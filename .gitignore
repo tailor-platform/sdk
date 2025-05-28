@@ -17,20 +17,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Eslint cache
-.eslintcache
-
 # Coverage directory used by tools like istanbul
 coverage/
 
 # IDEs and editors
 .idea/
 .vscode/
-
-# Tailor SDK
-**/.tailor-sdk/**
-.turbo
-
-# tailorctl
-cue.mod
-.mcp.json
