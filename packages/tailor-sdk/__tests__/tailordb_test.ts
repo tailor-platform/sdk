@@ -16,7 +16,7 @@ import {describe, expect, test} from '@jest/globals';
 class ProductItem {
     @TypeField({type: 'uuid'})
     id!: string;
-    
+
     @TailorDBField({required: true, index: true, unique: true})
     name?: string;
 }
@@ -35,7 +35,7 @@ class Product {
   @TailorDBField({type: "integer", required: true})
   price!: number;
 
-  @TailorDBField({type: "float"}) 
+  @TailorDBField({type: "float"})
   weight?: number;
 
   @TailorDBField() @ArrayOf(ProductItem)
@@ -43,8 +43,8 @@ class Product {
 }
 
 
-describe('Schema generation', () => {
-    test("GraphQL Type", () => {
+describe('TailorDB: decorator style', () => {
+    test("sdl", () => {
         const sdl = generateSDLForType(Product);
         expect(sdl).toContain(`type Product {`);
         expect(sdl).toContain(`id: ID!`);
@@ -54,7 +54,7 @@ describe('Schema generation', () => {
         expect(sdl).toContain(`weight: Float`);
         expect(sdl).toContain(`items: [ProductItem]`);
     });
-    test("TailorDB Decorators", () => {
+    test("metadata", () => {
         const metadata = getTailorDBTypeMetadata(Product);
         expect(metadata.name).toBe("Product");
         expect(metadata.schema).toBeDefined();
@@ -72,7 +72,7 @@ describe('Schema generation', () => {
         expect(nameField["vector"]).toBe(false);
         expect(nameField["foreignKey"]).toBe(false);
         expect(nameField["validate"].length).toBe(0)
-        expect(nameField["allowedValues"].length).toBe(0) 
+        expect(nameField["allowedValues"].length).toBe(0)
 
         const descriptionField = fields["description"];
         expect(descriptionField["type"]).toBe("string");

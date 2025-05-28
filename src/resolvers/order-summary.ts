@@ -1,14 +1,14 @@
 
-import { 
+import {
   queryResolver,
-  sqlStep, 
-  InputType, 
+  sqlStep,
+  InputType,
   InputTypeField,
-  Type, 
-  TypeField, 
+  Type,
+  TypeField,
   ArrayOf
 } from '@tailor-platform/tailor-sdk';
-import { SalesOrder } from '../tailordb/order';
+import { SalesOrder } from '../tailordb/salesOrder';
 
 @InputType()
 class OrderSumamryInput {

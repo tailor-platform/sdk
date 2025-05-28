@@ -2,7 +2,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/src', '<rootDir>/packages', '<rootDir>/__test__'],
+  roots: ['<rootDir>/src', '<rootDir>/packages'],
   moduleNameMapper: {
     '^@tailor-platform/tailor-sdk$': '<rootDir>/packages/tailor-sdk/index.ts'
   },

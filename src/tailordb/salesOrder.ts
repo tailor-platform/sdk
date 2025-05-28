@@ -1,4 +1,4 @@
-import { 
+import {
     TypeField,
     TailorDBType,
     TailorDBField,
@@ -6,24 +6,24 @@ import {
 
 @TailorDBType()
 export class SalesOrder {
-    @TypeField({type:"uuid"})
+    @TypeField({ type: "uuid" })
     public id?: string;
 
-    @TailorDBField({type:"uuid"})
+    @TailorDBField({ type: "uuid" })
     public cutomerID?: string;
-    
+
     @TailorDBField()
     public totalPrice?: number;
-    
+
     @TailorDBField()
     public discount?: number
-    
+
     @TailorDBField()
     public status?: string;
-    
+
     @TailorDBField()
     public cancelReason?: number;
-    
+
     @TailorDBField()
     public canceledAt?: string;
 

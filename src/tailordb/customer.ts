@@ -1,12 +1,12 @@
-import { 
+import {
   TypeField,
   TailorDBType,
   TailorDBField,
 } from '@tailor-platform/tailor-sdk';
 
-@TailorDBType({withTimestamps:true})
+@TailorDBType({ withTimestamps: true })
 export class Customer {
-  @TypeField({type:"uuid"})
+  @TypeField({ type: "uuid" })
   public id?: string;
   @TailorDBField()
   public name!: string;

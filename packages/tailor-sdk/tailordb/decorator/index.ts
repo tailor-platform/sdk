@@ -1,6 +1,6 @@
 import "reflect-metadata";
-import { 
-    TailorDBType as TDB, 
+import {
+    TailorDBType as TDB,
     TailorDBType_ValidateConfig,
     TailorDBType_FieldConfig,
     TailorDBType_Value,
@@ -10,17 +10,10 @@ import {
 
 import {
     Type,
-    TypeField,  
-    ArrayOf,
+    TypeField,
     GraphQLType,
     arrayElementTypesMap,
-} from "./schema-generator"
-
-export type integer = number;
-export type float = number;
-export type Date = string;
-export type DateTime = string;
-export type uuid = string;
+} from "../../schema-generator"
 
 type TailorDBType = 'uuid' | 'string' | 'bool' | 'integer' | 'float' | 'enum' | 'datetime';
 
@@ -44,18 +37,14 @@ const typeMappingArray: Record<TailorDBType, GraphQLType> = {
 }
 
 interface TailorDBTypeMetadata {
-  name: string;
-  fields: TailorDBFieldMetadata[];
+    name: string;
+    fields: TailorDBFieldMetadata[];
 }
 
 interface AlloewdValue {
     name: string;
     value: string;
 }
-
-interface TailorDBFKMetadata {
-}
-
 
 type TailorDBFieldMetadata = {
     name?: string;
@@ -81,11 +70,7 @@ type TailorDBTypeConfig = {
 
 const tailorDBTypeRegistry = new Map<Function, TailorDBTypeMetadata>();
 
-export function TailorDBTypeRegistry() {
-    return tailorDBTypeRegistry;
-}
-
-export function TailorDBType (config?: TailorDBTypeConfig) {
+export function TailorDBType(config?: TailorDBTypeConfig) {
     return function (target: any) {
         let metadata = tailorDBTypeRegistry.get(target);
         if (!metadata) {
@@ -105,7 +90,7 @@ export function TailorDBType (config?: TailorDBTypeConfig) {
                         return new Date().toISOString();
                     }
                 }
-                
+
             });
             metadata.fields.push({
                 name: 'updatedAt',
@@ -125,7 +110,7 @@ export function TailorDBType (config?: TailorDBTypeConfig) {
 
 
 export function TailorDBField(config?: TailorDBFieldMetadata) {
-    return function(target: any, propertyKey: string) {
+    return function (target: any, propertyKey: string) {
         let metadata = tailorDBTypeRegistry.get(target.constructor);
         if (!metadata) {
             metadata = {
@@ -135,7 +120,7 @@ export function TailorDBField(config?: TailorDBFieldMetadata) {
             tailorDBTypeRegistry.set(target.constructor, metadata);
         }
         const designType = Reflect.getMetadata("design:type", target, propertyKey);
-        let typeName: TailorDBType = config?.type || typeMapping[designType?.name] || undefined; 
+        let typeName: TailorDBType = config?.type || typeMapping[designType?.name] || undefined;
 
         const fieldMetadata: TailorDBFieldMetadata = {
             ...config,
@@ -146,7 +131,7 @@ export function TailorDBField(config?: TailorDBFieldMetadata) {
             type: typeMappingArray[typeName],
             nullable: !config?.required,
         })(target, propertyKey);
-        metadata.fields.push(fieldMetadata);    
+        metadata.fields.push(fieldMetadata);
     }
 }
 
@@ -161,7 +146,7 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
         const item = arrayElementTypesMap.get(`${target.name}.${field.name}`)
         fields[field!.name!] = new TailorDBType_FieldConfig({
             type: item ? item.name : field.type,
-            description:  "",
+            description: "",
             required: !!field.required,
             array: !!field.array,
             index: !!field.index,
@@ -178,7 +163,7 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
             allowedValues: field.allowdValues?.map((value) => new TailorDBType_Value({
                 description: value.name,
                 value: value.value
-            })) || [], 
+            })) || [],
             hooks: new TailorDBType_FieldHook({
                 create: field.hooks?.create ? new Script({
                     expr: field.hooks.create.toString().trim(),
@@ -196,7 +181,7 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
             description: `${metadata.name} generated @ ${new Date().toISOString()}`,
             extends: false,
             fields,
-          },
+        },
     });
 
 
