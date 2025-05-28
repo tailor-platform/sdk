@@ -1,53 +1,9 @@
-import { GraphQLType } from "../../schema-generator";
+import { TailorField, User } from "../../types";
+import { AllowedValue } from "../../types/field";
 
-export type TailorDBFieldType =
-  | "uuid"
-  | "string"
-  | "bool"
-  | "integer"
-  | "float"
-  | "enum"
-  | "date"
-  | "datetime";
-
-export type TailorDB2TS = {
-  string: string;
-  integer: number;
-  float: number;
-  bool: boolean;
-  uuid: string;
-  date: Date;
-  datetime: Date;
-  enum: string;
-} & Record<TailorDBFieldType, unknown>;
-
-export type TailorDB2GraphQL = {
-  string: "String";
-  integer: "Int";
-  float: "Float";
-  bool: "Boolean";
-  uuid: "ID";
-  date: "Date";
-  datetime: "DateTime";
-  enum: "enum";
-} & Record<TailorDBFieldType, GraphQLType>;
-
-export interface TailorDBTypeMetadata {
-  name: string;
-  fields: TailorDBFieldMetadata[];
-}
-
-export interface AllowedValue {
-  value: string;
+export type DBFieldMetadata = {
   description?: string;
-}
-
-export interface TailorDBFKMetadata { }
-
-export type TailorDBFieldMetadata = {
-  // name: string;
-  description?: string;
-  type: TailorDBFieldType;
+  type: TailorField;
   required?: boolean;
   allowedValues?: AllowedValue[];
   array?: boolean;
@@ -62,6 +18,24 @@ export type TailorDBFieldMetadata = {
   };
 };
 
-export type TailorDBTypeConfig = {
+export type DBTypeConfig = {
   withTimestamps?: boolean;
 };
+
+export type ValidateFn<O, P = undefined> = (
+  args: P extends undefined ? { value: O; user: User }
+    : { value: O; data: P; user: User },
+) => boolean;
+export type FieldValidateFn<O> = ValidateFn<O>;
+export type FieldValidator<O> =
+  | FieldValidateFn<O>
+  | {
+    script: FieldValidateFn<O>;
+    action?: "allow" | "deny";
+    error_message?: string;
+  };
+export type TypeValidateFn<P, O> = (args: {
+  value: O;
+  data: P;
+  user: User;
+}) => boolean;
