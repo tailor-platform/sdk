@@ -1,30 +1,31 @@
-import { PipelineResolverService } from './pipeline';
-import { getTailorDBTypeMetadata, isDBType, TailorDBDef } from './tailordb';
-import * as fs from 'fs';
-import { generateSDL, TypeMetadata } from './schema-generator';
+import { PipelineResolverService } from "./pipeline";
+import { getTailorDBTypeMetadata, isDBType, TailorDBDef } from "./tailordb";
+import * as fs from "fs";
+import { generateSDL } from "./schema-generator";
+import { TypeMetadata } from "./types";
 
-export * from './tailordb';
-export * from './pipeline';
-export * from './schema-generator';
+export * from "./tailordb";
+export * from "./pipeline";
+export * from "./schema-generator";
 
-export let basePath: string = '';
+export let basePath: string = "";
 
 export const Tailor = {
   init: (path: string) => {
     basePath = path;
-    console.log('Tailor SDK initialized');
-    console.log('path:', basePath);
+    console.log("Tailor SDK initialized");
+    console.log("path:", basePath);
   },
   newWorkspace: (name: string) => {
     return new Workspace(name);
   },
-}
+};
 
 export class Workspace {
   private applications: Application[] = [];
   private tailorDBServices: TailorDBService[] = [];
   private pipelineResolverServices: PipelineResolverService[] = [];
-  constructor(public name: string) { }
+  constructor(public name: string) {}
 
   newApplication(name: string) {
     const app = new Application(name);
@@ -32,7 +33,7 @@ export class Workspace {
     return app;
   }
   newTailorDBservice(name: string) {
-    const tailorDb = new TailorDBService(name, 'default');
+    const tailorDb = new TailorDBService(name, "default");
     this.tailorDBServices.push(tailorDb);
     return tailorDb;
   }
@@ -42,31 +43,38 @@ export class Workspace {
     return pipelineService;
   }
   apply() {
-
-    console.log('Applying workspace:', this.name);
-    console.log('Applications:', this.applications.map(app => app.name));
+    console.log("Applying workspace:", this.name);
+    console.log("Applications:", this.applications.map((app) => app.name));
 
     // Ensure directories exist before writing files
     const tailorDBDir = `${basePath}/dist/tailordb`;
     fs.mkdirSync(tailorDBDir, { recursive: true });
 
     const objectStyleMetadataList: TypeMetadata[] = [];
-    this.tailorDBServices.forEach(db => {
-      console.log('TailorDB Service:', db.workspace);
-      db.getTypes().forEach(type => {
-        const meta = isDBType(type) ? type.metadata : getTailorDBTypeMetadata(type);
+    this.tailorDBServices.forEach((db) => {
+      console.log("TailorDB Service:", db.workspace);
+      db.getTypes().forEach((type) => {
+        const meta = isDBType(type)
+          ? type.metadata
+          : getTailorDBTypeMetadata(type);
         if (isDBType(type)) {
           objectStyleMetadataList.push(type.toSDLMetadata());
         }
-        fs.writeFileSync(`${tailorDBDir}/${meta.name}.json`, JSON.stringify(meta, null, 2));
-      })
+        fs.writeFileSync(
+          `${tailorDBDir}/${meta.name}.json`,
+          JSON.stringify(meta, null, 2),
+        );
+      });
       // Here you would implement the logic to apply the TailorDB service
-    })
+    });
 
     const sdl = generateSDL(objectStyleMetadataList);
     fs.writeFileSync(`${basePath}/dist/schema.graphql`, sdl);
 
-    console.log('Pipeline Services:', this.pipelineResolverServices.map(service => service.name));
+    console.log(
+      "Pipeline Services:",
+      this.pipelineResolverServices.map((service) => service.name),
+    );
     // Here you would implement the logic to apply the workspace configuration
   }
 }

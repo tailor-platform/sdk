@@ -1,40 +1,43 @@
 import "reflect-metadata";
 import {
-    TailorDBType as TDB,
-    TailorDBType_ValidateConfig,
-    TailorDBType_FieldConfig,
-    TailorDBType_Value,
-    TailorDBType_FieldHook,
     Script,
+    TailorDBType as TDB,
+    TailorDBType_FieldConfig,
+    TailorDBType_FieldHook,
+    TailorDBType_ValidateConfig,
+    TailorDBType_Value,
 } from "@tailor-inc/operator-client";
 
-import {
-    Type,
-    TypeField,
-    GraphQLType,
-    arrayElementTypesMap,
-} from "../../schema-generator"
+import { arrayElementTypesMap, Type, TypeField } from "../../schema-generator";
+import { GraphQLType } from "../../types";
 
-type TailorDBType = 'uuid' | 'string' | 'bool' | 'integer' | 'float' | 'enum' | 'datetime';
+type TailorDBType =
+    | "uuid"
+    | "string"
+    | "bool"
+    | "integer"
+    | "float"
+    | "enum"
+    | "datetime";
 
 const typeMapping: Record<string, TailorDBType> = {
-    'string': 'string',
-    'String': 'string',
-    'Number': 'integer',
-    'number': 'integer',
-    'Boolean': 'bool',
-    'boolean': 'bool',
+    "string": "string",
+    "String": "string",
+    "Number": "integer",
+    "number": "integer",
+    "Boolean": "bool",
+    "boolean": "bool",
 };
 
 const typeMappingArray: Record<TailorDBType, GraphQLType> = {
-    'string': 'String',
-    'integer': 'Int',
-    'float': 'Float',
-    'bool': 'Boolean',
-    'uuid': 'ID',
-    'datetime': 'DateTime',
-    'enum': 'enum',
-}
+    "string": "String",
+    "integer": "Int",
+    "float": "Float",
+    "bool": "Boolean",
+    "uuid": "ID",
+    "datetime": "DateTime",
+    "enum": "enum",
+};
 
 interface TailorDBTypeMetadata {
     name: string;
@@ -59,14 +62,14 @@ type TailorDBFieldMetadata = {
     foreignKey?: boolean;
     validate?: Function[];
     hooks?: {
-        create?: Function,
-        update?: Function,
+        create?: Function;
+        update?: Function;
     };
-}
+};
 
 type TailorDBTypeConfig = {
     withTimestamps?: boolean;
-}
+};
 
 const tailorDBTypeRegistry = new Map<Function, TailorDBTypeMetadata>();
 
@@ -76,38 +79,36 @@ export function TailorDBType(config?: TailorDBTypeConfig) {
         if (!metadata) {
             metadata = {
                 name: target.name,
-                fields: []
+                fields: [],
             };
         }
 
         if (config?.withTimestamps) {
             metadata.fields.push({
-                name: 'createdAt',
-                type: 'datetime',
+                name: "createdAt",
+                type: "datetime",
                 required: false,
                 hooks: {
                     create: () => {
                         return new Date().toISOString();
-                    }
-                }
-
+                    },
+                },
             });
             metadata.fields.push({
-                name: 'updatedAt',
-                type: 'datetime',
+                name: "updatedAt",
+                type: "datetime",
                 required: false,
                 hooks: {
                     update: () => {
                         return new Date().toISOString();
-                    }
-                }
+                    },
+                },
             });
         }
         Type()(target);
         tailorDBTypeRegistry.set(target, metadata);
-    }
+    };
 }
-
 
 export function TailorDBField(config?: TailorDBFieldMetadata) {
     return function (target: any, propertyKey: string) {
@@ -115,12 +116,17 @@ export function TailorDBField(config?: TailorDBFieldMetadata) {
         if (!metadata) {
             metadata = {
                 name: target.constructor.name,
-                fields: []
+                fields: [],
             };
             tailorDBTypeRegistry.set(target.constructor, metadata);
         }
-        const designType = Reflect.getMetadata("design:type", target, propertyKey);
-        let typeName: TailorDBType = config?.type || typeMapping[designType?.name] || undefined;
+        const designType = Reflect.getMetadata(
+            "design:type",
+            target,
+            propertyKey,
+        );
+        let typeName: TailorDBType = config?.type ||
+            typeMapping[designType?.name] || undefined;
 
         const fieldMetadata: TailorDBFieldMetadata = {
             ...config,
@@ -132,18 +138,20 @@ export function TailorDBField(config?: TailorDBFieldMetadata) {
             nullable: !config?.required,
         })(target, propertyKey);
         metadata.fields.push(fieldMetadata);
-    }
+    };
 }
 
 export function getTailorDBTypeMetadata(target: Function): TDB {
     const metadata = tailorDBTypeRegistry.get(target);
     if (!metadata) {
-        throw new Error(`Type ${target} is not registered with @Type or @InputType decorator`);
+        throw new Error(
+            `Type ${target} is not registered with @Type or @InputType decorator`,
+        );
     }
 
     const fields: Record<string, TailorDBType_FieldConfig> = {};
     metadata.fields.forEach((field) => {
-        const item = arrayElementTypesMap.get(`${target.name}.${field.name}`)
+        const item = arrayElementTypesMap.get(`${target.name}.${field.name}`);
         fields[field!.name!] = new TailorDBType_FieldConfig({
             type: item ? item.name : field.type,
             description: "",
@@ -160,17 +168,23 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
                     }),
                 });
             }) || [],
-            allowedValues: field.allowdValues?.map((value) => new TailorDBType_Value({
-                description: value.name,
-                value: value.value
-            })) || [],
+            allowedValues: field.allowdValues?.map((value) =>
+                new TailorDBType_Value({
+                    description: value.name,
+                    value: value.value,
+                })
+            ) || [],
             hooks: new TailorDBType_FieldHook({
-                create: field.hooks?.create ? new Script({
-                    expr: field.hooks.create.toString().trim(),
-                }) : undefined,
-                update: field.hooks?.update ? new Script({
-                    expr: field.hooks?.update.toString().trim(),
-                }) : undefined,
+                create: field.hooks?.create
+                    ? new Script({
+                        expr: field.hooks.create.toString().trim(),
+                    })
+                    : undefined,
+                update: field.hooks?.update
+                    ? new Script({
+                        expr: field.hooks?.update.toString().trim(),
+                    })
+                    : undefined,
             }),
         });
     });
@@ -178,14 +192,13 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
     const tailorDb = new TDB({
         name: metadata.name,
         schema: {
-            description: `${metadata.name} generated @ ${new Date().toISOString()}`,
+            description: `${metadata.name} generated @ ${
+                new Date().toISOString()
+            }`,
             extends: false,
             fields,
         },
     });
 
-
     return tailorDb;
 }
-
-

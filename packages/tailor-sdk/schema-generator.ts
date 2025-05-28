@@ -1,21 +1,5 @@
 import 'reflect-metadata';
-
-export type GraphQLType = 'String' | 'Int' | 'Float' | 'Boolean' | 'ID' | string;
-const scalarTypes = ['String', 'Int', 'Float', 'Boolean', 'ID', 'JSON', 'Date', 'Time', 'DateTime']
-
-export interface TypeMetadata {
-  name: string;
-  fields: FieldMetadata[];
-  isInput: boolean;
-}
-
-export interface FieldMetadata {
-  name: string;
-  type: GraphQLType;
-  isNullable: boolean;
-  isList: boolean;
-  elementType?: GraphQLType; // Added to store the type of elements in an array
-}
+import { GraphQLType, scalarTypes, TypeMetadata } from './types';
 
 // Store array element types for later reference
 export const arrayElementTypesMap = new Map<string, Function>();
@@ -51,18 +35,18 @@ function toGraphQLType(type: string): GraphQLType {
  * Decorator for GraphQL Input Types
  */
 export function InputType() {
-  return function(target: Function) {
+  return function (target: Function) {
     let metadata = typeRegistry.get(target);
     if (!metadata) {
-        metadata = {
-            name: target.name,
-            fields: [],
-            isInput: true
-        };
-        typeRegistry.set(target, metadata);
+      metadata = {
+        name: target.name,
+        fields: [],
+        isInput: true
+      };
+      typeRegistry.set(target, metadata);
     } else {
-        metadata.isInput = true; // Update existing metadata to mark as input type
-        typeRegistry.set(target, metadata);
+      metadata.isInput = true; // Update existing metadata to mark as input type
+      typeRegistry.set(target, metadata);
     }
   };
 }
@@ -71,40 +55,40 @@ export function InputType() {
  * Decorator for GraphQL Object Types
  */
 export function Type() {
-  return function(target: Function) {
+  return function (target: Function) {
     let metadata = typeRegistry.get(target);
     if (!metadata) {
-        metadata = {
-            name: target.name,
-            fields: [],
-            isInput: false
-        };
-        typeRegistry.set(target, metadata);
+      metadata = {
+        name: target.name,
+        fields: [],
+        isInput: false
+      };
+      typeRegistry.set(target, metadata);
     } else {
-        metadata.isInput = false; // Update existing metadata to mark as object type
-        typeRegistry.set(target, metadata);
+      metadata.isInput = false; // Update existing metadata to mark as object type
+      typeRegistry.set(target, metadata);
     }
   };
 }
 
 type TypeConfig = {
-    type?: string;
-    nullable?: boolean;
+  type?: string;
+  nullable?: boolean;
 }
 /**
  * Field decorator for both Input and Object types
  */
 export function TypeField(config?: TypeConfig) {
-    return function (target: any, propertyKey: string) {
-        registerField(target, propertyKey, config);
-    }
+  return function (target: any, propertyKey: string) {
+    registerField(target, propertyKey, config);
+  }
 }
 
 /**
  * Field decorator specifically for Input types
  */
 export function InputTypeField(config?: TypeConfig) {
-  return function(target: any, propertyKey: string) {
+  return function (target: any, propertyKey: string) {
     registerField(target, propertyKey, config);
   }
 }
@@ -113,7 +97,7 @@ export function InputTypeField(config?: TypeConfig) {
  * Register the type of array elements for a field
  */
 export function ArrayOf(elementType: Function) {
-  return function(target: any, propertyKey: string) {
+  return function (target: any, propertyKey: string) {
     // Store the element type for this array field
     const key = `${target.constructor.name}.${propertyKey}`;
     arrayElementTypesMap.set(key, elementType);
@@ -150,8 +134,8 @@ function registerField(target: any, propertyKey: string, config?: TypeConfig) {
 
   // Check if it's an array type
   let isList = typeName === 'Array' ||
-                Array.isArray(target[propertyKey]) ||
-                typeName.includes('Array');
+    Array.isArray(target[propertyKey]) ||
+    typeName.includes('Array');
 
   // Check for ArrayOf decorator - if it exists, mark as list
   const key = `${constructor.name}.${cleanPropertyKey}`;
@@ -281,27 +265,6 @@ export function generateSDLForType(type: any): string {
     throw new Error(`Type ${type.name} is not registered with @Type or @InputType decorator`);
   }
 
-  // const typeName = metadata.isInput ? 'input' : 'type';
-  // let sdl = `${typeName} ${metadata.name} {\n`;
-
-  // for (const field of metadata.fields) {
-  //   let fieldType = field.type;
-
-  //   // Handle list types
-  //   if (field.isList) {
-  //     fieldType = `[${field.elementType || 'JSON'}]`;
-  //   }
-
-  //   // Handle non-nullable types
-  //   if (!field.isNullable) {
-  //     fieldType += '!';
-  //   }
-
-  //   sdl += `  ${field.name}: ${fieldType}\n`;
-  // }
-
-  // sdl += '}\n';
-
   return generateSDLFromMetadata(metadata);
 }
 
@@ -357,7 +320,7 @@ export function generateSDLForTypeAndDependencies(type: any): string {
 
       // Check for array element type dependencies
       if (field.isList && field.elementType &&
-          !scalarTypes.includes(field.elementType)) {
+        !scalarTypes.includes(field.elementType)) {
         // Look up the element type by name in registry
         for (const [constructor, meta] of typeRegistry.entries()) {
           if (meta.name === field.elementType && !typesToInclude.has(constructor)) {
@@ -371,7 +334,7 @@ export function generateSDLForTypeAndDependencies(type: any): string {
       if (arrayElementTypesMap.has(key)) {
         const arrayElementType = arrayElementTypesMap.get(key);
         if (arrayElementType && typeRegistry.has(arrayElementType) &&
-            !typesToInclude.has(arrayElementType)) {
+          !typesToInclude.has(arrayElementType)) {
           addTypeWithDependencies(arrayElementType);
         }
       }
