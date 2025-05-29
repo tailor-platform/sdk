@@ -1,24 +1,23 @@
 import {
-  generateSDL,
   generateSDLFromMetadata,
-  t,
+  db,
 } from "@tailor-platform/tailor-sdk";
 
 import { describe, expect, test } from "@jest/globals";
 
-const productItem = t.dbType(
+const productItem = db.type(
   "ProductItem",
-  { name: t.string().unique() }
+  { name: db.string().unique() }
 );
-const productType = t.dbType(
+const productType = db.type(
   "Product",
   {
-    name: t.string().unique(),
-    description: t.string().optional(),
-    price: t.int(),
-    weight: t.float().optional(),
-    variants: t.string().array().optional(),
-    itemIDs: t.uuid().ref(productItem, ["items", "product"]).array().optional(),
+    name: db.string().unique(),
+    description: db.string().optional(),
+    price: db.int(),
+    weight: db.float().optional(),
+    variants: db.string().array().optional(),
+    itemIDs: db.uuid().ref(productItem, ["items", "product"]).array().optional(),
   },
   { withTimestamps: true },
 );
