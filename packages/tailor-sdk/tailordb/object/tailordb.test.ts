@@ -3,7 +3,7 @@ import {
   db,
 } from "@tailor-platform/tailor-sdk";
 
-import { describe, expect, test } from "@jest/globals";
+import { describe, expect, test } from "vitest";
 
 const productItem = db.type(
   "ProductItem",

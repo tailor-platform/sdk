@@ -123,7 +123,7 @@ function registerField(target: any, propertyKey: string, config?: TypeConfig) {
 
   // Get the type of the property using reflect-metadata
   const designType = Reflect.getMetadata("design:type", target, propertyKey);
-  let typeName = config?.type || designType?.name || 'String';
+  const typeName = config?.type || designType?.name;
 
   let isNullable: boolean = false;
   if (typeof config?.nullable === "boolean") {

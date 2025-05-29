@@ -5,11 +5,11 @@ import {
     TailorDBType_FieldConfig,
     TailorDBType_FieldHook,
     TailorDBType_ValidateConfig,
-    TailorDBType_Value,
 } from "@tailor-inc/operator-client";
 
 import { arrayElementTypesMap, Type, TypeField } from "../../schema-generator";
 import { GraphQLType } from "../../types";
+import { AllowedValues, mapAllowedValues } from '../../types/field';
 
 type TailorDBType =
     | "uuid"
@@ -54,7 +54,7 @@ type TailorDBFieldMetadata = {
     description?: string;
     type?: TailorDBType;
     required?: boolean;
-    allowdValues?: AlloewdValue[];
+    allowedValues?: AlloewdValue[];
     array?: boolean;
     index?: boolean;
     unique?: boolean;
@@ -125,8 +125,7 @@ export function TailorDBField(config?: TailorDBFieldMetadata) {
             target,
             propertyKey,
         );
-        let typeName: TailorDBType = config?.type ||
-            typeMapping[designType?.name] || undefined;
+        const typeName: TailorDBType = config?.type || typeMapping[designType?.name];
 
         const fieldMetadata: TailorDBFieldMetadata = {
             ...config,
@@ -168,12 +167,7 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
                     }),
                 });
             }) || [],
-            allowedValues: field.allowdValues?.map((value) =>
-                new TailorDBType_Value({
-                    description: value.name,
-                    value: value.value,
-                })
-            ) || [],
+            allowedValues: mapAllowedValues(field.allowedValues as unknown as AllowedValues),
             hooks: new TailorDBType_FieldHook({
                 create: field.hooks?.create
                     ? new Script({
@@ -192,9 +186,8 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
     const tailorDb = new TDB({
         name: metadata.name,
         schema: {
-            description: `${metadata.name} generated @ ${
-                new Date().toISOString()
-            }`,
+            description: `${metadata.name} generated @ ${new Date().toISOString()
+                }`,
             extends: false,
             fields,
         },
