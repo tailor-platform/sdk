@@ -9,37 +9,37 @@ import {
     generateSDLForType
 } from '@tailor-platform/tailor-sdk';
 
-import {describe, expect, test} from '@jest/globals';
+import { describe, expect, test } from 'vitest';
 
 
 @TailorDBType()
 class ProductItem {
-    @TypeField({type: 'uuid'})
+    @TypeField({ type: 'uuid' })
     id!: string;
 
-    @TailorDBField({required: true, index: true, unique: true})
+    @TailorDBField({ required: true, index: true, unique: true })
     name?: string;
 }
 
-@TailorDBType({withTimestamps: true})
+@TailorDBType({ withTimestamps: true })
 class Product {
-  @TypeField({type: 'uuid'})
-  id!: string;
+    @TypeField({ type: 'uuid' })
+    id!: string;
 
-  @TailorDBField({required: true, index: true, unique: true})
-  name?: string;
+    @TailorDBField({ required: true, index: true, unique: true })
+    name?: string;
 
-  @TailorDBField()
-  description?: string;
+    @TailorDBField()
+    description?: string;
 
-  @TailorDBField({type: "integer", required: true})
-  price!: number;
+    @TailorDBField({ type: "integer", required: true })
+    price!: number;
 
-  @TailorDBField({type: "float"})
-  weight?: number;
+    @TailorDBField({ type: "float" })
+    weight?: number;
 
-  @TailorDBField() @ArrayOf(ProductItem)
-  items!: ProductItem[];
+    @TailorDBField() @ArrayOf(ProductItem)
+    items!: ProductItem[];
 }
 
 

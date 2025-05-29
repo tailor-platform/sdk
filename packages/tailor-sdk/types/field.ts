@@ -16,16 +16,15 @@ export type AllowedValues =
 export function mapAllowedValues(
   values: AllowedValues,
 ): AllowedValue[] {
-  return values
-    .map((value) => {
-      if (typeof value === "string") {
-        return { value };
-      }
-      if (Array.isArray(value)) {
-        return { value: value[0], description: value[1] };
-      }
-      return value;
-    }).map((value) => new TailorDBType_Value(value));
+  return values?.map((value) => {
+    if (typeof value === "string") {
+      return { value };
+    }
+    if (Array.isArray(value)) {
+      return { value: value[0], description: value[1] };
+    }
+    return value;
+  }).map((value) => new TailorDBType_Value(value)) ?? [];
 }
 
 export type AllowedValuesOutput<V extends AllowedValues> = V[number] extends
