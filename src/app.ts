@@ -2,8 +2,8 @@ import { Tailor } from '@tailor-platform/tailor-sdk';
 import { SalesOrder } from './tailordb/salesOrder'
 import { Customer } from './tailordb/customer'
 import helloWorld from './resolvers/hello-world';
-import orderSummary  from './resolvers/order-summary';
-import externalLib  from './resolvers/external-lib';
+import orderSummary from './resolvers/order-summary';
+import externalLib from './resolvers/external-lib';
 import { supplier } from './tailordb/supplier';
 import { purchaseOrder } from './tailordb/purchaseOrder';
 

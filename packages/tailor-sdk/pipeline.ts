@@ -1,17 +1,15 @@
+import fs from 'node:fs';
+import path from "node:path";
 import {
   PipelineResolver,
   PipelineResolver_Pipeline,
   PipelineResolver_OperationType,
-  AuthInvoker,
 } from "@tailor-inc/operator-client";
-
 
 import { rollup } from 'rollup';
 
 import { createRollupConfig } from "./rollup/config";
 import { generateSDLForTypeAndDependencies, generateSDLForType } from "./schema-generator";
-const fs = require('fs');
-const path = require('path');
 
 
 
@@ -22,7 +20,7 @@ export class PipelineResolverService {
   }
 
   async build() {
-    // Get file listing 
+    // Get file listing
     const resolversDir = path.join(process.cwd(), 'src/resolvers');
     const cfg = createRollupConfig({
       input: fs.readdirSync(resolversDir).map((file: string) => path.join(resolversDir, file)),
@@ -85,7 +83,7 @@ export class PipelineResolverService {
     ${resolverConfig.name}(input: ${resolverConfig.queryType}): ${resolverConfig.queryType}
   }
 `;
-    
+
     const resolver = new PipelineResolver({
       name: resolverConfig.name,
       sdl: sdl,
@@ -142,7 +140,7 @@ type StepConfig = {
   variables?: any
 }
 
-export function queryResolver<IN, OUT>(name: string, steps: StepConfig|StepConfig[]): ResolverConfigMetadata<IN, OUT> {
+export function queryResolver<IN, OUT>(name: string, steps: StepConfig | StepConfig[]): ResolverConfigMetadata<IN, OUT> {
   return {
     name: name,
     queryType: "query",
@@ -150,7 +148,7 @@ export function queryResolver<IN, OUT>(name: string, steps: StepConfig|StepConfi
   }
 }
 
-export function resolver<IN extends Function, OUT>(name: string, steps: StepConfig|StepConfig[]): ResolverConfigMetadata<IN, OUT> {
+export function resolver<IN extends Function, OUT>(name: string, steps: StepConfig | StepConfig[]): ResolverConfigMetadata<IN, OUT> {
   return {
     name: name,
     queryType: "mutation",
@@ -158,25 +156,25 @@ export function resolver<IN extends Function, OUT>(name: string, steps: StepConf
   }
 }
 
-export function steps <IN extends Function ,OUT extends Function>(...steps: StepConfig[]): StepsConfig<IN, OUT> {
+export function steps<IN extends Function, OUT extends Function>(...steps: StepConfig[]): StepsConfig<IN, OUT> {
   return {
 
   }
 }
 
 class FunctionArgument<Req, Res> {
-  constructor(public name: string, public type: string) {}
+  constructor(public name: string, public type: string) { }
 
 }
 
 type FunctionCall = <Req, Res>(args: FunctionArgument<Req, Res>) => boolean
 
 
-type Constructor<T> = { new (...args: any[]): T };
+type Constructor<T> = { new(...args: any[]): T };
 
 export const functionStep = <IN, OUT>(name: string, func: (input: IN) => OUT, inCtor: Constructor<IN>, outCtor: Constructor<OUT>): StepConfig => {
-  let sdl= generateSDLForTypeAndDependencies(inCtor); 
-  sdl  += generateSDLForTypeAndDependencies(outCtor);
+  let sdl = generateSDLForTypeAndDependencies(inCtor);
+  sdl += generateSDLForTypeAndDependencies(outCtor);
 
   return {
     kind: 'function',
@@ -194,9 +192,9 @@ interface SQLStepConfig {
   variables?: any
 }
 
-export const sqlStep = <IN, OUT>(name: string, namespace:string, sql: string, inCtor: Constructor<IN>, outCtor: Constructor<OUT>): StepConfig => {
-  let sdl= generateSDLForTypeAndDependencies(inCtor); 
-  sdl  += generateSDLForTypeAndDependencies(outCtor);
+export const sqlStep = <IN, OUT>(name: string, namespace: string, sql: string, inCtor: Constructor<IN>, outCtor: Constructor<OUT>): StepConfig => {
+  let sdl = generateSDLForTypeAndDependencies(inCtor);
+  sdl += generateSDLForTypeAndDependencies(outCtor);
   return {
     kind: 'sql',
     name: name,
@@ -209,20 +207,20 @@ export function generateResolverConfig<IN, OUT>(resolver: ResolverConfigMetadata
   resolver.steps.forEach((step) => {
     switch (step.kind) {
       case 'function':
-        // Generate SDL for function step
+      // Generate SDL for function step
       case 'sql':
-        // Generate SDL for SQL step
+      // Generate SDL for SQL step
       case 'graphql':
-        // Generate SDL for GraphQL step
+      // Generate SDL for GraphQL step
     }
   });
-//   let sdl = generateSDLForType({} as IN);
-//   sdl += generateSDLForType({} as OUT);
-//   sdl += `
-// extend type Mutation {
-//   ${resolver.name}(input: in): out
-// }
-// `;
+  //   let sdl = generateSDLForType({} as IN);
+  //   sdl += generateSDLForType({} as OUT);
+  //   sdl += `
+  // extend type Mutation {
+  //   ${resolver.name}(input: in): out
+  // }
+  // `;
 
   const resolverConfig = new PipelineResolver({
     // name: resolver.name,
