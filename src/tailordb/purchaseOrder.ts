@@ -1,13 +1,13 @@
-import { t } from "@tailor-platform/tailor-sdk";
-import { supplier } from './supplier';
+import { db, t } from "@tailor-platform/tailor-sdk";
+import { supplier } from "./supplier";
 
-export const purchaseOrder = t.dbType(
+export const purchaseOrder = db.type(
   "PurchaseOrder",
   {
-    supplierID: t.uuid().ref(supplier, ["supplier", "purchaseOrder"]),
-    totalPrice: t.int(),
-    discount: t.float().optional(),
-    status: t.string(),
+    supplierID: db.uuid().ref(supplier, ["supplier", "purchaseOrder"]),
+    totalPrice: db.int(),
+    discount: db.float().optional(),
+    status: db.string(),
   },
   { withTimestamps: true },
 );

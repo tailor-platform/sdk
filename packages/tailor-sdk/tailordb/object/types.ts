@@ -18,6 +18,10 @@ export type DBFieldMetadata = {
   };
 };
 
+export type DefinedFieldMetadata = Partial<
+  Omit<DBFieldMetadata, "allowedValues"> & { allowedValues: string[] }
+>;
+
 export type DBTypeConfig = {
   withTimestamps?: boolean;
 };
