@@ -5,14 +5,17 @@ import {
   TailorDBType_FieldHook,
   TailorDBType_ValidateConfig,
 } from "@tailor-inc/operator-client";
-import { DBFieldMetadata, FieldValidateFn } from "./types";
+import {
+  DBFieldMetadata,
+  DefinedFieldMetadata,
+  FieldValidateFn,
+} from "./types";
 import {
   FieldMetadata,
   TailorField,
   tailorToGraphQL,
   TailorToTs,
   TypeMetadata,
-  User,
 } from "../../types";
 import type { DeepWriteable, output, Prettify } from "../../types/helpers";
 import {
@@ -36,16 +39,16 @@ const fieldDefaults = {
 } as const satisfies Omit<DBFieldMetadata, "type">;
 
 class TailorDBField<
-  const Defined extends Partial<DBFieldMetadata>,
+  const Defined extends DefinedFieldMetadata,
   const Output,
   const Reference extends
-    | ReferenceConfig<
-      TailorDBType<
-        & { id?: never }
-        & Record<string, TailorDBField<Partial<DBFieldMetadata>, any, any>>
-      >
+  | ReferenceConfig<
+    TailorDBType<
+      & { id?: never }
+      & Record<string, TailorDBField<DefinedFieldMetadata, any, any>>
     >
-    | undefined,
+  >
+  | undefined,
 > {
   protected _metadata: DBFieldMetadata;
   public readonly _defined: Defined = undefined as unknown as Defined;
@@ -318,34 +321,34 @@ type DBTypeOptions = {
 
 class TailorDBType<
   const F extends
-    & { id?: never }
-    & Record<
-      string,
-      TailorDBField<
-        Partial<DBFieldMetadata>,
-        any,
-        any
-      >
-    >,
+  & { id?: never }
+  & Record<
+    string,
+    TailorDBField<
+      DefinedFieldMetadata,
+      any,
+      any
+    >
+  >,
 > {
   public readonly metadata: TDB;
   public readonly _output = null as unknown as Prettify<
     & {
       [
-        K in keyof F as F[K]["_defined"] extends { required: false } ? never
-          : K
+      K in keyof F as F[K]["_defined"] extends { required: false } ? never
+      : K
       ]: output<F[K]>;
     }
     & {
       [
-        K in keyof F as F[K]["_defined"] extends { required: false } ? K
-          : never
+      K in keyof F as F[K]["_defined"] extends { required: false } ? K
+      : never
       ]?: output<F[K]>;
     }
     & {
       [
-        K in keyof F as FieldReference<F[K]> extends never ? never
-          : FieldReference<F[K]>["nameMap"][0]
+      K in keyof F as FieldReference<F[K]> extends never ? never
+      : FieldReference<F[K]>["nameMap"][0]
       ]: output<FieldReference<F[K]>["type"]>;
     }
   >;
@@ -396,14 +399,7 @@ class TailorDBType<
 }
 type TailorDBDef = InstanceType<
   typeof TailorDBType<
-    Record<
-      string,
-      TailorDBField<
-        Partial<DBFieldMetadata>,
-        any,
-        any
-      >
-    >
+    Record<string, TailorDBField<DefinedFieldMetadata, any, any>>
   >
 >;
 
@@ -446,8 +442,8 @@ function dbType<
   ) as DBType<F, O>;
 }
 
-const t = {
-  dbType,
+const db = {
+  type: dbType,
   uuid,
   string,
   bool,
@@ -456,21 +452,21 @@ const t = {
   date,
   datetime,
   enum: _enum,
+  isDBType,
 };
 
-export default t;
-
+export default db;
 export {
-  _enum as enum,
+  db,
+  uuid,
+  string,
   bool,
+  int,
+  float,
   date,
   datetime,
-  dbType,
-  float,
-  int,
+  dbType as type,
+  _enum as enum,
   isDBType,
-  string,
-  t,
   TailorDBDef,
-  uuid,
 };

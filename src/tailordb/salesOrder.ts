@@ -1,8 +1,8 @@
 import {
-    TypeField,
-    TailorDBType,
     TailorDBField,
-} from '@tailor-platform/tailor-sdk';
+    TailorDBType,
+    TypeField,
+} from "@tailor-platform/tailor-sdk";
 
 @TailorDBType()
 export class SalesOrder {
@@ -16,7 +16,7 @@ export class SalesOrder {
     public totalPrice?: number;
 
     @TailorDBField()
-    public discount?: number
+    public discount?: number;
 
     @TailorDBField()
     public status?: string;
