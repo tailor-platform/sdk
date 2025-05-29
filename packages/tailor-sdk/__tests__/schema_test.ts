@@ -8,22 +8,22 @@ import {
   generateSDLForType,
   generateSDLForTypeAndDependencies
 } from '@tailor-platform/tailor-sdk';
-import {describe, expect, test} from '@jest/globals';
+import { describe, expect, test } from 'vitest';
 
 
 // Define a type to be used as an array element
 @Type()
 class Product {
-  @TypeField({type: 'uuid'})
+  @TypeField({ type: 'uuid' })
   id!: string;
 
   @TypeField()
   name?: string;
 
-  @TypeField({type: 'Int'})
+  @TypeField({ type: 'Int' })
   price!: number;
 
-  @TypeField({type: 'Float', nullable: true})
+  @TypeField({ type: 'Float', nullable: true })
   weight?: number;
 }
 const productSDL = `type Product {
@@ -41,7 +41,7 @@ class ProductList {
   @ArrayOf(Product) // Explicitly define that this array contains Product elements
   items!: Product[];
 
-  @TypeField({type: 'Int'})
+  @TypeField({ type: 'Int' })
   totalCount!: number;
 }
 const productListSDL = `type ProductList {
@@ -56,7 +56,7 @@ const productListSDL = `type ProductList {
 class OrderInput {
   @InputTypeField()
   customerId!: string;
-  
+
   @InputTypeField()
   @ArrayOf(String) // Array of primitive types
   productIds!: string[];
@@ -83,7 +83,7 @@ class Address {
 
 @Type()
 class Customer {
-  @TypeField({type: 'uuid'})
+  @TypeField({ type: 'uuid' })
   id!: string;
 
   @TypeField()
@@ -95,7 +95,7 @@ class Customer {
 
 @Type()
 class Order {
-  @TypeField({type: 'uuid'})
+  @TypeField({ type: 'uuid' })
   id!: string;
 
   @TypeField()
@@ -105,7 +105,7 @@ class Order {
   @ArrayOf(Product)
   products!: Product[];
 
-  @TypeField({type: 'Float'})
+  @TypeField({ type: 'Float' })
   totalPrice!: number;
 }
 
@@ -135,18 +135,18 @@ describe('Schema generation', () => {
     const sdl = generateSDLForTypeAndDependencies(ProductList);
     expect(sdl).toContain('type ProductList {');
     expect(sdl).toContain('type Product {');
-    
+
     // OrderInput has no custom type dependencies, so it should only include itself
     const orderSdl = generateSDLForTypeAndDependencies(OrderInput);
     expect(orderSdl).toBe(orderInputSDL.trim());
-    
+
     // Test complex type hierarchy with nested dependencies
     const orderWithDependenciesSDL = generateSDLForTypeAndDependencies(Order);
     expect(orderWithDependenciesSDL).toContain('type Order {');
     expect(orderWithDependenciesSDL).toContain('type Customer {');
     expect(orderWithDependenciesSDL).toContain('type Address {');
     expect(orderWithDependenciesSDL).toContain('type Product {');
-    
+
     // We should be able to start from any type in the hierarchy and get all dependencies
     const customerWithDependenciesSDL = generateSDLForTypeAndDependencies(Customer);
     expect(customerWithDependenciesSDL).toContain('type Customer {');

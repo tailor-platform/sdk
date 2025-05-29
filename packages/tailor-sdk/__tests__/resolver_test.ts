@@ -1,13 +1,14 @@
-import { 
+import {
   resolver,
-  functionStep, 
-  InputType, 
+  functionStep,
+  InputType,
   InputTypeField,
-  Type, 
+  Type,
   TypeField,
   generateResolverConfig,
   steps
 } from '@tailor-platform/tailor-sdk';
+import { test } from 'vitest';
 
 @InputType()
 export class HelloWorldInput {
