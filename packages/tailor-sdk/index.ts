@@ -1,15 +1,26 @@
 import { PipelineResolverService } from "./pipeline";
-import { getTailorDBTypeMetadata, isDBType, TailorDBDef } from "./tailordb";
+import {
+  getTailorDBTypeMetadata,
+  isDBType,
+  TailorDBDef,
+} from "./tailordb";
 import * as fs from "fs";
 import { generateSDL } from "./schema-generator";
 import { TypeMetadata } from "./types";
+import type { output as _output } from "./types/helpers";
 
-export * from "./tailordb";
 export * from "./pipeline";
 export * from "./schema-generator";
+export * from "./tailordb/decorator";
+export { db } from "./tailordb";
 
-export let basePath: string = "";
+export { _output as infer, _output as output };
+export namespace t {
+  export type output<T> = _output<T>;
+  export type infer<T> = _output<T>;
+}
 
+let basePath: string = "";
 export const Tailor = {
   init: (path: string) => {
     basePath = path;
@@ -25,7 +36,7 @@ export class Workspace {
   private applications: Application[] = [];
   private tailorDBServices: TailorDBService[] = [];
   private pipelineResolverServices: PipelineResolverService[] = [];
-  constructor(public name: string) {}
+  constructor(public name: string) { }
 
   newApplication(name: string) {
     const app = new Application(name);
