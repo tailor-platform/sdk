@@ -1,0 +1,160 @@
+{
+  "name": "Customer",
+  "schema": {
+    "fields": {
+      "name": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "email": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "phone": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "address": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "city": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "state": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "country": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "postalCode": {
+        "type": "",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "createdAt": {
+        "type": "datetime",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {
+          "create": {
+            "expr": "()=>{return new Date().toISOString()}"
+          }
+        },
+        "allowedValues": [],
+        "vector": false
+      },
+      "updatedAt": {
+        "type": "datetime",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {
+          "update": {
+            "expr": "()=>{return new Date().toISOString()}"
+          }
+        },
+        "allowedValues": [],
+        "vector": false
+      }
+    },
+    "description": "Customer schema",
+    "extends": false,
+    "directives": [],
+    "indexes": {},
+    "relationships": {}
+  }
+}

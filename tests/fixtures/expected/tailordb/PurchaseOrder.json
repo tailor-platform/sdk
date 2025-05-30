@@ -1,0 +1,113 @@
+{
+  "name": "PurchaseOrder",
+  "schema": {
+    "fields": {
+      "id": {
+        "type": "uuid",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "allowedValues": [],
+        "vector": false
+      },
+      "supplierID": {
+        "type": "uuid",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "allowedValues": [],
+        "vector": false
+      },
+      "totalPrice": {
+        "type": "integer",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "allowedValues": [],
+        "vector": false
+      },
+      "discount": {
+        "type": "float",
+        "description": "",
+        "required": false,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "allowedValues": [],
+        "vector": false
+      },
+      "status": {
+        "type": "string",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "allowedValues": [],
+        "vector": false
+      },
+      "createdAt": {
+        "type": "datetime",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {
+          "create": {
+            "expr": "()=>new Date().toISOString()"
+          }
+        },
+        "allowedValues": [],
+        "vector": false
+      },
+      "updatedAt": {
+        "type": "datetime",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
+        "hooks": {
+          "update": {
+            "expr": "()=>new Date().toISOString()"
+          }
+        },
+        "allowedValues": [],
+        "vector": false
+      }
+    },
+    "description": "",
+    "extends": false,
+    "directives": [],
+    "indexes": {},
+    "relationships": {}
+  }
+}

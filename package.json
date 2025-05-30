@@ -2,8 +2,12 @@
   "name": "tailor-dev-kit",
   "version": "1.0.0",
   "description": "Tailor Development Kit - Workspace Root",
+  "type": "module",
   "scripts": {
     "test": "pnpm -r test",
+    "test:root": "vitest watch",
+    "test:root:run": "vitest run",
+    "test:root:update-expects": "tsx tests/scripts/generate_expected_files.ts",
     "apply": "tsx src/app.ts",
     "clean": "rm -rf dist",
     "dev": "pnpm -r dev"
@@ -15,7 +19,9 @@
     "@tailor-platform/tailor-sdk": "workspace:^",
     "@types/node": "^22.15.3",
     "date-fns": "^4.1.0",
+    "dir-compare": "^4.2.0",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^1.6.0"
   }
 }
