@@ -1,0 +1,200 @@
+// import path from 'node:path';
+// import fs from 'node:fs';
+// import multiline from 'multiline-ts';
+import { gqlFactory } from "./gql";
+import { sqlFactory } from "./sql";
+import { ResolverOptions, Step, StepDef, StepOptions, StepType } from "./types";
+import { TailorType } from "../types/type";
+import { output } from "../types/helpers";
+// import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+// import { generateSDLFromMetadata } from '../../schema-generator';
+// import { capitalize } from 'es-toolkit';
+// import { getBasePath } from '../../index';
+
+export class Resolver<
+  QueryType extends "query" | "mutation",
+  Input extends TailorType<any, any, any>,
+  CurrentOutput,
+  Context extends Record<string, unknown>,
+  Steps extends StepDef<StepType, string, any, any, any>[],
+  Output extends TailorType<any, any, any>,
+> {
+  readonly _input = null as output<Input>;
+  readonly _output = null as output<Output>;
+  readonly _context = null as unknown as Context;
+  private _steps: Steps;
+  #options: ResolverOptions;
+
+  private output = null as unknown as Output;
+
+  constructor(
+    public readonly queryType: QueryType,
+    public readonly name: string,
+    private readonly input: TailorType<any, any, Input>,
+    options: ResolverOptions = { defaults: {} },
+  ) {
+    this._steps = [] as unknown as Steps;
+    this.#options = options;
+  }
+
+  get steps() {
+    return Array.from(this._steps) as Steps;
+  }
+
+  fnStep<
+    const S extends string,
+    const R,
+  >(
+    name: S,
+    fn: Step<Awaited<CurrentOutput>, R, Context>,
+    _options?: StepOptions,
+  ) {
+    this._steps.push(["fn", name, fn]);
+    return this as unknown as Resolver<
+      QueryType,
+      Input,
+      Awaited<R>,
+      Context & Record<S, Awaited<R>>,
+      [...Steps, ["fn", S, Step<Awaited<CurrentOutput>, R, Context>]],
+      Output
+    >;
+  }
+
+  sqlStep<
+    const S extends string,
+    const Q extends sqlFactory<Awaited<CurrentOutput>, Context>,
+  >(
+    name: S,
+    fn: Q,
+    _options?: StepOptions,
+  ) {
+    this._steps.push(["sql", name, fn]);
+    return this as unknown as Resolver<
+      QueryType,
+      Input,
+      Awaited<ReturnType<Q>>,
+      Context & Record<S, Awaited<ReturnType<Q>>>,
+      [
+        ...Steps,
+        ["sql", S, Step<Awaited<CurrentOutput>, ReturnType<Q>, Context>],
+      ],
+      Output
+    >;
+  }
+
+  gqlStep<
+    const S extends string,
+    const Q extends gqlFactory<Awaited<CurrentOutput>, Context>,
+  >(
+    name: S,
+    fn: Q,
+    _options?: StepOptions,
+  ) {
+    this._steps.push(["gql", name, fn]);
+    return this as unknown as Resolver<
+      QueryType,
+      Input,
+      Awaited<ReturnType<Q>>["data"],
+      Context & Record<S, ReturnType<Q>>,
+      [
+        ...Steps,
+        [
+          "gql",
+          S,
+          Step<Awaited<CurrentOutput>, Awaited<ReturnType<Q>>["data"], Context>,
+        ],
+      ],
+      Output
+    >;
+  }
+
+  returns<const O extends TailorType<any, any, any>>(
+    output: CurrentOutput extends output<O> ? O : never,
+  ) {
+    this.output = output as any;
+    return this as unknown as Resolver<
+      QueryType,
+      Input,
+      CurrentOutput,
+      Context,
+      Steps,
+      O
+    >;
+  }
+
+  // toSDLMetadata() {
+  //   const input = this.input.toSDLMetadata(true);
+  //   const output = this.output.toSDLMetadata();
+  //   const sdl = multiline/* gql */`
+  //   ${generateSDLFromMetadata(input)}
+  //   ${generateSDLFromMetadata(output)}
+  //   extend type ${capitalize(this.queryType)} {
+  //     ${this.name}(input: ${input.name}): ${output.name}
+  //   }
+  //   `;
+  //   return {
+  //     name: this.name,
+  //     sdl,
+  //     pipelines: this._steps.map((step) => {
+  //       const [type, name] = step;
+  //       switch (type) {
+  //         case "fn":
+  //         case "sql":
+  //           const functionPath = path.join(getBasePath(), "dist", "functions", `${name}.js`)
+  //           const functionCode = fs.readFileSync(functionPath, 'utf-8');
+  //           return {
+  //             name,
+  //             description: name,
+  //             operationType: PipelineResolver_OperationType.FUNCTION,
+  //             operationSource: functionCode,
+  //             operationName: name,
+  //           };
+  //         case "gql":
+  //           return {
+  //             name,
+  //             description: name,
+  //             operationType: PipelineResolver_OperationType.GRAPHQL,
+  //             operationSource: "",
+  //             operationName: name,
+  //           };
+  //         default:
+  //           throw new Error(`Unsupported step kind: ${step[0]}`);
+  //       }
+  //     }),
+  //   };
+  // }
+}
+
+export function createQueryResolver<
+  const Input extends TailorType<any, any, any>,
+>(
+  name: string,
+  input: Input,
+  options?: ResolverOptions,
+) {
+  return new Resolver<
+    "query",
+    Input,
+    output<Input>,
+    { input: output<Input> },
+    [],
+    never
+  >("query", name, input, options);
+}
+
+export function createMutationResolver<
+  const Input extends TailorType<any, any, any>,
+>(
+  name: string,
+  input: Input,
+  options?: ResolverOptions,
+) {
+  return new Resolver<
+    "mutation",
+    Input,
+    output<Input>,
+    { input: output<Input> },
+    [],
+    never
+  >("mutation", name, input, options);
+}
