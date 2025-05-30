@@ -1,4 +1,6 @@
-export type TailorField =
+import { AllowedValue } from "./field";
+
+export type TailorFieldType =
   | "uuid"
   | "string"
   | "bool"
@@ -17,9 +19,9 @@ export type TailorToTs = {
   date: Date;
   datetime: Date;
   enum: string;
-} & Record<TailorField, unknown>;
+} & Record<TailorFieldType, unknown>;
 
-export const typeMapping: Record<string, TailorField> = {
+export const typeMapping: Record<string, TailorFieldType> = {
   String: "string",
   string: "string",
   Number: "integer",
@@ -60,15 +62,24 @@ export const scalarTypes = [
   "DateTime",
 ];
 
-export interface TypeMetadata {
+export interface SDLTypeMetadata {
   name: string;
-  fields: FieldMetadata[];
+  fields: SDLFieldMetadata[];
   isInput: boolean;
 }
 
-export interface FieldMetadata {
+export interface SDLFieldMetadata {
   name: string;
+  description?: string;
   type: GraphQLType;
   required: boolean;
   array: boolean;
+}
+
+export interface FieldMetadata {
+  description?: string;
+  type: TailorFieldType;
+  required?: boolean;
+  array?: boolean;
+  allowedValues?: AllowedValue[];
 }

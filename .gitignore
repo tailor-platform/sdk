@@ -23,3 +23,6 @@ coverage/
 # IDEs and editors
 .idea/
 .vscode/
+
+# Tailor SDK
+.tailor-sdk

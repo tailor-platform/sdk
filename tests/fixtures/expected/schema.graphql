@@ -1,3 +1,26 @@
+type SalesOrder {
+  id: ID!
+  customerID: ID!
+  customer: Customer!
+  totalPrice: Int
+  discount: Float
+  status: String
+  cancelReason: String
+  canceledAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type Customer {
+  id: ID!
+  name: String!
+  email: String!
+  phone: String
+  address: String
+  city: String
+  state: String!
+  country: String!
+  postalCode: String!
+}
 type Supplier {
   id: ID!
   name: String!
@@ -20,43 +43,4 @@ type PurchaseOrder {
   status: String!
   createdAt: DateTime!
   updatedAt: DateTime!
-}
-type SalesOrder {
-  id: ID!
-  cutomerID: id
-  totalPrice: undefined
-  discount: undefined
-  status: undefined
-  cancelReason: undefined
-  canceledAt: undefined
-  createdAt: undefined
-  updatedAt: undefined
-}
-type Customer {
-  id: ID!
-  name: undefined
-  email: undefined
-  phone: undefined
-  address: undefined
-  city: undefined
-  state: undefined
-  country: undefined
-  postalCode: undefined
-}
-input HelloWorldInput {
-  name: undefined!
-}
-type HelloWorldOutput {
-  message: undefined!
-}
-input OrderSummaryInput {
-  order_id: undefined!
-}
-type OrderSummaryOutput {
-  connection: [SalesOrder]!
-}
-input CurrentDateInput {
-}
-type CurrentDateOutput {
-  message: undefined!
 }

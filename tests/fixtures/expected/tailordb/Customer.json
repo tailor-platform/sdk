@@ -2,36 +2,47 @@
   "name": "Customer",
   "schema": {
     "fields": {
-      "name": {
-        "type": "",
+      "id": {
+        "type": "uuid",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "name": {
+        "type": "string",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
         "allowedValues": [],
         "vector": false
       },
       "email": {
-        "type": "",
+        "type": "string",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "phone": {
-        "type": "",
+        "type": "string",
         "description": "",
         "required": false,
         "array": false,
@@ -40,12 +51,11 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "address": {
-        "type": "",
+        "type": "string",
         "description": "",
         "required": false,
         "array": false,
@@ -54,12 +64,11 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "city": {
-        "type": "",
+        "type": "string",
         "description": "",
         "required": false,
         "array": false,
@@ -68,90 +77,50 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "state": {
-        "type": "",
+        "type": "string",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "country": {
-        "type": "",
+        "type": "string",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "postalCode": {
-        "type": "",
+        "type": "string",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
-        "allowedValues": [],
-        "vector": false
-      },
-      "createdAt": {
-        "type": "datetime",
-        "description": "",
-        "required": false,
-        "array": false,
-        "validate": [],
-        "fields": {},
-        "index": false,
-        "unique": false,
-        "foreignKey": false,
-        "hooks": {
-          "create": {
-            "expr": "()=>{return new Date().toISOString()}"
-          }
-        },
-        "allowedValues": [],
-        "vector": false
-      },
-      "updatedAt": {
-        "type": "datetime",
-        "description": "",
-        "required": false,
-        "array": false,
-        "validate": [],
-        "fields": {},
-        "index": false,
-        "unique": false,
-        "foreignKey": false,
-        "hooks": {
-          "update": {
-            "expr": "()=>{return new Date().toISOString()}"
-          }
-        },
         "allowedValues": [],
         "vector": false
       }
     },
-    "description": "Customer schema",
+    "description": "",
     "extends": false,
     "directives": [],
     "indexes": {},

@@ -1,4 +1,5 @@
-import { spawn } from 'child_process';
+import { spawn } from 'node:child_process';
+import { styleText } from 'node:util';
 
 export interface CommandResult {
   exitCode: number | null;
@@ -12,8 +13,10 @@ export interface CommandResult {
  * @returns コマンドの実行結果
  */
 export async function runApplyCommand(outputDir: string): Promise<CommandResult> {
+  const args = ['apply', outputDir];
+  console.log(styleText("cyan", `$ pnpm ${args.join(' ')}`));
   return new Promise((resolve, reject) => {
-    const child = spawn('pnpm', ['apply', outputDir], {
+    const child = spawn('pnpm', args, {
       cwd: process.cwd(),
       stdio: 'pipe',
       shell: true

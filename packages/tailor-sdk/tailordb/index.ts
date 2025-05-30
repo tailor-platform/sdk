@@ -1,2 +1,1 @@
-export * from './decorator';
-export * from './object';
+export { db } from "./schema";

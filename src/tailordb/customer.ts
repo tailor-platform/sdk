@@ -1,27 +1,17 @@
-import {
-  TypeField,
-  TailorDBType,
-  TailorDBField,
-} from '@tailor-platform/tailor-sdk';
+import { db, t } from "@tailor-platform/tailor-sdk";
 
-@TailorDBType({ withTimestamps: true })
-export class Customer {
-  @TypeField({ type: "uuid" })
-  public id?: string;
-  @TailorDBField()
-  public name!: string;
-  @TailorDBField()
-  public email!: string;
-  @TailorDBField()
-  public phone?: string;
-  @TailorDBField()
-  public address?: string;
-  @TailorDBField()
-  public city?: string;
-  @TailorDBField()
-  public state?: string;
-  @TailorDBField()
-  public country?: string;
-  @TailorDBField()
-  public postalCode?: string;
-}
+export const customer = db.type(
+  "Customer",
+  {
+    name: db.string(),
+    email: db.string(),
+    phone: db.string().optional(),
+    address: db.string().optional(),
+    city: db.string().optional(),
+    state: db.string(),
+    country: db.string(),
+    postalCode: db.string(),
+  },
+);
+export type customer = typeof customer;
+export type Customer = t.infer<customer>;
