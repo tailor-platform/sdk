@@ -4,7 +4,6 @@
   "description": "Tailor Development Kit - Workspace Root",
   "scripts": {
     "test": "pnpm -r test",
-    "build": "pnpm -r build",
     "apply": "tsx src/app.ts",
     "clean": "rm -rf dist",
     "dev": "pnpm -r dev"
