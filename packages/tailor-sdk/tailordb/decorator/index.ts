@@ -186,8 +186,7 @@ export function getTailorDBTypeMetadata(target: Function): TDB {
     const tailorDb = new TDB({
         name: metadata.name,
         schema: {
-            description: `${metadata.name} generated @ ${new Date().toISOString()
-                }`,
+            description: `${metadata.name} schema`,
             extends: false,
             fields,
         },

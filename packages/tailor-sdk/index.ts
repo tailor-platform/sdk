@@ -21,6 +21,9 @@ export namespace t {
 }
 
 let basePath: string = "";
+
+export const getBasePath = () => basePath;
+
 export const Tailor = {
   init: (path: string) => {
     basePath = path;
@@ -53,7 +56,7 @@ export class Workspace {
     this.pipelineResolverServices.push(pipelineService);
     return pipelineService;
   }
-  apply() {
+  async apply() {
     console.log("Applying workspace:", this.name);
     console.log("Applications:", this.applications.map((app) => app.name));
 
@@ -86,7 +89,11 @@ export class Workspace {
       "Pipeline Services:",
       this.pipelineResolverServices.map((service) => service.name),
     );
-    // Here you would implement the logic to apply the workspace configuration
+
+    // Build pipeline services
+    for (const pipelineService of this.pipelineResolverServices) {
+      await pipelineService.build();
+    }
   }
 }
 
