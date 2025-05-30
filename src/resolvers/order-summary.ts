@@ -11,24 +11,24 @@ import {
 import { SalesOrder } from '../tailordb/salesOrder';
 
 @InputType()
-class OrderSumamryInput {
+class OrderSummaryInput {
   @InputTypeField()
   public order_id?: number;
 }
 
 @Type()
-class OrderSumamryOutput {
+class OrderSummaryOutput {
   @TypeField() @ArrayOf(SalesOrder)
   connection?: SalesOrder[];
 }
 
 const orderSummary = queryResolver("orderSummary",
-    sqlStep(
-      'orderSummary',
-      "attendance-db",
-      'SELECT id, email FROM Employee where id = $ORDER_ID',
-      OrderSumamryInput,OrderSumamryOutput
-    ),
+  sqlStep(
+    'orderSummary',
+    "attendance-db",
+    'SELECT id, email FROM Employee where id = $ORDER_ID',
+    OrderSummaryInput, OrderSummaryOutput
+  ),
 );
 
 export default orderSummary;

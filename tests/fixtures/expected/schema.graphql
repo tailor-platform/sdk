@@ -1,0 +1,62 @@
+type Supplier {
+  id: ID!
+  name: String!
+  phone: String!
+  fax: String
+  email: String
+  postalCode: String!
+  country: String!
+  state: enum!
+  city: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type PurchaseOrder {
+  id: ID!
+  supplierID: ID!
+  supplier: Supplier!
+  totalPrice: Int!
+  discount: Float
+  status: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type SalesOrder {
+  id: ID!
+  cutomerID: id
+  totalPrice: undefined
+  discount: undefined
+  status: undefined
+  cancelReason: undefined
+  canceledAt: undefined
+  createdAt: undefined
+  updatedAt: undefined
+}
+type Customer {
+  id: ID!
+  name: undefined
+  email: undefined
+  phone: undefined
+  address: undefined
+  city: undefined
+  state: undefined
+  country: undefined
+  postalCode: undefined
+}
+input HelloWorldInput {
+  name: undefined!
+}
+type HelloWorldOutput {
+  message: undefined!
+}
+input OrderSummaryInput {
+  order_id: undefined!
+}
+type OrderSummaryOutput {
+  connection: [SalesOrder]!
+}
+input CurrentDateInput {
+}
+type CurrentDateOutput {
+  message: undefined!
+}

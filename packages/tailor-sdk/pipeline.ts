@@ -9,7 +9,8 @@ import {
 import { rollup } from 'rollup';
 
 import { createRollupConfig } from "./rollup/config";
-import { generateSDLForTypeAndDependencies, generateSDLForType } from "./schema-generator";
+import { generateSDLForTypeAndDependencies } from "./schema-generator";
+import { getBasePath } from "./index";
 
 
 
@@ -22,8 +23,10 @@ export class PipelineResolverService {
   async build() {
     // Get file listing
     const resolversDir = path.join(process.cwd(), 'src/resolvers');
+    const outputDir = path.join(getBasePath(), 'dist/functions');
     const cfg = createRollupConfig({
       input: fs.readdirSync(resolversDir).map((file: string) => path.join(resolversDir, file)),
+      outputDir: outputDir,
     });
     const bundle = await rollup(cfg);
     try {
@@ -47,7 +50,7 @@ export class PipelineResolverService {
       resolver.pipelines.forEach((pipeline) => {
         switch (pipeline.operationType) {
           case PipelineResolver_OperationType.FUNCTION:
-            const functionPath = path.join("dist/functions", `${resolver.name}.js`);
+            const functionPath = path.join(getBasePath(), "dist/functions", `${resolver.name}.js`);
             const functionCode = fs.readFileSync(functionPath, 'utf-8');
             pipeline.operationSource = functionCode;
             break;
@@ -56,10 +59,11 @@ export class PipelineResolverService {
             break;
         }
       });
-      if (!fs.existsSync("dist/pipelines")) {
-        fs.mkdirSync("dist/pipelines", { recursive: true });
+      const pipelinesDir = path.join(getBasePath(), "dist/pipelines");
+      if (!fs.existsSync(pipelinesDir)) {
+        fs.mkdirSync(pipelinesDir, { recursive: true });
       }
-      const resolverPath = path.join("dist/pipelines", `${resolver.name}.json`);
+      const resolverPath = path.join(pipelinesDir, `${resolver.name}.json`);
       fs.writeFileSync(resolverPath, JSON.stringify(resolver, null, 2));
       console.log(`Resolver ${resolver.name} written to ${resolverPath}`);
     }
