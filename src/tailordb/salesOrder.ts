@@ -1,35 +1,17 @@
-import {
-    TailorDBField,
-    TailorDBType,
-    TypeField,
-} from "@tailor-platform/tailor-sdk";
+import { db, t } from "@tailor-platform/tailor-sdk";
+import { customer } from "./customer";
 
-@TailorDBType()
-export class SalesOrder {
-    @TypeField({ type: "uuid" })
-    public id?: string;
-
-    @TailorDBField({ type: "uuid" })
-    public cutomerID?: string;
-
-    @TailorDBField()
-    public totalPrice?: number;
-
-    @TailorDBField()
-    public discount?: number;
-
-    @TailorDBField()
-    public status?: string;
-
-    @TailorDBField()
-    public cancelReason?: number;
-
-    @TailorDBField()
-    public canceledAt?: string;
-
-    @TailorDBField()
-    public createdAt?: string;
-
-    @TailorDBField()
-    public updatedAt?: string;
-}
+export const salesOrder = db.type(
+  "SalesOrder",
+  {
+    customerID: db.uuid().ref(customer, ["customer", "salesOrder"]),
+    totalPrice: db.int().optional(),
+    discount: db.float().optional(),
+    status: db.string().optional(),
+    cancelReason: db.string().optional(),
+    canceledAt: db.datetime().optional(),
+  },
+  { withTimestamps: true },
+);
+export type salesOrder = typeof salesOrder;
+export type SalesOrder = t.infer<salesOrder>;

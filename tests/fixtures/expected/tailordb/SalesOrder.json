@@ -2,22 +2,34 @@
   "name": "SalesOrder",
   "schema": {
     "fields": {
-      "cutomerID": {
+      "id": {
         "type": "uuid",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
+        "allowedValues": [],
+        "vector": false
+      },
+      "customerID": {
+        "type": "uuid",
+        "description": "",
+        "required": true,
+        "array": false,
+        "validate": [],
+        "fields": {},
+        "index": false,
+        "unique": false,
+        "foreignKey": false,
         "allowedValues": [],
         "vector": false
       },
       "totalPrice": {
-        "type": "",
+        "type": "integer",
         "description": "",
         "required": false,
         "array": false,
@@ -26,12 +38,11 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "discount": {
-        "type": "",
+        "type": "float",
         "description": "",
         "required": false,
         "array": false,
@@ -40,12 +51,11 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "status": {
-        "type": "",
+        "type": "string",
         "description": "",
         "required": false,
         "array": false,
@@ -54,12 +64,11 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "cancelReason": {
-        "type": "",
+        "type": "string",
         "description": "",
         "required": false,
         "array": false,
@@ -68,12 +77,11 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "canceledAt": {
-        "type": "",
+        "type": "datetime",
         "description": "",
         "required": false,
         "array": false,
@@ -82,40 +90,47 @@
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
         "allowedValues": [],
         "vector": false
       },
       "createdAt": {
-        "type": "",
+        "type": "datetime",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
+        "hooks": {
+          "create": {
+            "expr": "()=>new Date().toISOString()"
+          }
+        },
         "allowedValues": [],
         "vector": false
       },
       "updatedAt": {
-        "type": "",
+        "type": "datetime",
         "description": "",
-        "required": false,
+        "required": true,
         "array": false,
         "validate": [],
         "fields": {},
         "index": false,
         "unique": false,
         "foreignKey": false,
-        "hooks": {},
+        "hooks": {
+          "update": {
+            "expr": "()=>new Date().toISOString()"
+          }
+        },
         "allowedValues": [],
         "vector": false
       }
     },
-    "description": "SalesOrder schema",
+    "description": "",
     "extends": false,
     "directives": [],
     "indexes": {},

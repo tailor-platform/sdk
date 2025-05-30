@@ -1,2 +1,0 @@
-function i(o,t,n){return async function(a){const e=new tailordb.Client({namespace:t});await e.connect(),await e.queryObject("BEGIN");const c=await e.queryObject(n,a.input);return await e.queryObject("ROLLBACK"),await e.end(),{collection:c.rows}}}const r=i("orderSummary","attendance-db","SELECT id, email FROM Employee where id = $ORDER_ID");export{r as default};
-//# sourceMappingURL=order-summary.js.map

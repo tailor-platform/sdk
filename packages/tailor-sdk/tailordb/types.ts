@@ -1,12 +1,7 @@
-import { TailorField, User } from "../../types";
-import { AllowedValue } from "../../types/field";
+import { TailorUser } from "../types";
+import { FieldMetadata } from "../types/types";
 
-export type DBFieldMetadata = {
-  description?: string;
-  type: TailorField;
-  required?: boolean;
-  allowedValues?: AllowedValue[];
-  array?: boolean;
+export interface DBFieldMetadata extends FieldMetadata {
   index?: boolean;
   unique?: boolean;
   vector?: boolean;
@@ -16,7 +11,7 @@ export type DBFieldMetadata = {
     create?: Function;
     update?: Function;
   };
-};
+}
 
 export type DefinedFieldMetadata = Partial<
   Omit<DBFieldMetadata, "allowedValues"> & { allowedValues: string[] }
@@ -27,8 +22,8 @@ export type DBTypeConfig = {
 };
 
 export type ValidateFn<O, P = undefined> = (
-  args: P extends undefined ? { value: O; user: User }
-    : { value: O; data: P; user: User },
+  args: P extends undefined ? { value: O; user: TailorUser }
+    : { value: O; data: P; user: TailorUser },
 ) => boolean;
 export type FieldValidateFn<O> = ValidateFn<O>;
 export type FieldValidator<O> =
@@ -41,5 +36,10 @@ export type FieldValidator<O> =
 export type TypeValidateFn<P, O> = (args: {
   value: O;
   data: P;
-  user: User;
+  user: TailorUser;
 }) => boolean;
+
+export interface TailorDBServiceConfig {
+  namespace: string;
+  files?: string[];
+}

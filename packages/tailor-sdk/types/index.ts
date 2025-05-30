@@ -1,2 +1,2 @@
-export * from "./tailortype";
+export * from "./type";
 export * from "./user";

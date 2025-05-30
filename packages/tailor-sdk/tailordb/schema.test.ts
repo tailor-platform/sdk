@@ -1,7 +1,5 @@
-import {
-  generateSDLFromMetadata,
-  db,
-} from "@tailor-platform/tailor-sdk";
+import { generateSDLFromMetadata } from "../schema-generator";
+import { db } from "./schema"
 
 import { describe, expect, test } from "vitest";
 
