@@ -49,7 +49,7 @@ importers:
         version: 2.2.5
       '@tailor-inc/operator-client':
         specifier: ^25.313.146
-        version: 25.424.332(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 25.602.152(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -1199,9 +1199,9 @@ packages:
   '@swc/types@0.1.21':
     resolution: {integrity: sha512-2YEtj5HJVbKivud9N4bpPBAyZhj4S2Ipe5LkUG94alTpr7in/GU/EARgPAd3BwU+YOmFVJC2+kjqhGRi3r0ZpQ==}
 
-  '@tailor-inc/operator-client@25.424.332':
-    resolution: {integrity: sha512-/9+Yp4HXGECcqkYBCa68HwJ5RrdVY/Vvb4bzPdcsThIgS/goFINQ5dcH7Vk7PYjyeR05x5pAoavpkKEMCb8P5A==, tarball: https://npm.pkg.github.com/download/@tailor-inc/operator-client/25.424.332/a5c8cb38c9bd8c90591ce5c0e8d4b2720976b1cb}
-    engines: {node: 22.x, pnpm: 10.7.1}
+  '@tailor-inc/operator-client@25.602.152':
+    resolution: {integrity: sha512-ro/FWEfdGCuubUYh60k/Vc7PelirdmHVUIKrnEOV8v0haJB2laNi8T5b37v5zMyfUHGOf0kCAzn6tNn9v1d1bA==, tarball: https://npm.pkg.github.com/download/@tailor-inc/operator-client/25.602.152/0a5e56fd25ef9ee723d55aefd2afc867fc269b22}
+    engines: {node: 22.x, pnpm: 10.11.0}
 
   '@tanstack/query-core@5.75.0':
     resolution: {integrity: sha512-rk8KQuCdhoRkzjRVF3QxLgAfFUyS0k7+GCQjlGEpEGco+qazJ0eMH6aO1DjDjibH7/ik383nnztua3BG+lOnwg==}
@@ -2943,7 +2943,7 @@ snapshots:
     dependencies:
       '@swc/counter': 0.1.3
 
-  '@tailor-inc/operator-client@25.424.332(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@tailor-inc/operator-client@25.602.152(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@bufbuild/protobuf': 1.10.1
       '@connectrpc/connect-query': 1.4.2(@bufbuild/protobuf@1.10.1)(@connectrpc/connect@1.6.1(@bufbuild/protobuf@1.10.1))(@tanstack/react-query@5.75.1(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
