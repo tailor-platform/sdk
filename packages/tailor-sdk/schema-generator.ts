@@ -125,15 +125,11 @@ function registerField(target: any, propertyKey: string, config?: TypeConfig) {
   const designType = Reflect.getMetadata("design:type", target, propertyKey);
   const typeName = config?.type || designType?.name || "undefined";
 
-  let isNullable: boolean = false;
-  if (typeof config?.nullable === "boolean") {
-    isNullable = config.nullable;
-  }
   // Clean the property name (remove the ? if present)
   const cleanPropertyKey = propertyKey.replace('?', '');
 
   // Check if it's an array type
-  let isList = typeName === 'Array' ||
+  let array: boolean = typeName === 'Array' ||
     Array.isArray(target[propertyKey]) ||
     typeName.includes('Array');
 
@@ -141,7 +137,7 @@ function registerField(target: any, propertyKey: string, config?: TypeConfig) {
   const key = `${constructor.name}.${cleanPropertyKey}`;
   const hasArrayOfDecorator = arrayElementTypesMap.has(key);
   if (hasArrayOfDecorator) {
-    isList = true;
+    array = true;
   }
 
   // Map the TypeScript type to GraphQL type
@@ -155,7 +151,7 @@ function registerField(target: any, propertyKey: string, config?: TypeConfig) {
 
   // Try to determine the element type for arrays
   let elementType: GraphQLType | undefined = undefined;
-  if (isList) {
+  if (array) {
     // Check if the array element type was explicitly defined using @ArrayOf
     const key = `${constructor.name}.${cleanPropertyKey}`;
     const arrayElementType = arrayElementTypesMap.get(key);
@@ -208,10 +204,9 @@ function registerField(target: any, propertyKey: string, config?: TypeConfig) {
   // Add the field to the metadata
   metadata.fields.push({
     name: cleanPropertyKey,
-    type: graphQLType,
-    isNullable: isNullable,
-    isList: isList,
-    elementType: elementType
+    type: elementType ?? graphQLType,
+    required: !config?.nullable,
+    array,
   });
 }
 
@@ -239,12 +234,12 @@ export function generateSDLFromMetadata(metadata: TypeMetadata): string {
     let fieldType = field.type;
 
     // Handle list types
-    if (field.isList) {
-      fieldType = `[${field.elementType || 'JSON'}]`;
+    if (field.array) {
+      fieldType = `[${field.type || 'JSON'}]`;
     }
 
     // Handle non-nullable types
-    if (!field.isNullable) {
+    if (!!field.required) {
       fieldType += '!';
     }
 
@@ -319,11 +314,11 @@ export function generateSDLForTypeAndDependencies(type: any): string {
       }
 
       // Check for array element type dependencies
-      if (field.isList && field.elementType &&
-        !scalarTypes.includes(field.elementType)) {
+      if (field.array && field.type &&
+        !scalarTypes.includes(field.type)) {
         // Look up the element type by name in registry
         for (const [constructor, meta] of typeRegistry.entries()) {
-          if (meta.name === field.elementType && !typesToInclude.has(constructor)) {
+          if (meta.name === field.type && !typesToInclude.has(constructor)) {
             addTypeWithDependencies(constructor);
           }
         }

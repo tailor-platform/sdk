@@ -260,17 +260,15 @@ class TailorDBField<
     return [
       {
         type: tailorToGraphQL[this._metadata.type],
-        elementType: tailorToGraphQL[this._metadata.type],
-        isNullable: !this._metadata.required,
-        isList: !!this._metadata.array,
+        required: this._metadata.required ?? true,
+        array: this._metadata.array ?? false,
       },
       ...(this._ref
         ? [{
           name: this._ref.nameMap[0],
           type: this._ref.type.name,
-          elementType: this._ref.type.name,
-          isNullable: !this._metadata.required,
-          isList: !!this._metadata.array,
+          required: this._metadata.required ?? true,
+          array: this._metadata.array ?? false,
         }]
         : []),
     ];
