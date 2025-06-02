@@ -69,7 +69,6 @@ export interface TypeMetadata {
 export interface FieldMetadata {
   name: string;
   type: GraphQLType;
-  isNullable: boolean;
-  isList: boolean;
-  elementType?: GraphQLType;
+  required: boolean;
+  array: boolean;
 }
