@@ -4,9 +4,8 @@
   "description": "Tailor Development Kit - Workspace Root",
   "type": "module",
   "scripts": {
-    "test": "pnpm -r test",
-    "test:root": "vitest watch",
-    "test:root:run": "vitest run",
+    "test": "pnpm -r test && pnpm test:root",
+    "test:root": "vitest run",
     "test:root:update-expects": "tsx tests/scripts/generate_expected_files.ts",
     "apply": "tsx src/app.ts",
     "clean": "rm -rf dist",
@@ -22,6 +21,6 @@
     "dir-compare": "^4.2.0",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "vitest": "^1.6.0"
+    "vitest": "^3.1.4"
   }
 }
