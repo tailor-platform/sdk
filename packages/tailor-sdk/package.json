@@ -5,7 +5,7 @@
   "main": "index.ts",
   "type": "module",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest",
     "build": "rollup -c rollup/config.ts"
   },
   "dependencies": {
