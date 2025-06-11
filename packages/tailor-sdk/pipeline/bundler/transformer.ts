@@ -87,7 +87,6 @@ export class CodeTransformer {
         // 実際に使用される識別子（エイリアスがあればエイリアス、なければ元の名前）
         const identifierToTrack = aliasNode || nameNode;
 
-        // このインポートされた識別子のSymbolを取得
         const symbol = identifierToTrack.getSymbol();
         if (symbol) {
           const identifierName = identifierToTrack.getText();
@@ -136,7 +135,6 @@ export class CodeTransformer {
     const referencedStatements = new Set<any>();
 
     importedIdentifierReferences.forEach((ref) => {
-      // 参照が含まれている最上位の文を取得
       let statement = ref;
       while (
         statement.getParent() &&
@@ -173,12 +171,10 @@ export class CodeTransformer {
           }
         }
 
-        // インポートされた識別子を直接参照している文をチェック
         if (referencedStatements.has(statement)) {
           statementsToRemove.add(statement);
           hasChanges = true;
 
-          // この文で定義されている識別子を削除対象に追加
           const identifiers = this.getDefinedIdentifiers(statement);
           identifiers.forEach((identifier) => {
             if (!removedIdentifiers.has(identifier)) {
@@ -203,7 +199,6 @@ export class CodeTransformer {
           statementsToRemove.add(statement);
           hasChanges = true;
 
-          // この文で定義されている識別子を削除対象に追加
           const identifiers = this.getDefinedIdentifiers(statement);
           identifiers.forEach((identifier) => {
             if (!removedIdentifiers.has(identifier)) {
@@ -219,7 +214,6 @@ export class CodeTransformer {
       }
     }
 
-    // 削除実行
     statementsToRemove.forEach((statement: Statement) => {
       if (!statement.wasForgotten()) {
         statement.remove();
@@ -232,7 +226,6 @@ export class CodeTransformer {
   private getDefinedIdentifiers(statement: Statement): Symbol[] {
     const identifiers: Symbol[] = [];
 
-    // 変数宣言 (const, let, var)
     if (statement.getKind() === SyntaxKind.VariableStatement) {
       const variableStatement = statement.asKindOrThrow(
         SyntaxKind.VariableStatement,
@@ -244,7 +237,6 @@ export class CodeTransformer {
       ).forEach((s) => s && identifiers.push(s));
     }
 
-    // 関数宣言
     if (statement.getKind() === SyntaxKind.FunctionDeclaration) {
       const functionDecl = statement.asKindOrThrow(
         SyntaxKind.FunctionDeclaration,
@@ -253,7 +245,6 @@ export class CodeTransformer {
       symbol && identifiers.push(symbol);
     }
 
-    // クラス宣言
     if (statement.getKind() === SyntaxKind.ClassDeclaration) {
       const classDecl = statement.asKindOrThrow(SyntaxKind.ClassDeclaration);
       const symbol = classDecl.getNameNode()?.getSymbol();
