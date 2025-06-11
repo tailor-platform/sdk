@@ -1,6 +1,6 @@
-import path from 'node:path';
-import fs from 'node:fs';
-import assert from 'node:assert';
+import path from "node:path";
+import fs from "node:fs";
+import assert from "node:assert";
 
 export interface TestCase {
   input: any;
@@ -30,26 +30,27 @@ export interface FunctionTestSuite {
  * @param filePath JSファイルのパス
  * @returns インポートされた関数
  */
-export async function importGeneratedFunction(filePath: string): Promise<Function> {
+export async function importGeneratedFunction(
+  filePath: string,
+): Promise<Function> {
   if (!fs.existsSync(filePath)) {
     throw new Error(`Function file does not exist: ${filePath}`);
   }
 
   try {
     const absolutePath = path.resolve(filePath);
-    // キャッシュをクリアして最新のファイルを読み込む
     delete require.cache[absolutePath];
 
     const module = require(absolutePath);
 
-    // デフォルトエクスポートまたは名前付きエクスポートを取得
-    if (typeof module === 'function') {
+    if (typeof module === "function") {
       return module;
-    } else if (module.default && typeof module.default === 'function') {
+    } else if (module.default && typeof module.default === "function") {
       return module.default;
     } else {
-      // オブジェクトの場合、最初の関数を返す
-      const functionNames = Object.keys(module).filter(key => typeof module[key] === 'function');
+      const functionNames = Object.keys(module).filter((key) =>
+        typeof module[key] === "function"
+      );
       if (functionNames.length > 0) {
         return module[functionNames[0]];
       }
@@ -69,16 +70,16 @@ export async function importGeneratedFunction(filePath: string): Promise<Functio
  */
 export async function testFunctionWithInputs(
   functionPath: string,
-  testCases: TestCase[]
+  testCases: TestCase[],
 ): Promise<TestResult[]> {
   const func = await importGeneratedFunction(functionPath);
 
-  return testCases.map(testCase => {
+  return testCases.map((testCase) => {
     try {
       const result = func(testCase.input);
       let passed: boolean = true;
       try {
-        assert.deepStrictEqual(result, testCase.expected)
+        assert.deepStrictEqual(result, testCase.expected);
       } catch (error) {
         passed = false;
       }
@@ -87,7 +88,7 @@ export async function testFunctionWithInputs(
         expected: testCase.expected,
         actual: result,
         passed,
-        description: testCase.description
+        description: testCase.description,
       };
     } catch (error) {
       return {
@@ -96,7 +97,7 @@ export async function testFunctionWithInputs(
         actual: null,
         error: error instanceof Error ? error.message : String(error),
         passed: false,
-        description: testCase.description
+        description: testCase.description,
       };
     }
   });
@@ -112,17 +113,17 @@ export async function testFunctionWithInputs(
 export async function runFunctionTestSuite(
   functionName: string,
   functionPath: string,
-  testCases: TestCase[]
+  testCases: TestCase[],
 ): Promise<FunctionTestSuite> {
   const results = await testFunctionWithInputs(functionPath, testCases);
-  const allPassed = results.every(result => result.passed);
+  const allPassed = results.every((result) => result.passed);
 
   return {
     functionName,
     functionPath,
     testCases,
     results,
-    allPassed
+    allPassed,
   };
 }
 
@@ -134,7 +135,7 @@ export async function runFunctionTestSuite(
  */
 export async function testAllGeneratedFunctions(
   functionsDir: string,
-  testSuites: Record<string, TestCase[]>
+  testSuites: Record<string, TestCase[]>,
 ): Promise<FunctionTestSuite[]> {
   const results: FunctionTestSuite[] = [];
 
@@ -142,10 +143,13 @@ export async function testAllGeneratedFunctions(
     const functionPath = path.join(functionsDir, `${functionName}.js`);
 
     if (fs.existsSync(functionPath)) {
-      const suite = await runFunctionTestSuite(functionName, functionPath, testCases);
+      const suite = await runFunctionTestSuite(
+        functionName,
+        functionPath,
+        testCases,
+      );
       results.push(suite);
     } else {
-      // ファイルが存在しない場合のエラーレポート
       results.push({
         functionName,
         functionPath,
@@ -155,9 +159,9 @@ export async function testAllGeneratedFunctions(
           expected: null,
           actual: null,
           passed: false,
-          error: `Function file not found: ${functionPath}`
+          error: `Function file not found: ${functionPath}`,
         }],
-        allPassed: false
+        allPassed: false,
       });
     }
   }
@@ -175,14 +179,14 @@ export function generateTestReport(testSuite: FunctionTestSuite): string {
 
   lines.push(`=== Function Test Report: ${testSuite.functionName} ===`);
   lines.push(`File: ${testSuite.functionPath}`);
-  lines.push(`Overall Result: ${testSuite.allPassed ? 'PASS' : 'FAIL'}`);
+  lines.push(`Overall Result: ${testSuite.allPassed ? "PASS" : "FAIL"}`);
   lines.push(`Test Cases: ${testSuite.results.length}`);
-  lines.push(`Passed: ${testSuite.results.filter(r => r.passed).length}`);
-  lines.push(`Failed: ${testSuite.results.filter(r => !r.passed).length}`);
-  lines.push('');
+  lines.push(`Passed: ${testSuite.results.filter((r) => r.passed).length}`);
+  lines.push(`Failed: ${testSuite.results.filter((r) => !r.passed).length}`);
+  lines.push("");
 
   testSuite.results.forEach((result, index) => {
-    const status = result.passed ? 'PASS' : 'FAIL';
+    const status = result.passed ? "PASS" : "FAIL";
     const description = result.description || `Test ${index + 1}`;
 
     lines.push(`${index + 1}. ${description}: ${status}`);
@@ -193,10 +197,10 @@ export function generateTestReport(testSuite: FunctionTestSuite): string {
     if (result.error) {
       lines.push(`   Error: ${result.error}`);
     }
-    lines.push('');
+    lines.push("");
   });
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -204,33 +208,41 @@ export function generateTestReport(testSuite: FunctionTestSuite): string {
  * @param testSuites テストスイートの配列
  * @returns 統合レポート文字列
  */
-export function generateCombinedTestReport(testSuites: FunctionTestSuite[]): string {
+export function generateCombinedTestReport(
+  testSuites: FunctionTestSuite[],
+): string {
   const lines: string[] = [];
 
   lines.push(`=== Combined Function Test Report ===`);
   lines.push(`Total Functions: ${testSuites.length}`);
-  lines.push(`Passed Functions: ${testSuites.filter(s => s.allPassed).length}`);
-  lines.push(`Failed Functions: ${testSuites.filter(s => !s.allPassed).length}`);
-  lines.push('');
+  lines.push(
+    `Passed Functions: ${testSuites.filter((s) => s.allPassed).length}`,
+  );
+  lines.push(
+    `Failed Functions: ${testSuites.filter((s) => !s.allPassed).length}`,
+  );
+  lines.push("");
 
-  testSuites.forEach(suite => {
-    const status = suite.allPassed ? 'PASS' : 'FAIL';
-    const passedTests = suite.results.filter(r => r.passed).length;
+  testSuites.forEach((suite) => {
+    const status = suite.allPassed ? "PASS" : "FAIL";
+    const passedTests = suite.results.filter((r) => r.passed).length;
     const totalTests = suite.results.length;
 
-    lines.push(`${suite.functionName}: ${status} (${passedTests}/${totalTests})`);
+    lines.push(
+      `${suite.functionName}: ${status} (${passedTests}/${totalTests})`,
+    );
   });
 
-  lines.push('');
-  lines.push('=== Detailed Reports ===');
+  lines.push("");
+  lines.push("=== Detailed Reports ===");
 
-  testSuites.forEach(suite => {
+  testSuites.forEach((suite) => {
     if (!suite.allPassed) {
       lines.push(generateTestReport(suite));
     }
   });
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -241,7 +253,7 @@ export function generateCombinedTestReport(testSuites: FunctionTestSuite[]): str
  */
 export async function measureFunctionPerformance(
   func: Function,
-  input: any
+  input: any,
 ): Promise<{ result: any; executionTime: number }> {
   const startTime = process.hrtime.bigint();
   const result = func(input);
