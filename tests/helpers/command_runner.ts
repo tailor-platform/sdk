@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
-import { styleText } from 'node:util';
+import { spawn } from "node:child_process";
+import { styleText } from "node:util";
 
 export interface CommandResult {
   exitCode: number | null;
@@ -12,43 +12,45 @@ export interface CommandResult {
  * @param outputDir 出力先ディレクトリのパス
  * @returns コマンドの実行結果
  */
-export async function runApplyCommand(outputDir: string): Promise<CommandResult> {
-  const args = ['apply', outputDir];
-  console.log(styleText("cyan", `$ pnpm ${args.join(' ')}`));
+export async function runApplyCommand(
+  outputDir: string,
+): Promise<CommandResult> {
+  const args = ["apply", outputDir];
+  console.log(styleText("cyan", `$ pnpm ${args.join(" ")}`));
   return new Promise((resolve, reject) => {
-    const child = spawn('pnpm', args, {
+    const child = spawn("pnpm", args, {
       cwd: process.cwd(),
-      stdio: 'pipe',
-      shell: true
+      stdio: "pipe",
+      shell: true,
     });
 
-    let stdout = '';
-    let stderr = '';
+    let stdout = "";
+    let stderr = "";
 
-    child.stdout?.on('data', (data) => {
+    child.stdout?.on("data", (data) => {
       stdout += data.toString();
     });
 
-    child.stderr?.on('data', (data) => {
+    child.stderr?.on("data", (data) => {
       stderr += data.toString();
     });
 
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       resolve({
         exitCode: code,
         stdout: stdout.trim(),
-        stderr: stderr.trim()
+        stderr: stderr.trim(),
       });
     });
 
-    child.on('error', (error) => {
+    child.on("error", (error) => {
       reject(error);
     });
 
     // タイムアウト設定（30秒）
     setTimeout(() => {
       child.kill();
-      reject(new Error('Command timeout after 30 seconds'));
+      reject(new Error("Command timeout after 30 seconds"));
     }, 30000);
   });
 }
@@ -63,41 +65,40 @@ export async function runApplyCommand(outputDir: string): Promise<CommandResult>
 export async function runCommand(
   command: string,
   args: string[] = [],
-  options: { cwd?: string; timeout?: number } = {}
+  options: { cwd?: string; timeout?: number } = {},
 ): Promise<CommandResult> {
   const { cwd = process.cwd(), timeout = 30000 } = options;
 
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      stdio: 'pipe',
-      shell: true
+      stdio: "pipe",
+      shell: true,
     });
 
-    let stdout = '';
-    let stderr = '';
+    let stdout = "";
+    let stderr = "";
 
-    child.stdout?.on('data', (data) => {
+    child.stdout?.on("data", (data) => {
       stdout += data.toString();
     });
 
-    child.stderr?.on('data', (data) => {
+    child.stderr?.on("data", (data) => {
       stderr += data.toString();
     });
 
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       resolve({
         exitCode: code,
         stdout: stdout.trim(),
-        stderr: stderr.trim()
+        stderr: stderr.trim(),
       });
     });
 
-    child.on('error', (error) => {
+    child.on("error", (error) => {
       reject(error);
     });
 
-    // タイムアウト設定
     setTimeout(() => {
       child.kill();
       reject(new Error(`Command timeout after ${timeout}ms`));
