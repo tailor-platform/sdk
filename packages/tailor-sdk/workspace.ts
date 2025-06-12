@@ -4,9 +4,9 @@ import { generateSDL } from "./schema-generator";
 import { SDLTypeMetadata } from "./types/types";
 import type { output as _output } from "./types/helpers";
 import { PipelineResolverService } from "./pipeline/service";
-import { ResolverServiceConfig } from "./pipeline/types";
+import { PipelineResolverServiceInput } from "./pipeline/types";
 import { TailorDBService } from "./tailordb/service";
-import { TailorDBServiceConfig } from "./tailordb/types";
+import { TailorDBServiceInput } from "./tailordb/types";
 
 let distPath: string = "";
 export const getDistPath = () => distPath;
@@ -26,6 +26,7 @@ export class Workspace {
   private applications: Application[] = [];
   private tailorDBServices: TailorDBService[] = [];
   private pipelineResolverServices: PipelineResolverService[] = [];
+
   constructor(public name: string) {}
 
   newApplication(name: string) {
@@ -33,19 +34,20 @@ export class Workspace {
     this.applications.push(app);
     return app;
   }
-  newTailorDBservice(nameOrConfig: string | TailorDBServiceConfig) {
-    const config: TailorDBServiceConfig = typeof nameOrConfig === "string"
-      ? { namespace: nameOrConfig }
-      : nameOrConfig;
-
-    const tailorDb = new TailorDBService(config);
-    this.tailorDBServices.push(tailorDb);
-    return tailorDb;
+  defineTailorDBService(config: TailorDBServiceInput) {
+    for (const [namespace, serviceConfig] of Object.entries(config)) {
+      const tailorDB = new TailorDBService(namespace, serviceConfig);
+      this.tailorDBServices.push(tailorDB);
+    }
   }
-  newResolverService(config: ResolverServiceConfig) {
-    const pipelineService = new PipelineResolverService(config);
-    this.pipelineResolverServices.push(pipelineService);
-    return pipelineService;
+  defineResolverService(config: PipelineResolverServiceInput) {
+    for (const [namespace, serviceConfig] of Object.entries(config)) {
+      const pipelineService = new PipelineResolverService(
+        namespace,
+        serviceConfig,
+      );
+      this.pipelineResolverServices.push(pipelineService);
+    }
   }
   async apply() {
     console.log("Applying workspace:", this.name);
@@ -57,7 +59,7 @@ export class Workspace {
 
     const metadataList: SDLTypeMetadata[] = [];
     for (const db of this.tailorDBServices) {
-      console.log("TailorDB Service:", db.config.namespace);
+      console.log("TailorDB Service:", db.namespace);
 
       // Apply the TailorDB service (loads types from files if configured)
       await db.apply();
@@ -76,7 +78,7 @@ export class Workspace {
 
     console.log(
       "Pipeline Services:",
-      this.pipelineResolverServices.map((service) => service.name),
+      this.pipelineResolverServices.map((service) => service.namespace),
     );
 
     // Build pipeline services
@@ -89,6 +91,5 @@ export class Workspace {
 export class Application {
   constructor(public name: string) {
   }
-  addSubgraph(subgraph: any) {
-  }
+  addSubgraph(subgraph: any) {}
 }

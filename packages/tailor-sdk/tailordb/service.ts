@@ -5,16 +5,10 @@ import { TailorDBServiceConfig } from "./types";
 export class TailorDBService {
   private types: any[] = [];
 
-  constructor(public config: TailorDBServiceConfig) {
-  }
-
-  get workspace(): string {
-    return this.config.namespace;
-  }
-
-  get namespace(): string {
-    return this.config.namespace;
-  }
+  constructor(
+    public readonly namespace: string,
+    public readonly config: TailorDBServiceConfig,
+  ) {}
 
   getTypes() {
     return this.types;
@@ -57,7 +51,7 @@ export class TailorDBService {
     }
 
     console.log(
-      `Found ${typeFiles.length} type files for TailorDB service "${this.config.namespace}"`,
+      `Found ${typeFiles.length} type files for TailorDB service "${this.namespace}"`,
     );
 
     // Load and add types from each file
