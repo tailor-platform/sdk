@@ -14,3 +14,6 @@ export * from "./pipeline";
 export { t } from "./types";
 
 export { Tailor } from "./workspace";
+
+// Export performance measurement utilities
+export * from "./performance/index";

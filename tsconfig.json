@@ -4,8 +4,6 @@
     "module": "ES2022",
     "moduleResolution": "node",
     "noEmit": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "removeComments": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

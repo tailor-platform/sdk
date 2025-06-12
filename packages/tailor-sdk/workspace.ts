@@ -7,6 +7,7 @@ import { PipelineResolverService } from "./pipeline/service";
 import { PipelineResolverServiceInput } from "./pipeline/types";
 import { TailorDBService } from "./tailordb/service";
 import { TailorDBServiceInput } from "./tailordb/types";
+import { measure } from "./performance";
 
 let distPath: string = "";
 export const getDistPath = () => distPath;
@@ -29,17 +30,20 @@ export class Workspace {
 
   constructor(public name: string) {}
 
+  @measure
   newApplication(name: string) {
     const app = new Application(name);
     this.applications.push(app);
     return app;
   }
+  @measure
   defineTailorDBService(config: TailorDBServiceInput) {
     for (const [namespace, serviceConfig] of Object.entries(config)) {
       const tailorDB = new TailorDBService(namespace, serviceConfig);
       this.tailorDBServices.push(tailorDB);
     }
   }
+  @measure
   defineResolverService(config: PipelineResolverServiceInput) {
     for (const [namespace, serviceConfig] of Object.entries(config)) {
       const pipelineService = new PipelineResolverService(
@@ -49,6 +53,7 @@ export class Workspace {
       this.pipelineResolverServices.push(pipelineService);
     }
   }
+  @measure
   async apply() {
     console.log("Applying workspace:", this.name);
     console.log("Applications:", this.applications.map((app) => app.name));

@@ -10,6 +10,7 @@ import {
   VariableDeclaration,
 } from "ts-morph";
 import { ResolverSummary } from "./types";
+import { measure } from "../../performance";
 
 export class CodeTransformer {
   private project: Project;
@@ -17,6 +18,7 @@ export class CodeTransformer {
   constructor() {
     this.project = new Project({
       tsConfigFilePath: "./tsconfig.json",
+      skipAddingFilesFromTsConfig: true,
       compilerOptions: {
         allowJs: true,
         checkJs: false,
@@ -24,6 +26,7 @@ export class CodeTransformer {
     });
   }
 
+  @measure
   transform(
     filePath: string,
     resolver: ResolverSummary,
@@ -59,6 +62,7 @@ export class CodeTransformer {
     });
   }
 
+  @measure
   private trimSDKCode(filePath: string): string {
     const sourceFile = this.project.addSourceFileAtPath(filePath);
 
@@ -226,6 +230,7 @@ export class CodeTransformer {
     return sourceFile.getFullText();
   }
 
+  @measure
   private getDefinedIdentifiers(statement: Statement): Symbol[] {
     const identifiers: Symbol[] = [];
 
