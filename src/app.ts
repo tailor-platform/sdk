@@ -22,5 +22,7 @@ export async function apply() {
 }
 
 if (process.argv[1] === __filename) {
+  // Note: Environment variables are loaded automatically by tsx when using --env-file flag
+  // Performance tracking and reporting will be handled automatically based on environment variables
   await apply().catch(console.error);
 }

@@ -1,7 +1,9 @@
 import { Resolver } from "../resolver";
 import { ResolverSummary } from "./types";
+import { measure } from "../../performance";
 
 export class ResolverExtractor {
+  @measure
   async summarize(
     resolverFilePath: string,
   ): Promise<ResolverSummary> {

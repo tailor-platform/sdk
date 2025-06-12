@@ -1,5 +1,6 @@
 import { ResolverBundler } from "./bundler";
 import { PipelineResolverServiceConfig } from "./types";
+import { measure } from "../performance";
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
@@ -11,6 +12,7 @@ export class PipelineResolverService {
     this.bundler = new ResolverBundler(namespace, config);
   }
 
+  @measure
   async build() {
     await this.bundler.bundle();
   }
