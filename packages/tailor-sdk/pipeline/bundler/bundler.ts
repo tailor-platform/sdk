@@ -3,19 +3,20 @@ import fs from "node:fs";
 import * as rolldown from "rolldown";
 import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
-import { ResolverServiceConfig } from "../types";
 import { ResolverExtractor } from "./extractor";
 import { CodeTransformer } from "./transformer";
 import { getDistPath } from "../../workspace";
+import { PipelineResolverServiceConfig } from "../types";
 
 export class ResolverBundler {
-  private config: ResolverServiceConfig;
-  private tempDir: string;
-  private extractor: ResolverExtractor;
-  private transformer: CodeTransformer;
+  private readonly tempDir: string;
+  private readonly extractor: ResolverExtractor;
+  private readonly transformer: CodeTransformer;
 
-  constructor(config: ResolverServiceConfig) {
-    this.config = config;
+  constructor(
+    private readonly namespace: string,
+    private readonly config: PipelineResolverServiceConfig,
+  ) {
     this.tempDir = path.join(process.cwd(), ".tailor-sdk");
     this.extractor = new ResolverExtractor();
     this.transformer = new CodeTransformer();
@@ -40,7 +41,7 @@ export class ResolverBundler {
       }
 
       console.log(
-        `Found ${resolverFiles.length} resolver files for service "${this.config.namespace}"`,
+        `Found ${resolverFiles.length} resolver files for service "${this.namespace}"`,
       );
 
       // Process each resolver file
@@ -51,11 +52,11 @@ export class ResolverBundler {
       );
 
       console.log(
-        `Successfully bundled resolvers for service "${this.config.namespace}"`,
+        `Successfully bundled resolvers for service "${this.namespace}"`,
       );
     } catch (error) {
       console.error(
-        `Bundle failed for service ${this.config.namespace}:`,
+        `Bundle failed for service ${this.namespace}:`,
         error,
       );
       throw error;

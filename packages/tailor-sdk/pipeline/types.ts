@@ -30,8 +30,7 @@ export type ResolverOptions = {
   defaults: StepOptions;
 };
 
-// Resolver Service Configuration
-export interface ResolverServiceConfig {
-  namespace: string;
-  files?: string[];
-}
+export type PipelineResolverServiceConfig = { files: string[] };
+export type PipelineResolverServiceInput = {
+  [namespace: string]: PipelineResolverServiceConfig;
+};
