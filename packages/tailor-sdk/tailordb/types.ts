@@ -39,7 +39,7 @@ export type TypeValidateFn<P, O> = (args: {
   user: TailorUser;
 }) => boolean;
 
-export interface TailorDBServiceConfig {
-  namespace: string;
-  files?: string[];
-}
+export type TailorDBServiceConfig = { files: string[] };
+export type TailorDBServiceInput = {
+  [namespace: string]: TailorDBServiceConfig;
+};

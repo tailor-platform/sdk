@@ -1,15 +1,14 @@
 import { ResolverBundler } from "./bundler";
-import { ResolverServiceConfig } from "./types";
+import { PipelineResolverServiceConfig } from "./types";
 
 export class PipelineResolverService {
-  public name: string;
-  private config: ResolverServiceConfig;
   private bundler: ResolverBundler;
 
-  constructor(config: ResolverServiceConfig) {
-    this.name = config.namespace;
-    this.config = config;
-    this.bundler = new ResolverBundler(this.config);
+  constructor(
+    public readonly namespace: string,
+    config: PipelineResolverServiceConfig,
+  ) {
+    this.bundler = new ResolverBundler(namespace, config);
   }
 
   async build() {

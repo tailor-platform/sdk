@@ -9,14 +9,12 @@ export async function apply() {
   Tailor.init(process.argv[2] || path.join(__dirname, "..", "dist"));
   const workspace = Tailor.newWorkspace("my_workspace");
 
-  workspace.newTailorDBservice({
-    namespace: "my_db",
-    files: ["./src/tailordb/*.ts"],
+  workspace.defineTailorDBService({
+    my_db: { files: ["./src/tailordb/*.ts"] },
   });
 
-  workspace.newResolverService({
-    namespace: "my_pipeline",
-    files: ["./src/resolvers/*.resolver.ts"],
+  workspace.defineResolverService({
+    my_pipeline: { files: ["./src/resolvers/*.resolver.ts"] },
   });
 
   workspace.newApplication("my_app");

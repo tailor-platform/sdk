@@ -12,14 +12,14 @@ import {
 } from "./types";
 import {
   SDLFieldMetadata,
+  SDLTypeMetadata,
   TailorFieldType,
   tailorToGraphQL,
   TailorToTs,
-  SDLTypeMetadata,
 } from "../types/types";
 import type { DeepWriteable, Prettify } from "../types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "../types/field";
-import { ReferenceConfig, TailorType, TailorField } from "../types/type";
+import { ReferenceConfig, TailorField, TailorType } from "../types/type";
 
 const fieldDefaults = {
   required: undefined,
@@ -38,8 +38,8 @@ class TailorDBField<
   const Defined extends DefinedFieldMetadata,
   const Output,
   const Reference extends
-  | ReferenceConfig<any>
-  | undefined,
+    | ReferenceConfig<any>
+    | undefined,
 > extends TailorField<Defined, Output, Reference, DBFieldMetadata> {
   get metadata() {
     return structuredClone(this._metadata);
@@ -195,7 +195,6 @@ class TailorDBField<
     >;
   }
 
-
   validate<
     const V extends FieldValidateFn<Output>[],
     CurrentDefined extends Defined,
@@ -295,15 +294,15 @@ type DBTypeOptions = {
 
 class TailorDBType<
   const F extends
-  & { id?: never }
-  & Record<
-    string,
-    TailorDBField<
-      M,
-      any,
-      any
-    >
-  >,
+    & { id?: never }
+    & Record<
+      string,
+      TailorDBField<
+        M,
+        any,
+        any
+      >
+    >,
   M extends DefinedFieldMetadata,
 > extends TailorType<M, F & Record<string, TailorField<M, any, any>>> {
   public readonly metadata: TDB;
@@ -376,8 +375,10 @@ const datetimeFields = {
 type DBType<
   F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
   O extends DBTypeOptions = {},
-> = O extends { withTimestamps: true }
-  ? TailorDBType<{ id: idField } & F & typeof datetimeFields, DefinedFieldMetadata>
+> = O extends { withTimestamps: true } ? TailorDBType<
+    { id: idField } & F & typeof datetimeFields,
+    DefinedFieldMetadata
+  >
   : TailorDBType<{ id: idField } & F, DefinedFieldMetadata>;
 
 function dbType<
@@ -385,7 +386,10 @@ function dbType<
   const O extends DBTypeOptions,
 >(name: string, fields: F, options?: O): DBType<F, O> {
   if (options?.withTimestamps) {
-    return new TailorDBType<{ id: idField } & F & typeof datetimeFields, DefinedFieldMetadata>(name, {
+    return new TailorDBType<
+      { id: idField } & F & typeof datetimeFields,
+      DefinedFieldMetadata
+    >(name, {
       id: idField,
       ...fields,
       ...datetimeFields,
@@ -413,16 +417,16 @@ const db = {
 
 export default db;
 export {
-  db,
-  uuid,
-  string,
+  _enum as enum,
   bool,
-  int,
-  float,
   date,
   datetime,
+  db,
   dbType as type,
-  _enum as enum,
+  float,
+  int,
   isDBType,
+  string,
   TailorDBDef,
+  uuid,
 };
