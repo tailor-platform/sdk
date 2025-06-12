@@ -1,9 +1,10 @@
 import { Resolver } from "../resolver";
-import { Step } from "./types";
-import { StepType } from "../types";
+import { ResolverSummary } from "./types";
 
-export class StepExtractor {
-  async extractSteps(resolverFilePath: string): Promise<Step[]> {
+export class ResolverExtractor {
+  async summarize(
+    resolverFilePath: string,
+  ): Promise<ResolverSummary> {
     const resolverModule = await import(resolverFilePath);
     const resolver = resolverModule.default;
 
@@ -13,8 +14,9 @@ export class StepExtractor {
       );
     }
 
-    return resolver.steps.map((
-      [type, name, fn]: [StepType, string, Function],
+    const steps = resolver.steps.map((
+      [type, name, fn]: typeof resolver.steps[number],
     ) => ({ type, name, fn }));
+    return { name: resolver.name, steps };
   }
 }

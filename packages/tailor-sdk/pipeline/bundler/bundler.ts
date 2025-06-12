@@ -4,21 +4,20 @@ import * as rolldown from "rolldown";
 import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
 import { ResolverServiceConfig } from "../types";
-import { StepExtractor } from "./extractor";
+import { ResolverExtractor } from "./extractor";
 import { CodeTransformer } from "./transformer";
 import { getDistPath } from "../../workspace";
 
 export class ResolverBundler {
   private config: ResolverServiceConfig;
   private tempDir: string;
-  private extractor: StepExtractor;
+  private extractor: ResolverExtractor;
   private transformer: CodeTransformer;
 
   constructor(config: ResolverServiceConfig) {
     this.config = config;
-    // Use absolute path for temp directory
     this.tempDir = path.join(process.cwd(), ".tailor-sdk");
-    this.extractor = new StepExtractor();
+    this.extractor = new ResolverExtractor();
     this.transformer = new CodeTransformer();
   }
 
@@ -96,18 +95,14 @@ export class ResolverBundler {
   }
 
   private async processResolverFile(resolverFile: string): Promise<void> {
-    // Extract steps from resolver
-    const steps = await this.extractor.extractSteps(resolverFile);
+    // Extract steps and resolver name from resolver
+    const resolver = await this.extractor.summarize(resolverFile);
 
     // Generate output filename
-    const resolverName = path.basename(
-      resolverFile,
-      path.extname(resolverFile),
-    );
     const outputFile = path.join(
       this.tempDir,
       "resolvers",
-      `${resolverName}.js`,
+      `${resolver.name}.js`,
     );
 
     // Pre-bundle the resolver file
@@ -116,7 +111,7 @@ export class ResolverBundler {
     // Transform the bundled file
     const stepOutputFiles = this.transformer.transform(
       outputFile,
-      steps,
+      resolver,
       this.tempDir,
     );
 

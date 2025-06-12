@@ -9,7 +9,7 @@ import {
   SyntaxKind,
   VariableDeclaration,
 } from "ts-morph";
-import { Step } from "./types";
+import { ResolverSummary } from "./types";
 
 export class CodeTransformer {
   private project: Project;
@@ -24,26 +24,29 @@ export class CodeTransformer {
     });
   }
 
-  transform(filePath: string, steps: Step[], tempDir: string): string[] {
+  transform(
+    filePath: string,
+    resolver: ResolverSummary,
+    tempDir: string,
+  ): string[] {
     const trimmedContent = this.trimSDKCode(filePath);
     fs.writeFileSync(
       filePath,
       outdent`
       ${trimmedContent}
       ${
-        steps.map(({ name, fn }) =>
+        resolver.steps.map(({ name, fn }) =>
           /* js */ `export const $tailor_resolver_step__${name} = ${fn.toString()};`
         ).join("\n")
       }
       `,
     );
 
-    const resolverId = path.basename(filePath, ".js");
     const stepDir = path.join(tempDir, "steps");
     fs.mkdirSync(stepDir, { recursive: true });
 
-    return steps.map(({ name }) => {
-      const stepFilePath = path.join(stepDir, `${resolverId}__${name}.js`);
+    return resolver.steps.map(({ name }) => {
+      const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
       const stepFunctionVariable = `$tailor_resolver_step__${name}`;
       const stepContent = outdent /* js */`
       import { ${stepFunctionVariable} } from "${
