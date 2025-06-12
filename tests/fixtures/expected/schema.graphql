@@ -1,3 +1,24 @@
+type Customer {
+  id: ID!
+  name: String!
+  email: String!
+  phone: String
+  address: String
+  city: String
+  state: String!
+  country: String!
+  postalCode: String!
+}
+type PurchaseOrder {
+  id: ID!
+  supplierID: ID!
+  supplier: Supplier!
+  totalPrice: Int!
+  discount: Float
+  status: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
 type SalesOrder {
   id: ID!
   customerID: ID!
@@ -10,17 +31,6 @@ type SalesOrder {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
-type Customer {
-  id: ID!
-  name: String!
-  email: String!
-  phone: String
-  address: String
-  city: String
-  state: String!
-  country: String!
-  postalCode: String!
-}
 type Supplier {
   id: ID!
   name: String!
@@ -31,16 +41,6 @@ type Supplier {
   country: String!
   state: enum!
   city: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-type PurchaseOrder {
-  id: ID!
-  supplierID: ID!
-  supplier: Supplier!
-  totalPrice: Int!
-  discount: Float
-  status: String!
   createdAt: DateTime!
   updatedAt: DateTime!
 }

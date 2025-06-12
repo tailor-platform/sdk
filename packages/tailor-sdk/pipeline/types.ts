@@ -2,7 +2,11 @@ import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 
 export type StepType = "fn" | "sql" | "gql";
-export type Step<T, R, Context extends Record<string, unknown>> =
+export type Step<
+  T,
+  R,
+  Context extends Record<string, unknown>,
+> =
   | ((
     { input, context }: {
       input: T;
