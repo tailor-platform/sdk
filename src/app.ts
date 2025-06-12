@@ -14,7 +14,7 @@ export async function apply() {
   });
 
   workspace.defineResolverService({
-    my_pipeline: { files: ["./src/resolvers/*.resolver.ts"] },
+    my_pipeline: { files: ["./src/resolvers/**/resolver.ts"] },
   });
 
   workspace.newApplication("my_app");

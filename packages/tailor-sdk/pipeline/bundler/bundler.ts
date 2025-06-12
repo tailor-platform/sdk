@@ -24,13 +24,11 @@ export class ResolverBundler {
 
   async bundle(): Promise<void> {
     try {
-      // Clean up temp directory
       if (fs.existsSync(this.tempDir)) {
         fs.rmSync(this.tempDir, { recursive: true });
       }
       fs.mkdirSync(this.tempDir, { recursive: true });
 
-      // Detect resolver files
       const resolverFiles = await this.detectResolverFiles();
       if (resolverFiles.length === 0) {
         throw new Error(
@@ -44,7 +42,6 @@ export class ResolverBundler {
         `Found ${resolverFiles.length} resolver files for service "${this.namespace}"`,
       );
 
-      // Process each resolver file
       await Promise.all(
         resolverFiles.map(async (resolverFile) => {
           await this.processResolverFile(resolverFile);
@@ -71,24 +68,13 @@ export class ResolverBundler {
     const resolverFiles: string[] = [];
 
     for (const pattern of this.config.files) {
-      // Convert glob pattern to regex
-      const baseDir = path.dirname(pattern);
-      const filePattern = path.basename(pattern);
+      const absolutePattern = path.resolve(process.cwd(), pattern);
 
-      // Simple glob to regex conversion (supports * wildcard)
-      const regexPattern = filePattern
-        .replace(/\./g, "\\.")
-        .replace(/\*/g, ".*");
-      const regex = new RegExp(`^${regexPattern}$`);
-
-      // Read directory and filter files
-      const absoluteBaseDir = path.resolve(process.cwd(), baseDir);
-      if (fs.existsSync(absoluteBaseDir)) {
-        const files = fs.readdirSync(absoluteBaseDir);
-        const matchedFiles = files
-          .filter((file) => regex.test(file))
-          .map((file) => path.join(absoluteBaseDir, file));
+      try {
+        const matchedFiles = fs.globSync(absolutePattern);
         resolverFiles.push(...matchedFiles);
+      } catch (error) {
+        console.warn(`Failed to glob pattern "${pattern}":`, error);
       }
     }
 
@@ -96,27 +82,22 @@ export class ResolverBundler {
   }
 
   private async processResolverFile(resolverFile: string): Promise<void> {
-    // Extract steps and resolver name from resolver
     const resolver = await this.extractor.summarize(resolverFile);
 
-    // Generate output filename
     const outputFile = path.join(
       this.tempDir,
       "resolvers",
       `${resolver.name}.js`,
     );
 
-    // Pre-bundle the resolver file
     await this.preBundle(resolverFile, outputFile);
 
-    // Transform the bundled file
     const stepOutputFiles = this.transformer.transform(
       outputFile,
       resolver,
       this.tempDir,
     );
 
-    // Post-bundle the step files
     await this.postBundle(stepOutputFiles);
   }
 
