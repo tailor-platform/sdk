@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { TailorDBServiceConfig } from "./types";
+import { measure } from "../performance";
 
 export class TailorDBService {
   private types: any[] = [];
@@ -10,10 +11,12 @@ export class TailorDBService {
     public readonly config: TailorDBServiceConfig,
   ) {}
 
+  @measure
   getTypes() {
     return this.types;
   }
 
+  @measure
   async apply() {
     // If files are specified, load types from those files
     if (this.config.files && this.config.files.length > 0) {
@@ -21,6 +24,7 @@ export class TailorDBService {
     }
   }
 
+  @measure
   private async loadTypesFromFiles(): Promise<void> {
     if (!this.config.files || this.config.files.length === 0) {
       return;

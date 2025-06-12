@@ -7,6 +7,7 @@ import { ResolverExtractor } from "./extractor";
 import { CodeTransformer } from "./transformer";
 import { getDistPath } from "../../workspace";
 import { PipelineResolverServiceConfig } from "../types";
+import { measure } from "../../performance";
 
 export class ResolverBundler {
   private readonly tempDir: string;
@@ -22,6 +23,7 @@ export class ResolverBundler {
     this.transformer = new CodeTransformer();
   }
 
+  @measure
   async bundle(): Promise<void> {
     try {
       if (fs.existsSync(this.tempDir)) {
@@ -60,6 +62,7 @@ export class ResolverBundler {
     }
   }
 
+  @measure
   private async detectResolverFiles(): Promise<string[]> {
     if (!this.config.files || this.config.files.length === 0) {
       return [];
@@ -81,6 +84,7 @@ export class ResolverBundler {
     return resolverFiles;
   }
 
+  @measure
   private async processResolverFile(resolverFile: string): Promise<void> {
     const resolver = await this.extractor.summarize(resolverFile);
 
@@ -101,6 +105,7 @@ export class ResolverBundler {
     await this.postBundle(stepOutputFiles);
   }
 
+  @measure
   private async preBundle(input: string, output: string): Promise<void> {
     const outputDir = path.dirname(output);
     if (!fs.existsSync(outputDir)) {
@@ -121,6 +126,7 @@ export class ResolverBundler {
     );
   }
 
+  @measure
   private async postBundle(stepFiles: string[]): Promise<void> {
     const distPath = getDistPath() || "dist";
     const outputDir = path.join(distPath, "functions");
