@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import outdent from "multiline-ts";
+import ml from "multiline-ts";
 import {
   Node,
   Project,
@@ -35,12 +35,27 @@ export class CodeTransformer {
     const trimmedContent = this.trimSDKCode(filePath);
     fs.writeFileSync(
       filePath,
-      outdent`
+      ml /* js */`
       ${trimmedContent}
+
+      ${SQL_WRAPPER_DEFINITION}
+
       ${
-        resolver.steps.map(({ name, fn }) =>
-          /* js */ `export const $tailor_resolver_step__${name} = ${fn.toString()};`
-        ).join("\n")
+        resolver.steps.flatMap(({ type, name, fn }) => {
+          switch (type) {
+            case "fn":
+            case "sql":
+              return [
+                ml /* js */`export const ${
+                  stepVariableName(name)
+                } = ${fn.toString()};`,
+              ];
+            case "gql":
+              return [];
+            default:
+              throw new Error(`Unsupported step type: ${type}`);
+          }
+        }).join("\n")
       }
       `,
     );
@@ -48,18 +63,39 @@ export class CodeTransformer {
     const stepDir = path.join(tempDir, "steps");
     fs.mkdirSync(stepDir, { recursive: true });
 
-    return resolver.steps.map(({ name }) => {
-      const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
-      const stepFunctionVariable = `$tailor_resolver_step__${name}`;
-      const stepContent = outdent /* js */`
-      import { ${stepFunctionVariable} } from "${
-        path.relative(stepDir, filePath)
-      }";
-      globalThis.main = ${stepFunctionVariable};
-      `;
-      fs.writeFileSync(stepFilePath, stepContent);
-      return stepFilePath;
-    });
+    return resolver.steps
+      .filter(({ type }) => type !== "gql")
+      .flatMap(
+        ({ type, name }) => {
+          const stepFilePath = path.join(
+            stepDir,
+            `${resolver.name}__${name}.js`,
+          );
+          const stepFunctionVariable = stepVariableName(name);
+          const relativePath = path.relative(stepDir, filePath);
+          let stepContent;
+          switch (type) {
+            case "fn":
+              stepContent = ml /* js */`
+                import { ${stepFunctionVariable} } from "${relativePath}";
+                globalThis.main = ${stepFunctionVariable};
+              `;
+              break;
+            case "sql":
+              stepContent = ml /* js */`
+                import { ${stepFunctionVariable} } from "${relativePath}";
+                ${SQL_WRAPPER_DEFINITION}
+                globalThis.main = ${wrapSqlFn(stepFunctionVariable)};
+              `;
+              break;
+            default:
+              return [];
+          }
+
+          fs.writeFileSync(stepFilePath, stepContent);
+          return [stepFilePath];
+        },
+      );
   }
 
   @measure
@@ -262,3 +298,47 @@ export class CodeTransformer {
     return identifiers;
   }
 }
+
+function stepVariableName(stepName: string) {
+  return `$tailor_resolver_step__${stepName}`;
+}
+
+const SQL_WRAPPER_NAME = "$tailor_sql_step_wrapper";
+function wrapSqlFn(target: string) {
+  return `${SQL_WRAPPER_NAME}(${target})`;
+}
+const SQL_WRAPPER_DEFINITION = ml /* js */`
+  export const $connect_tailordb = async (namespace) => {
+    const baseClient = new tailordb.Client({ namespace });
+    await baseClient.connect();
+    const client = {
+      async exec(query) { return baseClient.queryObject(query) },
+      async execOne(query) { return baseClient.queryObject(query) },
+    };
+    return {
+      client,
+      async transaction(callback) {
+        try {
+          await client.exec("BEGIN");
+          const result = await callback(client);
+          await client.exec("COMMIT");
+          return result;
+        } catch (e) {
+          console.error("Transaction failed:", e);
+          try {
+            await client.exec("ROLLBACK");
+          } catch (e) {
+            console.error("Failed to rollback transaction:", e);
+          }
+        }
+      }
+    };
+  };
+
+  const ${SQL_WRAPPER_NAME} = (namespace, fn) => {
+    const client = $connect_tailordb(namespace);
+    return (args) => {
+      return fn({ ...args, client });
+    };
+  };
+`;
