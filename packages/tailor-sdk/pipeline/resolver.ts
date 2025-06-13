@@ -1,15 +1,15 @@
-// import path from 'node:path';
-// import fs from 'node:fs';
-// import multiline from 'multiline-ts';
+import path from "node:path";
+import fs from "node:fs";
+import multiline from "multiline-ts";
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 import { ResolverOptions, Step, StepDef, StepOptions, StepType } from "./types";
 import { TailorType } from "../types/type";
 import { output } from "../types/helpers";
-// import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-// import { generateSDLFromMetadata } from '../../schema-generator';
-// import { capitalize } from 'es-toolkit';
-// import { getBasePath } from '../../index';
+import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { SchemaGenerator } from "../schema-generator";
+import { capitalize } from "es-toolkit";
+import { getDistPath } from "../workspace";
 
 export class Resolver<
   QueryType extends "query" | "mutation",
@@ -122,47 +122,62 @@ export class Resolver<
     >;
   }
 
-  // toSDLMetadata() {
-  //   const input = this.input.toSDLMetadata(true);
-  //   const output = this.output.toSDLMetadata();
-  //   const sdl = multiline/* gql */`
-  //   ${generateSDLFromMetadata(input)}
-  //   ${generateSDLFromMetadata(output)}
-  //   extend type ${capitalize(this.queryType)} {
-  //     ${this.name}(input: ${input.name}): ${output.name}
-  //   }
-  //   `;
-  //   return {
-  //     name: this.name,
-  //     sdl,
-  //     pipelines: this._steps.map((step) => {
-  //       const [type, name] = step;
-  //       switch (type) {
-  //         case "fn":
-  //         case "sql":
-  //           const functionPath = path.join(getBasePath(), "dist", "functions", `${name}.js`)
-  //           const functionCode = fs.readFileSync(functionPath, 'utf-8');
-  //           return {
-  //             name,
-  //             description: name,
-  //             operationType: PipelineResolver_OperationType.FUNCTION,
-  //             operationSource: functionCode,
-  //             operationName: name,
-  //           };
-  //         case "gql":
-  //           return {
-  //             name,
-  //             description: name,
-  //             operationType: PipelineResolver_OperationType.GRAPHQL,
-  //             operationSource: "",
-  //             operationName: name,
-  //           };
-  //         default:
-  //           throw new Error(`Unsupported step kind: ${step[0]}`);
-  //       }
-  //     }),
-  //   };
-  // }
+  toSDLMetadata() {
+    if (!this.output) {
+      throw new Error(
+        `Resolver "${this.name}" must have an output type defined. Use .returns() to specify the output type.`,
+      );
+    }
+
+    const input = this.input.toSDLMetadata(true);
+    const output = this.output.toSDLMetadata();
+    const sdl = multiline /* gql */`
+    ${SchemaGenerator.generateSDLFromMetadata(input)}
+    ${SchemaGenerator.generateSDLFromMetadata(output)}
+    extend type ${capitalize(this.queryType)} {
+      ${this.name}(input: ${input.name}): ${output.name}
+    }
+    `;
+    return {
+      name: this.name,
+      sdl,
+      pipelines: this._steps.map((step) => {
+        const [type, name] = step;
+        switch (type) {
+          case "fn":
+          case "sql":
+            const functionPath = path.join(
+              getDistPath(),
+              "functions",
+              `${this.name}__${name}.js`,
+            );
+            let functionCode = "";
+            try {
+              functionCode = fs.readFileSync(functionPath, "utf-8");
+            } catch (error) {
+              console.warn(`Function file not found: ${functionPath}`);
+            }
+            return {
+              name,
+              description: name,
+              operationType: PipelineResolver_OperationType.FUNCTION,
+              operationSource: functionCode,
+              operationName: name,
+            };
+          case "gql":
+            return {
+              name,
+              description: name,
+              operationType: PipelineResolver_OperationType.GRAPHQL,
+              operationSource: "",
+              operationName: name,
+            };
+          default:
+            throw new Error(`Unsupported step kind: ${step[0]}`);
+        }
+      }),
+    };
+  }
 }
 
 export function createQueryResolver<

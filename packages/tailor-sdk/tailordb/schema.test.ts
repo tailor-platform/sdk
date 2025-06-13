@@ -1,11 +1,11 @@
-import { generateSDLFromMetadata } from "../schema-generator";
-import { db } from "./schema"
+import { SchemaGenerator } from "../schema-generator";
+import { db } from "./schema";
 
 import { describe, expect, test } from "vitest";
 
 const productItem = db.type(
   "ProductItem",
-  { name: db.string().unique() }
+  { name: db.string().unique() },
 );
 const productType = db.type(
   "Product",
@@ -15,14 +15,17 @@ const productType = db.type(
     price: db.int(),
     weight: db.float().optional(),
     variants: db.string().array().optional(),
-    itemIDs: db.uuid().ref(productItem, ["items", "product"]).array().optional(),
+    itemIDs: db.uuid().ref(productItem, ["items", "product"]).array()
+      .optional(),
   },
   { withTimestamps: true },
 );
 
 describe("TailorDB: object style", () => {
   test("sdl", () => {
-    const sdl = generateSDLFromMetadata(productType.toSDLMetadata());
+    const sdl = SchemaGenerator.generateSDLFromMetadata(
+      productType.toSDLMetadata(),
+    );
     // console.log(sdl);
 
     expect(sdl).toContain(`type Product {`);

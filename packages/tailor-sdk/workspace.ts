@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import { generateSDL } from "./schema-generator";
+import { SchemaGenerator } from "./schema-generator";
 import { SDLTypeMetadata } from "./types/types";
 import type { output as _output } from "./types/helpers";
 import { PipelineResolverService } from "./pipeline/service";
@@ -8,6 +8,7 @@ import { PipelineResolverServiceInput } from "./pipeline/types";
 import { TailorDBService } from "./tailordb/service";
 import { TailorDBServiceInput } from "./tailordb/types";
 import { measure } from "./performance";
+import outdent from "multiline-ts";
 
 let distPath: string = "";
 export const getDistPath = () => distPath;
@@ -78,18 +79,44 @@ export class Workspace {
       });
     }
 
-    const sdl = generateSDL(metadataList);
-    fs.writeFileSync(path.join(distPath, "schema.graphql"), sdl);
+    // Generate TailorDB SDL
+    const tailorDBSDL = SchemaGenerator.generateSDL(metadataList);
 
     console.log(
       "Pipeline Services:",
       this.pipelineResolverServices.map((service) => service.namespace),
     );
 
-    // Build pipeline services
+    // Build pipeline services and collect resolver metadata
+    const resolverMetadataList: Array<{ name: string; sdl: string }> = [];
     for (const pipelineService of this.pipelineResolverServices) {
       await pipelineService.build();
+
+      // Get resolver SDL metadata
+      const resolverMetadata = pipelineService.getResolverSDLMetadata();
+      for (const metadata of resolverMetadata) {
+        resolverMetadataList.push({
+          name: metadata.name,
+          sdl: metadata.sdl,
+        });
+      }
     }
+
+    const combinedSDL = outdent`
+    # TailorDB Type
+    ${tailorDBSDL}
+
+    ${
+      resolverMetadataList.map((metadata) =>
+        outdent`
+        # Resolver: ${metadata.name}
+        ${metadata.sdl}
+        `
+      ).join("\n\n\n")
+    }
+
+    `;
+    fs.writeFileSync(path.join(distPath, "schema.graphql"), combinedSDL);
   }
 }
 
