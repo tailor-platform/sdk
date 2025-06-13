@@ -4,6 +4,7 @@ import { ConsoleReporter, JSONReporter } from "./reporters/index";
 import { performanceConfig } from "./config";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import ml from "multiline-ts";
 
 export class PerformanceTracker {
   private static instance: PerformanceTracker;
@@ -139,27 +140,13 @@ export class PerformanceTracker {
 
         const stats = this.getAllStats();
         if (stats.length > 0) {
-          console.log("\n=== Performance Summary ===");
-          console.log(`Total unique methods measured: ${stats.length}`);
-
           const totalCalls = stats.reduce((sum, s) => sum + s.callCount, 0);
-          const totalTime = stats.reduce((sum, s) => sum + s.totalTime, 0);
-          const avgTimePerCall = totalTime / totalCalls;
 
-          console.log(`Total method calls: ${totalCalls}`);
-          console.log(`Total execution time: ${totalTime.toFixed(2)}ms`);
-          console.log(
-            `Average time per call: ${avgTimePerCall.toFixed(2)}ms`,
-          );
-
-          const slowest = stats.reduce((prev, curr) =>
-            prev.totalTime > curr.totalTime ? prev : curr
-          );
-          console.log(
-            `Slowest method: ${slowest.className}.${slowest.methodName} (${
-              slowest.totalTime.toFixed(2)
-            }ms total)`,
-          );
+          console.log(ml`
+            === Performance Summary ===
+            Total unique methods measured: ${stats.length.toString()}
+            Total method calls: ${totalCalls.toString()}
+          `);
         }
       } catch (error) {
         console.error("Failed to generate performance report on exit:", error);

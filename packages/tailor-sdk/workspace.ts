@@ -8,7 +8,7 @@ import { PipelineResolverServiceInput } from "./pipeline/types";
 import { TailorDBService } from "./tailordb/service";
 import { TailorDBServiceInput } from "./tailordb/types";
 import { measure } from "./performance";
-import outdent from "multiline-ts";
+import gql from "multiline-ts";
 
 let distPath: string = "";
 export const getDistPath = () => distPath;
@@ -102,13 +102,13 @@ export class Workspace {
       }
     }
 
-    const combinedSDL = outdent`
+    const combinedSDL = gql`
     # TailorDB Type
     ${tailorDBSDL}
 
     ${
       resolverMetadataList.map((metadata) =>
-        outdent`
+        gql`
         # Resolver: ${metadata.name}
         ${metadata.sdl}
         `
