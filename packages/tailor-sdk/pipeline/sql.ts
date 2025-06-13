@@ -1,19 +1,16 @@
+type execQuery = <T>(query: string) => Promise<T>;
 
-const execQuery = <T>(_strings: TemplateStringsArray, ..._values: any[]): Promise<T> => {
-  return [] as unknown as Promise<T>;
-}
-
-const sqlClient = {
-  query: execQuery,
-  queryOne: execQuery,
-} as const;
+type sqlClient = {
+  readonly query: execQuery;
+  readonly queryOne: execQuery;
+};
 
 export type sqlFactory<I, C> = ({
   client,
   input,
-  context
+  context,
 }: {
-  client: typeof sqlClient
-  input: I,
-  context: C
-}) => ReturnType<typeof execQuery>;
+  client: sqlClient;
+  input: I;
+  context: C;
+}) => ReturnType<execQuery>;

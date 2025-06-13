@@ -18,12 +18,26 @@ const resolver = createQueryResolver("stepChain", input)
     async () =>
       `step2: recorded ${format(new Date(), "yyyy-MM-dd HH:mm:ss")} on step2!`,
   )
-  .fnStep("step3", step3);
+  .fnStep("step3", step3)
+  .sqlStep("sqlStep", async ({ context, client }) => {
+    return {
+      step1: context.step1,
+      step2: context.step2,
+      step3: await client.queryOne<string>(
+        "SELECT 'This is a SQL step result!' AS result",
+      ),
+      sqlStep: await client.queryOne<string>(/* sql */ `
+        SELECT * FROM users WHERE name = '${context.step1}'
+      `),
+    };
+    ``;
+  });
 
 const output = t.type("StepChainOutput", {
   step1: t.string(),
   step2: t.string(),
   step3: t.string(),
+  sqlStep: t.string(),
 });
 
 export default resolver.returns(output);
