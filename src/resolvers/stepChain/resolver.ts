@@ -8,7 +8,7 @@ const step3 = async ({ context }: any) => ({
   step3: "summarized step1 and step2",
 });
 
-const input = t.type("stepChainInput", {
+const input = t.type("StepChainInput", {
   name: t.string(),
 });
 const resolver = createQueryResolver("stepChain", input)
@@ -20,7 +20,7 @@ const resolver = createQueryResolver("stepChain", input)
   )
   .fnStep("step3", step3);
 
-const output = t.type("stepChainOutput", {
+const output = t.type("StepChainOutput", {
   step1: t.string(),
   step2: t.string(),
   step3: t.string(),

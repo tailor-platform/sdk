@@ -1,3 +1,4 @@
+# TailorDB Type
 type Customer {
   id: ID!
   name: String!
@@ -9,6 +10,7 @@ type Customer {
   country: String!
   postalCode: String!
 }
+
 type PurchaseOrder {
   id: ID!
   supplierID: ID!
@@ -19,6 +21,7 @@ type PurchaseOrder {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
+
 type SalesOrder {
   id: ID!
   customerID: ID!
@@ -31,6 +34,7 @@ type SalesOrder {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
+
 type Supplier {
   id: ID!
   name: String!
@@ -43,4 +47,20 @@ type Supplier {
   city: String!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+
+# Resolver: stepChain
+input StepChainInput {
+  name: String!
+}
+
+type StepChainOutput {
+  step1: String!
+  step2: String!
+  step3: String!
+}
+
+extend type Query {
+  stepChain(input: StepChainInput): StepChainOutput
 }
