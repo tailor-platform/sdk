@@ -38,8 +38,6 @@ export class CodeTransformer {
       ml /* js */`
       ${trimmedContent}
 
-      ${SQL_WRAPPER_DEFINITION}
-
       ${
         resolver.steps.flatMap(({ type, name, fn }) => {
           switch (type) {
@@ -84,6 +82,7 @@ export class CodeTransformer {
             case "sql":
               stepContent = ml /* js */`
                 import { ${stepFunctionVariable} } from "${relativePath}";
+
                 ${SQL_WRAPPER_DEFINITION}
                 globalThis.main = ${wrapSqlFn(stepFunctionVariable)};
               `;
@@ -132,7 +131,6 @@ export class CodeTransformer {
 
         const symbol = identifierToTrack.getSymbol();
         if (symbol) {
-          const identifierName = identifierToTrack.getText();
           removedIdentifiers.add(symbol);
         }
       });
@@ -142,7 +140,6 @@ export class CodeTransformer {
       if (defaultImport) {
         const symbol = defaultImport.getSymbol();
         if (symbol) {
-          const identifierName = defaultImport.getText();
           removedIdentifiers.add(symbol);
         }
       }
@@ -308,7 +305,7 @@ function wrapSqlFn(target: string) {
   return `${SQL_WRAPPER_NAME}(${target})`;
 }
 const SQL_WRAPPER_DEFINITION = ml /* js */`
-  export const $connect_tailordb = async (namespace) => {
+  const $connect_tailordb = async (namespace) => {
     const baseClient = new tailordb.Client({ namespace });
     await baseClient.connect();
     const client = {
