@@ -44,9 +44,8 @@ export class CodeTransformer {
             case "fn":
             case "sql":
               return [
-                ml /* js */`export const ${
-                  stepVariableName(name)
-                } = ${fn.toString()};`,
+                ml /* js */`
+                  export const ${stepVariableName(name)} = ${fn.toString()};`,
               ];
             case "gql":
               return [];
