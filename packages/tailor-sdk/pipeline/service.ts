@@ -1,7 +1,6 @@
 import { ResolverBundler } from "./bundler";
 import { PipelineResolverServiceConfig } from "./types";
 import { measure } from "../performance";
-import { SDLTypeMetadata } from "../types/types";
 import { Resolver } from "./resolver";
 import path from "node:path";
 import fs from "node:fs";
