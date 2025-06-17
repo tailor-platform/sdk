@@ -3,26 +3,14 @@ import fs from "node:fs";
 import { SchemaGenerator } from "./schema-generator";
 import { SDLTypeMetadata } from "./types/types";
 import type { output as _output } from "./types/helpers";
-import { PipelineResolverService } from "./pipeline/service";
-import { PipelineResolverServiceInput } from "./pipeline/types";
-import { TailorDBService } from "./tailordb/service";
-import { TailorDBServiceInput } from "./tailordb/types";
+import { PipelineResolverService } from "./services/pipeline/service";
+import { PipelineResolverServiceInput } from "./services/pipeline/types";
+import { TailorDBService } from "./services/tailordb/service";
+import { TailorDBServiceInput } from "./services/tailordb/types";
 import { measure } from "./performance";
 import gql from "multiline-ts";
-
-let distPath: string = "";
-export const getDistPath = () => distPath;
-
-export const Tailor = {
-  init: (path: string) => {
-    distPath = path;
-    console.log("Tailor SDK initialized");
-    console.log("path:", distPath);
-  },
-  newWorkspace: (name: string) => {
-    return new Workspace(name);
-  },
-};
+import { OperatorClient } from "./client";
+import { getDistPath } from "./tailor";
 
 export class Workspace {
   private applications: Application[] = [];
@@ -37,6 +25,7 @@ export class Workspace {
     this.applications.push(app);
     return app;
   }
+
   @measure
   defineTailorDBService(config: TailorDBServiceInput) {
     for (const [namespace, serviceConfig] of Object.entries(config)) {
@@ -44,6 +33,7 @@ export class Workspace {
       this.tailorDBServices.push(tailorDB);
     }
   }
+
   @measure
   defineResolverService(config: PipelineResolverServiceInput) {
     for (const [namespace, serviceConfig] of Object.entries(config)) {
@@ -54,12 +44,77 @@ export class Workspace {
       this.pipelineResolverServices.push(pipelineService);
     }
   }
+
+  @measure
+  async ctlApply() {
+    const client = new OperatorClient();
+    const workspace = await client.upsertWorkspace({
+      name: this.name,
+      region: "asia-northeast",
+    });
+    console.log(`Workspace: ${workspace.name} (${workspace.id})`);
+
+    const distPath = getDistPath();
+    fs.mkdirSync(distPath, { recursive: true });
+    const manifestPath = path.join(distPath, "manifest.cue");
+
+    const manifest: {
+      Apps: any[];
+      Kind: string;
+      Services: any[];
+      Auths: any[];
+      Pipelines: any[];
+      Executors: any[];
+      Stateflows: any[];
+      Tailordbs: any[];
+    } = {
+      Apps: [],
+      Kind: "workspace",
+      Services: [],
+      Auths: [],
+      Pipelines: [],
+      Executors: [],
+      Stateflows: [],
+      Tailordbs: [],
+    };
+
+    for (const db of this.tailorDBServices) {
+      await db.apply(); // 型情報をロード
+      const tailordbManifest = db.toManifestJSON();
+      manifest.Services.push(tailordbManifest);
+      manifest.Tailordbs.push(tailordbManifest);
+    }
+
+    for (const pipeline of this.pipelineResolverServices) {
+      await pipeline.build(); // Resolverをロード
+      const pipelineManifest = pipeline.toManifestJSON();
+      manifest.Services.push(pipelineManifest);
+      manifest.Pipelines.push(pipelineManifest);
+    }
+
+    for (const app of this.applications) {
+      for (const db of this.tailorDBServices) {
+        app.addSubgraph("tailordb", db.namespace);
+      }
+      for (const pipeline of this.pipelineResolverServices) {
+        app.addSubgraph("pipeline", pipeline.namespace);
+      }
+
+      manifest.Apps.push(app.toManifestJSON());
+    }
+
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log(`Generated manifest.cue at ${manifestPath}`);
+
+    client.apply(manifestPath);
+  }
+
   @measure
   async apply() {
     console.log("Applying workspace:", this.name);
     console.log("Applications:", this.applications.map((app) => app.name));
 
-    // Ensure directories exist before writing files
+    const distPath = getDistPath();
     const tailorDBDir = path.join(distPath, "tailordb");
     fs.mkdirSync(tailorDBDir, { recursive: true });
 
@@ -67,19 +122,17 @@ export class Workspace {
     for (const db of this.tailorDBServices) {
       console.log("TailorDB Service:", db.namespace);
 
-      // Apply the TailorDB service (loads types from files if configured)
       await db.apply();
 
       db.getTypes().forEach((type) => {
         metadataList.push(type.toSDLMetadata());
         fs.writeFileSync(
-          `${tailorDBDir}/${type.metadata.name}.json`,
+          path.join(tailorDBDir, `${type.metadata.name}.json`),
           JSON.stringify(type.metadata, null, 2),
         );
       });
     }
 
-    // Generate TailorDB SDL
     const tailorDBSDL = SchemaGenerator.generateSDL(metadataList);
 
     console.log(
@@ -87,12 +140,10 @@ export class Workspace {
       this.pipelineResolverServices.map((service) => service.namespace),
     );
 
-    // Build pipeline services and collect resolver metadata
     const resolverMetadataList: Array<{ name: string; sdl: string }> = [];
     for (const pipelineService of this.pipelineResolverServices) {
       await pipelineService.build();
 
-      // Get resolver SDL metadata
       const resolverMetadata = pipelineService.getResolverSDLMetadata();
       for (const metadata of resolverMetadata) {
         resolverMetadataList.push({
@@ -121,7 +172,24 @@ export class Workspace {
 }
 
 export class Application {
-  constructor(public name: string) {
+  private subgraphs: Array<{ Type: string; Name: string }> = [];
+
+  constructor(public name: string) {}
+
+  addSubgraph(type: string, name: string) {
+    this.subgraphs.push({ Type: type, Name: name });
   }
-  addSubgraph(subgraph: any) {}
+
+  toManifestJSON() {
+    return {
+      Kind: "application",
+      Name: this.name,
+      Cors: [],
+      AllowedIPAddresses: [],
+      DisableIntrospection: false,
+      Auth: {},
+      Subgraphs: this.subgraphs,
+      Version: "v2",
+    };
+  }
 }

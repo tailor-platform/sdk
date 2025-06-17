@@ -12,6 +12,7 @@ export const customer = db.type(
     country: db.string(),
     postalCode: db.string(),
   },
+  { withTimestamps: true },
 );
 export type customer = typeof customer;
 export type Customer = t.infer<customer>;

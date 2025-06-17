@@ -9,6 +9,7 @@
     "test:root:update-expects": "tsx tests/scripts/generate_expected_files.ts",
     "apply": "pnpm clean && tsx src/app.ts",
     "apply:perf": "pnpm clean && tsx --env-file=.env src/app.ts",
+    "apply:ctl": "pnpm clean && tsx src/ctl.ts",
     "clean": "rm -rf dist",
     "dev": "pnpm -r dev"
   },

@@ -5,9 +5,9 @@ import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
 import { ResolverExtractor } from "./extractor";
 import { CodeTransformer } from "./transformer";
-import { getDistPath } from "../../workspace";
+import { getDistPath } from "../../../tailor";
 import { PipelineResolverServiceConfig } from "../types";
-import { measure } from "../../performance";
+import { measure } from "../../../performance";
 
 export class ResolverBundler {
   private readonly tempDir: string;
@@ -128,7 +128,7 @@ export class ResolverBundler {
 
   @measure
   private async postBundle(stepFiles: string[]): Promise<void> {
-    const distPath = getDistPath() || "dist";
+    const distPath = getDistPath();
     const outputDir = path.join(distPath, "functions");
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
