@@ -1,37 +1,45 @@
-import { describe, test, expect } from 'vitest';
-import path from 'node:path';
-import { runApplyCommand } from './helpers/command_runner';
-import { compareDirectories, generateDetailedDiffReport } from './helpers/directory_compare';
+import { describe, expect, test } from "vitest";
+import path from "node:path";
+import {
+  compareDirectories,
+  generateDetailedDiffReport,
+} from "./helpers/directory_compare";
 import {
   createTempDirectory,
-  getDirectoryStructure
-} from './helpers/file_utils';
+  getDirectoryStructure,
+} from "./helpers/file_utils";
+import { defineWorkspace } from "../src/app";
 // import {
 //   testAllGeneratedFunctions,
 //   generateCombinedTestReport,
 //   TestCase
 // } from './helpers/function_tester';
 
-const tempOutputDir = await createTempDirectory('apply-test-');
-const tempDistDir = path.join(tempOutputDir, 'dist');
-await runApplyCommand(tempDistDir);
+const tempOutputDir = await createTempDirectory("apply-test-");
+const tempDistDir = path.join(tempOutputDir, "dist");
+await defineWorkspace(tempDistDir).apply();
+
 console.info(`This test is running in directory: ${tempOutputDir}`);
 
-describe('pnpm apply command integration tests', () => {
-  const expectedDir = path.join(__dirname, 'fixtures/expected');
-  describe('ディレクトリ比較テスト', () => {
-    test('生成されたディレクトリ構造が期待値と一致する', async () => {
+describe("pnpm apply command integration tests", () => {
+  const expectedDir = path.join(__dirname, "fixtures/expected");
+  describe("ディレクトリ比較テスト", () => {
+    test("生成されたディレクトリ構造が期待値と一致する", async () => {
       const comparison = await compareDirectories(tempDistDir, expectedDir);
 
       if (!comparison.same) {
-        const report = generateDetailedDiffReport(comparison, tempDistDir, expectedDir);
-        console.log('Directory comparison failed:');
+        const report = generateDetailedDiffReport(
+          comparison,
+          tempDistDir,
+          expectedDir,
+        );
+        console.log("Directory comparison failed:");
         console.log(report);
 
-        console.log('\nActual directory structure:');
+        console.log("\nActual directory structure:");
         console.log(getDirectoryStructure(tempDistDir));
 
-        console.log('\nExpected directory structure:');
+        console.log("\nExpected directory structure:");
         console.log(getDirectoryStructure(expectedDir));
       }
 
