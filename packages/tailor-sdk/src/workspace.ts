@@ -2,20 +2,14 @@ import path from "node:path";
 import fs from "node:fs";
 import { SchemaGenerator } from "./schema-generator";
 import { SDLTypeMetadata } from "./types/types";
-import type { output as _output } from "./types/helpers";
-import { PipelineResolverService } from "./services/pipeline/service";
-import { PipelineResolverServiceInput } from "./services/pipeline/types";
-import { TailorDBService } from "./services/tailordb/service";
-import { TailorDBServiceInput } from "./services/tailordb/types";
 import { measure } from "./performance";
 import gql from "multiline-ts";
 import { OperatorClient } from "./client";
 import { getDistPath } from "./tailor";
+import { Application } from "./application";
 
 export class Workspace {
   private applications: Application[] = [];
-  private tailorDBServices: TailorDBService[] = [];
-  private pipelineResolverServices: PipelineResolverService[] = [];
 
   constructor(public name: string) {}
 
@@ -24,25 +18,6 @@ export class Workspace {
     const app = new Application(name);
     this.applications.push(app);
     return app;
-  }
-
-  @measure
-  defineTailorDBService(config: TailorDBServiceInput) {
-    for (const [namespace, serviceConfig] of Object.entries(config)) {
-      const tailorDB = new TailorDBService(namespace, serviceConfig);
-      this.tailorDBServices.push(tailorDB);
-    }
-  }
-
-  @measure
-  defineResolverService(config: PipelineResolverServiceInput) {
-    for (const [namespace, serviceConfig] of Object.entries(config)) {
-      const pipelineService = new PipelineResolverService(
-        namespace,
-        serviceConfig,
-      );
-      this.pipelineResolverServices.push(pipelineService);
-    }
   }
 
   @measure
@@ -78,29 +53,22 @@ export class Workspace {
       Tailordbs: [],
     };
 
-    for (const db of this.tailorDBServices) {
-      await db.apply(); // 型情報をロード
-      const tailordbManifest = db.toManifestJSON();
-      manifest.Services.push(tailordbManifest);
-      manifest.Tailordbs.push(tailordbManifest);
-    }
-
-    for (const pipeline of this.pipelineResolverServices) {
-      await pipeline.build(); // Resolverをロード
-      const pipelineManifest = pipeline.toManifestJSON();
-      manifest.Services.push(pipelineManifest);
-      manifest.Pipelines.push(pipelineManifest);
-    }
-
     for (const app of this.applications) {
-      for (const db of this.tailorDBServices) {
-        app.addSubgraph("tailordb", db.namespace);
-      }
-      for (const pipeline of this.pipelineResolverServices) {
-        app.addSubgraph("pipeline", pipeline.namespace);
+      manifest.Apps.push(app.toManifestJSON());
+
+      for (const db of app.tailorDBServices) {
+        await db.apply();
+        const tailordbManifest = db.toManifestJSON();
+        manifest.Services.push(tailordbManifest);
+        manifest.Tailordbs.push(tailordbManifest);
       }
 
-      manifest.Apps.push(app.toManifestJSON());
+      for (const pipeline of app.pipelineResolverServices) {
+        await pipeline.build();
+        const pipelineManifest = pipeline.toManifestJSON();
+        manifest.Services.push(pipelineManifest);
+        manifest.Pipelines.push(pipelineManifest);
+      }
     }
 
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -118,78 +86,55 @@ export class Workspace {
     const tailorDBDir = path.join(distPath, "tailordb");
     fs.mkdirSync(tailorDBDir, { recursive: true });
 
-    const metadataList: SDLTypeMetadata[] = [];
-    for (const db of this.tailorDBServices) {
-      console.log("TailorDB Service:", db.namespace);
-
-      await db.apply();
-
-      db.getTypes().forEach((type) => {
-        metadataList.push(type.toSDLMetadata());
-        fs.writeFileSync(
-          path.join(tailorDBDir, `${type.metadata.name}.json`),
-          JSON.stringify(type.metadata, null, 2),
-        );
-      });
-    }
-
-    const tailorDBSDL = SchemaGenerator.generateSDL(metadataList);
-
-    console.log(
-      "Pipeline Services:",
-      this.pipelineResolverServices.map((service) => service.namespace),
-    );
-
+    const tailordbMetadataList: SDLTypeMetadata[] = [];
     const resolverMetadataList: Array<{ name: string; sdl: string }> = [];
-    for (const pipelineService of this.pipelineResolverServices) {
-      await pipelineService.build();
+    for (const app of this.applications) {
+      for (const db of app.tailorDBServices) {
+        console.log("TailorDB Service:", db.namespace);
 
-      const resolverMetadata = pipelineService.getResolverSDLMetadata();
-      for (const metadata of resolverMetadata) {
-        resolverMetadataList.push({
-          name: metadata.name,
-          sdl: metadata.sdl,
+        await db.apply();
+
+        db.getTypes().forEach((type) => {
+          tailordbMetadataList.push(type.toSDLMetadata());
+          fs.writeFileSync(
+            path.join(tailorDBDir, `${type.metadata.name}.json`),
+            JSON.stringify(type.metadata, null, 2),
+          );
         });
+      }
+
+      console.log(
+        "Pipeline Services:",
+        app.pipelineResolverServices.map((service) => service.namespace),
+      );
+
+      for (const pipelineService of app.pipelineResolverServices) {
+        await pipelineService.build();
+
+        const resolverMetadata = pipelineService.getResolverSDLMetadata();
+        for (const metadata of resolverMetadata) {
+          resolverMetadataList.push({
+            name: metadata.name,
+            sdl: metadata.sdl,
+          });
+        }
       }
     }
 
-    const combinedSDL = gql`
-    # TailorDB Type
-    ${tailorDBSDL}
-
-    ${
-      resolverMetadataList.map((metadata) =>
-        gql`
+    const tailordbSDL = SchemaGenerator.generateSDL(tailordbMetadataList);
+    const resolverSDL = resolverMetadataList.map((metadata) =>
+      gql`
         # Resolver: ${metadata.name}
         ${metadata.sdl}
         `
-      ).join("\n\n\n")
-    }
+    ).join("\n\n\n");
+    const combinedSDL = gql`
+    # TailorDB Type
+    ${tailordbSDL}
+
+    ${resolverSDL}
 
     `;
     fs.writeFileSync(path.join(distPath, "schema.graphql"), combinedSDL);
-  }
-}
-
-export class Application {
-  private subgraphs: Array<{ Type: string; Name: string }> = [];
-
-  constructor(public name: string) {}
-
-  addSubgraph(type: string, name: string) {
-    this.subgraphs.push({ Type: type, Name: name });
-  }
-
-  toManifestJSON() {
-    return {
-      Kind: "application",
-      Name: this.name,
-      Cors: [],
-      AllowedIPAddresses: [],
-      DisableIntrospection: false,
-      Auth: {},
-      Subgraphs: this.subgraphs,
-      Version: "v2",
-    };
   }
 }
