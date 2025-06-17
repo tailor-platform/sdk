@@ -1,4 +1,4 @@
-import { execSync, spawn, spawnSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -13,7 +13,7 @@ interface CtlConfig {
   workspaceName: string;
 }
 
-export class OperatorClient {
+export class TailorCtl {
   private ctlConfig: CtlConfig;
 
   constructor() {
