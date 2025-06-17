@@ -9,11 +9,11 @@ export function defineWorkspace() {
   Tailor.init(process.argv[2] || path.join(__dirname, "..", ".tailor-sdk"));
 
   const workspace = new Workspace("tailor-sdk-dev");
-  workspace.newApplication("my-app");
-  workspace.defineTailorDBService({
+  const app = workspace.newApplication("my-app");
+  app.defineTailorDBService({
     "my-db": { files: ["./src/tailordb/*.ts"] },
   });
-  workspace.defineResolverService({
+  app.defineResolverService({
     "my-pipeline": { files: ["./src/resolvers/**/resolver.ts"] },
   });
 
