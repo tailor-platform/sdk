@@ -4,7 +4,7 @@ import { SchemaGenerator } from "./schema-generator";
 import { SDLTypeMetadata } from "./types/types";
 import { measure } from "./performance";
 import gql from "multiline-ts";
-import { OperatorClient } from "./client";
+import { TailorCtl } from "./ctl";
 import { getDistPath } from "./tailor";
 import { Application } from "./application";
 
@@ -22,7 +22,7 @@ export class Workspace {
 
   @measure
   async ctlApply() {
-    const client = new OperatorClient();
+    const client = new TailorCtl();
     const workspace = await client.upsertWorkspace({
       name: this.name,
       region: "asia-northeast",
