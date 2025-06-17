@@ -2,7 +2,7 @@
   "name": "@tailor-platform/tailor-sdk",
   "version": "1.0.0",
   "description": "Tailor SDK Core Package",
-  "main": "index.ts",
+  "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "test": "vitest",
@@ -19,9 +19,11 @@
   },
   "devDependencies": {
     "@swc/core": "^1.11.29",
+    "@types/ini": "^4.1.1",
     "@types/node": "^22.15.3",
     "@urql/core": "^5.1.1",
     "gql.tada": "^1.8.10",
+    "ini": "^5.0.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.4"
   }

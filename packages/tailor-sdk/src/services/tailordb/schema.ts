@@ -16,10 +16,10 @@ import {
   TailorFieldType,
   tailorToGraphQL,
   TailorToTs,
-} from "../types/types";
-import type { DeepWriteable, Prettify } from "../types/helpers";
-import { AllowedValues, AllowedValuesOutput } from "../types/field";
-import { ReferenceConfig, TailorField, TailorType } from "../types/type";
+} from "../../types/types";
+import type { DeepWriteable, Prettify } from "../../types/helpers";
+import { AllowedValues, AllowedValuesOutput } from "../../types/field";
+import { ReferenceConfig, TailorField, TailorType } from "../../types/type";
 
 const fieldDefaults = {
   required: undefined,
@@ -59,12 +59,12 @@ class TailorDBField<
         ? new TailorDBType_FieldHook({
           create: this._metadata.hooks.create
             ? new Script({
-              expr: this._metadata.hooks.create.toString().trim(),
+              expr: `(${this._metadata.hooks.create.toString().trim()})()`,
             })
             : undefined,
           update: this._metadata.hooks.update
             ? new Script({
-              expr: this._metadata.hooks.update.toString().trim(),
+              expr: `(${this._metadata.hooks.update.toString().trim()})()`,
             })
             : undefined,
         })

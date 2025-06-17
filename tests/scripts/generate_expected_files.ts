@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
-import { apply } from "../../src/app";
+import { defineWorkspace } from "../../src/app";
 import { getDirectoryStructure } from "../helpers/file_utils";
 
 const __filename = url.fileURLToPath(import.meta.url);
@@ -81,7 +81,7 @@ async function listGeneratedFiles(
 
 if (process.argv[1] === __filename) {
   try {
-    await apply();
+    await defineWorkspace().apply();
     console.log(
       "\n✅ Application applied successfully. Generating expected files...",
     );

@@ -4,12 +4,12 @@ import multiline from "multiline-ts";
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 import { ResolverOptions, Step, StepDef, StepOptions, StepType } from "./types";
-import { TailorType } from "../types/type";
-import { output } from "../types/helpers";
+import { TailorType } from "../../types/type";
+import { output } from "../../types/helpers";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { SchemaGenerator } from "../schema-generator";
+import { SchemaGenerator } from "../../schema-generator";
 import { capitalize } from "es-toolkit";
-import { getDistPath } from "../workspace";
+import { getDistPath } from "../../tailor";
 
 export class Resolver<
   QueryType extends "query" | "mutation",

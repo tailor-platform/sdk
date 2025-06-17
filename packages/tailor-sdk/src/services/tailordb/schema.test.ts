@@ -1,4 +1,4 @@
-import { SchemaGenerator } from "../schema-generator";
+import { SchemaGenerator } from "../../schema-generator";
 import { db } from "./schema";
 
 import { describe, expect, test } from "vitest";
