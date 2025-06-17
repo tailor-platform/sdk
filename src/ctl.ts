@@ -5,5 +5,5 @@ const __filename = url.fileURLToPath(import.meta.url);
 
 if (process.argv[1] === __filename) {
   const workspace = defineWorkspace();
-  await workspace.ctlApply().catch(console.error);
+  await workspace.ctlApply();
 }

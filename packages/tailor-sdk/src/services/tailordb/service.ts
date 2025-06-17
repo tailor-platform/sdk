@@ -26,7 +26,6 @@ export class TailorDBService {
 
   @measure
   toManifestJSON() {
-    // デフォルトのTypePermissionを定義
     const defaultTypePermission = {
       Create: [
         {
@@ -65,7 +64,6 @@ export class TailorDBService {
       ],
     };
 
-    // デフォルトのSettings
     const defaultSettings = {
       Aggregation: false,
       BulkUpsert: false,
@@ -80,35 +78,36 @@ export class TailorDBService {
       Kind: "tailordb",
       Namespace: this.namespace,
       Types: this.types.map((type) => {
-        // type.metadataからmanifest.json形式に変換
         const metadata = type.metadata;
         const schema = metadata.schema || {};
 
         // Fieldsを変換
         const fields: any = {};
         if (schema.fields) {
-          Object.entries(schema.fields).forEach(
-            ([fieldName, fieldConfig]: [string, any]) => {
-              fields[fieldName] = {
-                Type: fieldConfig.type || "string",
-                AllowedValues: fieldConfig.allowedValues || [],
-                Description: fieldConfig.description || "",
-                Validate: fieldConfig.validate || [],
-                Array: fieldConfig.array || false,
-                Index: fieldConfig.index || false,
-                Required: fieldConfig.required !== false,
-                Unique: fieldConfig.unique || false,
-                ForeignKey: fieldConfig.foreignKey || false,
-                Vector: fieldConfig.vector || false,
-                ...(fieldConfig.hooks && {
-                  Hooks: {
-                    Create: fieldConfig.hooks?.create,
-                    Update: fieldConfig.hooks?.update,
-                  },
-                }),
-              };
-            },
-          );
+          Object.entries(schema.fields)
+            .filter(([fieldName]) => fieldName !== "id")
+            .forEach(
+              ([fieldName, fieldConfig]: [string, any]) => {
+                fields[fieldName] = {
+                  Type: fieldConfig.type || "string",
+                  AllowedValues: fieldConfig.allowedValues || [],
+                  Description: fieldConfig.description || "",
+                  Validate: fieldConfig.validate || [],
+                  Array: fieldConfig.array || false,
+                  Index: fieldConfig.index || false,
+                  Required: fieldConfig.required !== false,
+                  Unique: fieldConfig.unique || false,
+                  ForeignKey: fieldConfig.foreignKey || false,
+                  Vector: fieldConfig.vector || false,
+                  ...(fieldConfig.hooks && {
+                    Hooks: {
+                      Create: fieldConfig.hooks?.create,
+                      Update: fieldConfig.hooks?.update,
+                    },
+                  }),
+                };
+              },
+            );
         }
 
         return {

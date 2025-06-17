@@ -2,10 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
 import { defineWorkspace } from "../../src/app";
-import { getDirectoryStructure } from "../helpers/file_utils";
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const expectedDir = path.join(__dirname, "../fixtures/expected");
 
 /**
  * 期待値ファイルを生成するスクリプト
@@ -14,32 +15,15 @@ const __dirname = path.dirname(__filename);
 export async function generateExpectedFiles(): Promise<void> {
   console.log("Generating expected files...");
 
-  const expectedDir = path.join(__dirname, "../fixtures/expected");
-
   try {
     console.log(`Expected directory: ${expectedDir}`);
-
-    const currentDistDir = path.join(process.cwd(), "dist");
-
-    if (!fs.existsSync(currentDistDir)) {
-      throw new Error(
-        `dist directory not found in current working directory: ${process.cwd()}`,
-      );
-    }
-
-    console.log("Using current dist directory:");
-    console.log(getDirectoryStructure(currentDistDir));
 
     if (fs.existsSync(expectedDir)) {
       await fs.rmdirSync(expectedDir, { recursive: true });
       console.log("Removed existing expected directory");
     }
 
-    await fs.cpSync(currentDistDir, expectedDir, {
-      recursive: true,
-      force: true,
-    });
-    console.log(`Expected files copied to: ${expectedDir}`);
+    await defineWorkspace(expectedDir).apply();
 
     console.log("\nGenerated files:");
     await listGeneratedFiles(expectedDir);
@@ -81,10 +65,6 @@ async function listGeneratedFiles(
 
 if (process.argv[1] === __filename) {
   try {
-    await defineWorkspace().apply();
-    console.log(
-      "\n✅ Application applied successfully. Generating expected files...",
-    );
     await generateExpectedFiles();
   } catch (error) {
     console.error("\n❌ Failed to generate expected files:", error);

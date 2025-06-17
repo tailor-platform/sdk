@@ -46,10 +46,22 @@ export class TailorCtl {
   }
 
   private spawn(...args: string[]) {
-    return spawnSync(`tailorctl ${args.join(" ")}`, {
+    const result = spawnSync(`tailorctl ${args.join(" ")}`, {
       stdio: "inherit",
       shell: true,
     });
+
+    if (result.error) {
+      throw new Error(`Failed to execute tailorctl: ${result.error.message}`);
+    }
+
+    if (result.status !== 0) {
+      throw new Error(
+        `tailorctl command failed with exit code ${result.status}`,
+      );
+    }
+
+    return result;
   }
 
   private exec(...args: string[]) {
@@ -90,7 +102,7 @@ export class TailorCtl {
     return this.execJson("workspace", "describe");
   }
 
-  apply(manifest: string) {
+  async apply(manifest: string) {
     this.spawn("workspace", "apply", "-m", manifest, "-a");
   }
 }

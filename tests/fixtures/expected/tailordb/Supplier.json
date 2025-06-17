@@ -131,7 +131,7 @@
       "createdAt": {
         "type": "datetime",
         "description": "",
-        "required": true,
+        "required": false,
         "array": false,
         "validate": [],
         "fields": {},
@@ -140,7 +140,7 @@
         "foreignKey": false,
         "hooks": {
           "create": {
-            "expr": "()=>new Date().toISOString()"
+            "expr": "(()=>new Date().toISOString())()"
           }
         },
         "allowedValues": [],
@@ -149,7 +149,7 @@
       "updatedAt": {
         "type": "datetime",
         "description": "",
-        "required": true,
+        "required": false,
         "array": false,
         "validate": [],
         "fields": {},
@@ -158,7 +158,7 @@
         "foreignKey": false,
         "hooks": {
           "update": {
-            "expr": "()=>new Date().toISOString()"
+            "expr": "(()=>new Date().toISOString())()"
           }
         },
         "allowedValues": [],

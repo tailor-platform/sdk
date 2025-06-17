@@ -37,8 +37,8 @@ describe("TailorDB: object style", () => {
     expect(sdl).toContain(`variants: [String]`);
     expect(sdl).toContain(`itemIDs: [ID]`);
     expect(sdl).toContain(`items: [ProductItem]`);
-    expect(sdl).toContain(`createdAt: DateTime!`);
-    expect(sdl).toContain(`updatedAt: DateTime!`);
+    expect(sdl).toContain(`createdAt: DateTime`);
+    expect(sdl).toContain(`updatedAt: DateTime`);
   });
   test("metadata", () => {
     const metadata = productType.metadata;
