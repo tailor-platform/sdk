@@ -1,5 +1,5 @@
-import { TailorUser } from "../types";
-import { FieldMetadata } from "../types/types";
+import { TailorUser } from "../../types";
+import { FieldMetadata } from "../../types/types";
 
 export interface DBFieldMetadata extends FieldMetadata {
   index?: boolean;

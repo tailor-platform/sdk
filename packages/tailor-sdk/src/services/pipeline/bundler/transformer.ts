@@ -10,7 +10,7 @@ import {
   VariableDeclaration,
 } from "ts-morph";
 import { ResolverSummary } from "./types";
-import { measure } from "../../performance";
+import { measure } from "../../../performance";
 
 export class CodeTransformer {
   private project: Project;
@@ -44,8 +44,9 @@ export class CodeTransformer {
             case "fn":
             case "sql":
               return [
-                ml /* js */`
-                  export const ${stepVariableName(name)} = ${fn.toString()};`,
+                /* js */ `export const ${
+                  stepVariableName(name)
+                } = ${fn.toString()};`,
               ];
             case "gql":
               return [];

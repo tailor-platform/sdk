@@ -1,6 +1,6 @@
 import { Resolver } from "../resolver";
 import { ResolverSummary } from "./types";
-import { measure } from "../../performance";
+import { measure } from "../../../performance";
 
 export class ResolverExtractor {
   @measure

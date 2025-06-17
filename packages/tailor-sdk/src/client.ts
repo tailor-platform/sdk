@@ -1,0 +1,96 @@
+import { execSync, spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { styleText } from "node:util";
+import ini from "ini";
+import ml from "multiline-ts";
+
+interface CtlConfig {
+  name: string;
+  username: string;
+  workspaceId: string;
+  workspaceName: string;
+}
+
+export class OperatorClient {
+  private ctlConfig: CtlConfig;
+
+  constructor() {
+    this.init();
+    this.ctlConfig = this.execJson("config", "describe");
+  }
+
+  private login() {
+    this.spawn("auth", "login");
+  }
+
+  private init() {
+    const config = this.loadIni();
+    if (
+      config &&
+      new Date(config.controlplanetokenexpiresat).getTime() > Date.now()
+    ) {
+      return config;
+    }
+
+    this.login();
+    return this.loadIni();
+  }
+
+  private loadIni() {
+    const configs = ini.parse(
+      fs.readFileSync(path.join(os.homedir(), ".tailorctl", "config"), "utf-8"),
+    );
+    return configs[configs.global?.context || "default"];
+  }
+
+  private spawn(...args: string[]) {
+    return spawnSync(`tailorctl ${args.join(" ")}`, {
+      stdio: "inherit",
+      shell: true,
+    });
+  }
+
+  private exec(...args: string[]) {
+    return execSync(`tailorctl ${args.join(" ")}`).toString("utf-8");
+  }
+
+  private execJson(...args: string[]) {
+    const output = this.exec(...[...args, "-f", "json"]);
+    return JSON.parse(output);
+  }
+
+  async upsertWorkspace(workspace: {
+    name: string;
+    region: "asia-northeast" | "us-west";
+  }) {
+    if (this.ctlConfig.workspaceName === "") {
+      console.log("Creating workspace...");
+      this.exec(
+        "workspace",
+        "create",
+        "-n",
+        workspace.name,
+        "-r",
+        workspace.region,
+      );
+    } else if (workspace.name !== this.ctlConfig.workspaceName) {
+      throw new Error(
+        styleText(
+          "red",
+          ml`
+            Workspace name mismatch: expected ${workspace.name}, got ${this.ctlConfig.workspaceName}
+            Please select the correct config using: tailorctl config switch <config name>
+            `,
+        ),
+      );
+    }
+
+    return this.execJson("workspace", "describe");
+  }
+
+  apply(manifest: string) {
+    this.spawn("workspace", "apply", "-m", manifest, "-a");
+  }
+}
