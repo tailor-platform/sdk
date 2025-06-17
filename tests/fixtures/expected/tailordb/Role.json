@@ -1,5 +1,5 @@
 {
-  "name": "PurchaseOrder",
+  "name": "Role",
   "schema": {
     "fields": {
       "id": {
@@ -15,46 +15,7 @@
         "allowedValues": [],
         "vector": false
       },
-      "supplierID": {
-        "type": "uuid",
-        "description": "",
-        "required": true,
-        "array": false,
-        "validate": [],
-        "fields": {},
-        "index": false,
-        "unique": false,
-        "foreignKey": false,
-        "allowedValues": [],
-        "vector": false
-      },
-      "totalPrice": {
-        "type": "integer",
-        "description": "",
-        "required": true,
-        "array": false,
-        "validate": [],
-        "fields": {},
-        "index": false,
-        "unique": false,
-        "foreignKey": false,
-        "allowedValues": [],
-        "vector": false
-      },
-      "discount": {
-        "type": "float",
-        "description": "",
-        "required": false,
-        "array": false,
-        "validate": [],
-        "fields": {},
-        "index": false,
-        "unique": false,
-        "foreignKey": false,
-        "allowedValues": [],
-        "vector": false
-      },
-      "status": {
+      "name": {
         "type": "string",
         "description": "",
         "required": true,

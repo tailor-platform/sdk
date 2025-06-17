@@ -283,10 +283,6 @@ function _enum<const V extends AllowedValues>(values: V) {
   return createField("enum", []).values(values);
 }
 
-type FieldReference<T extends TailorDBField<any, any, any>> = DeepWriteable<
-  NonNullable<T["reference"]>
->;
-
 type DBTypeOptions = {
   withTimestamps?: boolean;
   description?: string;
@@ -367,10 +363,10 @@ type idField = typeof idField;
 const datetimeFields = {
   createdAt: datetime().hooks({
     create: () => new Date().toISOString(),
-  }),
+  }).optional(),
   updatedAt: datetime().hooks({
     update: () => new Date().toISOString(),
-  }),
+  }).optional(),
 } as const satisfies Record<string, TailorDBField<any, any, any>>;
 type DBType<
   F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,

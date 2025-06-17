@@ -69,12 +69,18 @@ export class Workspace {
         manifest.Services.push(pipelineManifest);
         manifest.Pipelines.push(pipelineManifest);
       }
+
+      if (app.authService) {
+        const authManifest = app.authService.toManifest();
+        manifest.Services.push(authManifest);
+        manifest.Auths.push(authManifest);
+      }
     }
 
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     console.log(`Generated manifest.cue at ${manifestPath}`);
 
-    client.apply(manifestPath);
+    await client.apply(manifestPath);
   }
 
   @measure

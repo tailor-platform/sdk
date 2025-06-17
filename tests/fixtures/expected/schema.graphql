@@ -9,6 +9,8 @@ type Customer {
   state: String!
   country: String!
   postalCode: String!
+  createdAt: DateTime
+  updatedAt: DateTime
 }
 
 type PurchaseOrder {
@@ -18,8 +20,15 @@ type PurchaseOrder {
   totalPrice: Int!
   discount: Float
   status: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type Role {
+  id: ID!
+  name: String!
+  createdAt: DateTime
+  updatedAt: DateTime
 }
 
 type SalesOrder {
@@ -31,8 +40,8 @@ type SalesOrder {
   status: String
   cancelReason: String
   canceledAt: DateTime
-  createdAt: DateTime!
-  updatedAt: DateTime!
+  createdAt: DateTime
+  updatedAt: DateTime
 }
 
 type Supplier {
@@ -45,8 +54,16 @@ type Supplier {
   country: String!
   state: enum!
   city: String!
-  createdAt: DateTime!
-  updatedAt: DateTime!
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  createdAt: DateTime
+  updatedAt: DateTime
 }
 
 
