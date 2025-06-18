@@ -11,7 +11,7 @@ import {
   Step,
   StepDef,
 } from "./types";
-import t, { TailorType } from "../../types/type";
+import { TailorType } from "../../types/type";
 import { output } from "../../types/helpers";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { SchemaGenerator } from "../../schema-generator";
@@ -68,7 +68,7 @@ export class Resolver<
       Context & Record<S, Awaited<R>>,
       [
         ...Steps,
-        ["fn", S, Step<Awaited<CurrentOutput>, R, Context>, FnStepOptions],
+        ["fn", S, Step<R, Context>, FnStepOptions],
       ],
       Output
     >;
@@ -76,7 +76,7 @@ export class Resolver<
 
   sqlStep<
     const S extends string,
-    const Q extends sqlFactory<Awaited<CurrentOutput>, Context>,
+    const Q extends sqlFactory<Context>,
   >(
     name: S,
     fn: Q,
@@ -93,7 +93,7 @@ export class Resolver<
         [
           "sql",
           S,
-          Step<Awaited<CurrentOutput>, ReturnType<Q>, Context>,
+          Step<ReturnType<Q>, Context>,
           SqlStepOptions,
         ],
       ],
@@ -103,7 +103,7 @@ export class Resolver<
 
   gqlStep<
     const S extends string,
-    const Q extends gqlFactory<Awaited<CurrentOutput>, Context>,
+    const Q extends gqlFactory<Context>,
   >(
     name: S,
     fn: Q,
@@ -120,7 +120,7 @@ export class Resolver<
         [
           "gql",
           S,
-          Step<Awaited<CurrentOutput>, Awaited<ReturnType<Q>>["data"], Context>,
+          Step<Awaited<ReturnType<Q>>["data"], Context>,
           GqlStepOptions,
         ],
       ],
