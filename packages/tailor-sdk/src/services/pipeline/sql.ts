@@ -5,10 +5,6 @@ type sqlClient = {
   readonly execOne: execQuery;
 };
 
-export type sqlFactory<I, C> = ({
-  client,
-  input,
-}: C & {
-  client: sqlClient;
-  input: I;
-}) => ReturnType<execQuery>;
+export type sqlFactory<C> = (
+  input: C & { client: sqlClient },
+) => ReturnType<execQuery>;

@@ -3,13 +3,12 @@ import { sqlFactory } from "./sql";
 
 export type StepType = "fn" | "sql" | "gql";
 export type Step<
-  T,
   R,
   Context extends Record<string, unknown>,
 > =
-  | (({ input, context }: Context & { input: T }) => R)
-  | sqlFactory<Awaited<T>, Context>
-  | gqlFactory<Awaited<T>, Context>;
+  | (({ input, context }: Context) => R)
+  | sqlFactory<Context>
+  | gqlFactory<Context>;
 export type StepDef<
   S extends string,
   A,
@@ -18,17 +17,17 @@ export type StepDef<
 > = [
   "fn",
   S,
-  Step<A, B, Context>,
+  Step<B, Context>,
   FnStepOptions | undefined,
 ] | [
   "sql",
   S,
-  Step<A, B, Context>,
+  Step<B, Context>,
   SqlStepOptions | undefined,
 ] | [
   "gql",
   S,
-  Step<A, B, Context>,
+  Step<B, Context>,
   GqlStepOptions | undefined,
 ];
 

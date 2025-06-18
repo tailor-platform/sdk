@@ -2,40 +2,28 @@ import { describe, expectTypeOf, it } from "vitest";
 import { createMutationResolver, createQueryResolver } from "./resolver";
 import t from "../../types/type";
 
-// テスト用の型定義
 const UserInput = t.type("UserInput", {
   id: t.string(),
   name: t.string().optional(),
 });
-
 const UserOutput = t.type("UserOutput", {
   id: t.string(),
   name: t.string(),
   email: t.string(),
 });
 
-const PostOutput = t.type("PostOutput", {
-  id: t.string(),
-  title: t.string(),
-  content: t.string(),
-});
-
 describe("createQueryResolver type tests", () => {
   it("初期状態の型が正しいこと", () => {
     const resolver = createQueryResolver("getUser", UserInput);
-
-    // resolverの型チェック
     expectTypeOf(resolver.queryType).toEqualTypeOf<"query">();
     expectTypeOf(resolver.name).toEqualTypeOf<string>();
 
-    // 初期のinput型
     type InputType = typeof resolver._input;
     expectTypeOf<InputType>().toEqualTypeOf<{
       id: string;
       name?: string | null;
     }>();
 
-    // 初期のcontext型（inputのみを含む）
     type ContextType = typeof resolver._context;
     expectTypeOf<ContextType>().toEqualTypeOf<{
       input: {
@@ -44,14 +32,12 @@ describe("createQueryResolver type tests", () => {
       };
     }>();
 
-    // 初期のoutput型（never）
     expectTypeOf(resolver._output).toEqualTypeOf<never>();
   });
 
   it("fnStep追加後の型が正しいこと", () => {
     const resolver = createQueryResolver("getUser", UserInput)
       .fnStep("fetchUser", async (context) => {
-        // contextの型チェック
         type CtxType = typeof context;
         expectTypeOf<CtxType>().toEqualTypeOf<{
           input: {
@@ -67,7 +53,6 @@ describe("createQueryResolver type tests", () => {
         };
       });
 
-    // contextに結果が追加される
     type ResolverContext = typeof resolver._context;
     expectTypeOf<ResolverContext>().toExtend<{
       input: {
@@ -146,19 +131,15 @@ describe("createQueryResolver type tests", () => {
         }>();
         return { userId: context.input.id };
       })
-      .sqlStep("step2", ({ client, input }) => {
-        // sqlStepではinputとclientが渡される
-        type InputType = typeof input;
-        expectTypeOf<InputType>().toExtend<{ userId: string }>();
+      .sqlStep("step2", ({ client, step1 }) => {
+        expectTypeOf<typeof step1>().toExtend<{ userId: string }>();
 
         return client.exec<{ posts: string[] }>(
-          `SELECT posts FROM user_posts WHERE user_id = ${input.userId}`,
+          `SELECT posts FROM user_posts WHERE user_id = ${step1.userId}`,
         );
       })
-      .gqlStep("step3", ({ gql, client, input }) => {
-        // gqlStepではgql, client, inputが渡される
-        type InputType = typeof input;
-        expectTypeOf<InputType>().toEqualTypeOf<{ posts: string[] }>();
+      .gqlStep("step3", ({ gql, client, step2 }) => {
+        expectTypeOf<typeof step2>().toEqualTypeOf<{ posts: string[] }>();
 
         return client.query("" as any, {} as any);
       })
@@ -194,19 +175,15 @@ describe("createQueryResolver type tests", () => {
 
   it("createMutationResolverの型が正しいこと", () => {
     const resolver = createMutationResolver("updateUser", UserInput);
-
-    // resolverの型チェック
     expectTypeOf(resolver.queryType).toEqualTypeOf<"mutation">();
     expectTypeOf(resolver.name).toEqualTypeOf<string>();
 
-    // 初期のinput型
     type InputType = typeof resolver._input;
     expectTypeOf<InputType>().toEqualTypeOf<{
       id: string;
       name?: string | null;
     }>();
 
-    // 初期のcontext型（inputのみを含む）
     type ContextType = typeof resolver._context;
     expectTypeOf<ContextType>().toEqualTypeOf<{
       input: {
@@ -228,16 +205,12 @@ describe("createQueryResolver type tests", () => {
         }>();
         return { value: "string" };
       })
-      .sqlStep("step3", ({ input }) => {
-        // sqlStepでも前のステップの結果がinputとして渡される
-        type InputType = typeof input;
-        expectTypeOf<InputType>().toExtend<{ value: string }>();
+      .sqlStep("step3", ({ step2 }) => {
+        expectTypeOf<typeof step2>().toExtend<{ value: string }>();
         return {} as Promise<{ sqlResult: boolean }>;
       })
-      .gqlStep("step4", ({ input }) => {
-        // gqlStepでも前のステップの結果がinputとして渡される
-        type InputType = typeof input;
-        expectTypeOf<InputType>().toEqualTypeOf<{ sqlResult: boolean }>();
+      .gqlStep("step4", ({ step3 }) => {
+        expectTypeOf<typeof step3>().toEqualTypeOf<{ sqlResult: boolean }>();
         return {} as any;
       });
 
@@ -325,7 +298,6 @@ describe("createQueryResolver type tests", () => {
     const resolver = createQueryResolver("stepInputTest", UserInput)
       .fnStep("step1", () => ({ result: "step1" }))
       .fnStep("step2", (context) => {
-        // step2のcontextにはstep1の結果が含まれる
         type ContextType = typeof context;
         expectTypeOf<ContextType>().toExtend<{
           input: {
@@ -337,16 +309,13 @@ describe("createQueryResolver type tests", () => {
           };
         }>();
 
-        // step1の結果の型を確認
         expectTypeOf(context.step1).toExtend<{ result: string }>();
         expectTypeOf(context.step1.result).toExtend<string>();
 
         return { result: 123 };
       })
-      .sqlStep("step3", ({ input }) => {
-        // step3のinputはstep2の結果
-        type InputType = typeof input;
-        expectTypeOf<InputType>().toExtend<{ result: number }>();
+      .sqlStep("step3", ({ step2 }) => {
+        expectTypeOf<typeof step2>().toExtend<{ result: number }>();
         return {} as Promise<{ data: boolean[] }>;
       });
 
@@ -374,20 +343,17 @@ describe("createQueryResolver type tests", () => {
 
     const resolver = createQueryResolver("complexTest", ComplexInput)
       .fnStep("processComplex", (context) => {
-        // 各フィールドの型が正しいことを確認
         expectTypeOf(context.input.id).toEqualTypeOf<string>();
         expectTypeOf(context.input.count).toEqualTypeOf<number>();
         expectTypeOf(context.input.price).toEqualTypeOf<
           number | null | undefined
         >();
         expectTypeOf(context.input.active).toEqualTypeOf<boolean>();
-        // 配列型の推論に問題がある可能性
         expectTypeOf(context.input.tags).toEqualTypeOf<string>();
         expectTypeOf(context.input.data).toEqualTypeOf<
           string | null | undefined
         >();
 
-        // context全体の型を確認
         type ContextType = typeof context;
         expectTypeOf<ContextType>().toEqualTypeOf<{
           input: {
@@ -406,12 +372,9 @@ describe("createQueryResolver type tests", () => {
         };
       });
 
-    // 型の確認
     type InputType = typeof resolver._input;
     type ContextType = typeof resolver._context;
 
-    // 完全な型定義を確認
-    // プロパティの存在を確認
     expectTypeOf<InputType>().toHaveProperty("id");
     expectTypeOf<InputType>().toHaveProperty("count");
     expectTypeOf<InputType>().toHaveProperty("price");
