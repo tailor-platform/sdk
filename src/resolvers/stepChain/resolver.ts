@@ -1,43 +1,41 @@
 import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
-import { step1 } from "./step1";
-
-const step3 = async ({ context }: any) => ({
-  step1: context.step1,
-  step2: context.step2,
-  step3: "summarized step1 and step2",
-});
 
 const input = t.type("StepChainInput", {
   name: t.string(),
 });
-const resolver = createQueryResolver("stepChain", input)
-  .fnStep("step1", step1)
-  .fnStep(
-    "step2",
-    async () =>
-      `step2: recorded ${format(new Date(), "yyyy-MM-dd HH:mm:ss")} on step2!`,
-  )
-  .fnStep("step3", step3)
-  .sqlStep("sqlStep", async ({ context, client }) => {
-    return {
-      step1: context.step1,
-      step2: context.step2,
-      step3: await client.queryOne<string>(
-        "SELECT 'This is a SQL step result!' AS result",
-      ),
-      sqlStep: await client.queryOne<string>(/* sql */ `
-        SELECT * FROM users WHERE name = '${context.step1}'
-      `),
-    };
-    ``;
-  });
 
 const output = t.type("StepChainOutput", {
   step1: t.string(),
   step2: t.string(),
-  step3: t.string(),
   sqlStep: t.string(),
 });
 
-export default resolver.returns(output);
+export default createQueryResolver(
+  "stepChain",
+  input,
+  { defaults: { dbNamespace: "my-db" } },
+)
+  .fnStep(
+    "step1",
+    (args) => {
+      console.log(args);
+      return `step1: Hello ${args.input.name} on step1!`;
+    },
+  )
+  .fnStep(
+    "step2",
+    async (args) => {
+      console.log(args);
+      return `step2: recorded ${
+        format(new Date(), "yyyy-MM-dd HH:mm:ss")
+      } on step2!`;
+    },
+  )
+  .sqlStep("sqlStep", async (context) => {
+    const result = await context.client.execOne<{ name: string }>(/* sql */ `
+      SELECT name FROM User
+    `);
+    return result.name;
+  })
+  .returns(output);
