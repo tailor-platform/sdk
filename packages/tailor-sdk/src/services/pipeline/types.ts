@@ -7,27 +7,40 @@ export type Step<
   R,
   Context extends Record<string, unknown>,
 > =
-  | ((
-    { input, context }: {
-      input: T;
-      context: Context;
-    },
-  ) => R)
+  | (({ input, context }: Context & { input: T }) => R)
   | sqlFactory<Awaited<T>, Context>
   | gqlFactory<Awaited<T>, Context>;
 export type StepDef<
-  T extends StepType,
   S extends string,
   A,
   B,
   Context extends Record<string, unknown> = { input: A },
-> = [T, S, Step<A, B, Context>];
-export type StepOptions = {
+> = [
+  "fn",
+  S,
+  Step<A, B, Context>,
+  FnStepOptions | undefined,
+] | [
+  "sql",
+  S,
+  Step<A, B, Context>,
+  SqlStepOptions | undefined,
+] | [
+  "gql",
+  S,
+  Step<A, B, Context>,
+  GqlStepOptions | undefined,
+];
+
+export type FnStepOptions = {};
+export type SqlStepOptions = {
   dbNamespace?: string;
 };
+export type GqlStepOptions = {};
+export type StepOptions = FnStepOptions | SqlStepOptions | GqlStepOptions;
 export type ResolverOptions = {
   description?: string;
-  defaults: StepOptions;
+  defaults?: FnStepOptions & SqlStepOptions & GqlStepOptions;
 };
 
 export type PipelineResolverServiceConfig = { files: string[] };

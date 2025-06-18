@@ -38,17 +38,19 @@ export class PipelineResolverService {
           Name: pipeline.name,
           OperationName: pipeline.name,
           Description: pipeline.description,
-          Operation: {
-            Kind: pipeline.operationType === 1 ? "graphql" : "function",
-            Url: null,
-            Query: pipeline.operationType === 1
-              ? pipeline.operationSource
-              : null,
-          },
           OperationType: pipeline.operationType,
+          OperationSourcePath: path.join(
+            ".tailor-sdk",
+            "functions",
+            `${resolver.name}__${pipeline.name}.js`,
+          ),
+          OperationHook: {
+            Expr: "({ ...context.pipeline, ...context.args });",
+          },
+          PostScript: `args.${pipeline.name}`,
           SkipOperationOnError: false,
-          OperationSource: pipeline.operationSource,
         })),
+        PostHook: { Expr: "({ ...context.pipeline });" },
         PublishExecutionEvents: false,
       };
 

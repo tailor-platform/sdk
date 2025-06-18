@@ -3,8 +3,15 @@ import fs from "node:fs";
 import multiline from "multiline-ts";
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
-import { ResolverOptions, Step, StepDef, StepOptions, StepType } from "./types";
-import { TailorType } from "../../types/type";
+import {
+  FnStepOptions,
+  GqlStepOptions,
+  ResolverOptions,
+  SqlStepOptions,
+  Step,
+  StepDef,
+} from "./types";
+import t, { TailorType } from "../../types/type";
 import { output } from "../../types/helpers";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { SchemaGenerator } from "../../schema-generator";
@@ -16,7 +23,7 @@ export class Resolver<
   Input extends TailorType<any, any, any>,
   CurrentOutput,
   Context extends Record<string, unknown>,
-  Steps extends StepDef<StepType, string, any, any, any>[],
+  Steps extends StepDef<string, any, any, any>[],
   Output extends TailorType<any, any, any>,
 > {
   readonly _input = null as output<Input>;
@@ -37,6 +44,10 @@ export class Resolver<
     this.#options = options;
   }
 
+  get options() {
+    return this.#options as Readonly<ResolverOptions>;
+  }
+
   get steps() {
     return Array.from(this._steps) as Steps;
   }
@@ -46,16 +57,19 @@ export class Resolver<
     const R,
   >(
     name: S,
-    fn: Step<Awaited<CurrentOutput>, R, Context>,
-    _options?: StepOptions,
+    fn: (context: Context) => R | Promise<R>,
+    _options?: FnStepOptions,
   ) {
-    this._steps.push(["fn", name, fn]);
+    this._steps.push(["fn", name, fn, _options]);
     return this as unknown as Resolver<
       QueryType,
       Input,
       Awaited<R>,
       Context & Record<S, Awaited<R>>,
-      [...Steps, ["fn", S, Step<Awaited<CurrentOutput>, R, Context>]],
+      [
+        ...Steps,
+        ["fn", S, Step<Awaited<CurrentOutput>, R, Context>, FnStepOptions],
+      ],
       Output
     >;
   }
@@ -66,9 +80,9 @@ export class Resolver<
   >(
     name: S,
     fn: Q,
-    _options?: StepOptions,
+    options?: SqlStepOptions,
   ) {
-    this._steps.push(["sql", name, fn]);
+    this._steps.push(["sql", name, fn, options]);
     return this as unknown as Resolver<
       QueryType,
       Input,
@@ -76,7 +90,12 @@ export class Resolver<
       Context & Record<S, Awaited<ReturnType<Q>>>,
       [
         ...Steps,
-        ["sql", S, Step<Awaited<CurrentOutput>, ReturnType<Q>, Context>],
+        [
+          "sql",
+          S,
+          Step<Awaited<CurrentOutput>, ReturnType<Q>, Context>,
+          SqlStepOptions,
+        ],
       ],
       Output
     >;
@@ -88,9 +107,9 @@ export class Resolver<
   >(
     name: S,
     fn: Q,
-    _options?: StepOptions,
+    _options?: GqlStepOptions,
   ) {
-    this._steps.push(["gql", name, fn]);
+    this._steps.push(["gql", name, fn, _options]);
     return this as unknown as Resolver<
       QueryType,
       Input,
@@ -102,6 +121,7 @@ export class Resolver<
           "gql",
           S,
           Step<Awaited<CurrentOutput>, Awaited<ReturnType<Q>>["data"], Context>,
+          GqlStepOptions,
         ],
       ],
       Output
@@ -109,7 +129,7 @@ export class Resolver<
   }
 
   returns<const O extends TailorType<any, any, any>>(
-    output: CurrentOutput extends output<O> ? O : never,
+    output: Context extends output<O> ? O : never,
   ) {
     this.output = output as any;
     return this as unknown as Resolver<

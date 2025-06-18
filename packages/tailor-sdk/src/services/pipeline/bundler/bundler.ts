@@ -3,7 +3,7 @@ import fs from "node:fs";
 import * as rolldown from "rolldown";
 import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
-import { ResolverExtractor } from "./extractor";
+import { ResolverLoader } from "./loader";
 import { CodeTransformer } from "./transformer";
 import { getDistPath } from "../../../tailor";
 import { PipelineResolverServiceConfig } from "../types";
@@ -11,7 +11,7 @@ import { measure } from "../../../performance";
 
 export class ResolverBundler {
   private readonly tempDir: string;
-  private readonly extractor: ResolverExtractor;
+  private readonly resolverLoader: ResolverLoader;
   private readonly transformer: CodeTransformer;
 
   constructor(
@@ -19,7 +19,7 @@ export class ResolverBundler {
     private readonly config: PipelineResolverServiceConfig,
   ) {
     this.tempDir = path.join(process.cwd(), ".tailor-sdk");
-    this.extractor = new ResolverExtractor();
+    this.resolverLoader = new ResolverLoader();
     this.transformer = new CodeTransformer();
   }
 
@@ -86,7 +86,7 @@ export class ResolverBundler {
 
   @measure
   private async processResolverFile(resolverFile: string): Promise<void> {
-    const resolver = await this.extractor.summarize(resolverFile);
+    const resolver = await this.resolverLoader.load(resolverFile);
 
     const outputFile = path.join(
       this.tempDir,

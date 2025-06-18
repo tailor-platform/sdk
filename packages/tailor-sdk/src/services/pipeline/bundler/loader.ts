@@ -1,12 +1,11 @@
 import { Resolver } from "../resolver";
-import { ResolverSummary } from "./types";
 import { measure } from "../../../performance";
 
-export class ResolverExtractor {
+export class ResolverLoader {
   @measure
-  async summarize(
+  async load(
     resolverFilePath: string,
-  ): Promise<ResolverSummary> {
+  ): Promise<InstanceType<typeof Resolver>> {
     const resolverModule = await import(resolverFilePath);
     const resolver = resolverModule.default;
 
@@ -16,9 +15,6 @@ export class ResolverExtractor {
       );
     }
 
-    const steps = resolver.steps.map((
-      [type, name, fn]: typeof resolver.steps[number],
-    ) => ({ type, name, fn }));
-    return { name: resolver.name, steps };
+    return resolver;
   }
 }
