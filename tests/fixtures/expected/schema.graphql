@@ -75,7 +75,6 @@ input StepChainInput {
 type StepChainOutput {
   step1: String!
   step2: String!
-  step3: String!
   sqlStep: String!
 }
 

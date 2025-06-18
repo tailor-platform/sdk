@@ -9,8 +9,8 @@ import {
   SyntaxKind,
   VariableDeclaration,
 } from "ts-morph";
-import { ResolverSummary } from "./types";
 import { measure } from "../../../performance";
+import { Resolver } from "../resolver";
 
 export class CodeTransformer {
   private project: Project;
@@ -29,7 +29,7 @@ export class CodeTransformer {
   @measure
   transform(
     filePath: string,
-    resolver: ResolverSummary,
+    resolver: InstanceType<typeof Resolver>,
     tempDir: string,
   ): string[] {
     const trimmedContent = this.trimSDKCode(filePath);
@@ -39,7 +39,7 @@ export class CodeTransformer {
       ${trimmedContent}
 
       ${
-        resolver.steps.flatMap(({ type, name, fn }) => {
+        resolver.steps.flatMap(([type, name, fn]) => {
           switch (type) {
             case "fn":
             case "sql":
@@ -62,9 +62,9 @@ export class CodeTransformer {
     fs.mkdirSync(stepDir, { recursive: true });
 
     return resolver.steps
-      .filter(({ type }) => type !== "gql")
+      .filter(([type]) => type !== "gql")
       .flatMap(
-        ({ type, name }) => {
+        ([type, name, _, options]) => {
           const stepFilePath = path.join(
             stepDir,
             `${resolver.name}__${name}.js`,
@@ -80,11 +80,20 @@ export class CodeTransformer {
               `;
               break;
             case "sql":
+              const dbNamespace = options?.dbNamespace ||
+                resolver.options?.defaults?.dbNamespace;
+              if (!dbNamespace) {
+                throw new Error(
+                  `Database namespace is not defined at ${resolver.name} > ${name}`,
+                );
+              }
               stepContent = ml /* js */`
                 import { ${stepFunctionVariable} } from "${relativePath}";
 
                 ${SQL_WRAPPER_DEFINITION}
-                globalThis.main = ${wrapSqlFn(stepFunctionVariable)};
+                globalThis.main = ${
+                wrapSqlFn(dbNamespace, stepFunctionVariable)
+              };
               `;
               break;
             default:
@@ -120,22 +129,18 @@ export class CodeTransformer {
     const importedIdentifierReferences = new Set<Node>();
 
     tailorSdkImportDeclarations.forEach((importDecl) => {
-      // Named imports の処理
       const namedImports = importDecl.getNamedImports();
       namedImports.forEach((namedImport: any) => {
         const nameNode = namedImport.getNameNode();
         const aliasNode = namedImport.getAliasNode();
 
-        // 実際に使用される識別子（エイリアスがあればエイリアス、なければ元の名前）
         const identifierToTrack = aliasNode || nameNode;
-
         const symbol = identifierToTrack.getSymbol();
         if (symbol) {
           removedIdentifiers.add(symbol);
         }
       });
 
-      // Default import の処理
       const defaultImport = importDecl.getDefaultImport();
       if (defaultImport) {
         const symbol = defaultImport.getSymbol();
@@ -144,7 +149,6 @@ export class CodeTransformer {
         }
       }
 
-      // Namespace import の処理
       const namespaceImport = importDecl.getNamespaceImport();
       if (namespaceImport) {
         const symbol = namespaceImport.getSymbol();
@@ -152,7 +156,6 @@ export class CodeTransformer {
       }
     });
 
-    // 3. ファイル内の全ての識別子をチェックして、インポートされたSymbolを参照しているものを特定
     const allIdentifiers = sourceFile.getDescendantsOfKind(
       SyntaxKind.Identifier,
     );
@@ -171,9 +174,7 @@ export class CodeTransformer {
       }
     });
 
-    // 4. インポートされた識別子を使用している文を特定
     const referencedStatements = new Set<any>();
-
     importedIdentifierReferences.forEach((ref) => {
       let statement = ref;
       while (
@@ -188,7 +189,6 @@ export class CodeTransformer {
       }
     });
 
-    // 5. 依存関係を再帰的に追跡
     while (true) {
       let hasChanges = false;
       const statements = sourceFile.getStatements();
@@ -225,7 +225,6 @@ export class CodeTransformer {
           return;
         }
 
-        // 削除された識別子を使用しているかチェック（従来のロジック）
         const identifiersInStatement = statement.getDescendantsOfKind(
           SyntaxKind.Identifier,
         );
@@ -301,19 +300,26 @@ function stepVariableName(stepName: string) {
 }
 
 const SQL_WRAPPER_NAME = "$tailor_sql_step_wrapper";
-function wrapSqlFn(target: string) {
-  return `${SQL_WRAPPER_NAME}(${target})`;
+function wrapSqlFn(dbNamespace: string, target: string) {
+  return `await ${SQL_WRAPPER_NAME}("${dbNamespace}", ${target})`;
 }
 const SQL_WRAPPER_DEFINITION = ml /* js */`
   const $connect_tailordb = async (namespace) => {
     const baseClient = new tailordb.Client({ namespace });
     await baseClient.connect();
     const client = {
-      async exec(query) { return baseClient.queryObject(query) },
-      async execOne(query) { return baseClient.queryObject(query) },
+      async exec(query) {
+        const result = await baseClient.queryObject(query);
+        return result.rows;
+      },
+      async execOne(query) {
+        const result = await baseClient.queryObject(query);
+        console.log(result);
+        return result.rows[0];
+      },
     };
     return {
-      client,
+      ...client,
       async transaction(callback) {
         try {
           await client.exec("BEGIN");
@@ -332,10 +338,8 @@ const SQL_WRAPPER_DEFINITION = ml /* js */`
     };
   };
 
-  const ${SQL_WRAPPER_NAME} = (namespace, fn) => {
-    const client = $connect_tailordb(namespace);
-    return (args) => {
-      return fn({ ...args, client });
-    };
+  const ${SQL_WRAPPER_NAME} = async (namespace, fn) => {
+    const client = await $connect_tailordb(namespace);
+    return async (args) => await fn({ ...args, client });
   };
 `;
