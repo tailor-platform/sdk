@@ -174,7 +174,7 @@ export class TailorField<
     this._metadata.array = true;
     return this as TailorField<
       Prettify<CurrentDefined & { array: true }>,
-      Output,
+      Output[],
       Reference
     >;
   }

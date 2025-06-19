@@ -120,7 +120,7 @@ class TailorDBField<
       : TailorField<CurrentDefined, Output, Reference>,
   ): TailorDBField<
     Prettify<CurrentDefined & { array: true }>,
-    Output,
+    Output[],
     Reference
   > {
     return super.array() as any;
