@@ -261,13 +261,12 @@ describe("createQueryResolver type tests", () => {
         const ids = context.input.ids;
         const tags = context.input.tags;
 
-        // 実際の型を確認（配列型の推論に問題がある可能性）
         type IdsType = typeof ids;
         type TagsType = typeof tags;
 
         // 配列型として扱えることを確認
-        expectTypeOf<IdsType>().toEqualTypeOf<string>();
-        expectTypeOf<TagsType>().toEqualTypeOf<string | null | undefined>();
+        expectTypeOf<IdsType>().toEqualTypeOf<string[]>();
+        expectTypeOf<TagsType>().toEqualTypeOf<string[] | null | undefined>();
 
         // 配列操作が可能であることを確認（実行時チェック）
         if (Array.isArray(ids)) {
@@ -286,7 +285,6 @@ describe("createQueryResolver type tests", () => {
     type InputType = typeof resolver._input;
     type ContextType = typeof resolver._context;
 
-    // 配列型の推論に問題がある可能性があるため、プロパティの存在のみを確認
     expectTypeOf<InputType>().toHaveProperty("ids");
     expectTypeOf<InputType>().toHaveProperty("tags");
 
@@ -349,7 +347,7 @@ describe("createQueryResolver type tests", () => {
           number | null | undefined
         >();
         expectTypeOf(context.input.active).toEqualTypeOf<boolean>();
-        expectTypeOf(context.input.tags).toEqualTypeOf<string>();
+        expectTypeOf(context.input.tags).toEqualTypeOf<string[]>();
         expectTypeOf(context.input.data).toEqualTypeOf<
           string | null | undefined
         >();
@@ -361,7 +359,7 @@ describe("createQueryResolver type tests", () => {
             count: number;
             price?: number | null | undefined;
             active: boolean;
-            tags: string;
+            tags: string[];
             data?: string | null | undefined;
           };
         }>();
@@ -454,8 +452,7 @@ describe("createQueryResolver type tests", () => {
         expectTypeOf(context.input.profileAge).toEqualTypeOf<
           number | null | undefined
         >();
-        // 配列型の推論に問題がある可能性
-        expectTypeOf(context.input.tags).toEqualTypeOf<string>();
+        expectTypeOf(context.input.tags).toEqualTypeOf<string[]>();
 
         return { processed: true };
       });
