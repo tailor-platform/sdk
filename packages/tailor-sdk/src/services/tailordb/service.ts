@@ -1,11 +1,18 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import fs from "node:fs";
 import path from "node:path";
 import { TailorDBServiceConfig } from "./types";
 import { measure } from "../../performance";
-import { isDBType } from "./schema";
+import { createJiti } from "jiti";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const jiti = createJiti(__filename, {
+  interopDefault: true,
+});
 
 export class TailorDBService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private types: any[] = [];
 
   constructor(
@@ -83,12 +90,10 @@ export class TailorDBService {
         const schema = metadata.schema || {};
 
         // Fieldsを変換
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fields: any = {};
         if (schema.fields) {
           Object.entries(schema.fields)
             .filter(([fieldName]) => fieldName !== "id")
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .forEach(([fieldName, fieldConfig]: [string, any]) => {
               fields[fieldName] = {
                 Type: fieldConfig.type || "string",
@@ -150,12 +155,22 @@ export class TailorDBService {
 
     for (const typeFile of typeFiles) {
       try {
-        const module = await import(typeFile);
+        const module = (await jiti.import(typeFile)) as Record<string, any>;
 
         for (const exportName of Object.keys(module)) {
           const exportedValue = module[exportName];
 
-          if (isDBType(exportedValue)) {
+          // Check if the object has the expected shape of a TailorDBType
+          const isDBTypeLike =
+            exportedValue &&
+            typeof exportedValue === "object" &&
+            exportedValue.constructor?.name === "TailorDBType" &&
+            typeof exportedValue.name === "string" &&
+            typeof exportedValue.fields === "object" &&
+            exportedValue.metadata &&
+            typeof exportedValue.metadata === "object";
+
+          if (isDBTypeLike) {
             console.log(`Adding type "${exportName}" from ${typeFile}`);
             this.types.push(exportedValue);
           }
