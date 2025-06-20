@@ -23,9 +23,8 @@ export class Application {
   }
 
   get pipelineResolverServices() {
-    return this._pipelineResolverServices as ReadonlyArray<
-      PipelineResolverService
-    >;
+    return this
+      ._pipelineResolverServices as ReadonlyArray<PipelineResolverService>;
   }
 
   get authService() {
@@ -60,7 +59,7 @@ export class Application {
   }
 
   toManifestJSON() {
-    let authReference: AuthReference | {} = {};
+    let authReference: AuthReference | object = {};
 
     if (this._authService) {
       const namespace = this._authService.config.namespace;

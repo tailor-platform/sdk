@@ -3,10 +3,7 @@ import { db } from "./schema";
 
 import { describe, expect, test } from "vitest";
 
-const productItem = db.type(
-  "ProductItem",
-  { name: db.string().unique() },
-);
+const productItem = db.type("ProductItem", { name: db.string().unique() });
 const productType = db.type(
   "Product",
   {
@@ -15,7 +12,10 @@ const productType = db.type(
     price: db.int(),
     weight: db.float().optional(),
     variants: db.string().array().optional(),
-    itemIDs: db.uuid().ref(productItem, ["items", "product"]).array()
+    itemIDs: db
+      .uuid()
+      .ref(productItem, ["items", "product"])
+      .array()
       .optional(),
   },
   { withTimestamps: true },
@@ -48,6 +48,7 @@ describe("TailorDB: object style", () => {
     expect(metadata.schema).toBeDefined();
     const schema = metadata.schema;
     expect(schema?.fields).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
     const fields = schema?.fields!;
     expect(fields["name"]).toBeDefined();
 

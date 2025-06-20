@@ -1,6 +1,6 @@
 # Dependency directories
 node_modules/
-jspm_packages/
+pnpm-lock.yaml
 
 # TypeScript compiled output
 dist/
@@ -20,13 +20,5 @@ lerna-debug.log*
 # Eslint cache
 .eslintcache
 
-# Coverage directory used by tools like istanbul
-coverage/
-
-# IDEs and editors
-.idea/
-.vscode/
-
-# Tailor SDK
-.tailor-sdk
-performance-reports
+# Turbo 
+.turbo

@@ -7,6 +7,6 @@ type GQLFactoryInput<C> = C & {
   gql: typeof graphql;
   client: GQLClient;
 };
-export type gqlFactory<C> = (input: GQLFactoryInput<C>) => ReturnType<
-  typeof input.client.query | typeof input.client.mutation
->;
+export type gqlFactory<C> = (
+  input: GQLFactoryInput<C>,
+) => ReturnType<typeof input.client.query | typeof input.client.mutation>;

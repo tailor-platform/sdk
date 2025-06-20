@@ -13,22 +13,28 @@ export type AllowedValues =
   | [AllowedValueAlias, ...AllowedValueAlias[]]
   | [AllowedValueObject, ...AllowedValueObject[]];
 
-export function mapAllowedValues(
-  values: AllowedValues,
-): AllowedValue[] {
-  return values?.map((value) => {
-    if (typeof value === "string") {
-      return { value };
-    }
-    if (Array.isArray(value)) {
-      return { value: value[0], description: value[1] };
-    }
-    return value;
-  }).map((value) => new TailorDBType_Value(value)) ?? [];
+export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
+  return (
+    values
+      ?.map((value) => {
+        if (typeof value === "string") {
+          return { value };
+        }
+        if (Array.isArray(value)) {
+          return { value: value[0], description: value[1] };
+        }
+        return value;
+      })
+      .map((value) => new TailorDBType_Value(value)) ?? []
+  );
 }
 
-export type AllowedValuesOutput<V extends AllowedValues> = V[number] extends
-  string ? V[number]
-  : V[number] extends [infer K, ...any] ? K
-  : V[number] extends { value: infer K } ? K
-  : never;
+export type AllowedValuesOutput<V extends AllowedValues> =
+  V[number] extends string
+    ? V[number]
+    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      V[number] extends [infer K, ...any]
+      ? K
+      : V[number] extends { value: infer K }
+        ? K
+        : never;

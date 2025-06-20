@@ -27,12 +27,13 @@ export function getPerformanceSummary(): string {
 
   const summary = stats
     .sort((a, b) => b.averageTime - a.averageTime)
-    .map((stat) =>
-      `${stat.className}.${stat.methodName}: ` +
-      `calls=${stat.callCount}, ` +
-      `avg=${stat.averageTime.toFixed(2)}ms, ` +
-      `min=${stat.minTime.toFixed(2)}ms, ` +
-      `max=${stat.maxTime.toFixed(2)}ms`
+    .map(
+      (stat) =>
+        `${stat.className}.${stat.methodName}: ` +
+        `calls=${stat.callCount}, ` +
+        `avg=${stat.averageTime.toFixed(2)}ms, ` +
+        `min=${stat.minTime.toFixed(2)}ms, ` +
+        `max=${stat.maxTime.toFixed(2)}ms`,
     )
     .join("\n");
 

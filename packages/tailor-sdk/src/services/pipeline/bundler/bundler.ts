@@ -34,9 +34,9 @@ export class ResolverBundler {
       const resolverFiles = await this.detectResolverFiles();
       if (resolverFiles.length === 0) {
         throw new Error(
-          `No resolver files found matching pattern: ${
-            this.config.files?.join(", ")
-          }`,
+          `No resolver files found matching pattern: ${this.config.files?.join(
+            ", ",
+          )}`,
         );
       }
 
@@ -54,10 +54,7 @@ export class ResolverBundler {
         `Successfully bundled resolvers for service "${this.namespace}"`,
       );
     } catch (error) {
-      console.error(
-        `Bundle failed for service ${this.namespace}:`,
-        error,
-      );
+      console.error(`Bundle failed for service ${this.namespace}:`, error);
       throw error;
     }
   }

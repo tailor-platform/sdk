@@ -1,3 +1,5 @@
+/* eslint-disable no-case-declarations */
+
 import type { PerformanceMeasurement, PerformanceStats } from "./types";
 import type { Reporter } from "./reporters/index";
 import { ConsoleReporter, JSONReporter } from "./reporters/index";
@@ -111,20 +113,23 @@ export class PerformanceTracker {
 
     const handleExit = async () => {
       try {
-        const reportType = process.env.TAILOR_PERFORMANCE_REPORT_TYPE ||
-          "console";
+        const reportType =
+          process.env.TAILOR_PERFORMANCE_REPORT_TYPE || "console";
         let reporter: Reporter;
 
         switch (reportType) {
           case "json":
-            const reportPath = process.env.TAILOR_PERFORMANCE_REPORT_PATH ||
+            const reportPath =
+              process.env.TAILOR_PERFORMANCE_REPORT_PATH ||
               "./performance-reports";
             fs.mkdirSync(reportPath, { recursive: true });
 
-            const timestamp = new Date().toISOString().replace(
-              /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+).*/g,
-              "$1$2$3$4$5$6",
-            );
+            const timestamp = new Date()
+              .toISOString()
+              .replace(
+                /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+).*/g,
+                "$1$2$3$4$5$6",
+              );
             const filename = `report-${timestamp}.json`;
             const outputPath = path.join(reportPath, filename);
 

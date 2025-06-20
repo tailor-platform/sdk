@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import path from "node:path";
 import fs from "node:fs";
 import { SchemaGenerator } from "./schema-generator";
@@ -86,7 +88,10 @@ export class Workspace {
   @measure
   async apply() {
     console.log("Applying workspace:", this.name);
-    console.log("Applications:", this.applications.map((app) => app.name));
+    console.log(
+      "Applications:",
+      this.applications.map((app) => app.name),
+    );
 
     const distPath = getDistPath();
     const tailorDBDir = path.join(distPath, "tailordb");
@@ -128,18 +133,20 @@ export class Workspace {
     }
 
     const tailordbSDL = SchemaGenerator.generateSDL(tailordbMetadataList);
-    const resolverSDL = resolverMetadataList.map((metadata) =>
-      gql`
+    const resolverSDL = resolverMetadataList
+      .map(
+        (metadata) =>
+          gql`
         # Resolver: ${metadata.name}
         ${metadata.sdl}
-        `
-    ).join("\n\n\n");
+        `,
+      )
+      .join("\n\n\n");
     const combinedSDL = gql`
-    # TailorDB Type
-    ${tailordbSDL}
+      # TailorDB Type
+      ${tailordbSDL}
 
-    ${resolverSDL}
-
+      ${resolverSDL}
     `;
     fs.writeFileSync(path.join(distPath, "schema.graphql"), combinedSDL);
   }
