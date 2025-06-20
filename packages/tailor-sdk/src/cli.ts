@@ -44,17 +44,14 @@ const applyCommand = defineCommand({
         process.exit(1);
       }
 
-      // cli-apply.tsまたはcli-apply.mjsのパスを構築
-      // 開発環境では.ts、本番環境では.mjsを使用
       const cliApplyTsPath = path.join(__dirname, "cli-apply.ts");
       const cliApplyMjsPath = path.join(__dirname, "cli-apply.mjs");
-
-      let cliApplyPath: string;
-      if (existsSync(cliApplyTsPath)) {
-        cliApplyPath = cliApplyTsPath;
-      } else if (existsSync(cliApplyMjsPath)) {
-        cliApplyPath = cliApplyMjsPath;
-      } else {
+      const cliApplyPath = existsSync(cliApplyTsPath)
+        ? cliApplyTsPath
+        : existsSync(cliApplyMjsPath)
+          ? cliApplyMjsPath
+          : null;
+      if (!cliApplyPath) {
         console.error(
           `Error: cli-apply.ts or cli-apply.mjs not found in ${__dirname}`,
         );
