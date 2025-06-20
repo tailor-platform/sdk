@@ -354,10 +354,6 @@ type TailorDBDef = InstanceType<
   >
 >;
 
-function isDBType(type: any): type is InstanceType<typeof TailorDBType> {
-  return type instanceof TailorDBType;
-}
-
 const idField = uuid();
 type idField = typeof idField;
 const datetimeFields = {
@@ -417,7 +413,6 @@ const db = {
   date,
   datetime,
   enum: _enum,
-  isDBType,
 };
 
 export default db;
@@ -430,7 +425,6 @@ export {
   dbType as type,
   float,
   int,
-  isDBType,
   string,
   TailorDBDef,
   uuid,

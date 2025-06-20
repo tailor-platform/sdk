@@ -4,9 +4,24 @@
   "description": "Tailor SDK Core Package",
   "main": "src/index.ts",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "bin": {
+    "tailor-sdk": "./dist/cli.mjs"
+  },
+  "types": "./dist/index.d.ts",
   "scripts": {
     "test": "vitest",
-    "build": "rollup -c rollup/config.ts",
+    "build": "tsup",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",
     "format": "prettier --write ."
@@ -18,7 +33,9 @@
     "@connectrpc/connect-web": "^1.4.0",
     "@iarna/toml": "^2.2.5",
     "@tailor-inc/operator-client": "^25.313.146",
-    "reflect-metadata": "^0.2.2"
+    "citty": "^0.1.6",
+    "jiti": "^2.4.2",
+    "pkg-types": "^2.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",
@@ -31,6 +48,7 @@
     "globals": "^16.2.0",
     "gql.tada": "^1.8.10",
     "ini": "^5.0.0",
+    "tsup": "^8.0.2",
     "prettier": "3.5.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.1",

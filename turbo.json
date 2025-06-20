@@ -1,0 +1,38 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env"],
+  "globalPassThroughEnv": ["GITHUB_PACKAGES_READ_TOKEN"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "cache": true
+    },
+    "test": {
+      "dependsOn": ["//#test:root"],
+      "cache": false
+    },
+    "//#test:root": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "//#test:root:update-expects": {
+      "cache": false
+    },
+    "//#apply": {
+      "dependsOn": ["//#clean"],
+      "cache": false
+    },
+    "//#apply:perf": {
+      "dependsOn": ["//#clean"],
+      "cache": false
+    },
+    "//#apply:ctl": {
+      "dependsOn": ["^build", "//#clean"],
+      "cache": false
+    },
+    "//#clean": {
+      "cache": false
+    }
+  }
+}

@@ -1,18 +1,21 @@
 import type { output as _output } from "./types/helpers";
+import { t as _t } from "./types";
 
 export * from "./schema-generator";
 
-export { _output as infer, _output as output };
+export type infer<T> = _output<T>;
+export type output<T> = _output<T>;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace t {
   export type output<T> = _output<T>;
   export type infer<T> = _output<T>;
 }
-
-export { t } from "./types";
+export const t = { ..._t };
 
 export * from "./services";
 
+export { defineConfig } from "./config";
+export type { AppConfig, WorkspaceConfig } from "./config";
 export { Tailor } from "./tailor";
 export { Workspace } from "./workspace";
