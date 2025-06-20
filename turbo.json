@@ -33,6 +33,36 @@
     },
     "//#clean": {
       "cache": false
+    },
+    "lint": {
+      "dependsOn": ["^lint", "//#lint:root"],
+      "outputs": [".eslintcache"],
+      "cache": true
+    },
+    "lint:fix": {
+      "dependsOn": ["^lint:fix", "//#lint:fix:root"],
+      "outputs": [".eslintcache"],
+      "cache": true
+    },
+    "//#lint:root": {
+      "cache": true
+    },
+    "//#lint:fix:root": {
+      "cache": true
+    },
+    "format": {
+      "dependsOn": ["^format", "//#format:root"],
+      "cache": false
+    },
+    "format:check": {
+      "dependsOn": ["^format:check", "//#format:check:root"],
+      "cache": false
+    },
+    "//#format:root": {
+      "cache": false
+    },
+    "//#format:check:root": {
+      "cache": false
     }
   }
 }

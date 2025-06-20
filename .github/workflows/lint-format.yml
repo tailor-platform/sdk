@@ -1,4 +1,4 @@
-name: Test
+name: Check Lint and Format
 
 on:
   push:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  check-lint-format:
     runs-on: ubuntu-latest
 
     steps:
@@ -33,7 +33,12 @@ jobs:
         env:
           GITHUB_PACKAGES_READ_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_TOKEN }}
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run lint
+        run: pnpm lint
+        env:
+          GITHUB_PACKAGES_READ_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_TOKEN }}
+
+      - name: Check format
+        run: pnpm format:check
         env:
           GITHUB_PACKAGES_READ_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_TOKEN }}

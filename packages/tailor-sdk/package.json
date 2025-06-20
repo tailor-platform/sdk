@@ -24,7 +24,8 @@
     "build": "tsup",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@connectrpc/connect": "^1.4.0",
