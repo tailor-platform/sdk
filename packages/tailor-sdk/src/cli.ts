@@ -2,37 +2,24 @@
 
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "citty";
-import type { WorkspaceConfig } from "./config";
-import { Tailor } from "./tailor";
-import { Workspace } from "./workspace";
+import { spawn } from "node:child_process";
 import path from "node:path";
-import { createJiti } from "jiti";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
-const jiti = createJiti(__filename, {
-  interopDefault: true,
-});
+const __dirname = path.dirname(__filename);
 
-async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
-  try {
-    const config = await jiti.import(configPath);
+async function checkTsxAvailable(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn("tsx", ["--version"], {
+      stdio: "ignore",
+      shell: true,
+    });
 
-    if (!config || typeof config !== "object") {
-      throw new Error(
-        "Invalid Tailor config: config must export a default object",
-      );
-    }
-
-    return config as WorkspaceConfig;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(
-        `Failed to load config from ${configPath}: ${error.message}`,
-      );
-    }
-    throw error;
-  }
+    child.on("error", () => resolve(false));
+    child.on("exit", (code) => resolve(code === 0));
+  });
 }
 
 const applyCommand = defineCommand({
@@ -49,21 +36,51 @@ const applyCommand = defineCommand({
   },
   async run({ args }) {
     try {
-      const sdkTempDir = path.join(process.cwd(), ".tailor-sdk");
-      Tailor.init(sdkTempDir);
+      // tsxが利用可能か確認
+      const tsxAvailable = await checkTsxAvailable();
+      if (!tsxAvailable) {
+        console.error("Error: tsx is not installed or not available in PATH.");
+        console.error("Please install tsx globally: npm install -g tsx");
+        process.exit(1);
+      }
 
-      const configPath =
-        args.config || path.join(process.cwd(), "tailor.config.ts");
-      const config = await loadConfig(configPath);
+      // cli-apply.tsまたはcli-apply.mjsのパスを構築
+      // 開発環境では.ts、本番環境では.mjsを使用
+      const cliApplyTsPath = path.join(__dirname, "cli-apply.ts");
+      const cliApplyMjsPath = path.join(__dirname, "cli-apply.mjs");
 
-      const workspace = new Workspace(config.name);
-      const app = workspace.newApplication(config.app.name);
-      app.defineTailorDB(config.app.db);
-      app.defineResolver(config.app.resolver);
-      app.defineAuth(config.app.auth);
+      let cliApplyPath: string;
+      if (existsSync(cliApplyTsPath)) {
+        cliApplyPath = cliApplyTsPath;
+      } else if (existsSync(cliApplyMjsPath)) {
+        cliApplyPath = cliApplyMjsPath;
+      } else {
+        console.error(
+          `Error: cli-apply.ts or cli-apply.mjs not found in ${__dirname}`,
+        );
+        process.exit(1);
+      }
 
-      await workspace.ctlApply();
-      console.log("Configuration applied successfully.");
+      // configパスを決定
+      const configPath = args.config || "tailor.config.ts";
+
+      // tsxを使ってcli-apply.tsを実行
+      const child = spawn("tsx", [cliApplyPath, configPath], {
+        stdio: "inherit",
+        shell: true,
+        cwd: process.cwd(),
+      });
+
+      child.on("error", (error) => {
+        console.error("Failed to execute tsx:", error);
+        process.exit(1);
+      });
+
+      child.on("exit", (code) => {
+        if (code !== 0) {
+          process.exit(code || 1);
+        }
+      });
     } catch (error) {
       console.error("Failed to apply configuration:", error);
       process.exit(1);
@@ -72,6 +89,7 @@ const applyCommand = defineCommand({
 });
 
 const packageJson = await readPackageJSON(import.meta.url);
+
 const mainCommand = defineCommand({
   meta: {
     name: packageJson.name,
