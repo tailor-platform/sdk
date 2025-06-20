@@ -3,9 +3,7 @@ import { measure } from "../../../performance";
 
 export class ResolverLoader {
   @measure
-  async load(
-    resolverFilePath: string,
-  ): Promise<InstanceType<typeof Resolver>> {
+  async load(resolverFilePath: string): Promise<InstanceType<typeof Resolver>> {
     const resolverModule = await import(resolverFilePath);
     const resolver = resolverModule.default;
 

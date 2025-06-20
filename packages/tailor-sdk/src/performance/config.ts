@@ -36,8 +36,8 @@ export function getPerformanceReportConfig(): PerformanceReportConfig {
     reportType:
       (process.env.TAILOR_PERFORMANCE_REPORT_TYPE as "console" | "json") ||
       "console",
-    reportPath: process.env.TAILOR_PERFORMANCE_REPORT_PATH ||
-      "./performance-reports",
+    reportPath:
+      process.env.TAILOR_PERFORMANCE_REPORT_PATH || "./performance-reports",
   };
 }
 

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+
 import { TailorUser } from "../../types";
 import { FieldMetadata } from "../../types/types";
 
@@ -22,17 +24,18 @@ export type DBTypeConfig = {
 };
 
 export type ValidateFn<O, P = undefined> = (
-  args: P extends undefined ? { value: O; user: TailorUser }
+  args: P extends undefined
+    ? { value: O; user: TailorUser }
     : { value: O; data: P; user: TailorUser },
 ) => boolean;
 export type FieldValidateFn<O> = ValidateFn<O>;
 export type FieldValidator<O> =
   | FieldValidateFn<O>
   | {
-    script: FieldValidateFn<O>;
-    action?: "allow" | "deny";
-    error_message?: string;
-  };
+      script: FieldValidateFn<O>;
+      action?: "allow" | "deny";
+      error_message?: string;
+    };
 export type TypeValidateFn<P, O> = (args: {
   value: O;
   data: P;

@@ -9,13 +9,13 @@ export class AuthService {
     return {
       Kind: "auth",
       Namespace: this.config.namespace,
-      IdProviderConfigs: this.config.idProviderConfigs?.map((
-        provider: IdProviderConfig,
-      ) => ({
-        Name: provider.Name,
-        Config: provider.Config,
-        IdTokenConfig: provider.IdTokenConfig || provider.Config,
-      })),
+      IdProviderConfigs: this.config.idProviderConfigs?.map(
+        (provider: IdProviderConfig) => ({
+          Name: provider.Name,
+          Config: provider.Config,
+          IdTokenConfig: provider.IdTokenConfig || provider.Config,
+        }),
+      ),
       UserProfileProvider: this.config.userProfileProvider,
       UserProfileProviderConfig: this.config.userProfileProviderConfig,
       SCIMConfig: this.config.scimConfig,

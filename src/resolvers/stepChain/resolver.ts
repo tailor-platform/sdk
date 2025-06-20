@@ -11,27 +11,20 @@ const output = t.type("StepChainOutput", {
   sqlStep: t.string(),
 });
 
-export default createQueryResolver(
-  "stepChain",
-  input,
-  { defaults: { dbNamespace: "my-db" } },
-)
-  .fnStep(
-    "step1",
-    (args) => {
-      console.log(args);
-      return `step1: Hello ${args.input.name} on step1!`;
-    },
-  )
-  .fnStep(
-    "step2",
-    async (args) => {
-      console.log(args);
-      return `step2: recorded ${
-        format(new Date(), "yyyy-MM-dd HH:mm:ss")
-      } on step2!`;
-    },
-  )
+export default createQueryResolver("stepChain", input, {
+  defaults: { dbNamespace: "my-db" },
+})
+  .fnStep("step1", (args) => {
+    console.log(args);
+    return `step1: Hello ${args.input.name} on step1!`;
+  })
+  .fnStep("step2", async (args) => {
+    console.log(args);
+    return `step2: recorded ${format(
+      new Date(),
+      "yyyy-MM-dd HH:mm:ss",
+    )} on step2!`;
+  })
   .sqlStep("sqlStep", async (context) => {
     const result = await context.client.execOne<{ name: string }>(/* sql */ `
       SELECT name FROM User

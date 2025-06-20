@@ -3,6 +3,7 @@
 A development kit for building applications on the Tailor Platform.
 
 ## Table of Contents
+
 - [Installation](#installation)
 - [Getting Started](#getting-started)
 - [TailorDB](#tailordb)
@@ -31,9 +32,14 @@ pnpm add @tailor-platform/tailor-sdk
 ## Getting Started
 
 ```typescript
-import { Tailor, functionStep, pipeline, sqlStep } from '@tailor-platform/tailor-sdk';
+import {
+  Tailor,
+  functionStep,
+  pipeline,
+  sqlStep,
+} from "@tailor-platform/tailor-sdk";
 
-const workspace = Tailor.newWorkspace('my_workspace');
+const workspace = Tailor.newWorkspace("my_workspace");
 
 // Define your services, models, and pipelines
 // ...
@@ -50,41 +56,42 @@ TailorDB is a data modeling and persistence layer that allows you to define your
 Models are defined as TypeScript classes decorated with `@TailorDBType()` and fields are defined with `@TailorDBField()`:
 
 ```typescript
-import { 
-  TailorDBType, 
-  TailorDBField, 
-  Type, 
+import {
+  TailorDBType,
+  TailorDBField,
+  Type,
   TypeField,
-  ArrayOf 
-} from '@tailor-platform/tailor-sdk';
+  ArrayOf,
+} from "@tailor-platform/tailor-sdk";
 
 @TailorDBType()
 class ProductItem {
-  @TypeField({type: 'uuid'})
+  @TypeField({ type: "uuid" })
   id!: string;
-  
-  @TailorDBField({required: true, index: true, unique: true})
+
+  @TailorDBField({ required: true, index: true, unique: true })
   name!: string;
 }
 
-@TailorDBType({withTimestamps: true})
+@TailorDBType({ withTimestamps: true })
 class Product {
-  @TypeField({type: 'uuid'})
+  @TypeField({ type: "uuid" })
   id?: string;
 
-  @TailorDBField({required: true, index: true, unique: true})
+  @TailorDBField({ required: true, index: true, unique: true })
   name!: string;
 
   @TailorDBField()
   description?: string;
 
-  @TailorDBField({type: "integer", required: true})
+  @TailorDBField({ type: "integer", required: true })
   price!: number;
 
-  @TailorDBField({type: "float"}) 
+  @TailorDBField({ type: "float" })
   weight?: number;
 
-  @TailorDBField() @ArrayOf(ProductItem)
+  @TailorDBField()
+  @ArrayOf(ProductItem)
   items!: ProductItem[];
 }
 ```
@@ -96,13 +103,13 @@ class Product {
 TailorDB supports the following field types:
 
 | TypeScript Type | TailorDB Type | GraphQL Type |
-|----------------|--------------|-------------|
-| string         | string       | String      |
-| number         | integer      | Int         |
-| number         | float        | Float       |
-| boolean        | bool         | Boolean     |
-| string         | uuid         | ID          |
-| Date           | datetime     | String      |
+| --------------- | ------------- | ------------ |
+| string          | string        | String       |
+| number          | integer       | Int          |
+| number          | float         | Float        |
+| boolean         | bool          | Boolean      |
+| string          | uuid          | ID           |
+| Date            | datetime      | String       |
 
 You can configure fields with various options:
 
@@ -112,15 +119,15 @@ You can configure fields with various options:
   type: "string",              // Field type (optional, inferred from TypeScript type)
   required: true,              // Whether the field is required
   description: "Description",  // Field description
-  
+
   // Indexing and constraints
   index: true,                 // Whether to create an index for this field
   unique: true,                // Whether the field must have unique values
-  
+
   // Array and relations
   array: true,                 // Whether the field is an array
   foreignKey: true,            // Whether the field is a foreign key
-  
+
   // Validation
   validate: [validateFunction], // Array of validation functions
   allowedValues: [             // For enum-like fields, list of allowed values
@@ -146,13 +153,14 @@ This creates a one-to-many relationship between `Product` and `ProductItem`.
 You can automatically add `createdAt` and `updatedAt` fields to your model:
 
 ```typescript
-@TailorDBType({withTimestamps: true})
+@TailorDBType({ withTimestamps: true })
 class Product {
   // Fields...
 }
 ```
 
 This will:
+
 - Add a `createdAt` datetime field that is automatically set when a record is created
 - Add an `updatedAt` datetime field that is automatically updated when a record is modified
 
@@ -161,14 +169,14 @@ This will:
 After defining your TailorDB models, you need to register them with a TailorDB service in your workspace:
 
 ```typescript
-import { Tailor } from '@tailor-platform/tailor-sdk';
-import { Product, ProductItem } from './models';
+import { Tailor } from "@tailor-platform/tailor-sdk";
+import { Product, ProductItem } from "./models";
 
 // Create a new workspace
-const workspace = Tailor.newWorkspace('my_workspace');
+const workspace = Tailor.newWorkspace("my_workspace");
 
 // Create a TailorDB service
-const tailorDB = workspace.newTailorDBservice('my_db');
+const tailorDB = workspace.newTailorDBservice("my_db");
 
 // Register your models with the TailorDB service
 tailorDB.addTailorDBType(Product);
@@ -182,6 +190,7 @@ workspace.apply();
 ```
 
 This process:
+
 - Creates a TailorDB service named 'my_db' in your workspace
 - Registers your model classes with the service
 - When `workspace.apply()` is called, generates the necessary database schemas and GraphQL types
@@ -193,6 +202,7 @@ This process:
 Creates a new TailorDB model type.
 
 **Parameters:**
+
 - `config.withTimestamps`: Boolean indicating whether to add `createdAt` and `updatedAt` fields
 
 #### `TailorDBField(config?: TailorDBFieldMetadata)`
@@ -200,6 +210,7 @@ Creates a new TailorDB model type.
 Defines a field on a TailorDB model.
 
 **Parameters:**
+
 - `config.type`: Type of the field ('string', 'integer', 'float', 'bool', 'uuid', 'datetime')
 - `config.required`: Whether the field is required
 - `config.index`: Whether to create an index for this field
@@ -214,6 +225,7 @@ Defines a field on a TailorDB model.
 Defines an array relationship to another model.
 
 **Parameters:**
+
 - `type`: The model class for the relationship
 
 ## Pipeline Resolvers
@@ -234,10 +246,9 @@ graph LR
 **Example(Function):**
 
 ```typescript
-import { resolver, functionStep } from '@tailor-platform/tailor-sdk';
+import { resolver, functionStep } from "@tailor-platform/tailor-sdk";
 
 // define input/output types ....
-
 
 // input HelloWorldInput {
 //   .....
@@ -281,7 +292,7 @@ export class OrderViewOutput {
 // extends Query {
 //   orders_view(input: OrderViewInput): OrderViewOutput
 // }
-const hello = queryResolver("orders_view", 
+const hello = queryResolver("orders_view",
     sqlStep<OrderViewInput,OrderViewOutput>("hello", "SELECT id, name FROM Order create_date = :create_date"));
 ```
 
@@ -292,7 +303,7 @@ Each step passes its result as input to the next step, creating a processing cha
 ```mermaid
 graph LR
     Input --> Step1["Step 1"] --> Step2["Step 2"] --> Step3["Step 3"] --> Output
-    
+
     subgraph "Data Flow"
         Result1[Result 1] --> Result2[Result 2] --> Result3[Result 3]
     end
@@ -301,17 +312,18 @@ graph LR
 **Example:**
 
 ```typescript
-import { resolver, steps, functionStep } from '@tailor-platform/tailor-sdk';
+import { resolver, steps, functionStep } from "@tailor-platform/tailor-sdk";
 
 // define input/output types ....
 
-const createSo = resolver("createSo", 
+const createSo = resolver(
+  "createSo",
   steps<CreateSOInput, CreateSOOutput>(
     functionStep("auth", checkAuth),
     functionStep("createHistory", createHistory),
     functionStep("processSo", processSo),
     functionStep("makeResponse", makeResponse),
-  )
+  ),
 );
 ```
 
@@ -324,31 +336,32 @@ graph TD
     Input --> Step1["Step 1"]
     Input --> Step2["Step 2"]
     Input --> Step3["Step 3"]
-    
+
     Step1 --> FinalStep["Response Builder"]
     Step2 --> FinalStep
     Step3 --> FinalStep
-    
+
     FinalStep --> Output
 ```
 
 **Example:**
 
 ```typescript
-import { resolver, steps, functionStep } from '@tailor-platform/tailor-sdk';
+import { resolver, steps, functionStep } from "@tailor-platform/tailor-sdk";
 
 // define input/output types ....
 
-const orderProcessing = resolver("processOrder", 
-  steps< OrderInput, OrderOutput>(
+const orderProcessing = resolver(
+  "processOrder",
+  steps<OrderInput, OrderOutput>(
     functionStep("validateOrder", validateOrder),
     [
       functionStep("processPayment", processPayment),
       functionStep("updateInventory", updateInventory),
-      functionStep("createShippingLabel", createShippingLabel)
+      functionStep("createShippingLabel", createShippingLabel),
     ],
-    functionStep("buildResponse", buildResponse)
-  )
+    functionStep("buildResponse", buildResponse),
+  ),
 );
 ```
 
@@ -357,14 +370,14 @@ const orderProcessing = resolver("processOrder",
 After defining your Pipeline resolvers, you need to register them with your workspace, similar to how TailorDB types are registered:
 
 ```typescript
-import { Tailor } from '@tailor-platform/tailor-sdk';
-import { helloWorld, processOrder } from './resolvers';
+import { Tailor } from "@tailor-platform/tailor-sdk";
+import { helloWorld, processOrder } from "./resolvers";
 
 // Create a new workspace
-const workspace = Tailor.newWorkspace('my_workspace');
+const workspace = Tailor.newWorkspace("my_workspace");
 
 // Register your resolvers with the workspace
-const pipelineService = workspace.newPipelineService('my_pipeline');
+const pipelineService = workspace.newPipelineService("my_pipeline");
 
 // Register individual resolvers
 pipelineService.addResolver(helloWorld);
@@ -378,6 +391,7 @@ workspace.apply();
 ```
 
 This process:
+
 - Creates a Pipeline service named 'my_pipeline' in your workspace
 - Registers your resolver functions with the service
 - When `workspace.apply()` is called, generates the necessary GraphQL schema and resolver implementations
@@ -389,7 +403,12 @@ Pipeline Resolvers use TypeScript classes with decorators to define their input 
 #### Defining Input and Output Types
 
 ```typescript
-import { InputType, InputTypeField, Type, TypeField } from '@tailor-platform/tailor-sdk';
+import {
+  InputType,
+  InputTypeField,
+  Type,
+  TypeField,
+} from "@tailor-platform/tailor-sdk";
 
 @InputType()
 export class HelloWorldInput {
@@ -431,7 +450,14 @@ extend type Mutation {
 #### Complete Resolver Example
 
 ```typescript
-import { resolver, functionStep, InputType, InputTypeField, Type, TypeField } from '@tailor-platform/tailor-sdk';
+import {
+  resolver,
+  functionStep,
+  InputType,
+  InputTypeField,
+  Type,
+  TypeField,
+} from "@tailor-platform/tailor-sdk";
 
 @InputType()
 export class HelloWorldInput {
@@ -446,18 +472,18 @@ export class HelloWorldOutput {
 }
 
 function processHello(input: HelloWorldInput): HelloWorldOutput {
-  return { 
-    message: `Hello, ${input.name || 'World'}!` 
+  return {
+    message: `Hello, ${input.name || "World"}!`,
   };
 }
 
 export const helloWorld = resolver(
   "helloWorld",
-  functionStep("process", processHello)
+  functionStep("process", processHello),
 );
 ```
 
-npx rollup -c ./packages/tailor-sdk/rollup.config.mjs                                   
+npx rollup -c ./packages/tailor-sdk/rollup.config.mjs
 
 ### API Reference
 

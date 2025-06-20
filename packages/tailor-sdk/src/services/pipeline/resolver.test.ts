@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { describe, expectTypeOf, it } from "vitest";
 import { createMutationResolver, createQueryResolver } from "./resolver";
 import t from "../../types/type";
@@ -36,8 +39,9 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("fnStep追加後の型が正しいこと", () => {
-    const resolver = createQueryResolver("getUser", UserInput)
-      .fnStep("fetchUser", async (context) => {
+    const resolver = createQueryResolver("getUser", UserInput).fnStep(
+      "fetchUser",
+      async (context) => {
         type CtxType = typeof context;
         expectTypeOf<CtxType>().toEqualTypeOf<{
           input: {
@@ -51,7 +55,8 @@ describe("createQueryResolver type tests", () => {
           name: "John Doe",
           email: "john@example.com",
         };
-      });
+      },
+    );
 
     type ResolverContext = typeof resolver._context;
     expectTypeOf<ResolverContext>().toExtend<{
@@ -68,12 +73,14 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("sqlStep追加後の型が正しいこと", () => {
-    const resolver = createQueryResolver("getUser", UserInput)
-      .sqlStep("queryUser", ({ client, input }) => {
+    const resolver = createQueryResolver("getUser", UserInput).sqlStep(
+      "queryUser",
+      ({ client, input }) => {
         return client.execOne<{ id: string; name: string; email: string }>(
           `SELECT * FROM users WHERE id = ${input.id}`,
         );
-      });
+      },
+    );
 
     // contextに結果が追加される
     type ResolverContext = typeof resolver._context;
@@ -87,10 +94,12 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("gqlStep追加後の型が正しいこと", () => {
-    const resolver = createQueryResolver("getUser", UserInput)
-      .gqlStep("fetchUserGql", ({ client }) => {
+    const resolver = createQueryResolver("getUser", UserInput).gqlStep(
+      "fetchUserGql",
+      ({ client }) => {
         return client.query("" as any, {} as any);
-      });
+      },
+    );
 
     // contextにはgqlの結果全体が追加される
     type ResolverContext = typeof resolver._context;
@@ -104,12 +113,14 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("returns()メソッドの型制約が正しいこと", () => {
-    const resolver = createQueryResolver("getUser", UserInput)
-      .fnStep("fetchUser", async () => ({
+    const resolver = createQueryResolver("getUser", UserInput).fnStep(
+      "fetchUser",
+      async () => ({
         id: "1",
         name: "John",
         email: "john@example.com",
-      }));
+      }),
+    );
 
     // contextの型と一致する場合のみreturns()が使える
     // 注: 実際にはreturns()の型制約により、正確な型の一致が必要
@@ -230,8 +241,9 @@ describe("createQueryResolver type tests", () => {
       optional: t.string().optional(),
     });
 
-    const resolver = createQueryResolver("optionalTest", OptionalInput)
-      .fnStep("processOptional", (context) => {
+    const resolver = createQueryResolver("optionalTest", OptionalInput).fnStep(
+      "processOptional",
+      (context) => {
         // オプショナルフィールドの型チェック
         type RequiredType = typeof context.input.required;
         type OptionalType = typeof context.input.optional;
@@ -240,7 +252,8 @@ describe("createQueryResolver type tests", () => {
         expectTypeOf<OptionalType>().toEqualTypeOf<string | null | undefined>();
 
         return { processed: true };
-      });
+      },
+    );
 
     type InputType = typeof resolver._input;
     expectTypeOf<InputType>().toEqualTypeOf<{
@@ -255,8 +268,9 @@ describe("createQueryResolver type tests", () => {
       tags: t.string().array().optional(),
     });
 
-    const resolver = createQueryResolver("arrayTest", ArrayInput)
-      .fnStep("processArray", (context) => {
+    const resolver = createQueryResolver("arrayTest", ArrayInput).fnStep(
+      "processArray",
+      (context) => {
         // 配列型のテスト
         const ids = context.input.ids;
         const tags = context.input.tags;
@@ -279,7 +293,8 @@ describe("createQueryResolver type tests", () => {
         }
 
         return { count: Array.isArray(ids) ? ids.length : 0 };
-      });
+      },
+    );
 
     // 型の確認
     type InputType = typeof resolver._input;
@@ -339,8 +354,9 @@ describe("createQueryResolver type tests", () => {
       data: t.string().optional(), // jsonの代わりにstringを使用
     });
 
-    const resolver = createQueryResolver("complexTest", ComplexInput)
-      .fnStep("processComplex", (context) => {
+    const resolver = createQueryResolver("complexTest", ComplexInput).fnStep(
+      "processComplex",
+      (context) => {
         expectTypeOf(context.input.id).toEqualTypeOf<string>();
         expectTypeOf(context.input.count).toEqualTypeOf<number>();
         expectTypeOf(context.input.price).toEqualTypeOf<
@@ -368,7 +384,8 @@ describe("createQueryResolver type tests", () => {
           result: `Processed ${context.input.id}`,
           itemCount: context.input.count,
         };
-      });
+      },
+    );
 
     type InputType = typeof resolver._input;
     type ContextType = typeof resolver._context;
@@ -390,8 +407,9 @@ describe("createQueryResolver type tests", () => {
       priority: t.enum(["low", "medium", "high"]).optional(),
     });
 
-    const resolver = createQueryResolver("enumTest", EnumInput)
-      .fnStep("processEnum", (context) => {
+    const resolver = createQueryResolver("enumTest", EnumInput).fnStep(
+      "processEnum",
+      (context) => {
         // enum値の型チェック
         expectTypeOf(context.input.status).toEqualTypeOf<
           "active" | "inactive" | "pending"
@@ -410,7 +428,8 @@ describe("createQueryResolver type tests", () => {
         }>();
 
         return { processed: true };
-      });
+      },
+    );
 
     type InputType = typeof resolver._input;
 
@@ -443,8 +462,9 @@ describe("createQueryResolver type tests", () => {
       tags: t.string().array(),
     });
 
-    const resolver = createQueryResolver("nestedTest", NestedInput)
-      .fnStep("processNested", (context) => {
+    const resolver = createQueryResolver("nestedTest", NestedInput).fnStep(
+      "processNested",
+      (context) => {
         // 各フィールドの型を確認
         expectTypeOf(context.input.userId).toEqualTypeOf<string>();
         expectTypeOf(context.input.userName).toEqualTypeOf<string>();
@@ -455,7 +475,8 @@ describe("createQueryResolver type tests", () => {
         expectTypeOf(context.input.tags).toEqualTypeOf<string[]>();
 
         return { processed: true };
-      });
+      },
+    );
 
     // 型の確認
     type InputType = typeof resolver._input;

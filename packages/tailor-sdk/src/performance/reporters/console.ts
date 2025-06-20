@@ -23,14 +23,7 @@ export class ConsoleReporter extends BaseReporter {
     console.log("\n📋 Method Statistics (sorted by total time):");
     console.log("-".repeat(80));
     console.log(
-      this.formatHeader(
-        "Method",
-        "Calls",
-        "Total",
-        "Average",
-        "Min",
-        "Max",
-      ),
+      this.formatHeader("Method", "Calls", "Total", "Average", "Min", "Max"),
     );
     console.log("-".repeat(80));
 
@@ -55,9 +48,7 @@ export class ConsoleReporter extends BaseReporter {
 
   private formatHeader(...columns: string[]): string {
     const widths = [35, 8, 12, 12, 12, 12];
-    return columns
-      .map((col, i) => col.padEnd(widths[i]))
-      .join(" ");
+    return columns.map((col, i) => col.padEnd(widths[i])).join(" ");
   }
 
   private formatRow(...columns: string[]): string {

@@ -1,6 +1,6 @@
-import { compare, Options, Result } from 'dir-compare';
-import fs from 'node:fs';
-import path from 'node:path';
+import { compare, Options, Result } from "dir-compare";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * 2つのディレクトリを比較する
@@ -12,12 +12,12 @@ import path from 'node:path';
 export async function compareDirectories(
   actualDir: string,
   expectedDir: string,
-  options: Partial<Options> = {}
+  options: Partial<Options> = {},
 ): Promise<Result> {
   const defaultOptions: Options = {
     compareDate: false,
-    excludeFilter: '.DS_Store',
-    ...options
+    excludeFilter: ".DS_Store",
+    ...options,
   };
 
   return await compare(actualDir, expectedDir, defaultOptions);
@@ -33,15 +33,15 @@ export async function compareDirectories(
 export function generateDetailedDiffReport(
   comparison: Result,
   actualDir: string,
-  expectedDir: string
+  expectedDir: string,
 ): string {
   const lines: string[] = [];
 
   lines.push(`=== Directory Comparison Report ===`);
   lines.push(`Actual:   ${actualDir}`);
   lines.push(`Expected: ${expectedDir}`);
-  lines.push(`Overall Match: ${comparison.same ? 'YES' : 'NO'}`);
-  lines.push('');
+  lines.push(`Overall Match: ${comparison.same ? "YES" : "NO"}`);
+  lines.push("");
 
   lines.push(`Statistics:`);
   lines.push(`  Total files: ${comparison.totalFiles}`);
@@ -49,22 +49,24 @@ export function generateDetailedDiffReport(
   lines.push(`  Different files: ${comparison.differentFiles}`);
   lines.push(`  Left only: ${comparison.leftOnlyFiles}`);
   lines.push(`  Right only: ${comparison.rightOnlyFiles}`);
-  lines.push('');
+  lines.push("");
 
   if (comparison.differences > 0) {
     lines.push(`Differences (${comparison.differences}):`);
     comparison.diffSet?.forEach((diff, index) => {
       lines.push(`  ${index + 1}. ${diff.relativePath}`);
       lines.push(`     State: ${diff.state}`);
-      lines.push(`     Type: ${diff.type1 || 'missing'} vs ${diff.type2 || 'missing'}`);
+      lines.push(
+        `     Type: ${diff.type1 || "missing"} vs ${diff.type2 || "missing"}`,
+      );
       if (diff.reason) {
         lines.push(`     Reason: ${diff.reason}`);
       }
-      lines.push('');
+      lines.push("");
     });
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -73,17 +75,20 @@ export function generateDetailedDiffReport(
  * @param expectedFile 期待値ファイルパス
  * @returns ファイルが同じかどうか
  */
-export function compareFiles(actualFile: string, expectedFile: string): boolean {
+export function compareFiles(
+  actualFile: string,
+  expectedFile: string,
+): boolean {
   try {
     if (!fs.existsSync(actualFile) || !fs.existsSync(expectedFile)) {
       return false;
     }
 
-    const actualContent = fs.readFileSync(actualFile, 'utf-8');
-    const expectedContent = fs.readFileSync(expectedFile, 'utf-8');
+    const actualContent = fs.readFileSync(actualFile, "utf-8");
+    const expectedContent = fs.readFileSync(expectedFile, "utf-8");
 
     return actualContent === expectedContent;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -94,17 +99,23 @@ export function compareFiles(actualFile: string, expectedFile: string): boolean 
  * @param expectedFile 期待値JSONファイルパス
  * @returns JSONの内容が同じかどうか
  */
-export function compareJsonFiles(actualFile: string, expectedFile: string): boolean {
+export function compareJsonFiles(
+  actualFile: string,
+  expectedFile: string,
+): boolean {
   try {
     if (!fs.existsSync(actualFile) || !fs.existsSync(expectedFile)) {
       return false;
     }
 
-    const actualContent = JSON.parse(fs.readFileSync(actualFile, 'utf-8'));
-    const expectedContent = JSON.parse(fs.readFileSync(expectedFile, 'utf-8'));
+    const actualContent = JSON.parse(fs.readFileSync(actualFile, "utf-8"));
+    const expectedContent = JSON.parse(fs.readFileSync(expectedFile, "utf-8"));
 
-    return JSON.stringify(actualContent, null, 2) === JSON.stringify(expectedContent, null, 2);
-  } catch (error) {
+    return (
+      JSON.stringify(actualContent, null, 2) ===
+      JSON.stringify(expectedContent, null, 2)
+    );
+  } catch {
     return false;
   }
 }
@@ -115,13 +126,16 @@ export function compareJsonFiles(actualFile: string, expectedFile: string): bool
  * @param pattern ファイルパターン（例: '*.json', '*.js'）
  * @returns マッチするファイルのパス配列
  */
-export function getFilesWithPattern(dirPath: string, pattern: string): string[] {
+export function getFilesWithPattern(
+  dirPath: string,
+  pattern: string,
+): string[] {
   if (!fs.existsSync(dirPath)) {
     return [];
   }
 
   const files: string[] = [];
-  const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+  const regex = new RegExp(pattern.replace(/\*/g, ".*"));
 
   function walkDir(currentPath: string) {
     const items = fs.readdirSync(currentPath);

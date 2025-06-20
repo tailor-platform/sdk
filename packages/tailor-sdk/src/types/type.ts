@@ -1,4 +1,7 @@
-import { clone } from 'es-toolkit';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { clone } from "es-toolkit";
 import {
   SDLFieldMetadata,
   TailorFieldType,
@@ -8,19 +11,14 @@ import {
   FieldMetadata,
 } from "./types";
 import type { DeepWriteable, output, Prettify } from "./helpers";
-import {
-  AllowedValues,
-  AllowedValuesOutput,
-  mapAllowedValues,
-} from "./field";
+import { AllowedValues, AllowedValuesOutput, mapAllowedValues } from "./field";
 
 type DefinedFieldMetadata = Partial<
   Omit<FieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-export type FieldReference<T extends TailorField<any, any, any>> = DeepWriteable<
-  NonNullable<T["reference"]>
->;
+export type FieldReference<T extends TailorField<any, any, any>> =
+  DeepWriteable<NonNullable<T["reference"]>>;
 
 export type ReferenceConfig<
   T extends TailorType<any, any> = TailorType<any, any>,
@@ -40,42 +38,31 @@ const fieldDefaults = {
 
 export class TailorType<
   M extends DefinedFieldMetadata,
-  const F extends
-  Record<
-    string,
-    TailorField<
-      M,
-      any,
-      any
-    >
-  >,
+  const F extends Record<string, TailorField<M, any, any>>,
   Output = Prettify<
-    & {
-      [
-      K in keyof F as F[K]["_defined"] extends { required: false } ? never
-      : K
-      ]: output<F[K]>;
+    {
+      [K in keyof F as F[K]["_defined"] extends { required: false }
+        ? never
+        : K]: output<F[K]>;
+    } & {
+      [K in keyof F as F[K]["_defined"] extends { required: false }
+        ? K
+        : never]?: output<F[K]> | null;
+    } & {
+      [K in keyof F as FieldReference<F[K]> extends never
+        ? never
+        : FieldReference<F[K]>["nameMap"][0]]: output<
+        FieldReference<F[K]>["type"]
+      >;
     }
-    & {
-      [
-      K in keyof F as F[K]["_defined"] extends { required: false } ? K
-      : never
-      ]?: output<F[K]> | null;
-    }
-    & {
-      [
-      K in keyof F as FieldReference<F[K]> extends never ? never
-      : FieldReference<F[K]>["nameMap"][0]
-      ]: output<FieldReference<F[K]>["type"]>;
-    }
-  >
+  >,
 > {
   public readonly _output = null as unknown as Output;
 
   constructor(
     public readonly name: string,
     public readonly fields: F,
-  ) { }
+  ) {}
 
   protected referencedFields: SDLFieldMetadata[] = [];
 
@@ -87,7 +74,7 @@ export class TailorType<
           field.toSDLMetadata().map((f) => ({
             name,
             ...f,
-          }))
+          })),
         ),
         ...this.referencedFields,
       ],
@@ -100,15 +87,17 @@ export class TailorField<
   const Defined extends DefinedFieldMetadata,
   const Output,
   const Reference extends
-  | ReferenceConfig<
-    TailorType<
-      DefinedFieldMetadata,
-      & { id?: never }
-      & Record<string, TailorField<DefinedFieldMetadata, any, any>>
-    >
-  >
-  | undefined,
-  M extends FieldMetadata = FieldMetadata
+    | ReferenceConfig<
+        TailorType<
+          DefinedFieldMetadata,
+          { id?: never } & Record<
+            string,
+            TailorField<DefinedFieldMetadata, any, any>
+          >
+        >
+      >
+    | undefined,
+  M extends FieldMetadata = FieldMetadata,
 > {
   protected _metadata: M;
   public readonly _defined: Defined = undefined as unknown as Defined;
@@ -143,7 +132,8 @@ export class TailorField<
   }
 
   optional<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { required: unknown } ? never
+    this: CurrentDefined extends { required: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
   ) {
     this._metadata.required = false;
@@ -155,7 +145,8 @@ export class TailorField<
   }
 
   description<const D extends string, CurrentDefined extends Defined>(
-    this: CurrentDefined extends { description: unknown } ? never
+    this: CurrentDefined extends { description: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
     description: D,
   ) {
@@ -168,7 +159,8 @@ export class TailorField<
   }
 
   array<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { array: unknown } ? never
+    this: CurrentDefined extends { array: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
   ) {
     this._metadata.array = true;
@@ -180,7 +172,8 @@ export class TailorField<
   }
 
   values<CurrentDefined extends Defined, const V extends AllowedValues>(
-    this: CurrentDefined extends { allowedValues: unknown } ? never
+    this: CurrentDefined extends { allowedValues: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
     values: V,
   ) {
@@ -225,12 +218,14 @@ export class TailorField<
         array: !!this._metadata.array,
       },
       ...(this._ref
-        ? [{
-          name: this._ref.nameMap[0],
-          type: this._ref.type.name,
-          required: !!this._metadata.required,
-          array: !!this._metadata.array,
-        }]
+        ? [
+            {
+              name: this._ref.nameMap[0],
+              type: this._ref.type.name,
+              required: !!this._metadata.required,
+              array: !!this._metadata.array,
+            },
+          ]
         : []),
     ];
   }
@@ -276,13 +271,14 @@ type TailorTypeDef = InstanceType<
   >
 >;
 
-function tailorType<
-  const F extends Record<string, TailorField<any, any, any>>,
->(name: string, fields: F): TailorType<DefinedFieldMetadata, F> {
-  return new TailorType<DefinedFieldMetadata, F>(
-    name,
-    fields,
-  ) as TailorType<DefinedFieldMetadata, F>;
+function tailorType<const F extends Record<string, TailorField<any, any, any>>>(
+  name: string,
+  fields: F,
+): TailorType<DefinedFieldMetadata, F> {
+  return new TailorType<DefinedFieldMetadata, F>(name, fields) as TailorType<
+    DefinedFieldMetadata,
+    F
+  >;
 }
 
 const t = {
