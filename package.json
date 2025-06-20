@@ -13,9 +13,14 @@
     "apply:ctl": "tailor-sdk apply",
     "clean": "rm -rf dist",
     "dev": "turbo run dev",
-    "lint": "eslint --cache .",
-    "lint:fix": "eslint --cache . --fix",
-    "format": "prettier --write ."
+    "lint": "turbo run lint",
+    "lint:root": "eslint --cache .",
+    "lint:fix": "turbo run lint:fix",
+    "lint:fix:root": "eslint --cache . --fix",
+    "format": "turbo run format",
+    "format:root": "prettier --write .",
+    "format:check": "turbo run format:check",
+    "format:check:root": "prettier --check ."
   },
   "keywords": [],
   "author": "",
