@@ -4,13 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { TailorDBServiceConfig } from "./types";
 import { measure } from "../../performance";
-import { createJiti } from "jiti";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const jiti = createJiti(__filename, {
-  interopDefault: true,
-});
 
 export class TailorDBService {
   private types: any[] = [];
@@ -155,7 +148,7 @@ export class TailorDBService {
 
     for (const typeFile of typeFiles) {
       try {
-        const module = (await jiti.import(typeFile)) as Record<string, any>;
+        const module = await import(typeFile);
 
         for (const exportName of Object.keys(module)) {
           const exportedValue = module[exportName];

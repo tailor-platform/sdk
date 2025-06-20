@@ -35,7 +35,6 @@
     "@iarna/toml": "^2.2.5",
     "@tailor-inc/operator-client": "^25.313.146",
     "citty": "^0.1.6",
-    "jiti": "^2.4.2",
     "pkg-types": "^2.1.0"
   },
   "devDependencies": {

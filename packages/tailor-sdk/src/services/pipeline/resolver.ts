@@ -20,8 +20,6 @@ import { SchemaGenerator } from "../../schema-generator";
 import { capitalize } from "es-toolkit";
 import { getDistPath } from "../../tailor";
 
-export const RESOLVER_SYMBOL = Symbol.for("@tailor/resolver");
-
 export class Resolver<
   QueryType extends "query" | "mutation",
   Input extends TailorType<any, any, any>,
@@ -37,9 +35,6 @@ export class Resolver<
   #options: ResolverOptions;
 
   private output = null as unknown as Output;
-
-  // シンボルベースの識別子
-  readonly [RESOLVER_SYMBOL] = true;
 
   constructor(
     public readonly queryType: QueryType,
