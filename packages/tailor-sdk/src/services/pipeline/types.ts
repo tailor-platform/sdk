@@ -31,3 +31,6 @@ export type PipelineResolverServiceConfig = { files: string[] };
 export type PipelineResolverServiceInput = {
   [namespace: string]: PipelineResolverServiceConfig;
 };
+
+type TemplateLiteralToString<T> = T extends string ? string : T;
+export type StepReturn<T> = TemplateLiteralToString<Awaited<T>>;

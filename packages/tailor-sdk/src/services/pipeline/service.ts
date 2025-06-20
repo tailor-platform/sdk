@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
+import path from "node:path";
+import fs from "node:fs";
+import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { ResolverBundler } from "./bundler";
 import { PipelineResolverServiceConfig } from "./types";
 import { measure } from "../../performance";
 import { Resolver } from "./resolver";
-import path from "node:path";
-import fs from "node:fs";
+import { isResolver } from "./utils";
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
@@ -20,97 +21,109 @@ export class PipelineResolverService {
 
   @measure
   async build() {
-    // Load resolvers before bundling to collect metadata
     await this.loadResolvers();
     await this.bundler.bundle();
   }
 
   toManifestJSON() {
-    // Resolversを生成
-    const resolvers = this.resolvers.map((resolver: any) => {
-      const metadata = resolver.toSDLMetadata();
+    const resolvers = this.resolvers.map(
+      (resolver: Resolver<any, any, any, any, any, any>) => {
+        const metadata = resolver.toSDLMetadata();
 
-      const manifest: any = {
-        Authorization: "true==true", // デフォルト値
-        Description: `${resolver.name} resolver`,
-        Inputs: [],
-        Name: resolver.name,
-        Response: {},
-        Pipelines: metadata.pipelines.map((pipeline: any) => ({
-          Name: pipeline.name,
-          OperationName: pipeline.name,
-          Description: pipeline.description,
-          OperationType: pipeline.operationType,
-          OperationSourcePath: path.join(
-            ".tailor-sdk",
-            "functions",
-            `${resolver.name}__${pipeline.name}.js`,
-          ),
-          OperationHook: {
-            Expr: "({ ...context.pipeline, ...context.args });",
-          },
-          PostScript: `args.${pipeline.name}`,
-          SkipOperationOnError: false,
-        })),
-        PostHook: { Expr: "({ ...context.pipeline });" },
-        PublishExecutionEvents: false,
-      };
-
-      // Input構造を生成
-      const input = resolver.input.toSDLMetadata(true);
-      manifest.Inputs.push({
-        Name: "input",
-        Description: "",
-        Array: false,
-        Required: true,
-        Type: {
-          Kind: "UserDefined",
-          Name: input.name,
-          Description: "",
-          Required: false,
-          Fields: input.fields.map((field: any) => ({
-            Name: field.name,
-            Description: "",
-            Type: {
-              Kind: "ScalarType",
-              Name: field.type,
-              Description: "",
-              Required: false,
+        const manifest: any = {
+          Authorization: "true==true", // デフォルト値
+          Description: `${resolver.name} resolver`,
+          Inputs: [],
+          Name: resolver.name,
+          Response: {},
+          Pipelines: [
+            ...metadata.pipelines.map((pipeline: any) => ({
+              Name: pipeline.name,
+              OperationName: pipeline.name,
+              Description: pipeline.description,
+              OperationType: pipeline.operationType,
+              OperationSourcePath: path.join(
+                ".tailor-sdk",
+                "functions",
+                `${resolver.name}__${pipeline.name}.js`,
+              ),
+              OperationHook: {
+                Expr: "({ ...context.pipeline, ...context.args });",
+              },
+              PostScript: `args.${pipeline.name}`,
+            })),
+            {
+              Name: `__construct_output`,
+              OperationName: `__construct_output`,
+              Description: "Construct output from resolver",
+              OperationType: PipelineResolver_OperationType.FUNCTION,
+              OperationSource: `globalThis.main = ${resolver.outputMapper.toString()}`,
+              OperationHook: {
+                Expr: "({ ...context.pipeline, ...context.args });",
+              },
+              PostScript: `args.__construct_output`,
             },
-            Array: field.array || false,
-            Required: field.required || false,
-          })),
-        },
-      });
+          ],
+          PostHook: { Expr: "({ ...context.pipeline.__construct_output });" },
+          PublishExecutionEvents: false,
+        };
 
-      const output = resolver.output.toSDLMetadata();
-      manifest.Response = {
-        Type: {
-          Kind: "UserDefined",
-          Name: output.name,
-          Description: "", // TODO: 出力の説明を確認
-          Required: true, // TODO: 出力の必須性を確認
-        },
-        Description: "", // TODO: 出力の説明を確認
-        Array: false,
-        Required: true, // TODO: 出力の必須性を確認
-      };
-
-      manifest.Response.Type.Fields = output.fields.map((field: any) => ({
-        Name: field.name,
-        Description: "",
-        Type: {
-          Kind: "ScalarType",
-          Name: field.type,
+        // Input構造を生成
+        const input = resolver.input.toSDLMetadata(true);
+        manifest.Inputs.push({
+          Name: "input",
           Description: "",
-          Required: false,
-        },
-        Array: field.array || false,
-        Required: field.required || false,
-      }));
+          Array: false,
+          Required: true,
+          Type: {
+            Kind: "UserDefined",
+            Name: input.name,
+            Description: "",
+            Required: false,
+            Fields: input.fields.map((field: any) => ({
+              Name: field.name,
+              Description: "",
+              Type: {
+                Kind: "ScalarType",
+                Name: field.type,
+                Description: "",
+                Required: false,
+              },
+              Array: field.array || false,
+              Required: field.required || false,
+            })),
+          },
+        });
 
-      return manifest;
-    });
+        const output = resolver.output.toSDLMetadata();
+        manifest.Response = {
+          Type: {
+            Kind: "UserDefined",
+            Name: output.name,
+            Description: "", // TODO: 出力の説明を確認
+            Required: true, // TODO: 出力の必須性を確認
+          },
+          Description: "", // TODO: 出力の説明を確認
+          Array: false,
+          Required: true, // TODO: 出力の必須性を確認
+        };
+
+        manifest.Response.Type.Fields = output.fields.map((field: any) => ({
+          Name: field.name,
+          Description: "",
+          Type: {
+            Kind: "ScalarType",
+            Name: field.type,
+            Description: "",
+            Required: false,
+          },
+          Array: field.array || false,
+          Required: field.required || false,
+        }));
+
+        return manifest;
+      },
+    );
 
     return {
       Kind: "pipeline",
@@ -142,8 +155,7 @@ export class PipelineResolverService {
       try {
         const resolverModule = await import(resolverFile);
         const resolver = resolverModule.default;
-
-        if (resolver instanceof Resolver) {
+        if (isResolver(resolver)) {
           this.resolvers.push(resolver);
         }
       } catch (error) {
