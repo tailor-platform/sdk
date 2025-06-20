@@ -6,13 +6,6 @@ import { measure } from "../../performance";
 import { Resolver } from "./resolver";
 import path from "node:path";
 import fs from "node:fs";
-import { createJiti } from "jiti";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const jiti = createJiti(__filename, {
-  interopDefault: true,
-});
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
@@ -147,20 +140,10 @@ export class PipelineResolverService {
 
     for (const resolverFile of resolverFiles) {
       try {
-        const resolverModule = (await jiti.import(resolverFile)) as {
-          default: any;
-        };
+        const resolverModule = await import(resolverFile);
         const resolver = resolverModule.default;
 
-        // Check if the object has the expected shape of a Resolver
-        const isResolverLike =
-          resolver &&
-          typeof resolver === "object" &&
-          resolver.constructor?.name === "Resolver" &&
-          typeof resolver.name === "string" &&
-          typeof resolver.steps === "object";
-
-        if (isResolverLike) {
+        if (resolver instanceof Resolver) {
           this.resolvers.push(resolver);
         }
       } catch (error) {

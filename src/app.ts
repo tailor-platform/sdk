@@ -1,6 +1,6 @@
 import url from "node:url";
 import path from "node:path";
-import config from "../tailor.config.js"; // Adjust the path as necessary
+import config from "../tailor.config";
 import {
   Tailor,
   Workspace,

@@ -92,9 +92,6 @@ importers:
       citty:
         specifier: ^0.1.6
         version: 0.1.6
-      jiti:
-        specifier: ^2.4.2
-        version: 2.4.2
       pkg-types:
         specifier: ^2.1.0
         version: 2.1.0
@@ -2970,7 +2967,8 @@ snapshots:
     optionalDependencies:
       '@pkgjs/parseargs': 0.11.0
 
-  jiti@2.4.2: {}
+  jiti@2.4.2:
+    optional: true
 
   joycon@3.1.1: {}
 
