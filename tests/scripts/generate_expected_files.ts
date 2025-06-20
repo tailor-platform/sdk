@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
 import { defineWorkspace } from "../../src/app";
+import config from "../../tailor.config";
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,7 @@ export async function generateExpectedFiles(): Promise<void> {
       console.log("Removed existing expected directory");
     }
 
-    await defineWorkspace(expectedDir).apply();
+    await defineWorkspace(config, expectedDir).apply();
 
     console.log("\nGenerated files:");
     await listGeneratedFiles(expectedDir);

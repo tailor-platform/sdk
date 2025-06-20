@@ -9,6 +9,7 @@ import {
   getDirectoryStructure,
 } from "./helpers/file_utils";
 import { defineWorkspace } from "../src/app";
+import config from "../tailor.config";
 // import {
 //   testAllGeneratedFunctions,
 //   generateCombinedTestReport,
@@ -17,7 +18,7 @@ import { defineWorkspace } from "../src/app";
 
 const tempOutputDir = await createTempDirectory("apply-test-");
 const tempDistDir = path.join(tempOutputDir, "dist");
-await defineWorkspace(tempDistDir).apply();
+await defineWorkspace(config, tempDistDir).apply();
 
 console.info(`This test is running in directory: ${tempOutputDir}`);
 
