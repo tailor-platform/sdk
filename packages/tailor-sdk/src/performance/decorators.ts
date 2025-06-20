@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { performanceConfig } from "./config";
 import { performanceTracker } from "./tracker";
 import type { MethodDecoratorContext, PerformanceMeasurement } from "./types";
@@ -73,9 +75,12 @@ export function measure<This, Args extends any[], Return>(
   } as (this: This, ...args: Args) => Return;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 function isAsyncFunction(fn: Function): boolean {
-  return fn.constructor.name === "AsyncFunction" ||
-    (fn.toString().includes("async") && fn.toString().includes("__awaiter"));
+  return (
+    fn.constructor.name === "AsyncFunction" ||
+    (fn.toString().includes("async") && fn.toString().includes("__awaiter"))
+  );
 }
 
 function recordMeasurement(
@@ -109,9 +114,9 @@ function recordMeasurement(
   if (performanceConfig.logLevel === "detailed") {
     const errorInfo = error ? ` [ERROR: ${error.message}]` : "";
     console.log(
-      `[Performance] ${className}.${methodName}: ${
-        executionTime.toFixed(2)
-      }ms${errorInfo}`,
+      `[Performance] ${className}.${methodName}: ${executionTime.toFixed(
+        2,
+      )}ms${errorInfo}`,
     );
   }
 }

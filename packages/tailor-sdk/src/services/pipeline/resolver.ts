@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import path from "node:path";
 import fs from "node:fs";
 import multiline from "multiline-ts";
@@ -52,10 +54,7 @@ export class Resolver<
     return Array.from(this._steps) as Steps;
   }
 
-  fnStep<
-    const S extends string,
-    const R,
-  >(
+  fnStep<const S extends string, const R>(
     name: S,
     fn: (context: Context) => R | Promise<R>,
     _options?: FnStepOptions,
@@ -66,18 +65,12 @@ export class Resolver<
       Input,
       Awaited<R>,
       Context & Record<S, Awaited<R>>,
-      [
-        ...Steps,
-        ["fn", S, Step<R, Context>, FnStepOptions],
-      ],
+      [...Steps, ["fn", S, Step<R, Context>, FnStepOptions]],
       Output
     >;
   }
 
-  sqlStep<
-    const S extends string,
-    const Q extends sqlFactory<Context>,
-  >(
+  sqlStep<const S extends string, const Q extends sqlFactory<Context>>(
     name: S,
     fn: Q,
     options?: SqlStepOptions,
@@ -88,23 +81,12 @@ export class Resolver<
       Input,
       Awaited<ReturnType<Q>>,
       Context & Record<S, Awaited<ReturnType<Q>>>,
-      [
-        ...Steps,
-        [
-          "sql",
-          S,
-          Step<ReturnType<Q>, Context>,
-          SqlStepOptions,
-        ],
-      ],
+      [...Steps, ["sql", S, Step<ReturnType<Q>, Context>, SqlStepOptions]],
       Output
     >;
   }
 
-  gqlStep<
-    const S extends string,
-    const Q extends gqlFactory<Context>,
-  >(
+  gqlStep<const S extends string, const Q extends gqlFactory<Context>>(
     name: S,
     fn: Q,
     _options?: GqlStepOptions,
@@ -151,7 +133,7 @@ export class Resolver<
 
     const input = this.input.toSDLMetadata(true);
     const output = this.output.toSDLMetadata();
-    const sdl = multiline /* gql */`
+    const sdl = multiline/* gql */ `
     ${SchemaGenerator.generateSDLFromMetadata(input)}
     ${SchemaGenerator.generateSDLFromMetadata(output)}
     extend type ${capitalize(this.queryType)} {
@@ -166,15 +148,17 @@ export class Resolver<
         switch (type) {
           case "fn":
           case "sql":
+            // eslint-disable-next-line no-case-declarations
             const functionPath = path.join(
               getDistPath(),
               "functions",
               `${this.name}__${name}.js`,
             );
+            // eslint-disable-next-line no-case-declarations
             let functionCode = "";
             try {
               functionCode = fs.readFileSync(functionPath, "utf-8");
-            } catch (error) {
+            } catch {
               console.warn(`Function file not found: ${functionPath}`);
             }
             return {
@@ -202,11 +186,7 @@ export class Resolver<
 
 export function createQueryResolver<
   const Input extends TailorType<any, any, any>,
->(
-  name: string,
-  input: Input,
-  options?: ResolverOptions,
-) {
+>(name: string, input: Input, options?: ResolverOptions) {
   return new Resolver<
     "query",
     Input,
@@ -219,11 +199,7 @@ export function createQueryResolver<
 
 export function createMutationResolver<
   const Input extends TailorType<any, any, any>,
->(
-  name: string,
-  input: Input,
-  options?: ResolverOptions,
-) {
+>(name: string, input: Input, options?: ResolverOptions) {
   return new Resolver<
     "mutation",
     Input,

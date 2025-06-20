@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import path from "node:path";
 import fs from "node:fs";
 import assert from "node:assert";
@@ -41,6 +44,7 @@ export async function importGeneratedFunction(
     const absolutePath = path.resolve(filePath);
     delete require.cache[absolutePath];
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const module = require(absolutePath);
 
     if (typeof module === "function") {
@@ -48,8 +52,8 @@ export async function importGeneratedFunction(
     } else if (module.default && typeof module.default === "function") {
       return module.default;
     } else {
-      const functionNames = Object.keys(module).filter((key) =>
-        typeof module[key] === "function"
+      const functionNames = Object.keys(module).filter(
+        (key) => typeof module[key] === "function",
       );
       if (functionNames.length > 0) {
         return module[functionNames[0]];
@@ -80,7 +84,7 @@ export async function testFunctionWithInputs(
       let passed: boolean = true;
       try {
         assert.deepStrictEqual(result, testCase.expected);
-      } catch (error) {
+      } catch {
         passed = false;
       }
       return {
@@ -154,13 +158,15 @@ export async function testAllGeneratedFunctions(
         functionName,
         functionPath,
         testCases,
-        results: [{
-          input: null,
-          expected: null,
-          actual: null,
-          passed: false,
-          error: `Function file not found: ${functionPath}`,
-        }],
+        results: [
+          {
+            input: null,
+            expected: null,
+            actual: null,
+            passed: false,
+            error: `Function file not found: ${functionPath}`,
+          },
+        ],
         allPassed: false,
       });
     }

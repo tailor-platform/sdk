@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { ResolverBundler } from "./bundler";
 import { PipelineResolverServiceConfig } from "./types";
 import { measure } from "../../performance";

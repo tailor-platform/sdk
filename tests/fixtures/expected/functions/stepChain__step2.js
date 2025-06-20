@@ -1,2 +1,1156 @@
-const millisecondsInWeek=6048e5,millisecondsInDay=864e5,constructFromSymbol=Symbol.for("constructDateFrom");function constructFrom(t,e){return typeof t=="function"?t(e):t&&typeof t=="object"&&constructFromSymbol in t?t[constructFromSymbol](e):t instanceof Date?new t.constructor(e):new Date(e)}function toDate(t,e){return constructFrom(e||t,t)}let defaultOptions={};function getDefaultOptions(){return defaultOptions}function startOfWeek(t,e){const n=getDefaultOptions(),r=e?.weekStartsOn??e?.locale?.options?.weekStartsOn??n.weekStartsOn??n.locale?.options?.weekStartsOn??0,a=toDate(t,e?.in),o=a.getDay(),i=(o<r?7:0)+o-r;return a.setDate(a.getDate()-i),a.setHours(0,0,0,0),a}function startOfISOWeek(t,e){return startOfWeek(t,{...e,weekStartsOn:1})}function getISOWeekYear(t,e){const n=toDate(t,e?.in),r=n.getFullYear(),a=constructFrom(n,0);a.setFullYear(r+1,0,4),a.setHours(0,0,0,0);const o=startOfISOWeek(a),i=constructFrom(n,0);i.setFullYear(r,0,4),i.setHours(0,0,0,0);const s=startOfISOWeek(i);return n.getTime()>=o.getTime()?r+1:n.getTime()>=s.getTime()?r:r-1}function getTimezoneOffsetInMilliseconds(t){const e=toDate(t),n=new Date(Date.UTC(e.getFullYear(),e.getMonth(),e.getDate(),e.getHours(),e.getMinutes(),e.getSeconds(),e.getMilliseconds()));return n.setUTCFullYear(e.getFullYear()),+t-+n}function normalizeDates(t,...e){const n=constructFrom.bind(null,e.find(r=>typeof r=="object"));return e.map(n)}function startOfDay(t,e){const n=toDate(t,e?.in);return n.setHours(0,0,0,0),n}function differenceInCalendarDays(t,e,n){const[r,a]=normalizeDates(n?.in,t,e),o=startOfDay(r),i=startOfDay(a),s=+o-getTimezoneOffsetInMilliseconds(o),d=+i-getTimezoneOffsetInMilliseconds(i);return Math.round((s-d)/864e5)}function startOfISOWeekYear(t,e){const n=getISOWeekYear(t,e),r=constructFrom(t,0);return r.setFullYear(n,0,4),r.setHours(0,0,0,0),startOfISOWeek(r)}function isDate(t){return t instanceof Date||typeof t=="object"&&Object.prototype.toString.call(t)==="[object Date]"}function isValid(t){return!(!isDate(t)&&typeof t!="number"||isNaN(+toDate(t)))}function startOfYear(t,e){const n=toDate(t,e?.in);return n.setFullYear(n.getFullYear(),0,1),n.setHours(0,0,0,0),n}const formatDistanceLocale={lessThanXSeconds:{one:"less than a second",other:"less than {{count}} seconds"},xSeconds:{one:"1 second",other:"{{count}} seconds"},halfAMinute:"half a minute",lessThanXMinutes:{one:"less than a minute",other:"less than {{count}} minutes"},xMinutes:{one:"1 minute",other:"{{count}} minutes"},aboutXHours:{one:"about 1 hour",other:"about {{count}} hours"},xHours:{one:"1 hour",other:"{{count}} hours"},xDays:{one:"1 day",other:"{{count}} days"},aboutXWeeks:{one:"about 1 week",other:"about {{count}} weeks"},xWeeks:{one:"1 week",other:"{{count}} weeks"},aboutXMonths:{one:"about 1 month",other:"about {{count}} months"},xMonths:{one:"1 month",other:"{{count}} months"},aboutXYears:{one:"about 1 year",other:"about {{count}} years"},xYears:{one:"1 year",other:"{{count}} years"},overXYears:{one:"over 1 year",other:"over {{count}} years"},almostXYears:{one:"almost 1 year",other:"almost {{count}} years"}},formatDistance=(t,e,n)=>{let r;const a=formatDistanceLocale[t];return typeof a=="string"?r=a:e===1?r=a.one:r=a.other.replace("{{count}}",e.toString()),n?.addSuffix?n.comparison&&n.comparison>0?"in "+r:r+" ago":r};function buildFormatLongFn(t){return(e={})=>{const n=e.width?String(e.width):t.defaultWidth;return t.formats[n]||t.formats[t.defaultWidth]}}const dateFormats={full:"EEEE, MMMM do, y",long:"MMMM do, y",medium:"MMM d, y",short:"MM/dd/yyyy"},timeFormats={full:"h:mm:ss a zzzz",long:"h:mm:ss a z",medium:"h:mm:ss a",short:"h:mm a"},dateTimeFormats={full:"{{date}} 'at' {{time}}",long:"{{date}} 'at' {{time}}",medium:"{{date}}, {{time}}",short:"{{date}}, {{time}}"},formatLong={date:buildFormatLongFn({formats:dateFormats,defaultWidth:"full"}),time:buildFormatLongFn({formats:timeFormats,defaultWidth:"full"}),dateTime:buildFormatLongFn({formats:dateTimeFormats,defaultWidth:"full"})},formatRelativeLocale={lastWeek:"'last' eeee 'at' p",yesterday:"'yesterday at' p",today:"'today at' p",tomorrow:"'tomorrow at' p",nextWeek:"eeee 'at' p",other:"P"},formatRelative=(t,e,n,r)=>formatRelativeLocale[t];function buildLocalizeFn(t){return(e,n)=>{const r=n?.context?String(n.context):"standalone";let a;if(r==="formatting"&&t.formattingValues){const i=t.defaultFormattingWidth||t.defaultWidth,s=n?.width?String(n.width):i;a=t.formattingValues[s]||t.formattingValues[i]}else{const i=t.defaultWidth,s=n?.width?String(n.width):t.defaultWidth;a=t.values[s]||t.values[i]}const o=t.argumentCallback?t.argumentCallback(e):e;return a[o]}}const eraValues={narrow:["B","A"],abbreviated:["BC","AD"],wide:["Before Christ","Anno Domini"]},quarterValues={narrow:["1","2","3","4"],abbreviated:["Q1","Q2","Q3","Q4"],wide:["1st quarter","2nd quarter","3rd quarter","4th quarter"]},monthValues={narrow:["J","F","M","A","M","J","J","A","S","O","N","D"],abbreviated:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],wide:["January","February","March","April","May","June","July","August","September","October","November","December"]},dayValues={narrow:["S","M","T","W","T","F","S"],short:["Su","Mo","Tu","We","Th","Fr","Sa"],abbreviated:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],wide:["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]},dayPeriodValues={narrow:{am:"a",pm:"p",midnight:"mi",noon:"n",morning:"morning",afternoon:"afternoon",evening:"evening",night:"night"},abbreviated:{am:"AM",pm:"PM",midnight:"midnight",noon:"noon",morning:"morning",afternoon:"afternoon",evening:"evening",night:"night"},wide:{am:"a.m.",pm:"p.m.",midnight:"midnight",noon:"noon",morning:"morning",afternoon:"afternoon",evening:"evening",night:"night"}},formattingDayPeriodValues={narrow:{am:"a",pm:"p",midnight:"mi",noon:"n",morning:"in the morning",afternoon:"in the afternoon",evening:"in the evening",night:"at night"},abbreviated:{am:"AM",pm:"PM",midnight:"midnight",noon:"noon",morning:"in the morning",afternoon:"in the afternoon",evening:"in the evening",night:"at night"},wide:{am:"a.m.",pm:"p.m.",midnight:"midnight",noon:"noon",morning:"in the morning",afternoon:"in the afternoon",evening:"in the evening",night:"at night"}},ordinalNumber=(t,e)=>{const n=Number(t),r=n%100;if(r>20||r<10)switch(r%10){case 1:return n+"st";case 2:return n+"nd";case 3:return n+"rd"}return n+"th"},localize={ordinalNumber,era:buildLocalizeFn({values:eraValues,defaultWidth:"wide"}),quarter:buildLocalizeFn({values:quarterValues,defaultWidth:"wide",argumentCallback:t=>t-1}),month:buildLocalizeFn({values:monthValues,defaultWidth:"wide"}),day:buildLocalizeFn({values:dayValues,defaultWidth:"wide"}),dayPeriod:buildLocalizeFn({values:dayPeriodValues,defaultWidth:"wide",formattingValues:formattingDayPeriodValues,defaultFormattingWidth:"wide"})};function buildMatchFn(t){return(e,n={})=>{const r=n.width,a=r&&t.matchPatterns[r]||t.matchPatterns[t.defaultMatchWidth],o=e.match(a);if(!o)return null;const i=o[0],s=r&&t.parsePatterns[r]||t.parsePatterns[t.defaultParseWidth],d=Array.isArray(s)?findIndex(s,u=>u.test(i)):findKey(s,u=>u.test(i));let f;f=t.valueCallback?t.valueCallback(d):d,f=n.valueCallback?n.valueCallback(f):f;const c=e.slice(i.length);return{value:f,rest:c}}}function findKey(t,e){for(const n in t)if(Object.prototype.hasOwnProperty.call(t,n)&&e(t[n]))return n}function findIndex(t,e){for(let n=0;n<t.length;n++)if(e(t[n]))return n}function buildMatchPatternFn(t){return(e,n={})=>{const r=e.match(t.matchPattern);if(!r)return null;const a=r[0],o=e.match(t.parsePattern);if(!o)return null;let i=t.valueCallback?t.valueCallback(o[0]):o[0];i=n.valueCallback?n.valueCallback(i):i;const s=e.slice(a.length);return{value:i,rest:s}}}const matchOrdinalNumberPattern=/^(\d+)(th|st|nd|rd)?/i,parseOrdinalNumberPattern=/\d+/i,matchEraPatterns={narrow:/^(b|a)/i,abbreviated:/^(b\.?\s?c\.?|b\.?\s?c\.?\s?e\.?|a\.?\s?d\.?|c\.?\s?e\.?)/i,wide:/^(before christ|before common era|anno domini|common era)/i},parseEraPatterns={any:[/^b/i,/^(a|c)/i]},matchQuarterPatterns={narrow:/^[1234]/i,abbreviated:/^q[1234]/i,wide:/^[1234](th|st|nd|rd)? quarter/i},parseQuarterPatterns={any:[/1/i,/2/i,/3/i,/4/i]},matchMonthPatterns={narrow:/^[jfmasond]/i,abbreviated:/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,wide:/^(january|february|march|april|may|june|july|august|september|october|november|december)/i},parseMonthPatterns={narrow:[/^j/i,/^f/i,/^m/i,/^a/i,/^m/i,/^j/i,/^j/i,/^a/i,/^s/i,/^o/i,/^n/i,/^d/i],any:[/^ja/i,/^f/i,/^mar/i,/^ap/i,/^may/i,/^jun/i,/^jul/i,/^au/i,/^s/i,/^o/i,/^n/i,/^d/i]},matchDayPatterns={narrow:/^[smtwf]/i,short:/^(su|mo|tu|we|th|fr|sa)/i,abbreviated:/^(sun|mon|tue|wed|thu|fri|sat)/i,wide:/^(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i},parseDayPatterns={narrow:[/^s/i,/^m/i,/^t/i,/^w/i,/^t/i,/^f/i,/^s/i],any:[/^su/i,/^m/i,/^tu/i,/^w/i,/^th/i,/^f/i,/^sa/i]},matchDayPeriodPatterns={narrow:/^(a|p|mi|n|(in the|at) (morning|afternoon|evening|night))/i,any:/^([ap]\.?\s?m\.?|midnight|noon|(in the|at) (morning|afternoon|evening|night))/i},parseDayPeriodPatterns={any:{am:/^a/i,pm:/^p/i,midnight:/^mi/i,noon:/^no/i,morning:/morning/i,afternoon:/afternoon/i,evening:/evening/i,night:/night/i}},match={ordinalNumber:buildMatchPatternFn({matchPattern:matchOrdinalNumberPattern,parsePattern:parseOrdinalNumberPattern,valueCallback:t=>parseInt(t,10)}),era:buildMatchFn({matchPatterns:matchEraPatterns,defaultMatchWidth:"wide",parsePatterns:parseEraPatterns,defaultParseWidth:"any"}),quarter:buildMatchFn({matchPatterns:matchQuarterPatterns,defaultMatchWidth:"wide",parsePatterns:parseQuarterPatterns,defaultParseWidth:"any",valueCallback:t=>t+1}),month:buildMatchFn({matchPatterns:matchMonthPatterns,defaultMatchWidth:"wide",parsePatterns:parseMonthPatterns,defaultParseWidth:"any"}),day:buildMatchFn({matchPatterns:matchDayPatterns,defaultMatchWidth:"wide",parsePatterns:parseDayPatterns,defaultParseWidth:"any"}),dayPeriod:buildMatchFn({matchPatterns:matchDayPeriodPatterns,defaultMatchWidth:"any",parsePatterns:parseDayPeriodPatterns,defaultParseWidth:"any"})},enUS={code:"en-US",formatDistance,formatLong,formatRelative,localize,match,options:{weekStartsOn:0,firstWeekContainsDate:1}};function getDayOfYear(t,e){const n=toDate(t,e?.in);return differenceInCalendarDays(n,startOfYear(n))+1}function getISOWeek(t,e){const n=toDate(t,e?.in),r=+startOfISOWeek(n)-+startOfISOWeekYear(n);return Math.round(r/6048e5)+1}function getWeekYear(t,e){const n=toDate(t,e?.in),r=n.getFullYear(),a=getDefaultOptions(),o=e?.firstWeekContainsDate??e?.locale?.options?.firstWeekContainsDate??a.firstWeekContainsDate??a.locale?.options?.firstWeekContainsDate??1,i=constructFrom(e?.in||t,0);i.setFullYear(r+1,0,o),i.setHours(0,0,0,0);const s=startOfWeek(i,e),d=constructFrom(e?.in||t,0);d.setFullYear(r,0,o),d.setHours(0,0,0,0);const f=startOfWeek(d,e);return+n>=+s?r+1:+n>=+f?r:r-1}function startOfWeekYear(t,e){const n=getDefaultOptions(),r=e?.firstWeekContainsDate??e?.locale?.options?.firstWeekContainsDate??n.firstWeekContainsDate??n.locale?.options?.firstWeekContainsDate??1,a=getWeekYear(t,e),o=constructFrom(e?.in||t,0);return o.setFullYear(a,0,r),o.setHours(0,0,0,0),startOfWeek(o,e)}function getWeek(t,e){const n=toDate(t,e?.in),r=+startOfWeek(n,e)-+startOfWeekYear(n,e);return Math.round(r/6048e5)+1}function addLeadingZeros(t,e){const n=t<0?"-":"",r=Math.abs(t).toString().padStart(e,"0");return n+r}const lightFormatters={y(t,e){const n=t.getFullYear(),r=n>0?n:1-n;return addLeadingZeros(e==="yy"?r%100:r,e.length)},M(t,e){const n=t.getMonth();return e==="M"?String(n+1):addLeadingZeros(n+1,2)},d(t,e){return addLeadingZeros(t.getDate(),e.length)},a(t,e){const n=t.getHours()/12>=1?"pm":"am";switch(e){case"a":case"aa":return n.toUpperCase();case"aaa":return n;case"aaaaa":return n[0];case"aaaa":default:return n==="am"?"a.m.":"p.m."}},h(t,e){return addLeadingZeros(t.getHours()%12||12,e.length)},H(t,e){return addLeadingZeros(t.getHours(),e.length)},m(t,e){return addLeadingZeros(t.getMinutes(),e.length)},s(t,e){return addLeadingZeros(t.getSeconds(),e.length)},S(t,e){const n=e.length,r=t.getMilliseconds(),a=Math.trunc(r*Math.pow(10,n-3));return addLeadingZeros(a,e.length)}},dayPeriodEnum={midnight:"midnight",noon:"noon",morning:"morning",afternoon:"afternoon",evening:"evening",night:"night"},formatters={G:function(t,e,n){const r=t.getFullYear()>0?1:0;switch(e){case"G":case"GG":case"GGG":return n.era(r,{width:"abbreviated"});case"GGGGG":return n.era(r,{width:"narrow"});case"GGGG":default:return n.era(r,{width:"wide"})}},y:function(t,e,n){if(e==="yo"){const r=t.getFullYear(),a=r>0?r:1-r;return n.ordinalNumber(a,{unit:"year"})}return lightFormatters.y(t,e)},Y:function(t,e,n,r){const a=getWeekYear(t,r),o=a>0?a:1-a;if(e==="YY"){const i=o%100;return addLeadingZeros(i,2)}return e==="Yo"?n.ordinalNumber(o,{unit:"year"}):addLeadingZeros(o,e.length)},R:function(t,e){const n=getISOWeekYear(t);return addLeadingZeros(n,e.length)},u:function(t,e){const n=t.getFullYear();return addLeadingZeros(n,e.length)},Q:function(t,e,n){const r=Math.ceil((t.getMonth()+1)/3);switch(e){case"Q":return String(r);case"QQ":return addLeadingZeros(r,2);case"Qo":return n.ordinalNumber(r,{unit:"quarter"});case"QQQ":return n.quarter(r,{width:"abbreviated",context:"formatting"});case"QQQQQ":return n.quarter(r,{width:"narrow",context:"formatting"});case"QQQQ":default:return n.quarter(r,{width:"wide",context:"formatting"})}},q:function(t,e,n){const r=Math.ceil((t.getMonth()+1)/3);switch(e){case"q":return String(r);case"qq":return addLeadingZeros(r,2);case"qo":return n.ordinalNumber(r,{unit:"quarter"});case"qqq":return n.quarter(r,{width:"abbreviated",context:"standalone"});case"qqqqq":return n.quarter(r,{width:"narrow",context:"standalone"});case"qqqq":default:return n.quarter(r,{width:"wide",context:"standalone"})}},M:function(t,e,n){const r=t.getMonth();switch(e){case"M":case"MM":return lightFormatters.M(t,e);case"Mo":return n.ordinalNumber(r+1,{unit:"month"});case"MMM":return n.month(r,{width:"abbreviated",context:"formatting"});case"MMMMM":return n.month(r,{width:"narrow",context:"formatting"});case"MMMM":default:return n.month(r,{width:"wide",context:"formatting"})}},L:function(t,e,n){const r=t.getMonth();switch(e){case"L":return String(r+1);case"LL":return addLeadingZeros(r+1,2);case"Lo":return n.ordinalNumber(r+1,{unit:"month"});case"LLL":return n.month(r,{width:"abbreviated",context:"standalone"});case"LLLLL":return n.month(r,{width:"narrow",context:"standalone"});case"LLLL":default:return n.month(r,{width:"wide",context:"standalone"})}},w:function(t,e,n,r){const a=getWeek(t,r);return e==="wo"?n.ordinalNumber(a,{unit:"week"}):addLeadingZeros(a,e.length)},I:function(t,e,n){const r=getISOWeek(t);return e==="Io"?n.ordinalNumber(r,{unit:"week"}):addLeadingZeros(r,e.length)},d:function(t,e,n){return e==="do"?n.ordinalNumber(t.getDate(),{unit:"date"}):lightFormatters.d(t,e)},D:function(t,e,n){const r=getDayOfYear(t);return e==="Do"?n.ordinalNumber(r,{unit:"dayOfYear"}):addLeadingZeros(r,e.length)},E:function(t,e,n){const r=t.getDay();switch(e){case"E":case"EE":case"EEE":return n.day(r,{width:"abbreviated",context:"formatting"});case"EEEEE":return n.day(r,{width:"narrow",context:"formatting"});case"EEEEEE":return n.day(r,{width:"short",context:"formatting"});case"EEEE":default:return n.day(r,{width:"wide",context:"formatting"})}},e:function(t,e,n,r){const a=t.getDay(),o=(a-r.weekStartsOn+8)%7||7;switch(e){case"e":return String(o);case"ee":return addLeadingZeros(o,2);case"eo":return n.ordinalNumber(o,{unit:"day"});case"eee":return n.day(a,{width:"abbreviated",context:"formatting"});case"eeeee":return n.day(a,{width:"narrow",context:"formatting"});case"eeeeee":return n.day(a,{width:"short",context:"formatting"});case"eeee":default:return n.day(a,{width:"wide",context:"formatting"})}},c:function(t,e,n,r){const a=t.getDay(),o=(a-r.weekStartsOn+8)%7||7;switch(e){case"c":return String(o);case"cc":return addLeadingZeros(o,e.length);case"co":return n.ordinalNumber(o,{unit:"day"});case"ccc":return n.day(a,{width:"abbreviated",context:"standalone"});case"ccccc":return n.day(a,{width:"narrow",context:"standalone"});case"cccccc":return n.day(a,{width:"short",context:"standalone"});case"cccc":default:return n.day(a,{width:"wide",context:"standalone"})}},i:function(t,e,n){const r=t.getDay(),a=r===0?7:r;switch(e){case"i":return String(a);case"ii":return addLeadingZeros(a,e.length);case"io":return n.ordinalNumber(a,{unit:"day"});case"iii":return n.day(r,{width:"abbreviated",context:"formatting"});case"iiiii":return n.day(r,{width:"narrow",context:"formatting"});case"iiiiii":return n.day(r,{width:"short",context:"formatting"});case"iiii":default:return n.day(r,{width:"wide",context:"formatting"})}},a:function(t,e,n){const a=t.getHours()/12>=1?"pm":"am";switch(e){case"a":case"aa":return n.dayPeriod(a,{width:"abbreviated",context:"formatting"});case"aaa":return n.dayPeriod(a,{width:"abbreviated",context:"formatting"}).toLowerCase();case"aaaaa":return n.dayPeriod(a,{width:"narrow",context:"formatting"});case"aaaa":default:return n.dayPeriod(a,{width:"wide",context:"formatting"})}},b:function(t,e,n){const r=t.getHours();let a;switch(r===12?a=dayPeriodEnum.noon:r===0?a=dayPeriodEnum.midnight:a=r/12>=1?"pm":"am",e){case"b":case"bb":return n.dayPeriod(a,{width:"abbreviated",context:"formatting"});case"bbb":return n.dayPeriod(a,{width:"abbreviated",context:"formatting"}).toLowerCase();case"bbbbb":return n.dayPeriod(a,{width:"narrow",context:"formatting"});case"bbbb":default:return n.dayPeriod(a,{width:"wide",context:"formatting"})}},B:function(t,e,n){const r=t.getHours();let a;switch(r>=17?a=dayPeriodEnum.evening:r>=12?a=dayPeriodEnum.afternoon:r>=4?a=dayPeriodEnum.morning:a=dayPeriodEnum.night,e){case"B":case"BB":case"BBB":return n.dayPeriod(a,{width:"abbreviated",context:"formatting"});case"BBBBB":return n.dayPeriod(a,{width:"narrow",context:"formatting"});case"BBBB":default:return n.dayPeriod(a,{width:"wide",context:"formatting"})}},h:function(t,e,n){if(e==="ho"){let r=t.getHours()%12;return r===0&&(r=12),n.ordinalNumber(r,{unit:"hour"})}return lightFormatters.h(t,e)},H:function(t,e,n){return e==="Ho"?n.ordinalNumber(t.getHours(),{unit:"hour"}):lightFormatters.H(t,e)},K:function(t,e,n){const r=t.getHours()%12;return e==="Ko"?n.ordinalNumber(r,{unit:"hour"}):addLeadingZeros(r,e.length)},k:function(t,e,n){let r=t.getHours();return r===0&&(r=24),e==="ko"?n.ordinalNumber(r,{unit:"hour"}):addLeadingZeros(r,e.length)},m:function(t,e,n){return e==="mo"?n.ordinalNumber(t.getMinutes(),{unit:"minute"}):lightFormatters.m(t,e)},s:function(t,e,n){return e==="so"?n.ordinalNumber(t.getSeconds(),{unit:"second"}):lightFormatters.s(t,e)},S:function(t,e){return lightFormatters.S(t,e)},X:function(t,e,n){const r=t.getTimezoneOffset();if(r===0)return"Z";switch(e){case"X":return formatTimezoneWithOptionalMinutes(r);case"XXXX":case"XX":return formatTimezone(r);case"XXXXX":case"XXX":default:return formatTimezone(r,":")}},x:function(t,e,n){const r=t.getTimezoneOffset();switch(e){case"x":return formatTimezoneWithOptionalMinutes(r);case"xxxx":case"xx":return formatTimezone(r);case"xxxxx":case"xxx":default:return formatTimezone(r,":")}},O:function(t,e,n){const r=t.getTimezoneOffset();switch(e){case"O":case"OO":case"OOO":return"GMT"+formatTimezoneShort(r,":");case"OOOO":default:return"GMT"+formatTimezone(r,":")}},z:function(t,e,n){const r=t.getTimezoneOffset();switch(e){case"z":case"zz":case"zzz":return"GMT"+formatTimezoneShort(r,":");case"zzzz":default:return"GMT"+formatTimezone(r,":")}},t:function(t,e,n){const r=Math.trunc(+t/1e3);return addLeadingZeros(r,e.length)},T:function(t,e,n){return addLeadingZeros(+t,e.length)}};function formatTimezoneShort(t,e=""){const n=t>0?"-":"+",r=Math.abs(t),a=Math.trunc(r/60),o=r%60;return o===0?n+String(a):n+String(a)+e+addLeadingZeros(o,2)}function formatTimezoneWithOptionalMinutes(t,e){return t%60===0?(t>0?"-":"+")+addLeadingZeros(Math.abs(t)/60,2):formatTimezone(t,e)}function formatTimezone(t,e=""){const n=t>0?"-":"+",r=Math.abs(t),a=addLeadingZeros(Math.trunc(r/60),2),o=addLeadingZeros(r%60,2);return n+a+e+o}const dateLongFormatter=(t,e)=>{switch(t){case"P":return e.date({width:"short"});case"PP":return e.date({width:"medium"});case"PPP":return e.date({width:"long"});case"PPPP":default:return e.date({width:"full"})}},timeLongFormatter=(t,e)=>{switch(t){case"p":return e.time({width:"short"});case"pp":return e.time({width:"medium"});case"ppp":return e.time({width:"long"});case"pppp":default:return e.time({width:"full"})}},dateTimeLongFormatter=(t,e)=>{const n=t.match(/(P+)(p+)?/)||[],r=n[1],a=n[2];if(!a)return dateLongFormatter(t,e);let o;switch(r){case"P":o=e.dateTime({width:"short"});break;case"PP":o=e.dateTime({width:"medium"});break;case"PPP":o=e.dateTime({width:"long"});break;case"PPPP":default:o=e.dateTime({width:"full"});break}return o.replace("{{date}}",dateLongFormatter(r,e)).replace("{{time}}",timeLongFormatter(a,e))},longFormatters={p:timeLongFormatter,P:dateTimeLongFormatter},dayOfYearTokenRE=/^D+$/,weekYearTokenRE=/^Y+$/,throwTokens=["D","DD","YY","YYYY"];function isProtectedDayOfYearToken(t){return dayOfYearTokenRE.test(t)}function isProtectedWeekYearToken(t){return weekYearTokenRE.test(t)}function warnOrThrowProtectedError(t,e,n){const r=message(t,e,n);if(console.warn(r),throwTokens.includes(t))throw new RangeError(r)}function message(t,e,n){const r=t[0]==="Y"?"years":"days of the month";return`Use \`${t.toLowerCase()}\` instead of \`${t}\` (in \`${e}\`) for formatting ${r} to the input \`${n}\`; see: https://github.com/date-fns/date-fns/blob/master/docs/unicodeTokens.md`}const formattingTokensRegExp=/[yYQqMLwIdDecihHKkms]o|(\w)\1*|''|'(''|[^'])+('|$)|./g,longFormattingTokensRegExp=/P+p+|P+|p+|''|'(''|[^'])+('|$)|./g,escapedStringRegExp=/^'([^]*?)'?$/,doubleQuoteRegExp=/''/g,unescapedLatinCharacterRegExp=/[a-zA-Z]/;function format(t,e,n){const r=getDefaultOptions(),a=r.locale??enUS,o=r.firstWeekContainsDate??r.locale?.options?.firstWeekContainsDate??1,i=r.weekStartsOn??r.locale?.options?.weekStartsOn??0,s=toDate(t,n?.in);if(!isValid(s))throw new RangeError("Invalid time value");let d=e.match(longFormattingTokensRegExp).map(c=>{const u=c[0];if(u==="p"||u==="P"){const h=longFormatters[u];return h(c,a.formatLong)}return c}).join("").match(formattingTokensRegExp).map(c=>{if(c==="''")return{isToken:!1,value:"'"};const u=c[0];if(u==="'")return{isToken:!1,value:cleanEscapedString(c)};if(formatters[u])return{isToken:!0,value:c};if(u.match(unescapedLatinCharacterRegExp))throw new RangeError("Format string contains an unescaped latin alphabet character `"+u+"`");return{isToken:!1,value:c}});a.localize.preprocessor&&(d=a.localize.preprocessor(s,d));const f={firstWeekContainsDate:o,weekStartsOn:i,locale:a};return d.map(c=>{if(!c.isToken)return c.value;const u=c.value;(isProtectedWeekYearToken(u)||isProtectedDayOfYearToken(u))&&warnOrThrowProtectedError(u,e,String(t));const h=formatters[u[0]];return h(s,u,a.localize,f)}).join("")}function cleanEscapedString(t){const e=t.match(escapedStringRegExp);return e?e[1].replace(doubleQuoteRegExp,"'"):t}const $tailor_resolver_step__step2=async t=>(console.log(t),`step2: recorded ${format(new Date,"yyyy-MM-dd HH:mm:ss")} on step2!`);globalThis.main=$tailor_resolver_step__step2;
+const millisecondsInWeek = 6048e5,
+  millisecondsInDay = 864e5,
+  constructFromSymbol = Symbol.for("constructDateFrom");
+function constructFrom(t, e) {
+  return typeof t == "function"
+    ? t(e)
+    : t && typeof t == "object" && constructFromSymbol in t
+      ? t[constructFromSymbol](e)
+      : t instanceof Date
+        ? new t.constructor(e)
+        : new Date(e);
+}
+function toDate(t, e) {
+  return constructFrom(e || t, t);
+}
+let defaultOptions = {};
+function getDefaultOptions() {
+  return defaultOptions;
+}
+function startOfWeek(t, e) {
+  const n = getDefaultOptions(),
+    r =
+      e?.weekStartsOn ??
+      e?.locale?.options?.weekStartsOn ??
+      n.weekStartsOn ??
+      n.locale?.options?.weekStartsOn ??
+      0,
+    a = toDate(t, e?.in),
+    o = a.getDay(),
+    i = (o < r ? 7 : 0) + o - r;
+  return a.setDate(a.getDate() - i), a.setHours(0, 0, 0, 0), a;
+}
+function startOfISOWeek(t, e) {
+  return startOfWeek(t, { ...e, weekStartsOn: 1 });
+}
+function getISOWeekYear(t, e) {
+  const n = toDate(t, e?.in),
+    r = n.getFullYear(),
+    a = constructFrom(n, 0);
+  a.setFullYear(r + 1, 0, 4), a.setHours(0, 0, 0, 0);
+  const o = startOfISOWeek(a),
+    i = constructFrom(n, 0);
+  i.setFullYear(r, 0, 4), i.setHours(0, 0, 0, 0);
+  const s = startOfISOWeek(i);
+  return n.getTime() >= o.getTime()
+    ? r + 1
+    : n.getTime() >= s.getTime()
+      ? r
+      : r - 1;
+}
+function getTimezoneOffsetInMilliseconds(t) {
+  const e = toDate(t),
+    n = new Date(
+      Date.UTC(
+        e.getFullYear(),
+        e.getMonth(),
+        e.getDate(),
+        e.getHours(),
+        e.getMinutes(),
+        e.getSeconds(),
+        e.getMilliseconds(),
+      ),
+    );
+  return n.setUTCFullYear(e.getFullYear()), +t - +n;
+}
+function normalizeDates(t, ...e) {
+  const n = constructFrom.bind(
+    null,
+    e.find((r) => typeof r == "object"),
+  );
+  return e.map(n);
+}
+function startOfDay(t, e) {
+  const n = toDate(t, e?.in);
+  return n.setHours(0, 0, 0, 0), n;
+}
+function differenceInCalendarDays(t, e, n) {
+  const [r, a] = normalizeDates(n?.in, t, e),
+    o = startOfDay(r),
+    i = startOfDay(a),
+    s = +o - getTimezoneOffsetInMilliseconds(o),
+    d = +i - getTimezoneOffsetInMilliseconds(i);
+  return Math.round((s - d) / 864e5);
+}
+function startOfISOWeekYear(t, e) {
+  const n = getISOWeekYear(t, e),
+    r = constructFrom(t, 0);
+  return r.setFullYear(n, 0, 4), r.setHours(0, 0, 0, 0), startOfISOWeek(r);
+}
+function isDate(t) {
+  return (
+    t instanceof Date ||
+    (typeof t == "object" &&
+      Object.prototype.toString.call(t) === "[object Date]")
+  );
+}
+function isValid(t) {
+  return !((!isDate(t) && typeof t != "number") || isNaN(+toDate(t)));
+}
+function startOfYear(t, e) {
+  const n = toDate(t, e?.in);
+  return n.setFullYear(n.getFullYear(), 0, 1), n.setHours(0, 0, 0, 0), n;
+}
+const formatDistanceLocale = {
+    lessThanXSeconds: {
+      one: "less than a second",
+      other: "less than {{count}} seconds",
+    },
+    xSeconds: { one: "1 second", other: "{{count}} seconds" },
+    halfAMinute: "half a minute",
+    lessThanXMinutes: {
+      one: "less than a minute",
+      other: "less than {{count}} minutes",
+    },
+    xMinutes: { one: "1 minute", other: "{{count}} minutes" },
+    aboutXHours: { one: "about 1 hour", other: "about {{count}} hours" },
+    xHours: { one: "1 hour", other: "{{count}} hours" },
+    xDays: { one: "1 day", other: "{{count}} days" },
+    aboutXWeeks: { one: "about 1 week", other: "about {{count}} weeks" },
+    xWeeks: { one: "1 week", other: "{{count}} weeks" },
+    aboutXMonths: { one: "about 1 month", other: "about {{count}} months" },
+    xMonths: { one: "1 month", other: "{{count}} months" },
+    aboutXYears: { one: "about 1 year", other: "about {{count}} years" },
+    xYears: { one: "1 year", other: "{{count}} years" },
+    overXYears: { one: "over 1 year", other: "over {{count}} years" },
+    almostXYears: { one: "almost 1 year", other: "almost {{count}} years" },
+  },
+  formatDistance = (t, e, n) => {
+    let r;
+    const a = formatDistanceLocale[t];
+    return (
+      typeof a == "string"
+        ? (r = a)
+        : e === 1
+          ? (r = a.one)
+          : (r = a.other.replace("{{count}}", e.toString())),
+      n?.addSuffix
+        ? n.comparison && n.comparison > 0
+          ? "in " + r
+          : r + " ago"
+        : r
+    );
+  };
+function buildFormatLongFn(t) {
+  return (e = {}) => {
+    const n = e.width ? String(e.width) : t.defaultWidth;
+    return t.formats[n] || t.formats[t.defaultWidth];
+  };
+}
+const dateFormats = {
+    full: "EEEE, MMMM do, y",
+    long: "MMMM do, y",
+    medium: "MMM d, y",
+    short: "MM/dd/yyyy",
+  },
+  timeFormats = {
+    full: "h:mm:ss a zzzz",
+    long: "h:mm:ss a z",
+    medium: "h:mm:ss a",
+    short: "h:mm a",
+  },
+  dateTimeFormats = {
+    full: "{{date}} 'at' {{time}}",
+    long: "{{date}} 'at' {{time}}",
+    medium: "{{date}}, {{time}}",
+    short: "{{date}}, {{time}}",
+  },
+  formatLong = {
+    date: buildFormatLongFn({ formats: dateFormats, defaultWidth: "full" }),
+    time: buildFormatLongFn({ formats: timeFormats, defaultWidth: "full" }),
+    dateTime: buildFormatLongFn({
+      formats: dateTimeFormats,
+      defaultWidth: "full",
+    }),
+  },
+  formatRelativeLocale = {
+    lastWeek: "'last' eeee 'at' p",
+    yesterday: "'yesterday at' p",
+    today: "'today at' p",
+    tomorrow: "'tomorrow at' p",
+    nextWeek: "eeee 'at' p",
+    other: "P",
+  },
+  formatRelative = (t, e, n, r) => formatRelativeLocale[t];
+function buildLocalizeFn(t) {
+  return (e, n) => {
+    const r = n?.context ? String(n.context) : "standalone";
+    let a;
+    if (r === "formatting" && t.formattingValues) {
+      const i = t.defaultFormattingWidth || t.defaultWidth,
+        s = n?.width ? String(n.width) : i;
+      a = t.formattingValues[s] || t.formattingValues[i];
+    } else {
+      const i = t.defaultWidth,
+        s = n?.width ? String(n.width) : t.defaultWidth;
+      a = t.values[s] || t.values[i];
+    }
+    const o = t.argumentCallback ? t.argumentCallback(e) : e;
+    return a[o];
+  };
+}
+const eraValues = {
+    narrow: ["B", "A"],
+    abbreviated: ["BC", "AD"],
+    wide: ["Before Christ", "Anno Domini"],
+  },
+  quarterValues = {
+    narrow: ["1", "2", "3", "4"],
+    abbreviated: ["Q1", "Q2", "Q3", "Q4"],
+    wide: ["1st quarter", "2nd quarter", "3rd quarter", "4th quarter"],
+  },
+  monthValues = {
+    narrow: ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"],
+    abbreviated: [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ],
+    wide: [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ],
+  },
+  dayValues = {
+    narrow: ["S", "M", "T", "W", "T", "F", "S"],
+    short: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"],
+    abbreviated: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    wide: [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ],
+  },
+  dayPeriodValues = {
+    narrow: {
+      am: "a",
+      pm: "p",
+      midnight: "mi",
+      noon: "n",
+      morning: "morning",
+      afternoon: "afternoon",
+      evening: "evening",
+      night: "night",
+    },
+    abbreviated: {
+      am: "AM",
+      pm: "PM",
+      midnight: "midnight",
+      noon: "noon",
+      morning: "morning",
+      afternoon: "afternoon",
+      evening: "evening",
+      night: "night",
+    },
+    wide: {
+      am: "a.m.",
+      pm: "p.m.",
+      midnight: "midnight",
+      noon: "noon",
+      morning: "morning",
+      afternoon: "afternoon",
+      evening: "evening",
+      night: "night",
+    },
+  },
+  formattingDayPeriodValues = {
+    narrow: {
+      am: "a",
+      pm: "p",
+      midnight: "mi",
+      noon: "n",
+      morning: "in the morning",
+      afternoon: "in the afternoon",
+      evening: "in the evening",
+      night: "at night",
+    },
+    abbreviated: {
+      am: "AM",
+      pm: "PM",
+      midnight: "midnight",
+      noon: "noon",
+      morning: "in the morning",
+      afternoon: "in the afternoon",
+      evening: "in the evening",
+      night: "at night",
+    },
+    wide: {
+      am: "a.m.",
+      pm: "p.m.",
+      midnight: "midnight",
+      noon: "noon",
+      morning: "in the morning",
+      afternoon: "in the afternoon",
+      evening: "in the evening",
+      night: "at night",
+    },
+  },
+  ordinalNumber = (t, e) => {
+    const n = Number(t),
+      r = n % 100;
+    if (r > 20 || r < 10)
+      switch (r % 10) {
+        case 1:
+          return n + "st";
+        case 2:
+          return n + "nd";
+        case 3:
+          return n + "rd";
+      }
+    return n + "th";
+  },
+  localize = {
+    ordinalNumber,
+    era: buildLocalizeFn({ values: eraValues, defaultWidth: "wide" }),
+    quarter: buildLocalizeFn({
+      values: quarterValues,
+      defaultWidth: "wide",
+      argumentCallback: (t) => t - 1,
+    }),
+    month: buildLocalizeFn({ values: monthValues, defaultWidth: "wide" }),
+    day: buildLocalizeFn({ values: dayValues, defaultWidth: "wide" }),
+    dayPeriod: buildLocalizeFn({
+      values: dayPeriodValues,
+      defaultWidth: "wide",
+      formattingValues: formattingDayPeriodValues,
+      defaultFormattingWidth: "wide",
+    }),
+  };
+function buildMatchFn(t) {
+  return (e, n = {}) => {
+    const r = n.width,
+      a = (r && t.matchPatterns[r]) || t.matchPatterns[t.defaultMatchWidth],
+      o = e.match(a);
+    if (!o) return null;
+    const i = o[0],
+      s = (r && t.parsePatterns[r]) || t.parsePatterns[t.defaultParseWidth],
+      d = Array.isArray(s)
+        ? findIndex(s, (u) => u.test(i))
+        : findKey(s, (u) => u.test(i));
+    let f;
+    (f = t.valueCallback ? t.valueCallback(d) : d),
+      (f = n.valueCallback ? n.valueCallback(f) : f);
+    const c = e.slice(i.length);
+    return { value: f, rest: c };
+  };
+}
+function findKey(t, e) {
+  for (const n in t)
+    if (Object.prototype.hasOwnProperty.call(t, n) && e(t[n])) return n;
+}
+function findIndex(t, e) {
+  for (let n = 0; n < t.length; n++) if (e(t[n])) return n;
+}
+function buildMatchPatternFn(t) {
+  return (e, n = {}) => {
+    const r = e.match(t.matchPattern);
+    if (!r) return null;
+    const a = r[0],
+      o = e.match(t.parsePattern);
+    if (!o) return null;
+    let i = t.valueCallback ? t.valueCallback(o[0]) : o[0];
+    i = n.valueCallback ? n.valueCallback(i) : i;
+    const s = e.slice(a.length);
+    return { value: i, rest: s };
+  };
+}
+const matchOrdinalNumberPattern = /^(\d+)(th|st|nd|rd)?/i,
+  parseOrdinalNumberPattern = /\d+/i,
+  matchEraPatterns = {
+    narrow: /^(b|a)/i,
+    abbreviated: /^(b\.?\s?c\.?|b\.?\s?c\.?\s?e\.?|a\.?\s?d\.?|c\.?\s?e\.?)/i,
+    wide: /^(before christ|before common era|anno domini|common era)/i,
+  },
+  parseEraPatterns = { any: [/^b/i, /^(a|c)/i] },
+  matchQuarterPatterns = {
+    narrow: /^[1234]/i,
+    abbreviated: /^q[1234]/i,
+    wide: /^[1234](th|st|nd|rd)? quarter/i,
+  },
+  parseQuarterPatterns = { any: [/1/i, /2/i, /3/i, /4/i] },
+  matchMonthPatterns = {
+    narrow: /^[jfmasond]/i,
+    abbreviated: /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
+    wide: /^(january|february|march|april|may|june|july|august|september|october|november|december)/i,
+  },
+  parseMonthPatterns = {
+    narrow: [
+      /^j/i,
+      /^f/i,
+      /^m/i,
+      /^a/i,
+      /^m/i,
+      /^j/i,
+      /^j/i,
+      /^a/i,
+      /^s/i,
+      /^o/i,
+      /^n/i,
+      /^d/i,
+    ],
+    any: [
+      /^ja/i,
+      /^f/i,
+      /^mar/i,
+      /^ap/i,
+      /^may/i,
+      /^jun/i,
+      /^jul/i,
+      /^au/i,
+      /^s/i,
+      /^o/i,
+      /^n/i,
+      /^d/i,
+    ],
+  },
+  matchDayPatterns = {
+    narrow: /^[smtwf]/i,
+    short: /^(su|mo|tu|we|th|fr|sa)/i,
+    abbreviated: /^(sun|mon|tue|wed|thu|fri|sat)/i,
+    wide: /^(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i,
+  },
+  parseDayPatterns = {
+    narrow: [/^s/i, /^m/i, /^t/i, /^w/i, /^t/i, /^f/i, /^s/i],
+    any: [/^su/i, /^m/i, /^tu/i, /^w/i, /^th/i, /^f/i, /^sa/i],
+  },
+  matchDayPeriodPatterns = {
+    narrow: /^(a|p|mi|n|(in the|at) (morning|afternoon|evening|night))/i,
+    any: /^([ap]\.?\s?m\.?|midnight|noon|(in the|at) (morning|afternoon|evening|night))/i,
+  },
+  parseDayPeriodPatterns = {
+    any: {
+      am: /^a/i,
+      pm: /^p/i,
+      midnight: /^mi/i,
+      noon: /^no/i,
+      morning: /morning/i,
+      afternoon: /afternoon/i,
+      evening: /evening/i,
+      night: /night/i,
+    },
+  },
+  match = {
+    ordinalNumber: buildMatchPatternFn({
+      matchPattern: matchOrdinalNumberPattern,
+      parsePattern: parseOrdinalNumberPattern,
+      valueCallback: (t) => parseInt(t, 10),
+    }),
+    era: buildMatchFn({
+      matchPatterns: matchEraPatterns,
+      defaultMatchWidth: "wide",
+      parsePatterns: parseEraPatterns,
+      defaultParseWidth: "any",
+    }),
+    quarter: buildMatchFn({
+      matchPatterns: matchQuarterPatterns,
+      defaultMatchWidth: "wide",
+      parsePatterns: parseQuarterPatterns,
+      defaultParseWidth: "any",
+      valueCallback: (t) => t + 1,
+    }),
+    month: buildMatchFn({
+      matchPatterns: matchMonthPatterns,
+      defaultMatchWidth: "wide",
+      parsePatterns: parseMonthPatterns,
+      defaultParseWidth: "any",
+    }),
+    day: buildMatchFn({
+      matchPatterns: matchDayPatterns,
+      defaultMatchWidth: "wide",
+      parsePatterns: parseDayPatterns,
+      defaultParseWidth: "any",
+    }),
+    dayPeriod: buildMatchFn({
+      matchPatterns: matchDayPeriodPatterns,
+      defaultMatchWidth: "any",
+      parsePatterns: parseDayPeriodPatterns,
+      defaultParseWidth: "any",
+    }),
+  },
+  enUS = {
+    code: "en-US",
+    formatDistance,
+    formatLong,
+    formatRelative,
+    localize,
+    match,
+    options: { weekStartsOn: 0, firstWeekContainsDate: 1 },
+  };
+function getDayOfYear(t, e) {
+  const n = toDate(t, e?.in);
+  return differenceInCalendarDays(n, startOfYear(n)) + 1;
+}
+function getISOWeek(t, e) {
+  const n = toDate(t, e?.in),
+    r = +startOfISOWeek(n) - +startOfISOWeekYear(n);
+  return Math.round(r / 6048e5) + 1;
+}
+function getWeekYear(t, e) {
+  const n = toDate(t, e?.in),
+    r = n.getFullYear(),
+    a = getDefaultOptions(),
+    o =
+      e?.firstWeekContainsDate ??
+      e?.locale?.options?.firstWeekContainsDate ??
+      a.firstWeekContainsDate ??
+      a.locale?.options?.firstWeekContainsDate ??
+      1,
+    i = constructFrom(e?.in || t, 0);
+  i.setFullYear(r + 1, 0, o), i.setHours(0, 0, 0, 0);
+  const s = startOfWeek(i, e),
+    d = constructFrom(e?.in || t, 0);
+  d.setFullYear(r, 0, o), d.setHours(0, 0, 0, 0);
+  const f = startOfWeek(d, e);
+  return +n >= +s ? r + 1 : +n >= +f ? r : r - 1;
+}
+function startOfWeekYear(t, e) {
+  const n = getDefaultOptions(),
+    r =
+      e?.firstWeekContainsDate ??
+      e?.locale?.options?.firstWeekContainsDate ??
+      n.firstWeekContainsDate ??
+      n.locale?.options?.firstWeekContainsDate ??
+      1,
+    a = getWeekYear(t, e),
+    o = constructFrom(e?.in || t, 0);
+  return o.setFullYear(a, 0, r), o.setHours(0, 0, 0, 0), startOfWeek(o, e);
+}
+function getWeek(t, e) {
+  const n = toDate(t, e?.in),
+    r = +startOfWeek(n, e) - +startOfWeekYear(n, e);
+  return Math.round(r / 6048e5) + 1;
+}
+function addLeadingZeros(t, e) {
+  const n = t < 0 ? "-" : "",
+    r = Math.abs(t).toString().padStart(e, "0");
+  return n + r;
+}
+const lightFormatters = {
+    y(t, e) {
+      const n = t.getFullYear(),
+        r = n > 0 ? n : 1 - n;
+      return addLeadingZeros(e === "yy" ? r % 100 : r, e.length);
+    },
+    M(t, e) {
+      const n = t.getMonth();
+      return e === "M" ? String(n + 1) : addLeadingZeros(n + 1, 2);
+    },
+    d(t, e) {
+      return addLeadingZeros(t.getDate(), e.length);
+    },
+    a(t, e) {
+      const n = t.getHours() / 12 >= 1 ? "pm" : "am";
+      switch (e) {
+        case "a":
+        case "aa":
+          return n.toUpperCase();
+        case "aaa":
+          return n;
+        case "aaaaa":
+          return n[0];
+        case "aaaa":
+        default:
+          return n === "am" ? "a.m." : "p.m.";
+      }
+    },
+    h(t, e) {
+      return addLeadingZeros(t.getHours() % 12 || 12, e.length);
+    },
+    H(t, e) {
+      return addLeadingZeros(t.getHours(), e.length);
+    },
+    m(t, e) {
+      return addLeadingZeros(t.getMinutes(), e.length);
+    },
+    s(t, e) {
+      return addLeadingZeros(t.getSeconds(), e.length);
+    },
+    S(t, e) {
+      const n = e.length,
+        r = t.getMilliseconds(),
+        a = Math.trunc(r * Math.pow(10, n - 3));
+      return addLeadingZeros(a, e.length);
+    },
+  },
+  dayPeriodEnum = {
+    midnight: "midnight",
+    noon: "noon",
+    morning: "morning",
+    afternoon: "afternoon",
+    evening: "evening",
+    night: "night",
+  },
+  formatters = {
+    G: function (t, e, n) {
+      const r = t.getFullYear() > 0 ? 1 : 0;
+      switch (e) {
+        case "G":
+        case "GG":
+        case "GGG":
+          return n.era(r, { width: "abbreviated" });
+        case "GGGGG":
+          return n.era(r, { width: "narrow" });
+        case "GGGG":
+        default:
+          return n.era(r, { width: "wide" });
+      }
+    },
+    y: function (t, e, n) {
+      if (e === "yo") {
+        const r = t.getFullYear(),
+          a = r > 0 ? r : 1 - r;
+        return n.ordinalNumber(a, { unit: "year" });
+      }
+      return lightFormatters.y(t, e);
+    },
+    Y: function (t, e, n, r) {
+      const a = getWeekYear(t, r),
+        o = a > 0 ? a : 1 - a;
+      if (e === "YY") {
+        const i = o % 100;
+        return addLeadingZeros(i, 2);
+      }
+      return e === "Yo"
+        ? n.ordinalNumber(o, { unit: "year" })
+        : addLeadingZeros(o, e.length);
+    },
+    R: function (t, e) {
+      const n = getISOWeekYear(t);
+      return addLeadingZeros(n, e.length);
+    },
+    u: function (t, e) {
+      const n = t.getFullYear();
+      return addLeadingZeros(n, e.length);
+    },
+    Q: function (t, e, n) {
+      const r = Math.ceil((t.getMonth() + 1) / 3);
+      switch (e) {
+        case "Q":
+          return String(r);
+        case "QQ":
+          return addLeadingZeros(r, 2);
+        case "Qo":
+          return n.ordinalNumber(r, { unit: "quarter" });
+        case "QQQ":
+          return n.quarter(r, { width: "abbreviated", context: "formatting" });
+        case "QQQQQ":
+          return n.quarter(r, { width: "narrow", context: "formatting" });
+        case "QQQQ":
+        default:
+          return n.quarter(r, { width: "wide", context: "formatting" });
+      }
+    },
+    q: function (t, e, n) {
+      const r = Math.ceil((t.getMonth() + 1) / 3);
+      switch (e) {
+        case "q":
+          return String(r);
+        case "qq":
+          return addLeadingZeros(r, 2);
+        case "qo":
+          return n.ordinalNumber(r, { unit: "quarter" });
+        case "qqq":
+          return n.quarter(r, { width: "abbreviated", context: "standalone" });
+        case "qqqqq":
+          return n.quarter(r, { width: "narrow", context: "standalone" });
+        case "qqqq":
+        default:
+          return n.quarter(r, { width: "wide", context: "standalone" });
+      }
+    },
+    M: function (t, e, n) {
+      const r = t.getMonth();
+      switch (e) {
+        case "M":
+        case "MM":
+          return lightFormatters.M(t, e);
+        case "Mo":
+          return n.ordinalNumber(r + 1, { unit: "month" });
+        case "MMM":
+          return n.month(r, { width: "abbreviated", context: "formatting" });
+        case "MMMMM":
+          return n.month(r, { width: "narrow", context: "formatting" });
+        case "MMMM":
+        default:
+          return n.month(r, { width: "wide", context: "formatting" });
+      }
+    },
+    L: function (t, e, n) {
+      const r = t.getMonth();
+      switch (e) {
+        case "L":
+          return String(r + 1);
+        case "LL":
+          return addLeadingZeros(r + 1, 2);
+        case "Lo":
+          return n.ordinalNumber(r + 1, { unit: "month" });
+        case "LLL":
+          return n.month(r, { width: "abbreviated", context: "standalone" });
+        case "LLLLL":
+          return n.month(r, { width: "narrow", context: "standalone" });
+        case "LLLL":
+        default:
+          return n.month(r, { width: "wide", context: "standalone" });
+      }
+    },
+    w: function (t, e, n, r) {
+      const a = getWeek(t, r);
+      return e === "wo"
+        ? n.ordinalNumber(a, { unit: "week" })
+        : addLeadingZeros(a, e.length);
+    },
+    I: function (t, e, n) {
+      const r = getISOWeek(t);
+      return e === "Io"
+        ? n.ordinalNumber(r, { unit: "week" })
+        : addLeadingZeros(r, e.length);
+    },
+    d: function (t, e, n) {
+      return e === "do"
+        ? n.ordinalNumber(t.getDate(), { unit: "date" })
+        : lightFormatters.d(t, e);
+    },
+    D: function (t, e, n) {
+      const r = getDayOfYear(t);
+      return e === "Do"
+        ? n.ordinalNumber(r, { unit: "dayOfYear" })
+        : addLeadingZeros(r, e.length);
+    },
+    E: function (t, e, n) {
+      const r = t.getDay();
+      switch (e) {
+        case "E":
+        case "EE":
+        case "EEE":
+          return n.day(r, { width: "abbreviated", context: "formatting" });
+        case "EEEEE":
+          return n.day(r, { width: "narrow", context: "formatting" });
+        case "EEEEEE":
+          return n.day(r, { width: "short", context: "formatting" });
+        case "EEEE":
+        default:
+          return n.day(r, { width: "wide", context: "formatting" });
+      }
+    },
+    e: function (t, e, n, r) {
+      const a = t.getDay(),
+        o = (a - r.weekStartsOn + 8) % 7 || 7;
+      switch (e) {
+        case "e":
+          return String(o);
+        case "ee":
+          return addLeadingZeros(o, 2);
+        case "eo":
+          return n.ordinalNumber(o, { unit: "day" });
+        case "eee":
+          return n.day(a, { width: "abbreviated", context: "formatting" });
+        case "eeeee":
+          return n.day(a, { width: "narrow", context: "formatting" });
+        case "eeeeee":
+          return n.day(a, { width: "short", context: "formatting" });
+        case "eeee":
+        default:
+          return n.day(a, { width: "wide", context: "formatting" });
+      }
+    },
+    c: function (t, e, n, r) {
+      const a = t.getDay(),
+        o = (a - r.weekStartsOn + 8) % 7 || 7;
+      switch (e) {
+        case "c":
+          return String(o);
+        case "cc":
+          return addLeadingZeros(o, e.length);
+        case "co":
+          return n.ordinalNumber(o, { unit: "day" });
+        case "ccc":
+          return n.day(a, { width: "abbreviated", context: "standalone" });
+        case "ccccc":
+          return n.day(a, { width: "narrow", context: "standalone" });
+        case "cccccc":
+          return n.day(a, { width: "short", context: "standalone" });
+        case "cccc":
+        default:
+          return n.day(a, { width: "wide", context: "standalone" });
+      }
+    },
+    i: function (t, e, n) {
+      const r = t.getDay(),
+        a = r === 0 ? 7 : r;
+      switch (e) {
+        case "i":
+          return String(a);
+        case "ii":
+          return addLeadingZeros(a, e.length);
+        case "io":
+          return n.ordinalNumber(a, { unit: "day" });
+        case "iii":
+          return n.day(r, { width: "abbreviated", context: "formatting" });
+        case "iiiii":
+          return n.day(r, { width: "narrow", context: "formatting" });
+        case "iiiiii":
+          return n.day(r, { width: "short", context: "formatting" });
+        case "iiii":
+        default:
+          return n.day(r, { width: "wide", context: "formatting" });
+      }
+    },
+    a: function (t, e, n) {
+      const a = t.getHours() / 12 >= 1 ? "pm" : "am";
+      switch (e) {
+        case "a":
+        case "aa":
+          return n.dayPeriod(a, {
+            width: "abbreviated",
+            context: "formatting",
+          });
+        case "aaa":
+          return n
+            .dayPeriod(a, { width: "abbreviated", context: "formatting" })
+            .toLowerCase();
+        case "aaaaa":
+          return n.dayPeriod(a, { width: "narrow", context: "formatting" });
+        case "aaaa":
+        default:
+          return n.dayPeriod(a, { width: "wide", context: "formatting" });
+      }
+    },
+    b: function (t, e, n) {
+      const r = t.getHours();
+      let a;
+      switch (
+        (r === 12
+          ? (a = dayPeriodEnum.noon)
+          : r === 0
+            ? (a = dayPeriodEnum.midnight)
+            : (a = r / 12 >= 1 ? "pm" : "am"),
+        e)
+      ) {
+        case "b":
+        case "bb":
+          return n.dayPeriod(a, {
+            width: "abbreviated",
+            context: "formatting",
+          });
+        case "bbb":
+          return n
+            .dayPeriod(a, { width: "abbreviated", context: "formatting" })
+            .toLowerCase();
+        case "bbbbb":
+          return n.dayPeriod(a, { width: "narrow", context: "formatting" });
+        case "bbbb":
+        default:
+          return n.dayPeriod(a, { width: "wide", context: "formatting" });
+      }
+    },
+    B: function (t, e, n) {
+      const r = t.getHours();
+      let a;
+      switch (
+        (r >= 17
+          ? (a = dayPeriodEnum.evening)
+          : r >= 12
+            ? (a = dayPeriodEnum.afternoon)
+            : r >= 4
+              ? (a = dayPeriodEnum.morning)
+              : (a = dayPeriodEnum.night),
+        e)
+      ) {
+        case "B":
+        case "BB":
+        case "BBB":
+          return n.dayPeriod(a, {
+            width: "abbreviated",
+            context: "formatting",
+          });
+        case "BBBBB":
+          return n.dayPeriod(a, { width: "narrow", context: "formatting" });
+        case "BBBB":
+        default:
+          return n.dayPeriod(a, { width: "wide", context: "formatting" });
+      }
+    },
+    h: function (t, e, n) {
+      if (e === "ho") {
+        let r = t.getHours() % 12;
+        return r === 0 && (r = 12), n.ordinalNumber(r, { unit: "hour" });
+      }
+      return lightFormatters.h(t, e);
+    },
+    H: function (t, e, n) {
+      return e === "Ho"
+        ? n.ordinalNumber(t.getHours(), { unit: "hour" })
+        : lightFormatters.H(t, e);
+    },
+    K: function (t, e, n) {
+      const r = t.getHours() % 12;
+      return e === "Ko"
+        ? n.ordinalNumber(r, { unit: "hour" })
+        : addLeadingZeros(r, e.length);
+    },
+    k: function (t, e, n) {
+      let r = t.getHours();
+      return (
+        r === 0 && (r = 24),
+        e === "ko"
+          ? n.ordinalNumber(r, { unit: "hour" })
+          : addLeadingZeros(r, e.length)
+      );
+    },
+    m: function (t, e, n) {
+      return e === "mo"
+        ? n.ordinalNumber(t.getMinutes(), { unit: "minute" })
+        : lightFormatters.m(t, e);
+    },
+    s: function (t, e, n) {
+      return e === "so"
+        ? n.ordinalNumber(t.getSeconds(), { unit: "second" })
+        : lightFormatters.s(t, e);
+    },
+    S: function (t, e) {
+      return lightFormatters.S(t, e);
+    },
+    X: function (t, e, n) {
+      const r = t.getTimezoneOffset();
+      if (r === 0) return "Z";
+      switch (e) {
+        case "X":
+          return formatTimezoneWithOptionalMinutes(r);
+        case "XXXX":
+        case "XX":
+          return formatTimezone(r);
+        case "XXXXX":
+        case "XXX":
+        default:
+          return formatTimezone(r, ":");
+      }
+    },
+    x: function (t, e, n) {
+      const r = t.getTimezoneOffset();
+      switch (e) {
+        case "x":
+          return formatTimezoneWithOptionalMinutes(r);
+        case "xxxx":
+        case "xx":
+          return formatTimezone(r);
+        case "xxxxx":
+        case "xxx":
+        default:
+          return formatTimezone(r, ":");
+      }
+    },
+    O: function (t, e, n) {
+      const r = t.getTimezoneOffset();
+      switch (e) {
+        case "O":
+        case "OO":
+        case "OOO":
+          return "GMT" + formatTimezoneShort(r, ":");
+        case "OOOO":
+        default:
+          return "GMT" + formatTimezone(r, ":");
+      }
+    },
+    z: function (t, e, n) {
+      const r = t.getTimezoneOffset();
+      switch (e) {
+        case "z":
+        case "zz":
+        case "zzz":
+          return "GMT" + formatTimezoneShort(r, ":");
+        case "zzzz":
+        default:
+          return "GMT" + formatTimezone(r, ":");
+      }
+    },
+    t: function (t, e, n) {
+      const r = Math.trunc(+t / 1e3);
+      return addLeadingZeros(r, e.length);
+    },
+    T: function (t, e, n) {
+      return addLeadingZeros(+t, e.length);
+    },
+  };
+function formatTimezoneShort(t, e = "") {
+  const n = t > 0 ? "-" : "+",
+    r = Math.abs(t),
+    a = Math.trunc(r / 60),
+    o = r % 60;
+  return o === 0 ? n + String(a) : n + String(a) + e + addLeadingZeros(o, 2);
+}
+function formatTimezoneWithOptionalMinutes(t, e) {
+  return t % 60 === 0
+    ? (t > 0 ? "-" : "+") + addLeadingZeros(Math.abs(t) / 60, 2)
+    : formatTimezone(t, e);
+}
+function formatTimezone(t, e = "") {
+  const n = t > 0 ? "-" : "+",
+    r = Math.abs(t),
+    a = addLeadingZeros(Math.trunc(r / 60), 2),
+    o = addLeadingZeros(r % 60, 2);
+  return n + a + e + o;
+}
+const dateLongFormatter = (t, e) => {
+    switch (t) {
+      case "P":
+        return e.date({ width: "short" });
+      case "PP":
+        return e.date({ width: "medium" });
+      case "PPP":
+        return e.date({ width: "long" });
+      case "PPPP":
+      default:
+        return e.date({ width: "full" });
+    }
+  },
+  timeLongFormatter = (t, e) => {
+    switch (t) {
+      case "p":
+        return e.time({ width: "short" });
+      case "pp":
+        return e.time({ width: "medium" });
+      case "ppp":
+        return e.time({ width: "long" });
+      case "pppp":
+      default:
+        return e.time({ width: "full" });
+    }
+  },
+  dateTimeLongFormatter = (t, e) => {
+    const n = t.match(/(P+)(p+)?/) || [],
+      r = n[1],
+      a = n[2];
+    if (!a) return dateLongFormatter(t, e);
+    let o;
+    switch (r) {
+      case "P":
+        o = e.dateTime({ width: "short" });
+        break;
+      case "PP":
+        o = e.dateTime({ width: "medium" });
+        break;
+      case "PPP":
+        o = e.dateTime({ width: "long" });
+        break;
+      case "PPPP":
+      default:
+        o = e.dateTime({ width: "full" });
+        break;
+    }
+    return o
+      .replace("{{date}}", dateLongFormatter(r, e))
+      .replace("{{time}}", timeLongFormatter(a, e));
+  },
+  longFormatters = { p: timeLongFormatter, P: dateTimeLongFormatter },
+  dayOfYearTokenRE = /^D+$/,
+  weekYearTokenRE = /^Y+$/,
+  throwTokens = ["D", "DD", "YY", "YYYY"];
+function isProtectedDayOfYearToken(t) {
+  return dayOfYearTokenRE.test(t);
+}
+function isProtectedWeekYearToken(t) {
+  return weekYearTokenRE.test(t);
+}
+function warnOrThrowProtectedError(t, e, n) {
+  const r = message(t, e, n);
+  if ((console.warn(r), throwTokens.includes(t))) throw new RangeError(r);
+}
+function message(t, e, n) {
+  const r = t[0] === "Y" ? "years" : "days of the month";
+  return `Use \`${t.toLowerCase()}\` instead of \`${t}\` (in \`${e}\`) for formatting ${r} to the input \`${n}\`; see: https://github.com/date-fns/date-fns/blob/master/docs/unicodeTokens.md`;
+}
+const formattingTokensRegExp =
+    /[yYQqMLwIdDecihHKkms]o|(\w)\1*|''|'(''|[^'])+('|$)|./g,
+  longFormattingTokensRegExp = /P+p+|P+|p+|''|'(''|[^'])+('|$)|./g,
+  escapedStringRegExp = /^'([^]*?)'?$/,
+  doubleQuoteRegExp = /''/g,
+  unescapedLatinCharacterRegExp = /[a-zA-Z]/;
+function format(t, e, n) {
+  const r = getDefaultOptions(),
+    a = r.locale ?? enUS,
+    o =
+      r.firstWeekContainsDate ?? r.locale?.options?.firstWeekContainsDate ?? 1,
+    i = r.weekStartsOn ?? r.locale?.options?.weekStartsOn ?? 0,
+    s = toDate(t, n?.in);
+  if (!isValid(s)) throw new RangeError("Invalid time value");
+  let d = e
+    .match(longFormattingTokensRegExp)
+    .map((c) => {
+      const u = c[0];
+      if (u === "p" || u === "P") {
+        const h = longFormatters[u];
+        return h(c, a.formatLong);
+      }
+      return c;
+    })
+    .join("")
+    .match(formattingTokensRegExp)
+    .map((c) => {
+      if (c === "''") return { isToken: !1, value: "'" };
+      const u = c[0];
+      if (u === "'") return { isToken: !1, value: cleanEscapedString(c) };
+      if (formatters[u]) return { isToken: !0, value: c };
+      if (u.match(unescapedLatinCharacterRegExp))
+        throw new RangeError(
+          "Format string contains an unescaped latin alphabet character `" +
+            u +
+            "`",
+        );
+      return { isToken: !1, value: c };
+    });
+  a.localize.preprocessor && (d = a.localize.preprocessor(s, d));
+  const f = { firstWeekContainsDate: o, weekStartsOn: i, locale: a };
+  return d
+    .map((c) => {
+      if (!c.isToken) return c.value;
+      const u = c.value;
+      (isProtectedWeekYearToken(u) || isProtectedDayOfYearToken(u)) &&
+        warnOrThrowProtectedError(u, e, String(t));
+      const h = formatters[u[0]];
+      return h(s, u, a.localize, f);
+    })
+    .join("");
+}
+function cleanEscapedString(t) {
+  const e = t.match(escapedStringRegExp);
+  return e ? e[1].replace(doubleQuoteRegExp, "'") : t;
+}
+const $tailor_resolver_step__step2 = async (t) => (
+  console.log(t),
+  `step2: recorded ${format(new Date(), "yyyy-MM-dd HH:mm:ss")} on step2!`
+);
+globalThis.main = $tailor_resolver_step__step2;
 //# sourceMappingURL=stepChain__step2.js.map

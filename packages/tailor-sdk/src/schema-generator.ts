@@ -1,4 +1,6 @@
-import { scalarTypes, SDLTypeMetadata } from "./types/types";
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+
+import { SDLTypeMetadata } from "./types/types";
 import { measure } from "./performance";
 
 // Store array element types for later reference
@@ -38,7 +40,7 @@ export class SchemaGenerator {
       }
 
       // Handle non-nullable types
-      if (!!field.required) {
+      if (field.required) {
         fieldType += "!";
       }
 

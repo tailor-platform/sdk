@@ -1,3 +1,7 @@
+/* eslint-disable no-case-declarations */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-expressions */
+
 import fs from "node:fs";
 import path from "node:path";
 import ml from "multiline-ts";
@@ -35,26 +39,26 @@ export class CodeTransformer {
     const trimmedContent = this.trimSDKCode(filePath);
     fs.writeFileSync(
       filePath,
-      ml /* js */`
+      ml/* js */ `
       ${trimmedContent}
 
-      ${
-        resolver.steps.flatMap(([type, name, fn]) => {
+      ${resolver.steps
+        .flatMap(([type, name, fn]) => {
           switch (type) {
             case "fn":
             case "sql":
               return [
-                /* js */ `export const ${
-                  stepVariableName(name)
-                } = ${fn.toString()};`,
+                /* js */ `export const ${stepVariableName(
+                  name,
+                )} = ${fn.toString()};`,
               ];
             case "gql":
               return [];
             default:
               throw new Error(`Unsupported step type: ${type}`);
           }
-        }).join("\n")
-      }
+        })
+        .join("\n")}
       `,
     );
 
@@ -63,47 +67,43 @@ export class CodeTransformer {
 
     return resolver.steps
       .filter(([type]) => type !== "gql")
-      .flatMap(
-        ([type, name, _, options]) => {
-          const stepFilePath = path.join(
-            stepDir,
-            `${resolver.name}__${name}.js`,
-          );
-          const stepFunctionVariable = stepVariableName(name);
-          const relativePath = path.relative(stepDir, filePath);
-          let stepContent;
-          switch (type) {
-            case "fn":
-              stepContent = ml /* js */`
+      .flatMap(([type, name, _, options]) => {
+        const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
+        const stepFunctionVariable = stepVariableName(name);
+        const relativePath = path.relative(stepDir, filePath);
+        let stepContent;
+        switch (type) {
+          case "fn":
+            stepContent = ml/* js */ `
                 import { ${stepFunctionVariable} } from "${relativePath}";
                 globalThis.main = ${stepFunctionVariable};
               `;
-              break;
-            case "sql":
-              const dbNamespace = options?.dbNamespace ||
-                resolver.options?.defaults?.dbNamespace;
-              if (!dbNamespace) {
-                throw new Error(
-                  `Database namespace is not defined at ${resolver.name} > ${name}`,
-                );
-              }
-              stepContent = ml /* js */`
+            break;
+          case "sql":
+            const dbNamespace =
+              options?.dbNamespace || resolver.options?.defaults?.dbNamespace;
+            if (!dbNamespace) {
+              throw new Error(
+                `Database namespace is not defined at ${resolver.name} > ${name}`,
+              );
+            }
+            stepContent = ml/* js */ `
                 import { ${stepFunctionVariable} } from "${relativePath}";
 
                 ${SQL_WRAPPER_DEFINITION}
-                globalThis.main = ${
-                wrapSqlFn(dbNamespace, stepFunctionVariable)
-              };
+                globalThis.main = ${wrapSqlFn(
+                  dbNamespace,
+                  stepFunctionVariable,
+                )};
               `;
-              break;
-            default:
-              return [];
-          }
+            break;
+          default:
+            return [];
+        }
 
-          fs.writeFileSync(stepFilePath, stepContent);
-          return [stepFilePath];
-        },
-      );
+        fs.writeFileSync(stepFilePath, stepContent);
+        return [stepFilePath];
+      });
   }
 
   @measure
@@ -165,9 +165,9 @@ export class CodeTransformer {
       if (symbol && removedIdentifiers.has(symbol)) {
         // インポート宣言自体は除外
         if (
-          !identifier.getAncestors().some((ancestor) =>
-            tailorSdkImportDeclarations.includes(ancestor)
-          )
+          !identifier
+            .getAncestors()
+            .some((ancestor) => tailorSdkImportDeclarations.includes(ancestor))
         ) {
           importedIdentifierReferences.add(identifier);
         }
@@ -231,7 +231,7 @@ export class CodeTransformer {
         const usedRemovedIdentifiers = identifiersInStatement
           .filter((id) => id.getSymbol() != null)
           .filter((identifier) =>
-            removedIdentifiers.has(identifier.getSymbol() as Symbol)
+            removedIdentifiers.has(identifier.getSymbol() as Symbol),
           );
 
         if (usedRemovedIdentifiers.length > 0) {
@@ -270,11 +270,15 @@ export class CodeTransformer {
       const variableStatement = statement.asKindOrThrow(
         SyntaxKind.VariableStatement,
       );
-      const declarations = variableStatement.getDeclarationList()
+      const declarations = variableStatement
+        .getDeclarationList()
         .getDeclarations();
-      declarations.map((decl: VariableDeclaration) =>
-        decl.getNameNode().getSymbol() as Symbol
-      ).forEach((s) => s && identifiers.push(s));
+      declarations
+        .map(
+          (decl: VariableDeclaration) =>
+            decl.getNameNode().getSymbol() as Symbol,
+        )
+        .forEach((s) => s && identifiers.push(s));
     }
 
     if (statement.getKind() === SyntaxKind.FunctionDeclaration) {
@@ -303,7 +307,7 @@ const SQL_WRAPPER_NAME = "$tailor_sql_step_wrapper";
 function wrapSqlFn(dbNamespace: string, target: string) {
   return `await ${SQL_WRAPPER_NAME}("${dbNamespace}", ${target})`;
 }
-const SQL_WRAPPER_DEFINITION = ml /* js */`
+const SQL_WRAPPER_DEFINITION = ml/* js */ `
   const $connect_tailordb = async (namespace) => {
     const baseClient = new tailordb.Client({ namespace });
     await baseClient.connect();

@@ -5,6 +5,7 @@ import { measure } from "../../performance";
 import { isDBType } from "./schema";
 
 export class TailorDBService {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private types: any[] = [];
 
   constructor(
@@ -82,32 +83,32 @@ export class TailorDBService {
         const schema = metadata.schema || {};
 
         // Fieldsを変換
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fields: any = {};
         if (schema.fields) {
           Object.entries(schema.fields)
             .filter(([fieldName]) => fieldName !== "id")
-            .forEach(
-              ([fieldName, fieldConfig]: [string, any]) => {
-                fields[fieldName] = {
-                  Type: fieldConfig.type || "string",
-                  AllowedValues: fieldConfig.allowedValues || [],
-                  Description: fieldConfig.description || "",
-                  Validate: fieldConfig.validate || [],
-                  Array: fieldConfig.array || false,
-                  Index: fieldConfig.index || false,
-                  Required: fieldConfig.required !== false,
-                  Unique: fieldConfig.unique || false,
-                  ForeignKey: fieldConfig.foreignKey || false,
-                  Vector: fieldConfig.vector || false,
-                  ...(fieldConfig.hooks && {
-                    Hooks: {
-                      Create: fieldConfig.hooks?.create,
-                      Update: fieldConfig.hooks?.update,
-                    },
-                  }),
-                };
-              },
-            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .forEach(([fieldName, fieldConfig]: [string, any]) => {
+              fields[fieldName] = {
+                Type: fieldConfig.type || "string",
+                AllowedValues: fieldConfig.allowedValues || [],
+                Description: fieldConfig.description || "",
+                Validate: fieldConfig.validate || [],
+                Array: fieldConfig.array || false,
+                Index: fieldConfig.index || false,
+                Required: fieldConfig.required !== false,
+                Unique: fieldConfig.unique || false,
+                ForeignKey: fieldConfig.foreignKey || false,
+                Vector: fieldConfig.vector || false,
+                ...(fieldConfig.hooks && {
+                  Hooks: {
+                    Create: fieldConfig.hooks?.create,
+                    Update: fieldConfig.hooks?.update,
+                  },
+                }),
+              };
+            });
         }
 
         return {

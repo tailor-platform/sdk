@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+
 import {
   Script,
   TailorDBType as TDB,
@@ -17,7 +21,7 @@ import {
   tailorToGraphQL,
   TailorToTs,
 } from "../../types/types";
-import type { DeepWriteable, Prettify } from "../../types/helpers";
+import type { Prettify } from "../../types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "../../types/field";
 import { ReferenceConfig, TailorField, TailorType } from "../../types/type";
 
@@ -37,9 +41,7 @@ const fieldDefaults = {
 class TailorDBField<
   const Defined extends DefinedFieldMetadata,
   const Output,
-  const Reference extends
-    | ReferenceConfig<any>
-    | undefined,
+  const Reference extends ReferenceConfig<any> | undefined,
 > extends TailorField<Defined, Output, Reference, DBFieldMetadata> {
   get metadata() {
     return structuredClone(this._metadata);
@@ -57,17 +59,17 @@ class TailorDBField<
       }),
       hooks: this._metadata.hooks
         ? new TailorDBType_FieldHook({
-          create: this._metadata.hooks.create
-            ? new Script({
-              expr: `(${this._metadata.hooks.create.toString().trim()})()`,
-            })
-            : undefined,
-          update: this._metadata.hooks.update
-            ? new Script({
-              expr: `(${this._metadata.hooks.update.toString().trim()})()`,
-            })
-            : undefined,
-        })
+            create: this._metadata.hooks.create
+              ? new Script({
+                  expr: `(${this._metadata.hooks.create.toString().trim()})()`,
+                })
+              : undefined,
+            update: this._metadata.hooks.update
+              ? new Script({
+                  expr: `(${this._metadata.hooks.update.toString().trim()})()`,
+                })
+              : undefined,
+          })
         : undefined,
     });
   }
@@ -93,7 +95,8 @@ class TailorDBField<
   }
 
   optional<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { required: unknown } ? never
+    this: CurrentDefined extends { required: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
   ): TailorDBField<
     Prettify<CurrentDefined & { required: false }>,
@@ -104,7 +107,8 @@ class TailorDBField<
   }
 
   description<const D extends string, CurrentDefined extends Defined>(
-    this: CurrentDefined extends { description: unknown } ? never
+    this: CurrentDefined extends { description: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
     description: D,
   ): TailorDBField<
@@ -116,7 +120,8 @@ class TailorDBField<
   }
 
   array<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { array: unknown } ? never
+    this: CurrentDefined extends { array: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
   ): TailorDBField<
     Prettify<CurrentDefined & { array: true }>,
@@ -127,7 +132,8 @@ class TailorDBField<
   }
 
   values<CurrentDefined extends Defined, const V extends AllowedValues>(
-    this: CurrentDefined extends { allowedValues: unknown } ? never
+    this: CurrentDefined extends { allowedValues: unknown }
+      ? never
       : TailorField<CurrentDefined, Output, Reference>,
     values: V,
   ): TailorDBField<
@@ -150,16 +156,13 @@ class TailorDBField<
     type: T,
     nameMap: M,
     field: F = "id" as F,
-  ): TailorDBField<
-    CurrentDefined,
-    Output,
-    { nameMap: M; type: T; field: F }
-  > {
+  ): TailorDBField<CurrentDefined, Output, { nameMap: M; type: T; field: F }> {
     return super.ref(type, nameMap, field) as any;
   }
 
   index<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { index: unknown } ? never
+    this: CurrentDefined extends { index: unknown }
+      ? never
       : TailorDBField<CurrentDefined, Output, Reference>,
   ) {
     this._metadata.index = true;
@@ -171,7 +174,8 @@ class TailorDBField<
   }
 
   unique<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { unique: unknown } ? never
+    this: CurrentDefined extends { unique: unknown }
+      ? never
       : TailorDBField<CurrentDefined, Output, Reference>,
   ) {
     this._metadata.unique = true;
@@ -184,7 +188,8 @@ class TailorDBField<
   }
 
   vector<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { vector: unknown } ? never
+    this: CurrentDefined extends { vector: unknown }
+      ? never
       : TailorDBField<CurrentDefined, Output, Reference>,
   ) {
     this._metadata.vector = true;
@@ -199,7 +204,8 @@ class TailorDBField<
     const V extends FieldValidateFn<Output>[],
     CurrentDefined extends Defined,
   >(
-    this: CurrentDefined extends { validate: unknown } ? never
+    this: CurrentDefined extends { validate: unknown }
+      ? never
       : TailorDBField<CurrentDefined, Output, Reference>,
     ...validate: V
   ) {
@@ -218,7 +224,8 @@ class TailorDBField<
     },
     CurrentDefined extends Defined,
   >(
-    this: CurrentDefined extends { hooks: unknown } ? never
+    this: CurrentDefined extends { hooks: unknown }
+      ? never
       : TailorDBField<CurrentDefined, Output, Reference>,
     hooks: H,
   ) {
@@ -239,12 +246,14 @@ class TailorDBField<
         array: this._metadata.array ?? false,
       },
       ...(ref
-        ? [{
-          name: ref.nameMap[0],
-          type: ref.type.name,
-          required: this._metadata.required ?? true,
-          array: this._metadata.array ?? false,
-        }]
+        ? [
+            {
+              name: ref.nameMap[0],
+              type: ref.type.name,
+              required: this._metadata.required ?? true,
+              array: this._metadata.array ?? false,
+            },
+          ]
         : []),
     ];
   }
@@ -289,16 +298,7 @@ type DBTypeOptions = {
 };
 
 class TailorDBType<
-  const F extends
-    & { id?: never }
-    & Record<
-      string,
-      TailorDBField<
-        M,
-        any,
-        any
-      >
-    >,
+  const F extends { id?: never } & Record<string, TailorDBField<M, any, any>>,
   M extends DefinedFieldMetadata,
 > extends TailorType<M, F & Record<string, TailorField<M, any, any>>> {
   public readonly metadata: TDB;
@@ -339,7 +339,7 @@ class TailorDBType<
           field.toSDLMetadata().map((f) => ({
             name,
             ...f,
-          }))
+          })),
         ),
         ...this.referencedFields,
       ],
@@ -361,20 +361,25 @@ function isDBType(type: any): type is InstanceType<typeof TailorDBType> {
 const idField = uuid();
 type idField = typeof idField;
 const datetimeFields = {
-  createdAt: datetime().hooks({
-    create: () => new Date().toISOString(),
-  }).optional(),
-  updatedAt: datetime().hooks({
-    update: () => new Date().toISOString(),
-  }).optional(),
+  createdAt: datetime()
+    .hooks({
+      create: () => new Date().toISOString(),
+    })
+    .optional(),
+  updatedAt: datetime()
+    .hooks({
+      update: () => new Date().toISOString(),
+    })
+    .optional(),
 } as const satisfies Record<string, TailorDBField<any, any, any>>;
 type DBType<
   F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
-  O extends DBTypeOptions = {},
-> = O extends { withTimestamps: true } ? TailorDBType<
-    { id: idField } & F & typeof datetimeFields,
-    DefinedFieldMetadata
-  >
+  O extends DBTypeOptions = object,
+> = O extends { withTimestamps: true }
+  ? TailorDBType<
+      { id: idField } & F & typeof datetimeFields,
+      DefinedFieldMetadata
+    >
   : TailorDBType<{ id: idField } & F, DefinedFieldMetadata>;
 
 function dbType<
@@ -385,11 +390,15 @@ function dbType<
     return new TailorDBType<
       { id: idField } & F & typeof datetimeFields,
       DefinedFieldMetadata
-    >(name, {
-      id: idField,
-      ...fields,
-      ...datetimeFields,
-    }, options);
+    >(
+      name,
+      {
+        id: idField,
+        ...fields,
+        ...datetimeFields,
+      },
+      options,
+    );
   }
   return new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(
     name,

@@ -3,6 +3,8 @@ import type { output as _output } from "./types/helpers";
 export * from "./schema-generator";
 
 export { _output as infer, _output as output };
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace t {
   export type output<T> = _output<T>;
   export type infer<T> = _output<T>;
