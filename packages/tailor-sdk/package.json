@@ -28,14 +28,10 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@connectrpc/connect": "^1.4.0",
-    "@connectrpc/connect-node": "^1.4.0",
-    "@connectrpc/connect-query": "^1.4.2",
-    "@connectrpc/connect-web": "^1.4.0",
-    "@iarna/toml": "^2.2.5",
     "@tailor-inc/operator-client": "^25.313.146",
     "citty": "^0.1.6",
-    "pkg-types": "^2.1.0"
+    "pkg-types": "^2.1.0",
+    "tsx": "^4.20.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",
@@ -48,8 +44,8 @@
     "globals": "^16.2.0",
     "gql.tada": "^1.8.10",
     "ini": "^5.0.0",
-    "tsup": "^8.0.2",
     "prettier": "3.5.3",
+    "tsup": "^8.0.2",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.1",
     "vitest": "^3.1.4"
