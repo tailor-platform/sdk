@@ -8,8 +8,8 @@ import {
   createTempDirectory,
   getDirectoryStructure,
 } from "./helpers/file_utils";
-import { defineWorkspace } from "../src/app";
 import config from "../tailor.config";
+import { generate } from "@tailor-platform/tailor-sdk";
 // import {
 //   testAllGeneratedFunctions,
 //   generateCombinedTestReport,
@@ -18,7 +18,8 @@ import config from "../tailor.config";
 
 const tempOutputDir = await createTempDirectory("apply-test-");
 const tempDistDir = path.join(tempOutputDir, "dist");
-await defineWorkspace(config, tempDistDir).apply();
+process.env.TAILOR_SDK_OUTPUT_DIR = tempDistDir;
+await generate(config);
 
 console.info(`This test is running in directory: ${tempOutputDir}`);
 

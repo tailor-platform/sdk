@@ -19,19 +19,16 @@
     "//#test:root:update-expects": {
       "cache": false
     },
+    "//#gen": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "//#gen:perf": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "//#apply": {
-      "dependsOn": ["//#clean"],
-      "cache": false
-    },
-    "//#apply:perf": {
-      "dependsOn": ["//#clean"],
-      "cache": false
-    },
-    "//#apply:ctl": {
-      "dependsOn": ["^build", "//#clean"],
-      "cache": false
-    },
-    "//#clean": {
+      "dependsOn": ["^build"],
       "cache": false
     },
     "lint": {

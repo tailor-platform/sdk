@@ -16,6 +16,4 @@ export const t = { ..._t };
 export * from "./services";
 
 export { defineConfig } from "./config";
-export type { WorkspaceConfig } from "./config";
-export { Tailor } from "./tailor";
-export { Workspace } from "./workspace";
+export { apply, generate } from "./workspace";
