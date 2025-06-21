@@ -10,7 +10,7 @@
     "test:root:update-expects": "tsx tests/scripts/generate_expected_files.ts",
     "gen": "tailor-sdk generate",
     "gen:perf": "dotenvx run -- tailor-sdk generate",
-    "apply": "TAILOR_SDK_OUTPUT_DIR=out tailor-sdk apply",
+    "apply": "tailor-sdk apply",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "lint:root": "eslint --cache .",
