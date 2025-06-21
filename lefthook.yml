@@ -1,0 +1,12 @@
+# Refer for explanation to following link: https://lefthook.dev/configuration/
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      glob: "*.{ts}"
+      run: turbo run lint
+
+    - name: format
+      glob: "*.{ts,json}"
+      run: turbo run format:check
