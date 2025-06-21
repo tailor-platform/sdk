@@ -7,6 +7,7 @@ import { PipelineResolverServiceConfig } from "./types";
 import { measure } from "../../performance";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
+import { getDistDir } from "../../config";
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
@@ -43,7 +44,7 @@ export class PipelineResolverService {
               Description: pipeline.description,
               OperationType: pipeline.operationType,
               OperationSourcePath: path.join(
-                ".tailor-sdk",
+                getDistDir(),
                 "functions",
                 `${resolver.name}__${pipeline.name}.js`,
               ),

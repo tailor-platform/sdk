@@ -16,7 +16,7 @@
     }
   },
   "bin": {
-    "tailor-sdk": "./dist/cli.mjs"
+    "tailor-sdk": "./dist/cli/index.mjs"
   },
   "types": "./dist/index.d.ts",
   "scripts": {

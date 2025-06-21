@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
-import { defineWorkspace } from "../../src/app";
 import config from "../../tailor.config";
+import { generate } from "@tailor-platform/tailor-sdk";
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +24,8 @@ export async function generateExpectedFiles(): Promise<void> {
       console.log("Removed existing expected directory");
     }
 
-    await defineWorkspace(config, expectedDir).apply();
+    process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
+    await generate(config);
 
     console.log("\nGenerated files:");
     await listGeneratedFiles(expectedDir);
