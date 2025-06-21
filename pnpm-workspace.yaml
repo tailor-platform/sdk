@@ -4,4 +4,5 @@ packages:
 onlyBuiltDependencies:
   - "@swc/core"
   - esbuild
+  - lefthook
   - multiline-ts
