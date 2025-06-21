@@ -7,10 +7,10 @@ import { SDLTypeMetadata } from "./types/types";
 import { measure } from "./performance";
 import gql from "multiline-ts";
 import { TailorCtl } from "./ctl";
-import { getDistPath } from "./tailor";
 import { Application } from "./application";
+import { getDistDir, type WorkspaceConfig } from "./config";
 
-export class Workspace {
+class Workspace {
   private applications: Application[] = [];
 
   constructor(public name: string) {}
@@ -23,7 +23,7 @@ export class Workspace {
   }
 
   @measure
-  async ctlApply() {
+  async apply() {
     const client = new TailorCtl();
     const workspace = await client.upsertWorkspace({
       name: this.name,
@@ -31,7 +31,7 @@ export class Workspace {
     });
     console.log(`Workspace: ${workspace.name} (${workspace.id})`);
 
-    const distPath = getDistPath();
+    const distPath = getDistDir();
     fs.mkdirSync(distPath, { recursive: true });
     const manifestPath = path.join(distPath, "manifest.cue");
 
@@ -86,14 +86,14 @@ export class Workspace {
   }
 
   @measure
-  async apply() {
+  async generate() {
     console.log("Applying workspace:", this.name);
     console.log(
       "Applications:",
       this.applications.map((app) => app.name),
     );
 
-    const distPath = getDistPath();
+    const distPath = getDistDir();
     const tailorDBDir = path.join(distPath, "tailordb");
     fs.mkdirSync(tailorDBDir, { recursive: true });
 
@@ -150,4 +150,21 @@ export class Workspace {
     `;
     fs.writeFileSync(path.join(distPath, "schema.graphql"), combinedSDL);
   }
+}
+
+function defineWorkspace(config: WorkspaceConfig) {
+  const workspace = new Workspace(config.name);
+  const app = workspace.newApplication(config.app.name);
+  app.defineTailorDB(config.app.db);
+  app.defineResolver(config.app.resolver);
+  app.defineAuth(config.app.auth);
+  return workspace;
+}
+
+export function generate(config: WorkspaceConfig) {
+  return defineWorkspace(config).generate();
+}
+
+export function apply(config: WorkspaceConfig) {
+  return defineWorkspace(config).apply();
 }

@@ -19,7 +19,7 @@ import { TailorType } from "../../types/type";
 import { output, StrictOutput } from "../../types/helpers";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { SchemaGenerator } from "../../schema-generator";
-import { getDistPath } from "../../tailor";
+import { getDistDir } from "../../config";
 
 export class Resolver<
   QueryType extends "query" | "mutation",
@@ -174,7 +174,7 @@ export class Resolver<
           case "sql":
             // eslint-disable-next-line no-case-declarations
             const functionPath = path.join(
-              getDistPath(),
+              getDistDir(),
               "functions",
               `${this.name}__${name}.js`,
             );

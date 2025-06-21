@@ -1,10 +1,7 @@
-#!/usr/bin/env tsx
-
 import url from "node:url";
 import path from "node:path";
-import { Workspace } from "./workspace";
-import { Tailor } from "./tailor";
-import type { WorkspaceConfig } from "./config";
+import { generate } from "@tailor-platform/tailor-sdk";
+import type { WorkspaceConfig } from "../packages/tailor-sdk/src/config";
 
 const __filename = url.fileURLToPath(import.meta.url);
 
@@ -31,29 +28,12 @@ async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
 
 async function main() {
   try {
-    // コマンドライン引数からconfig pathを取得（デフォルトは tailor.config.ts）
     const configPath = process.argv[2] || "tailor.config.ts";
-
-    // 設定ファイルをロード
     const config = await loadConfig(configPath);
-
-    // SDKを初期化
-    const sdkTempDir = path.join(process.cwd(), ".tailor-sdk");
-    Tailor.init(sdkTempDir);
-
-    // Workspaceを作成して設定を適用
-    const workspace = new Workspace(config.name);
-    const app = workspace.newApplication(config.app.name);
-    app.defineTailorDB(config.app.db);
-    app.defineResolver(config.app.resolver);
-    app.defineAuth(config.app.auth);
-
-    // ctlApplyを実行
-    await workspace.ctlApply();
-    console.log("Configuration applied successfully.");
+    await generate(config);
+    console.log("Files generated successfully.");
   } catch (error) {
-    console.error("Failed to apply configuration:", error);
-    // スタックトレースも出力
+    console.error("Failed to generate files:", error);
     if (error instanceof Error && error.stack) {
       console.error("Stack trace:", error.stack);
     }
@@ -61,7 +41,6 @@ async function main() {
   }
 }
 
-// スクリプトとして直接実行された場合のみmainを実行
 if (process.argv[1] === __filename) {
   main().catch(console.error);
 }

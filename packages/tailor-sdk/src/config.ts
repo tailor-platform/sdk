@@ -14,6 +14,15 @@ export interface WorkspaceConfig {
   app: AppConfig;
 }
 
+let distPath: string | null = null;
+
+export const getDistDir = (): string => {
+  if (distPath === null) {
+    distPath = process.env.TAILOR_SDK_OUTPUT_DIR || ".tailor-sdk";
+  }
+  return distPath;
+};
+
 export function defineConfig(configs: WorkspaceConfig): WorkspaceConfig {
   if (!configs || !configs.name) {
     throw new Error("Invalid Tailor config structure");

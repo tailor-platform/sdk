@@ -5,7 +5,7 @@ import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
 import { ResolverLoader } from "./loader";
 import { CodeTransformer } from "./transformer";
-import { getDistPath } from "../../../tailor";
+import { getDistDir } from "../../../config";
 import { PipelineResolverServiceConfig } from "../types";
 import { measure } from "../../../performance";
 
@@ -18,7 +18,7 @@ export class ResolverBundler {
     private readonly namespace: string,
     private readonly config: PipelineResolverServiceConfig,
   ) {
-    this.tempDir = path.join(process.cwd(), ".tailor-sdk");
+    this.tempDir = path.join(process.cwd(), getDistDir());
     this.resolverLoader = new ResolverLoader();
     this.transformer = new CodeTransformer();
   }
@@ -125,7 +125,7 @@ export class ResolverBundler {
 
   @measure
   private async postBundle(stepFiles: string[]): Promise<void> {
-    const distPath = getDistPath();
+    const distPath = getDistDir();
     const outputDir = path.join(distPath, "functions");
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
