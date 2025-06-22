@@ -2,14 +2,15 @@
 
 import path from "node:path";
 import fs, { mkdirSync } from "node:fs";
-import { SchemaGenerator } from "./schema-generator";
-import { SDLTypeMetadata } from "./types/types";
 import { measure } from "./performance";
-import gql from "multiline-ts";
 import { TailorCtl } from "./ctl";
 import { Application } from "./application";
 import { AppConfig, getDistDir, type WorkspaceConfig } from "./config";
 import { ApplyOptions, GenerateOptions } from "./cli/args";
+import { sdlGenerator } from "./generator/sdl";
+import { TailorDBType } from "./services/tailordb/schema";
+import { Resolver } from "./services/pipeline/resolver";
+import { AggregateCodeGenerator } from "./generator/types";
 
 class Workspace {
   private applications: Application[] = [];
@@ -72,7 +73,7 @@ class Workspace {
 
       for (const pipeline of app.pipelineResolverServices) {
         await pipeline.build();
-        const pipelineManifest = pipeline.toManifestJSON();
+        const pipelineManifest = await pipeline.toManifestJSON();
         manifest.Services.push(pipelineManifest);
         manifest.Pipelines.push(pipelineManifest);
       }
@@ -103,52 +104,59 @@ class Workspace {
     const baseDir = path.join(getDistDir(), "generated");
     mkdirSync(baseDir, { recursive: true });
 
-    const tailordbMetadataList: SDLTypeMetadata[] = [];
-    const resolverMetadataList: Array<{ name: string; sdl: string }> = [];
+    const tailordbTypes: TailorDBType[] = [];
+    const resolvers: Resolver[] = [];
+
     for (const app of this.applications) {
       for (const db of app.tailorDBServices) {
         console.log("TailorDB Service:", db.namespace);
-
         await db.apply();
-
-        db.getTypes().forEach((type) => {
-          tailordbMetadataList.push(type.toSDLMetadata());
-        });
+        tailordbTypes.push(...db.getTypes());
       }
 
       console.log(
         "Pipeline Services:",
         app.pipelineResolverServices.map((service) => service.namespace),
       );
-
       for (const pipelineService of app.pipelineResolverServices) {
-        const resolverMetadata = pipelineService.getResolverSDLMetadata();
-        for (const metadata of resolverMetadata) {
-          resolverMetadataList.push({
-            name: metadata.name,
-            sdl: metadata.sdl,
-          });
-        }
+        await pipelineService.build(); // Resolverを読み込むためにbuild()を呼び出す
+        resolvers.push(...pipelineService.getResolvers());
       }
     }
 
-    const tailordbSDL = SchemaGenerator.generateSDL(tailordbMetadataList);
-    const resolverSDL = resolverMetadataList
-      .map(
-        (metadata) =>
-          gql`
-        # Resolver: ${metadata.name}
-        ${metadata.sdl}
-        `,
-      )
-      .join("\n\n\n");
-    const combinedSDL = gql`
-      # TailorDB Type
-      ${tailordbSDL}
+    const aggregateGenerators: AggregateCodeGenerator<any, any>[] = [
+      sdlGenerator,
+    ];
+    await Promise.all(
+      aggregateGenerators.map(async (gen) => {
+        const typeResults: Record<string, unknown> = {};
+        const resolverResults: Record<string, unknown> = {};
 
-      ${resolverSDL}
-    `;
-    fs.writeFileSync(path.join(baseDir, "schema.graphql"), combinedSDL);
+        for (const type of tailordbTypes) {
+          typeResults[type.name] = await gen.processType(type);
+        }
+        for (const resolver of resolvers) {
+          resolverResults[resolver.name] = await gen.processResolver(resolver);
+        }
+
+        const result = gen.aggregate(
+          { types: typeResults, resolvers: resolverResults },
+          baseDir,
+        );
+        Promise.all(
+          result.files.map(async (file) => {
+            mkdirSync(path.dirname(file.path), { recursive: true });
+            fs.writeFile(file.path, file.content, (err) => {
+              if (err) {
+                console.error(`Error writing file ${file.path}:`, err);
+              } else {
+                console.log(`Generated file: ${file.path}`);
+              }
+            });
+          }),
+        );
+      }),
+    );
   }
 }
 

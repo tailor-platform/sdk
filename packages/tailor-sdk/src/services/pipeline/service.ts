@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import path from "node:path";
 import fs from "node:fs";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { ResolverBundler } from "./bundler";
 import { PipelineResolverServiceConfig } from "./types";
 import { measure } from "../../performance";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
-import { getDistDir } from "../../config";
+import { ManifestAggregator } from "../../generator/manifest/aggregator";
+import { ResolverProcessor as ManifestResolverProcessor } from "../../generator/manifest/resolver-processor";
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
@@ -26,113 +26,36 @@ export class PipelineResolverService {
     await this.bundler.bundle();
   }
 
-  toManifestJSON() {
-    const resolvers = this.resolvers.map(
-      (resolver: Resolver<any, any, any, any, any, any>) => {
-        const metadata = resolver.toSDLMetadata();
+  async toManifestJSON() {
+    const resolverMetadata: Record<string, any> = {};
+    for (const resolver of this.resolvers) {
+      const metadata =
+        await ManifestResolverProcessor.processResolver(resolver);
+      resolverMetadata[resolver.name] = metadata;
+    }
 
-        const manifest: any = {
-          Authorization: "true==true", // デフォルト値
-          Description: `${resolver.name} resolver`,
-          Inputs: [],
-          Name: resolver.name,
-          Response: {},
-          Pipelines: [
-            ...metadata.pipelines.map((pipeline: any) => ({
-              Name: pipeline.name,
-              OperationName: pipeline.name,
-              Description: pipeline.description,
-              OperationType: pipeline.operationType,
-              OperationSourcePath: path.join(
-                getDistDir(),
-                "functions",
-                `${resolver.name}__${pipeline.name}.js`,
-              ),
-              OperationHook: {
-                Expr: "({ ...context.pipeline, ...context.args });",
-              },
-              PostScript: `args.${pipeline.name}`,
-            })),
-            {
-              Name: `__construct_output`,
-              OperationName: `__construct_output`,
-              Description: "Construct output from resolver",
-              OperationType: PipelineResolver_OperationType.FUNCTION,
-              OperationSource: `globalThis.main = ${resolver.outputMapper.toString()}`,
-              OperationHook: {
-                Expr: "({ ...context.pipeline, ...context.args });",
-              },
-              PostScript: `args.__construct_output`,
-            },
-          ],
-          PostHook: { Expr: "({ ...context.pipeline.__construct_output });" },
-          PublishExecutionEvents: false,
-        };
-
-        // Input構造を生成
-        const input = resolver.input.toSDLMetadata(true);
-        manifest.Inputs.push({
-          Name: "input",
-          Description: "",
-          Array: false,
-          Required: true,
-          Type: {
-            Kind: "UserDefined",
-            Name: input.name,
-            Description: "",
-            Required: false,
-            Fields: input.fields.map((field: any) => ({
-              Name: field.name,
-              Description: "",
-              Type: {
-                Kind: "ScalarType",
-                Name: field.type,
-                Description: "",
-                Required: false,
-              },
-              Array: field.array || false,
-              Required: field.required || false,
-            })),
-          },
-        });
-
-        const output = resolver.output.toSDLMetadata();
-        manifest.Response = {
-          Type: {
-            Kind: "UserDefined",
-            Name: output.name,
-            Description: "", // TODO: 出力の説明を確認
-            Required: true, // TODO: 出力の必須性を確認
-          },
-          Description: "", // TODO: 出力の説明を確認
-          Array: false,
-          Required: true, // TODO: 出力の必須性を確認
-        };
-
-        manifest.Response.Type.Fields = output.fields.map((field: any) => ({
-          Name: field.name,
-          Description: "",
-          Type: {
-            Kind: "ScalarType",
-            Name: field.type,
-            Description: "",
-            Required: false,
-          },
-          Array: field.array || false,
-          Required: field.required || false,
-        }));
-
-        return manifest;
+    // ManifestAggregatorを使用してJSON生成
+    const result = ManifestAggregator.aggregate(
+      {
+        types: {},
+        resolvers: resolverMetadata,
       },
+      ".",
+      this.namespace,
     );
 
-    return {
-      Kind: "pipeline",
-      Description: "",
-      Namespace: this.namespace,
-      Resolvers: resolvers,
-      Version: "v2",
-    };
+    if (result.errors && result.errors.length > 0) {
+      throw new Error(`Manifest生成エラー: ${result.errors.join(", ")}`);
+    }
+
+    const manifestFile = result.files.find((f) =>
+      f.path.endsWith("manifest.json"),
+    );
+    if (manifestFile) {
+      return JSON.parse(manifestFile.content);
+    }
+
+    throw new Error("Manifestファイルが生成されませんでした");
   }
 
   @measure
@@ -165,24 +88,7 @@ export class PipelineResolverService {
     }
   }
 
-  getResolverSDLMetadata() {
-    const metadataList: Array<{
-      name: string;
-      sdl: string;
-      pipelines: Array<{
-        name: string;
-        description: string;
-        operationType: any;
-        operationSource: string;
-        operationName: string;
-      }>;
-    }> = [];
-
-    for (const resolver of this.resolvers) {
-      const metadata = resolver.toSDLMetadata();
-      metadataList.push(metadata);
-    }
-
-    return metadataList;
+  getResolvers(): Resolver<any, any, any, any, any, any>[] {
+    return this.resolvers;
   }
 }

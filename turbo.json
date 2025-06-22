@@ -12,8 +12,12 @@
       "dependsOn": ["//#test:root"],
       "cache": false
     },
-    "//#test:root": {
+    "//#test:root:prepare": {
       "dependsOn": ["^build"],
+      "cache": false
+    },
+    "//#test:root": {
+      "dependsOn": ["//#test:root:prepare"],
       "cache": false
     },
     "//#test:root:update-expects": {

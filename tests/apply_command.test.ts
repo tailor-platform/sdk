@@ -1,25 +1,35 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
+import fs from "node:fs/promises";
 import {
   compareDirectories,
   generateDetailedDiffReport,
 } from "./helpers/directory_compare";
-import { createTempDirectory } from "./helpers/file_utils";
-import config from "../src/tailor.config";
-import { apply, generate } from "@tailor-platform/tailor-sdk";
 // import {
 //   testAllGeneratedFunctions,
 //   generateCombinedTestReport,
 //   TestCase
 // } from './helpers/function_tester';
 
-const tempOutputDir = await createTempDirectory("apply-test-");
-const tempDistDir = path.join(tempOutputDir, "dist");
-process.env.TAILOR_SDK_OUTPUT_DIR = tempDistDir;
-await generate(config);
-await apply(config, { dryRun: true });
+// 事前に生成されたテストディレクトリを取得
+async function getTestDirectory(): Promise<string> {
+  try {
+    const envFile = path.join(__dirname, ".test-env");
+    const envContent = await fs.readFile(envFile, "utf-8");
+    const match = envContent.match(/TAILOR_SDK_OUTPUT_DIR=(.+)/);
+    if (match) {
+      return match[1].trim();
+    }
+  } catch (error) {
+    console.error("テスト環境ファイルの読み込みに失敗しました:", error);
+  }
+  throw new Error(
+    "テストディレクトリが見つかりません。pnpm test:prepare を実行してください。",
+  );
+}
 
-console.info(`This test is running in directory: ${tempOutputDir}`);
+const tempDistDir = await getTestDirectory();
+console.info(`This test is running in directory: ${tempDistDir}`);
 
 describe("pnpm apply command integration tests", () => {
   const expectedDir = path.join(__dirname, "fixtures/expected");

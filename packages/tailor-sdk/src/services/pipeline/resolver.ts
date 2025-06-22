@@ -1,9 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import fs from "node:fs";
-import path from "node:path";
-import { capitalize } from "es-toolkit";
-import multiline from "multiline-ts";
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 import {
@@ -17,17 +13,14 @@ import {
 } from "./types";
 import { TailorType } from "../../types/type";
 import { output, StrictOutput } from "../../types/helpers";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { SchemaGenerator } from "../../schema-generator";
-import { getDistDir } from "../../config";
 
 export class Resolver<
-  QueryType extends "query" | "mutation",
-  Input extends TailorType<any, any, any>,
-  _CurrentOutput,
-  Context extends Record<string, unknown>,
-  Steps extends StepDef<string, any, any, any>[],
-  Output extends TailorType<any, any, any>,
+  QueryType extends "query" | "mutation" = any,
+  Input extends TailorType<any, any, any> = any,
+  _CurrentOutput = any,
+  Context extends Record<string, unknown> = any,
+  Steps extends StepDef<string, any, any, any>[] = any,
+  Output extends TailorType<any, any, any> = any,
 > {
   readonly _input = null as output<Input>;
   readonly _output = null as output<Output>;
@@ -150,62 +143,6 @@ export class Resolver<
     >;
   }
 
-  toSDLMetadata() {
-    if (!this.output) {
-      throw new Error(
-        `Resolver "${this.name}" must have an output type defined. Use .returns() to specify the output type.`,
-      );
-    }
-
-    const sdl = multiline/* gql */ `
-    ${SchemaGenerator.generateSDLFromMetadata(this.input.toSDLMetadata(true))}
-    ${SchemaGenerator.generateSDLFromMetadata(this.output.toSDLMetadata(true))}
-    extend type ${capitalize(this.queryType)} {
-      ${this.name}(input: ${this.input.name}): ${this.output.name}
-    }
-    `;
-    return {
-      name: this.name,
-      sdl,
-      pipelines: this.#steps.map((step) => {
-        const [type, name] = step;
-        switch (type) {
-          case "fn":
-          case "sql":
-            // eslint-disable-next-line no-case-declarations
-            const functionPath = path.join(
-              getDistDir(),
-              "functions",
-              `${this.name}__${name}.js`,
-            );
-            // eslint-disable-next-line no-case-declarations
-            let functionCode = "";
-            try {
-              functionCode = fs.readFileSync(functionPath, "utf-8");
-            } catch {
-              console.warn(`Function file not found: ${functionPath}`);
-            }
-            return {
-              name,
-              description: name,
-              operationType: PipelineResolver_OperationType.FUNCTION,
-              operationSource: functionCode,
-              operationName: name,
-            };
-          case "gql":
-            return {
-              name,
-              description: name,
-              operationType: PipelineResolver_OperationType.GRAPHQL,
-              operationSource: "",
-              operationName: name,
-            };
-          default:
-            throw new Error(`Unsupported step kind: ${step[0]}`);
-        }
-      }),
-    };
-  }
 }
 
 export function createQueryResolver<

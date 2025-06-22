@@ -42,6 +42,19 @@ export const tailorToGraphQL = {
   datetime: "DateTime",
   enum: "enum",
 } as const;
+
+// Manifest用の型マッピング（mapTypeToScalarの代替）
+export const tailorToManifestScalar = {
+  string: "String",
+  integer: "Int",
+  float: "Float",
+  bool: "Boolean",
+  boolean: "Boolean", // booleanエイリアスを追加
+  uuid: "String",
+  date: "String",
+  datetime: "String",
+  enum: "String",
+} as const;
 export type tailorToGraphQL = typeof tailorToGraphQL;
 
 export type GraphQLType =
@@ -63,20 +76,6 @@ export const scalarTypes = [
   "Time",
   "DateTime",
 ];
-
-export interface SDLTypeMetadata {
-  name: string;
-  fields: SDLFieldMetadata[];
-  isInput: boolean;
-}
-
-export interface SDLFieldMetadata {
-  name: string;
-  description?: string;
-  type: GraphQLType;
-  required: boolean;
-  array: boolean;
-}
 
 export interface FieldMetadata {
   description?: string;

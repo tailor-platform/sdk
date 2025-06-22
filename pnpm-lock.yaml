@@ -59,6 +59,9 @@ importers:
       ts-morph:
         specifier: ^26.0.0
         version: 26.0.0
+      tsx:
+        specifier: ^4.19.2
+        version: 4.20.3
       turbo:
         specifier: ^2.5.4
         version: 2.5.4
