@@ -68,7 +68,7 @@ export class TailorCtl {
     }
     if (result.status !== 0) {
       throw new Error(
-        `tailorctl command failed with exit code ${result.status}`,
+        `"tailorctl ${args.join(" ")}" command failed with exit code ${result.status}`,
       );
     }
 

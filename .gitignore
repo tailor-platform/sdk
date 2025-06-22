@@ -31,3 +31,6 @@ coverage/
 .tailor-sdk
 performance-reports
 .turbo
+
+# Test environment files
+tests/.test-env

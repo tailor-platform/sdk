@@ -1,4 +1,5 @@
-import { SchemaGenerator } from "../../schema-generator";
+import { SDLUtils } from "../../generator/sdl/utils";
+import { TypeProcessor } from "../../generator/sdl/type-processor";
 import { db } from "./schema";
 
 import { describe, expect, test } from "vitest";
@@ -22,10 +23,10 @@ const productType = db.type(
 );
 
 describe("TailorDB: object style", () => {
-  test("sdl", () => {
-    const sdl = SchemaGenerator.generateSDLFromMetadata(
-      productType.toSDLMetadata(),
-    );
+  test("sdl", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const metadata = await TypeProcessor.processDBType(productType as any);
+    const sdl = SDLUtils.generateSDLFromMetadata(metadata);
     // console.log(sdl);
 
     expect(sdl).toContain(`type Product {`);

@@ -6,6 +6,7 @@ import path from "node:path";
 const COLORS = {
   GREEN: "\x1b[32m", // 緑色（期待値にのみ存在）
   RED: "\x1b[31m", // 赤色（実際の結果にのみ存在）
+  YELLOW: "\x1b[33m", // 黄色（内容が異なる）
   RESET: "\x1b[0m", // リセット
 } as const;
 
@@ -31,7 +32,8 @@ export async function compareDirectories(
 ): Promise<Result> {
   const defaultOptions: Options = {
     compareDate: false,
-    excludeFilter: ".DS_Store",
+    compareContent: true,
+    excludeFilter: ".DS_Store,*.js.map",
     ...options,
   };
 
@@ -40,25 +42,30 @@ export async function compareDirectories(
 
 /**
  * 視覚的な差分レポートを生成する
- * @param comparison 比較結果
  * @param actualDir 実際のディレクトリパス
  * @param expectedDir 期待値ディレクトリパス
+ * @param comparison dir-compareの比較結果（オプション）
  * @returns 視覚的差分レポート文字列
  */
 export function generateVisualDiffReport(
-  comparison: Result,
   actualDir: string,
   expectedDir: string,
+  comparison?: Result,
 ): string {
   const lines: string[] = [];
 
   lines.push("=== Visual Directory Diff Report ===");
   lines.push(`${COLORS.RED}-${COLORS.RESET} Expected only`);
   lines.push(`${COLORS.GREEN}+${COLORS.RESET} Actual only`);
+  lines.push(`${COLORS.YELLOW}~${COLORS.RESET} Content differs`);
   lines.push("");
 
-  // ディレクトリ構造を構築
-  const treeStructure = buildTreeStructure(actualDir, expectedDir);
+  // ディレクトリ構造を構築（内容比較を含む）
+  const treeStructure = buildTreeStructureWithContentComparison(
+    actualDir,
+    expectedDir,
+    comparison,
+  );
 
   // ツリー構造を文字列として出力
   const treeOutput = renderTree(treeStructure);
@@ -68,21 +75,49 @@ export function generateVisualDiffReport(
 }
 
 /**
- * ディレクトリ比較結果からツリー構造を構築する
+ * ディレクトリ比較結果からツリー構造を構築する（内容比較を含む）
  */
-function buildTreeStructure(actualDir: string, expectedDir: string): TreeNode {
+function buildTreeStructureWithContentComparison(
+  actualDir: string,
+  expectedDir: string,
+  comparison?: Result,
+): TreeNode {
   const root: TreeNode = {
     name: path.basename(actualDir) || "root",
     type: "directory",
     status: "both",
     children: new Map(),
+    actualPath: actualDir,
+    expectedPath: expectedDir,
   };
 
   if (fs.existsSync(actualDir)) {
-    scanDirectory(actualDir, actualDir, root, "actual");
+    scanDirectoryWithContentComparison(actualDir, actualDir, root, "actual");
   }
   if (fs.existsSync(expectedDir)) {
-    scanDirectory(expectedDir, expectedDir, root, "expected");
+    scanDirectoryWithContentComparison(
+      expectedDir,
+      expectedDir,
+      root,
+      "expected",
+    );
+  }
+
+  if (comparison && comparison.diffSet) {
+    for (const diff of comparison.diffSet) {
+      if (
+        diff.state === "distinct" &&
+        diff.type1 === "file" &&
+        diff.type2 === "file"
+      ) {
+        // 相対パスを取得
+        const relativePath = diff.relativePath || "";
+        const fileName = diff.name1 || diff.name2 || "";
+
+        // ツリー構造内の対応するノードを見つけて更新
+        updateNodeStatus(root, relativePath, fileName, "content-differs");
+      }
+    }
   }
 
   return root;
@@ -91,7 +126,7 @@ function buildTreeStructure(actualDir: string, expectedDir: string): TreeNode {
 /**
  * ディレクトリをスキャンしてツリー構造に追加する
  */
-function scanDirectory(
+function scanDirectoryWithContentComparison(
   dirPath: string,
   basePath: string,
   parentNode: TreeNode,
@@ -117,16 +152,21 @@ function scanDirectory(
         };
         parentNode.children.set(item, child);
       } else {
-        // 両方に存在する場合
         child.status = "both";
       }
 
+      if (source === "actual") {
+        child.actualPath = fullPath;
+      } else {
+        child.expectedPath = fullPath;
+      }
+
       if (isDirectory) {
-        scanDirectory(fullPath, basePath, child, source);
+        scanDirectoryWithContentComparison(fullPath, basePath, child, source);
       }
     }
   } catch {
-    // ディレクトリの読み取りに失敗した場合は無視
+    // noop
   }
 }
 
@@ -173,8 +213,8 @@ function formatNodeName(node: TreeNode): string {
       return `${COLORS.RED}- ${node.name}${typeIndicator}${COLORS.RESET}`;
     case "actual-only":
       return `${COLORS.GREEN}+ ${node.name}${typeIndicator}${COLORS.RESET}`;
-    case "both":
-      return `${node.name}${typeIndicator}`;
+    case "content-differs":
+      return `${COLORS.YELLOW}~ ${node.name}${typeIndicator}${COLORS.RESET}`;
     default:
       return `${node.name}${typeIndicator}`;
   }
@@ -186,8 +226,10 @@ function formatNodeName(node: TreeNode): string {
 interface TreeNode {
   name: string;
   type: "file" | "directory";
-  status: "both" | "actual-only" | "expected-only";
+  status: "both" | "actual-only" | "expected-only" | "content-differs";
   children: Map<string, TreeNode>;
+  actualPath?: string;
+  expectedPath?: string;
 }
 
 /**
@@ -220,33 +262,21 @@ export function generateDetailedDiffReport(
 
   // 視覚的差分レポートを追加
   lines.push("");
-  lines.push(generateVisualDiffReport(comparison, actualDir, expectedDir));
+  lines.push(generateVisualDiffReport(actualDir, expectedDir, comparison));
+
+  if (comparison.diffSet && comparison.diffSet.length > 0) {
+    lines.push("");
+    lines.push("Content Differences:");
+    comparison.diffSet
+      .filter((diff) => diff.reason === "different-content")
+      .forEach((diff) => {
+        lines.push(
+          `- ${path.join(diff.path2 ?? "", diff.name2 ?? "")} ${path.join(diff.path1 ?? "", diff.name1 ?? "")}`,
+        );
+      });
+  }
 
   return lines.join("\n");
-}
-
-/**
- * 特定のファイルの内容を比較する
- * @param actualFile 実際のファイルパス
- * @param expectedFile 期待値ファイルパス
- * @returns ファイルが同じかどうか
- */
-export function compareFiles(
-  actualFile: string,
-  expectedFile: string,
-): boolean {
-  try {
-    if (!fs.existsSync(actualFile) || !fs.existsSync(expectedFile)) {
-      return false;
-    }
-
-    const actualContent = fs.readFileSync(actualFile, "utf-8");
-    const expectedContent = fs.readFileSync(expectedFile, "utf-8");
-
-    return actualContent === expectedContent;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -310,4 +340,30 @@ export function getFilesWithPattern(
 
   walkDir(dirPath);
   return files;
+}
+
+/**
+ * ツリー構造内の指定されたファイルのステータスを更新する
+ */
+function updateNodeStatus(
+  root: TreeNode,
+  relativePath: string,
+  fileName: string,
+  status: TreeNode["status"],
+): void {
+  const pathParts = relativePath
+    ? relativePath.split(path.sep).filter((p) => p)
+    : [];
+  let currentNode = root;
+
+  for (const part of pathParts) {
+    const child = currentNode.children.get(part);
+    if (!child) return; // パスが見つからない場合は終了
+    currentNode = child;
+  }
+
+  const fileNode = currentNode.children.get(fileName);
+  if (fileNode && fileNode.type === "file") {
+    fileNode.status = status;
+  }
 }

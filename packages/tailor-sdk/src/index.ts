@@ -1,7 +1,7 @@
 import type { output as _output } from "./types/helpers";
 import { t as _t } from "./types";
 
-export * from "./schema-generator";
+export * from "./generator/sdl";
 
 export type infer<T> = _output<T>;
 export type output<T> = _output<T>;

@@ -12,6 +12,10 @@
       },
       "Subgraphs": [
         {
+          "Type": "auth",
+          "Name": "my-auth"
+        },
+        {
           "Type": "tailordb",
           "Name": "my-db"
         },

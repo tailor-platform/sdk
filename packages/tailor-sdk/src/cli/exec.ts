@@ -43,7 +43,7 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
       throw new Error(`Unknown command: ${command}`);
     }
   } catch (error) {
-    console.error("Failed to apply configuration:", error);
+    console.error(`Failed to ${command} configuration:`, error);
     if (error instanceof Error && error.stack) {
       console.error("Stack trace:", error.stack);
     }
