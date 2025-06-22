@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import path from "node:path";
-import fs from "node:fs";
+import fs, { mkdirSync } from "node:fs";
 import { SchemaGenerator } from "./schema-generator";
 import { SDLTypeMetadata } from "./types/types";
 import { measure } from "./performance";
@@ -9,6 +9,7 @@ import gql from "multiline-ts";
 import { TailorCtl } from "./ctl";
 import { Application } from "./application";
 import { getDistDir, type WorkspaceConfig } from "./config";
+import { ApplyOptions, GenerateOptions } from "./cli/args";
 
 class Workspace {
   private applications: Application[] = [];
@@ -23,8 +24,8 @@ class Workspace {
   }
 
   @measure
-  async apply() {
-    const client = new TailorCtl();
+  async apply(options: ApplyOptions) {
+    const client = new TailorCtl(options);
     const workspace = await client.upsertWorkspace({
       name: this.name,
       region: "asia-northeast",
@@ -82,7 +83,9 @@ class Workspace {
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     console.log(`Generated manifest.cue at ${manifestPath}`);
 
-    await client.apply(manifestPath);
+    if (!options.dryRun) {
+      await client.apply(manifestPath);
+    }
   }
 
   @measure
@@ -93,9 +96,8 @@ class Workspace {
       this.applications.map((app) => app.name),
     );
 
-    const distPath = getDistDir();
-    const tailorDBDir = path.join(distPath, "tailordb");
-    fs.mkdirSync(tailorDBDir, { recursive: true });
+    const baseDir = path.join(getDistDir(), "generated");
+    mkdirSync(baseDir, { recursive: true });
 
     const tailordbMetadataList: SDLTypeMetadata[] = [];
     const resolverMetadataList: Array<{ name: string; sdl: string }> = [];
@@ -107,10 +109,6 @@ class Workspace {
 
         db.getTypes().forEach((type) => {
           tailordbMetadataList.push(type.toSDLMetadata());
-          fs.writeFileSync(
-            path.join(tailorDBDir, `${type.metadata.name}.json`),
-            JSON.stringify(type.metadata, null, 2),
-          );
         });
       }
 
@@ -120,8 +118,6 @@ class Workspace {
       );
 
       for (const pipelineService of app.pipelineResolverServices) {
-        await pipelineService.build();
-
         const resolverMetadata = pipelineService.getResolverSDLMetadata();
         for (const metadata of resolverMetadata) {
           resolverMetadataList.push({
@@ -148,7 +144,7 @@ class Workspace {
 
       ${resolverSDL}
     `;
-    fs.writeFileSync(path.join(distPath, "schema.graphql"), combinedSDL);
+    fs.writeFileSync(path.join(baseDir, "schema.graphql"), combinedSDL);
   }
 }
 
@@ -161,10 +157,13 @@ function defineWorkspace(config: WorkspaceConfig) {
   return workspace;
 }
 
-export function generate(config: WorkspaceConfig) {
+export function generate(
+  config: WorkspaceConfig,
+  _options: GenerateOptions = {},
+) {
   return defineWorkspace(config).generate();
 }
 
-export function apply(config: WorkspaceConfig) {
-  return defineWorkspace(config).apply();
+export function apply(config: WorkspaceConfig, options: ApplyOptions = {}) {
+  return defineWorkspace(config).apply(options);
 }

@@ -66,17 +66,4 @@ type User {
   updatedAt: DateTime
 }
 
-# Resolver: stepChain
-input StepChainInput {
-  name: String!
-}
 
-type StepChainOutput {
-  step1: String!
-  step2: String!
-  sqlStep: String!
-}
-
-extend type Query {
-  stepChain(input: StepChainInput): StepChainOutput
-}

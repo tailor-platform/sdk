@@ -5,8 +5,12 @@ pre-commit:
   jobs:
     - name: lint
       glob: "*.{ts}"
-      run: turbo run lint
+      run: |
+        echo "lint: {staged_files}"
+        npx eslint --no-ignore --cache {staged_files}
 
     - name: format
       glob: "*.{ts,json}"
-      run: turbo run format:check
+      run: |
+        echo "format: {staged_files}"
+        npx prettier --check {staged_files}

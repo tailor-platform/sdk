@@ -10,7 +10,6 @@ import { PipelineResolverServiceConfig } from "../types";
 import { measure } from "../../../performance";
 
 export class ResolverBundler {
-  private readonly tempDir: string;
   private readonly resolverLoader: ResolverLoader;
   private readonly transformer: CodeTransformer;
 
@@ -18,7 +17,6 @@ export class ResolverBundler {
     private readonly namespace: string,
     private readonly config: PipelineResolverServiceConfig,
   ) {
-    this.tempDir = path.join(process.cwd(), getDistDir());
     this.resolverLoader = new ResolverLoader();
     this.transformer = new CodeTransformer();
   }
@@ -26,11 +24,6 @@ export class ResolverBundler {
   @measure
   async bundle(): Promise<void> {
     try {
-      if (fs.existsSync(this.tempDir)) {
-        fs.rmSync(this.tempDir, { recursive: true });
-      }
-      fs.mkdirSync(this.tempDir, { recursive: true });
-
       const resolverFiles = await this.detectResolverFiles();
       if (resolverFiles.length === 0) {
         throw new Error(
@@ -86,7 +79,7 @@ export class ResolverBundler {
     const resolver = await this.resolverLoader.load(resolverFile);
 
     const outputFile = path.join(
-      this.tempDir,
+      getDistDir(),
       "resolvers",
       `${resolver.name}.js`,
     );
@@ -96,7 +89,7 @@ export class ResolverBundler {
     const stepOutputFiles = this.transformer.transform(
       outputFile,
       resolver,
-      this.tempDir,
+      getDistDir(),
     );
 
     await this.postBundle(stepOutputFiles);
@@ -125,8 +118,7 @@ export class ResolverBundler {
 
   @measure
   private async postBundle(stepFiles: string[]): Promise<void> {
-    const distPath = getDistDir();
-    const outputDir = path.join(distPath, "functions");
+    const outputDir = path.join(getDistDir(), "functions");
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
