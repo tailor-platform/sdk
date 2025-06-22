@@ -27,3 +27,6 @@ coverage/
 .tailor-sdk
 performance-reports
 packages
+
+# Test fixtures (generated files)
+tests/fixtures/
