@@ -1,9 +1,9 @@
 import type { TailorDBServiceInput } from "./services/tailordb/types";
 import type { PipelineResolverServiceInput } from "./services/pipeline/types";
 import type { AuthServiceInput } from "./services/auth/types";
+import { Region } from "./types/types";
 
-interface AppConfig {
-  name: string;
+export interface AppConfig {
   db: TailorDBServiceInput;
   resolver: PipelineResolverServiceInput;
   auth: AuthServiceInput;
@@ -11,7 +11,8 @@ interface AppConfig {
 
 export interface WorkspaceConfig {
   name: string;
-  app: AppConfig;
+  region: Region;
+  app: Record<string, AppConfig>;
 }
 
 let distPath: string | null = null;

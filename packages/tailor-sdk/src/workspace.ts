@@ -8,17 +8,21 @@ import { measure } from "./performance";
 import gql from "multiline-ts";
 import { TailorCtl } from "./ctl";
 import { Application } from "./application";
-import { getDistDir, type WorkspaceConfig } from "./config";
+import { AppConfig, getDistDir, type WorkspaceConfig } from "./config";
 import { ApplyOptions, GenerateOptions } from "./cli/args";
 
 class Workspace {
   private applications: Application[] = [];
 
-  constructor(public name: string) {}
+  constructor(public readonly config: WorkspaceConfig) {}
 
   @measure
-  newApplication(name: string) {
+  newApplication(name: string, appConfig: AppConfig) {
     const app = new Application(name);
+    app.defineAuth(appConfig.auth);
+    app.defineTailorDB(appConfig.db);
+    app.defineResolver(appConfig.resolver);
+
     this.applications.push(app);
     return app;
   }
@@ -27,8 +31,8 @@ class Workspace {
   async apply(options: ApplyOptions) {
     const client = new TailorCtl(options);
     const workspace = await client.upsertWorkspace({
-      name: this.name,
-      region: "asia-northeast",
+      name: this.config.name,
+      region: this.config.region,
     });
     console.log(`Workspace: ${workspace.name} (${workspace.id})`);
 
@@ -90,7 +94,7 @@ class Workspace {
 
   @measure
   async generate() {
-    console.log("Applying workspace:", this.name);
+    console.log("Applying workspace:", this.config.name);
     console.log(
       "Applications:",
       this.applications.map((app) => app.name),
@@ -149,11 +153,10 @@ class Workspace {
 }
 
 function defineWorkspace(config: WorkspaceConfig) {
-  const workspace = new Workspace(config.name);
-  const app = workspace.newApplication(config.app.name);
-  app.defineTailorDB(config.app.db);
-  app.defineResolver(config.app.resolver);
-  app.defineAuth(config.app.auth);
+  const workspace = new Workspace(config);
+  Object.entries(config.app).forEach(([name, appConfig]) =>
+    workspace.newApplication(name, appConfig),
+  );
   return workspace;
 }
 
