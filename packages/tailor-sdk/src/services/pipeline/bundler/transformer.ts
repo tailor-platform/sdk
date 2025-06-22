@@ -59,6 +59,7 @@ export class CodeTransformer {
           }
         })
         .join("\n")}
+
       `,
     );
 

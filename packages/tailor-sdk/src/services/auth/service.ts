@@ -18,11 +18,11 @@ export class AuthService {
       ),
       UserProfileProvider: this.config.userProfileProvider,
       UserProfileProviderConfig: this.config.userProfileProviderConfig,
-      SCIMConfig: this.config.scimConfig,
-      TenantProvider: this.config.tenantProvider,
-      TenantProviderConfig: this.config.tenantProviderConfig,
+      SCIMConfig: this.config.scimConfig || null,
+      TenantProvider: this.config.tenantProvider || "",
+      TenantProviderConfig: this.config.tenantProviderConfig || null,
       MachineUsers: this.config.machineUsers,
-      OAuth2Clients: this.config.oauth2Clients,
+      OAuth2Clients: this.config.oauth2Clients || [],
       Version: this.config.version,
     };
   }

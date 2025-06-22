@@ -3,11 +3,8 @@
 
 import { clone } from "es-toolkit";
 import {
-  SDLFieldMetadata,
   TailorFieldType,
-  tailorToGraphQL,
   TailorToTs,
-  SDLTypeMetadata,
   FieldMetadata,
 } from "./types";
 import type { DeepWriteable, output, Prettify } from "./helpers";
@@ -63,24 +60,6 @@ export class TailorType<
     public readonly name: string,
     public readonly fields: F,
   ) {}
-
-  protected referencedFields: SDLFieldMetadata[] = [];
-
-  toSDLMetadata(isInput: boolean = false): SDLTypeMetadata {
-    return {
-      name: this.name,
-      fields: [
-        ...Object.entries(this.fields).flatMap(([name, field]) =>
-          field.toSDLMetadata().map((f) => ({
-            name,
-            ...f,
-          })),
-        ),
-        ...this.referencedFields,
-      ],
-      isInput,
-    };
-  }
 }
 
 export class TailorField<
@@ -105,7 +84,7 @@ export class TailorField<
   private _ref: Reference = undefined as Reference;
 
   get metadata() {
-    return structuredClone(this._metadata);
+    return { ...this._metadata };
   }
 
   get reference(): Readonly<Reference> | null {
@@ -210,25 +189,6 @@ export class TailorField<
     >;
   }
 
-  toSDLMetadata(): (Omit<SDLFieldMetadata, "name"> & { name?: string })[] {
-    return [
-      {
-        type: tailorToGraphQL[this._metadata.type],
-        required: !!this._metadata.required,
-        array: !!this._metadata.array,
-      },
-      ...(this._ref
-        ? [
-            {
-              name: this._ref.nameMap[0],
-              type: this._ref.type.name,
-              required: !!this._metadata.required,
-              array: !!this._metadata.array,
-            },
-          ]
-        : []),
-    ];
-  }
 }
 
 const createField = TailorField.create;

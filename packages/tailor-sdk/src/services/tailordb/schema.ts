@@ -15,10 +15,7 @@ import {
   FieldValidateFn,
 } from "./types";
 import {
-  SDLFieldMetadata,
-  SDLTypeMetadata,
   TailorFieldType,
-  tailorToGraphQL,
   TailorToTs,
 } from "../../types/types";
 import type { Prettify } from "../../types/helpers";
@@ -44,7 +41,7 @@ class TailorDBField<
   const Reference extends ReferenceConfig<any> | undefined,
 > extends TailorField<Defined, Output, Reference, DBFieldMetadata> {
   get metadata() {
-    return structuredClone(this._metadata);
+    return { ...this._metadata };
   }
 
   get config() {
@@ -237,26 +234,6 @@ class TailorDBField<
     >;
   }
 
-  toSDLMetadata(): (Omit<SDLFieldMetadata, "name"> & { name?: string })[] {
-    const ref = this.reference as any;
-    return [
-      {
-        type: tailorToGraphQL[this._metadata.type],
-        required: this._metadata.required ?? true,
-        array: this._metadata.array ?? false,
-      },
-      ...(ref
-        ? [
-            {
-              name: ref.nameMap[0],
-              type: ref.type.name,
-              required: this._metadata.required ?? true,
-              array: this._metadata.array ?? false,
-            },
-          ]
-        : []),
-    ];
-  }
 }
 
 const createField = TailorDBField.create;
@@ -297,9 +274,12 @@ type DBTypeOptions = {
   description?: string;
 };
 
-class TailorDBType<
-  const F extends { id?: never } & Record<string, TailorDBField<M, any, any>>,
-  M extends DefinedFieldMetadata,
+export class TailorDBType<
+  const F extends { id?: never } & Record<
+    string,
+    TailorDBField<M, any, any>
+  > = any,
+  M extends DefinedFieldMetadata = any,
 > extends TailorType<M, F & Record<string, TailorField<M, any, any>>> {
   public readonly metadata: TDB;
 
@@ -331,21 +311,6 @@ class TailorDBType<
     });
   }
 
-  toSDLMetadata(): SDLTypeMetadata {
-    return {
-      name: this.name,
-      fields: [
-        ...Object.entries(this.fields).flatMap(([name, field]) =>
-          field.toSDLMetadata().map((f) => ({
-            name,
-            ...f,
-          })),
-        ),
-        ...this.referencedFields,
-      ],
-      isInput: false,
-    };
-  }
 }
 type TailorDBDef = InstanceType<
   typeof TailorDBType<

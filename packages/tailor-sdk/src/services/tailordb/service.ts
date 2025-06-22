@@ -2,11 +2,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { TailorDBServiceConfig } from "./types";
 import { measure } from "../../performance";
+import { TailorDBType } from "./schema";
+import { TailorDBServiceConfig } from "./types";
 
 export class TailorDBService {
-  private types: any[] = [];
+  private types: TailorDBType<any, any>[] = [];
 
   constructor(
     public readonly namespace: string,
@@ -80,11 +81,11 @@ export class TailorDBService {
       Namespace: this.namespace,
       Types: this.types.map((type) => {
         const metadata = type.metadata;
-        const schema = metadata.schema || {};
+        const schema = metadata.schema;
 
         // Fieldsを変換
         const fields: any = {};
-        if (schema.fields) {
+        if (schema?.fields) {
           Object.entries(schema.fields)
             .filter(([fieldName]) => fieldName !== "id")
             .forEach(([fieldName, fieldConfig]: [string, any]) => {
@@ -111,11 +112,11 @@ export class TailorDBService {
 
         return {
           Name: metadata.name || type.name,
-          Description: schema.description || "",
+          Description: schema?.description || "",
           Fields: fields,
           Relationships: {},
           Settings: defaultSettings,
-          Extends: schema.extends || false,
+          Extends: schema?.extends || false,
           Directives: [],
           Indexes: {},
           TypePermission: defaultTypePermission,
@@ -153,7 +154,6 @@ export class TailorDBService {
         for (const exportName of Object.keys(module)) {
           const exportedValue = module[exportName];
 
-          // Check if the object has the expected shape of a TailorDBType
           const isDBTypeLike =
             exportedValue &&
             typeof exportedValue === "object" &&

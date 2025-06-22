@@ -1,0 +1,52 @@
+import {
+  AggregateCodeGenerator,
+  GeneratorMetadata,
+  GeneratorResult,
+} from "../types";
+import { TailorDBType } from "../../services/tailordb/schema";
+import { Resolver } from "../../services/pipeline/resolver";
+import { SDLTypeMetadata, ResolverSDLMetadata } from "./types";
+import { TypeProcessor } from "./type-processor";
+import { ResolverProcessor } from "./resolver-processor";
+import { SDLAggregator } from "./aggregator";
+import { measure } from "../../performance";
+
+/**
+ * SDL生成システムのメインエントリーポイント
+ * AggregateCodeGeneratorインターフェースの完全実装
+ */
+class SDLGenerator
+  implements AggregateCodeGenerator<SDLTypeMetadata, ResolverSDLMetadata>
+{
+  readonly id = "@tailor/sdl";
+  readonly description = "Generates SDL files for TailorDB types and resolvers";
+
+  /**
+   * TailorDBTypeを処理してSDLTypeMetadataを生成
+   */
+  @measure
+  async processType(type: TailorDBType): Promise<SDLTypeMetadata> {
+    return await TypeProcessor.processType(type);
+  }
+
+  /**
+   * Resolverを処理してResolverSDLMetadataを生成
+   */
+  @measure
+  async processResolver(resolver: Resolver): Promise<ResolverSDLMetadata> {
+    return await ResolverProcessor.processResolver(resolver);
+  }
+
+  /**
+   * 処理されたメタデータを統合してSDLファイルを生成
+   */
+  @measure
+  aggregate(
+    metadata: GeneratorMetadata<SDLTypeMetadata, ResolverSDLMetadata>,
+    baseDir: string,
+  ): GeneratorResult {
+    return SDLAggregator.aggregate(metadata, baseDir);
+  }
+}
+
+export const sdlGenerator = new SDLGenerator();
