@@ -1,11 +1,10 @@
 #!/usr/bin/env tsx
 
-import url from "node:url";
+import { defineCommand, runMain } from "citty";
 import path from "node:path";
 import type { WorkspaceConfig } from "../config";
 import { apply, generate } from "../workspace";
-
-const __filename = url.fileURLToPath(import.meta.url);
+import { applyCommandArgs, CommandArgs, generateCommandArgs } from "./args.js";
 
 async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
   try {
@@ -28,35 +27,61 @@ async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
   }
 }
 
-async function main() {
+const exec: (...args: CommandArgs) => Promise<void> = async (
+  command,
+  options,
+) => {
   try {
-    const command = process.argv[2];
-    const configPath = process.argv[3] || "tailor.config.ts";
-
-    if (!command || (command !== "apply" && command !== "generate")) {
-      console.error("Error: Command must be 'apply' or 'generate'");
-      console.error("Usage: tsx exec.ts <apply|generate> [config-path]");
-      process.exit(1);
-    }
-
+    const configPath = options.config || "tailor.config.ts";
     const config = await loadConfig(configPath);
 
     if (command === "apply") {
-      await apply(config);
-      console.log("Configuration applied successfully.");
+      await apply(config, options);
     } else if (command === "generate") {
-      await generate(config);
-      console.log("Files generated successfully.");
+      await generate(config, options);
+    } else {
+      throw new Error(`Unknown command: ${command}`);
     }
   } catch (error) {
-    console.error(`Failed to ${process.argv[2]} configuration:`, error);
+    console.error("Failed to apply configuration:", error);
     if (error instanceof Error && error.stack) {
       console.error("Stack trace:", error.stack);
     }
     process.exit(1);
   }
-}
+};
 
-if (process.argv[1] === __filename) {
-  main().catch(console.error);
-}
+const applyCommand = defineCommand({
+  meta: {
+    name: "apply",
+    description: "Apply Tailor configuration to generate files",
+  },
+  args: applyCommandArgs,
+  async run({ args }) {
+    await exec("apply", args);
+  },
+});
+
+const generateCommand = defineCommand({
+  meta: {
+    name: "generate",
+    description: "Generate files using Tailor configuration",
+  },
+  args: generateCommandArgs,
+  async run({ args }) {
+    await exec("generate", args);
+  },
+});
+
+const mainCommand = defineCommand({
+  meta: {
+    name: "tailor-exec",
+    description: "Tailor SDK execution CLI",
+  },
+  subCommands: {
+    apply: applyCommand,
+    generate: generateCommand,
+  },
+});
+
+runMain(mainCommand);

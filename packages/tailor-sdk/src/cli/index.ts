@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 
 import { readPackageJSON } from "pkg-types";
-import { defineCommand, ParsedArgs, runMain } from "citty";
+import { defineCommand, runMain } from "citty";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import {
+  applyCommandArgs,
+  generateCommandArgs,
+  type CommandArgs,
+} from "./args.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +19,6 @@ async function checkTsxAvailable(): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn("tsx", ["--version"], {
       stdio: "ignore",
-      shell: true,
     });
 
     child.on("error", () => resolve(false));
@@ -22,18 +26,10 @@ async function checkTsxAvailable(): Promise<boolean> {
   });
 }
 
-const subCommandArgs = {
-  config: {
-    type: "string",
-    description: "Path to the Tailor config file",
-    alias: "c",
-  },
-} as const;
-
-async function exec(
-  command: "apply" | "generate",
-  args: ParsedArgs<typeof subCommandArgs>,
-) {
+const exec: (...args: CommandArgs) => Promise<void> = async (
+  command,
+  options,
+) => {
   try {
     const tsxAvailable = await checkTsxAvailable();
     if (!tsxAvailable) {
@@ -54,15 +50,20 @@ async function exec(
       process.exit(1);
     }
 
-    const child = spawn(
-      "tsx",
-      [cliExecPath, command, args.config || "tailor.config.ts"],
-      {
-        stdio: "inherit",
-        shell: true,
-        cwd: process.cwd(),
-      },
-    );
+    const args = [
+      cliExecPath,
+      command,
+      "-c",
+      options.config || "tailor.config.ts",
+    ];
+    if (options.dryRun) {
+      args.push("-d");
+    }
+
+    const child = spawn("tsx", args, {
+      stdio: "inherit",
+      cwd: process.cwd(),
+    });
 
     child.on("error", (error) => {
       console.error("Failed to execute tsx:", error);
@@ -78,14 +79,14 @@ async function exec(
     console.error(`Failed to ${command} configuration:`, error);
     process.exit(1);
   }
-}
+};
 
 const applyCommand = defineCommand({
   meta: {
     name: "apply",
     description: "Apply Tailor configuration to generate files",
   },
-  args: subCommandArgs,
+  args: applyCommandArgs,
   async run({ args }) {
     await exec("apply", args);
   },
@@ -96,7 +97,7 @@ const generateCommand = defineCommand({
     name: "generate",
     description: "Generate files using Tailor configuration",
   },
-  args: subCommandArgs,
+  args: generateCommandArgs,
   async run({ args }) {
     await exec("generate", args);
   },

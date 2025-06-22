@@ -4,12 +4,9 @@ import {
   compareDirectories,
   generateDetailedDiffReport,
 } from "./helpers/directory_compare";
-import {
-  createTempDirectory,
-  getDirectoryStructure,
-} from "./helpers/file_utils";
+import { createTempDirectory } from "./helpers/file_utils";
 import config from "../tailor.config";
-import { generate } from "@tailor-platform/tailor-sdk";
+import { apply, generate } from "@tailor-platform/tailor-sdk";
 // import {
 //   testAllGeneratedFunctions,
 //   generateCombinedTestReport,
@@ -20,6 +17,7 @@ const tempOutputDir = await createTempDirectory("apply-test-");
 const tempDistDir = path.join(tempOutputDir, "dist");
 process.env.TAILOR_SDK_OUTPUT_DIR = tempDistDir;
 await generate(config);
+await apply(config, { dryRun: true });
 
 console.info(`This test is running in directory: ${tempOutputDir}`);
 
@@ -30,20 +28,14 @@ describe("pnpm apply command integration tests", () => {
       const comparison = await compareDirectories(tempDistDir, expectedDir);
 
       if (!comparison.same) {
-        const report = generateDetailedDiffReport(
-          comparison,
-          tempDistDir,
-          expectedDir,
-        );
         console.log("Directory comparison failed:");
-        console.log(report);
-
-        console.log("\nActual directory structure:");
-        console.log(getDirectoryStructure(tempDistDir));
-
-        console.log("\nExpected directory structure:");
-        console.log(getDirectoryStructure(expectedDir));
       }
+      const report = generateDetailedDiffReport(
+        comparison,
+        tempDistDir,
+        expectedDir,
+      );
+      console.log(report);
 
       expect(comparison.same).toBe(true);
     });

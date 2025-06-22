@@ -5,6 +5,7 @@ import path from "node:path";
 import { styleText } from "node:util";
 import ini from "ini";
 import ml from "multiline-ts";
+import { ApplyOptions } from "./cli/args";
 
 interface CtlConfig {
   name: string;
@@ -16,9 +17,18 @@ interface CtlConfig {
 export class TailorCtl {
   private ctlConfig: CtlConfig;
 
-  constructor() {
-    this.init();
-    this.ctlConfig = this.execJson("config", "describe");
+  constructor(private options: ApplyOptions) {
+    if (options.dryRun) {
+      this.ctlConfig = {
+        name: "",
+        username: "",
+        workspaceId: "",
+        workspaceName: "",
+      };
+    } else {
+      this.init();
+      this.ctlConfig = this.execJson("config", "describe");
+    }
   }
 
   private login() {
@@ -46,15 +56,15 @@ export class TailorCtl {
   }
 
   private spawn(...args: string[]) {
-    const result = spawnSync(`tailorctl ${args.join(" ")}`, {
-      stdio: "inherit",
-      shell: true,
-    });
+    if (this.options.dryRun) {
+      console.log(`[Dry Run: spawn] tailorctl ${args.join(" ")}`);
+      return "{}";
+    }
 
+    const result = spawnSync("tailorctl", args, { stdio: "inherit" });
     if (result.error) {
       throw new Error(`Failed to execute tailorctl: ${result.error.message}`);
     }
-
     if (result.status !== 0) {
       throw new Error(
         `tailorctl command failed with exit code ${result.status}`,
@@ -65,6 +75,10 @@ export class TailorCtl {
   }
 
   private exec(...args: string[]) {
+    if (this.options.dryRun) {
+      console.log(`[Dry Run: exec] tailorctl ${args.join(" ")}`);
+      return "{}";
+    }
     return execSync(`tailorctl ${args.join(" ")}`).toString("utf-8");
   }
 
