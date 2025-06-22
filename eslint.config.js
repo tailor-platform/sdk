@@ -11,7 +11,7 @@ export default defineConfig([
       "**/node_modules/**",
       "**/.tailor-sdk/**",
       "**/packages/**",
-      "**/tests/fixtures/expected/**",
+      "**/tests/fixtures/**",
     ],
   },
   {
@@ -37,7 +37,7 @@ export default defineConfig([
           argsIgnorePattern: "^_",
         },
       ],
-      "no-console": "warn",
+      "no-console": "off",
     },
   },
 ]);

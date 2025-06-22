@@ -2,12 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
 import config from "../../tailor.config";
-import { generate } from "@tailor-platform/tailor-sdk";
+import { apply, generate } from "@tailor-platform/tailor-sdk";
 
 const __filename = url.fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-const expectedDir = path.join(__dirname, "../fixtures/expected");
+const expectedDir = "./tests/fixtures/expected";
 
 /**
  * 期待値ファイルを生成するスクリプト
@@ -26,6 +25,7 @@ export async function generateExpectedFiles(): Promise<void> {
 
     process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
     await generate(config);
+    await apply(config, { dryRun: true });
 
     console.log("\nGenerated files:");
     await listGeneratedFiles(expectedDir);
