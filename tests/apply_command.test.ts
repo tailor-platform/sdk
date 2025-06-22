@@ -5,7 +5,7 @@ import {
   generateDetailedDiffReport,
 } from "./helpers/directory_compare";
 import { createTempDirectory } from "./helpers/file_utils";
-import config from "../tailor.config";
+import config from "../src/tailor.config";
 import { apply, generate } from "@tailor-platform/tailor-sdk";
 // import {
 //   testAllGeneratedFunctions,

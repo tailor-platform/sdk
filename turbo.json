@@ -31,6 +31,10 @@
       "dependsOn": ["^build"],
       "cache": false
     },
+    "//#check": {
+      "dependsOn": ["^format", "^lint"],
+      "cache": false
+    },
     "lint": {
       "dependsOn": ["^lint", "//#lint:root"],
       "outputs": [".eslintcache"],

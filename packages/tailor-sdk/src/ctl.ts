@@ -6,6 +6,7 @@ import { styleText } from "node:util";
 import ini from "ini";
 import ml from "multiline-ts";
 import { ApplyOptions } from "./cli/args";
+import { Region } from "./types/types";
 
 interface CtlConfig {
   name: string;
@@ -87,10 +88,7 @@ export class TailorCtl {
     return JSON.parse(output);
   }
 
-  async upsertWorkspace(workspace: {
-    name: string;
-    region: "asia-northeast" | "us-west";
-  }) {
+  async upsertWorkspace(workspace: { name: string; region: Region }) {
     if (this.ctlConfig.workspaceName === "") {
       console.log("Creating workspace...");
       this.exec(

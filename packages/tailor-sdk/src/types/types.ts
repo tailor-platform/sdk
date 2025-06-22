@@ -1,5 +1,7 @@
 import { AllowedValue } from "./field";
 
+export type Region = "asia-northeast" | "us-west";
+
 export type TailorFieldType =
   | "uuid"
   | "string"
