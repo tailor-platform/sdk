@@ -56,6 +56,7 @@ export class Application {
   defineAuth(config: AuthServiceInput) {
     const authService = new AuthService(config);
     this._authService = authService;
+    this.addSubgraph("auth", authService.config.namespace);
   }
 
   toManifestJSON() {
