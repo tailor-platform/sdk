@@ -7,6 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.1.0
+      kysely:
+        specifier: 0.27.6
+        version: 0.27.6
     devDependencies:
       '@dotenvx/dotenvx':
         specifier: ^1.45.1
@@ -20,9 +27,6 @@ importers:
       '@types/node':
         specifier: ^22.15.3
         version: 22.15.3
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.1.0
       dir-compare:
         specifier: ^4.2.0
         version: 4.2.0
@@ -47,18 +51,6 @@ importers:
       prettier:
         specifier: 3.5.3
         version: 3.5.3
-      rolldown:
-        specifier: 1.0.0-beta.14
-        version: 1.0.0-beta.14
-      rollup:
-        specifier: ^4.42.0
-        version: 4.42.0
-      rollup-plugin-esbuild-minify:
-        specifier: ^1.3.0
-        version: 1.3.0(rollup@4.42.0)
-      ts-morph:
-        specifier: ^26.0.0
-        version: 26.0.0
       tsx:
         specifier: ^4.19.2
         version: 4.20.3
@@ -123,6 +115,18 @@ importers:
       prettier:
         specifier: 3.5.3
         version: 3.5.3
+      rolldown:
+        specifier: 1.0.0-beta.14
+        version: 1.0.0-beta.14
+      rollup:
+        specifier: ^4.42.0
+        version: 4.42.0
+      rollup-plugin-esbuild-minify:
+        specifier: ^1.3.0
+        version: 1.3.0(rollup@4.42.0)
+      ts-morph:
+        specifier: ^26.0.0
+        version: 26.0.0
       tsup:
         specifier: ^8.0.2
         version: 8.5.0(@swc/core@1.11.29)(jiti@2.4.2)(postcss@8.5.3)(tsx@4.20.3)(typescript@5.8.3)
@@ -1401,6 +1405,10 @@ packages:
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
+
+  kysely@0.27.6:
+    resolution: {integrity: sha512-FIyV/64EkKhJmjgC0g2hygpBv5RNWVPyNCqSAD7eTCv6eFWNIi4PN1UvdSJGicN/o35bnevgis4Y0UDC0qi8jQ==}
+    engines: {node: '>=14.0.0'}
 
   lefthook-darwin-arm64@1.11.14:
     resolution: {integrity: sha512-YPbUK6kGytY5W6aNUrzK7Vod3ynLVvj5JQiBh0DjlxCHMgIQPpFkDfwQzGw1E8CySyC95HXO83En5Ule8umS7g==}
@@ -3136,6 +3144,8 @@ snapshots:
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
+
+  kysely@0.27.6: {}
 
   lefthook-darwin-arm64@1.11.14:
     optional: true

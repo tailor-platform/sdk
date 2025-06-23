@@ -1,10 +1,10 @@
-import { PipelineResolverService } from "./services/pipeline/service";
-import { PipelineResolverServiceInput } from "./services/pipeline/types";
-import { TailorDBService } from "./services/tailordb/service";
-import { TailorDBServiceInput } from "./services/tailordb/types";
-import { AuthService } from "./services/auth/service";
-import { AuthReference, AuthServiceInput } from "./services/auth/types";
-import { measure } from "./performance";
+import { PipelineResolverService } from "@/services/pipeline/service";
+import { PipelineResolverServiceInput } from "@/services/pipeline/types";
+import { TailorDBService } from "@/services/tailordb/service";
+import { TailorDBServiceInput } from "@/services/tailordb/types";
+import { AuthService } from "@/services/auth/service";
+import { AuthReference, AuthServiceInput } from "@/services/auth/types";
+import { measure } from "@/performance";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];

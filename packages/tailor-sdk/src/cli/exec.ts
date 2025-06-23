@@ -2,9 +2,15 @@
 
 import { defineCommand, runMain } from "citty";
 import path from "node:path";
-import type { WorkspaceConfig } from "../config";
-import { apply, generate } from "../workspace";
-import { applyCommandArgs, CommandArgs, generateCommandArgs } from "./args.js";
+import type { WorkspaceConfig } from "@/config";
+import { apply } from "@/workspace";
+import {
+  commandArgs,
+  type CommandArgs,
+  type _ApplyOptions,
+  type _GenerateOptions,
+} from "./args.js";
+import { generate } from "@/generator";
 
 async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
   try {
@@ -56,9 +62,9 @@ const applyCommand = defineCommand({
     name: "apply",
     description: "Apply Tailor configuration to generate files",
   },
-  args: applyCommandArgs,
+  args: commandArgs.apply,
   async run({ args }) {
-    await exec("apply", args);
+    await exec("apply", args as _ApplyOptions);
   },
 });
 
@@ -67,9 +73,9 @@ const generateCommand = defineCommand({
     name: "generate",
     description: "Generate files using Tailor configuration",
   },
-  args: generateCommandArgs,
+  args: commandArgs.generate,
   async run({ args }) {
-    await exec("generate", args);
+    await exec("generate", args as _GenerateOptions);
   },
 });
 

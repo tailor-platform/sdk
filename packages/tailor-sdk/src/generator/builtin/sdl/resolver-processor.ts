@@ -2,12 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { capitalize } from "es-toolkit";
 import multiline from "multiline-ts";
-import { Resolver } from "../../services/pipeline/resolver";
+import { Resolver } from "@/services/pipeline/resolver";
 import { SDLUtils } from "./utils";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 import { ResolverSDLMetadata } from "./types";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { getDistDir } from "../../config";
+import { getDistDir } from "@/config";
 import { TypeProcessor } from "./type-processor";
 /**
  * Resolver処理ロジック

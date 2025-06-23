@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 import { TailorDBType } from "./schema";
 import { TailorDBServiceConfig } from "./types";
 

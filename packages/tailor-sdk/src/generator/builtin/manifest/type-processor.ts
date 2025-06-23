@@ -1,7 +1,7 @@
-import { TailorDBType } from "../../services/tailordb/schema";
+import { TailorDBType } from "@/services/tailordb/schema";
 import { ManifestTypeMetadata, ManifestFieldMetadata } from "./types";
-import { measure } from "../../performance";
-import { tailorToManifestScalar } from "../../types/types";
+import { measure } from "@/performance";
+import { tailorToManifestScalar } from "@/types/types";
 
 /**
  * TailorDBType処理ロジック（Manifest生成専用）

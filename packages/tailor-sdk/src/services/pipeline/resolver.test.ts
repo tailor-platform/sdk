@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from "vitest";
 import { createMutationResolver, createQueryResolver } from "./resolver";
-import t from "../../types/type";
+import t from "@/types/type";
 
 const UserInput = t.type("UserInput", {
   id: t.string(),

@@ -146,7 +146,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -163,7 +163,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -284,7 +284,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -301,7 +301,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -372,40 +372,6 @@
               "Unique": false,
               "ForeignKey": false,
               "Vector": false
-            },
-            "createdAt": {
-              "Type": "datetime",
-              "AllowedValues": [],
-              "Description": "",
-              "Validate": [],
-              "Array": false,
-              "Index": false,
-              "Required": false,
-              "Unique": false,
-              "ForeignKey": false,
-              "Vector": false,
-              "Hooks": {
-                "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
-                }
-              }
-            },
-            "updatedAt": {
-              "Type": "datetime",
-              "AllowedValues": [],
-              "Description": "",
-              "Validate": [],
-              "Array": false,
-              "Index": false,
-              "Required": false,
-              "Unique": false,
-              "ForeignKey": false,
-              "Vector": false,
-              "Hooks": {
-                "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
-                }
-              }
             }
           },
           "Relationships": {},
@@ -548,7 +514,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -565,7 +531,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -743,7 +709,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -760,7 +726,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -857,7 +823,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -874,7 +840,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -1372,7 +1338,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -1389,7 +1355,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -1510,7 +1476,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -1527,7 +1493,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -1598,40 +1564,6 @@
               "Unique": false,
               "ForeignKey": false,
               "Vector": false
-            },
-            "createdAt": {
-              "Type": "datetime",
-              "AllowedValues": [],
-              "Description": "",
-              "Validate": [],
-              "Array": false,
-              "Index": false,
-              "Required": false,
-              "Unique": false,
-              "ForeignKey": false,
-              "Vector": false,
-              "Hooks": {
-                "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
-                }
-              }
-            },
-            "updatedAt": {
-              "Type": "datetime",
-              "AllowedValues": [],
-              "Description": "",
-              "Validate": [],
-              "Array": false,
-              "Index": false,
-              "Required": false,
-              "Unique": false,
-              "ForeignKey": false,
-              "Vector": false,
-              "Hooks": {
-                "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
-                }
-              }
             }
           },
           "Relationships": {},
@@ -1774,7 +1706,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -1791,7 +1723,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -1969,7 +1901,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -1986,7 +1918,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }
@@ -2083,7 +2015,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             },
@@ -2100,7 +2032,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(()=>new Date().toISOString())()"
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
                 }
               }
             }

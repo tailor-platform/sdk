@@ -31,8 +31,6 @@ type PurchaseOrder {
 type Role {
   id: ID!
   name: String!
-  createdAt: DateTime
-  updatedAt: DateTime
 }
 
 

@@ -1,4 +1,4 @@
-import { DeepWidening } from "../../types/helpers";
+import { DeepWidening } from "@/types/helpers";
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 

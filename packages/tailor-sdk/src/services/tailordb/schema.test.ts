@@ -1,5 +1,5 @@
-import { SDLUtils } from "../../generator/sdl/utils";
-import { TypeProcessor } from "../../generator/sdl/type-processor";
+import { SDLUtils } from "@/generator/builtin/sdl/utils";
+import { TypeProcessor } from "@/generator/builtin/sdl/type-processor";
 import { db } from "./schema";
 
 import { describe, expect, test } from "vitest";

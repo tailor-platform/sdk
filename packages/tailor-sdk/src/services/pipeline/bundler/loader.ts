@@ -1,5 +1,5 @@
 import { Resolver } from "../resolver";
-import { measure } from "../../../performance";
+import { measure } from "@/performance";
 import { isResolver } from "../utils";
 
 export class ResolverLoader {

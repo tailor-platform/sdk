@@ -2,22 +2,24 @@ import {
   CodeGenerator,
   BasicGeneratorMetadata,
   GeneratorResult,
-} from "../types";
-import { TailorDBType } from "../../services/tailordb/schema";
-import { Resolver } from "../../services/pipeline/resolver";
+} from "../../types";
+import { TailorDBType } from "@/services/tailordb/schema";
+import { Resolver } from "@/services/pipeline/resolver";
 import { SDLTypeMetadata, ResolverSDLMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
 import { ResolverProcessor } from "./resolver-processor";
 import { SDLAggregator } from "./aggregator";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
+
+export const SdlGeneratorID = "@tailor/sdl";
 
 /**
  * SDL生成システムのメインエントリーポイント
  */
-class SdlGenerator
+export class SdlGenerator
   implements CodeGenerator<SDLTypeMetadata, ResolverSDLMetadata>
 {
-  readonly id = "@tailor/sdl";
+  readonly id = SdlGeneratorID;
   readonly description = "Generates SDL files for TailorDB types and resolvers";
 
   /**
@@ -47,5 +49,3 @@ class SdlGenerator
     return SDLAggregator.aggregate(metadata, baseDir);
   }
 }
-
-export const sdlGenerator = new SdlGenerator();

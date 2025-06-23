@@ -3,8 +3,16 @@
 pre-commit:
   parallel: true
   jobs:
-    - name: lint
+    - name: lint:root
       glob: "*.{ts}"
+      exclude: "packages"
+      run: |
+        echo "lint: {staged_files}"
+        npx eslint --no-ignore --cache {staged_files}
+
+    - name: lint:tailor-sdk
+      glob: "*.{ts}"
+      root: "packages/tailor-sdk"
       run: |
         echo "lint: {staged_files}"
         npx eslint --no-ignore --cache {staged_files}

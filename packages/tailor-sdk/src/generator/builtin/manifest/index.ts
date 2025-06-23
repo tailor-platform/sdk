@@ -2,10 +2,10 @@ import {
   CodeGenerator,
   BasicGeneratorMetadata,
   GeneratorResult,
-} from "../types";
-import { TailorDBType } from "../../services/tailordb/schema";
-import { Resolver } from "../../services/pipeline/resolver";
-import { measure } from "../../performance";
+} from "../../types";
+import { TailorDBType } from "@/services/tailordb/schema";
+import { Resolver } from "@/services/pipeline/resolver";
+import { measure } from "@/performance";
 import { ManifestTypeMetadata, ResolverManifestMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
 import { ResolverProcessor } from "./resolver-processor";

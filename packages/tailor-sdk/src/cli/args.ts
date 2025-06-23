@@ -1,30 +1,47 @@
-import type { ParsedArgs } from "citty";
+import type { ArgsDef, ParsedArgs } from "citty";
+
+type StrictParse<T extends ArgsDef> = {
+  [K in keyof ParsedArgs<T> as string extends K
+    ? never
+    : K extends "_"
+      ? never
+      : K]: ParsedArgs<T>[K];
+};
 
 export const commonCommandArgs = {
   config: {
     type: "string",
     description: "Path to the Tailor config file",
     alias: "c",
+    default: "tailor.config.ts",
   },
 } as const;
 
-export const applyCommandArgs = {
-  ...commonCommandArgs,
-  dryRun: {
-    type: "boolean",
-    description: "Run the command without making any changes",
-    alias: "d",
+export const commandArgs = {
+  apply: {
+    ...commonCommandArgs,
+    dryRun: {
+      type: "boolean",
+      description: "Run the command without making any changes",
+      alias: "d",
+    },
+  },
+  generate: {
+    ...commonCommandArgs,
+    watch: {
+      type: "boolean",
+      description: "Watch for type/resolver changes and regenerate",
+      alias: "w",
+    },
   },
 } as const;
 
-export const generateCommandArgs = commonCommandArgs;
+export type _ApplyOptions = StrictParse<typeof commandArgs.apply>;
+export type _GenerateOptions = StrictParse<typeof commandArgs.generate>;
 
 export type CommandArgs =
-  | ["apply", ParsedArgs<typeof applyCommandArgs>]
-  | ["generate", ParsedArgs<typeof generateCommandArgs>];
+  | ["apply", _ApplyOptions]
+  | ["generate", _GenerateOptions];
 
-export type ApplyOptions = Omit<ParsedArgs<typeof applyCommandArgs>, "config">;
-export type GenerateOptions = Omit<
-  ParsedArgs<typeof generateCommandArgs>,
-  "config"
->;
+export type ApplyOptions = Omit<_ApplyOptions, "config">;
+export type GenerateOptions = Omit<_GenerateOptions, "config">;

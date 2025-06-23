@@ -5,9 +5,9 @@ import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
 import { ResolverLoader } from "./loader";
 import { CodeTransformer } from "./transformer";
-import { getDistDir } from "../../../config";
+import { getDistDir } from "@/config";
 import { PipelineResolverServiceConfig } from "../types";
-import { measure } from "../../../performance";
+import { measure } from "@/performance";
 
 export class ResolverBundler {
   private readonly resolverLoader: ResolverLoader;

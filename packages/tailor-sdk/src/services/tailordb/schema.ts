@@ -13,10 +13,10 @@ import {
   DefinedFieldMetadata,
   FieldValidateFn,
 } from "./types";
-import { TailorFieldType, TailorToTs } from "../../types/types";
-import type { Prettify } from "../../types/helpers";
-import { AllowedValues, AllowedValuesOutput } from "../../types/field";
-import { ReferenceConfig, TailorField, TailorType } from "../../types/type";
+import { TailorFieldType, TailorToTs } from "@/types/types";
+import type { Prettify } from "@/types/helpers";
+import { AllowedValues, AllowedValuesOutput } from "@/types/field";
+import { ReferenceConfig, TailorField, TailorType } from "@/types/type";
 
 const fieldDefaults = {
   required: undefined,
@@ -260,7 +260,7 @@ function datetime() {
   return createField("datetime", ["allowedValues"]);
 }
 
-function _enum<const V extends AllowedValues>(values: V) {
+function _enum<const V extends AllowedValues>(...values: V) {
   return createField("enum", []).values(values);
 }
 

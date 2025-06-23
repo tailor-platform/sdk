@@ -39,4 +39,8 @@ export default defineConfig({
       },
     },
   },
+  generators: [
+    "@tailor/sdl",
+    ["@tailor/kysely-type", { distPath: "./src/resolvers/db.ts" }],
+  ],
 });
