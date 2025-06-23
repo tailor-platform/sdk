@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { Resolver } from "../resolver";
 import { measure } from "../../../performance";
 import { isResolver } from "../utils";

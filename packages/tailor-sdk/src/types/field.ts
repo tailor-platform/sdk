@@ -32,8 +32,7 @@ export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
 export type AllowedValuesOutput<V extends AllowedValues> =
   V[number] extends string
     ? V[number]
-    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      V[number] extends [infer K, ...any]
+    : V[number] extends [infer K, ...any]
       ? K
       : V[number] extends { value: infer K }
         ? K

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { performanceConfig } from "./config";
 import { performanceTracker } from "./tracker";
 import type { MethodDecoratorContext, PerformanceMeasurement } from "./types";

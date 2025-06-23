@@ -89,8 +89,14 @@ export interface ResolverManifestMetadata {
   queryType: "query" | "mutation";
   pipelines: PipelineInfo[];
   outputMapper?: string; // 関数の文字列表現
-  inputFields?: Record<string, { type: string; required: boolean; array: boolean }>;
-  outputFields?: Record<string, { type: string; required: boolean; array: boolean }>;
+  inputFields?: Record<
+    string,
+    { type: string; required: boolean; array: boolean }
+  >;
+  outputFields?: Record<
+    string,
+    { type: string; required: boolean; array: boolean }
+  >;
 }
 
 export interface PipelineInfo {

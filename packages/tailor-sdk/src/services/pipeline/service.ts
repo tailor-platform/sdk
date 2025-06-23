@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import path from "node:path";
 import fs from "node:fs";
 import { ResolverBundler } from "./bundler";

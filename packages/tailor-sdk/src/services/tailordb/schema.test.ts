@@ -24,10 +24,8 @@ const productType = db.type(
 
 describe("TailorDB: object style", () => {
   test("sdl", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const metadata = await TypeProcessor.processDBType(productType as any);
     const sdl = SDLUtils.generateSDLFromMetadata(metadata);
-    // console.log(sdl);
 
     expect(sdl).toContain(`type Product {`);
     expect(sdl).toContain(`id: ID!`);
