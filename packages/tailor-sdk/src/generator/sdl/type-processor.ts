@@ -20,15 +20,15 @@ export class TypeProcessor {
 
     // フィールドを処理
     for (const [fieldName, field] of Object.entries(type.fields)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const fieldMetadata = (field as any).metadata;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ref = (field as any).reference;
 
       // 基本フィールド
       fields.push({
         name: fieldName,
-        type: tailorToGraphQL[fieldMetadata.type as keyof typeof tailorToGraphQL],
+        type: tailorToGraphQL[
+          fieldMetadata.type as keyof typeof tailorToGraphQL
+        ],
         required: fieldMetadata.required ?? true,
         array: fieldMetadata.array ?? false,
       });
@@ -57,7 +57,6 @@ export class TypeProcessor {
    */
   @measure
   static async processType(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type: TailorType<any, any>,
     isInput: boolean = false,
   ): Promise<SDLTypeMetadata> {
@@ -65,15 +64,15 @@ export class TypeProcessor {
 
     // フィールドを処理
     for (const [fieldName, field] of Object.entries(type.fields)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const fieldMetadata = (field as any).metadata;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ref = (field as any).reference;
 
       // 基本フィールド
       fields.push({
         name: fieldName,
-        type: tailorToGraphQL[fieldMetadata.type as keyof typeof tailorToGraphQL],
+        type: tailorToGraphQL[
+          fieldMetadata.type as keyof typeof tailorToGraphQL
+        ],
         required: !!fieldMetadata.required,
         array: !!fieldMetadata.array,
       });
@@ -101,7 +100,6 @@ export class TypeProcessor {
    */
   @measure
   static async processAnyType(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type: TailorType<any, any> | TailorDBType,
   ): Promise<SDLTypeMetadata> {
     if (type instanceof TailorDBType) {

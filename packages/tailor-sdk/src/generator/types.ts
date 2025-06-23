@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Resolver } from "../services/pipeline/resolver";
 import { TailorDBType } from "../services/tailordb/schema";
 

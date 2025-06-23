@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 import {
@@ -142,7 +140,6 @@ export class Resolver<
       O
     >;
   }
-
 }
 
 export function createQueryResolver<

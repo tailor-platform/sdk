@@ -30,7 +30,10 @@ export class TypeProcessor {
         return {
           name: fieldName,
           description: metadata.description || "",
-          type: tailorToManifestScalar[metadata.type as keyof typeof tailorToManifestScalar] || "String",
+          type:
+            tailorToManifestScalar[
+              metadata.type as keyof typeof tailorToManifestScalar
+            ] || "String",
           required: metadata.required ?? true,
           array: metadata.array ?? false,
         };
@@ -43,7 +46,6 @@ export class TypeProcessor {
       isInput: false, // TailorDBTypeは通常出力型
     };
   }
-
 
   /**
    * 複数のTailorDBTypeを処理

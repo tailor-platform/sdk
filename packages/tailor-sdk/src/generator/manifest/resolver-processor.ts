@@ -21,47 +21,50 @@ export class ResolverProcessor {
   static async processResolver(
     resolver: Resolver,
   ): Promise<ResolverManifestMetadata> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pipelines: PipelineInfo[] = resolver.steps.map((step: StepDef<string, any, any, any>) => {
-      const [type, name] = step;
-      switch (type) {
-        case "fn":
-        case "sql": {
-          const functionPath = path.join(
-            getDistDir(),
-            "functions",
-            `${resolver.name}__${name}.js`,
-          );
-          let functionCode = "";
-          try {
-            functionCode = fs.readFileSync(functionPath, "utf-8");
-          } catch {
-            console.warn(`Function file not found: ${functionPath}`);
+    const pipelines: PipelineInfo[] = resolver.steps.map(
+      (step: StepDef<string, any, any, any>) => {
+        const [type, name] = step;
+        switch (type) {
+          case "fn":
+          case "sql": {
+            const functionPath = path.join(
+              getDistDir(),
+              "functions",
+              `${resolver.name}__${name}.js`,
+            );
+            let functionCode = "";
+            try {
+              functionCode = fs.readFileSync(functionPath, "utf-8");
+            } catch {
+              console.warn(`Function file not found: ${functionPath}`);
+            }
+            return {
+              name,
+              description: name,
+              operationType: PipelineResolver_OperationType.FUNCTION,
+              operationSource: functionCode,
+            };
           }
-          return {
-            name,
-            description: name,
-            operationType: PipelineResolver_OperationType.FUNCTION,
-            operationSource: functionCode,
-          };
+          case "gql":
+            return {
+              name,
+              description: name,
+              operationType: PipelineResolver_OperationType.GRAPHQL,
+              operationSource: "",
+            };
+          default:
+            throw new Error(`Unsupported step kind: ${step[0]}`);
         }
-        case "gql":
-          return {
-            name,
-            description: name,
-            operationType: PipelineResolver_OperationType.GRAPHQL,
-            operationSource: "",
-          };
-        default:
-          throw new Error(`Unsupported step kind: ${step[0]}`);
-      }
-    });
+      },
+    );
 
     // Input型のフィールド情報を抽出
     const inputFields = this.extractTypeFields(resolver.input);
 
     // Output型のフィールド情報を抽出
-    const outputFields = resolver.output ? this.extractTypeFields(resolver.output) : undefined;
+    const outputFields = resolver.output
+      ? this.extractTypeFields(resolver.output)
+      : undefined;
 
     return {
       name: resolver.name,
@@ -151,17 +154,20 @@ export class ResolverProcessor {
    * TailorType型からフィールド情報を抽出
    */
   private static extractTypeFields(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type: any,
-  ): Record<string, { type: string; required: boolean; array: boolean }> | undefined {
+  ):
+    | Record<string, { type: string; required: boolean; array: boolean }>
+    | undefined {
     if (!type || !type.fields) {
       return undefined;
     }
 
-    const fields: Record<string, { type: string; required: boolean; array: boolean }> = {};
+    const fields: Record<
+      string,
+      { type: string; required: boolean; array: boolean }
+    > = {};
 
     for (const [fieldName, field] of Object.entries(type.fields)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const fieldObj = field as any;
       if (fieldObj && fieldObj.metadata) {
         const metadata = fieldObj.metadata;

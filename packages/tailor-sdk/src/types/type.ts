@@ -1,12 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { clone } from "es-toolkit";
-import {
-  TailorFieldType,
-  TailorToTs,
-  FieldMetadata,
-} from "./types";
+import { TailorFieldType, TailorToTs, FieldMetadata } from "./types";
 import type { DeepWriteable, output, Prettify } from "./helpers";
 import { AllowedValues, AllowedValuesOutput, mapAllowedValues } from "./field";
 
@@ -188,7 +183,6 @@ export class TailorField<
       { nameMap: M; type: T; field: F }
     >;
   }
-
 }
 
 const createField = TailorField.create;

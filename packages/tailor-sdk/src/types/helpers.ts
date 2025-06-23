@@ -6,6 +6,14 @@ export type DeepWriteable<T> = T extends object
   ? { -readonly [P in keyof T]: DeepWriteable<T[P]> } & {}
   : T;
 
+type LiteralToString<T> = T extends string ? string : T;
+type SpecificNumberToNumber<T> = T extends number ? number : T;
+type TrueFalseToBool<T> = T extends number ? number : T;
+type Widening<T> = TrueFalseToBool<SpecificNumberToNumber<LiteralToString<T>>>;
+export type DeepWidening<T> = T extends object
+  ? { [K in keyof T]: DeepWidening<T[K]> }
+  : Widening<T>;
+
 export type input<T> = T extends { _input: infer U } ? DeepWriteable<U> : never;
 
 export type output<T> = T extends { _output: infer U }
