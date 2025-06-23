@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Resolver } from "../services/pipeline/resolver";
 import { TailorDBType } from "../services/tailordb/schema";
 
@@ -6,7 +7,7 @@ export interface GeneratedFile {
   content: string;
 }
 
-export interface GeneratorMetadata<T, R> {
+export interface BasicGeneratorMetadata<T, R> {
   types: Record<string, T>;
   resolvers: Record<string, R>;
 }
@@ -28,14 +29,24 @@ export interface SeparatedCodeGenerator {
   ): GeneratedFile | Promise<GeneratedFile> | null | Promise<null>;
 }
 
-export interface AggregateCodeGenerator<T = any, R = any> {
+export interface AggregateCodeGenerator<
+  T = any,
+  R = any,
+  Ts = Record<string, T>,
+  Rs = Record<string, R>,
+> {
   readonly id: string;
   readonly description: string;
 
-  processType(type: TailorDBType): Promise<T>;
-  processResolver(type: Resolver): Promise<R>;
+  processType(type: TailorDBType): T | Promise<T>;
+  processTypes?(types: Record<string, T>): Ts | Promise<Ts>;
+  processResolver(resolver: Resolver): R | Promise<R>;
+  processResolvers?(resolvers: Record<string, R>): Rs | Promise<Rs>;
   aggregate(
-    metadata: GeneratorMetadata<T, R>,
+    metadata: {
+      types: Ts;
+      resolvers: Rs;
+    },
     baseDir: string,
   ): GeneratorResult;
 }

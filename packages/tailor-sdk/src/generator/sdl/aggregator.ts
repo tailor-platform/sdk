@@ -1,5 +1,5 @@
 import path from "node:path";
-import { GeneratorMetadata, GeneratorResult } from "../types";
+import { BasicGeneratorMetadata, GeneratorResult } from "../types";
 import { SDLTypeMetadata } from "./types";
 import { ResolverSDLMetadata } from "./types";
 import { SDLUtils } from "./utils";
@@ -16,7 +16,7 @@ export class SDLAggregator {
    */
   @measure
   static aggregate(
-    metadata: GeneratorMetadata<SDLTypeMetadata, ResolverSDLMetadata>,
+    metadata: BasicGeneratorMetadata<SDLTypeMetadata, ResolverSDLMetadata>,
     baseDir: string,
   ): GeneratorResult {
     try {
