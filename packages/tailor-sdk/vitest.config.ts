@@ -4,6 +4,11 @@ import * as swc from "@swc/core";
 
 export default defineConfig({
   esbuild: false,
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
   plugins: [
     {
       name: "swc",

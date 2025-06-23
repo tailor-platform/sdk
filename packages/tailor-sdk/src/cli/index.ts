@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "citty";
@@ -6,11 +7,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
-import {
-  applyCommandArgs,
-  generateCommandArgs,
-  type CommandArgs,
-} from "./args.js";
+import { commandArgs, type CommandArgs } from "./args.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,15 +47,24 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
       process.exit(1);
     }
 
-    const args = [
-      cliExecPath,
-      command,
-      "-c",
-      options.config || "tailor.config.ts",
-    ];
-    if (options.dryRun) {
-      args.push("-d");
-    }
+    const argsDef = commandArgs[command];
+    const args = [cliExecPath, command];
+    Object.entries(argsDef).forEach(([key, value]) => {
+      if (key in options) {
+        if (value.type === "boolean") {
+          if ((options as any)[key]) {
+            args.push(`--${key}`);
+          }
+        } else if (value.type === "string") {
+          args.push(`--${key}`, (options as any)[key]);
+        } else {
+          args.push((options as any)[key]);
+        }
+      }
+    });
+    // if ("dryRun" in options && options.dryRun) {
+    //   args.push("-d");
+    // }
 
     const child = spawn("tsx", args, {
       stdio: "inherit",
@@ -86,7 +92,7 @@ const applyCommand = defineCommand({
     name: "apply",
     description: "Apply Tailor configuration to generate files",
   },
-  args: applyCommandArgs,
+  args: commandArgs.apply,
   async run({ args }) {
     await exec("apply", args);
   },
@@ -97,7 +103,7 @@ const generateCommand = defineCommand({
     name: "generate",
     description: "Generate files using Tailor configuration",
   },
-  args: generateCommandArgs,
+  args: commandArgs.generate,
   async run({ args }) {
     await exec("generate", args);
   },

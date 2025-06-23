@@ -1,5 +1,5 @@
 import { SDLFieldMetadata, SDLTypeMetadata } from "./types";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 
 /**
  * SDL生成の共通ユーティリティ関数

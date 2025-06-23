@@ -27,6 +27,10 @@
       "dependsOn": ["^build"],
       "cache": false
     },
+    "//#gen:watch": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "//#gen:perf": {
       "dependsOn": ["^build"],
       "cache": false

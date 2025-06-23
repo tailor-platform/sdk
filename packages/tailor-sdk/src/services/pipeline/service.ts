@@ -2,11 +2,11 @@ import path from "node:path";
 import fs from "node:fs";
 import { ResolverBundler } from "./bundler";
 import { PipelineResolverServiceConfig } from "./types";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
-import { ManifestAggregator } from "../../generator/manifest/aggregator";
-import { ResolverProcessor as ManifestResolverProcessor } from "../../generator/manifest/resolver-processor";
+import { ManifestAggregator } from "@/generator/builtin/manifest/aggregator";
+import { ResolverProcessor as ManifestResolverProcessor } from "@/generator/builtin/manifest/resolver-processor";
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;

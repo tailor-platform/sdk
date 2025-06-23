@@ -1,4 +1,4 @@
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 import { AuthServiceInput, IdProviderConfig } from "./types";
 
 export class AuthService {

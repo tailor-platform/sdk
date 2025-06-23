@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { Resolver } from "../../services/pipeline/resolver";
+import { Resolver } from "@/services/pipeline/resolver";
 import type { ResolverManifestMetadata, PipelineInfo } from "./types";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { getDistDir } from "../../config";
-import { StepDef } from "../../services/pipeline/types";
+import { getDistDir } from "@/config";
+import { StepDef } from "@/services/pipeline/types";
 
 export { ResolverManifestMetadata };
 

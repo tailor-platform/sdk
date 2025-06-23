@@ -1,9 +1,9 @@
 import path from "node:path";
-import { BasicGeneratorMetadata, GeneratorResult } from "../types";
+import { BasicGeneratorMetadata, GeneratorResult } from "../../types";
 import { SDLTypeMetadata } from "./types";
 import { ResolverSDLMetadata } from "./types";
 import { SDLUtils } from "./utils";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 
 /**
  * SDL統合ロジック

@@ -9,9 +9,6 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "baseUrl": ".",
-    "paths": {
-      "@tailor-platform/tailor-sdk": ["packages/tailor-sdk/src/index.ts"]
-    },
     "skipLibCheck": true
   },
   "include": ["src/**/*", "tests/**/*"],

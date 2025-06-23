@@ -9,7 +9,7 @@ export const supplier = db.type(
     email: db.string().optional(),
     postalCode: db.string(),
     country: db.string(),
-    state: db.enum(["Alabama", "Alaska"]),
+    state: db.enum("Alabama", "Alaska"),
     city: db.string(),
   },
   { withTimestamps: true },
