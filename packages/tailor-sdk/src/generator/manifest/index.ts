@@ -1,6 +1,6 @@
 import {
   AggregateCodeGenerator,
-  GeneratorMetadata,
+  BasicGeneratorMetadata,
   GeneratorResult,
 } from "../types";
 import { TailorDBType } from "../../services/tailordb/schema";
@@ -45,7 +45,10 @@ class ManifestGenerator
    */
   @measure
   aggregate(
-    metadata: GeneratorMetadata<ManifestTypeMetadata, ResolverManifestMetadata>,
+    metadata: BasicGeneratorMetadata<
+      ManifestTypeMetadata,
+      ResolverManifestMetadata
+    >,
     baseDir: string,
   ): GeneratorResult {
     return ManifestAggregator.aggregate(metadata, baseDir);

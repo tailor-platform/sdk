@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import path from "node:path";
 import fs, { mkdirSync } from "node:fs";
 import { measure } from "./performance";
@@ -127,14 +128,21 @@ class Workspace {
     ];
     await Promise.all(
       aggregateGenerators.map(async (gen) => {
-        const typeResults: Record<string, unknown> = {};
-        const resolverResults: Record<string, unknown> = {};
+        let typeResults: any = {};
+        let resolverResults: any = {};
 
         for (const type of tailordbTypes) {
           typeResults[type.name] = await gen.processType(type);
         }
+        if (gen.processTypes) {
+          typeResults = await gen.processTypes(typeResults);
+        }
+
         for (const resolver of resolvers) {
           resolverResults[resolver.name] = await gen.processResolver(resolver);
+        }
+        if (gen.processResolvers) {
+          resolverResults = await gen.processResolvers(resolverResults);
         }
 
         const result = gen.aggregate(

@@ -1,6 +1,6 @@
 import {
   AggregateCodeGenerator,
-  GeneratorMetadata,
+  BasicGeneratorMetadata,
   GeneratorResult,
 } from "../types";
 import { TailorDBType } from "../../services/tailordb/schema";
@@ -42,7 +42,7 @@ class SDLGenerator
    */
   @measure
   aggregate(
-    metadata: GeneratorMetadata<SDLTypeMetadata, ResolverSDLMetadata>,
+    metadata: BasicGeneratorMetadata<SDLTypeMetadata, ResolverSDLMetadata>,
     baseDir: string,
   ): GeneratorResult {
     return SDLAggregator.aggregate(metadata, baseDir);
