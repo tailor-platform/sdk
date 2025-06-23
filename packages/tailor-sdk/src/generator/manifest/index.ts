@@ -1,5 +1,5 @@
 import {
-  AggregateCodeGenerator,
+  CodeGenerator,
   BasicGeneratorMetadata,
   GeneratorResult,
 } from "../types";
@@ -13,12 +13,9 @@ import { ManifestAggregator } from "./aggregator";
 
 /**
  * Manifest生成システムのメインエントリーポイント
- * AggregateCodeGeneratorインターフェースの完全実装
- * SDL生成とは完全に独立
  */
 class ManifestGenerator
-  implements
-    AggregateCodeGenerator<ManifestTypeMetadata, ResolverManifestMetadata>
+  implements CodeGenerator<ManifestTypeMetadata, ResolverManifestMetadata>
 {
   readonly id = "@tailor/manifest";
   readonly description =

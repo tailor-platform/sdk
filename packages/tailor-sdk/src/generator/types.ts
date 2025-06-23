@@ -17,19 +17,7 @@ export interface GeneratorResult {
   errors?: string[];
 }
 
-export interface SeparatedCodeGenerator {
-  readonly id: string;
-  readonly description: string;
-
-  processType(
-    type: TailorDBType,
-  ): GeneratedFile | Promise<GeneratedFile> | null | Promise<null>;
-  processResolver(
-    type: Resolver,
-  ): GeneratedFile | Promise<GeneratedFile> | null | Promise<null>;
-}
-
-export interface AggregateCodeGenerator<
+export interface CodeGenerator<
   T = any,
   R = any,
   Ts = Record<string, T>,
@@ -50,7 +38,3 @@ export interface AggregateCodeGenerator<
     baseDir: string,
   ): GeneratorResult;
 }
-
-export type CodeGenerator<T, R> =
-  | SeparatedCodeGenerator
-  | AggregateCodeGenerator<T, R>;

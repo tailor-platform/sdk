@@ -1,5 +1,5 @@
 import {
-  AggregateCodeGenerator,
+  CodeGenerator,
   BasicGeneratorMetadata,
   GeneratorResult,
 } from "../types";
@@ -13,10 +13,9 @@ import { measure } from "../../performance";
 
 /**
  * SDL生成システムのメインエントリーポイント
- * AggregateCodeGeneratorインターフェースの完全実装
  */
-class SDLGenerator
-  implements AggregateCodeGenerator<SDLTypeMetadata, ResolverSDLMetadata>
+class SdlGenerator
+  implements CodeGenerator<SDLTypeMetadata, ResolverSDLMetadata>
 {
   readonly id = "@tailor/sdl";
   readonly description = "Generates SDL files for TailorDB types and resolvers";
@@ -49,4 +48,4 @@ class SDLGenerator
   }
 }
 
-export const sdlGenerator = new SDLGenerator();
+export const sdlGenerator = new SdlGenerator();

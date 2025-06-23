@@ -9,7 +9,7 @@ import { ApplyOptions, GenerateOptions } from "./cli/args";
 import { sdlGenerator } from "./generator/sdl";
 import { TailorDBType } from "./services/tailordb/schema";
 import { Resolver } from "./services/pipeline/resolver";
-import { AggregateCodeGenerator } from "./generator/types";
+import { CodeGenerator } from "./generator/types";
 
 class Workspace {
   private applications: Application[] = [];
@@ -123,15 +123,21 @@ class Workspace {
       }
     }
 
-    const aggregateGenerators: AggregateCodeGenerator<any, any>[] = [
-      sdlGenerator,
-    ];
+    this.processGenerators(baseDir, tailordbTypes, resolvers);
+  }
+
+  async processGenerators(
+    baseDir: string,
+    types: TailorDBType[],
+    resolvers: Resolver[],
+  ) {
+    const generators: CodeGenerator<any, any>[] = [sdlGenerator];
     await Promise.all(
-      aggregateGenerators.map(async (gen) => {
+      generators.map(async (gen) => {
         let typeResults: any = {};
         let resolverResults: any = {};
 
-        for (const type of tailordbTypes) {
+        for (const type of types) {
           typeResults[type.name] = await gen.processType(type);
         }
         if (gen.processTypes) {
@@ -145,9 +151,9 @@ class Workspace {
           resolverResults = await gen.processResolvers(resolverResults);
         }
 
-        const result = gen.aggregate(
+        const result = await gen.aggregate(
           { types: typeResults, resolvers: resolverResults },
-          baseDir,
+          path.join(baseDir, gen.id),
         );
         Promise.all(
           result.files.map(async (file) => {
