@@ -38,7 +38,6 @@ export default defineConfig([
         },
       ],
       "no-console": "off",
-      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
 ]);
