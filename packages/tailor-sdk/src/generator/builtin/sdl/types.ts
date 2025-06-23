@@ -1,4 +1,4 @@
-import { GraphQLType } from "../../types/types";
+import { GraphQLType } from "@/types/types";
 
 export interface SDLTypeMetadata {
   name: string;

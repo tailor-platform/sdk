@@ -1,9 +1,9 @@
-import { TailorDBType } from "../../services/tailordb/schema";
-import { TailorType } from "../../types/type";
+import { TailorDBType } from "@/services/tailordb/schema";
+import { TailorType } from "@/types/type";
 import { SDLTypeMetadata, SDLFieldMetadata } from "./types";
 import { SDLUtils } from "./utils";
-import { measure } from "../../performance";
-import { tailorToGraphQL } from "../../types/types";
+import { measure } from "@/performance";
+import { tailorToGraphQL } from "@/types/types";
 
 /**
  * Type処理ロジック

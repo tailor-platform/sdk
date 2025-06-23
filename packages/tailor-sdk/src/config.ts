@@ -1,7 +1,14 @@
-import type { TailorDBServiceInput } from "./services/tailordb/types";
-import type { PipelineResolverServiceInput } from "./services/pipeline/types";
-import type { AuthServiceInput } from "./services/auth/types";
-import { Region } from "./types/types";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { TailorDBServiceInput } from "@/services/tailordb/types";
+import type { PipelineResolverServiceInput } from "@/services/pipeline/types";
+import type { AuthServiceInput } from "@/services/auth/types";
+import { Region } from "@/types/types";
+import { SdlGeneratorID } from "@/generator/builtin/sdl/index";
+import {
+  KyselyGenerator,
+  KyselyGeneratorID,
+} from "@/generator/builtin/kysely-type/index";
+import { CodeGenerator } from "@/generator/types";
 
 export interface AppConfig {
   db: TailorDBServiceInput;
@@ -13,6 +20,14 @@ export interface WorkspaceConfig {
   name: string;
   region: Region;
   app: Record<string, AppConfig>;
+  generators?: Array<
+    | typeof SdlGeneratorID
+    | [
+        typeof KyselyGeneratorID,
+        ConstructorParameters<typeof KyselyGenerator>[0],
+      ]
+    | CodeGenerator<any, any, any, any>
+  >;
 }
 
 let distPath: string | null = null;

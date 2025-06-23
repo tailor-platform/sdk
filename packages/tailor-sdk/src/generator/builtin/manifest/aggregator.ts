@@ -1,5 +1,5 @@
 import path from "node:path";
-import { BasicGeneratorMetadata, GeneratorResult } from "../types";
+import { BasicGeneratorMetadata, GeneratorResult } from "../../types";
 import {
   ManifestTypeMetadata,
   ManifestJSON,
@@ -10,9 +10,9 @@ import {
   ManifestField,
 } from "./types";
 import { ResolverManifestMetadata } from "./resolver-processor";
-import { measure } from "../../performance";
+import { measure } from "@/performance";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { tailorToManifestScalar } from "../../types/types";
+import { tailorToManifestScalar } from "@/types/types";
 
 /**
  * Manifest統合ロジック

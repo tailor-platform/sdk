@@ -9,8 +9,8 @@ import {
   StepDef,
   StepReturn,
 } from "./types";
-import { TailorType } from "../../types/type";
-import { output, StrictOutput } from "../../types/helpers";
+import { TailorType } from "@/types/type";
+import { output, StrictOutput } from "@/types/helpers";
 
 export class Resolver<
   QueryType extends "query" | "mutation" = any,

@@ -12,7 +12,7 @@ import {
   SyntaxKind,
   VariableDeclaration,
 } from "ts-morph";
-import { measure } from "../../../performance";
+import { measure } from "@/performance";
 import { Resolver } from "../resolver";
 
 export class CodeTransformer {
