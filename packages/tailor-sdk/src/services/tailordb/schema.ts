@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
 
 import {
@@ -14,10 +13,7 @@ import {
   DefinedFieldMetadata,
   FieldValidateFn,
 } from "./types";
-import {
-  TailorFieldType,
-  TailorToTs,
-} from "../../types/types";
+import { TailorFieldType, TailorToTs } from "../../types/types";
 import type { Prettify } from "../../types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "../../types/field";
 import { ReferenceConfig, TailorField, TailorType } from "../../types/type";
@@ -233,7 +229,6 @@ class TailorDBField<
       Reference
     >;
   }
-
 }
 
 const createField = TailorDBField.create;
@@ -310,7 +305,6 @@ export class TailorDBType<
       },
     });
   }
-
 }
 type TailorDBDef = InstanceType<
   typeof TailorDBType<

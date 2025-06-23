@@ -29,6 +29,7 @@ export default defineConfig([
           argsIgnorePattern: "^_",
         },
       ],
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
 ]);

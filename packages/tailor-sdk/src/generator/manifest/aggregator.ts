@@ -31,7 +31,10 @@ export class ManifestAggregator {
     try {
       const { resolvers } = metadata;
 
-      const manifestJSON = this.generateManifestJSON(resolvers, namespace || "default");
+      const manifestJSON = this.generateManifestJSON(
+        resolvers,
+        namespace || "default",
+      );
 
       return {
         files: [
@@ -121,7 +124,10 @@ export class ManifestAggregator {
           Name: resolverMetadata.inputType,
           Description: "",
           Required: false,
-          Fields: this.generateTypeFields(resolverMetadata.inputType, resolverMetadata.inputFields),
+          Fields: this.generateTypeFields(
+            resolverMetadata.inputType,
+            resolverMetadata.inputFields,
+          ),
         },
       },
     ];
@@ -133,7 +139,10 @@ export class ManifestAggregator {
         Name: resolverMetadata.outputType,
         Description: "",
         Required: true,
-        Fields: this.generateTypeFields(resolverMetadata.outputType, resolverMetadata.outputFields),
+        Fields: this.generateTypeFields(
+          resolverMetadata.outputType,
+          resolverMetadata.outputFields,
+        ),
       },
       Description: "",
       Array: false,
@@ -161,7 +170,10 @@ export class ManifestAggregator {
   @measure
   private static generateTypeFields(
     typeName: string,
-    fields?: Record<string, { type: string; required: boolean; array: boolean }>,
+    fields?: Record<
+      string,
+      { type: string; required: boolean; array: boolean }
+    >,
   ): ManifestField[] {
     // 動的フィールド情報が存在する場合
     if (fields && Object.keys(fields).length > 0) {
@@ -170,7 +182,10 @@ export class ManifestAggregator {
         Description: "",
         Type: {
           Kind: "ScalarType",
-          Name: tailorToManifestScalar[fieldInfo.type as keyof typeof tailorToManifestScalar] || "String",
+          Name:
+            tailorToManifestScalar[
+              fieldInfo.type as keyof typeof tailorToManifestScalar
+            ] || "String",
           Description: "",
           Required: false,
         },
@@ -180,8 +195,9 @@ export class ManifestAggregator {
     }
 
     // フィールド情報が取得できない場合
-    console.warn(`No field information available for type: ${typeName}. Returning empty fields array.`);
+    console.warn(
+      `No field information available for type: ${typeName}. Returning empty fields array.`,
+    );
     return [];
   }
-
 }

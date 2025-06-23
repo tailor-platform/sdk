@@ -20,7 +20,9 @@ export class SDLUtils {
       // Handle list types
       if (field.array) {
         // 配列の要素も必須とする（t.string().array()の場合）
-        const elementType = field.required ? `${field.type || "JSON"}!` : (field.type || "JSON");
+        const elementType = field.required
+          ? `${field.type || "JSON"}!`
+          : field.type || "JSON";
         fieldType = `[${elementType}]`;
       }
 
@@ -60,7 +62,9 @@ export class SDLUtils {
     // Handle list types
     if (field.array) {
       // 配列の要素も必須とする（t.string().array()の場合）
-      const elementType = field.required ? `${field.type || "JSON"}!` : (field.type || "JSON");
+      const elementType = field.required
+        ? `${field.type || "JSON"}!`
+        : field.type || "JSON";
       fieldType = `[${elementType}]`;
     }
 

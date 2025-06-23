@@ -30,7 +30,10 @@ export class ResolverProcessor {
 
     // SDL生成ロジック（元のResolver.toSDLMetadata()から移行）
     const inputMetadata = await TypeProcessor.processType(resolver.input, true);
-    const outputMetadata = await TypeProcessor.processType(resolver.output, false);
+    const outputMetadata = await TypeProcessor.processType(
+      resolver.output,
+      false,
+    );
 
     const sdl = multiline/* gql */ `
     ${SDLUtils.generateSDLFromMetadata(inputMetadata)}
@@ -160,7 +163,10 @@ export class ResolverProcessor {
     }
 
     const inputMetadata = await TypeProcessor.processType(resolver.input, true);
-    const outputMetadata = await TypeProcessor.processType(resolver.output, false);
+    const outputMetadata = await TypeProcessor.processType(
+      resolver.output,
+      false,
+    );
 
     const inputSDL = SDLUtils.generateSDLFromMetadata(inputMetadata);
     const outputSDL = SDLUtils.generateSDLFromMetadata(outputMetadata);

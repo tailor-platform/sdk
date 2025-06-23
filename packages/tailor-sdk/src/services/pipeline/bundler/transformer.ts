@@ -1,5 +1,4 @@
 /* eslint-disable no-case-declarations */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 
 import fs from "node:fs";

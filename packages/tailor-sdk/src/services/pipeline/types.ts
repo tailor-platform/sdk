@@ -1,3 +1,4 @@
+import { DeepWidening } from "../../types/helpers";
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 
@@ -32,5 +33,4 @@ export type PipelineResolverServiceInput = {
   [namespace: string]: PipelineResolverServiceConfig;
 };
 
-type TemplateLiteralToString<T> = T extends string ? string : T;
-export type StepReturn<T> = TemplateLiteralToString<Awaited<T>>;
+export type StepReturn<T> = DeepWidening<Awaited<T>>;
