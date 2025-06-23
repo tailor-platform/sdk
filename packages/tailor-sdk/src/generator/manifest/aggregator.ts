@@ -1,5 +1,5 @@
 import path from "node:path";
-import { GeneratorMetadata, GeneratorResult } from "../types";
+import { BasicGeneratorMetadata, GeneratorResult } from "../types";
 import {
   ManifestTypeMetadata,
   ManifestJSON,
@@ -24,7 +24,10 @@ export class ManifestAggregator {
    */
   @measure
   static aggregate(
-    metadata: GeneratorMetadata<ManifestTypeMetadata, ResolverManifestMetadata>,
+    metadata: BasicGeneratorMetadata<
+      ManifestTypeMetadata,
+      ResolverManifestMetadata
+    >,
     baseDir: string,
     namespace?: string,
   ): GeneratorResult {
