@@ -130,7 +130,14 @@ export class ResolverBundler {
         const bundle = await rollup.rollup(
           rollup.defineConfig({
             input: file,
-            treeshake: true,
+            treeshake: {
+              moduleSideEffects: false,
+              propertyReadSideEffects: false,
+              tryCatchDeoptimization: false,
+              unknownGlobalSideEffects: false,
+              preset: "smallest",
+            },
+            external: () => false,
             plugins: [minify({})],
           }) as rollup.RollupOptions,
         );
