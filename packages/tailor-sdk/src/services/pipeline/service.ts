@@ -6,11 +6,14 @@ import { measure } from "@/performance";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
 import { ManifestAggregator } from "@/generator/builtin/manifest/aggregator";
-import { ResolverProcessor as ManifestResolverProcessor } from "@/generator/builtin/manifest/resolver-processor";
+import {
+  ResolverProcessor,
+  ResolverManifestMetadata,
+} from "@/generator/builtin/manifest/resolver-processor";
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
-  private resolvers: Resolver<any, any, any, any, any, any>[] = [];
+  private resolvers: Resolver[] = [];
 
   constructor(
     public readonly namespace: string,
@@ -26,10 +29,9 @@ export class PipelineResolverService {
   }
 
   async toManifestJSON() {
-    const resolverMetadata: Record<string, any> = {};
+    const resolverMetadata: Record<string, ResolverManifestMetadata> = {};
     for (const resolver of this.resolvers) {
-      const metadata =
-        await ManifestResolverProcessor.processResolver(resolver);
+      const metadata = await ResolverProcessor.processResolver(resolver);
       resolverMetadata[resolver.name] = metadata;
     }
 
@@ -87,7 +89,7 @@ export class PipelineResolverService {
     }
   }
 
-  getResolvers(): Resolver<any, any, any, any, any, any>[] {
+  getResolvers(): Resolver[] {
     return this.resolvers;
   }
 }

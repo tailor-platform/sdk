@@ -8,14 +8,14 @@ pre-commit:
       exclude: "packages"
       run: |
         echo "lint: {staged_files}"
-        npx eslint --no-ignore --cache {staged_files}
+        npx eslint --cache {staged_files}
 
     - name: lint:tailor-sdk
       glob: "*.{ts}"
       root: "packages/tailor-sdk"
       run: |
         echo "lint: {staged_files}"
-        npx eslint --no-ignore --cache {staged_files}
+        npx eslint --cache {staged_files}
 
     - name: format
       glob: "*.{ts,json}"
