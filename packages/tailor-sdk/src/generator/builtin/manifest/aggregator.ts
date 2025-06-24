@@ -13,6 +13,7 @@ import { ResolverManifestMetadata } from "./resolver-processor";
 import { measure } from "@/performance";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { tailorToManifestScalar } from "@/types/types";
+import { getDistDir } from "@/config";
 
 /**
  * Manifest統合ロジック
@@ -87,21 +88,25 @@ export class ManifestAggregator {
     resolverMetadata: ResolverManifestMetadata,
   ): ResolverManifest {
     const pipelines: PipelineManifest[] = [
-      ...resolverMetadata.pipelines.map((pipeline) => ({
-        Name: pipeline.name,
-        OperationName: pipeline.name,
-        Description: pipeline.description,
-        OperationType: pipeline.operationType,
-        OperationSourcePath: path.join(
-          "tests/fixtures/expected",
+      ...resolverMetadata.pipelines.map((pipeline) => {
+        const sourcePath = path.join(
+          getDistDir(),
           "functions",
           `${name}__${pipeline.name}.js`,
-        ),
-        OperationHook: {
-          Expr: "({ ...context.pipeline, ...context.args });",
-        },
-        PostScript: `args.${pipeline.name}`,
-      })),
+        );
+
+        return {
+          Name: pipeline.name,
+          OperationName: pipeline.name,
+          Description: pipeline.description,
+          OperationType: pipeline.operationType,
+          OperationSourcePath: sourcePath,
+          OperationHook: {
+            Expr: "({ ...context.pipeline, ...context.args });",
+          },
+          PostScript: `args.${pipeline.name}`,
+        };
+      }),
       {
         Name: `__construct_output`,
         OperationName: `__construct_output`,

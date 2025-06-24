@@ -75,7 +75,7 @@ export class TypeProcessor {
    */
   private static generateDBInterface(types: KyselyTypeMetadata[]): string {
     return multiline/* ts */ `
-      export interface DB {
+      interface DB {
         ${types.map((type) => `${type.name}: ${type.name};`).join("\n")}
       }
     `;
@@ -131,6 +131,7 @@ export class TypeProcessor {
 }
 
 const COMMON_PREFIX = multiline/* ts */ `
+  import { SqlClient } from "@tailor-platform/tailor-sdk";
   import {
     ColumnType,
     DummyDriver,
@@ -138,29 +139,30 @@ const COMMON_PREFIX = multiline/* ts */ `
     PostgresAdapter,
     PostgresIntrospector,
     PostgresQueryCompiler,
+    type CompiledQuery,
   } from "kysely";
 
-  export type ArrayType<T> = ArrayTypeImpl<T> extends (infer U)[]
+  type ArrayType<T> = ArrayTypeImpl<T> extends (infer U)[]
     ? U[]
     : ArrayTypeImpl<T>;
-  export type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
+  type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S[], I[], U[]>
     : T[];
-  export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>;
-  export type Json = JsonValue;
-  export type JsonArray = JsonValue[];
-  export type JsonObject = {
+  type Json = JsonValue;
+  type JsonArray = JsonValue[];
+  type JsonObject = {
     [x: string]: JsonValue | undefined;
   };
-  export type JsonPrimitive = boolean | number | string | null;
-  export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
-  export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+  type JsonPrimitive = boolean | number | string | null;
+  type JsonValue = JsonArray | JsonObject | JsonPrimitive;
+  type Timestamp = ColumnType<Date, Date | string, Date | string>;
 `;
 
 const COMMON_SUFFIX = multiline/* ts */ `
-  export const getDB = () => {
+  const getDB = () => {
     return new Kysely<DB>({
       dialect: {
         createAdapter: () => new PostgresAdapter(),
@@ -170,4 +172,29 @@ const COMMON_SUFFIX = multiline/* ts */ `
       },
     });
   };
+
+  type QueryReturnType<T> = T extends CompiledQuery<infer U> ? U : never;
+
+  export async function kyselyWrapper<const C extends { client: SqlClient }, R>(
+    context: C,
+    callback: (
+      context: Omit<C, "client"> & {
+        db: ReturnType<typeof getDB>;
+        client: {
+          exec: <Q extends CompiledQuery>(
+            query: Q,
+          ) => Promise<QueryReturnType<Q>[]>;
+        };
+      },
+    ) => Promise<R>,
+  ) {
+    const db = getDB();
+    const clientWrapper = {
+      exec: async <Q extends CompiledQuery>(query: Q) => {
+        return await context.client.exec<QueryReturnType<Q>[]>(query.sql);
+      },
+    };
+
+    return await callback({ ...context, db, client: clientWrapper });
+  }
 `;
