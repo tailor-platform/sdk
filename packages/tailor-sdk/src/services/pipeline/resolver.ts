@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { gqlFactory } from "./gql";
 import { sqlFactory } from "./sql";
 import {

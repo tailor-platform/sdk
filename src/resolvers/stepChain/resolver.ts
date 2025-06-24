@@ -1,5 +1,6 @@
 import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
+// import { kyselyWrapper } from "../db";
 
 export default createQueryResolver(
   "stepChain",
@@ -24,9 +25,25 @@ export default createQueryResolver(
     return result.name;
   })
 
+  // .sqlStep("kyselyStep", (context) =>
+  //   kyselyWrapper(context, async (context) => {
+  //     const query = context.db
+  //       .selectFrom("Supplier")
+  //       .select(["state"])
+  //       .compile();
+
+  //     return (await context.client.exec(query)).map((r) => r.state).join(", ");
+  //   }),
+  // )
+
   .returns(
     (context) => ({
-      summary: [context.step1, context.step2, context.sqlStep],
+      summary: [
+        context.step1,
+        context.step2,
+        context.sqlStep,
+        // context.kyselyStep,
+      ],
     }),
     t.type("StepChainOutput", {
       summary: t.string().array(),
