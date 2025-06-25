@@ -13,7 +13,7 @@ import {
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
-  private resolvers: Resolver[] = [];
+  private resolvers: Record<string, Resolver> = {};
 
   constructor(
     public readonly namespace: string,
@@ -24,13 +24,12 @@ export class PipelineResolverService {
 
   @measure
   async build() {
-    await this.loadResolvers();
     await this.bundler.bundle();
   }
 
   async toManifestJSON() {
     const resolverMetadata: Record<string, ResolverManifestMetadata> = {};
-    for (const resolver of this.resolvers) {
+    for (const resolver of Object.values(this.resolvers)) {
       const metadata = await ResolverProcessor.processResolver(resolver);
       resolverMetadata[resolver.name] = metadata;
     }
@@ -60,7 +59,7 @@ export class PipelineResolverService {
   }
 
   @measure
-  private async loadResolvers(): Promise<void> {
+  async loadResolvers(): Promise<void> {
     if (!this.config.files || this.config.files.length === 0) {
       return;
     }
@@ -77,19 +76,24 @@ export class PipelineResolverService {
     }
 
     for (const resolverFile of resolverFiles) {
-      try {
-        const resolverModule = await import(resolverFile);
-        const resolver = resolverModule.default;
-        if (isResolver(resolver)) {
-          this.resolvers.push(resolver);
-        }
-      } catch (error) {
-        console.error(`Failed to load resolver from ${resolverFile}:`, error);
-      }
+      await this.loadResolverForFile(resolverFile);
     }
   }
 
-  getResolvers(): Resolver[] {
+  async loadResolverForFile(resolverFile: string) {
+    try {
+      const resolverModule = await import(`${resolverFile}?t=${Date.now()}`);
+      const resolver = resolverModule.default;
+      if (isResolver(resolver)) {
+        this.resolvers[resolverFile] = resolver;
+      }
+    } catch (error) {
+      console.error(`Failed to load resolver from ${resolverFile}:`, error);
+    }
+    return this.resolvers[resolverFile];
+  }
+
+  getResolvers(): Record<string, Resolver> {
     return this.resolvers;
   }
 }
