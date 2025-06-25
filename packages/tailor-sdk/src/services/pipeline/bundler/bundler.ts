@@ -120,6 +120,9 @@ export class ResolverBundler {
           if (
             !id.startsWith(".") &&
             !id.startsWith("/") &&
+            !id.startsWith("@/") &&
+            !id.startsWith("#") &&
+            !id.startsWith("~") &&
             !id.includes("\\")
           ) {
             return true;
