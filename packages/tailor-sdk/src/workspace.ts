@@ -63,7 +63,7 @@ class Workspace {
       manifest.Apps.push(app.toManifestJSON());
 
       for (const db of app.tailorDBServices) {
-        await db.apply();
+        await db.loadTypes();
         const tailordbManifest = db.toManifestJSON();
         manifest.Services.push(tailordbManifest);
         manifest.Tailordbs.push(tailordbManifest);
@@ -71,6 +71,7 @@ class Workspace {
 
       for (const pipeline of app.pipelineResolverServices) {
         await pipeline.build();
+        await pipeline.loadResolvers();
         const pipelineManifest = await pipeline.toManifestJSON();
         manifest.Services.push(pipelineManifest);
         manifest.Pipelines.push(pipelineManifest);

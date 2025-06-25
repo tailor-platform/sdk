@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { capitalize } from "es-toolkit";
 import multiline from "multiline-ts";
 import { Resolver } from "@/services/pipeline/resolver";
@@ -7,7 +5,6 @@ import { SDLUtils } from "./utils";
 import { measure } from "@/performance";
 import { ResolverSDLMetadata } from "./types";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { getDistDir } from "@/config";
 import { TypeProcessor } from "./type-processor";
 /**
  * Resolver処理ロジック
@@ -50,22 +47,11 @@ export class ResolverProcessor {
         switch (type) {
           case "fn":
           case "sql": {
-            const functionPath = path.join(
-              getDistDir(),
-              "functions",
-              `${resolver.name}__${name}.js`,
-            );
-            let functionCode = "";
-            try {
-              functionCode = fs.readFileSync(functionPath, "utf-8");
-            } catch {
-              console.warn(`Function file not found: ${functionPath}`);
-            }
             return {
               name,
               description: name,
               operationType: PipelineResolver_OperationType.FUNCTION,
-              operationSource: functionCode,
+              operationSource: "",
               operationName: name,
             };
           }

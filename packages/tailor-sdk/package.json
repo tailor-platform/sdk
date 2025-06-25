@@ -29,7 +29,9 @@
   },
   "dependencies": {
     "@tailor-inc/operator-client": "^25.313.146",
+    "chokidar": "^4.0.0",
     "citty": "^0.1.6",
+    "madge": "^8.0.0",
     "pkg-types": "^2.1.0",
     "tsx": "^4.20.3"
   },
@@ -38,6 +40,7 @@
     "@rollup/plugin-node-resolve": "^16.0.1",
     "@swc/core": "^1.11.29",
     "@types/ini": "^4.1.1",
+    "@types/madge": "^5.0.3",
     "@types/node": "^22.15.3",
     "@urql/core": "^5.1.1",
     "eslint": "^9.29.0",
