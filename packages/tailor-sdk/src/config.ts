@@ -28,6 +28,7 @@ export interface WorkspaceConfig {
       ]
     | CodeGenerator<any, any, any, any>
   >;
+  tsConfig?: string;
 }
 
 let distPath: string | null = null;

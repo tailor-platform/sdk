@@ -43,4 +43,5 @@ export default defineConfig({
     "@tailor/sdl",
     ["@tailor/kysely-type", { distPath: "./src/resolvers/db.ts" }],
   ],
+  tsConfig: "./tsconfig.json",
 });
