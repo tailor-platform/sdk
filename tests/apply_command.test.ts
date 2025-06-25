@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs/promises";
 import {
   compareDirectories,
   generateDetailedDiffReport,
@@ -11,24 +10,7 @@ import {
 //   TestCase
 // } from './helpers/function_tester';
 
-// 事前に生成されたテストディレクトリを取得
-async function getTestDirectory(): Promise<string> {
-  try {
-    const envFile = path.join(__dirname, ".test-env");
-    const envContent = await fs.readFile(envFile, "utf-8");
-    const match = envContent.match(/TAILOR_SDK_OUTPUT_DIR=(.+)/);
-    if (match) {
-      return match[1].trim();
-    }
-  } catch (error) {
-    console.error("テスト環境ファイルの読み込みに失敗しました:", error);
-  }
-  throw new Error(
-    "テストディレクトリが見つかりません。pnpm test:prepare を実行してください。",
-  );
-}
-
-const tempDistDir = await getTestDirectory();
+const tempDistDir = "tests/fixtures/actual";
 console.info(`This test is running in directory: ${tempDistDir}`);
 
 describe("pnpm apply command integration tests", () => {

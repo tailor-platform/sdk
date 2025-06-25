@@ -34,3 +34,4 @@ performance-reports
 
 # Test environment files
 tests/.test-env
+tests/fixtures/actual

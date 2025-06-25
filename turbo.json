@@ -21,6 +21,7 @@
       "cache": false
     },
     "//#test:root:update-expects": {
+      "dependsOn": ["^build"],
       "cache": false
     },
     "//#gen": {

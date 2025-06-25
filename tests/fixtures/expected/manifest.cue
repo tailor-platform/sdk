@@ -996,11 +996,22 @@
               "PostScript": "args.sqlStep"
             },
             {
+              "Name": "kyselyStep",
+              "OperationName": "kyselyStep",
+              "Description": "kyselyStep",
+              "OperationType": 2,
+              "OperationSourcePath": "tests/fixtures/expected/functions/stepChain__kyselyStep.js",
+              "OperationHook": {
+                "Expr": "({ ...context.pipeline, ...context.args });"
+              },
+              "PostScript": "args.kyselyStep"
+            },
+            {
               "Name": "__construct_output",
               "OperationName": "__construct_output",
               "Description": "Construct output from resolver",
               "OperationType": 2,
-              "OperationSource": "globalThis.main = context=>({summary:[context.step1,context.step2,context.sqlStep]})",
+              "OperationSource": "globalThis.main = context=>({summary:[context.step1,context.step2,context.sqlStep,context.kyselyStep]})",
               "OperationHook": {
                 "Expr": "({ ...context.pipeline, ...context.args });"
               },
@@ -1198,11 +1209,22 @@
               "PostScript": "args.sqlStep"
             },
             {
+              "Name": "kyselyStep",
+              "OperationName": "kyselyStep",
+              "Description": "kyselyStep",
+              "OperationType": 2,
+              "OperationSourcePath": "tests/fixtures/expected/functions/stepChain__kyselyStep.js",
+              "OperationHook": {
+                "Expr": "({ ...context.pipeline, ...context.args });"
+              },
+              "PostScript": "args.kyselyStep"
+            },
+            {
               "Name": "__construct_output",
               "OperationName": "__construct_output",
               "Description": "Construct output from resolver",
               "OperationType": 2,
-              "OperationSource": "globalThis.main = context=>({summary:[context.step1,context.step2,context.sqlStep]})",
+              "OperationSource": "globalThis.main = context=>({summary:[context.step1,context.step2,context.sqlStep,context.kyselyStep]})",
               "OperationHook": {
                 "Expr": "({ ...context.pipeline, ...context.args });"
               },

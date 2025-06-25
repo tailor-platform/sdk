@@ -6,15 +6,14 @@ import { apply, generate } from "@tailor-platform/tailor-sdk";
 
 const __filename = url.fileURLToPath(import.meta.url);
 
-const expectedDir = "./tests/fixtures/expected";
+const expectedDir = "tests/fixtures/expected";
+const actualDir = "tests/fixtures/actual";
 
 /**
  * 期待値ファイルを生成するスクリプト
  * 現在の実装で正常な出力を生成し、期待値として保存する
  */
 export async function generateExpectedFiles(): Promise<void> {
-  console.log("Generating expected files...");
-
   try {
     console.log(`Expected directory: ${expectedDir}`);
 
@@ -65,9 +64,30 @@ async function listGeneratedFiles(
   }
 }
 
+export async function generateActualFiles(): Promise<void> {
+  process.env.TAILOR_SDK_OUTPUT_DIR = actualDir;
+  await generate(config);
+  await apply(config, { dryRun: true });
+
+  const manifestPath = path.join(actualDir, "manifest.cue");
+
+  const manifest = fs.readFileSync(manifestPath, "utf-8");
+
+  fs.writeFileSync(
+    manifestPath,
+    manifest.replaceAll(actualDir, "tests/fixtures/expected"),
+  );
+}
+
 if (process.argv[1] === __filename) {
   try {
-    await generateExpectedFiles();
+    if (process.argv[2] === "actual") {
+      console.log("Generating actual files...");
+      await generateActualFiles();
+    } else {
+      console.log("Generating expected files...");
+      await generateExpectedFiles();
+    }
   } catch (error) {
     console.error("\n❌ Failed to generate expected files:", error);
     process.exit(1);
