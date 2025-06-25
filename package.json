@@ -7,8 +7,8 @@
   "scripts": {
     "test": "turbo run test",
     "test:root": "vitest run",
-    "test:root:prepare": "tsx tests/scripts/prepare_test_files.ts",
-    "test:root:update-expects": "tsx tests/scripts/generate_expected_files.ts",
+    "test:root:prepare": "tsx tests/scripts/generate_files.ts actual",
+    "test:root:update-expects": "tsx tests/scripts/generate_files.ts",
     "gen": "tailor-sdk generate -c src/tailor.config.ts",
     "gen:watch": "tailor-sdk generate -c src/tailor.config.ts --watch",
     "gen:perf": "dotenvx run -- tailor-sdk generate -c src/tailor.config.ts",

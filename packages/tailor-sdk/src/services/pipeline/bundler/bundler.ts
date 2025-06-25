@@ -3,6 +3,7 @@ import fs from "node:fs";
 import * as rolldown from "rolldown";
 import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
+import { nodeResolve } from "@rollup/plugin-node-resolve";
 import { ResolverLoader } from "./loader";
 import { CodeTransformer } from "./transformer";
 import { getDistDir } from "@/config";
@@ -111,9 +112,33 @@ export class ResolverBundler {
           sourcemap: false,
           minify: false,
         },
-        external: ["@tailor-platform/tailor-sdk"],
+        external: (id) => {
+          if (id.includes("node_modules")) {
+            return true;
+          }
+
+          if (
+            !id.startsWith(".") &&
+            !id.startsWith("/") &&
+            !id.includes("\\")
+          ) {
+            return true;
+          }
+
+          return false;
+        },
+        treeshake: {
+          moduleSideEffects: false,
+          annotations: true,
+          unknownGlobalSideEffects: false,
+        },
+        logLevel: "silent",
       }) as rolldown.BuildOptions,
     );
+
+    // Log bundle size for debugging
+    const stats = fs.statSync(output);
+    console.log(`Pre-bundle output size: ${(stats.size / 1024).toFixed(2)} KB`);
   }
 
   @measure
@@ -137,8 +162,14 @@ export class ResolverBundler {
               unknownGlobalSideEffects: false,
               preset: "smallest",
             },
-            external: () => false,
-            plugins: [minify({})],
+            plugins: [
+              nodeResolve({
+                preferBuiltins: false,
+                browser: false,
+              }),
+              minify({}),
+            ],
+            logLevel: "silent",
           }) as rollup.RollupOptions,
         );
 
