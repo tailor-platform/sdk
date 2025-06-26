@@ -41,7 +41,7 @@
       "cache": false
     },
     "//#check": {
-      "dependsOn": ["^format", "^lint"],
+      "dependsOn": ["^format", "^lint:fix"],
       "cache": false
     },
     "lint": {

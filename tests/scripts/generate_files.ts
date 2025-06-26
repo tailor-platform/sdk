@@ -65,6 +65,11 @@ async function listGeneratedFiles(
 }
 
 export async function generateActualFiles(): Promise<void> {
+  if (fs.existsSync(actualDir)) {
+    await fs.rmdirSync(actualDir, { recursive: true });
+    console.log("Removed existing actual directory");
+  }
+
   process.env.TAILOR_SDK_OUTPUT_DIR = actualDir;
   await generate(config);
   await apply(config, { dryRun: true });

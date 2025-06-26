@@ -1,33 +1,31 @@
 /* eslint-disable no-case-declarations */
-/* eslint-disable @typescript-eslint/no-unused-expressions */
 
 import fs from "node:fs";
 import path from "node:path";
 import ml from "multiline-ts";
-import {
-  Node,
-  Project,
-  Statement,
-  Symbol,
-  SyntaxKind,
-  VariableDeclaration,
-} from "ts-morph";
+import { parseSync } from "oxc-parser";
 import { measure } from "@/performance";
 import { Resolver } from "../resolver";
 
-export class CodeTransformer {
-  private project: Project;
+interface ImportInfo {
+  source: string;
+  specifiers: Array<{
+    imported: string;
+    local: string;
+  }>;
+  defaultImport?: string;
+  namespaceImport?: string;
+}
 
-  constructor() {
-    this.project = new Project({
-      tsConfigFilePath: "./tsconfig.json",
-      skipAddingFilesFromTsConfig: true,
-      compilerOptions: {
-        allowJs: true,
-        checkJs: false,
-      },
-    });
-  }
+interface NodeWithRange {
+  type: string;
+  start: number;
+  end: number;
+  [key: string]: any;
+}
+
+export class CodeTransformer {
+  constructor() {}
 
   @measure
   transform(
@@ -36,8 +34,12 @@ export class CodeTransformer {
     tempDir: string,
   ): string[] {
     const trimmedContent = this.trimSDKCode(filePath);
+    const transformedPath = path.join(
+      path.dirname(filePath),
+      path.basename(filePath, ".js") + ".transformed.js",
+    );
     fs.writeFileSync(
-      filePath,
+      transformedPath,
       ml/* js */ `
       ${trimmedContent}
 
@@ -70,7 +72,7 @@ export class CodeTransformer {
       .flatMap(([type, name, _, options]) => {
         const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
         const stepFunctionVariable = stepVariableName(name);
-        const relativePath = path.relative(stepDir, filePath);
+        const relativePath = path.relative(stepDir, transformedPath);
         let stepContent;
         switch (type) {
           case "fn":
@@ -108,194 +110,232 @@ export class CodeTransformer {
 
   @measure
   private trimSDKCode(filePath: string): string {
-    const sourceFile = this.project.addSourceFileAtPath(filePath);
+    const sourceText = fs.readFileSync(filePath, "utf-8");
 
-    const statementsToRemove = new Set<any>();
-    const removedIdentifiers = new Set<Symbol>();
+    try {
+      const parseResult = parseSync(sourceText, {
+        sourceType: "module",
+      });
 
-    // 1. @tailor-platform/tailor-sdk からのインポートを処理
-    const tailorSdkImportDeclarations: any[] = [];
-    const importDeclarations = sourceFile.getImportDeclarations();
-
-    importDeclarations.forEach((importDecl) => {
-      const moduleSpecifier = importDecl.getModuleSpecifierValue();
-      if (moduleSpecifier === "@tailor-platform/tailor-sdk") {
-        tailorSdkImportDeclarations.push(importDecl);
-        statementsToRemove.add(importDecl);
+      if (parseResult.errors && parseResult.errors.length > 0) {
+        console.warn(`Parse errors in ${filePath}:`, parseResult.errors);
       }
-    });
 
-    // 2. インポートされた識別子のSymbolを収集
-    const importedIdentifierReferences = new Set<Node>();
+      const program = parseResult.program;
+      const removedRanges = new Set<string>();
+      const removedIdentifiers = new Set<string>();
 
-    tailorSdkImportDeclarations.forEach((importDecl) => {
-      const namedImports = importDecl.getNamedImports();
-      namedImports.forEach((namedImport: any) => {
-        const nameNode = namedImport.getNameNode();
-        const aliasNode = namedImport.getAliasNode();
+      // 1. @tailor-platform/tailor-sdk からのインポートを処理
+      const tailorSdkImports: ImportInfo[] = [];
 
-        const identifierToTrack = aliasNode || nameNode;
-        const symbol = identifierToTrack.getSymbol();
-        if (symbol) {
-          removedIdentifiers.add(symbol);
+      this.visitNode(program, (node: NodeWithRange) => {
+        if (
+          node.type === "ImportDeclaration" &&
+          node.source?.value === "@tailor-platform/tailor-sdk"
+        ) {
+          const importInfo: ImportInfo = {
+            source: node.source.value,
+            specifiers: [],
+          };
+
+          if (node.specifiers) {
+            for (const spec of node.specifiers) {
+              if (spec.type === "ImportSpecifier") {
+                const imported = spec.imported?.name || spec.local?.name;
+                const local = spec.local?.name;
+                if (imported && local) {
+                  importInfo.specifiers.push({ imported, local });
+                  removedIdentifiers.add(local);
+                }
+              } else if (spec.type === "ImportDefaultSpecifier") {
+                importInfo.defaultImport = spec.local?.name;
+                if (spec.local?.name) {
+                  removedIdentifiers.add(spec.local.name);
+                }
+              } else if (spec.type === "ImportNamespaceSpecifier") {
+                importInfo.namespaceImport = spec.local?.name;
+                if (spec.local?.name) {
+                  removedIdentifiers.add(spec.local.name);
+                }
+              }
+            }
+          }
+
+          tailorSdkImports.push(importInfo);
+          removedRanges.add(`${node.start}-${node.end}`);
         }
       });
 
-      const defaultImport = importDecl.getDefaultImport();
-      if (defaultImport) {
-        const symbol = defaultImport.getSymbol();
-        if (symbol) {
-          removedIdentifiers.add(symbol);
+      // 2. export default文を削除
+      this.visitNode(program, (node: NodeWithRange) => {
+        if (node.type === "ExportDefaultDeclaration") {
+          removedRanges.add(`${node.start}-${node.end}`);
         }
-      }
+      });
 
-      const namespaceImport = importDecl.getNamespaceImport();
-      if (namespaceImport) {
-        const symbol = namespaceImport.getSymbol();
-        symbol && removedIdentifiers.add(symbol);
-      }
-    });
+      // 3. 削除された識別子を使用している文を特定
+      let hasChanges = true;
+      while (hasChanges) {
+        hasChanges = false;
 
-    const allIdentifiers = sourceFile.getDescendantsOfKind(
-      SyntaxKind.Identifier,
-    );
-    allIdentifiers[0]?.getSymbol();
-    allIdentifiers.forEach((identifier) => {
-      const symbol = identifier.getSymbol();
-      if (symbol && removedIdentifiers.has(symbol)) {
-        // インポート宣言自体は除外
-        if (
-          !identifier
-            .getAncestors()
-            .some((ancestor) => tailorSdkImportDeclarations.includes(ancestor))
-        ) {
-          importedIdentifierReferences.add(identifier);
-        }
-      }
-    });
-
-    const referencedStatements = new Set<any>();
-    importedIdentifierReferences.forEach((ref) => {
-      let statement = ref;
-      while (
-        statement.getParent() &&
-        !sourceFile.getStatements().includes(statement as any)
-      ) {
-        statement = statement.getParent()!;
-      }
-
-      if (sourceFile.getStatements().includes(statement as any)) {
-        referencedStatements.add(statement);
-      }
-    });
-
-    while (true) {
-      let hasChanges = false;
-      const statements = sourceFile.getStatements();
-
-      statements.forEach((statement) => {
-        if (statementsToRemove.has(statement)) {
-          return;
-        }
-
-        // ExportAssignment (export default) を削除
-        if (statement.getKind() === SyntaxKind.ExportAssignment) {
-          const exportAssignment = statement.asKindOrThrow(
-            SyntaxKind.ExportAssignment,
-          );
-          // export default のみを削除（export = は除外）
-          if (!exportAssignment.isExportEquals()) {
-            statementsToRemove.add(statement);
-            hasChanges = true;
+        this.visitNode(program, (node: NodeWithRange) => {
+          // すでに削除対象の範囲内にある場合はスキップ
+          if (this.isNodeInRemovedRange(node, removedRanges)) {
             return;
           }
-        }
 
-        if (referencedStatements.has(statement)) {
-          statementsToRemove.add(statement);
-          hasChanges = true;
+          // トップレベルの文を対象とする
+          if (this.isTopLevelStatement(node, program)) {
+            const usedIdentifiers = this.extractIdentifiers(node);
+            const usesRemovedIdentifier = usedIdentifiers.some((id) =>
+              removedIdentifiers.has(id),
+            );
 
-          const identifiers = this.getDefinedIdentifiers(statement);
-          identifiers.forEach((identifier) => {
-            if (!removedIdentifiers.has(identifier)) {
-              removedIdentifiers.add(identifier);
-              hasChanges = true;
+            if (usesRemovedIdentifier) {
+              removedRanges.add(`${node.start}-${node.end}`);
+
+              // この文で定義される識別子も削除対象に追加
+              const definedIdentifiers =
+                this.getDefinedIdentifiersFromNode(node);
+              for (const id of definedIdentifiers) {
+                if (!removedIdentifiers.has(id)) {
+                  removedIdentifiers.add(id);
+                  hasChanges = true;
+                }
+              }
             }
-          });
-          return;
-        }
-
-        const identifiersInStatement = statement.getDescendantsOfKind(
-          SyntaxKind.Identifier,
-        );
-        const usedRemovedIdentifiers = identifiersInStatement
-          .filter((id) => id.getSymbol() != null)
-          .filter((identifier) =>
-            removedIdentifiers.has(identifier.getSymbol() as Symbol),
-          );
-
-        if (usedRemovedIdentifiers.length > 0) {
-          statementsToRemove.add(statement);
-          hasChanges = true;
-
-          const identifiers = this.getDefinedIdentifiers(statement);
-          identifiers.forEach((identifier) => {
-            if (!removedIdentifiers.has(identifier)) {
-              removedIdentifiers.add(identifier);
-              hasChanges = true;
-            }
-          });
-        }
-      });
-
-      if (!hasChanges) {
-        break;
+          }
+        });
       }
+
+      // 4. コードから削除対象の範囲を除去
+      return this.removeRangesFromSource(sourceText, removedRanges);
+    } catch (error) {
+      console.error(`Failed to parse ${filePath}:`, error);
+      // パースエラーの場合は元のコードをそのまま返す
+      return sourceText;
     }
-
-    statementsToRemove.forEach((statement: Statement) => {
-      if (!statement.wasForgotten()) {
-        statement.remove();
-      }
-    });
-
-    return sourceFile.getFullText();
   }
 
   @measure
-  private getDefinedIdentifiers(statement: Statement): Symbol[] {
-    const identifiers: Symbol[] = [];
+  private visitNode(node: any, callback: (node: NodeWithRange) => void): void {
+    if (!node || typeof node !== "object") return;
 
-    if (statement.getKind() === SyntaxKind.VariableStatement) {
-      const variableStatement = statement.asKindOrThrow(
-        SyntaxKind.VariableStatement,
-      );
-      const declarations = variableStatement
-        .getDeclarationList()
-        .getDeclarations();
-      declarations
-        .map(
-          (decl: VariableDeclaration) =>
-            decl.getNameNode().getSymbol() as Symbol,
-        )
-        .forEach((s) => s && identifiers.push(s));
+    callback(node);
+
+    for (const key in node) {
+      const value = node[key];
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          this.visitNode(item, callback);
+        }
+      } else if (value && typeof value === "object") {
+        this.visitNode(value, callback);
+      }
     }
+  }
 
-    if (statement.getKind() === SyntaxKind.FunctionDeclaration) {
-      const functionDecl = statement.asKindOrThrow(
-        SyntaxKind.FunctionDeclaration,
-      );
-      const symbol = functionDecl.getNameNode()?.getSymbol();
-      symbol && identifiers.push(symbol);
+  @measure
+  private isNodeInRemovedRange(
+    node: NodeWithRange,
+    removedRanges: Set<string>,
+  ): boolean {
+    for (const range of removedRanges) {
+      const [start, end] = range.split("-").map(Number);
+      if (node.start >= start && node.end <= end) {
+        return true;
+      }
     }
+    return false;
+  }
 
-    if (statement.getKind() === SyntaxKind.ClassDeclaration) {
-      const classDecl = statement.asKindOrThrow(SyntaxKind.ClassDeclaration);
-      const symbol = classDecl.getNameNode()?.getSymbol();
-      symbol && identifiers.push(symbol);
+  @measure
+  private isTopLevelStatement(node: NodeWithRange, program: any): boolean {
+    return program.body && program.body.includes(node);
+  }
+
+  @measure
+  private extractIdentifiers(node: NodeWithRange): string[] {
+    const identifiers: string[] = [];
+
+    this.visitNode(node, (n: NodeWithRange) => {
+      if (n.type === "Identifier" && n.name) {
+        identifiers.push(n.name);
+      }
+    });
+
+    return identifiers;
+  }
+
+  @measure
+  private getDefinedIdentifiersFromNode(node: NodeWithRange): string[] {
+    const identifiers: string[] = [];
+
+    switch (node.type) {
+      case "VariableDeclaration":
+        if (node.declarations) {
+          for (const decl of node.declarations) {
+            if (decl.id?.type === "Identifier" && decl.id.name) {
+              identifiers.push(decl.id.name);
+            }
+          }
+        }
+        break;
+      case "FunctionDeclaration":
+        if (node.id?.name) {
+          identifiers.push(node.id.name);
+        }
+        break;
+      case "ClassDeclaration":
+        if (node.id?.name) {
+          identifiers.push(node.id.name);
+        }
+        break;
     }
 
     return identifiers;
+  }
+
+  @measure
+  private removeRangesFromSource(
+    sourceText: string,
+    removedRanges: Set<string>,
+  ): string {
+    if (removedRanges.size === 0) {
+      return sourceText;
+    }
+
+    // 範囲を開始位置でソート
+    const sortedRanges = Array.from(removedRanges)
+      .map((range) => {
+        const [start, end] = range.split("-").map(Number);
+        return { start, end };
+      })
+      .sort((a, b) => a.start - b.start);
+
+    // 重複する範囲をマージ
+    const mergedRanges = [];
+    let current = sortedRanges[0];
+
+    for (let i = 1; i < sortedRanges.length; i++) {
+      const next = sortedRanges[i];
+      if (current.end >= next.start) {
+        current.end = Math.max(current.end, next.end);
+      } else {
+        mergedRanges.push(current);
+        current = next;
+      }
+    }
+    mergedRanges.push(current);
+
+    // 後ろから削除して位置がずれないようにする
+    let result = sourceText;
+    for (let i = mergedRanges.length - 1; i >= 0; i--) {
+      const { start, end } = mergedRanges[i];
+      result = result.slice(0, start) + result.slice(end);
+    }
+
+    return result.replace(/(\n\s*){3,}/g, "\n\n").trim();
   }
 }
 
