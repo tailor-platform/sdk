@@ -8,6 +8,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   unique?: boolean;
   vector?: boolean;
   foreignKey?: boolean;
+  foreignKeyType?: string;
   validate?: Function[];
   hooks?: {
     create?: Function;

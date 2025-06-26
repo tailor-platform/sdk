@@ -90,6 +90,14 @@ export interface User {
   updatedAt: Timestamp | null;
 }
 
+export interface UserSetting {
+  id: Generated<string>;
+  language: "jp" | "en";
+  userID: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp | null;
+}
+
 interface DB {
   Customer: Customer;
   PurchaseOrder: PurchaseOrder;
@@ -97,6 +105,7 @@ interface DB {
   SalesOrder: SalesOrder;
   Supplier: Supplier;
   User: User;
+  UserSetting: UserSetting;
 }
 
 const getDB = () => {

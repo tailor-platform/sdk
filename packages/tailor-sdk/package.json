@@ -31,6 +31,7 @@
     "@tailor-inc/operator-client": "^25.313.146",
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",
+    "inflection": "^3.0.2",
     "madge": "^8.0.0",
     "pkg-types": "^2.1.0",
     "tsx": "^4.20.3"

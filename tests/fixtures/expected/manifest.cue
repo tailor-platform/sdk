@@ -177,7 +177,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "salesOrders": {
+              "RefType": "SalesOrder",
+              "RefField": "customerID",
+              "SrcField": "id",
+              "Array": true,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -238,10 +246,11 @@
               "Description": "",
               "Validate": [],
               "Array": false,
-              "Index": false,
+              "Index": true,
               "Required": true,
               "Unique": false,
-              "ForeignKey": false,
+              "ForeignKey": true,
+              "ForeignKeyType": "Supplier",
               "Vector": false
             },
             "totalPrice": {
@@ -315,7 +324,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "supplier": {
+              "RefType": "Supplier",
+              "RefField": "id",
+              "SrcField": "supplierID",
+              "Array": false,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -444,10 +461,11 @@
               "Description": "",
               "Validate": [],
               "Array": false,
-              "Index": false,
+              "Index": true,
               "Required": true,
               "Unique": false,
-              "ForeignKey": false,
+              "ForeignKey": true,
+              "ForeignKeyType": "Customer",
               "Vector": false
             },
             "totalPrice": {
@@ -545,7 +563,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "customer": {
+              "RefType": "Customer",
+              "RefField": "id",
+              "SrcField": "customerID",
+              "Array": false,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -740,7 +766,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "purchaseOrders": {
+              "RefType": "PurchaseOrder",
+              "RefField": "supplierID",
+              "SrcField": "id",
+              "Array": true,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -854,7 +888,147 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "setting": {
+              "RefType": "UserSetting",
+              "RefField": "userID",
+              "SrcField": "id",
+              "Array": false,
+              "Description": ""
+            }
+          },
+          "Settings": {
+            "Aggregation": false,
+            "BulkUpsert": false,
+            "Draft": false,
+            "DefaultQueryLimitSize": 100,
+            "MaxBulkUpsertSize": 1000,
+            "PluralForm": "",
+            "PublishRecordEvents": false
+          },
+          "Extends": false,
+          "Directives": [],
+          "Indexes": {},
+          "TypePermission": {
+            "Create": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Read": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Update": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Delete": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Admin": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ]
+          }
+        },
+        {
+          "Name": "UserSetting",
+          "Description": "",
+          "Fields": {
+            "language": {
+              "Type": "enum",
+              "AllowedValues": [
+                {
+                  "value": "jp",
+                  "description": ""
+                },
+                {
+                  "value": "en",
+                  "description": ""
+                }
+              ],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "userID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": true,
+              "Required": true,
+              "Unique": true,
+              "ForeignKey": true,
+              "ForeignKeyType": "User",
+              "Vector": false
+            },
+            "createdAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Create": {
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
+                }
+              }
+            },
+            "updatedAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Update": {
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
+                }
+              }
+            }
+          },
+          "Relationships": {
+            "user": {
+              "RefType": "User",
+              "RefField": "id",
+              "SrcField": "userID",
+              "Array": false,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -1400,7 +1574,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "salesOrders": {
+              "RefType": "SalesOrder",
+              "RefField": "customerID",
+              "SrcField": "id",
+              "Array": true,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -1461,10 +1643,11 @@
               "Description": "",
               "Validate": [],
               "Array": false,
-              "Index": false,
+              "Index": true,
               "Required": true,
               "Unique": false,
-              "ForeignKey": false,
+              "ForeignKey": true,
+              "ForeignKeyType": "Supplier",
               "Vector": false
             },
             "totalPrice": {
@@ -1538,7 +1721,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "supplier": {
+              "RefType": "Supplier",
+              "RefField": "id",
+              "SrcField": "supplierID",
+              "Array": false,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -1667,10 +1858,11 @@
               "Description": "",
               "Validate": [],
               "Array": false,
-              "Index": false,
+              "Index": true,
               "Required": true,
               "Unique": false,
-              "ForeignKey": false,
+              "ForeignKey": true,
+              "ForeignKeyType": "Customer",
               "Vector": false
             },
             "totalPrice": {
@@ -1768,7 +1960,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "customer": {
+              "RefType": "Customer",
+              "RefField": "id",
+              "SrcField": "customerID",
+              "Array": false,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -1963,7 +2163,15 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "purchaseOrders": {
+              "RefType": "PurchaseOrder",
+              "RefField": "supplierID",
+              "SrcField": "id",
+              "Array": true,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -2077,7 +2285,147 @@
               }
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "setting": {
+              "RefType": "UserSetting",
+              "RefField": "userID",
+              "SrcField": "id",
+              "Array": false,
+              "Description": ""
+            }
+          },
+          "Settings": {
+            "Aggregation": false,
+            "BulkUpsert": false,
+            "Draft": false,
+            "DefaultQueryLimitSize": 100,
+            "MaxBulkUpsertSize": 1000,
+            "PluralForm": "",
+            "PublishRecordEvents": false
+          },
+          "Extends": false,
+          "Directives": [],
+          "Indexes": {},
+          "TypePermission": {
+            "Create": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Read": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Update": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Delete": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Admin": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ]
+          }
+        },
+        {
+          "Name": "UserSetting",
+          "Description": "",
+          "Fields": {
+            "language": {
+              "Type": "enum",
+              "AllowedValues": [
+                {
+                  "value": "jp",
+                  "description": ""
+                },
+                {
+                  "value": "en",
+                  "description": ""
+                }
+              ],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "userID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": true,
+              "Required": true,
+              "Unique": true,
+              "ForeignKey": true,
+              "ForeignKeyType": "User",
+              "Vector": false
+            },
+            "createdAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Create": {
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
+                }
+              }
+            },
+            "updatedAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Update": {
+                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())()"
+                }
+              }
+            }
+          },
+          "Relationships": {
+            "user": {
+              "RefType": "User",
+              "RefField": "id",
+              "SrcField": "userID",
+              "Array": false,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
