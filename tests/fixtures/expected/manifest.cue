@@ -89,7 +89,16 @@
               "Type": "string",
               "AllowedValues": [],
               "Description": "",
-              "Validate": [],
+              "Validate": [
+                {
+                  "Action": "allow",
+                  "ErrorMessage": "",
+                  "Expr": "",
+                  "Script": {
+                    "Expr": "(({value})=>value.length>1)({ value: _value, user })"
+                  }
+                }
+              ],
               "Array": false,
               "Index": false,
               "Required": false,
@@ -1303,7 +1312,16 @@
               "Type": "string",
               "AllowedValues": [],
               "Description": "",
-              "Validate": [],
+              "Validate": [
+                {
+                  "Action": "allow",
+                  "ErrorMessage": "",
+                  "Expr": "",
+                  "Script": {
+                    "Expr": "(({value})=>value.length>1)({ value: _value, user })"
+                  }
+                }
+              ],
               "Array": false,
               "Index": false,
               "Required": false,

@@ -7,7 +7,10 @@ export const customer = db.type(
     email: db.string(),
     phone: db.string().optional(),
     address: db.string().optional(),
-    city: db.string().optional(),
+    city: db
+      .string()
+      .optional()
+      .validate(({ value }) => value.length > 1),
     state: db.string(),
     country: db.string(),
     postalCode: db.string(),
