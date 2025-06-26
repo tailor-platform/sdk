@@ -1,4 +1,4 @@
-import { $tailor_resolver_step__sqlStep } from "../resolvers/stepChain.js";
+import { $tailor_resolver_step__sqlStep } from "../resolvers/stepChain.transformed.js";
 
 const $connect_tailordb = async (namespace) => {
   const baseClient = new tailordb.Client({ namespace });
