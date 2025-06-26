@@ -140,7 +140,16 @@ export class TailorDBService {
                   Type: fieldConfig.type || "string",
                   AllowedValues: fieldConfig.allowedValues || [],
                   Description: fieldConfig.description || "",
-                  Validate: fieldConfig.validate || [],
+                  Validate: (fieldConfig.validate || []).map((val: any) => ({
+                    Action: "allow",
+                    ErrorMessage: val.errorMessage || "",
+                    Expr: val.expr || "",
+                    ...(val.script && {
+                      Script: {
+                        Expr: val.script.expr || "",
+                      },
+                    }),
+                  })),
                   Array: fieldConfig.array || false,
                   Index: fieldConfig.index || false,
                   Required: fieldConfig.required !== false,
