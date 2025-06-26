@@ -75,6 +75,17 @@ type User {
 }
 
 
+# Type: UserSetting
+type UserSetting {
+  id: ID!
+  language: enum!
+  userID: ID!
+  user: User!
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+
 # Resolver: stepChain
 input StepChainInput {
   name: String!

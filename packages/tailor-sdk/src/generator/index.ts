@@ -179,11 +179,11 @@ class GenerationManager {
         this.watcher?.addWatchGroup(
           `TailorDB__${namespace}`,
           db.files,
-          async (_, { affectedFiles }) => {
+          async ({ timestamp }, { affectedFiles }) => {
             for (const app of this.workspace.applications) {
               for (const db of app.tailorDBServices) {
                 for (const file of affectedFiles) {
-                  this.types[file] = await db.loadTypesForFile(file);
+                  this.types[file] = await db.loadTypesForFile(file, timestamp);
                 }
               }
             }
@@ -206,12 +206,14 @@ class GenerationManager {
         this.watcher?.addWatchGroup(
           `Pipeline__${namespace}`,
           service.files,
-          async (_, { affectedFiles }) => {
+          async ({ timestamp }, { affectedFiles }) => {
             for (const app of this.workspace.applications) {
               for (const pipeline of app.pipelineResolverServices) {
                 for (const file of affectedFiles) {
-                  this.resolvers[file] =
-                    await pipeline.loadResolverForFile(file);
+                  this.resolvers[file] = await pipeline.loadResolverForFile(
+                    file,
+                    timestamp,
+                  );
                 }
               }
             }

@@ -80,9 +80,11 @@ export class PipelineResolverService {
     }
   }
 
-  async loadResolverForFile(resolverFile: string) {
+  async loadResolverForFile(resolverFile: string, timestamp?: Date) {
     try {
-      const resolverModule = await import(`${resolverFile}?t=${Date.now()}`);
+      const resolverModule = await import(
+        [resolverFile, ...(timestamp ? [timestamp.getTime()] : [])].join("?t=")
+      );
       const resolver = resolverModule.default;
       if (isResolver(resolver)) {
         this.resolvers[resolverFile] = resolver;

@@ -3,6 +3,7 @@ import path from "node:path";
 import { measure } from "@/performance";
 import { TailorDBType } from "./schema";
 import { TailorDBServiceConfig } from "./types";
+import inflection from "inflection";
 
 export class TailorDBService {
   private types: Record<string, Record<string, TailorDBType>> = {};
@@ -44,10 +45,12 @@ export class TailorDBService {
     return this.types as Record<string, Record<string, TailorDBType>>;
   }
 
-  async loadTypesForFile(typeFile: string) {
+  async loadTypesForFile(typeFile: string, timestamp?: Date) {
     this.types[typeFile] = {};
     try {
-      const module = await import(`${typeFile}?t=${Date.now()}`);
+      const module = await import(
+        [typeFile, ...(timestamp ? [timestamp.getTime()] : [])].join("?t=")
+      );
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
@@ -155,6 +158,7 @@ export class TailorDBService {
                   Required: fieldConfig.required !== false,
                   Unique: fieldConfig.unique || false,
                   ForeignKey: fieldConfig.foreignKey || false,
+                  ForeignKeyType: fieldConfig.foreignKeyType,
                   Vector: fieldConfig.vector || false,
                   ...(fieldConfig.hooks && {
                     Hooks: {
@@ -166,11 +170,61 @@ export class TailorDBService {
               });
           }
 
+          // 参照しているdbTypeのrelationshipsを設定
+          const relationships: Record<string, any> = {};
+          Object.entries(type.fields)
+            .filter(([_, fieldConfig]: [string, any]) => fieldConfig.reference)
+            .forEach(([fieldName, fieldConfig]: [string, any]) => {
+              if (fieldConfig.reference) {
+                const ref = fieldConfig.reference;
+                const nameMap = ref.nameMap || [];
+                if (nameMap.length > 0) {
+                  relationships[nameMap[0]] = {
+                    RefType: ref.type.name,
+                    RefField: ref.field || "id",
+                    SrcField: fieldName,
+                    Array: fieldConfig._metadata?.array || false,
+                    Description: ref.type.metadata.description || "",
+                  };
+                }
+              }
+            });
+
+          // 参照されているdbTypeのrelationshipsを設定
+          if (type.referenced && type.referenced.length > 0) {
+            type.referenced.forEach((referencedType) => {
+              // TODO: Object.entriesで型情報が失われないようにしたい。
+              const [fieldName, field] = (
+                Object.entries(referencedType.fields) as [string, any]
+              ).find(
+                ([_, fieldConfig]) =>
+                  fieldConfig?._metadata?.foreignKeyType === type.name,
+              );
+
+              if (fieldName && field) {
+                const nameMap = field._ref.nameMap;
+                // 外部キーにunique制約がある場合は、Arrayはfalse（https://docs.tailor.tech/guides/tailordb/relationships#constraints）
+                const array = !(field._metadata?.unique ?? false);
+                const key = array
+                  ? inflection.pluralize(nameMap[1])
+                  : nameMap[1];
+                relationships[key] = {
+                  RefType: referencedType.name,
+                  RefField: fieldName,
+                  SrcField: "id",
+                  Array: array,
+                  Description:
+                    referencedType.metadata.schema?.description || "",
+                };
+              }
+            });
+          }
+
           return {
             Name: metadata.name || type.name,
             Description: schema?.description || "",
             Fields: fields,
-            Relationships: {},
+            Relationships: relationships,
             Settings: defaultSettings,
             Extends: schema?.extends || false,
             Directives: [],
