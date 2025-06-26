@@ -27,6 +27,7 @@ const fieldDefaults = {
   unique: undefined,
   vector: undefined,
   foreignKey: undefined,
+  foreignKeyType: undefined,
   validate: undefined,
   hooks: undefined,
 } as const satisfies Omit<DBFieldMetadata, "type">;
@@ -150,7 +151,15 @@ class TailorDBField<
     nameMap: M,
     field: F = "id" as F,
   ): TailorDBField<CurrentDefined, Output, { nameMap: M; type: T; field: F }> {
-    return super.ref(type, nameMap, field) as any;
+    const result = super.ref(type, nameMap, field) as TailorDBField<
+      CurrentDefined,
+      Output,
+      { nameMap: M; type: T; field: F }
+    >;
+    result._metadata.index = true;
+    result._metadata.foreignKeyType = type.name;
+    result._metadata.foreignKey = true;
+    return result;
   }
 
   index<CurrentDefined extends Defined>(
@@ -277,6 +286,7 @@ export class TailorDBType<
   M extends DefinedFieldMetadata = any,
 > extends TailorType<M, F & Record<string, TailorField<M, any, any>>> {
   public readonly metadata: TDB;
+  public referenced: TailorDBType[] = [];
 
   constructor(
     public readonly name: string,
@@ -292,6 +302,10 @@ export class TailorDBType<
     const metadataFields = Object.entries(this.fields).reduce(
       (acc, [key, field]) => {
         acc[key] = field.config;
+        if (field.reference) {
+          const ref = field.reference;
+          ref.type.referenced.push(this);
+        }
         return acc;
       },
       {} as Record<string, TailorDBType_FieldConfig>,
