@@ -32,11 +32,12 @@ export interface Customer {
   name: string;
   email: string;
   phone: string | null;
-  address: string | null;
-  city: string | null;
-  state: string;
   country: string;
   postalCode: string;
+  address: string | null;
+  city: string | null;
+  fullAddress: string | null;
+  state: string;
   createdAt: Timestamp;
   updatedAt: Timestamp | null;
 }
