@@ -10,10 +10,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   foreignKey?: boolean;
   foreignKeyType?: string;
   validate?: Function[];
-  hooks?: {
-    create?: Function;
-    update?: Function;
-  };
+  hooks?: Hook<any, any>;
 }
 
 export type DefinedFieldMetadata = Partial<
@@ -22,6 +19,23 @@ export type DefinedFieldMetadata = Partial<
 
 export type DBTypeConfig = {
   withTimestamps?: boolean;
+  description?: string;
+};
+
+type IsDateType<T> = Date extends T ? true : false;
+type HookReturn<T> = IsDateType<T> extends true ? string : T;
+type HookValue<T> = IsDateType<T> extends true ? string : T;
+type HookFn<O, P = undefined> = (
+  args: P extends undefined
+    ? { value: HookValue<O>; user: TailorUser }
+    : { value: HookValue<O>; data: P; user: TailorUser },
+) => HookReturn<O>;
+export type Hooks<P> = {
+  [K in keyof P]?: Hook<P[K], P>;
+};
+export type Hook<O, P> = {
+  create?: HookFn<O, P>;
+  update?: HookFn<O, P>;
 };
 
 export type ValidateFn<O, P = undefined> = (
