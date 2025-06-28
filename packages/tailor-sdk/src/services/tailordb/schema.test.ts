@@ -5,22 +5,30 @@ import { db } from "./schema";
 import { describe, expect, test } from "vitest";
 
 const productItem = db.type("ProductItem", { name: db.string().unique() });
-const productType = db.type(
-  "Product",
-  {
-    name: db.string().unique(),
-    description: db.string().optional(),
-    price: db.int(),
-    weight: db.float().optional(),
-    variants: db.string().array().optional(),
-    itemIDs: db
-      .uuid()
-      .ref(productItem, ["items", "product"])
-      .array()
-      .optional(),
-  },
-  { withTimestamps: true },
-);
+const productType = db
+  .type(
+    "Product",
+    {
+      name: db.string().unique(),
+      description: db.string().optional(),
+      price: db.int(),
+      weight: db.float().optional(),
+      variants: db.string().array().optional(),
+      itemIDs: db
+        .uuid()
+        .ref(productItem, ["items", "product"])
+        .array()
+        .optional(),
+      status: db.enum("IN_REVIEW", "CURRENT", "REJECTED"),
+    },
+    { withTimestamps: true },
+  )
+  .hooks({
+    status: {
+      create: ({ data }) => (data.status != null ? data.status : "IN_REVIEW"),
+      update: ({ data }) => (data.status != null ? data.status : "IN_REVIEW"),
+    },
+  });
 
 describe("TailorDB: object style", () => {
   test("sdl", async () => {
@@ -34,6 +42,7 @@ describe("TailorDB: object style", () => {
     expect(sdl).toContain(`price: Int!`);
     expect(sdl).toContain(`weight: Float`);
     expect(sdl).toContain(`variants: [String]`);
+    expect(sdl).toContain(`status: enum!`);
     expect(sdl).toContain(`itemIDs: [ID]`);
     expect(sdl).toContain(`items: [ProductItem]`);
     expect(sdl).toContain(`createdAt: DateTime`);
@@ -94,6 +103,20 @@ describe("TailorDB: object style", () => {
     expect(weightField["foreignKey"]).toBe(false);
     expect(weightField["validate"].length).toBe(0);
     expect(weightField["allowedValues"].length).toBe(0);
+
+    const statusField = fields["status"];
+    expect(statusField["type"]).toBe("enum");
+    expect(statusField["required"]).toBe(true);
+    expect(statusField["index"]).toBe(false);
+    expect(statusField["unique"]).toBe(false);
+    expect(statusField["array"]).toBe(false);
+    expect(statusField["vector"]).toBe(false);
+    expect(statusField["foreignKey"]).toBe(false);
+    expect(statusField["validate"].length).toBe(0);
+    expect(statusField["allowedValues"].length).toBe(3);
+    expect(statusField["hooks"]).toBeDefined();
+    expect(statusField["hooks"]?.create).toBeDefined();
+    expect(statusField["hooks"]?.update).toBeDefined();
 
     const createdAtField = fields["createdAt"];
     expect(createdAtField["type"]).toBe("datetime");

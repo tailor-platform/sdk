@@ -4,11 +4,12 @@ type Customer {
   name: String!
   email: String!
   phone: String
-  address: String
-  city: String
-  state: String!
   country: String!
   postalCode: String!
+  address: String
+  city: String
+  fullAddress: String
+  state: String!
   createdAt: DateTime
   updatedAt: DateTime
 }
