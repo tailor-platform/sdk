@@ -28,7 +28,8 @@ coverage/
 .vscode/
 
 # Tailor SDK
-.tailor-sdk
+**/.tailor-sdk/**
+!.tailor-sdk/manifest.cue
 performance-reports
 .turbo
 
