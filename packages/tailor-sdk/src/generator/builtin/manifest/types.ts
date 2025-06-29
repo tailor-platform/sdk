@@ -120,7 +120,7 @@ export interface WorkspaceManifest {
 
 // 各種Manifest型の定義
 export interface AppManifest {
-  name: string;
+  Name: string;
   [key: string]: unknown;
 }
 

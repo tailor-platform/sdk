@@ -3,14 +3,13 @@
 import { defineCommand, runMain } from "citty";
 import path from "node:path";
 import type { WorkspaceConfig } from "@/config";
-import { apply } from "@/workspace";
 import {
   commandArgs,
   type CommandArgs,
   type _ApplyOptions,
   type _GenerateOptions,
 } from "./args.js";
-import { generate } from "@/generator";
+import { apply, generate } from "@/generator";
 
 async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
   try {

@@ -8,12 +8,14 @@ import {
   ManifestResponse,
   PipelineManifest,
   ManifestField,
+  WorkspaceManifest,
 } from "./types";
 import { ResolverManifestMetadata } from "./resolver-processor";
 import { measure } from "@/performance";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { tailorToManifestScalar } from "@/types/types";
 import { getDistDir } from "@/config";
+import type { Workspace } from "@/workspace";
 
 /**
  * Manifest統合ロジック
@@ -24,26 +26,34 @@ export class ManifestAggregator {
    * 型とResolverのメタデータを統合してManifest JSONを生成
    */
   @measure
-  static aggregate(
+  static async aggregate(
     metadata: BasicGeneratorMetadata<
       ManifestTypeMetadata,
       ResolverManifestMetadata
     >,
-    baseDir: string,
     namespace?: string,
-  ): GeneratorResult {
+    workspace?: Workspace,
+  ): Promise<GeneratorResult> {
     try {
       const { resolvers } = metadata;
 
-      const manifestJSON = this.generateManifestJSON(
-        resolvers,
-        namespace || "default",
-      );
+      let manifestJSON: WorkspaceManifest | ManifestJSON;
+
+      if (workspace) {
+        // Workspace全体のManifestを生成
+        manifestJSON = await this.generateWorkspaceManifest(workspace);
+      } else {
+        // 従来のPipelineのみのManifestを生成
+        manifestJSON = this.generateManifestJSON(
+          resolvers,
+          namespace || "default",
+        );
+      }
 
       return {
         files: [
           {
-            path: path.join(baseDir, "manifest.json"),
+            path: path.join(getDistDir(), "manifest.cue"),
             content: JSON.stringify(manifestJSON, null, 2),
           },
         ],
@@ -54,6 +64,52 @@ export class ManifestAggregator {
         errors: [error instanceof Error ? error.message : String(error)],
       };
     }
+  }
+
+  /**
+   * WorkspaceからManifest全体を生成
+   */
+  @measure
+  private static async generateWorkspaceManifest(
+    workspace: Workspace,
+  ): Promise<WorkspaceManifest> {
+    const manifest: WorkspaceManifest = {
+      Apps: [],
+      Kind: "workspace",
+      Services: [],
+      Auths: [],
+      Pipelines: [],
+      Executors: [],
+      Stateflows: [],
+      Tailordbs: [],
+    };
+
+    for (const app of workspace.applications) {
+      manifest.Apps.push(app.toManifestJSON());
+
+      for (const db of app.tailorDBServices) {
+        await db.loadTypes();
+        const tailordbManifest = db.toManifestJSON();
+        manifest.Services.push(tailordbManifest);
+        manifest.Tailordbs.push(tailordbManifest);
+      }
+
+      for (const pipeline of app.pipelineResolverServices) {
+        await pipeline.build();
+        await pipeline.loadResolvers();
+        const pipelineManifest = await pipeline.toManifestJSON();
+        manifest.Services.push(pipelineManifest);
+        manifest.Pipelines.push(pipelineManifest);
+      }
+
+      if (app.authService) {
+        const authManifest = app.authService.toManifest();
+        manifest.Services.push(authManifest);
+        manifest.Auths.push(authManifest);
+      }
+    }
+
+    return manifest;
   }
 
   /**

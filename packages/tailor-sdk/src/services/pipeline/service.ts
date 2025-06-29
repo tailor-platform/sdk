@@ -35,12 +35,11 @@ export class PipelineResolverService {
     }
 
     // ManifestAggregatorを使用してJSON生成
-    const result = ManifestAggregator.aggregate(
+    const result = await ManifestAggregator.aggregate(
       {
         types: {},
         resolvers: resolverMetadata,
       },
-      ".",
       this.namespace,
     );
 
@@ -49,7 +48,7 @@ export class PipelineResolverService {
     }
 
     const manifestFile = result.files.find((f) =>
-      f.path.endsWith("manifest.json"),
+      f.path.endsWith("manifest.cue"),
     );
     if (manifestFile) {
       return JSON.parse(manifestFile.content);
