@@ -36,5 +36,5 @@ export interface CodeGenerator<
       resolvers: Rs;
     },
     baseDir: string,
-  ): GeneratorResult;
+  ): GeneratorResult | Promise<GeneratorResult>;
 }

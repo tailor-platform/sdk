@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from "node:fs";
 import path from "node:path";
-import { GenerateOptions } from "@/cli/args";
+import { GenerateOptions, type ApplyOptions } from "@/cli/args";
 import { getDistDir, WorkspaceConfig } from "@/config";
 import { defineWorkspace } from "@/workspace";
 import { Resolver } from "@/services/pipeline/resolver";
@@ -11,11 +11,12 @@ import { CodeGenerator } from "./types";
 import { SdlGenerator, SdlGeneratorID } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
+import { ManifestGenerator } from "./builtin/manifest";
 
 type Workspace = ReturnType<typeof defineWorkspace>;
 
 class GenerationManager {
-  private workspace: Workspace;
+  public readonly workspace: Workspace;
   private generators: CodeGenerator<any, any, any, any>[] = [];
   private types: Record<string, Record<string, TailorDBType>> = {};
   private resolvers: Record<string, Resolver> = {};
@@ -30,8 +31,17 @@ class GenerationManager {
   @measure
   private initGenerators() {
     if (this.generators.length > 0) {
+      console.log(
+        "[initGenerators] Generators already initialized, count:",
+        this.generators.length,
+      );
       return;
     }
+
+    console.log(
+      "[initGenerators] Initializing generators, config has:",
+      this.config.generators?.length || 0,
+    );
 
     this.generators =
       this.config.generators?.map((gen) => {
@@ -46,28 +56,25 @@ class GenerationManager {
           }
           throw new Error(`Unknown generator ID: ${gen[0]}`);
         }
+
+        if (gen instanceof ManifestGenerator) {
+          gen.workspace = this.workspace;
+          return gen;
+        }
+
         return gen as CodeGenerator<any, any, any, any>;
       }) || [];
   }
 
   @measure
   async generate(_options: GenerateOptions) {
-    console.log("Applying workspace:", this.workspace.config.name);
-    console.log(
-      "Applications:",
-      this.workspace.applications.map((app) => app.name),
-    );
+    console.log("Generation for workspace:", this.workspace.config.name);
 
     for (const app of this.workspace.applications) {
       for (const db of app.tailorDBServices) {
-        console.log("TailorDB Service:", db.namespace);
         this.types = (await db.loadTypes())!;
       }
 
-      console.log(
-        "Pipeline Services:",
-        app.pipelineResolverServices.map((service) => service.namespace),
-      );
       for (const pipelineService of app.pipelineResolverServices) {
         await pipelineService.loadResolvers();
         Object.entries(pipelineService.getResolvers()).forEach(
@@ -79,7 +86,7 @@ class GenerationManager {
     }
 
     this.initGenerators();
-    this.processGenerators();
+    await this.processGenerators();
   }
 
   private typeResults: Record<
@@ -156,15 +163,19 @@ class GenerationManager {
       },
       path.join(this.baseDir, gen.id),
     );
-    Promise.all(
+    await Promise.all(
       result.files.map(async (file) => {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
-        fs.writeFile(file.path, file.content, (err) => {
-          if (err) {
-            console.error(`Error writing file ${file.path}:`, err);
-          } else {
-            console.log(`Generated file: ${file.path}`);
-          }
+        return new Promise<void>((resolve, reject) => {
+          fs.writeFile(file.path, file.content, (err) => {
+            if (err) {
+              console.error(`Error writing file ${file.path}:`, err);
+              reject(err);
+            } else {
+              console.log(`Generated file: ${file.path}`);
+              resolve();
+            }
+          });
         });
       }),
     );
@@ -243,4 +254,15 @@ export async function generate(
   if (options.watch) {
     await manager.watch();
   }
+}
+
+export async function apply(config: WorkspaceConfig, options: ApplyOptions) {
+  const applyConfig: WorkspaceConfig = {
+    ...config,
+    generators: [new ManifestGenerator(options)],
+  };
+  await new GenerationManager(applyConfig).generate({
+    ...options,
+    watch: false,
+  });
 }

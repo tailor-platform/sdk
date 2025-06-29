@@ -14,5 +14,4 @@ export const t = { ..._t };
 export * from "@/services";
 
 export { defineConfig } from "@/config";
-export { apply } from "@/workspace";
-export { generate } from "@/generator";
+export { apply, generate } from "@/generator";
