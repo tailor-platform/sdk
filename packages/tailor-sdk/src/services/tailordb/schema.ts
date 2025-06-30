@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import {
   Script,
   TailorDBType as TDB,
@@ -13,13 +15,9 @@ import {
   Hook,
 } from "./types";
 import { TailorFieldType, TailorToTs } from "@/types/types";
-import type { Prettify, output, DeepWriteable } from "@/types/helpers";
-import {
-  AllowedValues,
-  AllowedValuesOutput,
-  mapAllowedValues,
-} from "@/types/field";
-import { clone } from "es-toolkit";
+import type { Prettify, output } from "@/types/helpers";
+import { AllowedValues, AllowedValuesOutput } from "@/types/field";
+import { ReferenceConfig, TailorField, TailorType } from "@/types/type";
 
 const fieldDefaults = {
   required: undefined,
@@ -35,29 +33,11 @@ const fieldDefaults = {
   hooks: undefined,
 } as const satisfies Omit<DBFieldMetadata, "type">;
 
-export type FieldReference<T extends TailorDBField> = DeepWriteable<
-  NonNullable<T["reference"]>
->;
-
-export type ReferenceConfig<
-  T extends TailorDBType = TailorDBType,
-  M extends [string, string] = [string, string],
-> = {
-  nameMap: M;
-  type: T;
-  field?: keyof T["fields"];
-};
-
 class TailorDBField<
-  const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
-  const Output = any,
-  const Reference extends ReferenceConfig | undefined = any,
-> {
-  public readonly type: TailorFieldType;
-  public readonly _defined: Defined = undefined as unknown as Defined;
-  public readonly _output = undefined as Output;
-  protected _metadata: DBFieldMetadata;
-
+  const Defined extends DefinedFieldMetadata,
+  const Output,
+  const Reference extends ReferenceConfig<any> | undefined,
+> extends TailorField<Defined, Output, Reference, DBFieldMetadata> {
   get metadata() {
     return { ...this._metadata };
   }
@@ -86,7 +66,6 @@ class TailorDBField<
               : undefined,
           })
         : undefined,
-      allowedValues: this._metadata.allowedValues || [],
     });
   }
 
@@ -95,8 +74,8 @@ class TailorDBField<
   }
 
   private constructor(type: TailorFieldType) {
-    this.type = type;
-    this._metadata = { ...fieldDefaults, type, required: true };
+    super(type);
+    this._metadata = { type, required: true };
   }
 
   static create<
@@ -117,87 +96,75 @@ class TailorDBField<
   optional<CurrentDefined extends Defined>(
     this: CurrentDefined extends { required: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output, Reference>,
+      : TailorField<CurrentDefined, Output, Reference>,
   ): TailorDBField<
     Prettify<CurrentDefined & { required: false }>,
-    Output | null,
+    Output,
     Reference
   > {
-    this._metadata.required = false;
-    return this as any;
+    return super.optional() as any;
   }
 
   description<const D extends string, CurrentDefined extends Defined>(
     this: CurrentDefined extends { description: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output, Reference>,
+      : TailorField<CurrentDefined, Output, Reference>,
     description: D,
   ): TailorDBField<
     Prettify<CurrentDefined & { description: D }>,
     Output,
     Reference
   > {
-    this._metadata.description = description;
-    return this as any;
+    return super.description(description) as any;
   }
 
   array<CurrentDefined extends Defined>(
     this: CurrentDefined extends { array: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output, Reference>,
+      : TailorField<CurrentDefined, Output, Reference>,
   ): TailorDBField<
     Prettify<CurrentDefined & { array: true }>,
     Output[],
     Reference
   > {
-    this._metadata.array = true;
-    return this as any;
+    return super.array() as any;
   }
 
   values<CurrentDefined extends Defined, const V extends AllowedValues>(
     this: CurrentDefined extends { allowedValues: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output, Reference>,
+      : TailorField<CurrentDefined, Output, Reference>,
     values: V,
   ): TailorDBField<
     Prettify<CurrentDefined & { allowedValues: V }>,
     AllowedValuesOutput<V>,
     Reference
   > {
-    this._metadata.allowedValues = mapAllowedValues(values);
-    return this as any;
+    return super.values(values) as any;
   }
 
-  private _ref: Reference = undefined as Reference;
-  get reference(): Readonly<Reference> | null {
-    return clone(this._ref);
-  }
   ref<
     const M extends [string, string],
-    const T extends TailorDBType,
+    const T extends TailorType<any, any>,
     const F extends keyof T["fields"] & string,
     CurrentDefined extends Defined,
   >(
     this: Reference extends undefined
-      ? TailorDBField<CurrentDefined, Output, Reference>
+      ? TailorField<CurrentDefined, Output, Reference>
       : never,
     type: T,
     nameMap: M,
     field: F = "id" as F,
   ): TailorDBField<CurrentDefined, Output, { nameMap: M; type: T; field: F }> {
-    (this as any)._ref = {
-      nameMap,
-      type,
-      field,
-    };
-    this._metadata.index = true;
-    this._metadata.foreignKeyType = type.name;
-    this._metadata.foreignKey = true;
-    return this as unknown as TailorDBField<
+    const result = super.ref(type, nameMap, field) as TailorDBField<
       CurrentDefined,
       Output,
       { nameMap: M; type: T; field: F }
     >;
+    result._metadata.index = true;
+    result._metadata.foreignKeyType = type.name;
+    result._metadata.foreignKey = true;
+    return result;
   }
 
   index<CurrentDefined extends Defined>(
@@ -297,18 +264,22 @@ type DBTypeOptions = {
 };
 
 export class TailorDBType<
-  const F extends { id?: never } & Record<string, TailorDBField<M>> = any,
-  M extends DefinedFieldMetadata = DefinedFieldMetadata,
-> {
+  const F extends { id?: never } & Record<
+    string,
+    TailorDBField<M, any, any>
+  > = any,
+  M extends DefinedFieldMetadata = any,
+> extends TailorType<M, F & Record<string, TailorField<M, any, any>>> {
   private _metadata?: TDB;
   public referenced: TailorDBType[] = [];
-  public readonly _output = null as unknown as any;
 
   constructor(
     public readonly name: string,
     public readonly fields: F,
     public readonly options: DBTypeOptions = {},
   ) {
+    super(name, fields);
+
     if (this.options.withTimestamps) {
       this.fields = { ...this.fields, ...datetimeFields };
     }
