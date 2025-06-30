@@ -12,6 +12,7 @@ import { SdlGenerator, SdlGeneratorID } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
 import { ManifestGenerator } from "./builtin/manifest";
+import { TailorCtl } from "@/ctl";
 
 type Workspace = ReturnType<typeof defineWorkspace>;
 
@@ -265,4 +266,6 @@ export async function apply(config: WorkspaceConfig, options: ApplyOptions) {
     ...options,
     watch: false,
   });
+
+  new TailorCtl(options).apply(path.join(getDistDir(), "manifest.cue"));
 }
