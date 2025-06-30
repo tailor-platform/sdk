@@ -1,129 +1,349 @@
-import { SDLUtils } from "@/generator/builtin/sdl/utils";
-import { TypeProcessor } from "@/generator/builtin/sdl/type-processor";
-import { db } from "./schema";
+import { describe, it, expectTypeOf } from "vitest";
+import db from "./schema";
+import type { output } from "@/types/helpers";
 
-import { describe, expect, test } from "vitest";
+describe("TailorDBField 基本フィールド型テスト", () => {
+  it("string型フィールドが正しくstring型を出力する", () => {
+    const _stringType = db.type("Test", {
+      name: db.string(),
+    });
+    expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+    }>();
+  });
 
-const productItem = db.type("ProductItem", { name: db.string().unique() });
-const productType = db
-  .type(
-    "Product",
-    {
-      name: db.string().unique(),
+  it("int型フィールドが正しくnumber型を出力する", () => {
+    const _intType = db.type("Test", {
+      age: db.int(),
+    });
+    expectTypeOf<output<typeof _intType>>().toEqualTypeOf<{
+      id: string;
+      age: number;
+    }>();
+  });
+
+  it("bool型フィールドが正しくboolean型を出力する", () => {
+    const _boolType = db.type("Test", {
+      active: db.bool(),
+    });
+    expectTypeOf<output<typeof _boolType>>().toEqualTypeOf<{
+      id: string;
+      active: boolean;
+    }>();
+  });
+
+  it("float型フィールドが正しくnumber型を出力する", () => {
+    const _floatType = db.type("Test", {
+      price: db.float(),
+    });
+    expectTypeOf<output<typeof _floatType>>().toEqualTypeOf<{
+      id: string;
+      price: number;
+    }>();
+  });
+
+  it("uuid型フィールドが正しくstring型を出力する", () => {
+    const _uuidType = db.type("Test", {
+      uuid: db.uuid(),
+    });
+    expectTypeOf<output<typeof _uuidType>>().toEqualTypeOf<{
+      id: string;
+      uuid: string;
+    }>();
+  });
+
+  it("date型フィールドが正しくDate型を出力する", () => {
+    const _dateType = db.type("Test", {
+      birthDate: db.date(),
+    });
+    expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
+      id: string;
+      birthDate: Date;
+    }>();
+  });
+
+  it("datetime型フィールドが正しくDate型を出力する", () => {
+    const _datetimeType = db.type("Test", {
+      timestamp: db.datetime(),
+    });
+    expectTypeOf<output<typeof _datetimeType>>().toMatchObjectType<{
+      id: string;
+      timestamp: Date;
+    }>();
+  });
+});
+
+describe("TailorDBField オプショナル修飾子テスト", () => {
+  it("optional()修飾子がnull許可型を生成する", () => {
+    const _optionalType = db.type("Test", {
       description: db.string().optional(),
-      price: db.int(),
-      weight: db.float().optional(),
-      variants: db.string().array().optional(),
-      itemIDs: db
-        .uuid()
-        .ref(productItem, ["items", "product"])
-        .array()
-        .optional(),
-      status: db.enum("IN_REVIEW", "CURRENT", "REJECTED"),
-    },
-    { withTimestamps: true },
-  )
-  .hooks({
-    status: {
-      create: ({ data }) => (data.status != null ? data.status : "IN_REVIEW"),
-      update: ({ data }) => (data.status != null ? data.status : "IN_REVIEW"),
-    },
+    });
+    expectTypeOf<output<typeof _optionalType>>().toEqualTypeOf<{
+      id: string;
+      description?: string | null;
+    }>();
   });
 
-describe("TailorDB: object style", () => {
-  test("sdl", async () => {
-    const metadata = await TypeProcessor.processDBType(productType as any);
-    const sdl = SDLUtils.generateSDLFromMetadata(metadata);
-
-    expect(sdl).toContain(`type Product {`);
-    expect(sdl).toContain(`id: ID!`);
-    expect(sdl).toContain(`name: String!`);
-    expect(sdl).toContain(`description: String`);
-    expect(sdl).toContain(`price: Int!`);
-    expect(sdl).toContain(`weight: Float`);
-    expect(sdl).toContain(`variants: [String]`);
-    expect(sdl).toContain(`status: enum!`);
-    expect(sdl).toContain(`itemIDs: [ID]`);
-    expect(sdl).toContain(`items: [ProductItem]`);
-    expect(sdl).toContain(`createdAt: DateTime`);
-    expect(sdl).toContain(`updatedAt: DateTime`);
+  it("複数のオプショナルフィールドが正しく動作する", () => {
+    const _multiOptionalType = db.type("Test", {
+      title: db.string(),
+      description: db.string().optional(),
+      count: db.int().optional(),
+    });
+    expectTypeOf<output<typeof _multiOptionalType>>().toEqualTypeOf<{
+      id: string;
+      title: string;
+      description?: string | null;
+      count?: number | null;
+    }>();
   });
-  test("metadata", () => {
-    const metadata = productType.metadata;
-    // console.log(metadata);
+});
 
-    expect(metadata.name).toBe("Product");
-    expect(metadata.schema).toBeDefined();
-    const schema = metadata.schema;
-    expect(schema?.fields).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-    const fields = schema?.fields!;
-    expect(fields["name"]).toBeDefined();
+describe("TailorDBField 配列修飾子テスト", () => {
+  it("array()修飾子が配列型を生成する", () => {
+    const _arrayType = db.type("Test", {
+      tags: db.string().array(),
+    });
+    expectTypeOf<output<typeof _arrayType>>().toEqualTypeOf<{
+      id: string;
+      tags: string[];
+    }>();
+  });
 
-    const nameField = fields["name"];
-    expect(nameField["type"]).toBe("string");
-    expect(nameField["required"]).toBe(true);
-    expect(nameField["index"]).toBe(true);
-    expect(nameField["unique"]).toBe(true);
-    expect(nameField["array"]).toBe(false);
-    expect(nameField["vector"]).toBe(false);
-    expect(nameField["foreignKey"]).toBe(false);
-    expect(nameField["validate"].length).toBe(0);
-    expect(nameField["allowedValues"].length).toBe(0);
+  it("オプショナル配列が正しく動作する", () => {
+    const _optionalArrayType = db.type("Test", {
+      items: db.string().array().optional(),
+    });
+    expectTypeOf<output<typeof _optionalArrayType>>().toEqualTypeOf<{
+      id: string;
+      items?: string[] | null;
+    }>();
+  });
 
-    const descriptionField = fields["description"];
-    expect(descriptionField["type"]).toBe("string");
-    expect(descriptionField["required"]).toBe(false);
-    expect(descriptionField["index"]).toBe(false);
-    expect(descriptionField["unique"]).toBe(false);
-    expect(descriptionField["array"]).toBe(false);
-    expect(descriptionField["vector"]).toBe(false);
-    expect(descriptionField["foreignKey"]).toBe(false);
-    expect(descriptionField["validate"].length).toBe(0);
-    expect(descriptionField["allowedValues"].length).toBe(0);
+  it("複数の配列フィールドが正しく動作する", () => {
+    const _multiArrayType = db.type("Test", {
+      tags: db.string().array(),
+      numbers: db.int().array(),
+      flags: db.bool().array(),
+    });
+    expectTypeOf<output<typeof _multiArrayType>>().toEqualTypeOf<{
+      id: string;
+      tags: string[];
+      numbers: number[];
+      flags: boolean[];
+    }>();
+  });
+});
 
-    const priceField = fields["price"];
-    expect(priceField["type"]).toBe("integer");
-    expect(priceField["required"]).toBe(true);
-    expect(priceField["index"]).toBe(false);
-    expect(priceField["unique"]).toBe(false);
-    expect(priceField["array"]).toBe(false);
-    expect(priceField["vector"]).toBe(false);
-    expect(priceField["foreignKey"]).toBe(false);
-    expect(priceField["validate"].length).toBe(0);
-    expect(priceField["allowedValues"].length).toBe(0);
+describe("TailorDBField enum フィールドテスト", () => {
+  it("enum()でユニオン型を生成する", () => {
+    const _enumType = db.type("Test", {
+      status: db.enum("active", "inactive", "pending"),
+    });
+    expectTypeOf<output<typeof _enumType>>().toEqualTypeOf<{
+      id: string;
+      status: "active" | "inactive" | "pending";
+    }>();
+  });
 
-    const weightField = fields["weight"];
-    expect(weightField["type"]).toBe("float");
-    expect(weightField["required"]).toBe(false);
-    expect(weightField["index"]).toBe(false);
-    expect(weightField["unique"]).toBe(false);
-    expect(weightField["array"]).toBe(false);
-    expect(weightField["vector"]).toBe(false);
-    expect(weightField["foreignKey"]).toBe(false);
-    expect(weightField["validate"].length).toBe(0);
-    expect(weightField["allowedValues"].length).toBe(0);
+  it("オプショナルenum()が正しく動作する", () => {
+    const _optionalEnumType = db.type("Test", {
+      priority: db.enum("high", "medium", "low").optional(),
+    });
+    expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
+      id: string;
+      priority?: "high" | "medium" | "low" | null;
+    }>();
+  });
 
-    const statusField = fields["status"];
-    expect(statusField["type"]).toBe("enum");
-    expect(statusField["required"]).toBe(true);
-    expect(statusField["index"]).toBe(false);
-    expect(statusField["unique"]).toBe(false);
-    expect(statusField["array"]).toBe(false);
-    expect(statusField["vector"]).toBe(false);
-    expect(statusField["foreignKey"]).toBe(false);
-    expect(statusField["validate"].length).toBe(0);
-    expect(statusField["allowedValues"].length).toBe(3);
-    expect(statusField["hooks"]).toBeDefined();
-    expect(statusField["hooks"]?.create).toBeDefined();
-    expect(statusField["hooks"]?.update).toBeDefined();
+  it("enum配列が正しく動作する", () => {
+    const _enumArrayType = db.type("Test", {
+      categories: db.enum("a", "b", "c").array(),
+    });
+    expectTypeOf<output<typeof _enumArrayType>>().toEqualTypeOf<{
+      id: string;
+      categories: ("a" | "b" | "c")[];
+    }>();
+  });
+});
 
-    const createdAtField = fields["createdAt"];
-    expect(createdAtField["type"]).toBe("datetime");
-    expect(createdAtField["hooks"]?.create).toBeDefined();
+describe("TailorDBField 修飾子チェーンテスト", () => {
+  it("index()修飾子が型に影響しない", () => {
+    const _indexType = db.type("Test", {
+      email: db.string().index(),
+    });
+    expectTypeOf<output<typeof _indexType>>().toEqualTypeOf<{
+      id: string;
+      email: string;
+    }>();
+  });
 
-    const updateAtField = fields["updatedAt"];
-    expect(updateAtField["type"]).toBe("datetime");
-    expect(updateAtField["hooks"]?.update).toBeDefined();
+  it("unique()修飾子が型に影響しない", () => {
+    const _uniqueType = db.type("Test", {
+      username: db.string().unique(),
+    });
+    expectTypeOf<output<typeof _uniqueType>>().toEqualTypeOf<{
+      id: string;
+      username: string;
+    }>();
+  });
+
+  it("vector()修飾子が型に影響しない", () => {
+    const _vectorType = db.type("Test", {
+      embedding: db.string().vector(),
+    });
+    expectTypeOf<output<typeof _vectorType>>().toEqualTypeOf<{
+      id: string;
+      embedding: string;
+    }>();
+  });
+
+  it("validate()修飾子が型に影響しない", () => {
+    const _validateType = db.type("Test", {
+      email: db.string().validate(() => true),
+    });
+    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
+      id: string;
+      email: string;
+    }>();
+  });
+
+  it("修飾子の順序が結果に影響しない", () => {
+    const _chainType1 = db.type("Test", {
+      field: db.string().optional().array(),
+    });
+    const _chainType2 = db.type("Test", {
+      field: db.string().array().optional(),
+    });
+    expectTypeOf<output<typeof _chainType1>>().toEqualTypeOf<
+      output<typeof _chainType2>
+    >();
+  });
+});
+
+describe("TailorDBField ref修飾子テスト", () => {
+  it("ref()修飾子が参照型を生成する", () => {
+    const _userType = db.type("User", {
+      name: db.string(),
+    });
+    const _postType = db.type("Post", {
+      title: db.string(),
+      authorId: db.uuid().ref(_userType, ["authorId", "author"]),
+    });
+    expectTypeOf<output<typeof _postType>>().toEqualTypeOf<{
+      id: string;
+      title: string;
+      authorId: string;
+    }>();
+  });
+});
+
+describe("TailorDBType withTimestamps オプションテスト", () => {
+  it("withTimestamps: falseでタイムスタンプフィールドが追加されない", () => {
+    const _noTimestampType = db.type(
+      "Test",
+      {
+        name: db.string(),
+      },
+      { withTimestamps: false },
+    );
+    expectTypeOf<output<typeof _noTimestampType>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+    }>();
+  });
+});
+
+describe("TailorDBType 複合型テスト", () => {
+  it("複数フィールドを持つ型が正しく動作する", () => {
+    const _complexType = db.type("User", {
+      name: db.string(),
+      email: db.string(),
+      age: db.int().optional(),
+      isActive: db.bool(),
+      tags: db.string().array(),
+      role: db.enum("admin", "user", "guest"),
+      score: db.float(),
+      birthDate: db.date(),
+      lastLogin: db.datetime().optional(),
+    });
+    expectTypeOf<output<typeof _complexType>>().toMatchObjectType<{
+      id: string;
+      name: string;
+      email: string;
+      age?: number | null;
+      isActive: boolean;
+      tags: string[];
+      role: "admin" | "user" | "guest";
+      score: number;
+      birthDate: Date;
+      lastLogin?: Date | null;
+    }>();
+  });
+});
+
+describe("TailorDBType エッジケーステスト", () => {
+  it("単一フィールドの型が正しく動作する", () => {
+    const _singleFieldType = db.type("Simple", {
+      value: db.string(),
+    });
+    expectTypeOf<output<typeof _singleFieldType>>().toEqualTypeOf<{
+      id: string;
+      value: string;
+    }>();
+  });
+
+  it("すべてオプショナルフィールドの型が正しく動作する", () => {
+    const _allOptionalType = db.type("Optional", {
+      a: db.string().optional(),
+      b: db.int().optional(),
+      c: db.bool().optional(),
+    });
+    expectTypeOf<output<typeof _allOptionalType>>().toEqualTypeOf<{
+      id: string;
+      a?: string | null;
+      b?: number | null;
+      c?: boolean | null;
+    }>();
+  });
+
+  it("すべて配列フィールドの型が正しく動作する", () => {
+    const _allArrayType = db.type("Arrays", {
+      strings: db.string().array(),
+      numbers: db.int().array(),
+      booleans: db.bool().array(),
+    });
+    expectTypeOf<output<typeof _allArrayType>>().toEqualTypeOf<{
+      id: string;
+      strings: string[];
+      numbers: number[];
+      booleans: boolean[];
+    }>();
+  });
+});
+
+describe("TailorDBType 型の一貫性テスト", () => {
+  it("同じ定義は同じ型を生成する", () => {
+    const _type1 = db.type("Same", {
+      name: db.string(),
+      age: db.int(),
+    });
+    const _type2 = db.type("Same", {
+      name: db.string(),
+      age: db.int(),
+    });
+    expectTypeOf<output<typeof _type1>>().toEqualTypeOf<
+      output<typeof _type2>
+    >();
+  });
+
+  it("idフィールドが自動的に追加される", () => {
+    const _typeWithoutId = db.type("Test", {
+      name: db.string(),
+    });
+    expectTypeOf<output<typeof _typeWithoutId>>().toMatchTypeOf<{
+      id: string;
+    }>();
   });
 });

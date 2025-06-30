@@ -25,7 +25,8 @@
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@tailor-inc/operator-client": "^25.313.146",
