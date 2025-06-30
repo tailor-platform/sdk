@@ -26,10 +26,21 @@ export class ResolverProcessor {
     }
 
     // SDL生成ロジック（元のResolver.toSDLMetadata()から移行）
-    const inputMetadata = await TypeProcessor.processType(resolver.input, true);
+    // resolver名をパスカルケースに変換
+    const pascalCaseName =
+      resolver.name.charAt(0).toUpperCase() + resolver.name.slice(1);
+    const inputTypeName = `${pascalCaseName}Input`;
+    const outputTypeName = `${pascalCaseName}Output`;
+
+    const inputMetadata = await TypeProcessor.processType(
+      resolver.input,
+      true,
+      inputTypeName,
+    );
     const outputMetadata = await TypeProcessor.processType(
       resolver.output,
       false,
+      outputTypeName,
     );
 
     const sdl = multiline/* gql */ `
@@ -148,10 +159,18 @@ export class ResolverProcessor {
       );
     }
 
-    const inputMetadata = await TypeProcessor.processType(resolver.input, true);
+    const inputTypeName = `${resolver.name}Input`;
+    const outputTypeName = `${resolver.name}Output`;
+
+    const inputMetadata = await TypeProcessor.processType(
+      resolver.input,
+      true,
+      inputTypeName,
+    );
     const outputMetadata = await TypeProcessor.processType(
       resolver.output,
       false,
+      outputTypeName,
     );
 
     const inputSDL = SDLUtils.generateSDLFromMetadata(inputMetadata);
