@@ -4,7 +4,7 @@ import { supplier } from "./supplier";
 export const purchaseOrder = db.type(
   "PurchaseOrder",
   {
-    supplierID: db.uuid().ref(supplier, ["supplier", "purchaseOrder"]),
+    supplierID: db.uuid().ref(supplier, ["supplier", "purchaseOrders"]),
     totalPrice: db.int(),
     discount: db.float().optional(),
     status: db.string(),
