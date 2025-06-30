@@ -10,11 +10,21 @@ export class AuthService {
       Kind: "auth",
       Namespace: this.config.namespace,
       IdProviderConfigs: this.config.idProviderConfigs?.map(
-        (provider: IdProviderConfig) => ({
-          Name: provider.Name,
-          Config: provider.Config,
-          IdTokenConfig: provider.IdTokenConfig || provider.Config,
-        }),
+        (provider: IdProviderConfig) => {
+          const baseConfig = { Name: provider.Name };
+          switch (provider.Config.Kind) {
+            case "IDToken":
+              return { ...baseConfig, IdTokenConfig: provider.Config };
+            case "SAML":
+              return { ...baseConfig, SamlConfig: provider.Config };
+            case "OIDC":
+              return { ...baseConfig, OidcConfig: provider.Config };
+            default:
+              throw new Error(
+                `Unknown IdProviderConfig kind: ${provider.Config satisfies never}`,
+              );
+          }
+        },
       ),
       UserProfileProvider: this.config.userProfileProvider,
       UserProfileProviderConfig: this.config.userProfileProviderConfig,
