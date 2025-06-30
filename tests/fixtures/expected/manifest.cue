@@ -1235,11 +1235,6 @@
       "IdProviderConfigs": [
         {
           "Name": "sample",
-          "Config": {
-            "Kind": "IDToken",
-            "ClientID": "exampleco",
-            "ProviderURL": "https://exampleco-enterprises.auth0.com/"
-          },
           "IdTokenConfig": {
             "Kind": "IDToken",
             "ClientID": "exampleco",
@@ -1278,11 +1273,6 @@
       "IdProviderConfigs": [
         {
           "Name": "sample",
-          "Config": {
-            "Kind": "IDToken",
-            "ClientID": "exampleco",
-            "ProviderURL": "https://exampleco-enterprises.auth0.com/"
-          },
           "IdTokenConfig": {
             "Kind": "IDToken",
             "ClientID": "exampleco",
