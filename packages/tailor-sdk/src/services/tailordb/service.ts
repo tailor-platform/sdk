@@ -172,7 +172,6 @@ export class TailorDBService {
 
           // 参照しているdbTypeのrelationshipsを設定
           const relationships: Record<string, any> = {};
-          // TODO: Object.entriesで型情報が失われないようにしたい。
           Object.entries(type.fields)
             .filter(([_, fieldConfig]: [string, any]) => fieldConfig.reference)
             .forEach(([fieldName, fieldConfig]: [string, any]) => {

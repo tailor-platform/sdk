@@ -17,7 +17,6 @@ export interface ManifestFieldMetadata {
   type: string;
   required: boolean;
   array: boolean;
-  allowedValues?: Array<{ value: string; label?: string }>;
 }
 
 // Pipeline Manifest生成用の型定義
