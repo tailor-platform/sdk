@@ -59,6 +59,7 @@ export class TypeProcessor {
   static async processType(
     type: TailorType<any, any>,
     isInput: boolean = false,
+    typeName?: string,
   ): Promise<SDLTypeMetadata> {
     const fields: SDLFieldMetadata[] = [];
 
@@ -89,7 +90,7 @@ export class TypeProcessor {
     }
 
     return {
-      name: type.name,
+      name: typeName || "undefined",
       fields,
       isInput,
     };
