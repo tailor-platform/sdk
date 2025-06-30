@@ -2,9 +2,11 @@ import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
 import { kyselyWrapper } from "../db";
 
-export default createQueryResolver("stepChain", t.type({ name: t.string() }), {
-  defaults: { dbNamespace: "my-db" },
-})
+export default createQueryResolver(
+  "stepChain",
+  t.type("StepChainInput", { name: t.string() }),
+  { defaults: { dbNamespace: "my-db" } },
+)
   .fnStep("step1", (context) => {
     return `step1: Hello ${context.input.name} on step1!`;
   })
@@ -43,7 +45,7 @@ export default createQueryResolver("stepChain", t.type({ name: t.string() }), {
         context.kyselyStep,
       ],
     }),
-    t.type({
+    t.type("StepChainOutput", {
       summary: t.string().array(),
     }),
   );

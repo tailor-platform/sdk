@@ -27,7 +27,7 @@ export class SdlGenerator
    */
   @measure
   async processType(type: TailorDBType): Promise<SDLTypeMetadata> {
-    return await TypeProcessor.processDBType(type);
+    return await TypeProcessor.processType(type);
   }
 
   /**

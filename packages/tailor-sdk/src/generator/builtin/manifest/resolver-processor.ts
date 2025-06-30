@@ -6,7 +6,6 @@ import { measure } from "@/performance";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { getDistDir } from "@/config";
 import { StepDef } from "@/services/pipeline/types";
-import type { TailorType } from "@/types";
 
 export { ResolverManifestMetadata };
 
@@ -59,20 +58,18 @@ export class ResolverProcessor {
       },
     );
 
+    // Input型のフィールド情報を抽出
     const inputFields = this.extractTypeFields(resolver.input);
+
+    // Output型のフィールド情報を抽出
     const outputFields = resolver.output
       ? this.extractTypeFields(resolver.output)
       : undefined;
 
-    const pascalCaseName =
-      resolver.name.charAt(0).toUpperCase() + resolver.name.slice(1);
-    const inputTypeName = `${pascalCaseName}Input`;
-    const outputTypeName = resolver.output ? `${pascalCaseName}Output` : "JSON";
-
     return {
       name: resolver.name,
-      inputType: inputTypeName,
-      outputType: outputTypeName,
+      inputType: resolver.input.name,
+      outputType: resolver.output?.name || "JSON",
       queryType: resolver.queryType,
       pipelines,
       outputMapper: resolver.outputMapper?.toString(),
@@ -157,7 +154,7 @@ export class ResolverProcessor {
    * TailorType型からフィールド情報を抽出
    */
   private static extractTypeFields(
-    type?: TailorType,
+    type: any,
   ):
     | Record<string, { type: string; required: boolean; array: boolean }>
     | undefined {

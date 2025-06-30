@@ -17,8 +17,16 @@ export class TypeProcessor {
     // SDL生成システムには依存しない
     const fields: ManifestFieldMetadata[] = Object.entries(type.fields).map(
       ([fieldName, fieldDef]) => {
-        const metadata = (fieldDef as any).metadata;
-
+        const metadata = (
+          fieldDef as {
+            metadata: {
+              description?: string;
+              type: string;
+              required?: boolean;
+              array?: boolean;
+            };
+          }
+        ).metadata;
         return {
           name: fieldName,
           description: metadata.description || "",
@@ -28,7 +36,6 @@ export class TypeProcessor {
             ] || "String",
           required: metadata.required ?? true,
           array: metadata.array ?? false,
-          allowedValues: metadata.allowedValues || [],
         };
       },
     );
