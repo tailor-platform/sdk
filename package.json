@@ -22,7 +22,9 @@
     "format": "turbo run format",
     "format:root": "prettier --write .",
     "format:check": "turbo run format:check",
-    "format:check:root": "prettier --check ."
+    "format:check:root": "prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "typecheck:root": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",

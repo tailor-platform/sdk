@@ -2,9 +2,16 @@ export type Prettify<T> = {
   [K in keyof T as string extends K ? never : K]: T[K];
 } & {};
 
-export type DeepWriteable<T> = T extends object
-  ? { -readonly [P in keyof T]: DeepWriteable<T[P]> } & {}
-  : T;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+export type DeepWriteable<T> = T extends Date | RegExp | Function
+  ? T
+  : T extends object
+    ? { -readonly [P in keyof T]: DeepWriteable<T[P]> } & {}
+    : T;
+
+type _d = DeepWriteable<{
+  date: Date;
+}>;
 
 type LiteralToString<T> = T extends string ? string : T;
 type SpecificNumberToNumber<T> = T extends number ? number : T;

@@ -42,3 +42,8 @@ jobs:
         run: pnpm format:check
         env:
           GITHUB_PACKAGES_READ_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_TOKEN }}
+
+      - name: Check type
+        run: pnpm typecheck
+        env:
+          GITHUB_PACKAGES_READ_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_TOKEN }}
