@@ -22,3 +22,17 @@ pre-commit:
       run: |
         echo "format: {staged_files}"
         npx prettier --check {staged_files}
+
+    - name: typecheck:root
+      glob: "*.{ts}"
+      exclude: "packages"
+      run: |
+        echo "typecheck: root"
+        npx tsc --noEmit
+
+    - name: typecheck:tailor-sdk
+      glob: "*.{ts}"
+      root: "packages/tailor-sdk"
+      run: |
+        echo "typecheck: tailor-sdk"
+        npx tsc --noEmit

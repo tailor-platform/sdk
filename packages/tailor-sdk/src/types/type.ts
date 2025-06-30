@@ -9,11 +9,12 @@ type DefinedFieldMetadata = Partial<
   Omit<FieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-export type FieldReference<T extends TailorField<any, any, any>> =
-  DeepWriteable<NonNullable<T["reference"]>>;
+export type FieldReference<T extends TailorField> = DeepWriteable<
+  NonNullable<T["reference"]>
+>;
 
 export type ReferenceConfig<
-  T extends TailorType<any, any> = TailorType<any, any>,
+  T extends TailorType = TailorType,
   M extends [string, string] = [string, string],
 > = {
   nameMap: M;
@@ -29,8 +30,8 @@ const fieldDefaults = {
 } as const satisfies Omit<FieldMetadata, "type">;
 
 export class TailorType<
-  M extends DefinedFieldMetadata,
-  const F extends Record<string, TailorField<M, any, any>>,
+  M extends DefinedFieldMetadata = DefinedFieldMetadata,
+  const F extends Record<string, TailorField<M>> = any,
   Output = Prettify<
     {
       [K in keyof F as F[K]["_defined"] extends { required: false }
@@ -58,19 +59,16 @@ export class TailorType<
 }
 
 export class TailorField<
-  const Defined extends DefinedFieldMetadata,
-  const Output,
+  const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
+  const Output = any,
   const Reference extends
     | ReferenceConfig<
         TailorType<
           DefinedFieldMetadata,
-          { id?: never } & Record<
-            string,
-            TailorField<DefinedFieldMetadata, any, any>
-          >
+          { id?: never } & Record<string, TailorField<DefinedFieldMetadata>>
         >
       >
-    | undefined,
+    | undefined = undefined,
   M extends FieldMetadata = FieldMetadata,
 > {
   protected _metadata: M;
@@ -161,7 +159,7 @@ export class TailorField<
 
   ref<
     const M extends [string, string],
-    const T extends TailorType<any, any>,
+    const T extends TailorType,
     const F extends keyof T["fields"] & string,
     CurrentDefined extends Defined,
   >(
