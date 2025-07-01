@@ -22,7 +22,7 @@ export type ReferenceConfig<
 > = {
   nameMap: M;
   type: T;
-  field: K;
+  key: K;
 };
 
 const fieldDefaults = {
@@ -176,17 +176,17 @@ export class TailorField<
       : never,
     type: T,
     nameMap: M,
-    field: F = "id" as F,
+    key: F = "id" as F,
   ) {
     (this as any)._ref = {
       nameMap,
       type,
-      field,
+      key,
     };
     return this as unknown as TailorField<
       CurrentDefined,
       Output,
-      { nameMap: M; type: T; field: F }
+      { nameMap: M; type: T; key: F }
     >;
   }
 }

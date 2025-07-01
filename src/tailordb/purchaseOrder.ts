@@ -4,7 +4,10 @@ import { supplier } from "./supplier";
 export const purchaseOrder = db.type(
   "PurchaseOrder",
   {
-    supplierID: db.uuid().ref(supplier, ["supplier", "purchaseOrders"]),
+    supplierID: db.uuid().relation({
+      type: "1-n",
+      toward: { type: supplier },
+    }),
     totalPrice: db.int(),
     discount: db.float().optional(),
     status: db.string(),
