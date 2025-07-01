@@ -19,6 +19,18 @@ import type { Prettify, output } from "@/types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "@/types/field";
 import { ReferenceConfig, TailorField, TailorType } from "@/types/type";
 
+interface RelationConfig<
+  T extends { name: string; fields: Record<string, unknown> },
+> {
+  type: "oneToOne" | "1-1" | "oneToMany" | "1-n" | "1-N";
+  toward: {
+    type: T;
+    as?: string;
+    key?: keyof T["fields"] & string;
+  };
+  backward?: string;
+}
+
 const fieldDefaults = {
   required: undefined,
   description: undefined,
@@ -143,28 +155,55 @@ class TailorDBField<
     return super.values(values) as any;
   }
 
-  ref<
-    const M extends [string, string],
-    const T extends TailorType<any, any>,
-    const F extends keyof T["fields"] & string,
+  relation<
+    const Config extends RelationConfig<TailorType<any, any>>,
     CurrentDefined extends Defined,
   >(
     this: Reference extends undefined
       ? TailorField<CurrentDefined, Output, Reference>
       : never,
-    type: T,
-    nameMap: M,
-    field: F = "id" as F,
-  ): TailorDBField<CurrentDefined, Output, { nameMap: M; type: T; field: F }> {
-    const result = super.ref(type, nameMap, field) as TailorDBField<
-      CurrentDefined,
-      Output,
-      { nameMap: M; type: T; field: F }
-    >;
+    config: Config,
+  ): TailorDBField<
+    Config["type"] extends "oneToOne" | "1-1"
+      ? Prettify<CurrentDefined & { unique: true; index: true }>
+      : CurrentDefined,
+    Output,
+    {
+      nameMap: [
+        Config["toward"]["as"] extends string
+          ? Config["toward"]["as"]
+          : Config["toward"]["type"]["name"],
+        Config["backward"] extends string ? Config["backward"] : string,
+      ];
+      type: Config["toward"]["type"];
+      key: Config["toward"]["key"] extends string
+        ? Config["toward"]["key"]
+        : "id";
+    }
+  > {
+    const targetTable: TailorType<any, any> = config.toward.type;
+    const forwardName =
+      config.toward.as ??
+      targetTable.name.charAt(0).toLowerCase() + targetTable.name.slice(1);
+    const field: string = config.toward.key ?? "id";
+    const backward: string = config.backward ?? "";
+
+    const relationNames: [string, string] = [forwardName, backward];
+    const result = super.ref(
+      targetTable,
+      relationNames,
+      field,
+    ) as TailorDBField<any, Output, any>;
+
     result._metadata.index = true;
-    result._metadata.foreignKeyType = type.name;
+    result._metadata.foreignKeyType = targetTable.name;
     result._metadata.foreignKey = true;
-    return result;
+
+    if (["oneToOne", "1-1"].includes(config.type)) {
+      result._metadata.unique = true;
+    }
+
+    return result as any;
   }
 
   index<CurrentDefined extends Defined>(

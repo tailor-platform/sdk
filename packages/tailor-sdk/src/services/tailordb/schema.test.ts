@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expectTypeOf, expect } from "vitest";
 import db from "./schema";
 import type { output } from "@/types/helpers";
 
@@ -168,6 +168,117 @@ describe("TailorDBField enum フィールドテスト", () => {
   });
 });
 
+describe("TailorDBField RelationConfig オプションフィールドテスト", () => {
+  const User = db.type("User", {
+    name: db.string(),
+    email: db.string(),
+  });
+
+  const Customer = db.type("Customer", {
+    name: db.string(),
+    customerId: db.string(),
+  });
+
+  it("toward.asが省略された場合、toward.type.nameがデフォルトで使用される", () => {
+    const userField = db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: User,
+        key: "id",
+      },
+    });
+
+    expect(userField.reference!.nameMap[0]).toEqual("user");
+    expect(userField.reference!.nameMap[1]).toEqual("");
+  });
+
+  it('toward.keyが省略された場合、"id"がデフォルトで使用される', () => {
+    const userField = db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: User,
+        as: "owner",
+      },
+    });
+
+    expectTypeOf(userField.reference!.key).toEqualTypeOf<"id">();
+  });
+
+  it("toward.as、toward.key、backwardが全て明示的に指定された場合の動作", () => {
+    const managerField = db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: User,
+        as: "manager",
+        key: "email",
+      },
+      backward: "subordinates",
+    });
+
+    expect(managerField.reference!.nameMap[0]).toEqual("manager");
+    expect(managerField.reference!.key).toEqual("email");
+    expect(managerField.reference!.nameMap[1]).toEqual("subordinates");
+  });
+
+  it("toward.asのみ明示的に指定した場合の動作", () => {
+    const userField = db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: User,
+        as: "owner",
+      },
+    });
+
+    expect(userField.reference!.nameMap[0]).toEqual("owner");
+    expect(userField.reference!.key).toEqual("id");
+    expect(userField.reference!.nameMap[1]).toEqual("");
+  });
+
+  it("toward.keyのみ明示的に指定した場合の動作", () => {
+    const customerField = db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: Customer,
+        key: "customerId",
+      },
+    });
+
+    expect(customerField.reference!.nameMap[0]).toEqual("customer");
+    expect(customerField.reference!.key).toEqual("customerId");
+    expect(customerField.reference!.nameMap[1]).toEqual("");
+  });
+
+  it("backwardのみ明示的に指定した場合の動作", () => {
+    const userField = db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: User,
+      },
+      backward: "relatedItems",
+    });
+
+    expect(userField.reference!.nameMap[0]).toEqual("user");
+    expect(userField.reference!.key).toEqual("id");
+    expect(userField.reference!.nameMap[1]).toEqual("relatedItems");
+  });
+
+  it("oneToManyリレーションでの型推論確認", () => {
+    const userField = db.uuid().relation({
+      type: "oneToMany",
+      toward: {
+        type: User,
+        as: "author",
+        key: "email",
+      },
+      backward: "posts",
+    });
+
+    expect(userField.reference!.nameMap[0]).toEqual("author");
+    expect(userField.reference!.key).toEqual("email");
+    expect(userField.reference!.nameMap[1]).toEqual("posts");
+  });
+});
+
 describe("TailorDBField 修飾子チェーンテスト", () => {
   it("index()修飾子が型に影響しない", () => {
     const _indexType = db.type("Test", {
@@ -229,7 +340,11 @@ describe("TailorDBField ref修飾子テスト", () => {
     });
     const _postType = db.type("Post", {
       title: db.string(),
-      authorId: db.uuid().ref(_userType, ["author", "author"]),
+      authorId: db.uuid().relation({
+        type: "oneToOne",
+        toward: { type: _userType, as: "author" },
+        backward: "author",
+      }),
     });
     expectTypeOf<output<typeof _postType>>().toEqualTypeOf<{
       id: string;
