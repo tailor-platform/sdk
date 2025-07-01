@@ -66,10 +66,12 @@ export class ResolverProcessor {
       ? this.extractTypeFields(resolver.output)
       : undefined;
 
+    const typeBaseName =
+      resolver.name.charAt(0).toUpperCase() + resolver.name.slice(1);
     return {
       name: resolver.name,
-      inputType: resolver.input.name,
-      outputType: resolver.output?.name || "JSON",
+      inputType: `${typeBaseName}Input`,
+      outputType: `${typeBaseName}Output`,
       queryType: resolver.queryType,
       pipelines,
       outputMapper: resolver.outputMapper?.toString(),
@@ -93,61 +95,6 @@ export class ResolverProcessor {
     }
 
     return result;
-  }
-
-  /**
-   * Resolverの配列から名前をキーとするマップを作成
-   */
-  @measure
-  static async processResolverArrayToMap(
-    resolvers: Resolver[],
-  ): Promise<Record<string, ResolverManifestMetadata>> {
-    const result: Record<string, ResolverManifestMetadata> = {};
-
-    for (const resolver of resolvers) {
-      const metadata = await this.processResolver(resolver);
-      result[resolver.name] = metadata;
-    }
-
-    return result;
-  }
-
-  /**
-   * Resolverの依存関係を解析（将来の拡張用）
-   */
-  static analyzeDependencies(metadata: ResolverManifestMetadata): string[] {
-    const dependencies: string[] = [];
-
-    // Input/Output型を依存関係として追加
-    if (metadata.inputType) {
-      dependencies.push(metadata.inputType);
-    }
-    if (metadata.outputType) {
-      dependencies.push(metadata.outputType);
-    }
-
-    return [...new Set(dependencies)]; // 重複を除去
-  }
-
-  /**
-   * Query/Mutation別にResolverを分類
-   */
-  static categorizeResolvers(resolvers: Resolver[]): {
-    queries: Resolver[];
-    mutations: Resolver[];
-  } {
-    const queries: Resolver[] = [];
-    const mutations: Resolver[] = [];
-
-    for (const resolver of resolvers) {
-      if (resolver.queryType === "query") {
-        queries.push(resolver);
-      } else if (resolver.queryType === "mutation") {
-        mutations.push(resolver);
-      }
-    }
-
-    return { queries, mutations };
   }
 
   /**
