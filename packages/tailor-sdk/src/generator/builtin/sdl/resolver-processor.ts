@@ -6,6 +6,7 @@ import { measure } from "@/performance";
 import { ResolverSDLMetadata } from "./types";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { TypeProcessor } from "./type-processor";
+
 /**
  * Resolver処理ロジック
  * ResolverからGraphQL拡張定義の生成を担当
@@ -25,11 +26,17 @@ export class ResolverProcessor {
       );
     }
 
-    // SDL生成ロジック（元のResolver.toSDLMetadata()から移行）
-    const inputMetadata = await TypeProcessor.processType(resolver.input, true);
+    const resolverBaseName =
+      resolver.name.charAt(0).toUpperCase() + resolver.name.slice(1);
+    const inputMetadata = await TypeProcessor.processType(
+      resolver.input,
+      true,
+      `${resolverBaseName}Input`,
+    );
     const outputMetadata = await TypeProcessor.processType(
       resolver.output,
       false,
+      `${resolverBaseName}Output`,
     );
 
     const sdl = multiline/* gql */ `
@@ -40,7 +47,6 @@ export class ResolverProcessor {
     }
     `;
 
-    // パイプライン処理ロジック（元のResolver.toSDLMetadata()から移行）
     const pipelines = resolver.steps.map(
       (step: [string, string, unknown, unknown]) => {
         const [type, name] = step;
@@ -79,18 +85,12 @@ export class ResolverProcessor {
     };
   }
 
-  /**
-   * ResolverからSDL文字列のみを抽出
-   */
   @measure
   static async processResolverToSDL(resolver: Resolver): Promise<string> {
     const metadata = await this.processResolver(resolver);
     return metadata.sdl;
   }
 
-  /**
-   * 複数のResolverを処理してSDL文字列を生成
-   */
   @measure
   static async processResolvers(resolvers: Resolver[]): Promise<string> {
     const sdlParts: string[] = [];
@@ -101,100 +101,5 @@ export class ResolverProcessor {
     }
 
     return SDLUtils.combineSDL(...sdlParts);
-  }
-
-  /**
-   * Resolverの名前とSDLのマップを作成
-   */
-  @measure
-  static async processResolversToMap(
-    resolvers: Record<string, Resolver>,
-  ): Promise<Record<string, ResolverSDLMetadata>> {
-    const result: Record<string, ResolverSDLMetadata> = {};
-
-    for (const [name, resolver] of Object.entries(resolvers)) {
-      result[name] = await this.processResolver(resolver);
-    }
-
-    return result;
-  }
-
-  /**
-   * Resolverの配列から名前をキーとするマップを作成
-   */
-  @measure
-  static async processResolverArrayToMap(
-    resolvers: Resolver[],
-  ): Promise<Record<string, ResolverSDLMetadata>> {
-    const result: Record<string, ResolverSDLMetadata> = {};
-
-    for (const resolver of resolvers) {
-      const metadata = await this.processResolver(resolver);
-      result[resolver.name] = metadata;
-    }
-
-    return result;
-  }
-
-  /**
-   * Input/Output型の処理
-   * ResolverのInput/Output型からSDL定義を生成
-   */
-  @measure
-  static async processInputOutputTypes(resolver: Resolver): Promise<string> {
-    if (!resolver.output) {
-      throw new Error(
-        `Resolver "${resolver.name}" must have an output type defined. Use .returns() to specify the output type.`,
-      );
-    }
-
-    const inputMetadata = await TypeProcessor.processType(resolver.input, true);
-    const outputMetadata = await TypeProcessor.processType(
-      resolver.output,
-      false,
-    );
-
-    const inputSDL = SDLUtils.generateSDLFromMetadata(inputMetadata);
-    const outputSDL = SDLUtils.generateSDLFromMetadata(outputMetadata);
-
-    return SDLUtils.combineSDL(inputSDL, outputSDL);
-  }
-
-  /**
-   * Resolverの依存関係を解析（将来の拡張用）
-   */
-  static analyzeDependencies(metadata: ResolverSDLMetadata): string[] {
-    const dependencies: string[] = [];
-
-    // Input/Output型を依存関係として追加
-    if (metadata.inputType) {
-      dependencies.push(metadata.inputType);
-    }
-    if (metadata.outputType) {
-      dependencies.push(metadata.outputType);
-    }
-
-    return [...new Set(dependencies)]; // 重複を除去
-  }
-
-  /**
-   * Query/Mutation別にResolverを分類
-   */
-  static categorizeResolvers(resolvers: Resolver[]): {
-    queries: Resolver[];
-    mutations: Resolver[];
-  } {
-    const queries: Resolver[] = [];
-    const mutations: Resolver[] = [];
-
-    for (const resolver of resolvers) {
-      if (resolver.queryType === "query") {
-        queries.push(resolver);
-      } else if (resolver.queryType === "mutation") {
-        mutations.push(resolver);
-      }
-    }
-
-    return { queries, mutations };
   }
 }

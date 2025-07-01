@@ -3,14 +3,7 @@ import { ManifestTypeMetadata, ManifestFieldMetadata } from "./types";
 import { measure } from "@/performance";
 import { tailorToManifestScalar } from "@/types/types";
 
-/**
- * TailorDBType処理ロジック（Manifest生成専用）
- * SDL生成とは独立してManifest用のメタデータを生成
- */
 export class TypeProcessor {
-  /**
-   * TailorDBTypeからManifest用メタデータを抽出
-   */
   @measure
   static async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
     // TailorDBTypeから直接Manifest用のメタデータを生成
@@ -43,13 +36,10 @@ export class TypeProcessor {
     return {
       name: type.name,
       fields,
-      isInput: false, // TailorDBTypeは通常出力型
+      isInput: false,
     };
   }
 
-  /**
-   * 複数のTailorDBTypeを処理
-   */
   @measure
   static async processTypes(
     types: TailorDBType[],
@@ -62,21 +52,5 @@ export class TypeProcessor {
     }
 
     return result;
-  }
-
-  /**
-   * 型の依存関係を解析（将来の拡張用）
-   */
-  static analyzeDependencies(metadata: ManifestTypeMetadata): string[] {
-    const dependencies: string[] = [];
-
-    for (const field of metadata.fields) {
-      // カスタム型の場合は依存関係として追加
-      if (!["String", "Int", "Float", "Boolean"].includes(field.type)) {
-        dependencies.push(field.type);
-      }
-    }
-
-    return [...new Set(dependencies)]; // 重複を除去
   }
 }

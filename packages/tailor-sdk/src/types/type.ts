@@ -60,10 +60,7 @@ export class TailorType<
 > {
   public readonly _output = null as unknown as Output;
 
-  constructor(
-    public readonly name: string,
-    public readonly fields: F,
-  ) {}
+  constructor(public readonly fields: F) {}
 }
 
 export class TailorField<
@@ -232,10 +229,9 @@ type TailorTypeDef = InstanceType<
 >;
 
 function tailorType<const F extends Record<string, TailorField<any, any, any>>>(
-  name: string,
   fields: F,
 ): TailorType<DefinedFieldMetadata, F> {
-  return new TailorType<DefinedFieldMetadata, F>(name, fields) as TailorType<
+  return new TailorType<DefinedFieldMetadata, F>(fields) as TailorType<
     DefinedFieldMetadata,
     F
   >;
