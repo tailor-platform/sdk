@@ -69,7 +69,7 @@ class TailorDBField<
     });
   }
 
-  setHooks(hooks: Hook<Output, any>) {
+  private setHooks(hooks: Hook<Output, any>) {
     this._metadata.hooks = hooks;
   }
 
@@ -316,7 +316,7 @@ export class TailorDBType<
 
   hooks(hooks: Hooks<output<typeof this>>) {
     Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-      this.fields[fieldName].setHooks(fieldHooks);
+      (this.fields[fieldName] as any).setHooks(fieldHooks);
     });
     return this;
   }
@@ -334,14 +334,14 @@ type idField = typeof idField;
 const datetimeFields = {
   createdAt: (() => {
     const field = datetime().optional();
-    field.setHooks({
+    (field as any).setHooks({
       create: () => new Date().toISOString(),
     });
     return field;
   })(),
   updatedAt: (() => {
     const field = datetime().optional();
-    field.setHooks({
+    (field as any).setHooks({
       update: () => new Date().toISOString(),
     });
     return field;

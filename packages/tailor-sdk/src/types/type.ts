@@ -9,17 +9,20 @@ type DefinedFieldMetadata = Partial<
   Omit<FieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-export type FieldReference<T extends TailorField> = DeepWriteable<
-  NonNullable<T["reference"]>
->;
+export type FieldReference<T extends TailorField<any, any, any>> =
+  DeepWriteable<Exclude<T["reference"], null | undefined>>;
 
 export type ReferenceConfig<
-  T extends TailorType = TailorType,
+  T extends { _output: any; fields: Record<string, unknown> } = {
+    _output: any;
+    fields: Record<string, unknown>;
+  },
   M extends [string, string] = [string, string],
+  K extends keyof T["fields"] & string = keyof T["fields"] & string,
 > = {
   nameMap: M;
   type: T;
-  field?: keyof T["fields"];
+  field: K;
 };
 
 const fieldDefaults = {
@@ -42,11 +45,16 @@ export class TailorType<
         ? K
         : never]?: output<F[K]> | null;
     } & {
-      [K in keyof F as FieldReference<F[K]> extends never
-        ? never
-        : FieldReference<F[K]>["nameMap"][0]]: output<
-        FieldReference<F[K]>["type"]
-      >;
+      [K in keyof F as FieldReference<F[K]> extends ReferenceConfig<
+        any,
+        infer M
+      >
+        ? M[0]
+        : never]: FieldReference<F[K]> extends ReferenceConfig<
+        infer T extends { _output: any; fields: any }
+      >
+        ? T["_output"]
+        : never;
     }
   >,
 > {
