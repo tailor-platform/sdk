@@ -229,12 +229,16 @@ describe("TailorDBField ref修飾子テスト", () => {
     });
     const _postType = db.type("Post", {
       title: db.string(),
-      authorId: db.uuid().ref(_userType, ["authorId", "author"]),
+      authorId: db.uuid().ref(_userType, ["author", "author"]),
     });
     expectTypeOf<output<typeof _postType>>().toEqualTypeOf<{
       id: string;
       title: string;
       authorId: string;
+      author: {
+        id: string;
+        name: string;
+      };
     }>();
   });
 });
