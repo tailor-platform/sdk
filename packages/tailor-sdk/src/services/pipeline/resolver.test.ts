@@ -2,11 +2,11 @@ import { describe, expectTypeOf, it } from "vitest";
 import { createMutationResolver, createQueryResolver } from "./resolver";
 import t from "@/types/type";
 
-const UserInput = t.type("UserInput", {
+const UserInput = t.type({
   id: t.string(),
   name: t.string().optional(),
 });
-const UserOutput = t.type("UserOutput", {
+const UserOutput = t.type({
   id: t.string(),
   name: t.string(),
   email: t.string(),
@@ -241,7 +241,7 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("オプショナルフィールドを含む型が正しく処理されること", () => {
-    const OptionalInput = t.type("OptionalInput", {
+    const OptionalInput = t.type({
       required: t.string(),
       optional: t.string().optional(),
     });
@@ -268,7 +268,7 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("配列型を含む型が正しく処理されること", () => {
-    const ArrayInput = t.type("ArrayInput", {
+    const ArrayInput = t.type({
       ids: t.string().array(),
       tags: t.string().array().optional(),
     });
@@ -350,7 +350,7 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("複雑な型の組み合わせが正しく処理されること", () => {
-    const ComplexInput = t.type("ComplexInput", {
+    const ComplexInput = t.type({
       id: t.string(),
       count: t.int(),
       price: t.float().optional(),
@@ -407,7 +407,7 @@ describe("createQueryResolver type tests", () => {
   });
 
   it("enum型を含む場合の型が正しいこと", () => {
-    const EnumInput = t.type("EnumInput", {
+    const EnumInput = t.type({
       status: t.enum(["active", "inactive", "pending"]),
       priority: t.enum(["low", "medium", "high"]).optional(),
     });
@@ -459,7 +459,7 @@ describe("createQueryResolver type tests", () => {
 
   it("ネストした型構造の処理が正しいこと", () => {
     // ネストした型の定義（TailorTypeはフィールドとして使えないため、フラットな構造で表現）
-    const NestedInput = t.type("NestedInput", {
+    const NestedInput = t.type({
       userId: t.string(),
       userName: t.string(),
       profileName: t.string(),

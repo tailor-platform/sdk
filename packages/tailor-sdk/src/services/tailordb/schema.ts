@@ -19,9 +19,7 @@ import type { Prettify, output } from "@/types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "@/types/field";
 import { ReferenceConfig, TailorField, TailorType } from "@/types/type";
 
-interface RelationConfig<
-  T extends { name: string; fields: Record<string, unknown> },
-> {
+interface RelationConfig<T extends TailorDBType> {
   type: "oneToOne" | "1-1" | "oneToMany" | "1-n" | "1-N";
   toward: {
     type: T;
@@ -156,7 +154,7 @@ class TailorDBField<
   }
 
   relation<
-    const Config extends RelationConfig<TailorType<any, any>>,
+    const Config extends RelationConfig<TailorDBType>,
     CurrentDefined extends Defined,
   >(
     this: Reference extends undefined
@@ -181,7 +179,7 @@ class TailorDBField<
         : "id";
     }
   > {
-    const targetTable: TailorType<any, any> = config.toward.type;
+    const targetTable: TailorDBType = config.toward.type;
     const forwardName =
       config.toward.as ??
       targetTable.name.charAt(0).toLowerCase() + targetTable.name.slice(1);
@@ -317,7 +315,7 @@ export class TailorDBType<
     public readonly fields: F,
     public readonly options: DBTypeOptions = {},
   ) {
-    super(name, fields);
+    super(fields);
 
     if (this.options.withTimestamps) {
       this.fields = { ...this.fields, ...datetimeFields };
