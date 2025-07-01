@@ -181,7 +181,7 @@ export class TailorDBService {
                 if (nameMap.length > 0) {
                   relationships[nameMap[0]] = {
                     RefType: ref.type.name,
-                    RefField: ref.field || "id",
+                    RefField: ref.key || "id",
                     SrcField: fieldName,
                     Array: fieldConfig._metadata?.array || false,
                     Description: ref.type.metadata.description || "",
@@ -205,9 +205,17 @@ export class TailorDBService {
                 const nameMap = field._ref.nameMap;
                 // 外部キーにunique制約がある場合は、Arrayはfalse（https://docs.tailor.tech/guides/tailordb/relationships#constraints）
                 const array = !(field._metadata?.unique ?? false);
-                const key = array
-                  ? inflection.pluralize(nameMap[1])
-                  : nameMap[1];
+                const key = nameMap[1]
+                  ? nameMap[1]
+                  : array
+                    ? inflection.pluralize(
+                        referencedType.name.charAt(0).toLowerCase() +
+                          referencedType.name.slice(1),
+                      )
+                    : inflection.singularize(
+                        referencedType.name.charAt(0).toLowerCase() +
+                          referencedType.name.slice(1),
+                      );
                 relationships[key] = {
                   RefType: referencedType.name,
                   RefField: fieldName,

@@ -5,7 +5,11 @@ export const userSetting = db.type(
   "UserSetting",
   {
     language: db.enum("jp", "en"),
-    userID: db.uuid().ref(user, ["user", "setting"]).unique(),
+    userID: db.uuid().relation({
+      type: "1-1",
+      toward: { type: user },
+      backward: "setting",
+    }),
   },
   { withTimestamps: true },
 );
