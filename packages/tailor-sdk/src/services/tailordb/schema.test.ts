@@ -466,3 +466,244 @@ describe("TailorDBType 型の一貫性テスト", () => {
     }>();
   });
 });
+
+describe("db.object テスト", () => {
+  it("基本的なオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      user: db.object({
+        name: db.string(),
+        age: db.int(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      user: {
+        name: string;
+        age: number;
+      };
+    }>();
+  });
+
+  it("オプショナルフィールドを含むオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      user: db.object({
+        name: db.string(),
+        age: db.int().optional(),
+        email: db.string().optional(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      user: {
+        name: string;
+        age?: number | null;
+        email?: string | null;
+      };
+    }>();
+  });
+
+  it("ネストしたオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      user: db.object({
+        name: db.string(),
+        address: db.object({
+          street: db.string(),
+          city: db.string(),
+          zipCode: db.string().optional(),
+        }),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      user: {
+        name: string;
+        address: {
+          street: string;
+          city: string;
+          zipCode?: string | null;
+        };
+      };
+    }>();
+  });
+
+  it("オプショナル修飾子を持つオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      user: db
+        .object({
+          name: db.string(),
+          profile: db.object({
+            bio: db.string(),
+            avatar: db.string().optional(),
+          }),
+        })
+        .optional(),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      user?: {
+        name: string;
+        profile: {
+          bio: string;
+          avatar?: string | null;
+        };
+      } | null;
+    }>();
+  });
+
+  it("配列修飾子を持つオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      users: db
+        .object({
+          name: db.string(),
+          age: db.int(),
+        })
+        .array(),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      users: {
+        name: string;
+        age: number;
+      }[];
+    }>();
+  });
+
+  it("配列フィールドを含むオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      user: db.object({
+        name: db.string(),
+        tags: db.string().array(),
+        scores: db.int().array(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      user: {
+        name: string;
+        tags: string[];
+        scores: number[];
+      };
+    }>();
+  });
+
+  it("複数の修飾子を組み合わせたオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      optionalUsers: db
+        .object({
+          name: db.string(),
+          age: db.int().optional(),
+          tags: db.string().array(),
+        })
+        .array()
+        .optional(),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      optionalUsers?:
+        | {
+            name: string;
+            age?: number | null;
+            tags: string[];
+          }[]
+        | null;
+    }>();
+  });
+
+  it("深くネストしたオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      company: db.object({
+        name: db.string(),
+        departments: db
+          .object({
+            name: db.string(),
+            employees: db
+              .object({
+                name: db.string(),
+                position: db.string(),
+                contact: db.object({
+                  email: db.string(),
+                  phone: db.string().optional(),
+                }),
+              })
+              .array(),
+          })
+          .array(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      company: {
+        name: string;
+        departments: {
+          name: string;
+          employees: {
+            name: string;
+            position: string;
+            contact: {
+              email: string;
+              phone?: string | null;
+            };
+          }[];
+        }[];
+      };
+    }>();
+  });
+
+  it("bool型を含むオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      settings: db.object({
+        enabled: db.bool(),
+        notifications: db.object({
+          email: db.bool(),
+          push: db.bool().optional(),
+        }),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      settings: {
+        enabled: boolean;
+        notifications: {
+          email: boolean;
+          push?: boolean | null;
+        };
+      };
+    }>();
+  });
+
+  it("float型とenum型を含むオブジェクト型を正しく推論する", () => {
+    const _objectType = db.type("Test", {
+      product: db.object({
+        name: db.string(),
+        price: db.float(),
+        category: db.enum("electronics", "books", "clothing"),
+        metadata: db.object({
+          weight: db.float().optional(),
+          dimensions: db
+            .object({
+              width: db.float(),
+              height: db.float(),
+              depth: db.float(),
+            })
+            .optional(),
+        }),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      id: string;
+      product: {
+        name: string;
+        price: number;
+        category: "electronics" | "books" | "clothing";
+        metadata: {
+          weight?: number | null;
+          dimensions?: {
+            width: number;
+            height: number;
+            depth: number;
+          } | null;
+        };
+      };
+    }>();
+  });
+});

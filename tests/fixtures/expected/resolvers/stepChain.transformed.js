@@ -27,7 +27,7 @@ async function kyselyWrapper(context, callback) {
 
 //#endregion
 
-export const $tailor_resolver_step__step1 = context=>{return`step1: Hello ${context.input.name} on step1!`};
+export const $tailor_resolver_step__step1 = context=>{return`step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`};
 export const $tailor_resolver_step__step2 = async()=>{return`step2: recorded ${format(new Date,"yyyy-MM-dd HH:mm:ss")} on step2!`};
 export const $tailor_resolver_step__sqlStep = async context=>{const result=await context.client.execOne(`SELECT name FROM User`);return result.name};
 export const $tailor_resolver_step__kyselyStep = context=>kyselyWrapper(context,async context2=>{const query=context2.db.selectFrom("Supplier").select(["state"]).compile();return(await context2.client.exec(query)).map(r=>r.state).join(", ")});

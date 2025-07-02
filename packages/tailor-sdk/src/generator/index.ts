@@ -123,11 +123,14 @@ class GenerationManager {
 
   async processSingleTypes(gen: CodeGenerator) {
     this.typeResults[gen.id] = this.typeResults[gen.id] || {};
+
     await Promise.all(
       Object.values(this.types).map(async (types) => {
-        Object.values(types).forEach(async (type) => {
-          this.typeResults[gen.id][type.name] = await gen.processType(type);
-        });
+        await Promise.all(
+          Object.values(types).map(async (type) => {
+            this.typeResults[gen.id][type.name] = await gen.processType(type);
+          }),
+        );
       }),
     );
   }

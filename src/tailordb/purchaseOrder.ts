@@ -1,5 +1,6 @@
 import { db, t } from "@tailor-platform/tailor-sdk";
 import { supplier } from "./supplier";
+import { attachedFiles } from "./file";
 
 export const purchaseOrder = db.type(
   "PurchaseOrder",
@@ -11,6 +12,7 @@ export const purchaseOrder = db.type(
     totalPrice: db.int(),
     discount: db.float().optional(),
     status: db.string(),
+    attachedFiles,
   },
   { withTimestamps: true },
 );

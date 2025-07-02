@@ -241,21 +241,62 @@ export class ManifestAggregator {
   ): ManifestField[] {
     // 動的フィールド情報が存在する場合
     if (fields && Object.keys(fields).length > 0) {
-      return Object.entries(fields).map(([fieldName, fieldInfo]) => ({
-        Name: fieldName,
-        Description: "",
-        Type: {
-          Kind: "ScalarType",
-          Name:
-            tailorToManifestScalar[
-              fieldInfo.type as keyof typeof tailorToManifestScalar
-            ] || "String",
+      return Object.entries(fields).map(([fieldName, fieldInfo]) => {
+        if (fieldInfo.type === "nested") {
+          const nestedTypeName =
+            fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+          const capitalizedTypeName =
+            typeName +
+            nestedTypeName.charAt(0).toUpperCase() +
+            nestedTypeName.slice(1);
+
+          return {
+            Name: fieldName,
+            Description: "",
+            Type: {
+              Kind: "UserDefined",
+              Name: capitalizedTypeName,
+              Description: "",
+              Required: fieldInfo.required,
+              Fields: [
+                {
+                  Name: "name",
+                  Description: "",
+                  Type: {
+                    Kind: "ScalarType",
+                    Name: "String",
+                    Description: "",
+                    Required: false,
+                  },
+                  Array: false,
+                  Required: true,
+                },
+              ],
+            },
+            Array: fieldInfo.array,
+            Required: fieldInfo.required,
+          };
+        }
+
+        // 通常のスカラータイプの処理
+        return {
+          Name: fieldName,
           Description: "",
-          Required: false,
-        },
-        Array: fieldInfo.array,
-        Required: fieldInfo.required,
-      }));
+          Type: {
+            Kind: "ScalarType",
+            Name:
+              fieldInfo.type === "string"
+                ? "String"
+                : tailorToManifestScalar[
+                    fieldInfo.type as keyof typeof tailorToManifestScalar
+                  ] || "String",
+            Description: "",
+            Required: false,
+          },
+          Array: fieldInfo.array,
+          Required: fieldInfo.required,
+        };
+      });
     }
 
     // フィールド情報が取得できない場合

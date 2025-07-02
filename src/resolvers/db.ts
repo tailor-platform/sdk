@@ -42,12 +42,58 @@ export interface Customer {
   updatedAt: Timestamp | null;
 }
 
+export interface NestedProfile {
+  id: Generated<string>;
+  userInfo: {
+    personal: {
+      name: string;
+      age: number | null;
+      bio: string | null;
+    };
+    contact: {
+      email: string;
+      phone: string | null;
+      address: {
+        street: string;
+        city: string;
+        country: string;
+        coordinates: {
+          latitude: number;
+          longitude: number;
+        } | null;
+      };
+    };
+    preferences: {
+      notifications: {
+        email: boolean;
+        sms: boolean;
+        push: boolean;
+      };
+      privacy: {
+        profileVisible: boolean;
+        dataSharing: boolean;
+      } | null;
+    } | null;
+  };
+  metadata: {
+    created: Timestamp;
+    lastUpdated: Timestamp | null;
+    version: number;
+  };
+}
+
 export interface PurchaseOrder {
   id: Generated<string>;
   supplierID: string;
   totalPrice: number;
   discount: number | null;
   status: string;
+  attachedFiles: {
+    id: string;
+    name: string;
+    size: number;
+    type: "text" | "image";
+  }[];
   createdAt: Timestamp;
   updatedAt: Timestamp | null;
 }
@@ -101,6 +147,7 @@ export interface UserSetting {
 
 interface DB {
   Customer: Customer;
+  NestedProfile: NestedProfile;
   PurchaseOrder: PurchaseOrder;
   Role: Role;
   SalesOrder: SalesOrder;

@@ -15,6 +15,48 @@ type Customer {
 }
 
 
+# Type: NestedProfile
+type NestedProfile {
+  id: ID!
+  userInfo: {
+    personal: {
+      name: String!
+      age: Int
+      bio: String
+    }
+    contact: {
+      email: String!
+      phone: String
+      address: {
+        street: String!
+        city: String!
+        country: String!
+        coordinates: {
+          latitude: Float!
+          longitude: Float!
+        }
+      }
+    }
+    preferences: {
+      notifications: {
+        email: Boolean!
+        sms: Boolean!
+        push: Boolean!
+      }
+      privacy: {
+        profileVisible: Boolean!
+        dataSharing: Boolean!
+      }
+    }
+  }!
+  metadata: {
+    created: DateTime!
+    lastUpdated: DateTime
+    version: Int!
+  }!
+}
+
+
 # Type: PurchaseOrder
 type PurchaseOrder {
   id: ID!
@@ -23,6 +65,12 @@ type PurchaseOrder {
   totalPrice: Int!
   discount: Float
   status: String!
+  attachedFiles: [{
+    id: ID!
+    name: String!
+    size: Int!
+    type: enum!
+  }!]!
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -89,11 +137,18 @@ type UserSetting {
 
 # Resolver: stepChain
 input StepChainInput {
-  name: String!
+  user: {
+    name: {
+      first: String!
+      last: String!
+    }
+  }!
 }
 
 type StepChainOutput {
-  summary: [String!]!
+  result: {
+    summary: String!
+  }!
 }
 
 extend type Query {

@@ -3,6 +3,7 @@ import path from "node:path";
 import { measure } from "@/performance";
 import { TailorDBType } from "./schema";
 import { TailorDBServiceConfig } from "./types";
+import { tailorToManifestScalar } from "@/types/types";
 import inflection from "inflection";
 
 export class TailorDBService {
@@ -75,6 +76,48 @@ export class TailorDBService {
     return this.types[typeFile];
   }
 
+  /**
+   * ネストしたフィールドを再帰的に処理
+   */
+  private processNestedFieldsRecursively(objectFields: any): any {
+    const nestedFields: any = {};
+
+    Object.entries(objectFields).forEach(
+      ([nestedFieldName, nestedFieldDef]: [string, any]) => {
+        const nestedMetadata =
+          nestedFieldDef.metadata || nestedFieldDef._metadata;
+        const fieldType = nestedMetadata.type || "string";
+
+        const fieldEntry: any = {
+          Type:
+            tailorToManifestScalar[
+              fieldType as keyof typeof tailorToManifestScalar
+            ] || fieldType,
+          AllowedValues:
+            fieldType === "enum" ? nestedMetadata.allowedValues || [] : [],
+          Description: nestedMetadata.description || "",
+          Validate: [],
+          Required: nestedMetadata.required !== false,
+          Array: nestedMetadata.array || false,
+          Index: false,
+          Unique: false,
+          ForeignKey: false,
+          Vector: false,
+        };
+
+        // 再帰的にさらに深いネストを処理
+        if (fieldType === "nested" && nestedFieldDef.fields) {
+          fieldEntry.Fields = this.processNestedFieldsRecursively(
+            nestedFieldDef.fields,
+          );
+        }
+
+        nestedFields[nestedFieldName] = fieldEntry;
+      },
+    );
+    return nestedFields;
+  }
+
   @measure
   toManifestJSON() {
     const defaultTypePermission = {
@@ -133,15 +176,16 @@ export class TailorDBService {
           const metadata = type.metadata;
           const schema = metadata.schema;
 
-          // Fieldsを変換
           const fields: any = {};
           if (schema?.fields) {
             Object.entries(schema.fields)
               .filter(([fieldName]) => fieldName !== "id")
               .forEach(([fieldName, fieldConfig]: [string, any]) => {
-                fields[fieldName] = {
-                  Type: fieldConfig.type || "string",
-                  AllowedValues: fieldConfig.allowedValues || [],
+                const fieldType = fieldConfig.type || "string";
+                const fieldEntry: any = {
+                  Type: fieldType,
+                  AllowedValues:
+                    fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
                   Description: fieldConfig.description || "",
                   Validate: (fieldConfig.validate || []).map((val: any) => ({
                     Action: "allow",
@@ -167,10 +211,23 @@ export class TailorDBService {
                     },
                   }),
                 };
+
+                if (fieldConfig.type === "nested") {
+                  fieldEntry.Type = "nested";
+                  delete fieldEntry.Vector;
+
+                  const objectField = type.fields[fieldName];
+                  if (objectField && (objectField as any).fields) {
+                    fieldEntry.Fields = this.processNestedFieldsRecursively(
+                      (objectField as any).fields,
+                    );
+                  }
+                }
+
+                fields[fieldName] = fieldEntry;
               });
           }
 
-          // 参照しているdbTypeのrelationshipsを設定
           const relationships: Record<string, any> = {};
           Object.entries(type.fields)
             .filter(([_, fieldConfig]: [string, any]) => fieldConfig.reference)
@@ -190,7 +247,6 @@ export class TailorDBService {
               }
             });
 
-          // 参照されているdbTypeのrelationshipsを設定
           if (type.referenced && type.referenced.length > 0) {
             type.referenced.forEach((referencedType) => {
               // TODO: Object.entriesで型情報が失われないようにしたい。

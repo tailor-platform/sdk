@@ -83,15 +83,22 @@ class TailorDBField<
     this._metadata.hooks = hooks;
   }
 
-  private constructor(type: TailorFieldType) {
-    super(type);
+  private constructor(
+    type: TailorFieldType,
+    fields?: Record<string, TailorDBField<any, any, any>>,
+  ) {
+    super(type, fields);
     this._metadata = { type, required: true };
   }
 
   static create<
     const T extends TailorFieldType,
     const D extends (keyof DBFieldMetadata)[],
-  >(type: T, _defines: D) {
+  >(
+    type: T,
+    _defines: D,
+    fields?: Record<string, TailorDBField<any, any, any>>,
+  ) {
     return new TailorDBField<
       Prettify<
         Pick<typeof fieldDefaults, Exclude<D[number], "name" | "type">> & {
@@ -100,7 +107,7 @@ class TailorDBField<
       >,
       TailorToTs[T],
       undefined
-    >(type);
+    >(type, fields);
   }
 
   optional<CurrentDefined extends Defined>(
@@ -295,6 +302,31 @@ function _enum<const V extends AllowedValues>(...values: V) {
   return createField("enum", []).values(values);
 }
 
+function object<const F extends Record<string, TailorDBField<any, any, any>>>(
+  fields: F,
+) {
+  const objectField = createField(
+    "nested",
+    ["allowedValues"],
+    fields,
+  ) as TailorDBField<
+    DefinedFieldMetadata & { type: "nested" },
+    Prettify<
+      {
+        [K in keyof F as F[K]["_defined"] extends { required: false }
+          ? never
+          : K]: output<F[K]>;
+      } & {
+        [K in keyof F as F[K]["_defined"] extends { required: false }
+          ? K
+          : never]?: output<F[K]> | null;
+      }
+    >,
+    undefined
+  >;
+  return objectField;
+}
+
 type DBTypeOptions = {
   withTimestamps?: boolean;
   description?: string;
@@ -429,6 +461,7 @@ const db = {
   date,
   datetime,
   enum: _enum,
+  object,
 };
 
 export default db;
@@ -441,6 +474,7 @@ export {
   dbType as type,
   float,
   int,
+  object,
   string,
   TailorDBDef,
   uuid,
