@@ -266,12 +266,12 @@ export function generateDetailedDiffReport(
 
   if (comparison.diffSet && comparison.diffSet.length > 0) {
     lines.push("");
-    lines.push("Content Differences:");
+    lines.push("Content Differences (for diff command):");
     comparison.diffSet
       .filter((diff) => diff.reason === "different-content")
       .forEach((diff) => {
         lines.push(
-          `- ${path.join(diff.path2 ?? "", diff.name2 ?? "")} ${path.join(diff.path1 ?? "", diff.name1 ?? "")}`,
+          `- diff ${path.join(diff.path2 ?? "", diff.name2 ?? "")} ${path.join(diff.path1 ?? "", diff.name1 ?? "")}`,
         );
       });
   }

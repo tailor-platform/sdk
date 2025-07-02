@@ -89,14 +89,17 @@ export class TailorField<
     return clone(this._ref);
   }
 
-  protected constructor(type: TailorFieldType) {
+  protected constructor(
+    type: TailorFieldType,
+    public readonly fields?: Record<string, TailorField<any, any, any>>,
+  ) {
     this._metadata = { type, required: true } as M;
   }
 
   static create<
     const T extends TailorFieldType,
     const D extends (keyof FieldMetadata)[],
-  >(type: T, _defines: D) {
+  >(type: T, _defines: D, fields?: Record<string, TailorField<any, any, any>>) {
     return new TailorField<
       Prettify<
         Pick<typeof fieldDefaults, Exclude<D[number], "name" | "type">> & {
@@ -105,7 +108,7 @@ export class TailorField<
       >,
       TailorToTs[T],
       undefined
-    >(type);
+    >(type, fields);
   }
 
   optional<CurrentDefined extends Defined>(
@@ -221,6 +224,31 @@ function _enum<const V extends AllowedValues>(values: V) {
   return createField("enum", []).values(values);
 }
 
+function object<const F extends Record<string, TailorField<any, any, any>>>(
+  fields: F,
+) {
+  const objectField = createField(
+    "nested",
+    ["allowedValues"],
+    fields,
+  ) as TailorField<
+    DefinedFieldMetadata & { type: "nested" },
+    Prettify<
+      {
+        [K in keyof F as F[K]["_defined"] extends { required: false }
+          ? never
+          : K]: output<F[K]>;
+      } & {
+        [K in keyof F as F[K]["_defined"] extends { required: false }
+          ? K
+          : never]?: output<F[K]> | null;
+      }
+    >,
+    undefined
+  >;
+  return objectField;
+}
+
 type TailorTypeDef = InstanceType<
   typeof TailorType<
     DefinedFieldMetadata,
@@ -247,6 +275,7 @@ const t = {
   date,
   datetime,
   enum: _enum,
+  object,
 };
 export default t;
 export {
@@ -260,5 +289,6 @@ export {
   date,
   datetime,
   _enum as enum,
+  object,
   TailorTypeDef,
 };

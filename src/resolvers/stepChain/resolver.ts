@@ -2,11 +2,15 @@ import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
 import { kyselyWrapper } from "../db";
 
-export default createQueryResolver("stepChain", t.type({ name: t.string() }), {
-  defaults: { dbNamespace: "my-db" },
-})
+export default createQueryResolver(
+  "stepChain",
+  t.type({
+    user: t.object({ name: t.object({ first: t.string(), last: t.string() }) }),
+  }),
+  { defaults: { dbNamespace: "my-db" } },
+)
   .fnStep("step1", (context) => {
-    return `step1: Hello ${context.input.name} on step1!`;
+    return `step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`;
   })
 
   .fnStep("step2", async () => {
@@ -36,14 +40,18 @@ export default createQueryResolver("stepChain", t.type({ name: t.string() }), {
 
   .returns(
     (context) => ({
-      summary: [
-        context.step1,
-        context.step2,
-        context.sqlStep,
-        context.kyselyStep,
-      ],
+      result: {
+        summary: [
+          context.step1,
+          context.step2,
+          context.sqlStep,
+          context.kyselyStep,
+        ],
+      },
     }),
     t.type({
-      summary: t.string().array(),
+      result: t.object({
+        summary: t.string().array(),
+      }),
     }),
   );

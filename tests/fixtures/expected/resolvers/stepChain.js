@@ -25,8 +25,11 @@ async function kyselyWrapper(context, callback) {
 
 //#endregion
 //#region src/resolvers/stepChain/resolver.ts
-var resolver_default = createQueryResolver("stepChain", t.type({ name: t.string() }), { defaults: { dbNamespace: "my-db" } }).fnStep("step1", (context) => {
-	return `step1: Hello ${context.input.name} on step1!`;
+var resolver_default = createQueryResolver("stepChain", t.type({ user: t.object({ name: t.object({
+	first: t.string(),
+	last: t.string()
+}) }) }), { defaults: { dbNamespace: "my-db" } }).fnStep("step1", (context) => {
+	return `step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`;
 }).fnStep("step2", async () => {
 	return `step2: recorded ${format(/* @__PURE__ */ new Date(), "yyyy-MM-dd HH:mm:ss")} on step2!`;
 }).sqlStep("sqlStep", async (context) => {
@@ -35,12 +38,12 @@ var resolver_default = createQueryResolver("stepChain", t.type({ name: t.string(
 }).sqlStep("kyselyStep", (context) => kyselyWrapper(context, async (context$1) => {
 	const query = context$1.db.selectFrom("Supplier").select(["state"]).compile();
 	return (await context$1.client.exec(query)).map((r) => r.state).join(", ");
-})).returns((context) => ({ summary: [
+})).returns((context) => ({ result: { summary: [
 	context.step1,
 	context.step2,
 	context.sqlStep,
 	context.kyselyStep
-] }), t.type({ summary: t.string().array() }));
+] } }), t.type({ result: t.object({ summary: t.string().array() }) }));
 
 //#endregion
 export { resolver_default as default };

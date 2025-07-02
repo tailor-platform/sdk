@@ -10,7 +10,8 @@ export type TailorFieldType =
   | "float"
   | "enum"
   | "date"
-  | "datetime";
+  | "datetime"
+  | "nested";
 
 export type TailorToTs = {
   string: string;
@@ -21,16 +22,9 @@ export type TailorToTs = {
   date: Date;
   datetime: Date;
   enum: string;
+  object: Record<string, unknown>;
+  nested: Record<string, unknown>;
 } & Record<TailorFieldType, unknown>;
-
-export const typeMapping: Record<string, TailorFieldType> = {
-  String: "string",
-  string: "string",
-  Number: "integer",
-  number: "integer",
-  Boolean: "bool",
-  boolean: "bool",
-} as const;
 
 export const tailorToGraphQL = {
   string: "String",
@@ -41,19 +35,21 @@ export const tailorToGraphQL = {
   date: "Date",
   datetime: "DateTime",
   enum: "enum",
+  nested: "JSON",
 } as const;
 
 // Manifest用の型マッピング（mapTypeToScalarの代替）
 export const tailorToManifestScalar = {
-  string: "String",
-  integer: "Int",
-  float: "Float",
-  bool: "Boolean",
-  boolean: "Boolean", // booleanエイリアスを追加
-  uuid: "String",
-  date: "String",
-  datetime: "String",
-  enum: "String",
+  string: "string",
+  integer: "integer",
+  float: "float",
+  bool: "boolean",
+  boolean: "boolean",
+  uuid: "uuid",
+  date: "date",
+  datetime: "datetime",
+  enum: "enum",
+  nested: "nested",
 } as const;
 export type tailorToGraphQL = typeof tailorToGraphQL;
 

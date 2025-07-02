@@ -257,6 +257,402 @@
           }
         },
         {
+          "Name": "NestedProfile",
+          "Description": "",
+          "Fields": {
+            "userInfo": {
+              "Type": "nested",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Fields": {
+                "personal": {
+                  "Type": "nested",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false,
+                  "Fields": {
+                    "name": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "age": {
+                      "Type": "integer",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "bio": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    }
+                  }
+                },
+                "contact": {
+                  "Type": "nested",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false,
+                  "Fields": {
+                    "email": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "phone": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "address": {
+                      "Type": "nested",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false,
+                      "Fields": {
+                        "street": {
+                          "Type": "string",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "city": {
+                          "Type": "string",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "country": {
+                          "Type": "string",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "coordinates": {
+                          "Type": "nested",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": false,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false,
+                          "Fields": {
+                            "latitude": {
+                              "Type": "float",
+                              "AllowedValues": [],
+                              "Description": "",
+                              "Validate": [],
+                              "Required": true,
+                              "Array": false,
+                              "Index": false,
+                              "Unique": false,
+                              "ForeignKey": false,
+                              "Vector": false
+                            },
+                            "longitude": {
+                              "Type": "float",
+                              "AllowedValues": [],
+                              "Description": "",
+                              "Validate": [],
+                              "Required": true,
+                              "Array": false,
+                              "Index": false,
+                              "Unique": false,
+                              "ForeignKey": false,
+                              "Vector": false
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "preferences": {
+                  "Type": "nested",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": false,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false,
+                  "Fields": {
+                    "notifications": {
+                      "Type": "nested",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false,
+                      "Fields": {
+                        "email": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "sms": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "push": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        }
+                      }
+                    },
+                    "privacy": {
+                      "Type": "nested",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false,
+                      "Fields": {
+                        "profileVisible": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "dataSharing": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "metadata": {
+              "Type": "nested",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Fields": {
+                "created": {
+                  "Type": "datetime",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "lastUpdated": {
+                  "Type": "datetime",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": false,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "version": {
+                  "Type": "integer",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                }
+              }
+            }
+          },
+          "Relationships": {},
+          "Settings": {
+            "Aggregation": false,
+            "BulkUpsert": false,
+            "Draft": false,
+            "DefaultQueryLimitSize": 100,
+            "MaxBulkUpsertSize": 1000,
+            "PluralForm": "",
+            "PublishRecordEvents": false
+          },
+          "Extends": false,
+          "Directives": [],
+          "Indexes": {},
+          "TypePermission": {
+            "Create": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Read": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Update": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Delete": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Admin": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ]
+          }
+        },
+        {
           "Name": "PurchaseOrder",
           "Description": "",
           "Fields": {
@@ -308,6 +704,76 @@
               "Unique": false,
               "ForeignKey": false,
               "Vector": false
+            },
+            "attachedFiles": {
+              "Type": "nested",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": true,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Fields": {
+                "id": {
+                  "Type": "uuid",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "name": {
+                  "Type": "string",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "size": {
+                  "Type": "integer",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "type": {
+                  "Type": "enum",
+                  "AllowedValues": [
+                    {
+                      "value": "text",
+                      "description": ""
+                    },
+                    {
+                      "value": "image",
+                      "description": ""
+                    }
+                  ],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                }
+              }
             },
             "createdAt": {
               "Type": "datetime",
@@ -1123,13 +1589,27 @@
                 "Required": false,
                 "Fields": [
                   {
-                    "Name": "name",
+                    "Name": "user",
                     "Description": "",
                     "Type": {
-                      "Kind": "ScalarType",
-                      "Name": "String",
+                      "Kind": "UserDefined",
+                      "Name": "StepChainInputUser",
                       "Description": "",
-                      "Required": false
+                      "Required": true,
+                      "Fields": [
+                        {
+                          "Name": "name",
+                          "Description": "",
+                          "Type": {
+                            "Kind": "ScalarType",
+                            "Name": "String",
+                            "Description": "",
+                            "Required": false
+                          },
+                          "Array": false,
+                          "Required": true
+                        }
+                      ]
                     },
                     "Array": false,
                     "Required": true
@@ -1147,15 +1627,29 @@
               "Required": true,
               "Fields": [
                 {
-                  "Name": "summary",
+                  "Name": "result",
                   "Description": "",
                   "Type": {
-                    "Kind": "ScalarType",
-                    "Name": "String",
+                    "Kind": "UserDefined",
+                    "Name": "StepChainOutputResult",
                     "Description": "",
-                    "Required": false
+                    "Required": true,
+                    "Fields": [
+                      {
+                        "Name": "name",
+                        "Description": "",
+                        "Type": {
+                          "Kind": "ScalarType",
+                          "Name": "String",
+                          "Description": "",
+                          "Required": false
+                        },
+                        "Array": false,
+                        "Required": true
+                      }
+                    ]
                   },
-                  "Array": true,
+                  "Array": false,
                   "Required": true
                 }
               ]
@@ -1214,7 +1708,7 @@
               "OperationName": "__construct_output",
               "Description": "Construct output from resolver",
               "OperationType": 2,
-              "OperationSource": "globalThis.main = context=>({summary:[context.step1,context.step2,context.sqlStep,context.kyselyStep]})",
+              "OperationSource": "globalThis.main = context=>({result:{summary:[context.step1,context.step2,context.sqlStep,context.kyselyStep]}})",
               "OperationHook": {
                 "Expr": "({ ...context.pipeline, ...context.args });"
               },
@@ -1326,13 +1820,27 @@
                 "Required": false,
                 "Fields": [
                   {
-                    "Name": "name",
+                    "Name": "user",
                     "Description": "",
                     "Type": {
-                      "Kind": "ScalarType",
-                      "Name": "String",
+                      "Kind": "UserDefined",
+                      "Name": "StepChainInputUser",
                       "Description": "",
-                      "Required": false
+                      "Required": true,
+                      "Fields": [
+                        {
+                          "Name": "name",
+                          "Description": "",
+                          "Type": {
+                            "Kind": "ScalarType",
+                            "Name": "String",
+                            "Description": "",
+                            "Required": false
+                          },
+                          "Array": false,
+                          "Required": true
+                        }
+                      ]
                     },
                     "Array": false,
                     "Required": true
@@ -1350,15 +1858,29 @@
               "Required": true,
               "Fields": [
                 {
-                  "Name": "summary",
+                  "Name": "result",
                   "Description": "",
                   "Type": {
-                    "Kind": "ScalarType",
-                    "Name": "String",
+                    "Kind": "UserDefined",
+                    "Name": "StepChainOutputResult",
                     "Description": "",
-                    "Required": false
+                    "Required": true,
+                    "Fields": [
+                      {
+                        "Name": "name",
+                        "Description": "",
+                        "Type": {
+                          "Kind": "ScalarType",
+                          "Name": "String",
+                          "Description": "",
+                          "Required": false
+                        },
+                        "Array": false,
+                        "Required": true
+                      }
+                    ]
                   },
-                  "Array": true,
+                  "Array": false,
                   "Required": true
                 }
               ]
@@ -1417,7 +1939,7 @@
               "OperationName": "__construct_output",
               "Description": "Construct output from resolver",
               "OperationType": 2,
-              "OperationSource": "globalThis.main = context=>({summary:[context.step1,context.step2,context.sqlStep,context.kyselyStep]})",
+              "OperationSource": "globalThis.main = context=>({result:{summary:[context.step1,context.step2,context.sqlStep,context.kyselyStep]}})",
               "OperationHook": {
                 "Expr": "({ ...context.pipeline, ...context.args });"
               },
@@ -1664,6 +2186,402 @@
           }
         },
         {
+          "Name": "NestedProfile",
+          "Description": "",
+          "Fields": {
+            "userInfo": {
+              "Type": "nested",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Fields": {
+                "personal": {
+                  "Type": "nested",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false,
+                  "Fields": {
+                    "name": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "age": {
+                      "Type": "integer",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "bio": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    }
+                  }
+                },
+                "contact": {
+                  "Type": "nested",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false,
+                  "Fields": {
+                    "email": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "phone": {
+                      "Type": "string",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false
+                    },
+                    "address": {
+                      "Type": "nested",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false,
+                      "Fields": {
+                        "street": {
+                          "Type": "string",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "city": {
+                          "Type": "string",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "country": {
+                          "Type": "string",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "coordinates": {
+                          "Type": "nested",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": false,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false,
+                          "Fields": {
+                            "latitude": {
+                              "Type": "float",
+                              "AllowedValues": [],
+                              "Description": "",
+                              "Validate": [],
+                              "Required": true,
+                              "Array": false,
+                              "Index": false,
+                              "Unique": false,
+                              "ForeignKey": false,
+                              "Vector": false
+                            },
+                            "longitude": {
+                              "Type": "float",
+                              "AllowedValues": [],
+                              "Description": "",
+                              "Validate": [],
+                              "Required": true,
+                              "Array": false,
+                              "Index": false,
+                              "Unique": false,
+                              "ForeignKey": false,
+                              "Vector": false
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "preferences": {
+                  "Type": "nested",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": false,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false,
+                  "Fields": {
+                    "notifications": {
+                      "Type": "nested",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": true,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false,
+                      "Fields": {
+                        "email": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "sms": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "push": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        }
+                      }
+                    },
+                    "privacy": {
+                      "Type": "nested",
+                      "AllowedValues": [],
+                      "Description": "",
+                      "Validate": [],
+                      "Required": false,
+                      "Array": false,
+                      "Index": false,
+                      "Unique": false,
+                      "ForeignKey": false,
+                      "Vector": false,
+                      "Fields": {
+                        "profileVisible": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        },
+                        "dataSharing": {
+                          "Type": "boolean",
+                          "AllowedValues": [],
+                          "Description": "",
+                          "Validate": [],
+                          "Required": true,
+                          "Array": false,
+                          "Index": false,
+                          "Unique": false,
+                          "ForeignKey": false,
+                          "Vector": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "metadata": {
+              "Type": "nested",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Fields": {
+                "created": {
+                  "Type": "datetime",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "lastUpdated": {
+                  "Type": "datetime",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": false,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "version": {
+                  "Type": "integer",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                }
+              }
+            }
+          },
+          "Relationships": {},
+          "Settings": {
+            "Aggregation": false,
+            "BulkUpsert": false,
+            "Draft": false,
+            "DefaultQueryLimitSize": 100,
+            "MaxBulkUpsertSize": 1000,
+            "PluralForm": "",
+            "PublishRecordEvents": false
+          },
+          "Extends": false,
+          "Directives": [],
+          "Indexes": {},
+          "TypePermission": {
+            "Create": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Read": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Update": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Delete": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Admin": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ]
+          }
+        },
+        {
           "Name": "PurchaseOrder",
           "Description": "",
           "Fields": {
@@ -1715,6 +2633,76 @@
               "Unique": false,
               "ForeignKey": false,
               "Vector": false
+            },
+            "attachedFiles": {
+              "Type": "nested",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": true,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Fields": {
+                "id": {
+                  "Type": "uuid",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "name": {
+                  "Type": "string",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "size": {
+                  "Type": "integer",
+                  "AllowedValues": [],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                },
+                "type": {
+                  "Type": "enum",
+                  "AllowedValues": [
+                    {
+                      "value": "text",
+                      "description": ""
+                    },
+                    {
+                      "value": "image",
+                      "description": ""
+                    }
+                  ],
+                  "Description": "",
+                  "Validate": [],
+                  "Required": true,
+                  "Array": false,
+                  "Index": false,
+                  "Unique": false,
+                  "ForeignKey": false,
+                  "Vector": false
+                }
+              }
             },
             "createdAt": {
               "Type": "datetime",

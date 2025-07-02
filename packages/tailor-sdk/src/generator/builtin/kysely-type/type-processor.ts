@@ -37,7 +37,15 @@ export class TypeProcessor {
 
       const kyselyType = this.mapTailorDBTypeToKysely(fieldDef);
       const nullable = this.isOptional(fieldDef);
-      const finalType = nullable ? `${kyselyType} | null` : kyselyType;
+      const isArray = this.isArray(fieldDef);
+
+      let finalType = kyselyType;
+      if (isArray) {
+        finalType = `${kyselyType}[]`;
+      }
+      if (nullable) {
+        finalType = `${finalType} | null`;
+      }
 
       fields.push(`${fieldName}: ${finalType};`);
     }
@@ -91,6 +99,7 @@ export class TypeProcessor {
 
     switch (fieldType) {
       case "uuid":
+        return "string";
       case "string":
         return "string";
       case "integer":
@@ -115,6 +124,14 @@ export class TypeProcessor {
         }
         return "string";
       }
+      case "nested": {
+        // nestedの場合、fieldsプロパティからネストした型を生成
+        const fields = fieldDef.fields || (fieldDef as any).fields;
+        if (fields && typeof fields === "object") {
+          return this.processNestedObjectType(fields, 1);
+        }
+        return "string";
+      }
       default:
         return "string"; // デフォルトはstring
     }
@@ -127,6 +144,51 @@ export class TypeProcessor {
     const metadata = fieldDef.metadata || fieldDef._metadata;
     // requiredがtrueでない場合はオプショナル（requiredがfalseまたは未定義）
     return metadata?.required !== true;
+  }
+
+  /**
+   * フィールドが配列かどうかを判定
+   */
+  private static isArray(fieldDef: any): boolean {
+    const metadata = fieldDef.metadata || fieldDef._metadata;
+    return metadata?.array === true;
+  }
+
+  /**
+   * ネストしたオブジェクト型を再帰的に処理
+   */
+  private static processNestedObjectType(
+    fields: any,
+    indentLevel: number,
+  ): string {
+    const indent = "  ".repeat(indentLevel);
+    const objectFields: string[] = [];
+
+    for (const [fieldName, nestedFieldDef] of Object.entries(fields)) {
+      const nestedMetadata = (nestedFieldDef as any).metadata;
+
+      if (nestedMetadata.type === "nested" && (nestedFieldDef as any).fields) {
+        // さらにネストしたオブジェクトを再帰的に処理
+        const nestedObjectType = this.processNestedObjectType(
+          (nestedFieldDef as any).fields,
+          indentLevel + 1,
+        );
+        const nestedNullable = this.isOptional(nestedFieldDef as any);
+        const finalNestedType = nestedNullable
+          ? `${nestedObjectType} | null`
+          : nestedObjectType;
+        objectFields.push(`${fieldName}: ${finalNestedType};`);
+      } else {
+        const nestedType = this.mapTailorDBTypeToKysely(nestedFieldDef as any);
+        const nestedNullable = this.isOptional(nestedFieldDef as any);
+        const finalNestedType = nestedNullable
+          ? `${nestedType} | null`
+          : nestedType;
+        objectFields.push(`${fieldName}: ${finalNestedType};`);
+      }
+    }
+
+    return `{\n${indent}${objectFields.join(`\n${indent}`)}\n${"  ".repeat(indentLevel - 1)}}`;
   }
 }
 
