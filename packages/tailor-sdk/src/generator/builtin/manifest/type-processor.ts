@@ -4,32 +4,93 @@ import { measure } from "@/performance";
 import { tailorToManifestScalar } from "@/types/types";
 
 export class TypeProcessor {
+  /**
+   * ネストしたフィールドを再帰的に処理
+   */
+  private static processNestedFields(objectFields: any): any {
+    const nestedFields: any = {};
+
+    Object.entries(objectFields).forEach(
+      ([nestedFieldName, nestedFieldDef]: [string, any]) => {
+        const nestedMetadata = nestedFieldDef._metadata;
+
+        if (nestedMetadata.type === "nested" && nestedFieldDef.fields) {
+          const deepNestedFields = TypeProcessor.processNestedFields(
+            nestedFieldDef.fields,
+          );
+          nestedFields[nestedFieldName] = {
+            Type: "nested",
+            AllowedValues: nestedMetadata.allowedValues || [],
+            Description: nestedMetadata.description || "",
+            Validate: [],
+            Required: nestedMetadata.required ?? true,
+            Array: nestedMetadata.array ?? false,
+            Index: false,
+            Unique: false,
+            ForeignKey: false,
+            Vector: false,
+            Fields: deepNestedFields,
+          };
+        } else {
+          nestedFields[nestedFieldName] = {
+            Type:
+              tailorToManifestScalar[
+                nestedMetadata.type as keyof typeof tailorToManifestScalar
+              ] || nestedMetadata.type,
+            AllowedValues: nestedMetadata.allowedValues || [],
+            Description: nestedMetadata.description || "",
+            Validate: [],
+            Required: nestedMetadata.required ?? true,
+            Array: nestedMetadata.array ?? false,
+            Index: false,
+            Unique: false,
+            ForeignKey: false,
+            Vector: false,
+          };
+        }
+      },
+    );
+
+    return nestedFields;
+  }
+
   @measure
   static async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
-    // TailorDBTypeから直接Manifest用のメタデータを生成
-    // SDL生成システムには依存しない
     const fields: ManifestFieldMetadata[] = Object.entries(type.fields).map(
       ([fieldName, fieldDef]) => {
-        const metadata = (
-          fieldDef as {
-            metadata: {
-              description?: string;
-              type: string;
-              required?: boolean;
-              array?: boolean;
-            };
-          }
-        ).metadata;
-        return {
+        const typedFieldDef = fieldDef as {
+          _metadata: {
+            description?: string;
+            type: string;
+            required?: boolean;
+            array?: boolean;
+          };
+          fields?: any; // nestedフィールドの場合のfields
+        };
+
+        const metadata = typedFieldDef._metadata;
+        const fieldMetadata: ManifestFieldMetadata = {
           name: fieldName,
           description: metadata.description || "",
           type:
             tailorToManifestScalar[
               metadata.type as keyof typeof tailorToManifestScalar
-            ] || "String",
+            ] || "string",
           required: metadata.required ?? true,
           array: metadata.array ?? false,
         };
+
+        if (metadata.type === "nested") {
+          if (typedFieldDef.fields) {
+            const objectFields = typedFieldDef.fields;
+            const nestedFields =
+              TypeProcessor.processNestedFields(objectFields);
+            (fieldMetadata as any).Fields = nestedFields;
+            fieldMetadata.type = "nested";
+          }
+        }
+
+        return fieldMetadata;
       },
     );
 

@@ -224,3 +224,181 @@ describe("TailorType 型の一貫性テスト", () => {
     >();
   });
 });
+
+describe("t.object テスト", () => {
+  it("基本的なオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      user: t.object({
+        name: t.string(),
+        age: t.int(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      user: {
+        name: string;
+        age: number;
+      };
+    }>();
+  });
+
+  it("オプショナルフィールドを含むオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      profile: t.object({
+        name: t.string(),
+        age: t.int().optional(),
+        email: t.string().optional(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      profile: {
+        name: string;
+        age?: number | null;
+        email?: string | null;
+      };
+    }>();
+  });
+
+  it("配列フィールドを含むオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      data: t.object({
+        name: t.string(),
+        tags: t.string().array(),
+        scores: t.int().array().optional(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      data: {
+        name: string;
+        tags: string[];
+        scores?: number[] | null;
+      };
+    }>();
+  });
+
+  it("ネストしたオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      user: t.object({
+        name: t.string(),
+        address: t.object({
+          street: t.string(),
+          city: t.string(),
+          zipCode: t.string().optional(),
+        }),
+        contacts: t
+          .object({
+            email: t.string(),
+            phone: t.string().optional(),
+          })
+          .optional(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      user: {
+        name: string;
+        address: {
+          street: string;
+          city: string;
+          zipCode?: string | null;
+        };
+        contacts?: {
+          email: string;
+          phone?: string | null;
+        } | null;
+      };
+    }>();
+  });
+
+  it("オプショナル修飾子を持つオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      metadata: t
+        .object({
+          version: t.string(),
+          author: t.string(),
+        })
+        .optional(),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      metadata?: {
+        version: string;
+        author: string;
+      } | null;
+    }>();
+  });
+
+  it("配列修飾子を持つオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      items: t
+        .object({
+          id: t.uuid(),
+          name: t.string(),
+        })
+        .array(),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      items: {
+        id: string;
+        name: string;
+      }[];
+    }>();
+  });
+
+  it("複数の修飾子を組み合わせたオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      optionalItems: t
+        .object({
+          id: t.uuid(),
+          value: t.string().optional(),
+        })
+        .array()
+        .optional(),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      optionalItems?:
+        | {
+            id: string;
+            value?: string | null;
+          }[]
+        | null;
+    }>();
+  });
+
+  it("enum型を含むオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      config: t.object({
+        name: t.string(),
+        status: t.enum(["active", "inactive"]),
+        priority: t.enum(["high", "medium", "low"]).optional(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      config: {
+        name: string;
+        status: "active" | "inactive";
+        priority?: "high" | "medium" | "low" | null;
+      };
+    }>();
+  });
+
+  it("単一フィールドのオブジェクト型を正しく推論する", () => {
+    const _objectType = t.type({
+      settings: t.object({
+        theme: t.string(),
+      }),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      settings: {
+        theme: string;
+      };
+    }>();
+  });
+
+  it("空オブジェクトを正しく推論する", () => {
+    const _objectType = t.type({
+      empty: t.object({}),
+    });
+    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
+      // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+      empty: {};
+    }>();
+  });
+});
