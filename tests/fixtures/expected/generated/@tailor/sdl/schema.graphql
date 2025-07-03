@@ -23,7 +23,7 @@ type NestedProfile {
       name: String!
       age: Int
       bio: String
-    }
+    }!
     contact: {
       email: String!
       phone: String
@@ -35,14 +35,14 @@ type NestedProfile {
           latitude: Float!
           longitude: Float!
         }
-      }
-    }
+      }!
+    }!
     preferences: {
       notifications: {
         email: Boolean!
         sms: Boolean!
         push: Boolean!
-      }
+      }!
       privacy: {
         profileVisible: Boolean!
         dataSharing: Boolean!
@@ -141,13 +141,13 @@ input StepChainInput {
     name: {
       first: String!
       last: String!
-    }
+    }!
   }!
 }
 
 type StepChainOutput {
   result: {
-    summary: String!
+    summary: [String!]!
   }!
 }
 

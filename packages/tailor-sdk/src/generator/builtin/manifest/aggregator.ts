@@ -13,7 +13,7 @@ import {
 import { ResolverManifestMetadata } from "./resolver-processor";
 import { measure } from "@/performance";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { tailorToManifestScalar } from "@/types/types";
+import { tailorToGraphQL } from "@/types/types";
 import { getDistDir } from "@/config";
 import type { Workspace } from "@/workspace";
 
@@ -120,11 +120,11 @@ export class ManifestAggregator {
     resolvers: Record<string, ResolverManifestMetadata>,
     namespace: string,
   ): ManifestJSON {
-    const resolverManifests: ResolverManifest[] = Object.entries(resolvers).map(
-      ([name, resolverMetadata]) => {
+    const resolverManifests: ResolverManifest[] = Object.entries(resolvers)
+      .filter(([_name, resolverMetadata]) => resolverMetadata != null)
+      .map(([name, resolverMetadata]) => {
         return this.generateResolverManifest(name, resolverMetadata);
-      },
-    );
+      });
 
     return {
       Kind: "pipeline",
@@ -285,11 +285,8 @@ export class ManifestAggregator {
           Type: {
             Kind: "ScalarType",
             Name:
-              fieldInfo.type === "string"
-                ? "String"
-                : tailorToManifestScalar[
-                    fieldInfo.type as keyof typeof tailorToManifestScalar
-                  ] || "String",
+              tailorToGraphQL[fieldInfo.type as keyof typeof tailorToGraphQL] ||
+              "String",
             Description: "",
             Required: false,
           },

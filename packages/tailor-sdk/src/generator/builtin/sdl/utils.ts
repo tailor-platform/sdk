@@ -15,22 +15,7 @@ export class SDLUtils {
     const sdl = [`${typeName} ${metadata.name} {`];
 
     for (const field of metadata.fields) {
-      let fieldType = field.type;
-
-      // Handle list types
-      if (field.array) {
-        // 配列の要素も必須とする（t.string().array()の場合）
-        const elementType = field.required
-          ? `${field.type || "JSON"}!`
-          : field.type || "JSON";
-        fieldType = `[${elementType}]`;
-      }
-
-      // Handle non-nullable types
-      if (field.required) {
-        fieldType += "!";
-      }
-
+      const fieldType = this.formatFieldType(field);
       sdl.push(`  ${field.name}: ${fieldType}`);
     }
 
@@ -59,16 +44,11 @@ export class SDLUtils {
   static formatFieldType(field: SDLFieldMetadata): string {
     let fieldType = field.type;
 
-    // Handle list types
     if (field.array) {
-      // 配列の要素も必須とする（t.string().array()の場合）
-      const elementType = field.required
-        ? `${field.type || "JSON"}!`
-        : field.type || "JSON";
+      const elementType = `${field.type || "JSON"}!`;
       fieldType = `[${elementType}]`;
     }
 
-    // Handle non-nullable types
     if (field.required) {
       fieldType += "!";
     }

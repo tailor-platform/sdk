@@ -31,6 +31,7 @@ export const tailorToGraphQL = {
   integer: "Int",
   float: "Float",
   bool: "Boolean",
+  boolean: "Boolean",
   uuid: "ID",
   date: "Date",
   datetime: "DateTime",
