@@ -16,7 +16,7 @@ import { TailorCtl } from "@/ctl";
 
 type Workspace = ReturnType<typeof defineWorkspace>;
 
-class GenerationManager {
+export class GenerationManager {
   public readonly workspace: Workspace;
   private generators: CodeGenerator<any, any, any, any>[] = [];
   private types: Record<string, Record<string, TailorDBType>> = {};
@@ -102,33 +102,46 @@ class GenerationManager {
   private resolversResult: Record</* generator */ string, any> = {};
 
   async processGenerators() {
-    await Promise.all(
+    await Promise.allSettled(
       this.generators.map(async (gen) => await this.processGenerator(gen)),
     );
   }
 
   async processGenerator(gen: CodeGenerator) {
-    await Promise.all([
-      (async () => {
-        await this.processSingleTypes(gen);
-        this.typesResult[gen.id] = await this.summarizeTypes(gen);
-      })(),
-      (async () => {
-        await this.processSingleResolvers(gen);
-        this.resolversResult[gen.id] = await this.summarizeResolvers(gen);
-      })(),
-    ]);
-    await this.aggregate(gen);
+    try {
+      await Promise.all([
+        (async () => {
+          await this.processSingleTypes(gen);
+          this.typesResult[gen.id] = await this.summarizeTypes(gen);
+        })(),
+        (async () => {
+          await this.processSingleResolvers(gen);
+          this.resolversResult[gen.id] = await this.summarizeResolvers(gen);
+        })(),
+      ]);
+      await this.aggregate(gen);
+    } catch (error) {
+      console.error(`Error processing generator ${gen.id}:`, error);
+      // エラーが発生してもログに出力して続行
+    }
   }
 
   async processSingleTypes(gen: CodeGenerator) {
     this.typeResults[gen.id] = this.typeResults[gen.id] || {};
 
-    await Promise.all(
+    await Promise.allSettled(
       Object.values(this.types).map(async (types) => {
-        await Promise.all(
+        await Promise.allSettled(
           Object.values(types).map(async (type) => {
-            this.typeResults[gen.id][type.name] = await gen.processType(type);
+            try {
+              this.typeResults[gen.id][type.name] = await gen.processType(type);
+            } catch (error) {
+              console.error(
+                `Error processing type ${type.name} with generator ${gen.id}:`,
+                error,
+              );
+              delete this.typeResults[gen.id][type.name];
+            }
           }),
         );
       }),
@@ -137,10 +150,18 @@ class GenerationManager {
 
   async processSingleResolvers(gen: CodeGenerator) {
     this.resolverResults[gen.id] = this.resolverResults[gen.id] || {};
-    await Promise.all(
+    await Promise.allSettled(
       Object.values(this.resolvers).map(async (resolver) => {
-        this.resolverResults[gen.id][resolver.name] =
-          await gen.processResolver(resolver);
+        try {
+          this.resolverResults[gen.id][resolver.name] =
+            await gen.processResolver(resolver);
+        } catch (error) {
+          console.error(
+            `Error processing resolver ${resolver.name} with generator ${gen.id}:`,
+            error,
+          );
+          delete this.resolverResults[gen.id][resolver.name];
+        }
       }),
     );
   }
@@ -270,5 +291,9 @@ export async function apply(config: WorkspaceConfig, options: ApplyOptions) {
     watch: false,
   });
 
-  new TailorCtl(options).apply(path.join(getDistDir(), "manifest.cue"));
+  const distDir = getDistDir();
+  if (!distDir) {
+    throw new Error("Distribution directory is not configured");
+  }
+  new TailorCtl(options).apply(path.join(distDir, "manifest.cue"));
 }

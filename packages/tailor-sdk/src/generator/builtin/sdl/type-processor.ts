@@ -24,14 +24,18 @@ export class TypeProcessor {
           (objField as any).fields,
           indentLevel + 1,
         );
-        objectTypeDefinition += `${indent}${objFieldName}: ${nestedObjectDef}\n`;
+        const required = objFieldMetadata.required ? "!" : "";
+        objectTypeDefinition += `${indent}${objFieldName}: ${nestedObjectDef}${required}\n`;
       } else {
         const objFieldType =
           tailorToGraphQL[
             objFieldMetadata.type as keyof typeof tailorToGraphQL
           ];
         const required = objFieldMetadata.required ? "!" : "";
-        objectTypeDefinition += `${indent}${objFieldName}: ${objFieldType}${required}\n`;
+        const arrayWrapper = objFieldMetadata.array
+          ? `[${objFieldType}${required}]!`
+          : `${objFieldType}${required}`;
+        objectTypeDefinition += `${indent}${objFieldName}: ${arrayWrapper}\n`;
       }
     }
 
