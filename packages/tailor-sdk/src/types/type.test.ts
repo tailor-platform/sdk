@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import { t } from "./type";
 import type { output } from "./helpers";
 
@@ -132,6 +132,66 @@ describe("TailorField enum フィールドテスト", () => {
     expectTypeOf<output<typeof _enumArrayType>>().toEqualTypeOf<{
       categories: ("a" | "b" | "c")[];
     }>();
+  });
+});
+
+describe("TailorField assertNonNull修飾子テスト", () => {
+  it("optional({ assertNonNull: true })修飾子がメタデータを正しく設定する", () => {
+    const field = t.string().optional({ assertNonNull: true });
+    expect(field.metadata.assertNonNull).toBe(true);
+    expect(field.metadata.required).toBe(false);
+  });
+
+  it("optional({ assertNonNull: false })修飾子がメタデータを正しく設定する", () => {
+    const field = t.string().optional({ assertNonNull: false });
+    expect(field.metadata.assertNonNull).toBe(undefined);
+    expect(field.metadata.required).toBe(false);
+  });
+
+  it("optional()がデフォルトでassertNonNullをfalseとして扱う", () => {
+    const field = t.string().optional();
+    expect(field.metadata.assertNonNull).toBe(undefined);
+    expect(field.metadata.required).toBe(false);
+  });
+
+  it("optional({ assertNonNull: true })修飾子が各型で動作する", () => {
+    expect(
+      t.string().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+    expect(
+      t.int().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+    expect(
+      t.bool().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+    expect(
+      t.uuid().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+    expect(
+      t.float().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+    expect(
+      t.date().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+    expect(
+      t.datetime().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+  });
+
+  it("optional({ assertNonNull: true })修飾子がenum型で動作する", () => {
+    const enumField = t.enum(["a", "b", "c"]).optional({ assertNonNull: true });
+    expect(enumField.metadata.assertNonNull).toBe(true);
+    expect(enumField.metadata.required).toBe(false);
+  });
+
+  it("optional({ assertNonNull: true })修飾子がobject型で動作する", () => {
+    const objectField = t
+      .object({
+        name: t.string(),
+      })
+      .optional({ assertNonNull: true });
+    expect(objectField.metadata.assertNonNull).toBe(true);
+    expect(objectField.metadata.required).toBe(false);
   });
 });
 

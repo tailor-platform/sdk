@@ -372,6 +372,22 @@ describe("TailorDBType withTimestamps オプションテスト", () => {
       name: string;
     }>();
   });
+
+  it("withTimestamps: trueでタイムスタンプフィールドが追加される", () => {
+    const _timestampType = db.type(
+      "TestWithTimestamps",
+      {
+        name: db.string(),
+      },
+      { withTimestamps: true },
+    );
+    expectTypeOf<output<typeof _timestampType>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+      createdAt: Date;
+      updatedAt?: Date | null;
+    }>();
+  });
 });
 
 describe("TailorDBType 複合型テスト", () => {

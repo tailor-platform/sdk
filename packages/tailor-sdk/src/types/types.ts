@@ -80,4 +80,5 @@ export interface FieldMetadata {
   required?: boolean;
   array?: boolean;
   allowedValues?: AllowedValue[];
+  assertNonNull?: boolean;
 }
