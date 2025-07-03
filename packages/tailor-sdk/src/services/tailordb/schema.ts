@@ -67,12 +67,16 @@ class TailorDBField<
         ? new TailorDBType_FieldHook({
             create: this._metadata.hooks.create
               ? new Script({
-                  expr: `(${this._metadata.hooks.create.toString().trim()})({ value: _value, data: _data, user })`,
+                  expr: `(${this._metadata.hooks.create
+                    .toString()
+                    .trim()})({ value: _value, data: _data, user })`,
                 })
               : undefined,
             update: this._metadata.hooks.update
               ? new Script({
-                  expr: `(${this._metadata.hooks.update.toString().trim()})({ value: _value, data: _data, user })`,
+                  expr: `(${this._metadata.hooks.update
+                    .toString()
+                    .trim()})({ value: _value, data: _data, user })`,
                 })
               : undefined,
           })
@@ -113,17 +117,17 @@ class TailorDBField<
 
   optional<
     CurrentDefined extends Defined,
-    O extends { assertNonNull?: boolean },
+    const O extends { assertNonNull?: boolean } = { assertNonNull: false },
   >(
     this: CurrentDefined extends { required: unknown }
       ? never
-      : TailorField<CurrentDefined, Output, Reference>,
+      : CurrentDefined extends { assertNonNull: unknown }
+        ? never
+        : TailorField<CurrentDefined, Output, Reference>,
     options?: O,
   ): TailorDBField<
     Prettify<
-      CurrentDefined & { required: false } & (O extends { assertNonNull: true }
-          ? { assertNonNull: true }
-          : { assertNonNull: false })
+      CurrentDefined & { required: false; assertNonNull: O["assertNonNull"] }
     >,
     Output,
     Reference

@@ -132,11 +132,9 @@ export class TypeProcessor {
    */
   private static isOptional(fieldDef: any): boolean {
     const metadata = fieldDef.metadata || fieldDef._metadata;
-    // assertNonNullがtrueの場合は非nullとして扱う
     if (metadata?.assertNonNull === true) {
       return false;
     }
-    // requiredがtrueでない場合はオプショナル（requiredがfalseまたは未定義）
     return metadata?.required !== true;
   }
 
@@ -162,7 +160,6 @@ export class TypeProcessor {
       const nestedMetadata = (nestedFieldDef as any).metadata;
 
       if (nestedMetadata.type === "nested" && (nestedFieldDef as any).fields) {
-        // さらにネストしたオブジェクトを再帰的に処理
         const nestedObjectType = this.processNestedObjectType(
           (nestedFieldDef as any).fields,
           indentLevel + 1,
@@ -182,7 +179,9 @@ export class TypeProcessor {
       }
     }
 
-    return `{\n${indent}${objectFields.join(`\n${indent}`)}\n${"  ".repeat(indentLevel - 1)}}`;
+    return `{\n${indent}${objectFields.join(`\n${indent}`)}\n${"  ".repeat(
+      indentLevel - 1,
+    )}}`;
   }
 }
 
