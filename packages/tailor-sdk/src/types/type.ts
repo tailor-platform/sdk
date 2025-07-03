@@ -120,11 +120,16 @@ export class TailorField<
     >(type, fields);
   }
 
-  optional<CurrentDefined extends Defined>(
+  optional<
+    CurrentDefined extends Defined,
+    const O extends { assertNonNull?: boolean } = { assertNonNull: false },
+  >(
     this: CurrentDefined extends { required: unknown }
       ? never
-      : TailorField<CurrentDefined, Output, Reference>,
-    options?: { assertNonNull?: boolean },
+      : CurrentDefined extends { assertNonNull: unknown }
+        ? never
+        : TailorField<CurrentDefined, Output, Reference>,
+    options?: O,
   ) {
     this._metadata.required = false;
     if (options?.assertNonNull === true) {
@@ -132,11 +137,7 @@ export class TailorField<
     }
     return this as TailorField<
       Prettify<
-        CurrentDefined & { required: false } & (typeof options extends {
-            assertNonNull: true;
-          }
-            ? { assertNonNull: true }
-            : { assertNonNull: false })
+        CurrentDefined & { required: false; assertNonNull: O["assertNonNull"] }
       >,
       Output,
       Reference
