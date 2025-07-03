@@ -30,6 +30,7 @@ const fieldDefaults = {
   description: undefined,
   allowedValues: undefined,
   array: undefined,
+  assertNonNull: undefined,
 } as const satisfies Omit<FieldMetadata, "type">;
 
 export class TailorType<
@@ -42,8 +43,16 @@ export class TailorType<
         : K]: output<F[K]>;
     } & {
       [K in keyof F as F[K]["_defined"] extends { required: false }
-        ? K
+        ? F[K]["_defined"] extends { assertNonNull: true }
+          ? never
+          : K
         : never]?: output<F[K]> | null;
+    } & {
+      [K in keyof F as F[K]["_defined"] extends { required: false }
+        ? F[K]["_defined"] extends { assertNonNull: true }
+          ? K
+          : never
+        : never]-?: NonNullable<output<F[K]>>;
     } & {
       [K in keyof F as FieldReference<F[K]> extends ReferenceConfig<
         any,
@@ -115,10 +124,20 @@ export class TailorField<
     this: CurrentDefined extends { required: unknown }
       ? never
       : TailorField<CurrentDefined, Output, Reference>,
+    options?: { assertNonNull?: boolean },
   ) {
     this._metadata.required = false;
+    if (options?.assertNonNull === true) {
+      this._metadata.assertNonNull = true;
+    }
     return this as TailorField<
-      Prettify<CurrentDefined & { required: false }>,
+      Prettify<
+        CurrentDefined & { required: false } & (typeof options extends {
+            assertNonNull: true;
+          }
+            ? { assertNonNull: true }
+            : { assertNonNull: false })
+      >,
       Output,
       Reference
     >;

@@ -4,7 +4,6 @@ import db from "@/services/tailordb/schema";
 
 describe("Kysely TypeProcessor", () => {
   it("should process deeply nested objects correctly", async () => {
-    // db.typeとdb.objectを使って適切なTailorDBTypeを作成
     const nestedObjectType = db.type("UserProfile", {
       profile: db.object({
         personal: db.object({
@@ -37,7 +36,6 @@ describe("Kysely TypeProcessor", () => {
   });
 
   it("should handle single level nested objects", async () => {
-    // db.typeとdb.objectを使って適切なTailorDBTypeを作成
     const simpleNestedType = db.type("SimpleUser", {
       profile: db.object({
         name: db.string(),
@@ -52,5 +50,40 @@ describe("Kysely TypeProcessor", () => {
     expect(result.typeDef).toContain("profile:");
     expect(result.typeDef).toContain("name: string");
     expect(result.typeDef).toContain("email: string | null");
+  });
+
+  it("should handle assertNonNull field correctly", async () => {
+    const typeWithAssertNonNull = db.type("UserWithAssertNonNull", {
+      name: db.string(),
+      email: db.string().optional({ assertNonNull: true }), // optional but assertNonNull
+      phone: db.string().optional(), // optional and nullable
+    });
+
+    const result = await TypeProcessor.processType(typeWithAssertNonNull);
+
+    expect(result.name).toBe("UserWithAssertNonNull");
+    expect(result.typeDef).toContain("export interface UserWithAssertNonNull");
+    expect(result.typeDef).toContain("name: string");
+    expect(result.typeDef).toContain("email: string"); // should be non-null due to assertNonNull
+    expect(result.typeDef).toContain("phone: string | null"); // should be nullable
+  });
+
+  it("should process timestamp fields through normal field processing", async () => {
+    const typeWithTimestamps = db.type(
+      "UserWithTimestamps",
+      {
+        name: db.string(),
+      },
+      { withTimestamps: true },
+    );
+
+    const result = await TypeProcessor.processType(typeWithTimestamps);
+
+    expect(result.name).toBe("UserWithTimestamps");
+    expect(result.typeDef).toContain("export interface UserWithTimestamps");
+    expect(result.typeDef).toContain("name: string");
+    // createdAt and updatedAt should be processed through normal field logic
+    expect(result.typeDef).toContain("createdAt: Timestamp;");
+    expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
   });
 });

@@ -41,6 +41,7 @@ const fieldDefaults = {
   foreignKeyType: undefined,
   validate: undefined,
   hooks: undefined,
+  assertNonNull: undefined,
 } as const satisfies Omit<DBFieldMetadata, "type">;
 
 class TailorDBField<
@@ -110,16 +111,24 @@ class TailorDBField<
     >(type, fields);
   }
 
-  optional<CurrentDefined extends Defined>(
+  optional<
+    CurrentDefined extends Defined,
+    O extends { assertNonNull?: boolean },
+  >(
     this: CurrentDefined extends { required: unknown }
       ? never
       : TailorField<CurrentDefined, Output, Reference>,
+    options?: O,
   ): TailorDBField<
-    Prettify<CurrentDefined & { required: false }>,
+    Prettify<
+      CurrentDefined & { required: false } & (O extends { assertNonNull: true }
+          ? { assertNonNull: true }
+          : { assertNonNull: false })
+    >,
     Output,
     Reference
   > {
-    return super.optional() as any;
+    return super.optional(options) as any;
   }
 
   description<const D extends string, CurrentDefined extends Defined>(
@@ -338,7 +347,10 @@ export class TailorDBType<
     TailorDBField<M, any, any>
   > = any,
   M extends DefinedFieldMetadata = any,
-> extends TailorType<M, F & Record<string, TailorField<M, any, any>>> {
+> extends TailorType<
+  M,
+  F & Record<string, TailorField<M, any, any, DBFieldMetadata>>
+> {
   private _metadata?: TDB;
   public referenced: TailorDBType[] = [];
 
@@ -347,7 +359,9 @@ export class TailorDBType<
     public readonly fields: F,
     public readonly options: DBTypeOptions = {},
   ) {
-    super(fields);
+    super(
+      fields as F & Record<string, TailorField<M, any, any, DBFieldMetadata>>,
+    );
 
     if (this.options.withTimestamps) {
       this.fields = { ...this.fields, ...datetimeFields };
@@ -402,7 +416,7 @@ const idField = uuid();
 type idField = typeof idField;
 const datetimeFields = {
   createdAt: (() => {
-    const field = datetime().optional();
+    const field = datetime().optional({ assertNonNull: true });
     (field as any).setHooks({
       create: () => new Date().toISOString(),
     });
