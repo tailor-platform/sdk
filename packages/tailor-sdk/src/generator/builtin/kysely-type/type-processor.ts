@@ -24,14 +24,9 @@ export class TypeProcessor {
    * テーブルインターフェースを生成
    */
   private static generateTableInterface(type: TailorDBType): string {
-    const ignoreFields = [
-      "id",
-      ...(type.options?.withTimestamps ? ["createdAt", "updatedAt"] : []),
-    ];
-
     const fields: string[] = ["id: Generated<string>;"];
     for (const [fieldName, fieldDef] of Object.entries(type.fields)) {
-      if (ignoreFields.includes(fieldName)) {
+      if (fieldName === "id") {
         continue;
       }
 
@@ -48,11 +43,6 @@ export class TypeProcessor {
       }
 
       fields.push(`${fieldName}: ${finalType};`);
-    }
-
-    if (type.options?.withTimestamps) {
-      fields.push("createdAt: Timestamp;");
-      fields.push("updatedAt: Timestamp | null;");
     }
 
     return multiline/* ts */ `
@@ -142,6 +132,10 @@ export class TypeProcessor {
    */
   private static isOptional(fieldDef: any): boolean {
     const metadata = fieldDef.metadata || fieldDef._metadata;
+    // assertNonNullがtrueの場合は非nullとして扱う
+    if (metadata?.assertNonNull === true) {
+      return false;
+    }
     // requiredがtrueでない場合はオプショナル（requiredがfalseまたは未定義）
     return metadata?.required !== true;
   }
