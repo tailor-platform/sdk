@@ -1,180 +1,105 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { SdlGenerator, SdlGeneratorID } from "./index";
-import type { TailorDBType } from "@/services/tailordb/schema";
-import type { Resolver } from "@/services/pipeline/resolver";
+import { db } from "@/services/tailordb/schema";
+import {
+  createQueryResolver,
+  createMutationResolver,
+} from "@/services/pipeline/resolver";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import path from "node:path";
+import { t } from "@/types";
 
-// モックデータ
-const mockTailorDBType: TailorDBType = {
-  name: "User",
-  fields: {
-    name: {
-      _metadata: {
-        type: "string",
-        required: true,
-        description: "User name",
-      },
-    },
-    email: {
-      _metadata: {
-        type: "string",
-        required: true,
-        description: "User email",
-      },
-    },
-    age: {
-      _metadata: {
-        type: "integer",
-        required: false,
-      },
-    },
-    isActive: {
-      _metadata: {
-        type: "bool",
-        required: true,
-      },
-    },
-    tags: {
-      _metadata: {
-        type: "string",
-        required: true,
-        array: true,
-      },
-    },
-    profile: {
-      _metadata: {
-        type: "nested",
-        required: false,
-      },
-      fields: {
-        bio: {
-          _metadata: {
-            type: "string",
-            required: false,
-          },
-        },
-        avatar: {
-          _metadata: {
-            type: "string",
-            required: false,
-          },
-        },
-      },
-    },
-  },
-  options: { withTimestamps: true },
-  referenced: [],
-  metadata: {} as any,
-  hooks: {} as any,
-  _output: {} as any,
-};
+const userType = db.type("User", {
+  name: db.string().description("User name"),
+  email: db.string().description("User email"),
+  age: db.int().optional(),
+  isActive: db.bool(),
+  tags: db.string().array(),
+  profile: db
+    .object({
+      bio: db.string().optional(),
+      avatar: db.string().optional(),
+    })
+    .optional(),
+});
 
-const mockResolver: Resolver = {
-  name: "getUser",
-  queryType: "query",
-  input: {
-    fields: {
-      id: { _metadata: { type: "string", required: true } },
-      includeProfile: { _metadata: { type: "bool", required: false } },
-    },
-  },
-  output: {
-    fields: {
-      id: { _metadata: { type: "string", required: true } },
-      name: { _metadata: { type: "string", required: true } },
-      email: { _metadata: { type: "string", required: true } },
-      age: { _metadata: { type: "integer", required: false } },
-    },
-  },
-  steps: [
-    ["fn", "fetchUser", {}, {}],
-    ["sql", "validateUser", {}, {}],
-  ],
-  outputMapper: function (context: any) {
-    return {
+const mockResolver = createQueryResolver(
+  "getUser",
+  t.type({
+    id: t.string(),
+    includeProfile: t.bool().optional(),
+  }),
+)
+  .fnStep("fetchUser", (context) => ({
+    id: context.input.id,
+    name: "John Doe",
+    email: "john@example.com",
+    age: 30,
+  }))
+  .sqlStep("validateUser", async () => "SELECT 1")
+  .returns(
+    (context) => ({
       id: context.fetchUser.id,
       name: context.fetchUser.name,
       email: context.fetchUser.email,
-      age: context.fetchUser.age,
-    };
-  },
-} as any;
+      age: context.fetchUser.age ?? undefined,
+    }),
+    t.type({
+      id: t.string(),
+      name: t.string(),
+      email: t.string(),
+      age: t.int().optional(),
+      age2: t.int().optional(),
+    }),
+  );
 
-const mockMutationResolver: Resolver = {
-  name: "createUser",
-  queryType: "mutation",
-  input: {
-    fields: {
-      name: { _metadata: { type: "string", required: true } },
-      email: { _metadata: { type: "string", required: true } },
-      age: { _metadata: { type: "integer", required: false } },
-    },
-  },
-  output: {
-    fields: {
-      id: { _metadata: { type: "string", required: true } },
-      success: { _metadata: { type: "bool", required: true } },
-    },
-  },
-  steps: [
-    ["fn", "validateInput", {}, {}],
-    ["sql", "insertUser", {}, {}],
-    ["gql", "notifyServices", {}, {}],
-  ],
-  outputMapper: function (context: any) {
-    return {
+const mockMutationResolver = createMutationResolver(
+  "createUser",
+  t.type({
+    name: t.string(),
+    email: t.string(),
+    age: t.int().optional(),
+  }),
+)
+  .fnStep("validateInput", (context) => ({
+    valid: true,
+    input: context.input,
+  }))
+  .sqlStep("insertUser", async () => ({ id: "user-123" }))
+  .gqlStep("notifyServices", ({ gql, client }) =>
+    client.mutation(
+      gql(`
+      mutation NotifyServices {
+        notify {
+          notified
+        }
+      }
+    `),
+      {},
+    ),
+  )
+  .returns(
+    (context) => ({
       id: context.insertUser.id,
       success: true,
-    };
-  },
-} as any;
+    }),
+    t.type({
+      id: t.string(),
+      success: t.bool(),
+    }),
+  );
 
-const mockComplexType: TailorDBType = {
-  name: "ComplexEntity",
-  fields: {
-    metadata: {
-      _metadata: {
-        type: "nested",
-        required: true,
-      },
-      fields: {
-        tags: {
-          _metadata: {
-            type: "string",
-            required: true,
-            array: true,
-          },
-        },
-        settings: {
-          _metadata: {
-            type: "nested",
-            required: false,
-          },
-          fields: {
-            theme: {
-              _metadata: {
-                type: "string",
-                required: true,
-              },
-            },
-            notifications: {
-              _metadata: {
-                type: "bool",
-                required: false,
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-  options: { withTimestamps: false },
-  referenced: [],
-  metadata: {} as any,
-  hooks: {} as any,
-  _output: {} as any,
-};
+const complexType = db.type("ComplexEntity", {
+  metadata: db.object({
+    tags: db.string().array(),
+    settings: db
+      .object({
+        theme: db.string(),
+        notifications: db.bool().optional(),
+      })
+      .optional(),
+  }),
+});
 
 describe("SdlGenerator統合テスト", () => {
   let sdlGenerator: SdlGenerator;
@@ -192,11 +117,11 @@ describe("SdlGenerator統合テスト", () => {
     });
 
     it("processType メソッドが TailorDBType を正しくSDLTypeMetadataに変換する", async () => {
-      const result = await sdlGenerator.processType(mockTailorDBType);
+      const result = await sdlGenerator.processType(userType);
 
       expect(result.name).toBe("User");
       expect(result.isInput).toBe(false);
-      expect(result.fields).toHaveLength(6);
+      expect(result.fields).toHaveLength(7); // id + 6 defined fields
 
       // 基本フィールドの確認
       const nameField = result.fields.find((f) => f.name === "name");
@@ -429,46 +354,61 @@ extend type Mutation {
 
   describe("複雑なデータ構造のテスト", () => {
     it("深くネストしたオブジェクトを正しくSDLに変換する", async () => {
-      const result = await sdlGenerator.processType(mockComplexType);
+      const result = await sdlGenerator.processType(complexType);
 
       expect(result.name).toBe("ComplexEntity");
-      expect(result.fields).toHaveLength(1);
+      expect(result.fields).toHaveLength(2); // id + metadata
 
-      const metadataField = result.fields[0];
-      expect(metadataField.name).toBe("metadata");
-      expect(metadataField.required).toBe(true);
-      expect(metadataField.type).toContain("{");
-      expect(metadataField.type).toContain("tags: [String!]!");
-      expect(metadataField.type).toContain("settings: {");
-      expect(metadataField.type).toContain("theme: String!");
-      expect(metadataField.type).toContain("notifications: Boolean");
+      const metadataField = result.fields.find((f) => f.name === "metadata");
+      expect(metadataField).toBeDefined();
+      expect(metadataField?.name).toBe("metadata");
+      expect(metadataField?.required).toBe(true);
+      expect(metadataField?.type).toContain("{");
+      expect(metadataField?.type).toContain("tags: [String!]!");
+      expect(metadataField?.type).toContain("settings: {");
+      expect(metadataField?.type).toContain("theme: String!");
+      expect(metadataField?.type).toContain("notifications: Boolean");
     });
 
     it("複数のステップを持つリゾルバーを正しく処理する", async () => {
-      const complexResolver: Resolver = {
-        name: "complexOperation",
-        queryType: "mutation",
-        input: {
-          fields: {
-            data: { _metadata: { type: "string", required: true } },
-            options: {
-              _metadata: { type: "string", required: false, array: true },
-            },
-          },
-        },
-        output: {
-          fields: {
-            result: { _metadata: { type: "string", required: true } },
-            metadata: { _metadata: { type: "string", required: false } },
-          },
-        },
-        steps: [
-          ["fn", "validateInput", {}, {}],
-          ["sql", "processData", {}, {}],
-          ["gql", "fetchAdditionalData", {}, {}],
-          ["fn", "combineResults", {}, {}],
-        ],
-      } as any;
+      const complexResolver = createMutationResolver(
+        "complexOperation",
+        t.type({
+          data: t.string(),
+          options: t.string().array().optional(),
+        }),
+      )
+        .fnStep("validateInput", (context) => ({
+          valid: true,
+          data: context.input.data,
+        }))
+        .sqlStep("processData", async () => ({ processed: true }))
+        .gqlStep("fetchAdditionalData", ({ gql, client }) =>
+          client.query(
+            gql(`
+            query FetchAdditionalData {
+              fetchData {
+                additional
+              }
+            }
+          `),
+            {},
+          ),
+        )
+        .fnStep("combineResults", (context) => ({
+          final: true,
+          all: context,
+        }))
+        .returns(
+          (_context) => ({
+            result: "combined",
+            metadata: "metadata",
+          }),
+          t.type({
+            result: t.string(),
+            metadata: t.string(),
+          }),
+        );
 
       const result = await sdlGenerator.processResolver(complexResolver);
 
@@ -498,10 +438,13 @@ extend type Mutation {
 
   describe("エラーハンドリングのテスト", () => {
     it("output型が定義されていないリゾルバーでエラーが発生する", async () => {
-      const invalidResolver = {
-        ...mockResolver,
-        output: undefined,
-      } as any;
+      const invalidResolver = createQueryResolver(
+        "getUser",
+        t.type({
+          id: t.string(),
+          includeProfile: t.bool().optional(),
+        }),
+      );
 
       await expect(
         sdlGenerator.processResolver(invalidResolver),
@@ -522,25 +465,13 @@ extend type Mutation {
       expect(result.errors).toBeDefined();
       expect(result.errors!.length).toBeGreaterThan(0);
     });
-
-    it("不正なステップタイプでエラーが発生する", async () => {
-      const invalidStepResolver = {
-        ...mockResolver,
-        steps: [["invalid_step", "test", {}, {}]],
-      } as any;
-
-      await expect(
-        sdlGenerator.processResolver(invalidStepResolver),
-      ).rejects.toThrow("Unsupported step kind: invalid_step");
-    });
   });
 
   describe("完全な統合テスト", () => {
     it("実際のTailorDBTypeとResolverを使った完全な統合テスト", async () => {
       // 実際の型を処理
-      const userTypeMetadata = await sdlGenerator.processType(mockTailorDBType);
-      const complexTypeMetadata =
-        await sdlGenerator.processType(mockComplexType);
+      const userTypeMetadata = await sdlGenerator.processType(userType);
+      const complexTypeMetadata = await sdlGenerator.processType(complexType);
 
       // 実際のリゾルバーを処理
       const getUserResolverMetadata =

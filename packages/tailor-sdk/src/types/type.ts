@@ -2,15 +2,16 @@
 
 import { clone } from "es-toolkit";
 import { TailorFieldType, TailorToTs, FieldMetadata } from "./types";
-import type { DeepWriteable, output, Prettify } from "./helpers";
+import type { DeepWritable, output, Prettify } from "./helpers";
 import { AllowedValues, AllowedValuesOutput, mapAllowedValues } from "./field";
 
 type DefinedFieldMetadata = Partial<
   Omit<FieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-export type FieldReference<T extends TailorField<any, any, any>> =
-  DeepWriteable<Exclude<T["reference"], null | undefined>>;
+export type FieldReference<T extends TailorField<any, any, any>> = DeepWritable<
+  Exclude<T["reference"], null | undefined>
+>;
 
 export type ReferenceConfig<
   T extends { _output: any; fields: Record<string, unknown> } = {
