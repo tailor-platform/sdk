@@ -1,24 +1,21 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { KyselyGenerator, KyselyGeneratorID } from "./index";
-import db, { type TailorDBType } from "@/services/tailordb/schema";
+import { db } from "@/services/tailordb/schema";
 
 // モックデータ
-const mockBasicType: TailorDBType = db.type(
-  "User",
-  {
-    name: db.string().description("User name"),
-    email: db.string().description("User email"),
-    age: db.int().optional(),
-    isActive: db.bool(),
-    score: db.float().optional(),
-    birthDate: db.date().optional(),
-    lastLogin: db.datetime().optional(),
-    tags: db.string().array(),
-  },
-  { withTimestamps: true },
-);
+const mockBasicType = db.type("User", {
+  name: db.string().description("User name"),
+  email: db.string().description("User email"),
+  age: db.int().optional(),
+  isActive: db.bool(),
+  score: db.float().optional(),
+  birthDate: db.date().optional(),
+  lastLogin: db.datetime().optional(),
+  tags: db.string().array(),
+  ...db.fields.timestamps(),
+});
 
-const mockEnumType: TailorDBType = db.type("Status", {
+const mockEnumType = db.type("Status", {
   status: db.enum(
     { value: "active" },
     { value: "inactive" },
@@ -29,30 +26,27 @@ const mockEnumType: TailorDBType = db.type("Status", {
     .optional(),
 });
 
-const mockNestedType: TailorDBType = db.type(
-  "ComplexUser",
-  {
-    profile: db.object({
-      firstName: db.string(),
-      lastName: db.string(),
-      address: db
-        .object({
-          street: db.string(),
-          city: db.string(),
-          zipCode: db.string().optional(),
-        })
-        .optional(),
-    }),
-    preferences: db
+const mockNestedType = db.type("ComplexUser", {
+  profile: db.object({
+    firstName: db.string(),
+    lastName: db.string(),
+    address: db
       .object({
-        key: db.string(),
-        value: db.string(),
+        street: db.string(),
+        city: db.string(),
+        zipCode: db.string().optional(),
       })
-      .optional()
-      .array(),
-  },
-  { withTimestamps: true },
-);
+      .optional(),
+  }),
+  preferences: db
+    .object({
+      key: db.string(),
+      value: db.string(),
+    })
+    .optional()
+    .array(),
+  ...db.fields.timestamps(),
+});
 
 describe("KyselyGenerator統合テスト", () => {
   let kyselyGenerator: KyselyGenerator;
@@ -126,7 +120,7 @@ describe("KyselyGenerator統合テスト", () => {
     });
 
     it("required/optional フィールドを正しく処理する", async () => {
-      const testType: TailorDBType = db.type("TestRequired", {
+      const testType = db.type("TestRequired", {
         requiredField: db.string(),
         optionalField: db.string().optional(),
         undefinedRequiredField: db.string().optional(),
@@ -142,7 +136,7 @@ describe("KyselyGenerator統合テスト", () => {
     });
 
     it("配列型を正しく処理する", async () => {
-      const arrayType: TailorDBType = db.type("ArrayTest", {
+      const arrayType = db.type("ArrayTest", {
         stringArray: db.string().array(),
         optionalIntArray: db.int().optional().array(),
       });
@@ -276,7 +270,7 @@ export async function kyselyWrapper() {}
     });
 
     it("未知の型定義を文字列型として処理する", async () => {
-      const unknownType: TailorDBType = db.type("UnknownType", {
+      const unknownType = db.type("UnknownType", {
         unknownField: db.string(),
       });
 
@@ -288,13 +282,10 @@ export async function kyselyWrapper() {}
 
   describe("withTimestamps オプションのテスト", () => {
     it("withTimestamps: true でタイムスタンプフィールドが追加される", async () => {
-      const typeWithTimestamps: TailorDBType = db.type(
-        "WithTimestamps",
-        {
-          name: db.string(),
-        },
-        { withTimestamps: true },
-      );
+      const typeWithTimestamps = db.type("WithTimestamps", {
+        name: db.string(),
+        ...db.fields.timestamps(),
+      });
 
       const result = await kyselyGenerator.processType(typeWithTimestamps);
 
@@ -303,7 +294,7 @@ export async function kyselyWrapper() {}
     });
 
     it("withTimestamps: false でタイムスタンプフィールドが追加されない", async () => {
-      const typeWithoutTimestamps: TailorDBType = db.type("WithoutTimestamps", {
+      const typeWithoutTimestamps = db.type("WithoutTimestamps", {
         name: db.string(),
       });
 

@@ -93,13 +93,13 @@ describe("createQueryResolver type tests", () => {
   it("gqlStep追加後の型が正しいこと", () => {
     const _resolver = createQueryResolver("getUser", UserInput).gqlStep(
       "fetchUserGql",
-      ({ client }) => {
-        return client.query("" as any, {} as any);
-      },
+      ({ client, gql }) =>
+        client.query(gql(`query { fetchUser { id name } }`), {}),
     );
 
     // contextにはgqlの結果全体が追加される
     type ResolverContext = typeof _resolver._context;
+    type _t = ResolverContext["fetchUserGql"];
     expectTypeOf<ResolverContext>().toExtend<{
       input: {
         id: string;

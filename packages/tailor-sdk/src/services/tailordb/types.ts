@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
 
 import { TailorUser } from "@/types";
+import { output } from "@/types/helpers";
 import { FieldMetadata } from "@/types/types";
 
 export interface DBFieldMetadata extends FieldMetadata {
@@ -23,34 +24,63 @@ export type DBTypeConfig = {
 };
 
 type IsDateType<T> = Date extends T ? true : false;
+
+type DBTypeLike = {
+  fields: Record<string, { _defined: Record<string, unknown> }>;
+};
+type DefinedFields<
+  T extends DBTypeLike,
+  K extends keyof DBFieldMetadata,
+> = keyof {
+  [P in keyof T["fields"] as T["fields"][P]["_defined"] extends {
+    [Key in K]: unknown;
+  }
+    ? P
+    : never]: keyof T["fields"][P]["_defined"];
+};
+
+type UndefinedFields<
+  T extends DBTypeLike,
+  K extends keyof DBFieldMetadata,
+> = Exclude<keyof T["fields"], DefinedFields<T, K>>;
+
 type HookReturn<T> = IsDateType<T> extends true ? string : T;
 type HookValue<T> = IsDateType<T> extends true ? string : T;
-type HookFn<O, P = undefined> = (
-  args: P extends undefined
-    ? { value: HookValue<O>; user: TailorUser }
-    : { value: HookValue<O>; data: P; user: TailorUser },
-) => HookReturn<O>;
-export type Hooks<P> = {
-  [K in keyof P]?: Hook<P[K], P>;
-};
-export type Hook<O, P> = {
+type HookFn<O, P> = (args: {
+  value: HookValue<output<O>>;
+  data: P;
+  user: TailorUser;
+}) => HookReturn<O>;
+export type Hook<O, P = unknown> = {
   create?: HookFn<O, P>;
   update?: HookFn<O, P>;
 };
+export type Hooks<P extends DBTypeLike> = {
+  [K in UndefinedFields<P, "hooks">]?: K extends keyof output<P>
+    ? Hook<output<P>[K], output<P>>
+    : never;
+} & {
+  [K in DefinedFields<P, "hooks">]?: {
+    "hooks already defined in field": never;
+  };
+};
 
-export type ValidateFn<O, P = undefined> = (
-  args: P extends undefined
-    ? { value: O; user: TailorUser }
-    : { value: O; data: P; user: TailorUser },
-) => boolean;
+export type Validators<P extends DBTypeLike> = {
+  [K in UndefinedFields<P, "validate">]?: K extends keyof output<P>
+    ? ValidateFn<output<P>[K], output<P>>[]
+    : never;
+} & {
+  [K in DefinedFields<P, "validate">]?: {
+    "validator already defined in field": never;
+  };
+};
+
+export type ValidateFn<O, D = unknown> = (args: {
+  value: O;
+  data: D;
+  user: TailorUser;
+}) => boolean;
 export type FieldValidateFn<O> = ValidateFn<O>;
-export type FieldValidator<O> =
-  | FieldValidateFn<O>
-  | {
-      script: FieldValidateFn<O>;
-      action?: "allow" | "deny";
-      error_message?: string;
-    };
 export type TypeValidateFn<P, O> = (args: {
   value: O;
   data: P;

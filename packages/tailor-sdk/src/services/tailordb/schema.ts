@@ -10,6 +10,7 @@ import {
 import {
   DBFieldMetadata,
   Hooks,
+  Validators,
   DefinedFieldMetadata,
   FieldValidateFn,
   Hook,
@@ -82,10 +83,6 @@ class TailorDBField<
           })
         : undefined,
     });
-  }
-
-  private setHooks(hooks: Hook<Output, any>) {
-    this._metadata.hooks = hooks;
   }
 
   private constructor(
@@ -264,6 +261,20 @@ class TailorDBField<
     >;
   }
 
+  hooks<const H extends Hook<output<this>>, CurrentDefined extends Defined>(
+    this: CurrentDefined extends { hooks: unknown }
+      ? never
+      : TailorDBField<CurrentDefined, Output, Reference>,
+    hooks: H,
+  ) {
+    this._metadata.hooks = hooks;
+    return this as unknown as TailorDBField<
+      Prettify<CurrentDefined & { hooks: H }>,
+      Output,
+      Reference
+    >;
+  }
+
   validate<
     const V extends FieldValidateFn<Output>[],
     CurrentDefined extends Defined,
@@ -340,11 +351,6 @@ function object<const F extends Record<string, TailorDBField<any, any, any>>>(
   return objectField;
 }
 
-type DBTypeOptions = {
-  withTimestamps?: boolean;
-  description?: string;
-};
-
 export class TailorDBType<
   const F extends { id?: never } & Record<
     string,
@@ -357,27 +363,26 @@ export class TailorDBType<
 > {
   private _metadata?: TDB;
   public referenced: TailorDBType[] = [];
+  private _description: string | undefined;
 
   constructor(
     public readonly name: string,
     public readonly fields: F,
-    public readonly options: DBTypeOptions = {},
   ) {
     super(
       fields as F & Record<string, TailorField<M, any, any, DBFieldMetadata>>,
     );
 
-    if (this.options.withTimestamps) {
-      this.fields = { ...this.fields, ...datetimeFields };
-    }
-
-    // RelationShips定義用に参照先にthisを設定しておく
     Object.entries(this.fields).forEach(([_, field]) => {
       if (field.reference) {
         const ref = field.reference;
         ref.type.referenced.push(this);
       }
     });
+  }
+
+  set description(description: string) {
+    this._description = description;
   }
 
   get metadata(): TDB {
@@ -392,7 +397,7 @@ export class TailorDBType<
     this._metadata = new TDB({
       name: this.name,
       schema: {
-        description: this.options.description,
+        description: this._description,
         extends: false,
         fields: metadataFields,
       },
@@ -401,72 +406,35 @@ export class TailorDBType<
     return this._metadata;
   }
 
-  hooks(hooks: Hooks<output<typeof this>>) {
+  hooks(hooks: Hooks<typeof this>) {
     Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-      (this.fields[fieldName] as any).setHooks(fieldHooks);
+      (this.fields[fieldName] as any).hooks(fieldHooks);
+    });
+    return this;
+  }
+
+  validate(validators: Validators<typeof this>) {
+    Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
+      const field = this.fields[fieldName];
+      (field as any).validate(...(fieldValidators as unknown[]));
     });
     return this;
   }
 }
 
-type TailorDBDef = InstanceType<
-  typeof TailorDBType<
-    Record<string, TailorDBField<DefinedFieldMetadata, any, any>>,
-    DefinedFieldMetadata
-  >
->;
-
 const idField = uuid();
 type idField = typeof idField;
-const datetimeFields = {
-  createdAt: (() => {
-    const field = datetime().optional({ assertNonNull: true });
-    (field as any).setHooks({
-      create: () => new Date().toISOString(),
-    });
-    return field;
-  })(),
-  updatedAt: (() => {
-    const field = datetime().optional();
-    (field as any).setHooks({
-      update: () => new Date().toISOString(),
-    });
-    return field;
-  })(),
-} as const satisfies Record<string, TailorDBField<any, any, any>>;
 type DBType<
   F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
-  O extends DBTypeOptions = object,
-> = O extends { withTimestamps: true }
-  ? TailorDBType<
-      { id: idField } & F & typeof datetimeFields,
-      DefinedFieldMetadata
-    >
-  : TailorDBType<{ id: idField } & F, DefinedFieldMetadata>;
+> = TailorDBType<{ id: idField } & F, DefinedFieldMetadata>;
 
 function dbType<
   const F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
-  const O extends DBTypeOptions,
->(name: string, fields: F, options?: O): DBType<F, O> {
-  if (options?.withTimestamps) {
-    return new TailorDBType<
-      { id: idField } & F & typeof datetimeFields,
-      DefinedFieldMetadata
-    >(
-      name,
-      {
-        id: idField,
-        ...fields,
-        ...datetimeFields,
-      },
-      options,
-    );
-  }
-  return new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(
-    name,
-    { id: idField, ...fields },
-    options,
-  ) as DBType<F, O>;
+>(name: string, fields: F): DBType<F> {
+  return new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(name, {
+    id: idField,
+    ...fields,
+  }) as DBType<F>;
 }
 
 const db = {
@@ -480,6 +448,20 @@ const db = {
   datetime,
   enum: _enum,
   object,
+  fields: {
+    timestamps: () => ({
+      createdAt: datetime()
+        .optional({ assertNonNull: true })
+        .hooks({
+          create: () => new Date().toISOString(),
+        }),
+      updatedAt: datetime()
+        .optional()
+        .hooks({
+          update: () => new Date().toISOString(),
+        }),
+    }),
+  },
 };
 
 export default db;
@@ -494,6 +476,5 @@ export {
   int,
   object,
   string,
-  TailorDBDef,
   uuid,
 };

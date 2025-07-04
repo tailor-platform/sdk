@@ -307,8 +307,7 @@ describe("GenerationManager", () => {
       manager.generators.push(errorGenerator);
 
       // エラーが発生しても全体の処理は続行されることを確認
-      // Promise.allSettledを使用してエラーが発生してもプロセスが続行されることをテスト
-      await expect(manager.processGenerators()).resolves.not.toThrow();
+      await manager.processGenerators();
 
       // 正常なジェネレーターは処理され、エラージェネレーターのメソッドも呼ばれることを確認
       expect(errorGenerator.processType).toHaveBeenCalled();

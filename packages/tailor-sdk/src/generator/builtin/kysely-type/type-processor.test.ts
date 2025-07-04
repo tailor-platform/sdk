@@ -69,13 +69,10 @@ describe("Kysely TypeProcessor", () => {
   });
 
   it("should process timestamp fields through normal field processing", async () => {
-    const typeWithTimestamps = db.type(
-      "UserWithTimestamps",
-      {
-        name: db.string(),
-      },
-      { withTimestamps: true },
-    );
+    const typeWithTimestamps = db.type("UserWithTimestamps", {
+      name: db.string(),
+      ...db.fields.timestamps(),
+    });
 
     const result = await TypeProcessor.processType(typeWithTimestamps);
 
