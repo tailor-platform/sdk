@@ -1,59 +1,56 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ManifestGenerator } from "./index";
-import type { TailorDBType } from "@/services/tailordb/schema";
 import { db } from "@/services/tailordb/schema";
-import type { Resolver } from "@/services/pipeline/resolver";
+import {
+  createQueryResolver,
+  createMutationResolver,
+} from "@/services/pipeline/resolver";
 import type { Workspace } from "@/workspace";
 import type { ApplyOptions } from "@/cli/args";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import path from "node:path";
 import { getDistDir } from "@/config";
+import t from "@/types/type";
 
 // モックデータ - db.type を使用した正しい構造
-const mockTailorDBType: TailorDBType = db.type(
-  "User",
-  {
-    name: db.string().description("User name"),
-    email: db.string().description("User email"),
-    age: db.int().optional().description("User age"),
-    profile: db
-      .object({
-        bio: db.string().optional(),
-        avatar: db.string().optional(),
-      })
-      .description("User profile"),
-  },
-  { withTimestamps: true },
-);
+const mockTailorDBType = db.type("User", {
+  name: db.string().description("User name"),
+  email: db.string().description("User email"),
+  age: db.int().optional().description("User age"),
+  profile: db
+    .object({
+      bio: db.string().optional(),
+      avatar: db.string().optional(),
+    })
+    .description("User profile"),
+  ...db.fields.timestamps,
+});
 
-const mockResolver: Resolver = {
-  name: "getUser",
-  queryType: "query",
-  input: {
-    fields: {
-      id: { metadata: { type: "string", required: true } },
-      includeProfile: { metadata: { type: "bool", required: false } },
-    },
-  },
-  output: {
-    fields: {
-      id: { metadata: { type: "string", required: true } },
-      name: { metadata: { type: "string", required: true } },
-      email: { metadata: { type: "string", required: true } },
-    },
-  },
-  steps: [
-    ["fn", "fetchUser", {}, {}],
-    ["sql", "validateUser", {}, {}],
-  ],
-  outputMapper: function (context: any) {
-    return {
+const mockResolver = createQueryResolver(
+  "getUser",
+  t.type({
+    id: t.string(),
+    includeProfile: t.bool().optional(),
+  }),
+)
+  .fnStep("fetchUser", async (context) => ({
+    id: context.input.id,
+    name: "Test User",
+    email: "test@example.com",
+  }))
+  .sqlStep("validateUser", () => ({}) as any)
+  .returns(
+    (context) => ({
       id: context.fetchUser.id,
       name: context.fetchUser.name,
       email: context.fetchUser.email,
-    };
-  },
-} as any;
+    }),
+    t.type({
+      id: t.string(),
+      name: t.string(),
+      email: t.string(),
+    }),
+  );
 
 const mockWorkspace: Workspace = {
   config: { name: "test-workspace", app: {}, generators: [] },
@@ -121,10 +118,10 @@ describe("ManifestGenerator統合テスト", () => {
     it("processType メソッドが TailorDBType を正しく処理する", async () => {
       const result = await manifestGenerator.processType(mockTailorDBType);
 
-      // db.type を使用した場合、自動的に id, createdAt, updatedAt フィールドが追加される
+      // db.type を使用した場合、自動的に id フィールドが追加される
       expect(result.name).toBe("User");
       expect(result.isInput).toBe(false);
-      expect(result.fields).toHaveLength(7); // id, name, email, age, profile, createdAt, updatedAt
+      expect(result.fields).toHaveLength(5); // id, name, email, age, profile
 
       // 主要フィールドの確認
       const nameField = result.fields.find((f) => f.name === "name");
@@ -294,7 +291,7 @@ describe("ManifestGenerator統合テスト", () => {
 
   describe("複雑なデータ構造のテスト", () => {
     it("ネストしたフィールドを持つ型を正しく処理する", async () => {
-      const nestedType: TailorDBType = db.type("ComplexUser", {
+      const nestedType = db.type("ComplexUser", {
         profile: db.object({
           personal: db.object({
             firstName: db.string(),
@@ -327,34 +324,32 @@ describe("ManifestGenerator統合テスト", () => {
     });
 
     it("複数のパイプラインを持つリゾルバーを正しく処理する", async () => {
-      const complexResolver: Resolver = {
-        name: "complexOperation",
-        queryType: "mutation",
-        input: {
-          fields: {
-            userId: { metadata: { type: "string", required: true } },
-            data: { metadata: { type: "string", required: true } },
-          },
-        },
-        output: {
-          fields: {
-            success: { metadata: { type: "bool", required: true } },
-            message: { metadata: { type: "string", required: true } },
-          },
-        },
-        steps: [
-          ["fn", "validateInput", {}, {}],
-          ["sql", "updateDatabase", {}, {}],
-          ["gql", "notifyServices", {}, {}],
-          ["fn", "finalizeOperation", {}, {}],
-        ],
-        outputMapper: function (context: any) {
-          return {
+      const complexResolver = createMutationResolver(
+        "complexOperation",
+        t.type({
+          userId: t.string(),
+          data: t.string(),
+        }),
+      )
+        .fnStep("validateInput", async (_context) => ({ valid: true }))
+        .sqlStep("updateDatabase", async () => ({ updated: true }))
+        .gqlStep("notifyServices", ({ client, gql }) =>
+          client.query(gql(`query { get { id } }`), {}),
+        )
+        .fnStep("finalizeOperation", async (_context) => ({
+          success: true,
+          message: "Operation completed successfully",
+        }))
+        .returns(
+          (context) => ({
             success: context.finalizeOperation.success,
             message: context.finalizeOperation.message,
-          };
-        },
-      } as any;
+          }),
+          t.type({
+            success: t.bool(),
+            message: t.string(),
+          }),
+        );
 
       const result = await manifestGenerator.processResolver(complexResolver);
 

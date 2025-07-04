@@ -125,7 +125,7 @@ export class Resolver<
 
   returns<
     R extends Record<string, unknown>,
-    const O extends TailorType<any, any, R>,
+    const O extends TailorType<any, any, any>,
   >(
     map: (context: Context) => StrictOutput<O, R>,
     output: O,

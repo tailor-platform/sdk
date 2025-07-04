@@ -360,27 +360,23 @@ describe("TailorDBField ref修飾子テスト", () => {
 
 describe("TailorDBType withTimestamps オプションテスト", () => {
   it("withTimestamps: falseでタイムスタンプフィールドが追加されない", () => {
-    const _noTimestampType = db.type(
-      "Test",
-      {
-        name: db.string(),
-      },
-      { withTimestamps: false },
-    );
+    const _noTimestampType = db.type("Test", {
+      name: db.string(),
+      ...db.fields.timestamps(),
+    });
     expectTypeOf<output<typeof _noTimestampType>>().toEqualTypeOf<{
       id: string;
       name: string;
+      createdAt: Date;
+      updatedAt?: Date | null;
     }>();
   });
 
   it("withTimestamps: trueでタイムスタンプフィールドが追加される", () => {
-    const _timestampType = db.type(
-      "TestWithTimestamps",
-      {
-        name: db.string(),
-      },
-      { withTimestamps: true },
-    );
+    const _timestampType = db.type("TestWithTimestamps", {
+      name: db.string(),
+      ...db.fields.timestamps(),
+    });
     expectTypeOf<output<typeof _timestampType>>().toEqualTypeOf<{
       id: string;
       name: string;
@@ -480,6 +476,22 @@ describe("TailorDBType 型の一貫性テスト", () => {
     expectTypeOf<output<typeof _typeWithoutId>>().toMatchTypeOf<{
       id: string;
     }>();
+  });
+
+  it("type-level validate method should exist and work", () => {
+    const _userType = db.type("User", {
+      name: db.string(),
+      email: db.string(),
+    });
+
+    // Test that the validate method exists
+    const result = _userType.validate({
+      name: [({ value }) => value.length > 0],
+      email: [({ value }) => value.includes("@")],
+    });
+
+    // Should return the same type instance for chaining
+    expect(result).toBe(_userType);
   });
 });
 
