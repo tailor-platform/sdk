@@ -1,8 +1,4 @@
-import {
-  CodeGenerator,
-  BasicGeneratorMetadata,
-  GeneratorResult,
-} from "../../types";
+import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { Resolver } from "@/services/pipeline/resolver";
 import { SDLTypeMetadata, ResolverSDLMetadata } from "./types";
@@ -17,7 +13,13 @@ export const SdlGeneratorID = "@tailor/sdl";
  * SDL生成システムのメインエントリーポイント
  */
 export class SdlGenerator
-  implements CodeGenerator<SDLTypeMetadata, ResolverSDLMetadata>
+  implements
+    CodeGenerator<
+      SDLTypeMetadata,
+      ResolverSDLMetadata,
+      Record<string, SDLTypeMetadata>,
+      Record<string, ResolverSDLMetadata>
+    >
 {
   readonly id = SdlGeneratorID;
   readonly description = "Generates SDL files for TailorDB types and resolvers";
@@ -43,9 +45,33 @@ export class SdlGenerator
    */
   @measure
   aggregate(
-    metadata: BasicGeneratorMetadata<SDLTypeMetadata, ResolverSDLMetadata>,
+    inputs: GeneratorInput<
+      Record<string, SDLTypeMetadata>,
+      Record<string, ResolverSDLMetadata>
+    >[],
     baseDir: string,
   ): GeneratorResult {
-    return SDLAggregator.aggregate(metadata, baseDir);
+    // すべてのnamespaceのメタデータを統合
+    const allTypes: Record<string, SDLTypeMetadata> = {};
+    const allResolvers: Record<string, ResolverSDLMetadata> = {};
+
+    for (const input of inputs) {
+      // TailorDB types
+      for (const nsResult of input.tailordb) {
+        Object.assign(allTypes, nsResult.types);
+      }
+      // Pipeline resolvers
+      for (const nsResult of input.pipeline) {
+        Object.assign(allResolvers, nsResult.resolvers);
+      }
+    }
+
+    return SDLAggregator.aggregate(
+      {
+        types: allTypes,
+        resolvers: allResolvers,
+      },
+      baseDir,
+    );
   }
 }

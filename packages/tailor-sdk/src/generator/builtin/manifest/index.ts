@@ -1,8 +1,4 @@
-import {
-  CodeGenerator,
-  BasicGeneratorMetadata,
-  GeneratorResult,
-} from "../../types";
+import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { Resolver } from "@/services/pipeline/resolver";
 import { measure } from "@/performance";
@@ -17,7 +13,13 @@ import type { ApplyOptions } from "@/cli/args";
  * Manifest生成システムのメインエントリーポイント
  */
 export class ManifestGenerator
-  implements CodeGenerator<ManifestTypeMetadata, ResolverManifestMetadata>
+  implements
+    CodeGenerator<
+      ManifestTypeMetadata,
+      ResolverManifestMetadata,
+      Record<string, ManifestTypeMetadata>,
+      Record<string, ResolverManifestMetadata>
+    >
 {
   readonly id = "@tailor/manifest";
   readonly description =
@@ -47,14 +49,43 @@ export class ManifestGenerator
    */
   @measure
   async aggregate(
-    metadata: BasicGeneratorMetadata<
-      ManifestTypeMetadata,
-      ResolverManifestMetadata
-    >,
+    inputs: GeneratorInput<
+      Record<string, ManifestTypeMetadata>,
+      Record<string, ResolverManifestMetadata>
+    >[],
+    _baseDir: string,
   ): Promise<GeneratorResult> {
+    // 現時点では最初のapplicationのみを処理（将来的には複数application対応可能）
+    if (inputs.length === 0) {
+      return { files: [], errors: [] };
+    }
+
+    // すべてのnamespaceのメタデータを統合
+    const allTypes: Record<string, ManifestTypeMetadata> = {};
+    const allResolvers: Record<string, ResolverManifestMetadata> = {};
+    let pipelineNamespace: string | undefined;
+
+    for (const input of inputs) {
+      // TailorDB types
+      for (const nsResult of input.tailordb) {
+        Object.assign(allTypes, nsResult.types);
+      }
+      // Pipeline resolvers
+      for (const nsResult of input.pipeline) {
+        Object.assign(allResolvers, nsResult.resolvers);
+        // 最初のpipeline namespaceを記録
+        if (!pipelineNamespace && nsResult.namespace) {
+          pipelineNamespace = nsResult.namespace;
+        }
+      }
+    }
+
     return await ManifestAggregator.aggregate(
-      metadata,
-      undefined,
+      {
+        types: allTypes,
+        resolvers: allResolvers,
+      },
+      pipelineNamespace,
       this.workspace,
     );
   }

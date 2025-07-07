@@ -17,7 +17,7 @@
         },
         {
           "Type": "tailordb",
-          "Name": "my-db"
+          "Name": "tailordb"
         },
         {
           "Type": "pipeline",
@@ -31,7 +31,7 @@
   "Services": [
     {
       "Kind": "tailordb",
-      "Namespace": "my-db",
+      "Namespace": "tailordb",
       "Types": [
         {
           "Name": "Customer",
@@ -1601,10 +1601,36 @@
                           "Name": "name",
                           "Description": "",
                           "Type": {
-                            "Kind": "ScalarType",
-                            "Name": "String",
+                            "Kind": "UserDefined",
+                            "Name": "StepChainInputUserName",
                             "Description": "",
-                            "Required": false
+                            "Required": true,
+                            "Fields": [
+                              {
+                                "Name": "first",
+                                "Description": "",
+                                "Type": {
+                                  "Kind": "ScalarType",
+                                  "Name": "String",
+                                  "Description": "",
+                                  "Required": false
+                                },
+                                "Array": false,
+                                "Required": true
+                              },
+                              {
+                                "Name": "last",
+                                "Description": "",
+                                "Type": {
+                                  "Kind": "ScalarType",
+                                  "Name": "String",
+                                  "Description": "",
+                                  "Required": false
+                                },
+                                "Array": false,
+                                "Required": true
+                              }
+                            ]
                           },
                           "Array": false,
                           "Required": true
@@ -1636,7 +1662,7 @@
                     "Required": true,
                     "Fields": [
                       {
-                        "Name": "name",
+                        "Name": "summary",
                         "Description": "",
                         "Type": {
                           "Kind": "ScalarType",
@@ -1644,7 +1670,7 @@
                           "Description": "",
                           "Required": false
                         },
-                        "Array": false,
+                        "Array": true,
                         "Required": true
                       }
                     ]
@@ -1832,10 +1858,36 @@
                           "Name": "name",
                           "Description": "",
                           "Type": {
-                            "Kind": "ScalarType",
-                            "Name": "String",
+                            "Kind": "UserDefined",
+                            "Name": "StepChainInputUserName",
                             "Description": "",
-                            "Required": false
+                            "Required": true,
+                            "Fields": [
+                              {
+                                "Name": "first",
+                                "Description": "",
+                                "Type": {
+                                  "Kind": "ScalarType",
+                                  "Name": "String",
+                                  "Description": "",
+                                  "Required": false
+                                },
+                                "Array": false,
+                                "Required": true
+                              },
+                              {
+                                "Name": "last",
+                                "Description": "",
+                                "Type": {
+                                  "Kind": "ScalarType",
+                                  "Name": "String",
+                                  "Description": "",
+                                  "Required": false
+                                },
+                                "Array": false,
+                                "Required": true
+                              }
+                            ]
                           },
                           "Array": false,
                           "Required": true
@@ -1867,7 +1919,7 @@
                     "Required": true,
                     "Fields": [
                       {
-                        "Name": "name",
+                        "Name": "summary",
                         "Description": "",
                         "Type": {
                           "Kind": "ScalarType",
@@ -1875,7 +1927,7 @@
                           "Description": "",
                           "Required": false
                         },
-                        "Array": false,
+                        "Array": true,
                         "Required": true
                       }
                     ]
@@ -1960,7 +2012,7 @@
   "Tailordbs": [
     {
       "Kind": "tailordb",
-      "Namespace": "my-db",
+      "Namespace": "tailordb",
       "Types": [
         {
           "Name": "Customer",
