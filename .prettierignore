@@ -31,4 +31,4 @@ packages
 # Test fixtures (generated files)
 tests/fixtures/
 
-src/resolvers/db.ts
+src/resolvers/tailordb.ts

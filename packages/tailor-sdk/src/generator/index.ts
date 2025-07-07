@@ -7,7 +7,12 @@ import { defineWorkspace } from "@/workspace";
 import { Resolver } from "@/services/pipeline/resolver";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { measure } from "@/performance";
-import { CodeGenerator } from "./types";
+import {
+  CodeGenerator,
+  GeneratorInput,
+  TailorDBNamespaceResult,
+  PipelineNamespaceResult,
+} from "./types";
 import { SdlGenerator, SdlGeneratorID } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
@@ -19,8 +24,14 @@ type Workspace = ReturnType<typeof defineWorkspace>;
 export class GenerationManager {
   public readonly workspace: Workspace;
   private generators: CodeGenerator<any, any, any, any>[] = [];
-  private types: Record<string, Record<string, TailorDBType>> = {};
-  private resolvers: Record<string, Resolver> = {};
+  // application毎、service種別毎、namespace毎に整理
+  private applications: Record<
+    string,
+    {
+      tailordbNamespaces: Record<string, Record<string, TailorDBType>>;
+      pipelineNamespaces: Record<string, Record<string, Resolver>>;
+    }
+  > = {};
   private readonly baseDir;
 
   constructor(private readonly config: WorkspaceConfig) {
@@ -71,16 +82,41 @@ export class GenerationManager {
   async generate(_options: GenerateOptions) {
     console.log("Generation for workspace:", this.workspace.config.name);
 
+    // application毎のデータ構造を初期化
     for (const app of this.workspace.applications) {
+      const appNamespace = app.name;
+      this.applications[appNamespace] = {
+        tailordbNamespaces: {},
+        pipelineNamespaces: {},
+      };
+
+      // TailorDB services
       for (const db of app.tailorDBServices) {
-        this.types = (await db.loadTypes())!;
+        const namespace = db.namespace;
+        const types = await db.loadTypes();
+        if (types) {
+          this.applications[appNamespace].tailordbNamespaces[namespace] = {};
+          // flatten the nested structure
+          Object.values(types).forEach((nsTypes) => {
+            Object.entries(nsTypes).forEach(([typeName, type]) => {
+              this.applications[appNamespace].tailordbNamespaces[namespace][
+                typeName
+              ] = type;
+            });
+          });
+        }
       }
 
+      // Pipeline services
       for (const pipelineService of app.pipelineResolverServices) {
+        const namespace = pipelineService.namespace;
         await pipelineService.loadResolvers();
+        this.applications[appNamespace].pipelineNamespaces[namespace] = {};
         Object.entries(pipelineService.getResolvers()).forEach(
-          ([filename, resolver]) => {
-            this.resolvers[filename] = resolver;
+          ([_, resolver]) => {
+            this.applications[appNamespace].pipelineNamespaces[namespace][
+              resolver.name
+            ] = resolver;
           },
         );
       }
@@ -90,16 +126,25 @@ export class GenerationManager {
     await this.processGenerators();
   }
 
-  private typeResults: Record<
+  // generator毎、application毎、service種別毎、namespace毎の結果を格納
+  private generatorResults: Record<
     /* generator */ string,
-    Record</* type */ string, any>
+    Record<
+      /* application */ string,
+      {
+        tailordbResults: Record<
+          /* namespace */ string,
+          Record</* type */ string, any>
+        >;
+        pipelineResults: Record<
+          /* namespace */ string,
+          Record</* resolver */ string, any>
+        >;
+        tailordbNamespaceResults: Record</* namespace */ string, any>;
+        pipelineNamespaceResults: Record</* namespace */ string, any>;
+      }
+    >
   > = {};
-  private typesResult: Record</* generator */ string, any> = {};
-  private resolverResults: Record<
-    /* generator */ string,
-    Record</* resolver */ string, any>
-  > = {};
-  private resolversResult: Record</* generator */ string, any> = {};
 
   async processGenerators() {
     await Promise.allSettled(
@@ -109,85 +154,183 @@ export class GenerationManager {
 
   async processGenerator(gen: CodeGenerator) {
     try {
-      await Promise.all([
-        (async () => {
-          await this.processSingleTypes(gen);
-          this.typesResult[gen.id] = await this.summarizeTypes(gen);
-        })(),
-        (async () => {
-          await this.processSingleResolvers(gen);
-          this.resolversResult[gen.id] = await this.summarizeResolvers(gen);
-        })(),
-      ]);
+      this.generatorResults[gen.id] = {};
+
+      // Process each application
+      for (const [appNamespace, appData] of Object.entries(this.applications)) {
+        this.generatorResults[gen.id][appNamespace] = {
+          tailordbResults: {},
+          pipelineResults: {},
+          tailordbNamespaceResults: {},
+          pipelineNamespaceResults: {},
+        };
+
+        // Process TailorDB namespaces
+        for (const [namespace, types] of Object.entries(
+          appData.tailordbNamespaces,
+        )) {
+          await this.processTailorDBNamespace(
+            gen,
+            appNamespace,
+            namespace,
+            types,
+          );
+        }
+
+        // Process Pipeline namespaces
+        for (const [namespace, resolvers] of Object.entries(
+          appData.pipelineNamespaces,
+        )) {
+          await this.processPipelineNamespace(
+            gen,
+            appNamespace,
+            namespace,
+            resolvers,
+          );
+        }
+      }
+
+      // Aggregate all results
       await this.aggregate(gen);
     } catch (error) {
       console.error(`Error processing generator ${gen.id}:`, error);
-      // エラーが発生してもログに出力して続行
     }
   }
 
-  async processSingleTypes(gen: CodeGenerator) {
-    this.typeResults[gen.id] = this.typeResults[gen.id] || {};
+  async processTailorDBNamespace(
+    gen: CodeGenerator,
+    appNamespace: string,
+    namespace: string,
+    types: Record<string, TailorDBType>,
+  ) {
+    const results = this.generatorResults[gen.id][appNamespace];
+    results.tailordbResults[namespace] = {};
 
+    // Process individual types
     await Promise.allSettled(
-      Object.values(this.types).map(async (types) => {
-        await Promise.allSettled(
-          Object.values(types).map(async (type) => {
-            try {
-              this.typeResults[gen.id][type.name] = await gen.processType(type);
-            } catch (error) {
-              console.error(
-                `Error processing type ${type.name} with generator ${gen.id}:`,
-                error,
-              );
-              delete this.typeResults[gen.id][type.name];
-            }
-          }),
-        );
-      }),
-    );
-  }
-
-  async processSingleResolvers(gen: CodeGenerator) {
-    this.resolverResults[gen.id] = this.resolverResults[gen.id] || {};
-    await Promise.allSettled(
-      Object.values(this.resolvers).map(async (resolver) => {
+      Object.entries(types).map(async ([typeName, type]) => {
         try {
-          this.resolverResults[gen.id][resolver.name] =
-            await gen.processResolver(resolver);
+          results.tailordbResults[namespace][typeName] = await gen.processType(
+            type,
+            appNamespace,
+            namespace,
+          );
         } catch (error) {
           console.error(
-            `Error processing resolver ${resolver.name} with generator ${gen.id}:`,
+            `Error processing type ${typeName} in ${appNamespace}/${namespace} with generator ${gen.id}:`,
             error,
           );
-          delete this.resolverResults[gen.id][resolver.name];
         }
       }),
     );
+
+    // Process namespace summary if available
+    if (gen.processTailorDBNamespace) {
+      try {
+        results.tailordbNamespaceResults[namespace] =
+          await gen.processTailorDBNamespace(
+            appNamespace,
+            namespace,
+            results.tailordbResults[namespace],
+          );
+      } catch (error) {
+        console.error(
+          `Error processing TailorDB namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
+          error,
+        );
+      }
+    } else {
+      results.tailordbNamespaceResults[namespace] =
+        results.tailordbResults[namespace];
+    }
   }
 
-  async summarizeTypes(gen: CodeGenerator) {
-    if (gen.processTypes) {
-      return await gen.processTypes(this.typeResults[gen.id]);
-    }
-    return this.typeResults[gen.id];
-  }
+  async processPipelineNamespace(
+    gen: CodeGenerator,
+    appNamespace: string,
+    namespace: string,
+    resolvers: Record<string, Resolver>,
+  ) {
+    const results = this.generatorResults[gen.id][appNamespace];
+    results.pipelineResults[namespace] = {};
 
-  async summarizeResolvers(gen: CodeGenerator) {
-    if (gen.processResolvers) {
-      return await gen.processResolvers(this.resolverResults[gen.id]);
+    // Process individual resolvers
+    await Promise.allSettled(
+      Object.entries(resolvers).map(async ([resolverName, resolver]) => {
+        try {
+          results.pipelineResults[namespace][resolverName] =
+            await gen.processResolver(resolver, appNamespace, namespace);
+        } catch (error) {
+          console.error(
+            `Error processing resolver ${resolverName} in ${appNamespace}/${namespace} with generator ${gen.id}:`,
+            error,
+          );
+        }
+      }),
+    );
+
+    // Process namespace summary if available
+    if (gen.processPipelineNamespace) {
+      try {
+        results.pipelineNamespaceResults[namespace] =
+          await gen.processPipelineNamespace(
+            appNamespace,
+            namespace,
+            results.pipelineResults[namespace],
+          );
+      } catch (error) {
+        console.error(
+          `Error processing Pipeline namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
+          error,
+        );
+      }
+    } else {
+      results.pipelineNamespaceResults[namespace] =
+        results.pipelineResults[namespace];
     }
-    return this.resolverResults[gen.id];
   }
 
   async aggregate(gen: CodeGenerator) {
-    const result = await gen.aggregate(
-      {
-        types: this.typesResult[gen.id],
-        resolvers: this.resolversResult[gen.id],
-      },
-      path.join(this.baseDir, gen.id),
-    );
+    // Build inputs for each application
+    const inputs: GeneratorInput<any, any>[] = [];
+
+    for (const [appNamespace, results] of Object.entries(
+      this.generatorResults[gen.id],
+    )) {
+      const tailordbResults: TailorDBNamespaceResult<any>[] = [];
+      const pipelineResults: PipelineNamespaceResult<any>[] = [];
+
+      // Collect TailorDB namespace results
+      for (const [namespace, types] of Object.entries(
+        results.tailordbNamespaceResults,
+      )) {
+        tailordbResults.push({
+          namespace,
+          types,
+        });
+      }
+
+      // Collect Pipeline namespace results
+      for (const [namespace, resolvers] of Object.entries(
+        results.pipelineNamespaceResults,
+      )) {
+        pipelineResults.push({
+          namespace,
+          resolvers,
+        });
+      }
+
+      inputs.push({
+        applicationNamespace: appNamespace,
+        tailordb: tailordbResults,
+        pipeline: pipelineResults,
+      });
+    }
+
+    // Call generator's aggregate method
+    const result = await gen.aggregate(inputs, path.join(this.baseDir, gen.id));
+
+    // Write generated files
     await Promise.all(
       result.files.map(async (file) => {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
@@ -210,63 +353,75 @@ export class GenerationManager {
   async watch() {
     this.watcher = new DependencyWatcher();
 
-    Object.values(this.config.app).map((app) => {
-      Object.entries(app.db).forEach(([namespace, db]) => {
+    // Watch for each application
+    for (const app of this.workspace.applications) {
+      const appNamespace = app.name;
+
+      // Watch TailorDB services
+      for (const db of app.tailorDBServices) {
+        const dbNamespace = db.namespace;
         this.watcher?.addWatchGroup(
-          `TailorDB__${namespace}`,
-          db.files,
+          `TailorDB__${appNamespace}__${dbNamespace}`,
+          db.config.files,
           async ({ timestamp }, { affectedFiles }) => {
-            for (const app of this.workspace.applications) {
-              for (const db of app.tailorDBServices) {
-                for (const file of affectedFiles) {
-                  this.types[file] = await db.loadTypesForFile(file, timestamp);
-                }
-              }
+            // Reload affected types
+            for (const file of affectedFiles) {
+              const types = await db.loadTypesForFile(file, timestamp);
+              Object.entries(types).forEach(([typeName, type]) => {
+                this.applications[appNamespace].tailordbNamespaces[dbNamespace][
+                  typeName
+                ] = type;
+              });
             }
 
+            // Process with all generators
             for (const gen of this.generators) {
-              for (const file of affectedFiles) {
-                for (const type of Object.values(this.types[file])) {
-                  this.typeResults[gen.id][type.name] =
-                    await gen.processType(type);
-                }
-              }
-
-              this.typesResult[gen.id] = await this.summarizeTypes(gen);
+              await this.processTailorDBNamespace(
+                gen,
+                appNamespace,
+                dbNamespace,
+                this.applications[appNamespace].tailordbNamespaces[dbNamespace],
+              );
               await this.aggregate(gen);
             }
           },
         );
-      });
-      Object.entries(app.resolver).forEach(([namespace, service]) => {
+      }
+
+      // Watch Pipeline services
+      for (const pipeline of app.pipelineResolverServices) {
+        const pipelineNamespace = pipeline.namespace;
         this.watcher?.addWatchGroup(
-          `Pipeline__${namespace}`,
-          service.files,
+          `Pipeline__${appNamespace}__${pipelineNamespace}`,
+          pipeline["config"].files,
           async ({ timestamp }, { affectedFiles }) => {
-            for (const app of this.workspace.applications) {
-              for (const pipeline of app.pipelineResolverServices) {
-                for (const file of affectedFiles) {
-                  this.resolvers[file] = await pipeline.loadResolverForFile(
-                    file,
-                    timestamp,
-                  );
-                }
-              }
+            // Reload affected resolvers
+            for (const file of affectedFiles) {
+              const resolver = await pipeline.loadResolverForFile(
+                file,
+                timestamp,
+              );
+              this.applications[appNamespace].pipelineNamespaces[
+                pipelineNamespace
+              ][resolver.name] = resolver;
             }
 
+            // Process with all generators
             for (const gen of this.generators) {
-              for (const file of affectedFiles) {
-                const resolver = this.resolvers[file];
-                this.resolverResults[gen.id][resolver.name] =
-                  await gen.processResolver(resolver);
-              }
-              this.resolversResult[gen.id] = await this.summarizeResolvers(gen);
+              await this.processPipelineNamespace(
+                gen,
+                appNamespace,
+                pipelineNamespace,
+                this.applications[appNamespace].pipelineNamespaces[
+                  pipelineNamespace
+                ],
+              );
               await this.aggregate(gen);
             }
           },
         );
-      });
-    });
+      }
+    }
   }
 }
 

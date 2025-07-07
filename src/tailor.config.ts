@@ -5,7 +5,9 @@ export default defineConfig({
   region: "asia-northeast",
   app: {
     "my-app": {
-      db: { "my-db": { files: ["./src/tailordb/*.ts"] } },
+      db: {
+        tailordb: { files: ["./src/tailordb/*.ts"] },
+      },
       resolver: {
         "my-pipeline": { files: ["./src/resolvers/**/resolver.ts"] },
       },
@@ -41,7 +43,10 @@ export default defineConfig({
   },
   generators: [
     "@tailor/sdl",
-    ["@tailor/kysely-type", { distPath: "./src/resolvers/db.ts" }],
+    [
+      "@tailor/kysely-type",
+      { distPath: ({ tailorDB }) => `./src/resolvers/${tailorDB}.ts` },
+    ],
   ],
   tsConfig: "./tsconfig.json",
 });

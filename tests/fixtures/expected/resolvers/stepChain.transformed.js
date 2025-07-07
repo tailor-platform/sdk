@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { DummyDriver, Kysely, PostgresAdapter, PostgresIntrospector, PostgresQueryCompiler } from "kysely";
 
-//#region src/resolvers/db.ts
+//#region src/resolvers/tailordb.ts
 const getDB = () => {
 	return new Kysely({ dialect: {
 		createAdapter: () => new PostgresAdapter(),

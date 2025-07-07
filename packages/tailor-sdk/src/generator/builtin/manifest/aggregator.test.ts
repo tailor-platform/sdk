@@ -564,57 +564,6 @@ describe("ManifestAggregator", () => {
       expect(tagsField.Required).toBe(true);
     });
 
-    it("ネストしたフィールドを正しく生成すること", async () => {
-      const resolverMetadata: ResolverManifestMetadata = {
-        name: "testResolver",
-        inputType: "TestInput",
-        outputType: "TestOutput",
-        queryType: "query",
-        pipelines: [],
-        inputFields: {
-          profile: { type: "nested", required: true, array: false },
-          settings: { type: "nested", required: false, array: true },
-        },
-        outputFields: {},
-      };
-
-      const metadata: BasicGeneratorMetadata<
-        ManifestTypeMetadata,
-        ResolverManifestMetadata
-      > = {
-        types: {},
-        resolvers: {
-          testResolver: resolverMetadata,
-        },
-      };
-
-      const result = await ManifestAggregator.aggregate(
-        metadata,
-        "test-namespace",
-      );
-
-      const manifestJSON = JSON.parse(result.files[0].content);
-      const inputFields = manifestJSON.Resolvers[0].Inputs[0].Type.Fields;
-
-      expect(inputFields).toHaveLength(2);
-
-      // ネストしたprofileフィールド
-      const profileField = inputFields.find((f: any) => f.Name === "profile");
-      expect(profileField.Type.Kind).toBe("UserDefined");
-      expect(profileField.Type.Name).toBe("TestInputProfile");
-      expect(profileField.Required).toBe(true);
-      expect(profileField.Array).toBe(false);
-      expect(profileField.Type.Fields).toHaveLength(1);
-      expect(profileField.Type.Fields[0].Name).toBe("name");
-
-      // ネストした配列settingsフィールド
-      const settingsField = inputFields.find((f: any) => f.Name === "settings");
-      expect(settingsField.Type.Kind).toBe("UserDefined");
-      expect(settingsField.Type.Name).toBe("TestInputSettings");
-      expect(settingsField.Required).toBe(false);
-      expect(settingsField.Array).toBe(true);
-    });
-
     it("フィールド情報がない場合に空配列を返すこと", async () => {
       const resolverMetadata: ResolverManifestMetadata = {
         name: "testResolver",

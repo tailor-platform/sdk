@@ -103,7 +103,10 @@ export class ResolverProcessor {
   private static extractTypeFields(
     type: any,
   ):
-    | Record<string, { type: string; required: boolean; array: boolean }>
+    | Record<
+        string,
+        { type: string; required: boolean; array: boolean; fields?: any }
+      >
     | undefined {
     if (!type || !type.fields) {
       return undefined;
@@ -111,7 +114,7 @@ export class ResolverProcessor {
 
     const fields: Record<
       string,
-      { type: string; required: boolean; array: boolean }
+      { type: string; required: boolean; array: boolean; fields?: any }
     > = {};
 
     for (const [fieldName, field] of Object.entries(type.fields)) {
@@ -123,6 +126,11 @@ export class ResolverProcessor {
           required: metadata.required !== false,
           array: metadata.array === true,
         };
+
+        // nested objectの場合、fieldsプロパティも含める
+        if (metadata.type === "nested" && fieldObj.fields) {
+          fields[fieldName].fields = fieldObj.fields;
+        }
       }
     }
 

@@ -41,6 +41,7 @@ export class PipelineResolverService {
         resolvers: resolverMetadata,
       },
       this.namespace,
+      undefined, // workspace
     );
 
     if (result.errors && result.errors.length > 0) {

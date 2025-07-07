@@ -18,7 +18,7 @@
     "lint": "turbo run lint",
     "lint:root": "eslint --cache .",
     "lint:fix": "turbo run lint:fix",
-    "lint:fix:root": "eslint --cache . --fix",
+    "lint:fix:root": "eslint --cache . --fix --quiet",
     "format": "turbo run format",
     "format:root": "prettier --write .",
     "format:check": "turbo run format:check",

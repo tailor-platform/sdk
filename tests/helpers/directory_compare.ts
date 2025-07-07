@@ -271,7 +271,7 @@ export function generateDetailedDiffReport(
       .filter((diff) => diff.reason === "different-content")
       .forEach((diff) => {
         lines.push(
-          `- diff ${path.join(diff.path2 ?? "", diff.name2 ?? "")} ${path.join(diff.path1 ?? "", diff.name1 ?? "")}`,
+          `- diff ${path.join(diff.path2 ?? "", diff.name2 ?? "")} ${path.resolve(path.join(diff.path1 ?? "", diff.name1 ?? ""))}`,
         );
       });
   }

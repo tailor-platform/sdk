@@ -9,6 +9,22 @@ const __filename = url.fileURLToPath(import.meta.url);
 const expectedDir = "tests/fixtures/expected";
 const actualDir = "tests/fixtures/actual";
 
+function getConfig(dist: "expected" | "actual") {
+  config.generators = config.generators?.map((gen) => {
+    if (Array.isArray(gen) && gen[0] === "@tailor/kysely-type") {
+      return [
+        gen[0],
+        {
+          distPath: () =>
+            path.join(dist === "expected" ? expectedDir : actualDir, "db.ts"),
+        },
+      ];
+    }
+    return gen;
+  });
+  return config;
+}
+
 /**
  * 期待値ファイルを生成するスクリプト
  * 現在の実装で正常な出力を生成し、期待値として保存する
@@ -23,6 +39,7 @@ export async function generateExpectedFiles(): Promise<void> {
     }
 
     process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
+    const config = getConfig("expected");
     await generate(config);
     await apply(config, { dryRun: true });
 
@@ -71,6 +88,7 @@ export async function generateActualFiles(): Promise<void> {
   }
 
   process.env.TAILOR_SDK_OUTPUT_DIR = actualDir;
+  const config = getConfig("actual");
   await generate(config);
   await apply(config, { dryRun: true });
 
