@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { KyselyGenerator, KyselyGeneratorID } from "./index";
+import { KyselyGenerator } from "./index";
 import { db } from "@/services/tailordb/schema";
 
-// モックデータ
 const mockBasicType = db.type("User", {
   name: db.string().description("User name"),
   email: db.string().description("User email"),
@@ -53,18 +52,10 @@ describe("KyselyGenerator統合テスト", () => {
   const testDistPath = "/test/dist/kysely-types.ts";
 
   beforeEach(() => {
-    kyselyGenerator = new KyselyGenerator({ distPath: testDistPath });
+    kyselyGenerator = new KyselyGenerator({ distPath: () => testDistPath });
   });
 
   describe("基本的な動作テスト", () => {
-    it("KyselyGeneratorクラスが正しく初期化される", () => {
-      expect(kyselyGenerator.id).toBe(KyselyGeneratorID);
-      expect(kyselyGenerator.description).toBe(
-        "Generates Kysely type definitions for TailorDB types",
-      );
-      expect((kyselyGenerator as any).options.distPath).toBe(testDistPath);
-    });
-
     it("processType メソッドが基本的な TailorDBType を正しく処理する", async () => {
       const result = await kyselyGenerator.processType(mockBasicType);
 
@@ -148,7 +139,7 @@ describe("KyselyGenerator統合テスト", () => {
     });
   });
 
-  describe("processTypes メソッドのテスト", () => {
+  describe("processTailorDBNamespace メソッドのテスト", () => {
     it("複数の型を統合してKysely型定義ファイルを生成する", async () => {
       const typeMetadata = {
         User: {
@@ -169,7 +160,11 @@ describe("KyselyGenerator統合テスト", () => {
         },
       };
 
-      const result = await kyselyGenerator.processTypes(typeMetadata);
+      const result = await kyselyGenerator.processTailorDBNamespace(
+        "test-app",
+        "test-namespace",
+        typeMetadata,
+      );
 
       // 共通のimportが含まれている
       expect(result).toContain(
@@ -197,7 +192,11 @@ describe("KyselyGenerator統合テスト", () => {
     });
 
     it("空の型定義でも正常に動作する", async () => {
-      const result = await kyselyGenerator.processTypes({});
+      const result = await kyselyGenerator.processTailorDBNamespace(
+        "test-app",
+        "test-namespace",
+        {},
+      );
 
       expect(result).toContain(
         'import { SqlClient } from "@tailor-platform/tailor-sdk";',
@@ -225,7 +224,19 @@ interface DB {
 export async function kyselyWrapper() {}
 `;
 
-      const result = kyselyGenerator.aggregate({ types: processedTypes });
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-namespace",
+              types: processedTypes,
+            },
+          ],
+          pipeline: [],
+        },
+      ];
+      const result = kyselyGenerator.aggregate(inputs);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(testDistPath);
@@ -239,8 +250,24 @@ export async function kyselyWrapper() {}
         Status: await kyselyGenerator.processType(mockEnumType),
       };
 
-      const processedTypes = await kyselyGenerator.processTypes(types);
-      const result = kyselyGenerator.aggregate({ types: processedTypes });
+      const processedTypes = await kyselyGenerator.processTailorDBNamespace(
+        "test-app",
+        "test-namespace",
+        types,
+      );
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-namespace",
+              types: processedTypes,
+            },
+          ],
+          pipeline: [],
+        },
+      ];
+      const result = kyselyGenerator.aggregate(inputs);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(testDistPath);

@@ -1,6 +1,6 @@
 import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
-import { kyselyWrapper } from "../db";
+import { kyselyWrapper } from "../tailordb";
 
 export default createQueryResolver(
   "stepChain",

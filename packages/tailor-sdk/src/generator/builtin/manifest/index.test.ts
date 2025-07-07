@@ -165,32 +165,48 @@ describe("ManifestGenerator統合テスト", () => {
 
   describe("aggregate関数のテスト", () => {
     it("ワークスペース全体のマニフェストを正しく生成する", async () => {
-      const metadata = {
-        types: {
-          User: {
-            name: "User",
-            fields: [],
-            isInput: false,
-          },
-        },
-        resolvers: {
-          getUser: {
-            name: "getUser",
-            inputType: "GetUserInput",
-            outputType: "GetUserOutput",
-            queryType: "query" as const,
-            pipelines: [],
-            inputFields: {
-              id: { type: "string", required: true, array: false },
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-db",
+              types: {
+                User: {
+                  name: "User",
+                  fields: [],
+                  isInput: false,
+                },
+              },
             },
-            outputFields: {
-              name: { type: "string", required: true, array: false },
+          ],
+          pipeline: [
+            {
+              namespace: "test-pipeline",
+              resolvers: {
+                getUser: {
+                  name: "getUser",
+                  inputType: "GetUserInput",
+                  outputType: "GetUserOutput",
+                  queryType: "query" as const,
+                  pipelines: [],
+                  inputFields: {
+                    id: { type: "string", required: true, array: false },
+                  },
+                  outputFields: {
+                    name: { type: "string", required: true, array: false },
+                  },
+                },
+              },
             },
-          },
+          ],
         },
-      };
+      ];
 
-      const result = await manifestGenerator.aggregate(metadata);
+      const result = await manifestGenerator.aggregate(
+        inputs,
+        path.join(getDistDir(), "@tailor/manifest"),
+      );
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(
@@ -212,34 +228,45 @@ describe("ManifestGenerator統合テスト", () => {
       const generatorWithoutWorkspace = new ManifestGenerator(mockApplyOptions);
       // workspace を設定しない
 
-      const metadata = {
-        types: {},
-        resolvers: {
-          getUser: {
-            name: "getUser",
-            inputType: "GetUserInput",
-            outputType: "GetUserOutput",
-            queryType: "query" as const,
-            pipelines: [
-              {
-                name: "fetchUser",
-                description: "Fetch user data",
-                operationType: PipelineResolver_OperationType.FUNCTION,
-                operationSource: "function code here",
+      const inputs = [
+        {
+          applicationNamespace: "default-app",
+          tailordb: [],
+          pipeline: [
+            {
+              namespace: "default",
+              resolvers: {
+                getUser: {
+                  name: "getUser",
+                  inputType: "GetUserInput",
+                  outputType: "GetUserOutput",
+                  queryType: "query" as const,
+                  pipelines: [
+                    {
+                      name: "fetchUser",
+                      description: "Fetch user data",
+                      operationType: PipelineResolver_OperationType.FUNCTION,
+                      operationSource: "function code here",
+                    },
+                  ],
+                  inputFields: {
+                    id: { type: "string", required: true, array: false },
+                  },
+                  outputFields: {
+                    name: { type: "string", required: true, array: false },
+                    email: { type: "string", required: true, array: false },
+                  },
+                },
               },
-            ],
-            inputFields: {
-              id: { type: "string", required: true, array: false },
             },
-            outputFields: {
-              name: { type: "string", required: true, array: false },
-              email: { type: "string", required: true, array: false },
-            },
-          },
+          ],
         },
-      };
+      ];
 
-      const result = await generatorWithoutWorkspace.aggregate(metadata);
+      const result = await generatorWithoutWorkspace.aggregate(
+        inputs,
+        path.join(getDistDir(), "@tailor/manifest"),
+      );
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(
@@ -268,16 +295,25 @@ describe("ManifestGenerator統合テスト", () => {
     });
 
     it("aggregate でnullリゾルバーが含まれても正常に処理すること", async () => {
-      const metadataWithNullResolver = {
-        types: {},
-        resolvers: {
-          invalid: null, // nullのリゾルバー
-        },
-      } as any;
-
       const generatorWithoutWorkspace = new ManifestGenerator(mockApplyOptions);
+      const inputs = [
+        {
+          applicationNamespace: "default-app",
+          tailordb: [],
+          pipeline: [
+            {
+              namespace: "default",
+              resolvers: {
+                invalid: null, // nullのリゾルバー
+              },
+            },
+          ],
+        },
+      ] as any;
+
       const result = await generatorWithoutWorkspace.aggregate(
-        metadataWithNullResolver,
+        inputs,
+        path.join(getDistDir(), "@tailor/manifest"),
       );
 
       // nullリゾルバーはスキップされ、マニフェストは正常に生成される
@@ -418,7 +454,28 @@ describe("ManifestGenerator統合テスト", () => {
         ),
       };
 
-      const result = await manifestGenerator.aggregate(largeMetadata);
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-db",
+              types: largeMetadata.types,
+            },
+          ],
+          pipeline: [
+            {
+              namespace: "test-pipeline",
+              resolvers: largeMetadata.resolvers,
+            },
+          ],
+        },
+      ];
+
+      const result = await manifestGenerator.aggregate(
+        inputs,
+        path.join(getDistDir(), "@tailor/manifest"),
+      );
       const endTime = Date.now();
 
       expect(result.files).toHaveLength(1);

@@ -12,7 +12,7 @@ export default defineConfig([
       "**/.tailor-sdk/**",
       "**/packages/**",
       "**/tests/fixtures/**",
-      "src/resolvers/db.ts",
+      "src/resolvers/tailordb.ts",
     ],
   },
   {

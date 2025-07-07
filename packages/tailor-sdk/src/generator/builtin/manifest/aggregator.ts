@@ -44,17 +44,19 @@ export class ManifestAggregator {
         manifestJSON = await this.generateWorkspaceManifest(workspace);
       } else {
         // 従来のPipelineのみのManifestを生成
-        manifestJSON = this.generateManifestJSON(
-          resolvers,
-          namespace || "default",
-        );
+        if (!namespace) {
+          throw new Error(
+            "namespace is required when workspace is not provided",
+          );
+        }
+        manifestJSON = this.generateManifestJSON(resolvers, namespace);
       }
 
       return {
         files: [
           {
             path: path.join(getDistDir(), "manifest.cue"),
-            content: JSON.stringify(manifestJSON, null, 2),
+            content: JSON.stringify(manifestJSON, null, 2) + "\n",
           },
         ],
       };
@@ -123,7 +125,11 @@ export class ManifestAggregator {
     const resolverManifests: ResolverManifest[] = Object.entries(resolvers)
       .filter(([_name, resolverMetadata]) => resolverMetadata != null)
       .map(([name, resolverMetadata]) => {
-        return this.generateResolverManifest(name, resolverMetadata);
+        return this.generateResolverManifest(
+          name,
+          resolverMetadata,
+          getDistDir(),
+        );
       });
 
     return {
@@ -142,11 +148,12 @@ export class ManifestAggregator {
   private static generateResolverManifest(
     name: string,
     resolverMetadata: ResolverManifestMetadata,
+    baseDir?: string,
   ): ResolverManifest {
     const pipelines: PipelineManifest[] = [
       ...resolverMetadata.pipelines.map((pipeline) => {
         const sourcePath = path.join(
-          getDistDir(),
+          baseDir || getDistDir(),
           "functions",
           `${name}__${pipeline.name}.js`,
         );
@@ -229,6 +236,7 @@ export class ManifestAggregator {
    * 型のFields配列を生成（完全に動的な実装）
    * @param typeName - 型名（ログ出力用）
    * @param fields - 動的に抽出されたフィールド情報
+   * @param allFields - 全てのフィールド情報（nested typeの再帰参照用）
    * @returns ManifestField配列
    */
   @measure
@@ -236,10 +244,10 @@ export class ManifestAggregator {
     typeName: string,
     fields?: Record<
       string,
-      { type: string; required: boolean; array: boolean }
+      { type: string; required: boolean; array: boolean; fields?: any }
     >,
+    allFields?: Record<string, any>,
   ): ManifestField[] {
-    // 動的フィールド情報が存在する場合
     if (fields && Object.keys(fields).length > 0) {
       return Object.entries(fields).map(([fieldName, fieldInfo]) => {
         if (fieldInfo.type === "nested") {
@@ -250,6 +258,24 @@ export class ManifestAggregator {
             nestedTypeName.charAt(0).toUpperCase() +
             nestedTypeName.slice(1);
 
+          let nestedFields: ManifestField[] = [];
+          if (fieldInfo.fields && typeof fieldInfo.fields === "object") {
+            nestedFields = this.generateNestedFields(
+              fieldInfo.fields,
+              capitalizedTypeName,
+            );
+          } else if (allFields && allFields[capitalizedTypeName]) {
+            nestedFields = this.generateTypeFields(
+              capitalizedTypeName,
+              allFields[capitalizedTypeName],
+              allFields,
+            );
+          } else {
+            console.warn(
+              `No nested field information found for ${fieldName} in type ${typeName}. Using empty fields.`,
+            );
+          }
+
           return {
             Name: fieldName,
             Description: "",
@@ -258,27 +284,13 @@ export class ManifestAggregator {
               Name: capitalizedTypeName,
               Description: "",
               Required: fieldInfo.required,
-              Fields: [
-                {
-                  Name: "name",
-                  Description: "",
-                  Type: {
-                    Kind: "ScalarType",
-                    Name: "String",
-                    Description: "",
-                    Required: false,
-                  },
-                  Array: false,
-                  Required: true,
-                },
-              ],
+              Fields: nestedFields,
             },
             Array: fieldInfo.array,
             Required: fieldInfo.required,
           };
         }
 
-        // 通常のスカラータイプの処理
         return {
           Name: fieldName,
           Description: "",
@@ -301,5 +313,73 @@ export class ManifestAggregator {
       `No field information available for type: ${typeName}. Returning empty fields array.`,
     );
     return [];
+  }
+
+  /**
+   * Nested objectのフィールドを再帰的に処理
+   * @param nestedFields - nested objectの生フィールド情報
+   * @param parentTypeName - 親の型名（ネストされた型名生成用）
+   * @returns ManifestField配列
+   */
+  @measure
+  private static generateNestedFields(
+    nestedFields: any,
+    parentTypeName?: string,
+  ): ManifestField[] {
+    if (!nestedFields || typeof nestedFields !== "object") {
+      return [];
+    }
+
+    return Object.entries(nestedFields).map(
+      ([fieldName, field]: [string, any]) => {
+        const fieldObj = field as any;
+
+        const metadata = fieldObj?.metadata || fieldObj?._metadata || {};
+        const fieldType = metadata.type || "string";
+        const required = metadata.required !== false;
+        const array = metadata.array === true;
+
+        if (fieldType === "nested" && fieldObj.fields) {
+          const nestedTypeName = parentTypeName
+            ? parentTypeName +
+              fieldName.charAt(0).toUpperCase() +
+              fieldName.slice(1)
+            : fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+
+          return {
+            Name: fieldName,
+            Description: metadata.description || "",
+            Type: {
+              Kind: "UserDefined",
+              Name: nestedTypeName,
+              Description: "",
+              Required: required,
+              Fields: this.generateNestedFields(
+                fieldObj.fields,
+                nestedTypeName,
+              ),
+            },
+            Array: array,
+            Required: required,
+          };
+        }
+
+        // スカラータイプの場合
+        return {
+          Name: fieldName,
+          Description: metadata.description || "",
+          Type: {
+            Kind: "ScalarType",
+            Name:
+              tailorToGraphQL[fieldType as keyof typeof tailorToGraphQL] ||
+              "String",
+            Description: "",
+            Required: false,
+          },
+          Array: array,
+          Required: required,
+        };
+      },
+    );
   }
 }

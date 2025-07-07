@@ -304,7 +304,24 @@ extend type Mutation {
       };
 
       const baseDir = "/test/output";
-      const result = sdlGenerator.aggregate(metadata, baseDir);
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-db",
+              types: metadata.types,
+            },
+          ],
+          pipeline: [
+            {
+              namespace: "test-pipeline",
+              resolvers: metadata.resolvers,
+            },
+          ],
+        },
+      ];
+      const result = sdlGenerator.aggregate(inputs, baseDir);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(path.join(baseDir, "schema.graphql"));
@@ -340,12 +357,25 @@ extend type Mutation {
     });
 
     it("空のメタデータでも正常に動作する", () => {
-      const metadata = {
-        types: {},
-        resolvers: {},
-      };
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-db",
+              types: {},
+            },
+          ],
+          pipeline: [
+            {
+              namespace: "test-pipeline",
+              resolvers: {},
+            },
+          ],
+        },
+      ];
 
-      const result = sdlGenerator.aggregate(metadata, "/test/output");
+      const result = sdlGenerator.aggregate(inputs, "/test/output");
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].content).toBe("\n\n");
@@ -459,7 +489,24 @@ extend type Mutation {
         resolvers: {},
       } as any;
 
-      const result = sdlGenerator.aggregate(invalidMetadata, "/test/output");
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-db",
+              types: invalidMetadata.types,
+            },
+          ],
+          pipeline: [
+            {
+              namespace: "test-pipeline",
+              resolvers: invalidMetadata.resolvers,
+            },
+          ],
+        },
+      ];
+      const result = sdlGenerator.aggregate(inputs, "/test/output");
 
       expect(result.files).toHaveLength(0);
       expect(result.errors).toBeDefined();
@@ -491,7 +538,24 @@ extend type Mutation {
         },
       };
 
-      const result = sdlGenerator.aggregate(metadata, "/test/output");
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            {
+              namespace: "test-db",
+              types: metadata.types,
+            },
+          ],
+          pipeline: [
+            {
+              namespace: "test-pipeline",
+              resolvers: metadata.resolvers,
+            },
+          ],
+        },
+      ];
+      const result = sdlGenerator.aggregate(inputs, "/test/output");
 
       expect(result.files).toHaveLength(1);
       expect(result.errors).toBeUndefined();

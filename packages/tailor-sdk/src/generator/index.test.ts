@@ -51,24 +51,32 @@ class TestGenerator {
     return { name: type.name, processed: true };
   }
 
-  async processTypes(types: Record<string, any>) {
-    return { processed: true, count: Object.keys(types).length };
-  }
-
   async processResolver(resolver: Resolver) {
     return { name: resolver.name, processed: true };
   }
 
-  async processResolvers(resolvers: Record<string, any>) {
+  async processTailorDBNamespace(
+    applicationNamespace: string,
+    namespace: string,
+    types: Record<string, any>,
+  ) {
+    return { processed: true, count: Object.keys(types).length };
+  }
+
+  async processPipelineNamespace(
+    applicationNamespace: string,
+    namespace: string,
+    resolvers: Record<string, any>,
+  ) {
     return { processed: true, count: Object.keys(resolvers).length };
   }
 
-  async aggregate(metadata: any, baseDir: string) {
+  async aggregate(inputs: any[], baseDir: string) {
     return {
       files: [
         {
           path: path.join(baseDir, "test-output.txt"),
-          content: `Types: ${JSON.stringify(metadata.types)}\nResolvers: ${JSON.stringify(metadata.resolvers)}`,
+          content: `Inputs: ${JSON.stringify(inputs)}`,
         },
       ],
     };
@@ -229,9 +237,8 @@ describe("GenerationManager", () => {
 
       // ジェネレーターは設定されているが、実際のタイプファイルが存在しないため0になる可能性がある
       expect(manager.generators.length).toBeGreaterThan(0);
-      // typesとresolversは実際のファイルが存在しない場合は空になる
-      expect(manager.types).toBeDefined();
-      expect(manager.resolvers).toBeDefined();
+      // applicationsは実際のファイルが存在しない場合は空になる
+      expect(manager.applications).toBeDefined();
     });
 
     it("複数のアプリケーションを処理", async () => {
@@ -249,27 +256,33 @@ describe("GenerationManager", () => {
   describe("processGenerators", () => {
     beforeEach(async () => {
       manager.initGenerators();
-      manager.types = {
-        "test.ts": {
-          testType: { name: "TestType", fields: [] } as TailorDBType,
-        },
-      };
-      manager.resolvers = {
-        "test-resolver.ts": {
-          name: "testResolver",
-          query: "test query",
-          _input: {} as any,
-          _output: {
-            name: "String",
-            type: "string",
-            _metadata: {
-              type: "string",
-              optional: false,
-              array: false,
+      manager.applications = {
+        "test-app": {
+          tailordbNamespaces: {
+            "test-namespace": {
+              testType: { name: "TestType", fields: [] } as TailorDBType,
             },
-          } as any,
-          _context: {} as any,
-        } as any,
+          },
+          pipelineNamespaces: {
+            "test-namespace": {
+              testResolver: {
+                name: "testResolver",
+                query: "test query",
+                _input: {} as any,
+                _output: {
+                  name: "String",
+                  type: "string",
+                  _metadata: {
+                    type: "string",
+                    optional: false,
+                    array: false,
+                  },
+                } as any,
+                _context: {} as any,
+              } as any,
+            },
+          },
+        },
       };
     });
 
@@ -297,8 +310,6 @@ describe("GenerationManager", () => {
           .mockImplementation(() =>
             Promise.reject(new Error("Resolver processing error")),
           ),
-        processTypes: vi.fn().mockImplementation(() => Promise.resolve({})),
-        processResolvers: vi.fn().mockImplementation(() => Promise.resolve({})),
         aggregate: vi
           .fn()
           .mockImplementation(() => Promise.resolve({ files: [] })),
@@ -321,50 +332,61 @@ describe("GenerationManager", () => {
     beforeEach(() => {
       testGenerator = new TestGenerator();
       manager.generators = [testGenerator];
-      manager.types = {
-        "test.ts": {
-          testType: { name: "TestType", fields: [] } as TailorDBType,
-        },
-      };
-      manager.resolvers = {
-        "test-resolver.ts": {
-          name: "testResolver",
-          query: "test query",
-          _input: {} as any,
-          _output: {
-            name: "String",
-            type: "string",
-            _metadata: {
-              type: "string",
-              optional: false,
-              array: false,
+      manager.applications = {
+        "test-app": {
+          tailordbNamespaces: {
+            "test-namespace": {
+              testType: { name: "TestType", fields: [] } as TailorDBType,
             },
-          } as any,
-          _context: {} as any,
-        } as any,
+          },
+          pipelineNamespaces: {
+            "test-namespace": {
+              testResolver: {
+                name: "testResolver",
+                query: "test query",
+                _input: {} as any,
+                _output: {
+                  name: "String",
+                  type: "string",
+                  _metadata: {
+                    type: "string",
+                    optional: false,
+                    array: false,
+                  },
+                } as any,
+                _context: {} as any,
+              } as any,
+            },
+          },
+        },
       };
     });
 
     it("単一ジェネレーターの完全処理", async () => {
-      const processSingleTypesSpy = vi.spyOn(manager, "processSingleTypes");
-      const summarizeTypesSpy = vi.spyOn(manager, "summarizeTypes");
-      const processSingleResolversSpy = vi.spyOn(
+      // generatorResultsを初期化
+      manager.generatorResults = {};
+
+      const processTailorDBNamespaceSpy = vi.spyOn(
         manager,
-        "processSingleResolvers",
+        "processTailorDBNamespace",
       );
-      const summarizeResolversSpy = vi.spyOn(manager, "summarizeResolvers");
+      const processPipelineNamespaceSpy = vi.spyOn(
+        manager,
+        "processPipelineNamespace",
+      );
       const aggregateSpy = vi.spyOn(manager, "aggregate");
 
       await manager.processGenerator(testGenerator);
 
-      expect(processSingleTypesSpy).toHaveBeenCalledWith(testGenerator);
-      expect(summarizeTypesSpy).toHaveBeenCalledWith(testGenerator);
-      expect(processSingleResolversSpy).toHaveBeenCalledWith(testGenerator);
-      expect(summarizeResolversSpy).toHaveBeenCalledWith(testGenerator);
+      expect(processTailorDBNamespaceSpy).toHaveBeenCalled();
+      expect(processPipelineNamespaceSpy).toHaveBeenCalled();
       expect(aggregateSpy).toHaveBeenCalledWith(testGenerator);
     });
 
     it("typesとresolversが並列処理される", async () => {
+      // generatorResultsを初期化
+      manager.generatorResults = {};
+
       const start = Date.now();
       await manager.processGenerator(testGenerator);
       const duration = Date.now() - start;
@@ -373,49 +395,85 @@ describe("GenerationManager", () => {
     });
   });
 
-  describe("processSingleTypes", () => {
+  describe("processTailorDBNamespace", () => {
     let testGenerator: TestGenerator;
 
     beforeEach(() => {
       testGenerator = new TestGenerator();
-      manager.types = {
-        "file1.ts": {
-          type1: { name: "Type1", fields: [] } as TailorDBType,
-          type2: { name: "Type2", fields: [] } as TailorDBType,
-        },
-        "file2.ts": {
-          type3: { name: "Type3", fields: [] } as TailorDBType,
+      manager.generatorResults = {
+        [testGenerator.id]: {
+          "test-app": {
+            tailordbResults: {},
+            pipelineResults: {},
+            tailordbNamespaceResults: {},
+            pipelineNamespaceResults: {},
+          },
         },
       };
     });
 
     it("全てのタイプを処理", async () => {
       const processTypeSpy = vi.spyOn(testGenerator, "processType");
+      const types = {
+        type1: { name: "Type1", fields: [] } as TailorDBType,
+        type2: { name: "Type2", fields: [] } as TailorDBType,
+        type3: { name: "Type3", fields: [] } as TailorDBType,
+      };
 
-      await manager.processSingleTypes(testGenerator);
+      await manager.processTailorDBNamespace(
+        testGenerator,
+        "test-app",
+        "test-namespace",
+        types,
+      );
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
-      expect(manager.typeResults[testGenerator.id]).toBeDefined();
-      expect(Object.keys(manager.typeResults[testGenerator.id])).toHaveLength(
-        3,
-      );
+      expect(
+        manager.generatorResults[testGenerator.id]["test-app"].tailordbResults[
+          "test-namespace"
+        ],
+      ).toBeDefined();
+      expect(
+        Object.keys(
+          manager.generatorResults[testGenerator.id]["test-app"]
+            .tailordbResults["test-namespace"],
+        ),
+      ).toHaveLength(3);
     });
 
     it("空のtypesでもエラーにならない", async () => {
-      manager.types = {};
       await expect(
-        manager.processSingleTypes(testGenerator),
+        manager.processTailorDBNamespace(
+          testGenerator,
+          "test-app",
+          "test-namespace",
+          {},
+        ),
       ).resolves.not.toThrow();
     });
   });
 
-  describe("processSingleResolvers", () => {
+  describe("processPipelineNamespace", () => {
     let testGenerator: TestGenerator;
 
     beforeEach(() => {
       testGenerator = new TestGenerator();
-      manager.resolvers = {
-        "resolver1.ts": {
+      manager.generatorResults = {
+        [testGenerator.id]: {
+          "test-app": {
+            tailordbResults: {},
+            pipelineResults: {},
+            tailordbNamespaceResults: {},
+            pipelineNamespaceResults: {},
+          },
+        },
+      };
+    });
+
+    it("全てのリゾルバーを処理", async () => {
+      const processResolverSpy = vi.spyOn(testGenerator, "processResolver");
+      const resolvers = {
+        resolver1: {
           name: "resolver1",
           query: "query1",
           _input: {} as any,
@@ -430,7 +488,7 @@ describe("GenerationManager", () => {
           } as any,
           _context: {} as any,
         } as any,
-        "resolver2.ts": {
+        resolver2: {
           name: "resolver2",
           query: "query2",
           _input: {} as any,
@@ -446,57 +504,26 @@ describe("GenerationManager", () => {
           _context: {} as any,
         } as any,
       };
-    });
 
-    it("全てのリゾルバーを処理", async () => {
-      const processResolverSpy = vi.spyOn(testGenerator, "processResolver");
-
-      await manager.processSingleResolvers(testGenerator);
+      await manager.processPipelineNamespace(
+        testGenerator,
+        "test-app",
+        "test-namespace",
+        resolvers,
+      );
 
       expect(processResolverSpy).toHaveBeenCalledTimes(2);
-      expect(manager.resolverResults[testGenerator.id]).toBeDefined();
       expect(
-        Object.keys(manager.resolverResults[testGenerator.id]),
+        manager.generatorResults[testGenerator.id]["test-app"].pipelineResults[
+          "test-namespace"
+        ],
+      ).toBeDefined();
+      expect(
+        Object.keys(
+          manager.generatorResults[testGenerator.id]["test-app"]
+            .pipelineResults["test-namespace"],
+        ),
       ).toHaveLength(2);
-    });
-  });
-
-  describe("summarizeTypes", () => {
-    let testGenerator: TestGenerator;
-
-    beforeEach(() => {
-      testGenerator = new TestGenerator();
-      manager.typeResults[testGenerator.id] = {
-        type1: { processed: true },
-        type2: { processed: true },
-      };
-    });
-
-    it("processTypesメソッドがある場合は実行", async () => {
-      const processTypesSpy = vi.spyOn(testGenerator, "processTypes");
-
-      const result = await manager.summarizeTypes(testGenerator);
-
-      expect(processTypesSpy).toHaveBeenCalledWith(
-        manager.typeResults[testGenerator.id],
-      );
-      expect(result).toEqual({ processed: true, count: 2 });
-    });
-
-    it("processTypesメソッドがない場合は元の結果を返す", async () => {
-      const generatorWithoutProcessTypes = {
-        id: "no-process-types",
-        processType: vi.fn().mockImplementation(() => Promise.resolve({})),
-        processResolver: vi.fn().mockImplementation(() => Promise.resolve({})),
-        aggregate: vi
-          .fn()
-          .mockImplementation(() => Promise.resolve({ files: [] })),
-      };
-
-      manager.typeResults[generatorWithoutProcessTypes.id] = { test: "data" };
-
-      const result = await manager.summarizeTypes(generatorWithoutProcessTypes);
-      expect(result).toEqual({ test: "data" });
     });
   });
 
@@ -505,8 +532,20 @@ describe("GenerationManager", () => {
 
     beforeEach(() => {
       testGenerator = new TestGenerator();
-      manager.typesResult[testGenerator.id] = { types: "processed" };
-      manager.resolversResult[testGenerator.id] = { resolvers: "processed" };
+      manager.generatorResults = {
+        [testGenerator.id]: {
+          "test-app": {
+            tailordbResults: {},
+            pipelineResults: {},
+            tailordbNamespaceResults: {
+              "test-namespace": { types: "processed" },
+            },
+            pipelineNamespaceResults: {
+              "test-namespace": { resolvers: "processed" },
+            },
+          },
+        },
+      };
     });
 
     it("ジェネレーターのaggregateメソッドを呼び出し", async () => {
@@ -515,10 +554,23 @@ describe("GenerationManager", () => {
       await manager.aggregate(testGenerator);
 
       expect(aggregateSpy).toHaveBeenCalledWith(
-        {
-          types: { types: "processed" },
-          resolvers: { resolvers: "processed" },
-        },
+        [
+          {
+            applicationNamespace: "test-app",
+            tailordb: [
+              {
+                namespace: "test-namespace",
+                types: { types: "processed" },
+              },
+            ],
+            pipeline: [
+              {
+                namespace: "test-namespace",
+                resolvers: { resolvers: "processed" },
+              },
+            ],
+          },
+        ],
         expect.stringContaining(testGenerator.id),
       );
     });
@@ -545,8 +597,16 @@ describe("GenerationManager", () => {
         }),
       };
 
-      manager.typesResult[multiFileGenerator.id] = {};
-      manager.resolversResult[multiFileGenerator.id] = {};
+      manager.generatorResults = {
+        [multiFileGenerator.id]: {
+          "test-app": {
+            tailordbResults: {},
+            pipelineResults: {},
+            tailordbNamespaceResults: {},
+            pipelineNamespaceResults: {},
+          },
+        },
+      };
 
       await manager.aggregate(multiFileGenerator);
 
@@ -556,7 +616,7 @@ describe("GenerationManager", () => {
     it("ファイル書き込みエラーのハンドリング", async () => {
       const writeFileError = new Error("Write permission denied");
       vi.mocked(fs.writeFile).mockImplementationOnce(
-        (path, content, callback: any) => {
+        (_path, _content, callback: any) => {
           callback(writeFileError);
         },
       );
@@ -568,8 +628,16 @@ describe("GenerationManager", () => {
         }),
       };
 
-      manager.typesResult[errorGenerator.id] = {};
-      manager.resolversResult[errorGenerator.id] = {};
+      manager.generatorResults = {
+        [errorGenerator.id]: {
+          "test-app": {
+            tailordbResults: {},
+            pipelineResults: {},
+            tailordbNamespaceResults: {},
+            pipelineNamespaceResults: {},
+          },
+        },
+      };
 
       await expect(manager.aggregate(errorGenerator)).rejects.toThrow(
         "Write permission denied",
@@ -598,7 +666,7 @@ describe("GenerationManager", () => {
       await manager.watch();
 
       expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith(
-        "TailorDB__main",
+        "TailorDB__testApp__main",
         ["src/types/*.ts"],
         expect.any(Function),
       );
@@ -608,7 +676,7 @@ describe("GenerationManager", () => {
       await manager.watch();
 
       expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith(
-        "Pipeline__main",
+        "Pipeline__testApp__main",
         ["src/resolvers/*.ts"],
         expect.any(Function),
       );
@@ -616,45 +684,59 @@ describe("GenerationManager", () => {
 
     it("ファイル変更時のコールバック処理", async () => {
       manager.initGenerators();
-      // TestGeneratorにprocessTypesメソッドがあることを確認
+      // TestGeneratorにprocessTailorDBNamespaceメソッドがあることを確認
       const testGen = manager.generators.find(
         (g: any) => g.id === "test-generator",
       );
       expect(testGen).toBeDefined();
-      expect(typeof testGen.processTypes).toBe("function");
+      expect(typeof testGen.processTailorDBNamespace).toBe("function");
 
-      // typesとresolversの初期化
-      manager.types = {
-        "test.ts": {
-          testType: { name: "TestType", fields: [] } as TailorDBType,
+      // applicationsの初期化
+      manager.applications = {
+        testApp: {
+          tailordbNamespaces: {
+            main: {
+              testType: { name: "TestType", fields: [] } as TailorDBType,
+            },
+          },
+          pipelineNamespaces: {
+            main: {
+              testResolver: {
+                name: "testResolver",
+                query: "test query",
+                _input: {} as any,
+                _output: {
+                  name: "String",
+                  type: "string",
+                  _metadata: {
+                    type: "string",
+                    optional: false,
+                    array: false,
+                  },
+                } as any,
+                _context: {} as any,
+              } as any,
+            },
+          },
         },
       };
-      manager.resolvers = {
-        "test-resolver.ts": {
-          name: "testResolver",
-          query: "test query",
-          _input: {} as any,
-          _output: {
-            name: "String",
-            type: "string",
-            _metadata: {
-              type: "string",
-              optional: false,
-              array: false,
-            },
-          } as any,
-          _context: {} as any,
-        } as any,
-      };
 
-      // typeResults と resolverResults を初期化
-      manager.typeResults = { "test-generator": {} };
-      manager.resolverResults = { "test-generator": {} };
+      // generatorResults を初期化
+      manager.generatorResults = {
+        "test-generator": {
+          testApp: {
+            tailordbResults: {},
+            pipelineResults: {},
+            tailordbNamespaceResults: {},
+            pipelineNamespaceResults: {},
+          },
+        },
+      };
 
       await manager.watch();
 
       const callArgs = mockWatcher.addWatchGroup.mock.calls.find(
-        (args: any) => args[0] === "TailorDB__main",
+        (args: any) => args[0] === "TailorDB__testApp__main",
       );
       expect(callArgs).toBeDefined();
 
@@ -863,44 +945,61 @@ describe("Integration Tests", () => {
       const GenerationManager = (indexModule as any).GenerationManager;
       const manager = new GenerationManager(largeDataConfig);
 
-      manager.types = Object.fromEntries(
-        Array(100)
-          .fill(0)
-          .map((_, i) => [
-            `file${i}.ts`,
-            Object.fromEntries(
+      // Create large applications structure
+      manager.applications = {};
+      Array(10)
+        .fill(0)
+        .forEach((_, appIdx) => {
+          const appName = `test-app-${appIdx}`;
+          manager.applications[appName] = {
+            tailordbNamespaces: {},
+            pipelineNamespaces: {},
+          };
+
+          // Add multiple namespaces per app
+          Array(10)
+            .fill(0)
+            .forEach((_, nsIdx) => {
+              const namespace = `namespace-${nsIdx}`;
+
+              // Add types to namespace
+              manager.applications[appName].tailordbNamespaces[namespace] = {};
               Array(50)
                 .fill(0)
-                .map((_, j) => [
-                  `type${i}_${j}`,
-                  { name: `Type${i}_${j}`, fields: [] } as TailorDBType,
-                ]),
-            ),
-          ]),
-      );
+                .forEach((_, typeIdx) => {
+                  manager.applications[appName].tailordbNamespaces[namespace][
+                    `Type${appIdx}_${nsIdx}_${typeIdx}`
+                  ] = {
+                    name: `Type${appIdx}_${nsIdx}_${typeIdx}`,
+                    fields: [],
+                  } as TailorDBType;
+                });
 
-      manager.resolvers = Object.fromEntries(
-        Array(100)
-          .fill(0)
-          .map((_, i) => [
-            `resolver${i}.ts`,
-            {
-              name: `resolver${i}`,
-              query: `query${i}`,
-              _input: {} as any,
-              _output: {
-                name: "String",
-                type: "string",
-                _metadata: {
-                  type: "string",
-                  optional: false,
-                  array: false,
-                },
-              } as any,
-              _context: {} as any,
-            } as any,
-          ]),
-      );
+              // Add resolvers to namespace
+              manager.applications[appName].pipelineNamespaces[namespace] = {};
+              Array(10)
+                .fill(0)
+                .forEach((_, resolverIdx) => {
+                  manager.applications[appName].pipelineNamespaces[namespace][
+                    `resolver${appIdx}_${nsIdx}_${resolverIdx}`
+                  ] = {
+                    name: `resolver${appIdx}_${nsIdx}_${resolverIdx}`,
+                    query: `query${appIdx}_${nsIdx}_${resolverIdx}`,
+                    _input: {} as any,
+                    _output: {
+                      name: "String",
+                      type: "string",
+                      _metadata: {
+                        type: "string",
+                        optional: false,
+                        array: false,
+                      },
+                    } as any,
+                    _context: {} as any,
+                  } as any;
+                });
+            });
+        });
 
       await expect(manager.generate({ watch: false })).resolves.not.toThrow();
     });
