@@ -1,0 +1,34 @@
+name: TypeScript Graph
+
+on: pull_request
+jobs:
+  root-typescript-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: ysk8hori/delta-typescript-graph-action@9f5aa92aa05dfa8dfa2865b244394eaeabf78783 # v1.2.2
+        with:
+          comment-title: "TypeScript Graph for Project Root"
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          tsconfig: "./tsconfig.json"
+          debug: true
+          in-details: true
+          exclude: "node_modules, tests, *.test.ts"
+          include-index-file-dependencies: true
+
+  sdk-typescript-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: ysk8hori/delta-typescript-graph-action@9f5aa92aa05dfa8dfa2865b244394eaeabf78783 # v1.2.2
+        with:
+          comment-title: "TypeScript Graph for SDK"
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          tsconfig: "./packages/tailor-sdk/tsconfig.json"
+          debug: true
+          in-details: true
+          exclude: "node_modules, tests, *.test.ts, dist"
+          include-index-file-dependencies: true
+          show-metrics: true

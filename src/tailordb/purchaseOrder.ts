@@ -1,4 +1,4 @@
-import { db, t } from "@tailor-platform/tailor-sdk";
+import { db } from "@tailor-platform/tailor-sdk";
 import { supplier } from "./supplier";
 import { attachedFiles } from "./file";
 
@@ -14,4 +14,3 @@ export const purchaseOrder = db.type("PurchaseOrder", {
   ...db.fields.timestamps(),
 });
 export type purchaseOrder = typeof purchaseOrder;
-export type PurchaseOrder = t.infer<purchaseOrder>;
