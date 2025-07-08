@@ -14,12 +14,16 @@ import path from "node:path";
 import os from "node:os";
 import { generate, apply } from "./index";
 import type { WorkspaceConfig } from "@/config";
-import type { TailorDBType } from "@/services/tailordb/schema";
-import type { Resolver } from "@/services/pipeline/resolver";
+import { db, type TailorDBType } from "@/services/tailordb/schema";
+import {
+  createQueryResolver,
+  type Resolver,
+} from "@/services/pipeline/resolver";
 import { SdlGenerator } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { ManifestGenerator } from "./builtin/manifest";
 import { DependencyWatcher } from "./watch";
+import { t } from "@/types";
 
 type GenerationManagerConstructor = new (config: WorkspaceConfig) => any;
 
@@ -56,16 +60,16 @@ class TestGenerator {
   }
 
   async processTailorDBNamespace(
-    applicationNamespace: string,
-    namespace: string,
+    _applicationNamespace: string,
+    _namespace: string,
     types: Record<string, any>,
   ) {
     return { processed: true, count: Object.keys(types).length };
   }
 
   async processPipelineNamespace(
-    applicationNamespace: string,
-    namespace: string,
+    _applicationNamespace: string,
+    _namespace: string,
     resolvers: Record<string, any>,
   ) {
     return { processed: true, count: Object.keys(resolvers).length };
@@ -90,13 +94,11 @@ describe("GenerationManager", () => {
   let GenerationManager: GenerationManagerConstructor;
 
   beforeAll(async () => {
-    vi.spyOn(fs, "writeFile").mockImplementation(
-      (path, content, callback: any) => {
-        if (typeof callback === "function") {
-          callback(null);
-        }
-      },
-    );
+    vi.spyOn(fs, "writeFile").mockImplementation((_, _2, callback: any) => {
+      if (typeof callback === "function") {
+        callback(null);
+      }
+    });
 
     vi.spyOn(fs, "mkdirSync").mockImplementation(() => "");
 
@@ -118,19 +120,9 @@ describe("GenerationManager", () => {
       region: "us-west-2",
       app: {
         testApp: {
-          db: {
-            main: {
-              files: ["src/types/*.ts"],
-            },
-          },
-          resolver: {
-            main: {
-              files: ["src/resolvers/*.ts"],
-            },
-          },
-          auth: {
-            namespace: "test-auth",
-          },
+          db: { main: { files: ["src/types/*.ts"] } },
+          resolver: { main: { files: ["src/resolvers/*.ts"] } },
+          auth: { namespace: "test-auth" },
         },
       },
       generators: [new TestGenerator()],
@@ -260,26 +252,15 @@ describe("GenerationManager", () => {
         "test-app": {
           tailordbNamespaces: {
             "test-namespace": {
-              testType: { name: "TestType", fields: [] } as TailorDBType,
+              testType: db.type("TestType", {}),
             },
           },
           pipelineNamespaces: {
             "test-namespace": {
-              testResolver: {
-                name: "testResolver",
-                query: "test query",
-                _input: {} as any,
-                _output: {
-                  name: "String",
-                  type: "string",
-                  _metadata: {
-                    type: "string",
-                    optional: false,
-                    array: false,
-                  },
-                } as any,
-                _context: {} as any,
-              } as any,
+              testResolver: createQueryResolver(
+                "testResolver",
+                t.type({}),
+              ).returns(() => ({ string: "" }), t.type({ string: t.string() })),
             },
           },
         },
@@ -336,26 +317,15 @@ describe("GenerationManager", () => {
         "test-app": {
           tailordbNamespaces: {
             "test-namespace": {
-              testType: { name: "TestType", fields: [] } as TailorDBType,
+              testType: db.type("TestType", {}),
             },
           },
           pipelineNamespaces: {
             "test-namespace": {
-              testResolver: {
-                name: "testResolver",
-                query: "test query",
-                _input: {} as any,
-                _output: {
-                  name: "String",
-                  type: "string",
-                  _metadata: {
-                    type: "string",
-                    optional: false,
-                    array: false,
-                  },
-                } as any,
-                _context: {} as any,
-              } as any,
+              testResolver: createQueryResolver(
+                "testResolver",
+                t.type({}),
+              ).returns(() => ({ string: "" }), t.type({ string: t.string() })),
             },
           },
         },
@@ -415,9 +385,9 @@ describe("GenerationManager", () => {
     it("全てのタイプを処理", async () => {
       const processTypeSpy = vi.spyOn(testGenerator, "processType");
       const types = {
-        type1: { name: "Type1", fields: [] } as TailorDBType,
-        type2: { name: "Type2", fields: [] } as TailorDBType,
-        type3: { name: "Type3", fields: [] } as TailorDBType,
+        type1: db.type("Type1", {}),
+        type2: db.type("Type2", {}),
+        type3: db.type("Type3", {}),
       };
 
       await manager.processTailorDBNamespace(
@@ -473,36 +443,14 @@ describe("GenerationManager", () => {
     it("全てのリゾルバーを処理", async () => {
       const processResolverSpy = vi.spyOn(testGenerator, "processResolver");
       const resolvers = {
-        resolver1: {
-          name: "resolver1",
-          query: "query1",
-          _input: {} as any,
-          _output: {
-            name: "String",
-            type: "string",
-            _metadata: {
-              type: "string",
-              optional: false,
-              array: false,
-            },
-          } as any,
-          _context: {} as any,
-        } as any,
-        resolver2: {
-          name: "resolver2",
-          query: "query2",
-          _input: {} as any,
-          _output: {
-            name: "String",
-            type: "string",
-            _metadata: {
-              type: "string",
-              optional: false,
-              array: false,
-            },
-          } as any,
-          _context: {} as any,
-        } as any,
+        resolver1: createQueryResolver("resolver1", t.type({})).returns(
+          () => ({ string: "" }),
+          t.type({ string: t.string() }),
+        ),
+        resolver2: createQueryResolver("resolver2", t.type({})).returns(
+          () => ({ string: "" }),
+          t.type({ string: t.string() }),
+        ),
       };
 
       await manager.processPipelineNamespace(
@@ -696,26 +644,15 @@ describe("GenerationManager", () => {
         testApp: {
           tailordbNamespaces: {
             main: {
-              testType: { name: "TestType", fields: [] } as TailorDBType,
+              testType: db.type("TestType", {}),
             },
           },
           pipelineNamespaces: {
             main: {
-              testResolver: {
-                name: "testResolver",
-                query: "test query",
-                _input: {} as any,
-                _output: {
-                  name: "String",
-                  type: "string",
-                  _metadata: {
-                    type: "string",
-                    optional: false,
-                    array: false,
-                  },
-                } as any,
-                _context: {} as any,
-              } as any,
+              testResolver: createQueryResolver(
+                "testResolver",
+                t.type({}),
+              ).returns(() => ({ string: "" }), t.type({ string: t.string() })),
             },
           },
         },
@@ -969,10 +906,7 @@ describe("Integration Tests", () => {
                 .forEach((_, typeIdx) => {
                   manager.applications[appName].tailordbNamespaces[namespace][
                     `Type${appIdx}_${nsIdx}_${typeIdx}`
-                  ] = {
-                    name: `Type${appIdx}_${nsIdx}_${typeIdx}`,
-                    fields: [],
-                  } as TailorDBType;
+                  ] = db.type(`Type${appIdx}_${nsIdx}_${typeIdx}`, {});
                 });
 
               // Add resolvers to namespace
@@ -982,21 +916,13 @@ describe("Integration Tests", () => {
                 .forEach((_, resolverIdx) => {
                   manager.applications[appName].pipelineNamespaces[namespace][
                     `resolver${appIdx}_${nsIdx}_${resolverIdx}`
-                  ] = {
-                    name: `resolver${appIdx}_${nsIdx}_${resolverIdx}`,
-                    query: `query${appIdx}_${nsIdx}_${resolverIdx}`,
-                    _input: {} as any,
-                    _output: {
-                      name: "String",
-                      type: "string",
-                      _metadata: {
-                        type: "string",
-                        optional: false,
-                        array: false,
-                      },
-                    } as any,
-                    _context: {} as any,
-                  } as any;
+                  ] = createQueryResolver(
+                    `resolver${appIdx}_${nsIdx}_${resolverIdx}`,
+                    t.type({}),
+                  ).returns(
+                    () => ({ string: "" }),
+                    t.type({ string: t.string() }),
+                  );
                 });
             });
         });
