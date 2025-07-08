@@ -19,6 +19,7 @@ import { TailorFieldType, TailorToTs } from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "@/types/field";
 import { ReferenceConfig, TailorField, TailorType } from "@/types/type";
+import inflection from "inflection";
 
 interface RelationConfig<T extends TailorDBType> {
   type: "oneToOne" | "1-1" | "oneToMany" | "1-n" | "1-N";
@@ -214,6 +215,9 @@ class TailorDBField<
     result._metadata.foreignKeyType = targetTable.name;
     result._metadata.foreignKey = true;
 
+    // Store the relation type in metadata
+    (result._metadata as any).relationType = config.type;
+
     if (["oneToOne", "1-1"].includes(config.type)) {
       result._metadata.unique = true;
     }
@@ -362,7 +366,7 @@ export class TailorDBType<
   F & Record<string, TailorField<M, any, any, DBFieldMetadata>>
 > {
   private _metadata?: TDB;
-  public referenced: TailorDBType[] = [];
+  public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
 
   constructor(
@@ -373,10 +377,29 @@ export class TailorDBType<
       fields as F & Record<string, TailorField<M, any, any, DBFieldMetadata>>,
     );
 
-    Object.entries(this.fields).forEach(([_, field]) => {
+    Object.entries(this.fields).forEach(([fieldName, field]) => {
       if (field.reference) {
         const ref = field.reference;
-        ref.type.referenced.push(this);
+        if (ref.type) {
+          let backwardFieldName = ref.nameMap?.[1]; // Get backward field name from nameMap
+
+          if (!backwardFieldName || backwardFieldName === "") {
+            const metadata = field.metadata;
+            const relationType = metadata?.unique ? "1-1" : "1-n";
+
+            if (relationType === "1-1") {
+              backwardFieldName = inflection.singularize(
+                this.name.charAt(0).toLowerCase() + this.name.slice(1),
+              );
+            } else {
+              backwardFieldName = inflection.pluralize(
+                this.name.charAt(0).toLowerCase() + this.name.slice(1),
+              );
+            }
+          }
+
+          ref.type.referenced[backwardFieldName] = [this, fieldName];
+        }
       }
     });
   }

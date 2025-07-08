@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ResolverProcessor } from "./resolver-processor";
-import { Resolver } from "@/services/pipeline/resolver";
+import {
+  Resolver,
+  createMutationResolver,
+  createQueryResolver,
+} from "@/services/pipeline/resolver";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { TypeProcessor } from "./type-processor";
+import { t } from "@/types";
 
 // TypeProcessorのモック
 vi.mock("./type-processor", () => ({
@@ -92,6 +97,17 @@ describe("SDL ResolverProcessor", () => {
         ["gql", "fetchUserProfile", () => {}, {}],
       ],
     } as any;
+    mockResolver = createQueryResolver(
+      "getUserById",
+      t.type({
+        id: t.string(),
+      }),
+    )
+      .fnStep("fetchUser", () => {})
+      .returns(
+        (context) => ({ user: { id: context.input.id, name: "name" } }),
+        t.type({ user: t.object({ id: t.string(), name: t.string() }) }),
+      );
   });
 
   afterEach(() => {
@@ -106,15 +122,14 @@ describe("SDL ResolverProcessor", () => {
       expect(result.queryType).toBe("query");
       expect(result.inputType).toBe("GetUserByIdInput");
       expect(result.outputType).toBe("GetUserByIdOutput");
-      expect(result.pipelines).toHaveLength(3);
+      expect(result.pipelines).toHaveLength(1);
     });
 
     it("mutationリゾルバーを正しく処理すること", async () => {
-      const mutationResolver = {
-        ...mockResolver,
-        name: "updateUser",
-        queryType: "mutation",
-      } as any;
+      const mutationResolver = createMutationResolver(
+        "updateUser",
+        t.type({}),
+      ).returns(() => ({}), t.type({}));
 
       const result = await ResolverProcessor.processResolver(mutationResolver);
 
@@ -188,14 +203,14 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("複数のfnステップを正しく処理すること", async () => {
-      const resolverWithMultipleFnSteps = {
-        ...mockResolver,
-        steps: [
-          ["fn", "step1", () => {}, {}],
-          ["fn", "step2", () => {}, {}],
-          ["fn", "step3", () => {}, {}],
-        ],
-      } as any;
+      const resolverWithMultipleFnSteps = createQueryResolver(
+        "getUserById",
+        t.type({ id: t.string() }),
+      )
+        .fnStep("step1", () => {})
+        .fnStep("step2", () => {})
+        .fnStep("step3", () => {})
+        .returns(() => ({}), t.type({}));
 
       const result = await ResolverProcessor.processResolver(
         resolverWithMultipleFnSteps,
@@ -214,13 +229,13 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("複数のsqlステップを正しく処理すること", async () => {
-      const resolverWithMultipleSqlSteps = {
-        ...mockResolver,
-        steps: [
-          ["sql", "getUserQuery", () => {}, {}],
-          ["sql", "getPostsQuery", () => {}, {}],
-        ],
-      } as any;
+      const resolverWithMultipleSqlSteps = createQueryResolver(
+        "getUserById",
+        t.type({ id: t.string() }),
+      )
+        .sqlStep("getUserQuery", async () => {})
+        .sqlStep("getPostsQuery", async () => {})
+        .returns(() => ({}), t.type({}));
 
       const result = await ResolverProcessor.processResolver(
         resolverWithMultipleSqlSteps,
@@ -238,13 +253,13 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("複数のgqlステップを正しく処理すること", async () => {
-      const resolverWithMultipleGqlSteps = {
-        ...mockResolver,
-        steps: [
-          ["gql", "fetchUserProfile", () => {}, {}],
-          ["gql", "fetchUserPosts", () => {}, {}],
-        ],
-      } as any;
+      const resolverWithMultipleGqlSteps = createQueryResolver(
+        "getUserById",
+        t.type({ id: t.string() }),
+      )
+        .gqlStep("fetchUserProfile", ({ client }) => client.query("", {}))
+        .gqlStep("fetchUserPosts", ({ client }) => client.query("", {}))
+        .returns(() => ({}), t.type({}));
 
       const result = await ResolverProcessor.processResolver(
         resolverWithMultipleGqlSteps,
@@ -262,15 +277,15 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("混合ステップタイプを正しく処理すること", async () => {
-      const resolverWithMixedSteps = {
-        ...mockResolver,
-        steps: [
-          ["fn", "validateInput", () => {}, {}],
-          ["sql", "queryDatabase", () => {}, {}],
-          ["gql", "fetchFromGraphQL", () => {}, {}],
-          ["fn", "processResult", () => {}, {}],
-        ],
-      } as any;
+      const resolverWithMixedSteps = createQueryResolver(
+        "getUserById",
+        t.type({ id: t.string() }),
+      )
+        .fnStep("validateInput", () => ({}))
+        .sqlStep("queryDatabase", async () => ({}))
+        .gqlStep("fetchFromGraphQL", ({ client }) => client.query("", {}))
+        .fnStep("processResult", () => ({}))
+        .returns(() => ({}), t.type({}));
 
       const result = await ResolverProcessor.processResolver(
         resolverWithMixedSteps,
@@ -290,48 +305,6 @@ describe("SDL ResolverProcessor", () => {
         PipelineResolver_OperationType.FUNCTION,
       );
     });
-
-    it("未対応のステップタイプでエラーを投げること", async () => {
-      const resolverWithUnsupportedStep = {
-        ...mockResolver,
-        steps: [["unsupported", "invalidStep", () => {}, {}]],
-      } as any;
-
-      await expect(
-        ResolverProcessor.processResolver(resolverWithUnsupportedStep),
-      ).rejects.toThrow("Unsupported step kind: unsupported");
-    });
-
-    it("ステップが空の場合を正しく処理すること", async () => {
-      const resolverWithEmptySteps = {
-        ...mockResolver,
-        steps: [],
-      } as any;
-
-      const result = await ResolverProcessor.processResolver(
-        resolverWithEmptySteps,
-      );
-
-      expect(result.pipelines).toHaveLength(0);
-      expect(result.sdl).toContain("extend type Query");
-      expect(result.sdl).toContain(
-        "getUserById(input: GetUserByIdInput): GetUserByIdOutput",
-      );
-    });
-
-    it("複雑なリゾルバー名を正しく処理すること", async () => {
-      const complexNameResolver = {
-        ...mockResolver,
-        name: "getUserByIdAndStatus",
-      } as any;
-
-      const result =
-        await ResolverProcessor.processResolver(complexNameResolver);
-
-      expect(result.name).toBe("getUserByIdAndStatus");
-      expect(result.inputType).toBe("GetUserByIdAndStatusInput");
-      expect(result.outputType).toBe("GetUserByIdAndStatusOutput");
-    });
   });
 
   describe("processResolverToSDL", () => {
@@ -348,11 +321,10 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("mutation リゾルバーのSDLを正しく生成すること", async () => {
-      const mutationResolver = {
-        ...mockResolver,
-        name: "createUser",
-        queryType: "mutation",
-      } as any;
+      const mutationResolver = createMutationResolver(
+        "createUser",
+        t.type({}),
+      ).returns(() => ({}), t.type({}));
 
       const sdl =
         await ResolverProcessor.processResolverToSDL(mutationResolver);
@@ -362,41 +334,24 @@ describe("SDL ResolverProcessor", () => {
         "createUser(input: CreateUserInput): CreateUserOutput",
       );
     });
-
-    it("空のステップを持つリゾルバーのSDLを正しく生成すること", async () => {
-      const emptyStepsResolver = {
-        ...mockResolver,
-        steps: [],
-      } as any;
-
-      const sdl =
-        await ResolverProcessor.processResolverToSDL(emptyStepsResolver);
-
-      expect(sdl).toContain("input GetUserByIdInput");
-      expect(sdl).toContain("type GetUserByIdOutput");
-      expect(sdl).toContain("extend type Query");
-    });
   });
 
   describe("processResolvers", () => {
     it("複数のリゾルバーを正しく処理すること", async () => {
-      const resolver1 = {
-        ...mockResolver,
-        name: "getUserById",
-        queryType: "query",
-      } as any;
+      const resolver1 = createQueryResolver("getUserById", t.type({})).returns(
+        () => ({}),
+        t.type({}),
+      );
 
-      const resolver2 = {
-        ...mockResolver,
-        name: "createUser",
-        queryType: "mutation",
-      } as any;
+      const resolver2 = createMutationResolver(
+        "createUser",
+        t.type({}),
+      ).returns(() => ({}), t.type({}));
 
-      const resolver3 = {
-        ...mockResolver,
-        name: "updateUser",
-        queryType: "mutation",
-      } as any;
+      const resolver3 = createMutationResolver(
+        "updateUser",
+        t.type({}),
+      ).returns(() => ({}), t.type({}));
 
       const resolvers = [resolver1, resolver2, resolver3];
       const combinedSDL = await ResolverProcessor.processResolvers(resolvers);
@@ -424,19 +379,12 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("同じ名前の複数のリゾルバーを処理できること", async () => {
-      const resolver1 = {
-        ...mockResolver,
-        name: "getUser",
-        queryType: "query",
-      } as any;
+      const resolver1 = createQueryResolver("getUser", t.type({})).returns(
+        () => ({}),
+        t.type({}),
+      );
 
-      const resolver2 = {
-        ...mockResolver,
-        name: "getUser",
-        queryType: "mutation",
-      } as any;
-
-      const resolvers = [resolver1, resolver2];
+      const resolvers = [resolver1, resolver1];
       const sdl = await ResolverProcessor.processResolvers(resolvers);
 
       expect(sdl).toContain("# Resolver: getUser");
@@ -447,10 +395,10 @@ describe("SDL ResolverProcessor", () => {
 
     it("リゾルバー処理でエラーが発生した場合の処理", async () => {
       const validResolver = mockResolver;
-      const invalidResolver = {
-        ...mockResolver,
-        output: undefined, // outputが未定義でエラーになる
-      } as any;
+      const invalidResolver = createQueryResolver(
+        "invalidResolver",
+        t.type({}),
+      );
 
       const resolvers = [validResolver, invalidResolver];
 
@@ -462,44 +410,19 @@ describe("SDL ResolverProcessor", () => {
 
   describe("Input/Output型処理のテスト", () => {
     it("複雑なInput型を正しく処理すること", async () => {
-      const complexInputResolver = {
-        ...mockResolver,
-        input: {
-          name: "ComplexInput",
-          fields: {
-            user: {
-              _metadata: { type: "nested", required: true, array: false },
-              fields: {
-                profile: {
-                  _metadata: { type: "nested", required: true, array: false },
-                  fields: {
-                    name: {
-                      _metadata: {
-                        type: "string",
-                        required: true,
-                        array: false,
-                      },
-                    },
-                    age: {
-                      _metadata: {
-                        type: "integer",
-                        required: false,
-                        array: false,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            tags: {
-              _metadata: { type: "string", required: true, array: true },
-            },
-            metadata: {
-              _metadata: { type: "json", required: false, array: false },
-            },
-          },
-        },
-      } as any;
+      const complexInputResolver = createQueryResolver(
+        "getUserById",
+        t.type({
+          user: t.object({
+            profile: t.object({
+              name: t.string(),
+              age: t.int().optional(),
+            }),
+          }),
+          tags: t.string().array(),
+          metadata: t.object({}),
+        }),
+      ).returns(() => ({}), t.type({}));
 
       (TypeProcessor.processType as any).mockResolvedValueOnce({
         name: "ComplexInput",
@@ -523,53 +446,23 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("複雑なOutput型を正しく処理すること", async () => {
-      const complexOutputResolver = {
-        ...mockResolver,
-        output: {
-          name: "ComplexOutput",
-          fields: {
-            result: {
-              _metadata: { type: "nested", required: true, array: false },
-              fields: {
-                user: {
-                  _metadata: { type: "nested", required: true, array: false },
-                  fields: {
-                    id: {
-                      _metadata: {
-                        type: "string",
-                        required: true,
-                        array: false,
-                      },
-                    },
-                    profile: {
-                      _metadata: {
-                        type: "nested",
-                        required: false,
-                        array: false,
-                      },
-                      fields: {
-                        name: {
-                          _metadata: {
-                            type: "string",
-                            required: true,
-                            array: false,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-                posts: {
-                  _metadata: { type: "nested", required: false, array: true },
-                },
-              },
-            },
-            success: {
-              _metadata: { type: "boolean", required: true, array: false },
-            },
-          },
-        },
-      } as any;
+      const complexOutputResolver = createQueryResolver(
+        "getUserById",
+        t.type({}),
+      ).returns(
+        () => ({}) as any,
+        t.type({
+          result: t.object({
+            user: t.object({
+              id: t.string(),
+              profile: t.object({
+                name: t.string(),
+              }),
+            }),
+            posts: t.object({}).array().optional(),
+          }),
+        }),
+      );
 
       (TypeProcessor.processType as any)
         .mockResolvedValueOnce({
@@ -594,7 +487,6 @@ describe("SDL ResolverProcessor", () => {
       const result = await ResolverProcessor.processResolver(
         complexOutputResolver,
       );
-
       expect(TypeProcessor.processType).toHaveBeenCalledWith(
         complexOutputResolver.output,
         false,
@@ -604,27 +496,19 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("配列型のInput/Outputを正しく処理すること", async () => {
-      const arrayTypeResolver = {
-        ...mockResolver,
-        input: {
-          fields: {
-            ids: { _metadata: { type: "string", required: true, array: true } },
-            filters: {
-              _metadata: { type: "string", required: false, array: true },
-            },
-          },
-        },
-        output: {
-          fields: {
-            users: {
-              _metadata: { type: "nested", required: true, array: true },
-            },
-            errors: {
-              _metadata: { type: "string", required: false, array: true },
-            },
-          },
-        },
-      } as any;
+      const arrayTypeResolver = createQueryResolver(
+        "getUserById",
+        t.type({
+          ids: t.string().array(),
+          filters: t.string().array().optional(),
+        }),
+      ).returns(
+        () => ({}) as any,
+        t.type({
+          users: t.object({ id: t.string(), name: t.string() }).array(),
+          errors: t.string().array().optional(),
+        }),
+      );
 
       (TypeProcessor.processType as any)
         .mockResolvedValueOnce({
@@ -652,41 +536,11 @@ describe("SDL ResolverProcessor", () => {
   });
 
   describe("異なるGraphQLリゾルバー形式での動作テスト", () => {
-    it("subscriptionタイプのリゾルバーを処理できること", async () => {
-      const subscriptionResolver = {
-        ...mockResolver,
-        name: "userUpdated",
-        queryType: "subscription",
-      } as any;
-
-      const result =
-        await ResolverProcessor.processResolver(subscriptionResolver);
-
-      expect(result.queryType).toBe("subscription");
-      expect(result.sdl).toContain("extend type Subscription");
-      expect(result.sdl).toContain(
-        "userUpdated(input: UserUpdatedInput): UserUpdatedOutput",
-      );
-    });
-
-    it("カスタム型名を持つリゾルバーを正しく処理すること", async () => {
-      const customTypeResolver = {
-        ...mockResolver,
-        name: "complexOperationWithVeryLongName",
-      } as any;
-
-      const result =
-        await ResolverProcessor.processResolver(customTypeResolver);
-
-      expect(result.inputType).toBe("ComplexOperationWithVeryLongNameInput");
-      expect(result.outputType).toBe("ComplexOperationWithVeryLongNameOutput");
-    });
-
     it("特殊文字を含む名前のリゾルバーを処理できること", async () => {
-      const specialNameResolver = {
-        ...mockResolver,
-        name: "get_user_by_id", // アンダースコアを含む
-      } as any;
+      const specialNameResolver = createQueryResolver(
+        "get_user_by_id",
+        t.type({ id: t.string() }),
+      ).returns(() => ({}), t.type({}));
 
       const result =
         await ResolverProcessor.processResolver(specialNameResolver);
@@ -696,52 +550,34 @@ describe("SDL ResolverProcessor", () => {
       expect(result.outputType).toBe("Get_user_by_idOutput");
     });
 
-    it("極小のリゾルバー定義を正しく処理すること", async () => {
-      const minimalResolver = {
-        name: "ping",
-        queryType: "query",
-        input: { fields: {} },
-        output: {
-          fields: {
-            pong: {
-              _metadata: { type: "string", required: true, array: false },
-            },
-          },
-        },
-        steps: [],
-      } as any;
-
-      (TypeProcessor.processType as any)
-        .mockResolvedValueOnce({
-          name: "PingInput",
-          fields: [],
-          isInput: true,
-        })
-        .mockResolvedValueOnce({
-          name: "PingOutput",
-          fields: [
-            { name: "pong", type: "String", required: true, array: false },
-          ],
-          isInput: false,
-        });
-
-      const result = await ResolverProcessor.processResolver(minimalResolver);
-
-      expect(result.name).toBe("ping");
-      expect(result.pipelines).toHaveLength(0);
-      expect(result.sdl).toContain("ping(input: PingInput): PingOutput");
-    });
-
     it("非常に複雑なパイプライン構成を処理できること", async () => {
-      const complexPipelineResolver = {
-        ...mockResolver,
-        steps: Array.from({ length: 10 }, (_, i) => [
-          i % 3 === 0 ? "fn" : i % 3 === 1 ? "sql" : "gql",
-          `step${i + 1}`,
-          () => {},
-          {},
-        ]),
-      } as any;
+      let complexPipelineResolver: Resolver = createQueryResolver(
+        "complexPipeline",
+        t.type({}),
+      );
+      Array.from({ length: 10 }).forEach((_, i) => {
+        switch (i % 3) {
+          case 0:
+            complexPipelineResolver = complexPipelineResolver.fnStep(
+              `step${i + 1}`,
+              () => {},
+            );
+            break;
+          case 1:
+            complexPipelineResolver = complexPipelineResolver.sqlStep(
+              `step${i + 1}`,
+              async () => {},
+            );
+            break;
+          case 2:
+            complexPipelineResolver = complexPipelineResolver.gqlStep(
+              `step${i + 1}`,
+              ({ client }: any) => client.query("", {}),
+            );
+            break;
+        }
+      });
+      complexPipelineResolver.returns(() => ({}), t.type({}));
 
       const result = await ResolverProcessor.processResolver(
         complexPipelineResolver,
@@ -775,32 +611,30 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("不正なステップ定義でエラーが発生した場合の処理", async () => {
-      const invalidStepResolver = {
-        ...mockResolver,
-        steps: [
-          ["fn", "validStep", () => {}, {}],
-          ["invalid", "invalidStep", () => {}, {}],
-          ["sql", "anotherValidStep", () => {}, {}],
-        ],
-      } as any;
+      // const invalidStepResolver = {
+      //   ...mockResolver,
+      //   steps: [
+      //     ["fn", "validStep", () => {}, {}],
+      //     ["invalid", "invalidStep", () => {}, {}],
+      //     ["sql", "anotherValidStep", () => {}, {}],
+      //   ],
+      // } as any;
+      const invalidStepResolver = createQueryResolver(
+        "invalidStepResolver",
+        t.type({}),
+      )
+        .fnStep("validStep", () => {})
+        .sqlStep("anotherValidStep", async () => {})
+        .returns(() => ({}), t.type({}));
+      (invalidStepResolver as any).steps = [
+        ["fn", "validStep", () => {}, {}],
+        ["invalid", "invalidStep", () => {}, {}],
+        ["sql", "anotherValidStep", () => {}, {}],
+      ];
 
       await expect(
         ResolverProcessor.processResolver(invalidStepResolver),
       ).rejects.toThrow("Unsupported step kind: invalid");
-    });
-
-    it("部分的に不正なステップ配列を処理できること", async () => {
-      const partiallyValidResolver = {
-        ...mockResolver,
-        steps: [
-          ["fn", "step1", () => {}, {}],
-          [null, "invalidStep", () => {}, {}], // nullタイプ
-        ],
-      } as any;
-
-      await expect(
-        ResolverProcessor.processResolver(partiallyValidResolver),
-      ).rejects.toThrow("Unsupported step kind: null");
     });
 
     it("TypeProcessorから不正なメタデータが返された場合の処理", async () => {

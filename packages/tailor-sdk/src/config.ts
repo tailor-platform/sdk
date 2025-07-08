@@ -8,6 +8,10 @@ import {
   KyselyGenerator,
   KyselyGeneratorID,
 } from "@/generator/builtin/kysely-type/index";
+import {
+  DbTypeGenerator,
+  DbTypeGeneratorID,
+} from "@/generator/builtin/db-type/index";
 import { CodeGenerator } from "@/generator/types";
 
 export interface AppConfig {
@@ -25,6 +29,10 @@ export interface WorkspaceConfig {
     | [
         typeof KyselyGeneratorID,
         ConstructorParameters<typeof KyselyGenerator>[0],
+      ]
+    | [
+        typeof DbTypeGeneratorID,
+        ConstructorParameters<typeof DbTypeGenerator>[0],
       ]
     | CodeGenerator<any, any, any, any>
   >;

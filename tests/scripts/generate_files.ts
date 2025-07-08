@@ -20,6 +20,18 @@ function getConfig(dist: "expected" | "actual") {
         },
       ];
     }
+    if (Array.isArray(gen) && gen[0] === "@tailor/db-type") {
+      return [
+        gen[0],
+        {
+          distPath: () =>
+            path.join(
+              dist === "expected" ? expectedDir : actualDir,
+              "types.ts",
+            ),
+        },
+      ];
+    }
     return gen;
   });
   return config;
