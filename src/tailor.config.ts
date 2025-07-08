@@ -47,6 +47,7 @@ export default defineConfig({
       "@tailor/kysely-type",
       { distPath: ({ tailorDB }) => `./src/resolvers/${tailorDB}.ts` },
     ],
+    ["@tailor/db-type", { distPath: () => `./src/tailordb/types.ts` }],
   ],
   tsConfig: "./tsconfig.json",
 });

@@ -334,7 +334,7 @@ export class ManifestAggregator {
       ([fieldName, field]: [string, any]) => {
         const fieldObj = field as any;
 
-        const metadata = fieldObj?.metadata || fieldObj?._metadata || {};
+        const metadata = fieldObj?.metadata || {};
         const fieldType = metadata.type || "string";
         const required = metadata.required !== false;
         const array = metadata.array === true;

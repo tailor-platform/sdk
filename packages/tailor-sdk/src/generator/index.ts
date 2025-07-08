@@ -15,6 +15,7 @@ import {
 } from "./types";
 import { SdlGenerator, SdlGeneratorID } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
+import { DbTypeGenerator } from "./builtin/db-type";
 import { DependencyWatcher } from "./watch";
 import { ManifestGenerator } from "./builtin/manifest";
 import { TailorCtl } from "@/ctl";
@@ -65,6 +66,9 @@ export class GenerationManager {
         } else if (Array.isArray(gen)) {
           if (gen[0] === "@tailor/kysely-type") {
             return new KyselyGenerator(gen[1]);
+          }
+          if (gen[0] === "@tailor/db-type") {
+            return new DbTypeGenerator(gen[1]);
           }
           throw new Error(`Unknown generator ID: ${gen[0]}`);
         }
