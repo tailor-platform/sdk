@@ -9,16 +9,15 @@ import {
   type CompiledQuery,
 } from "kysely";
 
-type ArrayType<T> =
-  ArrayTypeImpl<T> extends (infer U)[] ? U[] : ArrayTypeImpl<T>;
-type ArrayTypeImpl<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S[], I[], U[]>
-    : T[];
-type Generated<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>;
+type ArrayType<T> = ArrayTypeImpl<T> extends (infer U)[]
+  ? U[]
+  : ArrayTypeImpl<T>;
+type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S[], I[], U[]>
+  : T[];
+type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 type Json = JsonValue;
 type JsonArray = JsonValue[];
 type JsonObject = {

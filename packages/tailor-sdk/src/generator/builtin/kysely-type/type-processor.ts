@@ -84,7 +84,7 @@ export class TypeProcessor {
    */
   private static mapTailorDBTypeToKysely(fieldDef: any): string {
     // メタデータから型情報を取得
-    const metadata = fieldDef.metadata || fieldDef._metadata;
+    const metadata = fieldDef.metadata;
     const fieldType = metadata?.type;
 
     switch (fieldType) {
@@ -131,7 +131,7 @@ export class TypeProcessor {
    * フィールドがオプショナルかどうかを判定
    */
   private static isOptional(fieldDef: any): boolean {
-    const metadata = fieldDef.metadata || fieldDef._metadata;
+    const metadata = fieldDef.metadata;
     if (metadata?.assertNonNull === true) {
       return false;
     }
@@ -142,7 +142,7 @@ export class TypeProcessor {
    * フィールドが配列かどうかを判定
    */
   private static isArray(fieldDef: any): boolean {
-    const metadata = fieldDef.metadata || fieldDef._metadata;
+    const metadata = fieldDef.metadata;
     return metadata?.array === true;
   }
 

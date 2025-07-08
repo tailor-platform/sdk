@@ -12,7 +12,7 @@ export class TypeProcessor {
 
     Object.entries(objectFields).forEach(
       ([nestedFieldName, nestedFieldDef]: [string, any]) => {
-        const nestedMetadata = nestedFieldDef._metadata;
+        const nestedMetadata = nestedFieldDef.metadata;
 
         if (nestedMetadata.type === "nested" && nestedFieldDef.fields) {
           const deepNestedFields = TypeProcessor.processNestedFields(
@@ -58,17 +58,8 @@ export class TypeProcessor {
   static async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
     const fields: ManifestFieldMetadata[] = Object.entries(type.fields).map(
       ([fieldName, fieldDef]) => {
-        const typedFieldDef = fieldDef as {
-          _metadata: {
-            description?: string;
-            type: string;
-            required?: boolean;
-            array?: boolean;
-          };
-          fields?: any; // nestedフィールドの場合のfields
-        };
-
-        const metadata = typedFieldDef._metadata;
+        const typedFieldDef = fieldDef as any;
+        const metadata = typedFieldDef.metadata;
         const fieldMetadata: ManifestFieldMetadata = {
           name: fieldName,
           description: metadata.description || "",

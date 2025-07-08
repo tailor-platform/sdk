@@ -4,7 +4,6 @@ import { measure } from "@/performance";
 import { TailorDBType } from "./schema";
 import { TailorDBServiceConfig } from "./types";
 import { tailorToManifestScalar } from "@/types/types";
-import inflection from "inflection";
 
 export class TailorDBService {
   private types: Record<string, Record<string, TailorDBType>> = {};
@@ -247,41 +246,24 @@ export class TailorDBService {
               }
             });
 
-          if (type.referenced && type.referenced.length > 0) {
-            type.referenced.forEach((referencedType) => {
-              // TODO: Object.entriesで型情報が失われないようにしたい。
-              const [fieldName, field] = (
-                Object.entries(referencedType.fields) as [string, any]
-              ).find(
-                ([_, fieldConfig]) =>
-                  fieldConfig?._metadata?.foreignKeyType === type.name,
-              );
-
-              if (fieldName && field) {
-                const nameMap = field._ref.nameMap;
-                // 外部キーにunique制約がある場合は、Arrayはfalse（https://docs.tailor.tech/guides/tailordb/relationships#constraints）
-                const array = !(field._metadata?.unique ?? false);
-                const key = nameMap[1]
-                  ? nameMap[1]
-                  : array
-                    ? inflection.pluralize(
-                        referencedType.name.charAt(0).toLowerCase() +
-                          referencedType.name.slice(1),
-                      )
-                    : inflection.singularize(
-                        referencedType.name.charAt(0).toLowerCase() +
-                          referencedType.name.slice(1),
-                      );
+          if (type.referenced && Object.keys(type.referenced).length > 0) {
+            Object.entries(type.referenced).forEach(
+              ([backwardFieldName, [referencedType, fieldName]]) => {
+                const field = referencedType.fields[fieldName];
+                const nameMap = field.reference?.nameMap;
+                const array = !(field.metadata?.unique ?? false);
+                const key = nameMap[1] || backwardFieldName;
+                const srcField = field.reference?.key;
                 relationships[key] = {
                   RefType: referencedType.name,
                   RefField: fieldName,
-                  SrcField: "id",
+                  SrcField: srcField || "id",
                   Array: array,
                   Description:
                     referencedType.metadata.schema?.description || "",
                 };
-              }
-            });
+              },
+            );
           }
 
           return {
