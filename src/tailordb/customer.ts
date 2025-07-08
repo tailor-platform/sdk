@@ -1,4 +1,4 @@
-import { db, t } from "@tailor-platform/tailor-sdk";
+import { db } from "@tailor-platform/tailor-sdk";
 
 export const customer = db
   .type("Customer", {
@@ -23,4 +23,3 @@ export const customer = db
     },
   });
 export type customer = typeof customer;
-export type Customer = t.infer<customer>;

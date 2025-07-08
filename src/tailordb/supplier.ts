@@ -1,4 +1,4 @@
-import { db, t } from "@tailor-platform/tailor-sdk";
+import { db } from "@tailor-platform/tailor-sdk";
 
 export const supplier = db.type("Supplier", {
   name: db.string(),
@@ -12,4 +12,3 @@ export const supplier = db.type("Supplier", {
   ...db.fields.timestamps(),
 });
 export type supplier = typeof supplier;
-export type Supplier = t.infer<supplier>;
