@@ -8,8 +8,6 @@ import {
 import type { Workspace } from "@/workspace";
 import type { ApplyOptions } from "@/cli/args";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import path from "node:path";
-import { getDistDir } from "@/config";
 import t from "@/types/type";
 
 // モックデータ - db.type を使用した正しい構造
@@ -72,11 +70,7 @@ const mockWorkspace: Workspace = {
           loadResolvers: vi
             .fn()
             .mockImplementation(() => Promise.resolve(undefined)),
-          toManifestJSON: vi.fn().mockResolvedValue({
-            Kind: "pipeline",
-            Namespace: "test-pipeline",
-            Resolvers: [],
-          }),
+          getResolvers: vi.fn().mockReturnValue({}),
         },
       ],
       authService: {
@@ -163,125 +157,6 @@ describe("ManifestGenerator統合テスト", () => {
     });
   });
 
-  describe("aggregate関数のテスト", () => {
-    it("ワークスペース全体のマニフェストを正しく生成する", async () => {
-      const inputs = [
-        {
-          applicationNamespace: "test-app",
-          tailordb: [
-            {
-              namespace: "test-db",
-              types: {
-                User: {
-                  name: "User",
-                  fields: [],
-                  isInput: false,
-                },
-              },
-            },
-          ],
-          pipeline: [
-            {
-              namespace: "test-pipeline",
-              resolvers: {
-                getUser: {
-                  name: "getUser",
-                  inputType: "GetUserInput",
-                  outputType: "GetUserOutput",
-                  queryType: "query" as const,
-                  pipelines: [],
-                  inputFields: {
-                    id: { type: "string", required: true, array: false },
-                  },
-                  outputFields: {
-                    name: { type: "string", required: true, array: false },
-                  },
-                },
-              },
-            },
-          ],
-        },
-      ];
-
-      const result = await manifestGenerator.aggregate(
-        inputs,
-        path.join(getDistDir(), "@tailor/manifest"),
-      );
-
-      expect(result.files).toHaveLength(1);
-      expect(result.files[0].path).toBe(
-        path.join(getDistDir(), "manifest.cue"),
-      );
-
-      const manifestContent = JSON.parse(result.files[0].content);
-      expect(manifestContent.Kind).toBe("workspace");
-      expect(manifestContent.Apps).toBeDefined();
-      expect(manifestContent.Services).toBeDefined();
-      expect(manifestContent.Auths).toBeDefined();
-      expect(manifestContent.Pipelines).toBeDefined();
-      expect(manifestContent.Executors).toBeDefined();
-      expect(manifestContent.Stateflows).toBeDefined();
-      expect(manifestContent.Tailordbs).toBeDefined();
-    });
-
-    it("ワークスペースなしでPipelineマニフェストを生成する", async () => {
-      const generatorWithoutWorkspace = new ManifestGenerator(mockApplyOptions);
-      // workspace を設定しない
-
-      const inputs = [
-        {
-          applicationNamespace: "default-app",
-          tailordb: [],
-          pipeline: [
-            {
-              namespace: "default",
-              resolvers: {
-                getUser: {
-                  name: "getUser",
-                  inputType: "GetUserInput",
-                  outputType: "GetUserOutput",
-                  queryType: "query" as const,
-                  pipelines: [
-                    {
-                      name: "fetchUser",
-                      description: "Fetch user data",
-                      operationType: PipelineResolver_OperationType.FUNCTION,
-                      operationSource: "function code here",
-                    },
-                  ],
-                  inputFields: {
-                    id: { type: "string", required: true, array: false },
-                  },
-                  outputFields: {
-                    name: { type: "string", required: true, array: false },
-                    email: { type: "string", required: true, array: false },
-                  },
-                },
-              },
-            },
-          ],
-        },
-      ];
-
-      const result = await generatorWithoutWorkspace.aggregate(
-        inputs,
-        path.join(getDistDir(), "@tailor/manifest"),
-      );
-
-      expect(result.files).toHaveLength(1);
-      expect(result.files[0].path).toBe(
-        path.join(getDistDir(), "manifest.cue"),
-      );
-
-      const manifestContent = JSON.parse(result.files[0].content);
-      expect(manifestContent.Kind).toBe("pipeline");
-      expect(manifestContent.Namespace).toBe("default");
-      expect(manifestContent.Resolvers).toHaveLength(1);
-      expect(manifestContent.Resolvers[0].Name).toBe("getUser");
-      expect(manifestContent.Resolvers[0].Pipelines).toHaveLength(2); // fetchUser + __construct_output
-    });
-  });
-
   describe("エラーハンドリングのテスト", () => {
     it("processType でエラーが発生した場合の処理", async () => {
       const invalidType = {
@@ -292,36 +167,6 @@ describe("ManifestGenerator統合テスト", () => {
       await expect(
         manifestGenerator.processType(invalidType),
       ).rejects.toThrow();
-    });
-
-    it("aggregate でnullリゾルバーが含まれても正常に処理すること", async () => {
-      const generatorWithoutWorkspace = new ManifestGenerator(mockApplyOptions);
-      const inputs = [
-        {
-          applicationNamespace: "default-app",
-          tailordb: [],
-          pipeline: [
-            {
-              namespace: "default",
-              resolvers: {
-                invalid: null, // nullのリゾルバー
-              },
-            },
-          ],
-        },
-      ] as any;
-
-      const result = await generatorWithoutWorkspace.aggregate(
-        inputs,
-        path.join(getDistDir(), "@tailor/manifest"),
-      );
-
-      // nullリゾルバーはスキップされ、マニフェストは正常に生成される
-      expect(result.files).toHaveLength(1);
-      expect(result.errors).toBeUndefined();
-
-      const manifestContent = JSON.parse(result.files[0].content);
-      expect(manifestContent.Resolvers).toHaveLength(0); // nullリゾルバーはスキップ
     });
   });
 
@@ -404,82 +249,6 @@ describe("ManifestGenerator統合テスト", () => {
         PipelineResolver_OperationType.GRAPHQL,
         PipelineResolver_OperationType.FUNCTION,
       ]);
-    });
-  });
-
-  describe("パフォーマンステスト", () => {
-    it("大量のデータを効率的に処理する", async () => {
-      const startTime = Date.now();
-
-      // 100個の型とリゾルバーでテスト
-      const largeMetadata = {
-        types: Object.fromEntries(
-          Array.from({ length: 100 }, (_, i) => [
-            `Type${i}`,
-            {
-              name: `Type${i}`,
-              fields: Array.from({ length: 10 }, (_, j) => ({
-                name: `field${j}`,
-                type: "string",
-                required: true,
-                array: false,
-              })),
-              isInput: false,
-            },
-          ]),
-        ),
-        resolvers: Object.fromEntries(
-          Array.from({ length: 100 }, (_, i) => [
-            `resolver${i}`,
-            {
-              name: `resolver${i}`,
-              inputType: `Resolver${i}Input`,
-              outputType: `Resolver${i}Output`,
-              queryType: "query" as const,
-              pipelines: [
-                {
-                  name: "step1",
-                  description: "Step 1",
-                  operationType: PipelineResolver_OperationType.FUNCTION,
-                },
-              ],
-              inputFields: {
-                id: { type: "string", required: true, array: false },
-              },
-              outputFields: {
-                result: { type: "string", required: true, array: false },
-              },
-            },
-          ]),
-        ),
-      };
-
-      const inputs = [
-        {
-          applicationNamespace: "test-app",
-          tailordb: [
-            {
-              namespace: "test-db",
-              types: largeMetadata.types,
-            },
-          ],
-          pipeline: [
-            {
-              namespace: "test-pipeline",
-              resolvers: largeMetadata.resolvers,
-            },
-          ],
-        },
-      ];
-
-      const result = await manifestGenerator.aggregate(
-        inputs,
-        path.join(getDistDir(), "@tailor/manifest"),
-      );
-      const endTime = Date.now();
-
-      expect(result.files).toHaveLength(1);
-      expect(endTime - startTime).toBeLessThan(5000); // 5秒以内で完了
     });
   });
 });

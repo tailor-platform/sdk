@@ -9,6 +9,7 @@ export interface ManifestTypeMetadata {
   name: string;
   fields: ManifestFieldMetadata[];
   isInput: boolean;
+  typeManifest?: any;
 }
 
 export interface ManifestFieldMetadata {
@@ -97,6 +98,7 @@ export interface ResolverManifestMetadata {
     string,
     { type: string; required: boolean; array: boolean }
   >;
+  resolverManifest?: any; // 生成されたResolverManifest
 }
 
 export interface PipelineInfo {

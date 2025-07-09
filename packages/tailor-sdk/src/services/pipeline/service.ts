@@ -5,11 +5,6 @@ import { PipelineResolverServiceConfig } from "./types";
 import { measure } from "@/performance";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
-import { ManifestAggregator } from "@/generator/builtin/manifest/aggregator";
-import {
-  ResolverProcessor,
-  ResolverManifestMetadata,
-} from "@/generator/builtin/manifest/resolver-processor";
 
 export class PipelineResolverService {
   private bundler: ResolverBundler;
@@ -25,37 +20,6 @@ export class PipelineResolverService {
   @measure
   async build() {
     await this.bundler.bundle();
-  }
-
-  async toManifestJSON() {
-    const resolverMetadata: Record<string, ResolverManifestMetadata> = {};
-    for (const resolver of Object.values(this.resolvers)) {
-      const metadata = await ResolverProcessor.processResolver(resolver);
-      resolverMetadata[resolver.name] = metadata;
-    }
-
-    // ManifestAggregatorを使用してJSON生成
-    const result = await ManifestAggregator.aggregate(
-      {
-        types: {},
-        resolvers: resolverMetadata,
-      },
-      this.namespace,
-      undefined, // workspace
-    );
-
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(`Manifest生成エラー: ${result.errors.join(", ")}`);
-    }
-
-    const manifestFile = result.files.find((f) =>
-      f.path.endsWith("manifest.cue"),
-    );
-    if (manifestFile) {
-      return JSON.parse(manifestFile.content);
-    }
-
-    throw new Error("Manifestファイルが生成されませんでした");
   }
 
   @measure

@@ -2,20 +2,18 @@ import path from "node:path";
 import { BasicGeneratorMetadata, GeneratorResult } from "../../types";
 import {
   ManifestTypeMetadata,
-  ManifestJSON,
-  ResolverManifest,
-  ManifestInput,
-  ManifestResponse,
-  PipelineManifest,
-  ManifestField,
   WorkspaceManifest,
+  ServiceManifest,
 } from "./types";
 import { ResolverManifestMetadata } from "./resolver-processor";
 import { measure } from "@/performance";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
-import { tailorToGraphQL } from "@/types/types";
 import { getDistDir } from "@/config";
 import type { Workspace } from "@/workspace";
+import { AuthReference } from "@/services/auth";
+import { AuthService } from "@/services/auth/service";
+import { IdProviderConfig } from "@/services/auth/types";
+import { TailorDBService } from "@/services/tailordb/service";
+import { PipelineResolverService } from "@/services/pipeline/service";
 
 /**
  * Manifest統合ロジック
@@ -23,7 +21,7 @@ import type { Workspace } from "@/workspace";
  */
 export class ManifestAggregator {
   /**
-   * 型とResolverのメタデータを統合してManifest JSONを生成
+   * Workspace全体のManifestを生成してファイルに出力
    */
   @measure
   static async aggregate(
@@ -31,26 +29,13 @@ export class ManifestAggregator {
       ManifestTypeMetadata,
       ResolverManifestMetadata
     >,
-    namespace?: string,
-    workspace?: Workspace,
+    workspace: Workspace,
   ): Promise<GeneratorResult> {
     try {
-      const { resolvers } = metadata;
-
-      let manifestJSON: WorkspaceManifest | ManifestJSON;
-
-      if (workspace) {
-        // Workspace全体のManifestを生成
-        manifestJSON = await this.generateWorkspaceManifest(workspace);
-      } else {
-        // 従来のPipelineのみのManifestを生成
-        if (!namespace) {
-          throw new Error(
-            "namespace is required when workspace is not provided",
-          );
-        }
-        manifestJSON = this.generateManifestJSON(resolvers, namespace);
-      }
+      const manifestJSON = await ManifestAggregator.generateWorkspaceManifest(
+        workspace,
+        metadata,
+      );
 
       return {
         files: [
@@ -74,6 +59,10 @@ export class ManifestAggregator {
   @measure
   private static async generateWorkspaceManifest(
     workspace: Workspace,
+    metadata: BasicGeneratorMetadata<
+      ManifestTypeMetadata,
+      ResolverManifestMetadata
+    >,
   ): Promise<WorkspaceManifest> {
     const manifest: WorkspaceManifest = {
       Apps: [],
@@ -87,11 +76,14 @@ export class ManifestAggregator {
     };
 
     for (const app of workspace.applications) {
-      manifest.Apps.push(app.toManifestJSON());
+      manifest.Apps.push(ManifestAggregator.generateAppManifest(app));
 
       for (const db of app.tailorDBServices) {
         await db.loadTypes();
-        const tailordbManifest = db.toManifestJSON();
+        const tailordbManifest = ManifestAggregator.generateTailorDBManifest(
+          db,
+          metadata,
+        );
         manifest.Services.push(tailordbManifest);
         manifest.Tailordbs.push(tailordbManifest);
       }
@@ -99,13 +91,16 @@ export class ManifestAggregator {
       for (const pipeline of app.pipelineResolverServices) {
         await pipeline.build();
         await pipeline.loadResolvers();
-        const pipelineManifest = await pipeline.toManifestJSON();
-        manifest.Services.push(pipelineManifest);
+        const pipelineManifest =
+          await ManifestAggregator.generatePipelineManifest(pipeline, metadata);
+        manifest.Services.push(pipelineManifest as unknown as ServiceManifest);
         manifest.Pipelines.push(pipelineManifest);
       }
 
       if (app.authService) {
-        const authManifest = app.authService.toManifest();
+        const authManifest = ManifestAggregator.generateAuthManifest(
+          app.authService,
+        );
         manifest.Services.push(authManifest);
         manifest.Auths.push(authManifest);
       }
@@ -114,272 +109,117 @@ export class ManifestAggregator {
     return manifest;
   }
 
+  private static generateAppManifest(app: Workspace["applications"][number]) {
+    let authReference: AuthReference | null = null;
+
+    if (app.authService && app.authService.config) {
+      const namespace = app.authService.config.namespace;
+
+      const idProviderConfigs = app.authService.config.idProviderConfigs;
+      if (idProviderConfigs && idProviderConfigs.length > 0) {
+        authReference = {
+          Namespace: namespace,
+          IdProviderConfigName: idProviderConfigs[0].Name,
+        };
+      }
+    }
+
+    return {
+      Kind: "application",
+      Name: app.name,
+      Cors: [],
+      AllowedIPAddresses: [],
+      DisableIntrospection: false,
+      Auth: authReference ?? {},
+      Subgraphs: app.subgraphs,
+      Version: "v2",
+    };
+  }
+
   /**
-   * ResolverのManifest JSON生成
+   * PipelineResolverServiceからManifest JSON生成
+   * metadataから既に生成されたマニフェストを使用する純粋な統合処理
    */
   @measure
-  private static generateManifestJSON(
-    resolvers: Record<string, ResolverManifestMetadata>,
-    namespace: string,
-  ): ManifestJSON {
-    const resolverManifests: ResolverManifest[] = Object.entries(resolvers)
-      .filter(([_name, resolverMetadata]) => resolverMetadata != null)
-      .map(([name, resolverMetadata]) => {
-        return this.generateResolverManifest(
-          name,
-          resolverMetadata,
-          getDistDir(),
-        );
+  static async generatePipelineManifest(
+    service: PipelineResolverService,
+    metadata: BasicGeneratorMetadata<
+      ManifestTypeMetadata,
+      ResolverManifestMetadata
+    >,
+  ) {
+    const resolverManifests = Object.entries(metadata.resolvers)
+      .filter(([_, resolverMetadata]) => resolverMetadata != null)
+      .map(([_, resolverMetadata]) => {
+        return resolverMetadata.resolverManifest;
       });
 
     return {
       Kind: "pipeline",
       Description: "",
-      Namespace: namespace,
+      Namespace: service.namespace,
       Resolvers: resolverManifests,
       Version: "v2",
     };
   }
 
   /**
-   * 個別のResolverManifestを生成
+   * TailorDBServiceからManifest JSON生成
+   * metadataから既に生成されたマニフェストを使用する純粋な統合処理
    */
   @measure
-  private static generateResolverManifest(
-    name: string,
-    resolverMetadata: ResolverManifestMetadata,
-    baseDir?: string,
-  ): ResolverManifest {
-    const pipelines: PipelineManifest[] = [
-      ...resolverMetadata.pipelines.map((pipeline) => {
-        const sourcePath = path.join(
-          baseDir || getDistDir(),
-          "functions",
-          `${name}__${pipeline.name}.js`,
-        );
-
-        return {
-          Name: pipeline.name,
-          OperationName: pipeline.name,
-          Description: pipeline.description,
-          OperationType: pipeline.operationType,
-          OperationSourcePath: sourcePath,
-          OperationHook: {
-            Expr: "({ ...context.pipeline, ...context.args });",
-          },
-          PostScript: `args.${pipeline.name}`,
-        };
-      }),
-      {
-        Name: `__construct_output`,
-        OperationName: `__construct_output`,
-        Description: "Construct output from resolver",
-        OperationType: PipelineResolver_OperationType.FUNCTION,
-        OperationSource: `globalThis.main = ${resolverMetadata.outputMapper || "() => ({})"}`,
-        OperationHook: {
-          Expr: "({ ...context.pipeline, ...context.args });",
-        },
-        PostScript: `args.__construct_output`,
-      },
-    ];
-
-    // Input構造を生成（Fields配列を含む）
-    const inputs: ManifestInput[] = [
-      {
-        Name: "input",
-        Description: "",
-        Array: false,
-        Required: true,
-        Type: {
-          Kind: "UserDefined",
-          Name: resolverMetadata.inputType,
-          Description: "",
-          Required: false,
-          Fields: this.generateTypeFields(
-            resolverMetadata.inputType,
-            resolverMetadata.inputFields,
-          ),
-        },
-      },
-    ];
-
-    // Response構造を生成（Fields配列を含む）
-    const response: ManifestResponse = {
-      Type: {
-        Kind: "UserDefined",
-        Name: resolverMetadata.outputType,
-        Description: "",
-        Required: true,
-        Fields: this.generateTypeFields(
-          resolverMetadata.outputType,
-          resolverMetadata.outputFields,
-        ),
-      },
-      Description: "",
-      Array: false,
-      Required: true,
-    };
+  static generateTailorDBManifest(
+    service: TailorDBService,
+    metadata: BasicGeneratorMetadata<
+      ManifestTypeMetadata,
+      ResolverManifestMetadata
+    >,
+  ): any {
+    const types = Object.values(metadata.types)
+      .filter((typeMetadata) => typeMetadata != null)
+      .map((typeMetadata) => typeMetadata.typeManifest);
 
     return {
-      Authorization: "true==true", // デフォルト値
-      Description: `${name} resolver`,
-      Inputs: inputs,
-      Name: name,
-      Response: response,
-      Pipelines: pipelines,
-      PostHook: { Expr: "({ ...context.pipeline.__construct_output });" },
-      PublishExecutionEvents: false,
+      Kind: "tailordb",
+      Namespace: service.namespace,
+      Types: types,
+      Version: "v2",
     };
   }
 
   /**
-   * 型のFields配列を生成（完全に動的な実装）
-   * @param typeName - 型名（ログ出力用）
-   * @param fields - 動的に抽出されたフィールド情報
-   * @param allFields - 全てのフィールド情報（nested typeの再帰参照用）
-   * @returns ManifestField配列
+   * AuthServiceからManifest JSON生成
    */
   @measure
-  private static generateTypeFields(
-    typeName: string,
-    fields?: Record<
-      string,
-      { type: string; required: boolean; array: boolean; fields?: any }
-    >,
-    allFields?: Record<string, any>,
-  ): ManifestField[] {
-    if (fields && Object.keys(fields).length > 0) {
-      return Object.entries(fields).map(([fieldName, fieldInfo]) => {
-        if (fieldInfo.type === "nested") {
-          const nestedTypeName =
-            fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
-          const capitalizedTypeName =
-            typeName +
-            nestedTypeName.charAt(0).toUpperCase() +
-            nestedTypeName.slice(1);
-
-          let nestedFields: ManifestField[] = [];
-          if (fieldInfo.fields && typeof fieldInfo.fields === "object") {
-            nestedFields = this.generateNestedFields(
-              fieldInfo.fields,
-              capitalizedTypeName,
-            );
-          } else if (allFields && allFields[capitalizedTypeName]) {
-            nestedFields = this.generateTypeFields(
-              capitalizedTypeName,
-              allFields[capitalizedTypeName],
-              allFields,
-            );
-          } else {
-            console.warn(
-              `No nested field information found for ${fieldName} in type ${typeName}. Using empty fields.`,
-            );
+  static generateAuthManifest(service: AuthService): any {
+    return {
+      Kind: "auth",
+      Namespace: service.config.namespace,
+      IdProviderConfigs: service.config.idProviderConfigs?.map(
+        (provider: IdProviderConfig) => {
+          const baseConfig = { Name: provider.Name };
+          switch (provider.Config.Kind) {
+            case "IDToken":
+              return { ...baseConfig, IdTokenConfig: provider.Config };
+            case "SAML":
+              return { ...baseConfig, SamlConfig: provider.Config };
+            case "OIDC":
+              return { ...baseConfig, OidcConfig: provider.Config };
+            default:
+              throw new Error(
+                `Unknown IdProviderConfig kind: ${provider.Config satisfies never}`,
+              );
           }
-
-          return {
-            Name: fieldName,
-            Description: "",
-            Type: {
-              Kind: "UserDefined",
-              Name: capitalizedTypeName,
-              Description: "",
-              Required: fieldInfo.required,
-              Fields: nestedFields,
-            },
-            Array: fieldInfo.array,
-            Required: fieldInfo.required,
-          };
-        }
-
-        return {
-          Name: fieldName,
-          Description: "",
-          Type: {
-            Kind: "ScalarType",
-            Name:
-              tailorToGraphQL[fieldInfo.type as keyof typeof tailorToGraphQL] ||
-              "String",
-            Description: "",
-            Required: false,
-          },
-          Array: fieldInfo.array,
-          Required: fieldInfo.required,
-        };
-      });
-    }
-
-    // フィールド情報が取得できない場合
-    console.warn(
-      `No field information available for type: ${typeName}. Returning empty fields array.`,
-    );
-    return [];
-  }
-
-  /**
-   * Nested objectのフィールドを再帰的に処理
-   * @param nestedFields - nested objectの生フィールド情報
-   * @param parentTypeName - 親の型名（ネストされた型名生成用）
-   * @returns ManifestField配列
-   */
-  @measure
-  private static generateNestedFields(
-    nestedFields: any,
-    parentTypeName?: string,
-  ): ManifestField[] {
-    if (!nestedFields || typeof nestedFields !== "object") {
-      return [];
-    }
-
-    return Object.entries(nestedFields).map(
-      ([fieldName, field]: [string, any]) => {
-        const fieldObj = field as any;
-
-        const metadata = fieldObj?.metadata || {};
-        const fieldType = metadata.type || "string";
-        const required = metadata.required !== false;
-        const array = metadata.array === true;
-
-        if (fieldType === "nested" && fieldObj.fields) {
-          const nestedTypeName = parentTypeName
-            ? parentTypeName +
-              fieldName.charAt(0).toUpperCase() +
-              fieldName.slice(1)
-            : fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
-
-          return {
-            Name: fieldName,
-            Description: metadata.description || "",
-            Type: {
-              Kind: "UserDefined",
-              Name: nestedTypeName,
-              Description: "",
-              Required: required,
-              Fields: this.generateNestedFields(
-                fieldObj.fields,
-                nestedTypeName,
-              ),
-            },
-            Array: array,
-            Required: required,
-          };
-        }
-
-        // スカラータイプの場合
-        return {
-          Name: fieldName,
-          Description: metadata.description || "",
-          Type: {
-            Kind: "ScalarType",
-            Name:
-              tailorToGraphQL[fieldType as keyof typeof tailorToGraphQL] ||
-              "String",
-            Description: "",
-            Required: false,
-          },
-          Array: array,
-          Required: required,
-        };
-      },
-    );
+        },
+      ),
+      UserProfileProvider: service.config.userProfileProvider,
+      UserProfileProviderConfig: service.config.userProfileProviderConfig,
+      SCIMConfig: service.config.scimConfig || null,
+      TenantProvider: service.config.tenantProvider || "",
+      TenantProviderConfig: service.config.tenantProviderConfig || null,
+      MachineUsers: service.config.machineUsers,
+      OAuth2Clients: service.config.oauth2Clients || [],
+      Version: service.config.version,
+    };
   }
 }
