@@ -3,7 +3,7 @@ import { PipelineResolverServiceInput } from "@/services/pipeline/types";
 import { TailorDBService } from "@/services/tailordb/service";
 import { TailorDBServiceInput } from "@/services/tailordb/types";
 import { AuthService } from "@/services/auth/service";
-import { AuthReference, AuthServiceInput } from "@/services/auth/types";
+import { AuthServiceInput } from "@/services/auth/types";
 import { measure } from "@/performance";
 
 export class Application {
@@ -18,6 +18,10 @@ export class Application {
     this._subgraphs.push({ Type: type, Name: name });
   }
 
+  get subgraphs() {
+    return this._subgraphs as ReadonlyArray<{ Type: string; Name: string }>;
+  }
+
   get tailorDBServices() {
     return this._tailorDBServices as ReadonlyArray<TailorDBService>;
   }
@@ -28,7 +32,7 @@ export class Application {
   }
 
   get authService() {
-    return this._authService as Readonly<AuthService>;
+    return this._authService as Readonly<AuthService> | undefined;
   }
 
   @measure
@@ -57,32 +61,5 @@ export class Application {
     const authService = new AuthService(config);
     this._authService = authService;
     this.addSubgraph("auth", authService.config.namespace);
-  }
-
-  toManifestJSON() {
-    let authReference: AuthReference | object = {};
-
-    if (this._authService) {
-      const namespace = this._authService.config.namespace;
-
-      const idProviderConfigs = this._authService.config.idProviderConfigs;
-      if (idProviderConfigs && idProviderConfigs.length > 0) {
-        authReference = {
-          Namespace: namespace,
-          IdProviderConfigName: idProviderConfigs[0].Name,
-        };
-      }
-    }
-
-    return {
-      Kind: "application",
-      Name: this.name,
-      Cors: [],
-      AllowedIPAddresses: [],
-      DisableIntrospection: false,
-      Auth: authReference,
-      Subgraphs: this._subgraphs,
-      Version: "v2",
-    };
   }
 }

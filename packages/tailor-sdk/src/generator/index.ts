@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from "node:fs";
 import path from "node:path";
-import { GenerateOptions, type ApplyOptions } from "@/cli/args";
+import type { GenerateOptions, ApplyOptions } from "@/cli/args";
 import { getDistDir, WorkspaceConfig } from "@/config";
 import { defineWorkspace } from "@/workspace";
 import { Resolver } from "@/services/pipeline/resolver";
