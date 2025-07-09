@@ -54,6 +54,166 @@ export class TypeProcessor {
     return nestedFields;
   }
 
+  /**
+   * 単一のTailorDBTypeに対するマニフェスト生成処理
+   * 元のManifestAggregator.generateTailorDBManifest相当の処理を単一型に適用
+   */
+  @measure
+  static generateTailorDBTypeManifest(type: TailorDBType): any {
+    const metadata = type.metadata;
+    const schema = metadata.schema;
+
+    const defaultTypePermission = {
+      Create: [
+        {
+          Id: "everyone",
+          Ids: [],
+          Permit: "allow",
+        },
+      ],
+      Read: [
+        {
+          Id: "everyone",
+          Ids: [],
+          Permit: "allow",
+        },
+      ],
+      Update: [
+        {
+          Id: "everyone",
+          Ids: [],
+          Permit: "allow",
+        },
+      ],
+      Delete: [
+        {
+          Id: "everyone",
+          Ids: [],
+          Permit: "allow",
+        },
+      ],
+      Admin: [
+        {
+          Id: "everyone",
+          Ids: [],
+          Permit: "allow",
+        },
+      ],
+    };
+
+    const defaultSettings = {
+      Aggregation: false,
+      BulkUpsert: false,
+      Draft: false,
+      DefaultQueryLimitSize: 100,
+      MaxBulkUpsertSize: 1000,
+      PluralForm: "",
+      PublishRecordEvents: false,
+    };
+
+    const fields: any = {};
+    if (schema?.fields) {
+      Object.entries(schema.fields)
+        .filter(([fieldName]) => fieldName !== "id")
+        .forEach(([fieldName, fieldConfig]: [string, any]) => {
+          const fieldType = fieldConfig.type || "string";
+          const fieldEntry: any = {
+            Type: fieldType,
+            AllowedValues:
+              fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
+            Description: fieldConfig.description || "",
+            Validate: (fieldConfig.validate || []).map((val: any) => ({
+              Action: "allow",
+              ErrorMessage: val.errorMessage || "",
+              Expr: val.expr || "",
+              ...(val.script && {
+                Script: {
+                  Expr: val.script.expr || "",
+                },
+              }),
+            })),
+            Array: fieldConfig.array || false,
+            Index: fieldConfig.index || false,
+            Required: fieldConfig.required !== false,
+            Unique: fieldConfig.unique || false,
+            ForeignKey: fieldConfig.foreignKey || false,
+            ForeignKeyType: fieldConfig.foreignKeyType,
+            Vector: fieldConfig.vector || false,
+            ...(fieldConfig.hooks && {
+              Hooks: {
+                Create: fieldConfig.hooks?.create,
+                Update: fieldConfig.hooks?.update,
+              },
+            }),
+          };
+
+          if (fieldConfig.type === "nested") {
+            fieldEntry.Type = "nested";
+            delete fieldEntry.Vector;
+
+            const objectField = type.fields[fieldName];
+            if (objectField && (objectField as any).fields) {
+              fieldEntry.Fields = TypeProcessor.processNestedFields(
+                (objectField as any).fields,
+              );
+            }
+          }
+
+          fields[fieldName] = fieldEntry;
+        });
+    }
+
+    const relationships: Record<string, any> = {};
+    Object.entries(type.fields)
+      .filter(([_, fieldConfig]: [string, any]) => fieldConfig.reference)
+      .forEach(([fieldName, fieldConfig]: [string, any]) => {
+        if (fieldConfig.reference) {
+          const ref = fieldConfig.reference;
+          const nameMap = ref.nameMap || [];
+          if (nameMap.length > 0) {
+            relationships[nameMap[0]] = {
+              RefType: ref.type.name,
+              RefField: ref.key || "id",
+              SrcField: fieldName,
+              Array: fieldConfig._metadata?.array || false,
+              Description: ref.type.metadata.description || "",
+            };
+          }
+        }
+      });
+
+    if (type.referenced && Object.keys(type.referenced).length > 0) {
+      Object.entries(type.referenced).forEach(
+        ([backwardFieldName, [referencedType, fieldName]]) => {
+          const field = referencedType.fields[fieldName];
+          const nameMap = field.reference?.nameMap;
+          const array = !(field.metadata?.unique ?? false);
+          const key = nameMap[1] || backwardFieldName;
+          const srcField = field.reference?.key;
+          relationships[key] = {
+            RefType: referencedType.name,
+            RefField: fieldName,
+            SrcField: srcField || "id",
+            Array: array,
+            Description: referencedType.metadata.schema?.description || "",
+          };
+        },
+      );
+    }
+
+    return {
+      Name: metadata.name || type.name,
+      Description: schema?.description || "",
+      Fields: fields,
+      Relationships: relationships,
+      Settings: defaultSettings,
+      Extends: schema?.extends || false,
+      Directives: [],
+      Indexes: {},
+      TypePermission: defaultTypePermission,
+    };
+  }
+
   @measure
   static async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
     const fields: ManifestFieldMetadata[] = Object.entries(type.fields).map(
@@ -85,10 +245,12 @@ export class TypeProcessor {
       },
     );
 
+    const typeManifest = TypeProcessor.generateTailorDBTypeManifest(type);
     return {
       name: type.name,
       fields,
       isInput: false,
+      typeManifest,
     };
   }
 

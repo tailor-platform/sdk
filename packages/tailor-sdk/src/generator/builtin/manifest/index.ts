@@ -85,7 +85,6 @@ export class ManifestGenerator
         types: allTypes,
         resolvers: allResolvers,
       },
-      pipelineNamespace,
       this.workspace,
     );
   }
