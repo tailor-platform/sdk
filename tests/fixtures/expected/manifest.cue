@@ -116,10 +116,18 @@
               "Validate": [
                 {
                   "Action": "allow",
-                  "ErrorMessage": "",
+                  "ErrorMessage": "failed by \"({value})=>value.length>1\"",
                   "Expr": "",
                   "Script": {
                     "Expr": "(({value})=>value.length>1)({ value: _value, user })"
+                  }
+                },
+                {
+                  "Action": "allow",
+                  "ErrorMessage": "failed by \"({value})=>value.length<100\"",
+                  "Expr": "",
+                  "Script": {
+                    "Expr": "(({value})=>value.length<100)({ value: _value, user })"
                   }
                 }
               ],
@@ -2097,10 +2105,18 @@
               "Validate": [
                 {
                   "Action": "allow",
-                  "ErrorMessage": "",
+                  "ErrorMessage": "failed by \"({value})=>value.length>1\"",
                   "Expr": "",
                   "Script": {
                     "Expr": "(({value})=>value.length>1)({ value: _value, user })"
+                  }
+                },
+                {
+                  "Action": "allow",
+                  "ErrorMessage": "failed by \"({value})=>value.length<100\"",
+                  "Expr": "",
+                  "Script": {
+                    "Expr": "(({value})=>value.length<100)({ value: _value, user })"
                   }
                 }
               ],
