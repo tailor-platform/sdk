@@ -320,6 +320,43 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
     }>();
   });
 
+  it("validate()修飾子がメッセージ付きオブジェクトを受け取れる", () => {
+    const _validateType = db.type("Test", {
+      email: db
+        .string()
+        .validate([({ value }) => value.includes("@"), "Email must contain @"]),
+    });
+    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
+      id: string;
+      email: string;
+    }>();
+
+    // Test that the field config is generated correctly
+    const fieldConfig = (_validateType as any).fields.email.config;
+    expect(fieldConfig.validate).toBeDefined();
+    expect(fieldConfig.validate[0].errorMessage).toBe("Email must contain @");
+  });
+
+  it("validate()修飾子が複数のバリデーターを受け取れる", () => {
+    const _validateType = db.type("Test", {
+      password: db
+        .string()
+        .validate(
+          ({ value }) => value.length >= 8,
+          [
+            ({ value }) => /[A-Z]/.test(value),
+            "Password must contain uppercase letter",
+          ],
+        ),
+    });
+
+    const fieldConfig = (_validateType as any).fields.password.config;
+    expect(fieldConfig.validate).toHaveLength(2);
+    expect(fieldConfig.validate[1].errorMessage).toBe(
+      "Password must contain uppercase letter",
+    );
+  });
+
   it("修飾子の順序が結果に影響しない", () => {
     const _chainType1 = db.type("Test", {
       field: db.string().optional().array(),
@@ -492,6 +529,39 @@ describe("TailorDBType 型の一貫性テスト", () => {
 
     // Should return the same type instance for chaining
     expect(result).toBe(_userType);
+  });
+
+  it("type-level validate method should accept message objects", () => {
+    const _userType = db.type("User", {
+      name: db.string(),
+      email: db.string(),
+    });
+
+    // Test that the validate method accepts both function and object formats
+    const result = _userType.validate({
+      name: [
+        ({ value }) => value.length > 0,
+        [
+          ({ value }) => value.length <= 50,
+          "Name must be 50 characters or less",
+        ],
+      ],
+      email: [({ value }) => value.includes("@"), "Email must be valid"],
+    });
+
+    // Should return the same type instance for chaining
+    expect(result).toBe(_userType);
+
+    // Check that fields have correct validation config
+    const nameConfig = (_userType as any).fields.name.config;
+    expect(nameConfig.validate).toHaveLength(2);
+    expect(nameConfig.validate[1].errorMessage).toBe(
+      "Name must be 50 characters or less",
+    );
+
+    const emailConfig = (_userType as any).fields.email.config;
+    expect(emailConfig.validate).toHaveLength(1);
+    expect(emailConfig.validate[0].errorMessage).toBe("Email must be valid");
   });
 });
 

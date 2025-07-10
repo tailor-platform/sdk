@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-function-type */
-
 import { TailorUser } from "@/types";
 import { output } from "@/types/helpers";
 import { FieldMetadata } from "@/types/types";
@@ -10,7 +8,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   vector?: boolean;
   foreignKey?: boolean;
   foreignKeyType?: string;
-  validate?: Function[];
+  validate?: FieldValidateInput<any>[];
   hooks?: Hook<any, any>;
 }
 
@@ -67,7 +65,13 @@ export type Hooks<P extends DBTypeLike> = {
 
 export type Validators<P extends DBTypeLike> = {
   [K in UndefinedFields<P, "validate">]?: K extends keyof output<P>
-    ? ValidateFn<output<P>[K], output<P>>[]
+    ?
+        | ValidateFn<output<P>[K], output<P>>
+        | ValidateConfig<output<P>[K], output<P>>
+        | (
+            | ValidateFn<output<P>[K], output<P>>
+            | ValidateConfig<output<P>[K], output<P>>
+          )[]
     : never;
 } & {
   [K in DefinedFields<P, "validate">]?: {
@@ -80,7 +84,12 @@ export type ValidateFn<O, D = unknown> = (args: {
   data: D;
   user: TailorUser;
 }) => boolean;
+
+export type ValidateConfig<O, D = unknown> = [ValidateFn<O, D>, string];
+
 export type FieldValidateFn<O> = ValidateFn<O>;
+export type FieldValidateConfig<O> = ValidateConfig<O>;
+export type FieldValidateInput<O> = FieldValidateFn<O> | FieldValidateConfig<O>;
 export type TypeValidateFn<P, O> = (args: {
   value: O;
   data: P;

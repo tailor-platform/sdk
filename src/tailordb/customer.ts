@@ -11,7 +11,10 @@ export const customer = db
     city: db
       .string()
       .optional()
-      .validate(({ value }) => value.length > 1),
+      .validate(
+        ({ value }) => value.length > 1,
+        ({ value }) => value.length < 100,
+      ),
     fullAddress: db.string().optional(),
     state: db.string(),
     ...db.fields.timestamps(),
