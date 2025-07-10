@@ -5,7 +5,6 @@ import path from "node:path";
 import { styleText } from "node:util";
 import ini from "ini";
 import ml from "multiline-ts";
-import { ApplyOptions } from "@/cli/args";
 import { Region } from "@/types/types";
 
 interface CtlConfig {
@@ -18,7 +17,7 @@ interface CtlConfig {
 export class TailorCtl {
   private ctlConfig: CtlConfig;
 
-  constructor(private options: ApplyOptions) {
+  constructor(private options: { dryRun?: boolean } = { dryRun: false }) {
     if (options.dryRun) {
       this.ctlConfig = {
         name: "",
