@@ -12,8 +12,9 @@ import {
   Hooks,
   Validators,
   DefinedFieldMetadata,
-  FieldValidateFn,
+  FieldValidateInput,
   Hook,
+  ValidateConfig,
 } from "./types";
 import { TailorFieldType, TailorToTs } from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
@@ -59,10 +60,16 @@ class TailorDBField<
     return new TailorDBType_FieldConfig({
       ...this._metadata,
       validate: this._metadata.validate?.map((v) => {
+        const { fn, message } =
+          typeof v === "function"
+            ? { fn: v, message: `failed by "${v.toString().trim()}"` }
+            : { fn: v[0], message: v[1] };
+
         return new TailorDBType_ValidateConfig({
           script: new Script({
-            expr: `(${v.toString().trim()})({ value: _value, user })`,
+            expr: `(${fn.toString().trim()})({ value: _value, user })`,
           }),
+          errorMessage: message,
         });
       }),
       hooks: this._metadata.hooks
@@ -280,7 +287,7 @@ class TailorDBField<
   }
 
   validate<
-    const V extends FieldValidateFn<Output>[],
+    const V extends FieldValidateInput<Output>[],
     CurrentDefined extends Defined,
   >(
     this: CurrentDefined extends { validate: unknown }
@@ -438,8 +445,16 @@ export class TailorDBType<
 
   validate(validators: Validators<typeof this>) {
     Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
-      const field = this.fields[fieldName];
-      (field as any).validate(...(fieldValidators as unknown[]));
+      const field = this.fields[fieldName] as TailorDBField<any, any, any>;
+
+      const validators = fieldValidators as
+        | ValidateConfig<any>
+        | FieldValidateInput<any>[];
+      if (validators.length === 2 && typeof validators[1] === "string") {
+        field.validate(validators as ValidateConfig<any>);
+      } else {
+        field.validate(...(validators as FieldValidateInput<any>[]));
+      }
     });
     return this;
   }
