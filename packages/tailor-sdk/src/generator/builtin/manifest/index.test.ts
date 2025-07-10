@@ -6,7 +6,7 @@ import {
   createMutationResolver,
 } from "@/services/pipeline/resolver";
 import type { Workspace } from "@/workspace";
-import type { ApplyOptions } from "@/cli/args";
+import type { ApplyOptions } from "@/generator/options";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import t from "@/types/type";
 

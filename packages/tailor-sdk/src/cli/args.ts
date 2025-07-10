@@ -1,4 +1,6 @@
 import type { ArgsDef, ParsedArgs } from "citty";
+import type { CliOption } from "./types";
+import type { GenerateOptions, ApplyOptions } from "@/generator/options";
 
 type StrictParse<T extends ArgsDef> = {
   [K in keyof ParsedArgs<T> as string extends K
@@ -17,23 +19,27 @@ export const commonCommandArgs = {
   },
 } as const;
 
+const cliGenerateOption = {
+  ...commonCommandArgs,
+  watch: {
+    type: "boolean",
+    description: "Watch for type/resolver changes and regenerate",
+    alias: "w",
+  },
+} as const satisfies CliOption<GenerateOptions>;
+
+const cliApplyOption = {
+  ...commonCommandArgs,
+  dryRun: {
+    type: "boolean",
+    description: "Run the command without making any changes",
+    alias: "d",
+  },
+} as const satisfies CliOption<ApplyOptions>;
+
 export const commandArgs = {
-  apply: {
-    ...commonCommandArgs,
-    dryRun: {
-      type: "boolean",
-      description: "Run the command without making any changes",
-      alias: "d",
-    },
-  },
-  generate: {
-    ...commonCommandArgs,
-    watch: {
-      type: "boolean",
-      description: "Watch for type/resolver changes and regenerate",
-      alias: "w",
-    },
-  },
+  apply: cliApplyOption,
+  generate: cliGenerateOption,
 } as const;
 
 export type _ApplyOptions = StrictParse<typeof commandArgs.apply>;
@@ -43,5 +49,4 @@ export type CommandArgs =
   | ["apply", _ApplyOptions]
   | ["generate", _GenerateOptions];
 
-export type ApplyOptions = Omit<_ApplyOptions, "config">;
-export type GenerateOptions = Omit<_GenerateOptions, "config">;
+export { type ApplyOptions, type GenerateOptions } from "@/generator/options";
