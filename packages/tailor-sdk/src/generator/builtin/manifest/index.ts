@@ -7,7 +7,7 @@ import { TypeProcessor } from "./type-processor";
 import { ResolverProcessor } from "./resolver-processor";
 import { ManifestAggregator } from "./aggregator";
 import type { Workspace } from "@/workspace";
-import type { ApplyOptions } from "@/cli/args";
+import type { ApplyOptions } from "@/generator/options";
 
 /**
  * Manifest生成システムのメインエントリーポイント

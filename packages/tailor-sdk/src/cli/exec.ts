@@ -3,12 +3,7 @@
 import { defineCommand, runMain } from "citty";
 import path from "node:path";
 import type { WorkspaceConfig } from "@/config";
-import {
-  commandArgs,
-  type CommandArgs,
-  type _ApplyOptions,
-  type _GenerateOptions,
-} from "./args.js";
+import { commandArgs, type CommandArgs } from "./args.js";
 import { apply, generate } from "@/generator";
 
 async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
@@ -63,7 +58,7 @@ const applyCommand = defineCommand({
   },
   args: commandArgs.apply,
   async run({ args }) {
-    await exec("apply", args as _ApplyOptions);
+    await exec("apply", args);
   },
 });
 
@@ -74,7 +69,7 @@ const generateCommand = defineCommand({
   },
   args: commandArgs.generate,
   async run({ args }) {
-    await exec("generate", args as _GenerateOptions);
+    await exec("generate", args);
   },
 });
 
