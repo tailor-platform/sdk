@@ -54,6 +54,6 @@ jobs:
       - name: Publish to GitHub Packages
         run: |
           cd packages/tailor-sdk
-          pnpm publish --no-git-checks --dry-run
+          pnpm publish --no-git-checks
         env:
           GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
