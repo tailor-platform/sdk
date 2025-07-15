@@ -1,8 +1,8 @@
 {
   "name": "@tailor-platform/tailor-sdk",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "Tailor SDK Core Package",
-  "main": "src/index.ts",
+  "main": "src/index.mjs",
   "type": "module",
   "files": [
     "dist",
@@ -26,7 +26,8 @@
     "lint:fix": "eslint --cache . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublish": "pnpm run build"
   },
   "dependencies": {
     "@tailor-inc/operator-client": "^25.313.146",
@@ -37,6 +38,9 @@
     "oxc-parser": "^0.34.0",
     "pkg-types": "^2.1.0",
     "tsx": "^4.20.3"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",

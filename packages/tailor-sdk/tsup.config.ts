@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   tsconfig: "./tsconfig.json",
-  entry: ["src/cli/*", "src/index.ts"],
+  entry: ["src/index.ts", "src/cli/index.ts", "src/cli/exec.ts"],
   format: ["esm"],
   target: "node18",
   platform: "node",
