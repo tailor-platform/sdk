@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env"],
-  "globalPassThroughEnv": ["GITHUB_PACKAGES_READ_TOKEN"],
+  "globalPassThroughEnv": ["GITHUB_PACKAGES_TOKEN"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

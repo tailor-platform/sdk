@@ -53,4 +53,4 @@ jobs:
           cd packages/tailor-sdk
           pnpm publish --dry-run
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
