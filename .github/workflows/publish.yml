@@ -56,4 +56,4 @@ jobs:
           cd packages/tailor-sdk
           pnpm publish --no-git-checks
         env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_WRITE_TOKEN }}
