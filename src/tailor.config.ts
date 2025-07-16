@@ -8,7 +8,7 @@ export default defineConfig({
       db: {
         tailordb: { files: ["./src/tailordb/*.ts"] },
       },
-      resolver: {
+      pipeline: {
         "my-pipeline": { files: ["./src/resolvers/**/resolver.ts"] },
       },
       auth: {
