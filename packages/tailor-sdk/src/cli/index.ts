@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 
 async function checkTsxAvailable(): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn("tsx", ["--version"], {
+    const child = spawn("npx", ["tsx", "--version"], {
       stdio: "ignore",
     });
 
@@ -48,7 +48,7 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
     }
 
     const argsDef = commandArgs[command];
-    const args = [cliExecPath, command];
+    const args = ["tsx", cliExecPath, command];
     Object.entries(argsDef).forEach(([key, value]) => {
       if (key in options) {
         if (value.type === "boolean") {
@@ -62,11 +62,8 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
         }
       }
     });
-    // if ("dryRun" in options && options.dryRun) {
-    //   args.push("-d");
-    // }
 
-    const child = spawn("tsx", args, {
+    const child = spawn("npx", args, {
       stdio: "inherit",
       cwd: process.cwd(),
     });
