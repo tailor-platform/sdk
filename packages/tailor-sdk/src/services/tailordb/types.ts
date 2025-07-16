@@ -45,7 +45,7 @@ type UndefinedFields<
 type HookReturn<T> = IsDateType<T> extends true ? string : T;
 type HookValue<T> = IsDateType<T> extends true ? string : T;
 type HookFn<O, P> = (args: {
-  value: HookValue<output<O>>;
+  value: HookValue<O>;
   data: P;
   user: TailorUser;
 }) => HookReturn<O>;

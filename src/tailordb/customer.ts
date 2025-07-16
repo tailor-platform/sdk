@@ -24,5 +24,11 @@ export const customer = db
       create: ({ data }) => `〒${data.postalCode} ${data.address} ${data.city}`,
       update: ({ data }) => `〒${data.postalCode} ${data.address} ${data.city}`,
     },
+  })
+  .validate({
+    name: [
+      ({ value }) => value.length > 5,
+      "Name must be longer than 5 characters",
+    ],
   });
 export type customer = typeof customer;
