@@ -33,6 +33,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_READ_TOKEN }}
 
       - name: Create and push tag
         if: github.event_name == 'workflow_dispatch'
