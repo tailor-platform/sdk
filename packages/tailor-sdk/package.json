@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@tailor-inc/operator-client": "^25.313.146",
+    "@rollup/plugin-node-resolve": "^16.0.1",
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",
     "inflection": "^3.0.2",
@@ -50,7 +51,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",
-    "@rollup/plugin-node-resolve": "^16.0.1",
     "@swc/core": "^1.11.29",
     "@types/ini": "^4.1.1",
     "@types/madge": "^5.0.3",
