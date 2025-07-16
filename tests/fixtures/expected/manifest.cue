@@ -41,7 +41,16 @@
               "Type": "string",
               "AllowedValues": [],
               "Description": "",
-              "Validate": [],
+              "Validate": [
+                {
+                  "Action": "allow",
+                  "ErrorMessage": "Name must be longer than 5 characters",
+                  "Expr": "",
+                  "Script": {
+                    "Expr": "(({value})=>value.length>5)({ value: _value, user })"
+                  }
+                }
+              ],
               "Array": false,
               "Index": false,
               "Required": true,
@@ -2030,7 +2039,16 @@
               "Type": "string",
               "AllowedValues": [],
               "Description": "",
-              "Validate": [],
+              "Validate": [
+                {
+                  "Action": "allow",
+                  "ErrorMessage": "Name must be longer than 5 characters",
+                  "Expr": "",
+                  "Script": {
+                    "Expr": "(({value})=>value.length>5)({ value: _value, user })"
+                  }
+                }
+              ],
               "Array": false,
               "Index": false,
               "Required": true,
