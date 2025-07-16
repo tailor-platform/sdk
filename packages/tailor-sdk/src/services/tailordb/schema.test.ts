@@ -324,7 +324,10 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
     const _validateType = db.type("Test", {
       email: db
         .string()
-        .validate([({ value }) => value.includes("@"), "Email must contain @"]),
+        .validate([
+          ({ value }: { value: string }) => value.includes("@"),
+          "Email must contain @",
+        ]),
     });
     expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
       id: string;
