@@ -39,7 +39,6 @@
     "@tailor-platform/tailor-sdk": "workspace:^",
     "@types/node": "^22.15.3",
     "dir-compare": "^4.2.0",
-    "es-toolkit": "^1.38.0",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.5",
     "globals": "^16.2.0",
