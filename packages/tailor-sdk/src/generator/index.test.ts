@@ -121,7 +121,7 @@ describe("GenerationManager", () => {
       app: {
         testApp: {
           db: { main: { files: ["src/types/*.ts"] } },
-          resolver: { main: { files: ["src/resolvers/*.ts"] } },
+          pipeline: { main: { files: ["src/resolvers/*.ts"] } },
           auth: { namespace: "test-auth" },
         },
       },
@@ -811,7 +811,7 @@ describe("Integration Tests", () => {
               files: [path.join(tempDir, "types/*.ts")],
             },
           },
-          resolver: {
+          pipeline: {
             main: {
               files: [path.join(tempDir, "resolvers/*.ts")],
             },

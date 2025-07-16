@@ -45,7 +45,7 @@ export class Application {
   }
 
   @measure
-  defineResolver(config: PipelineResolverServiceInput) {
+  definePipeline(config: PipelineResolverServiceInput) {
     for (const [namespace, serviceConfig] of Object.entries(config)) {
       const pipelineService = new PipelineResolverService(
         namespace,
