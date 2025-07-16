@@ -37,6 +37,7 @@
     "@rollup/plugin-node-resolve": "^16.0.1",
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",
+    "es-toolkit": "^1.38.0",
     "inflection": "^3.0.2",
     "madge": "^8.0.0",
     "multiline-ts": "^4.0.1",
