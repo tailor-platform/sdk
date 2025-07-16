@@ -15,7 +15,7 @@ export class Workspace {
     const app = new Application(name);
     app.defineAuth(appConfig.auth);
     app.defineTailorDB(appConfig.db);
-    app.defineResolver(appConfig.resolver);
+    app.definePipeline(appConfig.pipeline);
 
     this._applications.push(app);
     return app;

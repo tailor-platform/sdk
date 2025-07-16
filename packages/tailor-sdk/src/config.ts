@@ -16,7 +16,7 @@ import { CodeGenerator } from "@/generator/types";
 
 export interface AppConfig {
   db: TailorDBServiceInput;
-  resolver: PipelineResolverServiceInput;
+  pipeline: PipelineResolverServiceInput;
   auth: AuthServiceInput;
 }
 

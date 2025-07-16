@@ -1,4 +1,4 @@
-# Tailor SDK
+# [Tailor SDK](https://github.com/tailor-platform/tailor-sdk/pkgs/npm/tailor-sdk)
 
 A development kit for building applications on the Tailor Platform.
 
@@ -21,6 +21,16 @@ A development kit for building applications on the Tailor Platform.
 
 ## Installation
 
+`.npmrc`
+
+```.npmrc
+@tailor-inc:registry=https://npm.pkg.github.com
+@tailor-platform:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+For `GITHUB_PACKAGES_TOKEN`, please [generate a Personal Access Token](https://github.com/settings/tokens/new) with `read:packages` scope and configure SSO to `tailor-inc` / `tailor-platform`.
+
 ```bash
 npm install @tailor-platform/tailor-sdk
 # or
@@ -42,8 +52,36 @@ export default defineConfig({
   app: {
     "my-app": {
       db: { "my-db": { files: ["./src/tailordb/*.ts"] } },
-      resolver: {
+      pipeline: {
         "my-pipeline": { files: ["./src/resolvers/**/resolver.ts"] },
+      },
+      auth: {
+        namespace: "my-auth",
+        idProviderConfigs: [
+          {
+            Name: "sample",
+            Config: {
+              Kind: "IDToken",
+              ClientID: "exampleco",
+              ProviderURL: "https://exampleco-enterprises.auth0.com/",
+            },
+          },
+        ],
+        userProfileProvider: "TAILORDB",
+        userProfileProviderConfig: {
+          Kind: "TAILORDB",
+          Namespace: "my-db",
+          Type: "User",
+          UsernameField: "email",
+          AttributesFields: ["roles"],
+        },
+        machineUsers: [
+          {
+            Name: "admin-machine-user",
+            Attributes: ["4293a799-4398-55e6-a19a-fe8427d1a415"],
+          },
+        ],
+        oauth2Clients: [],
       },
     },
   },
@@ -67,12 +105,12 @@ defineConfig({
   app: {
     [appName: string]: {
       db?: {                // TailorDB services
-        [dbName: string]: {
-          files: string[]   // Glob patterns for model files
+        [namespace: string]: {
+          files: string[]   // Glob patterns for type files
         }
       },
-      resolver?: {          // Pipeline resolver services
-        [serviceName: string]: {
+      pipeline?: {          // Pipeline services
+        [namespace: string]: {
           files: string[]   // Glob patterns for resolver files
         }
       },
@@ -86,9 +124,9 @@ defineConfig({
   },
   generators?: [            // Code generators
     "@tailor/sdl",
-    ["@tailor/kysely-type", { distPath: "./generated/db.ts" }]
+    ["@tailor/kysely-type", { distPath: ({ tailorDB }) => `./src/resolvers/${tailorDB}.ts` }],
+    ["@tailor/db-type", { distPath: () => `./src/tailordb/types.ts` }],
   ],
-  tsConfig?: string,        // Path to TypeScript config
 })
 ```
 

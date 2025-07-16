@@ -7,7 +7,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - uses: ysk8hori/delta-typescript-graph-action@9f5aa92aa05dfa8dfa2865b244394eaeabf78783 # v1.2.2
+      - uses: ysk8hori/delta-typescript-graph-action@b372d77b21e4e2aa1cd6f0c3921f979920f68b51 # v1.2.3
         with:
           comment-title: "TypeScript Graph for Project Root"
           access-token: ${{ secrets.GITHUB_TOKEN }}
@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - uses: ysk8hori/delta-typescript-graph-action@9f5aa92aa05dfa8dfa2865b244394eaeabf78783 # v1.2.2
+      - uses: ysk8hori/delta-typescript-graph-action@b372d77b21e4e2aa1cd6f0c3921f979920f68b51 # v1.2.3
         with:
           comment-title: "TypeScript Graph for SDK"
           access-token: ${{ secrets.GITHUB_TOKEN }}
