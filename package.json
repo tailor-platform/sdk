@@ -44,7 +44,6 @@
     "eslint-config-prettier": "^10.1.5",
     "globals": "^16.2.0",
     "lefthook": "^1.11.14",
-    "multiline-ts": "^4.0.1",
     "prettier": "3.5.3",
     "tsx": "^4.19.2",
     "turbo": "^2.5.4",
