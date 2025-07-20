@@ -748,7 +748,9 @@ describe("apply function", () => {
     const { TailorCtl } = await import("@/ctl");
     const TailorCtlMock = vi.mocked(TailorCtl);
     const applySpy = vi.fn();
-    TailorCtlMock.mockImplementation(() => ({ apply: applySpy }) as any);
+    TailorCtlMock.mockImplementation(
+      () => ({ apply: applySpy, upsertWorkspace: vi.fn() }) as any,
+    );
 
     await apply(mockConfig, mockApplyOptions);
 

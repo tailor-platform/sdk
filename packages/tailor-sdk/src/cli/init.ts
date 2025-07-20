@@ -80,14 +80,14 @@ export default defineConfig({
   region: "${region}",
   app: {
     "app-name": {
-      db: { 
-        "main-db": { 
-          files: ["./src/tailordb/**/*.ts"] 
-        } 
+      db: {
+        "main-db": {
+          files: ["./src/tailordb/**/*.ts"]
+        }
       },
       pipeline: {
-        "main-pipeline": { 
-          files: ["./src/resolvers/**/resolver.ts"] 
+        "main-pipeline": {
+          files: ["./src/resolvers/**/resolver.ts"]
         },
       },`;
 
@@ -453,7 +453,7 @@ export const initCommand = defineCommand({
             type: "input",
             name: "newProjectName",
             message: "Enter name for new project:",
-            validate: (input) => {
+            validate: (input: string) => {
               const validation = validateProjectName(input);
               return validation === true ? true : validation;
             },
@@ -504,7 +504,7 @@ export const initCommand = defineCommand({
           name: "projectName",
           message: "Project name:",
           default: projectName || "my-tailor-app",
-          validate: (input) => {
+          validate: (input: string) => {
             const validation = validateProjectName(input);
             return validation === true ? true : validation;
           },
