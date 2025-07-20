@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { commandArgs, type CommandArgs } from "./args.js";
+import { initCommand } from "./init.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -119,6 +120,7 @@ const mainCommand = defineCommand({
   subCommands: {
     apply: applyCommand,
     generate: generateCommand,
+    init: initCommand,
   },
 });
 

@@ -21,6 +21,75 @@ A development kit for building applications on the Tailor Platform.
 
 ## Installation
 
+### Quick Start with Init Command
+
+The easiest way to start a new Tailor SDK project is using the init command:
+
+```bash
+npx @tailor-platform/tailor-sdk init my-project
+```
+
+This will create a new project with all necessary configuration files and example code.
+
+#### Init Command Options
+
+```bash
+npx @tailor-platform/tailor-sdk init [project-name] [options]
+```
+
+Options:
+
+- `-r, --region <region>` - Deployment region (asia-northeast | us-west, default: asia-northeast)
+- `--skip-install` - Skip npm install after project creation
+- `-t, --template <template>` - Project template (basic | fullstack, default: basic)
+- `-y, --yes` - Skip interactive prompts and use default values
+- `--add-to-existing` - Add Tailor SDK to an existing TypeScript project
+
+Templates:
+
+- **basic** - Minimal setup with TailorDB and simple resolvers
+- **fullstack** - Full setup including authentication configuration
+
+#### Adding to Existing Projects
+
+The init command can add Tailor SDK to your existing TypeScript projects:
+
+1. **Using the --add-to-existing flag**:
+
+   ```bash
+   cd your-existing-project
+   npx @tailor-platform/tailor-sdk init --add-to-existing
+   ```
+
+2. **Interactive mode**:
+
+   ```bash
+   # When running init in a directory with package.json
+   npx @tailor-platform/tailor-sdk init
+   # Choose "Add Tailor SDK to existing project" when prompted
+   ```
+
+3. **Specify existing project directory**:
+   ```bash
+   npx @tailor-platform/tailor-sdk init existing-project-name
+   # Choose "Add Tailor SDK to existing project" when prompted
+   ```
+
+When adding to an existing project, the init command will:
+
+- Add `@tailor-platform/tailor-sdk` to your dependencies
+- Add Tailor scripts (`tailor:dev`, `tailor:build`, `tailor:deploy`) to package.json
+- Create `tailor.config.ts` with your project configuration
+- Create `src/tailordb/` and `src/resolvers/` directories with examples
+- Update `.npmrc` with GitHub Packages registry settings
+- Update `.gitignore` to exclude generated files
+
+Existing files are never overwritten - the command safely skips any files that already exist.
+
+### Manual Installation
+
+If you prefer to add Tailor SDK to an existing project:
+
 `.npmrc`
 
 ```.npmrc
@@ -409,6 +478,9 @@ export default defineConfig({
 The SDK provides CLI commands for development:
 
 ```bash
+# Initialize a new project
+npx tailor-sdk init [project-name]
+
 # Generate code and manifests
 npx tailor-sdk generate
 
