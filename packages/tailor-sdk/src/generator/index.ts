@@ -454,5 +454,7 @@ export async function apply(config: WorkspaceConfig, options: ApplyOptions) {
   if (!distDir) {
     throw new Error("Distribution directory is not configured");
   }
-  new TailorCtl(options).apply(path.join(distDir, "manifest.cue"));
+  const tailorCtl = new TailorCtl(options);
+  tailorCtl.upsertWorkspace(applyConfig);
+  tailorCtl.apply(path.join(distDir, "manifest.cue"));
 }
