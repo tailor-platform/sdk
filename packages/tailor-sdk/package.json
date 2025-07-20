@@ -48,7 +48,10 @@
     "rolldown": "1.0.0-beta.14",
     "rollup": "^4.42.0",
     "rollup-plugin-esbuild-minify": "^1.3.0",
-    "tsx": "^4.20.3"
+    "tsx": "^4.20.3",
+    "inquirer": "^12.7.0",
+    "fs-extra": "^11.2.0",
+    "chalk": "^5.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",
@@ -56,6 +59,8 @@
     "@types/ini": "^4.1.1",
     "@types/madge": "^5.0.3",
     "@types/node": "^22.15.3",
+    "@types/fs-extra": "^11.0.4",
+    "@types/inquirer": "^9.0.7",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.5",
     "globals": "^16.2.0",
