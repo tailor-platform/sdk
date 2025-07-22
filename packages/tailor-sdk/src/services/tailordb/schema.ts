@@ -503,16 +503,4 @@ const db = {
 };
 
 export default db;
-export {
-  _enum as enum,
-  bool,
-  date,
-  datetime,
-  db,
-  dbType as type,
-  float,
-  int,
-  object,
-  string,
-  uuid,
-};
+export { _enum as enum, db, dbType as type };

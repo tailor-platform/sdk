@@ -1,11 +1,6 @@
 import type { PerformanceConfig } from "./types";
 
-export interface PerformanceReportConfig {
-  reportType: "console" | "json";
-  reportPath: string;
-}
-
-export function getPerformanceConfig(): PerformanceConfig {
+function getPerformanceConfig(): PerformanceConfig {
   const envLogLevel = process.env.TAILOR_PERFORMANCE_LOG_LEVEL;
 
   // "summary"または"detailed"の場合
@@ -29,20 +24,6 @@ export function getPerformanceConfig(): PerformanceConfig {
     logLevel: undefined,
     thresholdMs: undefined,
   };
-}
-
-export function getPerformanceReportConfig(): PerformanceReportConfig {
-  return {
-    reportType:
-      (process.env.TAILOR_PERFORMANCE_REPORT_TYPE as "console" | "json") ||
-      "console",
-    reportPath:
-      process.env.TAILOR_PERFORMANCE_REPORT_PATH || "./performance-reports",
-  };
-}
-
-export function isPerformanceTrackingEnabled(): boolean {
-  return getPerformanceConfig().enabled;
 }
 
 export const performanceConfig = {

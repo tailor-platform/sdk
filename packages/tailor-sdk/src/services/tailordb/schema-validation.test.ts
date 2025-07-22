@@ -1,6 +1,6 @@
 // Basic test for the TailorDBType validation functionality
 import { beforeEach, describe, it, expect } from "vitest";
-import db from "./schema";
+import { db } from "./schema";
 
 describe("TailorDBType validation functionality", () => {
   const generateUserType = () =>

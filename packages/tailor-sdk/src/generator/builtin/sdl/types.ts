@@ -25,20 +25,3 @@ export interface ResolverSDLMetadata {
   queryType: "query" | "mutation";
   pipelines: unknown[];
 }
-
-/**
- * SDL生成に関連する共通型定義
- */
-export interface SDLGenerationContext {
-  types: SDLTypeMetadata[];
-  resolvers: ResolverSDLMetadata[];
-}
-
-/**
- * SDL生成オプション
- */
-export interface SDLGenerationOptions {
-  includeComments?: boolean;
-  sortTypes?: boolean;
-  validateSchema?: boolean;
-}

@@ -321,7 +321,7 @@ extend type Mutation {
           ],
         },
       ];
-      const result = sdlGenerator.aggregate(inputs, baseDir);
+      const result = sdlGenerator.aggregate(inputs, [], baseDir);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(path.join(baseDir, "schema.graphql"));
@@ -375,7 +375,7 @@ extend type Mutation {
         },
       ];
 
-      const result = sdlGenerator.aggregate(inputs, "/test/output");
+      const result = sdlGenerator.aggregate(inputs, [], "/test/output");
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].content).toBe("\n\n");
@@ -506,7 +506,7 @@ extend type Mutation {
           ],
         },
       ];
-      const result = sdlGenerator.aggregate(inputs, "/test/output");
+      const result = sdlGenerator.aggregate(inputs, [], "/test/output");
 
       expect(result.files).toHaveLength(0);
       expect(result.errors).toBeDefined();
@@ -555,7 +555,7 @@ extend type Mutation {
           ],
         },
       ];
-      const result = sdlGenerator.aggregate(inputs, "/test/output");
+      const result = sdlGenerator.aggregate(inputs, [], "/test/output");
 
       expect(result.files).toHaveLength(1);
       expect(result.errors).toBeUndefined();

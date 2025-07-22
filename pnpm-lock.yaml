@@ -157,6 +157,9 @@ importers:
       prettier:
         specifier: 3.5.3
         version: 3.5.3
+      ts-cron-validator:
+        specifier: ^1.1.5
+        version: 1.1.5
       tsup:
         specifier: ^8.0.2
         version: 8.5.0(@swc/core@1.11.29)(jiti@2.4.2)(postcss@8.5.3)(tsx@4.20.3)(typescript@5.8.3)
@@ -2564,6 +2567,9 @@ packages:
     engines: {node: '>=18.12'}
     peerDependencies:
       typescript: '>=4.8.4'
+
+  ts-cron-validator@1.1.5:
+    resolution: {integrity: sha512-vqk4cGxcOK5Dsdg3xF8X2J61BZqdfDdBzdP0Mz5Hf1LXiC6dHk9UNK7QMl4zuT4tMo74O4FhLs7dvtHo/GcR1Q==}
 
   ts-graphviz@2.1.6:
     resolution: {integrity: sha512-XyLVuhBVvdJTJr2FJJV2L1pc4MwSjMhcunRVgDE9k4wbb2ee7ORYnPewxMWUav12vxyfUM686MSGsqnVRIInuw==}
@@ -5016,6 +5022,8 @@ snapshots:
   ts-api-utils@2.1.0(typescript@5.8.3):
     dependencies:
       typescript: 5.8.3
+
+  ts-cron-validator@1.1.5: {}
 
   ts-graphviz@2.1.6:
     dependencies:

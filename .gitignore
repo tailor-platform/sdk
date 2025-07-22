@@ -36,3 +36,7 @@ performance-reports
 # Test environment files
 tests/.test-env
 tests/fixtures/actual
+
+# tailorctl
+cue.mod
+.mcp.json

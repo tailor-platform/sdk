@@ -20,58 +20,116 @@ export interface ManifestFieldMetadata {
   array: boolean;
 }
 
-// Pipeline Manifest生成用の型定義
-export interface ManifestJSON {
+// ワークスペース全体のManifest型
+export interface WorkspaceManifest {
+  Apps: AppManifest[];
   Kind: string;
+  Services: ServiceManifest[];
+  Auths: AuthManifest[];
+  Pipelines: PipelineManifest[];
+  Executors: ExecutorManifest[];
+  Stateflows: StateflowManifest[];
+  Tailordbs: TailordbManifest[];
+}
+
+// 各種Manifest型の定義
+interface AppManifest {
+  Name: string;
+  [key: string]: unknown;
+}
+
+interface ServiceManifest {
+  Kind: string;
+  [key: string]: unknown;
+}
+
+export interface AuthManifest extends ServiceManifest {
+  Kind: "auth";
+  Namespace: string;
+  [key: string]: unknown;
+}
+
+export interface ExecutorManifest extends ServiceManifest {
+  Kind: "executor";
+  Executors: Array<{
+    Name: string;
+    Description?: string;
+    Trigger: any;
+    TriggerSchedule?: any;
+    TriggerEvent?: any;
+    TriggerIncomingWebhook?: any;
+    Target: any;
+    TargetWebhook?: any;
+    TargetTailorGraphql?: any;
+    TargetFunction?: any;
+  }>;
+  Version: string;
+}
+
+interface StateflowManifest extends ServiceManifest {
+  Kind: "stateflow";
+  Namespace: string;
+  [key: string]: unknown;
+}
+
+export interface TailordbManifest extends ServiceManifest {
+  Kind: "tailordb";
+  Namespace: string;
+  [key: string]: unknown;
+}
+
+// Pipeline Manifest生成用の型定義
+export interface PipelineManifest extends ServiceManifest {
+  Kind: "pipeline";
   Description: string;
   Namespace: string;
   Resolvers: ResolverManifest[];
   Version: string;
 }
 
-export interface ResolverManifest {
+interface ResolverManifest {
   Authorization: string;
   Description: string;
-  Inputs: ManifestInput[];
+  Inputs: ResolverInput[];
   Name: string;
-  Response: ManifestResponse;
-  Pipelines: PipelineManifest[];
+  Response: ResolverResponse;
+  Pipelines: PipelineItemManifest[];
   PostHook: { Expr: string };
   PublishExecutionEvents: boolean;
 }
 
-export interface ManifestInput {
+interface ResolverInput {
   Name: string;
   Description: string;
   Array: boolean;
   Required: boolean;
-  Type: ManifestType;
+  Type: TailorType;
 }
 
-export interface ManifestResponse {
-  Type: ManifestType;
+interface ResolverResponse {
+  Type: TailorType;
   Description: string;
   Array: boolean;
   Required: boolean;
 }
 
-export interface ManifestType {
+interface TailorType {
   Kind: string;
   Name: string;
   Description: string;
   Required: boolean;
-  Fields?: ManifestField[];
+  Fields?: TypeField[];
 }
 
-export interface ManifestField {
+interface TypeField {
   Name: string;
   Description: string;
-  Type: ManifestType;
+  Type: TailorType;
   Array: boolean;
   Required: boolean;
 }
 
-export interface PipelineManifest {
+interface PipelineItemManifest {
   Name: string;
   OperationName: string;
   Description: string;
@@ -106,52 +164,4 @@ export interface PipelineInfo {
   description: string;
   operationType: PipelineResolver_OperationType;
   operationSource?: string;
-}
-
-// ワークスペース全体のManifest型
-export interface WorkspaceManifest {
-  Apps: AppManifest[];
-  Kind: string;
-  Services: ServiceManifest[];
-  Auths: AuthManifest[];
-  Pipelines: ManifestJSON[];
-  Executors: ExecutorManifest[];
-  Stateflows: StateflowManifest[];
-  Tailordbs: TailordbManifest[];
-}
-
-// 各種Manifest型の定義
-export interface AppManifest {
-  Name: string;
-  [key: string]: unknown;
-}
-
-export interface ServiceManifest {
-  Kind: string;
-  Namespace: string;
-  [key: string]: unknown;
-}
-
-export interface AuthManifest {
-  Kind: string;
-  Namespace: string;
-  [key: string]: unknown;
-}
-
-export interface ExecutorManifest {
-  Kind: string;
-  Namespace: string;
-  [key: string]: unknown;
-}
-
-export interface StateflowManifest {
-  Kind: string;
-  Namespace: string;
-  [key: string]: unknown;
-}
-
-export interface TailordbManifest {
-  Kind: string;
-  Namespace: string;
-  [key: string]: unknown;
 }

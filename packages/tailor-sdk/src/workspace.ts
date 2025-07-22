@@ -1,9 +1,19 @@
 import { measure } from "@/performance";
 import { Application } from "@/application";
-import { AppConfig, type WorkspaceConfig } from "@/config";
+import type { AppConfig, WorkspaceConfig } from "@/config";
+import { ExecutorService } from "./services/executor/service";
+import { ExecutorServiceInput } from "./services/executor/types";
 
 export class Workspace {
-  constructor(public readonly config: WorkspaceConfig) {}
+  private _executorService?: ExecutorService = undefined;
+
+  constructor(public readonly config: WorkspaceConfig) {
+    this.defineExecutor(config.executor);
+  }
+
+  get executorService() {
+    return this._executorService as Readonly<ExecutorService> | undefined;
+  }
 
   private readonly _applications: Array<Application> = [];
   get applications() {
@@ -19,6 +29,15 @@ export class Workspace {
 
     this._applications.push(app);
     return app;
+  }
+
+  @measure
+  private defineExecutor(config?: ExecutorServiceInput) {
+    if (!config) {
+      return;
+    }
+    // Use workspace name as namespace for executor service
+    this._executorService = new ExecutorService(this.config.name, config);
   }
 }
 

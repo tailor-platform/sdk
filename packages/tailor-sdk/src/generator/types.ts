@@ -1,28 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { Executor } from "@/services/executor/types";
 import { Resolver } from "../services/pipeline/resolver";
 import { TailorDBType } from "../services/tailordb/schema";
 
-export interface GeneratedFile {
+interface GeneratedFile {
   path: string;
   content: string;
 }
 
-export interface BasicGeneratorMetadata<T, R> {
+export interface BasicGeneratorMetadata<T = any, R = any, E = any> {
   types: Record<string, T>;
   resolvers: Record<string, R>;
+  executors: E[];
 }
 
 export interface GeneratorResult {
   files: GeneratedFile[];
   errors?: string[];
-}
-
-// service種別とnamespace情報を含むコンテキスト
-export interface ServiceNamespaceContext<T = any, R = any> {
-  applicationNamespace: string;
-  serviceType: "tailordb" | "pipeline";
-  namespace: string;
-  data: T | R;
 }
 
 // TailorDB用のnamespace結果
@@ -44,7 +38,7 @@ export interface GeneratorInput<T, R> {
   pipeline: PipelineNamespaceResult<R>[];
 }
 
-export interface CodeGenerator<T = any, R = any, Ts = any, Rs = any> {
+export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any> {
   readonly id: string;
   readonly description: string;
 
@@ -60,6 +54,8 @@ export interface CodeGenerator<T = any, R = any, Ts = any, Rs = any> {
     applicationNamespace: string,
     namespace: string,
   ): R | Promise<R>;
+
+  processExecutor(executor: Executor): E | Promise<E>;
 
   // namespace毎のまとめ処理（オプション、service種別毎）
   processTailorDBNamespace?(
@@ -77,6 +73,7 @@ export interface CodeGenerator<T = any, R = any, Ts = any, Rs = any> {
   // 最終統合処理 - application毎の結果配列を受け取る
   aggregate(
     inputs: GeneratorInput<Ts, Rs>[],
+    executorInputs: E[],
     baseDir: string,
   ): GeneratorResult | Promise<GeneratorResult>;
 }

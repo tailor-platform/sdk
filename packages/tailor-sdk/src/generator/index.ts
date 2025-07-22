@@ -6,6 +6,7 @@ import { getDistDir, WorkspaceConfig } from "@/config";
 import { defineWorkspace } from "@/workspace";
 import { Resolver } from "@/services/pipeline/resolver";
 import { TailorDBType } from "@/services/tailordb/schema";
+import { Executor } from "@/services/executor/types";
 import { measure } from "@/performance";
 import {
   CodeGenerator,
@@ -33,6 +34,7 @@ export class GenerationManager {
       pipelineNamespaces: Record<string, Record<string, Resolver>>;
     }
   > = {};
+  private executors: Record<string, Executor> = {};
   private readonly baseDir;
 
   constructor(private readonly config: WorkspaceConfig) {
@@ -126,6 +128,12 @@ export class GenerationManager {
       }
     }
 
+    // Executor services
+    const executors = await this.workspace.executorService?.loadExecutors();
+    Object.entries(executors ?? {}).forEach(([filePath, executor]) => {
+      this.executors[filePath] = executor;
+    });
+
     this.initGenerators();
     await this.processGenerators();
   }
@@ -133,21 +141,24 @@ export class GenerationManager {
   // generator毎、application毎、service種別毎、namespace毎の結果を格納
   private generatorResults: Record<
     /* generator */ string,
-    Record<
-      /* application */ string,
-      {
-        tailordbResults: Record<
-          /* namespace */ string,
-          Record</* type */ string, any>
-        >;
-        pipelineResults: Record<
-          /* namespace */ string,
-          Record</* resolver */ string, any>
-        >;
-        tailordbNamespaceResults: Record</* namespace */ string, any>;
-        pipelineNamespaceResults: Record</* namespace */ string, any>;
-      }
-    >
+    {
+      application: Record<
+        /* application */ string,
+        {
+          tailordbResults: Record<
+            /* namespace */ string,
+            Record</* type */ string, any>
+          >;
+          pipelineResults: Record<
+            /* namespace */ string,
+            Record</* resolver */ string, any>
+          >;
+          tailordbNamespaceResults: Record</* namespace */ string, any>;
+          pipelineNamespaceResults: Record</* namespace */ string, any>;
+        }
+      >;
+      executorResults: Record</* executor */ string, any>;
+    }
   > = {};
 
   async processGenerators() {
@@ -158,11 +169,14 @@ export class GenerationManager {
 
   async processGenerator(gen: CodeGenerator) {
     try {
-      this.generatorResults[gen.id] = {};
+      this.generatorResults[gen.id] = {
+        application: {},
+        executorResults: {},
+      };
 
       // Process each application
       for (const [appNamespace, appData] of Object.entries(this.applications)) {
-        this.generatorResults[gen.id][appNamespace] = {
+        this.generatorResults[gen.id].application[appNamespace] = {
           tailordbResults: {},
           pipelineResults: {},
           tailordbNamespaceResults: {},
@@ -192,6 +206,9 @@ export class GenerationManager {
             resolvers,
           );
         }
+
+        // Process Executors
+        await this.processExecutors(gen);
       }
 
       // Aggregate all results
@@ -207,7 +224,7 @@ export class GenerationManager {
     namespace: string,
     types: Record<string, TailorDBType>,
   ) {
-    const results = this.generatorResults[gen.id][appNamespace];
+    const results = this.generatorResults[gen.id].application[appNamespace];
     results.tailordbResults[namespace] = {};
 
     // Process individual types
@@ -255,7 +272,7 @@ export class GenerationManager {
     namespace: string,
     resolvers: Record<string, Resolver>,
   ) {
-    const results = this.generatorResults[gen.id][appNamespace];
+    const results = this.generatorResults[gen.id].application[appNamespace];
     results.pipelineResults[namespace] = {};
 
     // Process individual resolvers
@@ -294,12 +311,31 @@ export class GenerationManager {
     }
   }
 
+  async processExecutors(gen: CodeGenerator) {
+    const results = this.generatorResults[gen.id];
+
+    // Process individual executors
+    await Promise.allSettled(
+      Object.entries(this.executors).map(async ([executorId, executor]) => {
+        try {
+          results.executorResults[executorId] =
+            await gen.processExecutor(executor);
+        } catch (error) {
+          console.error(
+            `Error processing executor ${executor.name} with generator ${gen.id}:`,
+            error,
+          );
+        }
+      }),
+    );
+  }
+
   async aggregate(gen: CodeGenerator) {
     // Build inputs for each application
     const inputs: GeneratorInput<any, any>[] = [];
 
     for (const [appNamespace, results] of Object.entries(
-      this.generatorResults[gen.id],
+      this.generatorResults[gen.id].application,
     )) {
       const tailordbResults: TailorDBNamespaceResult<any>[] = [];
       const pipelineResults: PipelineNamespaceResult<any>[] = [];
@@ -330,9 +366,14 @@ export class GenerationManager {
         pipeline: pipelineResults,
       });
     }
+    // executor: Object.values(results.executorResults),
 
     // Call generator's aggregate method
-    const result = await gen.aggregate(inputs, path.join(this.baseDir, gen.id));
+    const result = await gen.aggregate(
+      inputs,
+      Object.values(this.generatorResults[gen.id].executorResults),
+      path.join(this.baseDir, gen.id),
+    );
 
     // Write generated files
     await Promise.all(

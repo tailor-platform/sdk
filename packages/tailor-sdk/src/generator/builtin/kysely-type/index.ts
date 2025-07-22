@@ -1,5 +1,6 @@
 import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
+import { Executor } from "@/services/executor/types";
 import { measure } from "@/performance";
 import { KyselyTypeMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
@@ -10,7 +11,8 @@ export const KyselyGeneratorID = "@tailor/kysely-type";
  * Kysely型生成システムのメインエントリーポイント
  */
 export class KyselyGenerator
-  implements CodeGenerator<KyselyTypeMetadata, undefined, string, undefined>
+  implements
+    CodeGenerator<KyselyTypeMetadata, undefined, undefined, string, undefined>
 {
   readonly id = KyselyGeneratorID;
   readonly description = "Generates Kysely type definitions for TailorDB types";
@@ -28,6 +30,11 @@ export class KyselyGenerator
 
   @measure
   processResolver(): undefined {
+    return undefined;
+  }
+
+  @measure
+  processExecutor(_executor: Executor): undefined {
     return undefined;
   }
 

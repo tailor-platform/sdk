@@ -2,6 +2,7 @@
 import type { TailorDBServiceInput } from "@/services/tailordb/types";
 import type { PipelineResolverServiceInput } from "@/services/pipeline/types";
 import type { AuthServiceInput } from "@/services/auth/types";
+import type { ExecutorServiceInput } from "@/services/executor/types";
 import { Region } from "@/types/types";
 import { SdlGeneratorID } from "@/generator/builtin/sdl/index";
 import {
@@ -15,15 +16,16 @@ import {
 import { CodeGenerator } from "@/generator/types";
 
 export interface AppConfig {
-  db: TailorDBServiceInput;
-  pipeline: PipelineResolverServiceInput;
-  auth: AuthServiceInput;
+  db?: TailorDBServiceInput;
+  pipeline?: PipelineResolverServiceInput;
+  auth?: AuthServiceInput;
 }
 
 export interface WorkspaceConfig {
   name: string;
   region: Region;
   app: Record<string, AppConfig>;
+  executor?: ExecutorServiceInput;
   generators?: Array<
     | typeof SdlGeneratorID
     | [

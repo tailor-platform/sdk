@@ -1,7 +1,5 @@
-export interface SecretValue {
-  VaultName: string;
-  SecretKey: string;
-}
+import { SecretValue } from "@/types/types";
+
 export interface OIDC {
   Kind: "OIDC";
   ClientID: string;

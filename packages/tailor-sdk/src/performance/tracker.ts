@@ -8,7 +8,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import ml from "multiline-ts";
 
-export class PerformanceTracker {
+class PerformanceTracker {
   private static instance: PerformanceTracker;
   private measurements: Map<string, PerformanceMeasurement[]> = new Map();
   private stats: Map<string, PerformanceStats> = new Map();

@@ -7,7 +7,7 @@ export default createQueryResolver(
   t.type({
     user: t.object({ name: t.object({ first: t.string(), last: t.string() }) }),
   }),
-  { defaults: { dbNamespace: "my-db" } },
+  { defaults: { dbNamespace: "tailordb" } },
 )
   .fnStep("step1", (context) => {
     return `step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`;
