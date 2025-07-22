@@ -16,6 +16,10 @@ A development kit for building applications on the Tailor Platform.
   - [Creating Resolvers](#creating-resolvers)
   - [Step Types](#step-types)
   - [Processing Flow Patterns](#processing-flow-patterns)
+- [Executor](#executor)
+  - [Overview](#overview)
+  - [Basic Usage](#basic-usage)
+  - [Advanced Features](#advanced-features)
 - [Generators](#generators)
 - [CLI Commands](#cli-commands)
 
@@ -154,6 +158,7 @@ export default defineConfig({
       },
     },
   },
+  executor: { files: ["./src/executors/*.ts"] },
 });
 ```
 
@@ -191,6 +196,7 @@ defineConfig({
       }
     }
   },
+  executor: { files: string[] },
   generators?: [            // Code generators
     "@tailor/sdl",
     ["@tailor/kysely-type", { distPath: ({ tailorDB }) => `./src/resolvers/${tailorDB}.ts` }],
@@ -452,6 +458,251 @@ import { kyselyWrapper } from "./db";
   })
 )
 ```
+
+## Executor
+
+### Overview
+
+Executors are event-driven workflows that respond to database events, schedules, or external triggers. They enable you to build reactive systems that automatically execute code or call webhooks when specific conditions are met.
+
+### Configuration
+
+Add executor configuration to your `tailor.config.ts`:
+
+```typescript
+export default defineConfig({
+  // ... other config
+  executor: { files: ["./src/executors/*.ts"] },
+});
+```
+
+### Creating Executors
+
+Create executor files in your executor directory (e.g., `src/executors/`):
+
+```typescript
+import {
+  createExecutor,
+  recordCreatedTrigger,
+} from "@tailor-platform/tailor-sdk";
+import { user } from "../tailordb/user";
+
+export default createExecutor(
+  "user-welcome", // Unique identifier
+  "Send welcome email to new users", // Description
+)
+  .on(
+    // Trigger (see Trigger Types section)
+    recordCreatedTrigger(
+      user,
+      ({ newRecord }) => newRecord.email && newRecord.isActive,
+    ),
+  )
+  .executeFunction(
+    // Execution method (see Execution Methods section)
+    async ({ newRecord, client }) => {
+      // Send welcome email logic here
+      console.log(`Sending welcome email to ${newRecord.email}`);
+    },
+    { dbNamespace: "my-db" },
+  );
+```
+
+Executors follow a simple pattern:
+
+1. **Create** an executor with `createExecutor(name, description)`
+2. **Define trigger** with `.on()` method
+3. **Specify execution** with `.executeFunction()`, `.executeWebhook()`, or `.executeGql()`
+
+### Trigger Types
+
+#### Record Triggers
+
+- `recordCreatedTrigger(type, filter?)` - Fires when a new record is created
+- `recordUpdatedTrigger(type, filter?)` - Fires when a record is updated
+- `recordDeletedTrigger(type, filter?)` - Fires when a record is deleted
+
+Each trigger can include an optional filter function:
+
+```typescript
+recordUpdatedTrigger(
+  order,
+  ({ newRecord, oldRecord }) =>
+    newRecord.status === "completed" && oldRecord.status !== "completed",
+);
+```
+
+#### Schedule Triggers
+
+- `scheduleTrigger(cron)` - Fires on a cron schedule
+
+Use cron expressions for scheduled execution:
+
+```typescript
+scheduleTrigger("*/5 * * * *"); // Every 5 minutes
+scheduleTrigger("0 9 * * 1"); // Every Monday at 9 AM
+scheduleTrigger("0 0 1 * *"); // First day of every month
+```
+
+#### Incoming Webhook Triggers
+
+- `incomingWebhookTrigger<T>()` - Fires when an external webhook is received
+
+Use typed payloads for type safety:
+
+```typescript
+incomingWebhookTrigger<WebhookPayload>();
+```
+
+#### Resolver Executed Triggers
+
+- `resolverExecutedTrigger(resolver, filter?)` - Fires when a pipeline resolver is executed
+
+Filter based on execution results:
+
+```typescript
+resolverExecutedTrigger(
+  createOrderResolver,
+  ({ result, error }) => !error && result?.order?.id, // Only trigger on successful executions
+);
+```
+
+### Execution
+
+Executors support different execution methods depending on your use case:
+
+#### executeFunction
+
+Execute JavaScript/TypeScript functions directly:
+
+```typescript
+.executeFunction(
+  async ({ newRecord, oldRecord, client }) => {
+    // Your business logic here
+    const result = await client.exec(
+      /* sql */ `SELECT * FROM Orders WHERE customerId = '${newRecord.id}'`
+    );
+    console.log(`Found ${result.length} orders for customer`);
+  },
+  { dbNamespace: "my-db" } // Optional configuration
+)
+```
+
+#### executeWebhook
+
+Call external webhooks with dynamic data:
+
+```typescript
+.executeWebhook({
+  url: ({ newRecord }) => `https://api.example.com/webhooks/${newRecord.type}`,
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": { vault: "api-keys", key: "external-api" }, // Vault integration
+  },
+  body: ({ newRecord }) => ({
+    id: newRecord.id,
+    timestamp: new Date().toISOString(),
+    data: newRecord,
+  }),
+})
+```
+
+#### executeGql
+
+Execute GraphQL queries and mutations:
+
+```typescript
+.executeGql({
+  appName: "my-app",
+  query: gql`
+    mutation UpdateUserStatus($id: ID!, $status: String!) {
+      updateUser(id: $id, input: { status: $status }) {
+        id
+        status
+        updatedAt
+      }
+    }
+  `,
+  variables: ({ newRecord }) => ({
+    id: newRecord.userId,
+    status: "active",
+  }),
+})
+```
+
+### Execution Context
+
+The execution context varies based on the trigger type:
+
+#### Record Trigger Context
+
+For `recordCreatedTrigger`, `recordUpdatedTrigger`, and `recordDeletedTrigger`:
+
+- `newRecord` - The new record state (not available for delete triggers)
+- `oldRecord` - The previous record state (only for update triggers)
+- `client` - Database client with methods:
+  - `exec<T>(sql: string)` - Execute SQL and return array of results
+  - `execOne<T>(sql: string)` - Execute SQL and return single result
+
+#### Schedule Trigger Context
+
+For `scheduleTrigger`:
+
+- `client` - Database client with methods:
+  - `exec<T>(sql: string)` - Execute SQL and return array of results
+  - `execOne<T>(sql: string)` - Execute SQL and return single result
+
+#### Incoming Webhook Trigger Context
+
+For `incomingWebhookTrigger`:
+
+- `payload` - The webhook request body (typed according to your generic parameter)
+- `headers` - The webhook request headers
+- `client` - Database client with methods:
+  - `exec<T>(sql: string)` - Execute SQL and return array of results
+  - `execOne<T>(sql: string)` - Execute SQL and return single result
+
+#### Resolver Executed Trigger Context
+
+For `resolverExecutedTrigger`:
+
+- `result` - The resolver's return value (when execution succeeds)
+- `error` - The error object (when execution fails)
+- `input` - The input that was passed to the resolver
+- `client` - Database client with methods:
+  - `exec<T>(sql: string)` - Execute SQL and return array of results
+  - `execOne<T>(sql: string)` - Execute SQL and return single result
+
+### Advanced Features
+
+#### Conditional Execution
+
+Use filters to control when executors run:
+
+```typescript
+.on(
+  recordUpdatedTrigger(product, ({ newRecord, oldRecord }) => {
+    // Only trigger if price decreased by more than 10%
+    return newRecord.price < oldRecord.price * 0.9;
+  })
+)
+```
+
+#### Vault Integration
+
+Securely access secrets for webhook authentication:
+
+```typescript
+.executeWebhook({
+  headers: {
+    "X-API-Key": { vault: "external-apis", key: "partner-api-key" },
+  },
+})
+```
+
+#### Error Handling
+
+Executors include built-in error handling and retry logic. Failed executions are logged and can be monitored through the Tailor console.
 
 ## Generators
 
