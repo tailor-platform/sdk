@@ -114,18 +114,20 @@ interface GraphStats {
 /**
  * エラーコード
  */
-enum WatcherErrorCode {
-  DEPENDENCY_ANALYSIS_FAILED = "DEPENDENCY_ANALYSIS_FAILED",
-  FILE_WATCH_FAILED = "FILE_WATCH_FAILED",
-  CIRCULAR_DEPENDENCY_DETECTED = "CIRCULAR_DEPENDENCY_DETECTED",
-  INVALID_WATCH_GROUP = "INVALID_WATCH_GROUP",
-  MADGE_INITIALIZATION_FAILED = "MADGE_INITIALIZATION_FAILED",
-}
+const WatcherErrorCode = {
+  DEPENDENCY_ANALYSIS_FAILED: "DEPENDENCY_ANALYSIS_FAILED",
+  FILE_WATCH_FAILED: "FILE_WATCH_FAILED",
+  CIRCULAR_DEPENDENCY_DETECTED: "CIRCULAR_DEPENDENCY_DETECTED",
+  INVALID_WATCH_GROUP: "INVALID_WATCH_GROUP",
+  MADGE_INITIALIZATION_FAILED: "MADGE_INITIALIZATION_FAILED",
+} as const;
+type WatcherErrorCode =
+  (typeof WatcherErrorCode)[keyof typeof WatcherErrorCode];
 
 /**
  * 監視システム固有のエラー
  */
-class WatcherError extends Error {
+export class WatcherError extends Error {
   constructor(
     message: string,
     public readonly code: WatcherErrorCode,
@@ -140,7 +142,7 @@ class WatcherError extends Error {
 /**
  * 依存関係グラフの管理を専門に行うクラス
  */
-class DependencyGraphManager {
+export class DependencyGraphManager {
   private graph: Map<string, DependencyNode> = new Map();
   private madgeInstance: madge.MadgeInstance | null = null;
 
@@ -741,9 +743,6 @@ class DependencyWatcher {
 
 export {
   DependencyWatcher,
-  DependencyGraphManager,
-  WatcherError,
-  WatcherErrorCode,
   type FileChangeEvent,
   type FileChangeInfo,
   type WatchGroup,
@@ -754,4 +753,5 @@ export {
   type WatcherOptions,
   type WatchStatus,
   type GraphStats,
+  WatcherErrorCode,
 };

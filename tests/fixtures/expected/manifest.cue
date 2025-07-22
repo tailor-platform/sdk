@@ -1082,7 +1082,7 @@
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
             "PluralForm": "",
-            "PublishRecordEvents": false
+            "PublishRecordEvents": true
           },
           "Extends": false,
           "Directives": [],
@@ -1407,7 +1407,7 @@
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
             "PluralForm": "",
-            "PublishRecordEvents": false
+            "PublishRecordEvents": true
           },
           "Extends": false,
           "Directives": [],
@@ -1782,7 +1782,7 @@
       "UserProfileProvider": "TAILORDB",
       "UserProfileProviderConfig": {
         "Kind": "TAILORDB",
-        "Namespace": "my-db",
+        "Namespace": "tailordb",
         "Type": "User",
         "UsernameField": "email",
         "AttributesFields": [
@@ -1801,6 +1801,104 @@
         }
       ],
       "OAuth2Clients": []
+    },
+    {
+      "Kind": "executor",
+      "Executors": [
+        {
+          "Name": "sales-order-created",
+          "Description": "Triggered when a new sales order is created",
+          "TriggerEvent": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "TargetWebhook": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "RawValue": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "SecretValue": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            }
+          },
+          "Trigger": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "Target": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "Value": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "Value": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            }
+          }
+        },
+        {
+          "Name": "user-created",
+          "Description": "Triggered when a new user is created",
+          "TriggerEvent": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"User\" && (({newRecord})=>newRecord.email.endsWith(\"@tailor.tech\"))({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "TargetFunction": {
+            "Kind": "function",
+            "Name": "user-created__target",
+            "ScriptPath": "tests/fixtures/expected/executors/user-created.js",
+            "Variables": {
+              "Expr": "({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "Trigger": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"User\" && (({newRecord})=>newRecord.email.endsWith(\"@tailor.tech\"))({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "Target": {
+            "Kind": "function",
+            "Name": "user-created__target"
+          }
+        }
+      ],
+      "Version": "v2"
     }
   ],
   "Auths": [
@@ -1820,7 +1918,7 @@
       "UserProfileProvider": "TAILORDB",
       "UserProfileProviderConfig": {
         "Kind": "TAILORDB",
-        "Namespace": "my-db",
+        "Namespace": "tailordb",
         "Type": "User",
         "UsernameField": "email",
         "AttributesFields": [
@@ -2024,7 +2122,106 @@
       "Version": "v2"
     }
   ],
-  "Executors": [],
+  "Executors": [
+    {
+      "Kind": "executor",
+      "Executors": [
+        {
+          "Name": "sales-order-created",
+          "Description": "Triggered when a new sales order is created",
+          "TriggerEvent": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "TargetWebhook": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "RawValue": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "SecretValue": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            }
+          },
+          "Trigger": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "Target": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "Value": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "Value": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            }
+          }
+        },
+        {
+          "Name": "user-created",
+          "Description": "Triggered when a new user is created",
+          "TriggerEvent": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"User\" && (({newRecord})=>newRecord.email.endsWith(\"@tailor.tech\"))({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "TargetFunction": {
+            "Kind": "function",
+            "Name": "user-created__target",
+            "ScriptPath": "tests/fixtures/expected/executors/user-created.js",
+            "Variables": {
+              "Expr": "({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "Trigger": {
+            "Kind": "Event",
+            "EventType": "tailordb.type_record.created",
+            "Condition": {
+              "Expr": "args.typeName === \"User\" && (({newRecord})=>newRecord.email.endsWith(\"@tailor.tech\"))({ ...args, appNamespace: args.namespaceName })"
+            }
+          },
+          "Target": {
+            "Kind": "function",
+            "Name": "user-created__target"
+          }
+        }
+      ],
+      "Version": "v2"
+    }
+  ],
   "Stateflows": [],
   "Tailordbs": [
     {
@@ -3080,7 +3277,7 @@
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
             "PluralForm": "",
-            "PublishRecordEvents": false
+            "PublishRecordEvents": true
           },
           "Extends": false,
           "Directives": [],
@@ -3405,7 +3602,7 @@
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
             "PluralForm": "",
-            "PublishRecordEvents": false
+            "PublishRecordEvents": true
           },
           "Extends": false,
           "Directives": [],

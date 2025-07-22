@@ -2,7 +2,9 @@ import { $tailor_resolver_step__sqlStep } from "../resolvers/stepChain.transform
 
 const $connect_tailordb = async (namespace) => {
   const baseClient = new tailordb.Client({ namespace });
-  await baseClient.connect();
+  if (namespace) {
+    await baseClient.connect();
+  }
   const client = {
     async exec(query) {
       const result = await baseClient.queryObject(query);
@@ -10,7 +12,6 @@ const $connect_tailordb = async (namespace) => {
     },
     async execOne(query) {
       const result = await baseClient.queryObject(query);
-      console.log(result);
       return result.rows[0];
     },
   };
@@ -34,8 +35,8 @@ const $connect_tailordb = async (namespace) => {
   };
 };
 
-const $tailor_sql_step_wrapper = async (namespace, fn) => {
+const $tailor_db_wrapper = async (namespace, fn) => {
   const client = await $connect_tailordb(namespace);
-  return async (args) => await fn({ ...args, client });
+  return async (args) => await fn({ ...args, db: client, client });
 };
-globalThis.main = await $tailor_sql_step_wrapper("my-db", $tailor_resolver_step__sqlStep);
+globalThis.main = await $tailor_db_wrapper("tailordb", $tailor_resolver_step__sqlStep);

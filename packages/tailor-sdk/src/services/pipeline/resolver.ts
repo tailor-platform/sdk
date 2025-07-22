@@ -18,7 +18,12 @@ export class Resolver<
   Input extends TailorType<any, any, any> = any,
   _CurrentOutput = any,
   Context extends Record<string, unknown> = any,
-  Steps extends StepDef<string, any, any, any>[] = any,
+  Steps extends StepDef<string, any, any, any>[] = StepDef<
+    string,
+    any,
+    any,
+    any
+  >[],
   Output extends TailorType<any, any, any> = any,
 > {
   readonly _input = null as output<Input>;

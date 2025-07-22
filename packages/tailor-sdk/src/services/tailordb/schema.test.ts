@@ -1,5 +1,5 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
-import db from "./schema";
+import { db } from "./schema";
 import type { output } from "@/types/helpers";
 
 describe("TailorDBField 基本フィールド型テスト", () => {

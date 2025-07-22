@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ManifestAggregator } from "./aggregator";
 import { BasicGeneratorMetadata } from "../../types";
 import { ManifestTypeMetadata, ResolverManifestMetadata } from "./types";
+import { ExecutorManifestMetadata } from "./executor-processor";
 import { Workspace } from "@/workspace";
 import { Application } from "@/application";
 import { TailorDBService } from "@/services/tailordb/service";
@@ -70,7 +71,7 @@ describe("ManifestAggregator", () => {
       namespace: "test-namespace",
       build: vi.fn().mockResolvedValue(undefined),
       loadResolvers: vi.fn().mockResolvedValue(undefined),
-      getResolvers: vi.fn().mockReturnValue({}),
+      getResolvers: vi.fn().mockResolvedValue({}),
     } as any;
 
     mockAuthService = {
@@ -125,10 +126,12 @@ describe("ManifestAggregator", () => {
     it("ワークスペース全体のManifest生成が正常に動作すること", async () => {
       const metadata: BasicGeneratorMetadata<
         ManifestTypeMetadata,
-        ResolverManifestMetadata
+        ResolverManifestMetadata,
+        ExecutorManifestMetadata
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       // ManifestAggregator.generatePipelineManifestのスパイを設定
@@ -179,7 +182,8 @@ describe("ManifestAggregator", () => {
 
       const metadata: BasicGeneratorMetadata<
         ManifestTypeMetadata,
-        ResolverManifestMetadata
+        ResolverManifestMetadata,
+        ExecutorManifestMetadata
       > = {
         types: {},
         resolvers: {
@@ -199,6 +203,7 @@ describe("ManifestAggregator", () => {
             outputFields: undefined, // 無効な出力フィールド
           },
         },
+        executors: [],
       };
 
       const result = await ManifestAggregator.aggregate(
@@ -228,10 +233,12 @@ describe("ManifestAggregator", () => {
 
       const metadata: BasicGeneratorMetadata<
         ManifestTypeMetadata,
-        ResolverManifestMetadata
+        ResolverManifestMetadata,
+        ExecutorManifestMetadata
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       // ManifestAggregator.generatePipelineManifestのスパイを設定
@@ -274,10 +281,12 @@ describe("ManifestAggregator", () => {
 
       const metadata: BasicGeneratorMetadata<
         ManifestTypeMetadata,
-        ResolverManifestMetadata
+        ResolverManifestMetadata,
+        ExecutorManifestMetadata
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       // ManifestAggregator.generatePipelineManifestのスパイを設定
@@ -307,10 +316,12 @@ describe("ManifestAggregator", () => {
     it("各サービスのメソッドが正しく呼ばれること", async () => {
       const metadata: BasicGeneratorMetadata<
         ManifestTypeMetadata,
-        ResolverManifestMetadata
+        ResolverManifestMetadata,
+        ExecutorManifestMetadata
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       // ManifestAggregator.generatePipelineManifestのスパイを設定
@@ -331,7 +342,7 @@ describe("ManifestAggregator", () => {
 
       // Pipelineサービスの検証
       expect(mockPipelineService.build).toHaveBeenCalledTimes(1);
-      expect(mockPipelineService.loadResolvers).toHaveBeenCalledTimes(1);
+      expect(mockPipelineService.getResolvers).toHaveBeenCalledTimes(1);
 
       // ManifestAggregator.generatePipelineManifestが呼び出されたことを確認
       expect(generatePipelineManifestSpy).toHaveBeenCalledTimes(1);
@@ -402,10 +413,12 @@ describe("ManifestAggregator", () => {
 
       const metadata: BasicGeneratorMetadata<
         ManifestTypeMetadata,
-        ResolverManifestMetadata
+        ResolverManifestMetadata,
+        ExecutorManifestMetadata
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       // ManifestAggregator.generatePipelineManifestのスパイを設定
@@ -461,10 +474,12 @@ describe("ManifestAggregator", () => {
 
       const metadata: BasicGeneratorMetadata<
         ManifestTypeMetadata,
-        ResolverManifestMetadata
+        ResolverManifestMetadata,
+        ExecutorManifestMetadata
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       const result = await ManifestAggregator.aggregate(

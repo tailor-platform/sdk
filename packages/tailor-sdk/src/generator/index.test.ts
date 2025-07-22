@@ -12,7 +12,7 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { generate, apply } from "./index";
+import { generate, apply, GenerationManager } from "./index";
 import type { WorkspaceConfig } from "@/config";
 import { db, type TailorDBType } from "@/services/tailordb/schema";
 import {
@@ -24,8 +24,6 @@ import { KyselyGenerator } from "./builtin/kysely-type";
 import { ManifestGenerator } from "./builtin/manifest";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/types";
-
-type GenerationManagerConstructor = new (config: WorkspaceConfig) => any;
 
 vi.mock("@/config", () => ({
   AppConfig: {},
@@ -75,7 +73,7 @@ class TestGenerator {
     return { processed: true, count: Object.keys(resolvers).length };
   }
 
-  async aggregate(inputs: any[], baseDir: string) {
+  async aggregate(inputs: any[], executorResults: any[], baseDir: string) {
     return {
       files: [
         {
@@ -91,7 +89,6 @@ describe("GenerationManager", () => {
   let tempDir: string;
   let manager: any;
   let mockConfig: WorkspaceConfig;
-  let GenerationManager: GenerationManagerConstructor;
 
   beforeAll(async () => {
     vi.spyOn(fs, "writeFile").mockImplementation((_, _2, callback: any) => {
@@ -101,9 +98,6 @@ describe("GenerationManager", () => {
     });
 
     vi.spyOn(fs, "mkdirSync").mockImplementation(() => "");
-
-    const indexModule = await import("./index");
-    GenerationManager = (indexModule as any).GenerationManager;
   });
 
   afterAll(() => {
@@ -170,9 +164,9 @@ describe("GenerationManager", () => {
         generators: ["@tailor/sdl" as const],
       };
       const managerWithSdl = new GenerationManager(configWithSdl as any);
-      managerWithSdl.initGenerators();
+      (managerWithSdl as any).initGenerators();
       expect(
-        managerWithSdl.generators.some(
+        (managerWithSdl as any).generators.some(
           (gen: any) => gen instanceof SdlGenerator,
         ),
       ).toBe(true);
@@ -186,9 +180,9 @@ describe("GenerationManager", () => {
         ],
       };
       const managerWithKysely = new GenerationManager(configWithKysely as any);
-      managerWithKysely.initGenerators();
+      (managerWithKysely as any).initGenerators();
       expect(
-        managerWithKysely.generators.some(
+        (managerWithKysely as any).generators.some(
           (gen: any) => gen instanceof KyselyGenerator,
         ),
       ).toBe(true);
@@ -205,7 +199,7 @@ describe("GenerationManager", () => {
       const managerWithManifest = new GenerationManager(
         configWithManifest as any,
       );
-      managerWithManifest.initGenerators();
+      (managerWithManifest as any).initGenerators();
       expect(manifestGen.workspace).toBe(managerWithManifest.workspace);
     });
 
@@ -217,7 +211,7 @@ describe("GenerationManager", () => {
       const managerWithUnknown = new GenerationManager(
         configWithUnknown as any,
       );
-      expect(() => managerWithUnknown.initGenerators()).toThrow(
+      expect(() => (managerWithUnknown as any).initGenerators()).toThrow(
         "Unknown generator ID: unknown-generator",
       );
     });
@@ -372,12 +366,15 @@ describe("GenerationManager", () => {
       testGenerator = new TestGenerator();
       manager.generatorResults = {
         [testGenerator.id]: {
-          "test-app": {
-            tailordbResults: {},
-            pipelineResults: {},
-            tailordbNamespaceResults: {},
-            pipelineNamespaceResults: {},
+          application: {
+            "test-app": {
+              tailordbResults: {},
+              pipelineResults: {},
+              tailordbNamespaceResults: {},
+              pipelineNamespaceResults: {},
+            },
           },
+          executorResults: {},
         },
       };
     });
@@ -399,13 +396,12 @@ describe("GenerationManager", () => {
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
       expect(
-        manager.generatorResults[testGenerator.id]["test-app"].tailordbResults[
-          "test-namespace"
-        ],
+        manager.generatorResults[testGenerator.id].application["test-app"]
+          .tailordbResults["test-namespace"],
       ).toBeDefined();
       expect(
         Object.keys(
-          manager.generatorResults[testGenerator.id]["test-app"]
+          manager.generatorResults[testGenerator.id].application["test-app"]
             .tailordbResults["test-namespace"],
         ),
       ).toHaveLength(3);
@@ -430,12 +426,15 @@ describe("GenerationManager", () => {
       testGenerator = new TestGenerator();
       manager.generatorResults = {
         [testGenerator.id]: {
-          "test-app": {
-            tailordbResults: {},
-            pipelineResults: {},
-            tailordbNamespaceResults: {},
-            pipelineNamespaceResults: {},
+          application: {
+            "test-app": {
+              tailordbResults: {},
+              pipelineResults: {},
+              tailordbNamespaceResults: {},
+              pipelineNamespaceResults: {},
+            },
           },
+          executorResults: {},
         },
       };
     });
@@ -462,13 +461,12 @@ describe("GenerationManager", () => {
 
       expect(processResolverSpy).toHaveBeenCalledTimes(2);
       expect(
-        manager.generatorResults[testGenerator.id]["test-app"].pipelineResults[
-          "test-namespace"
-        ],
+        manager.generatorResults[testGenerator.id].application["test-app"]
+          .pipelineResults["test-namespace"],
       ).toBeDefined();
       expect(
         Object.keys(
-          manager.generatorResults[testGenerator.id]["test-app"]
+          manager.generatorResults[testGenerator.id].application["test-app"]
             .pipelineResults["test-namespace"],
         ),
       ).toHaveLength(2);
@@ -482,16 +480,19 @@ describe("GenerationManager", () => {
       testGenerator = new TestGenerator();
       manager.generatorResults = {
         [testGenerator.id]: {
-          "test-app": {
-            tailordbResults: {},
-            pipelineResults: {},
-            tailordbNamespaceResults: {
-              "test-namespace": { types: "processed" },
-            },
-            pipelineNamespaceResults: {
-              "test-namespace": { resolvers: "processed" },
+          application: {
+            "test-app": {
+              tailordbResults: {},
+              pipelineResults: {},
+              tailordbNamespaceResults: {
+                "test-namespace": { types: "processed" },
+              },
+              pipelineNamespaceResults: {
+                "test-namespace": { resolvers: "processed" },
+              },
             },
           },
+          executorResults: {},
         },
       };
     });
@@ -519,6 +520,7 @@ describe("GenerationManager", () => {
             ],
           },
         ],
+        [],
         expect.stringContaining(testGenerator.id),
       );
     });
@@ -547,12 +549,15 @@ describe("GenerationManager", () => {
 
       manager.generatorResults = {
         [multiFileGenerator.id]: {
-          "test-app": {
-            tailordbResults: {},
-            pipelineResults: {},
-            tailordbNamespaceResults: {},
-            pipelineNamespaceResults: {},
+          application: {
+            "test-app": {
+              tailordbResults: {},
+              pipelineResults: {},
+              tailordbNamespaceResults: {},
+              pipelineNamespaceResults: {},
+            },
           },
+          executorResults: {},
         },
       };
 
@@ -578,12 +583,15 @@ describe("GenerationManager", () => {
 
       manager.generatorResults = {
         [errorGenerator.id]: {
-          "test-app": {
-            tailordbResults: {},
-            pipelineResults: {},
-            tailordbNamespaceResults: {},
-            pipelineNamespaceResults: {},
+          application: {
+            "test-app": {
+              tailordbResults: {},
+              pipelineResults: {},
+              tailordbNamespaceResults: {},
+              pipelineNamespaceResults: {},
+            },
           },
+          executorResults: {},
         },
       };
 
@@ -661,12 +669,15 @@ describe("GenerationManager", () => {
       // generatorResults を初期化
       manager.generatorResults = {
         "test-generator": {
-          testApp: {
-            tailordbResults: {},
-            pipelineResults: {},
-            tailordbNamespaceResults: {},
-            pipelineNamespaceResults: {},
+          application: {
+            testApp: {
+              tailordbResults: {},
+              pipelineResults: {},
+              tailordbNamespaceResults: {},
+              pipelineNamespaceResults: {},
+            },
           },
+          executorResults: {},
         },
       };
 
