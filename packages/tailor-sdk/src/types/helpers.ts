@@ -9,10 +9,6 @@ export type DeepWritable<T> = T extends Date | RegExp | Function
     ? { -readonly [P in keyof T]: DeepWritable<T[P]> } & {}
     : T;
 
-type _d = DeepWritable<{
-  date: Date;
-}>;
-
 type LiteralToString<T> = T extends string ? string : T;
 type SpecificNumberToNumber<T> = T extends number ? number : T;
 type TrueFalseToBool<T> = T extends number ? number : T;
@@ -20,8 +16,6 @@ type Widening<T> = TrueFalseToBool<SpecificNumberToNumber<LiteralToString<T>>>;
 export type DeepWidening<T> = T extends object
   ? { [K in keyof T]: DeepWidening<T[K]> }
   : Widening<T>;
-
-export type input<T> = T extends { _input: infer U } ? DeepWritable<U> : never;
 
 export type output<T> = T extends { _output: infer U }
   ? DeepWritable<U>

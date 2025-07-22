@@ -1,6 +1,7 @@
 import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { Resolver } from "@/services/pipeline/resolver";
+import { Executor } from "@/services/executor/types";
 import { SDLTypeMetadata, ResolverSDLMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
 import { ResolverProcessor } from "./resolver-processor";
@@ -17,6 +18,7 @@ export class SdlGenerator
     CodeGenerator<
       SDLTypeMetadata,
       ResolverSDLMetadata,
+      undefined,
       Record<string, SDLTypeMetadata>,
       Record<string, ResolverSDLMetadata>
     >
@@ -41,6 +43,14 @@ export class SdlGenerator
   }
 
   /**
+   * Executorを処理 - SDLジェネレーターではExecutorを処理しない
+   */
+  @measure
+  async processExecutor(_executor: Executor): Promise<undefined> {
+    return undefined;
+  }
+
+  /**
    * 処理されたメタデータを統合してSDLファイルを生成
    */
   @measure
@@ -49,6 +59,7 @@ export class SdlGenerator
       Record<string, SDLTypeMetadata>,
       Record<string, ResolverSDLMetadata>
     >[],
+    _: undefined[],
     baseDir: string,
   ): GeneratorResult {
     // すべてのnamespaceのメタデータを統合
@@ -70,6 +81,7 @@ export class SdlGenerator
       {
         types: allTypes,
         resolvers: allResolvers,
+        executors: [],
       },
       baseDir,
     );

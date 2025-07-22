@@ -36,7 +36,11 @@ export class Application {
   }
 
   @measure
-  defineTailorDB(config: TailorDBServiceInput) {
+  defineTailorDB(config?: TailorDBServiceInput) {
+    if (!config) {
+      return;
+    }
+
     for (const [namespace, serviceConfig] of Object.entries(config)) {
       const tailorDB = new TailorDBService(namespace, serviceConfig);
       this._tailorDBServices.push(tailorDB);
@@ -45,7 +49,11 @@ export class Application {
   }
 
   @measure
-  definePipeline(config: PipelineResolverServiceInput) {
+  definePipeline(config?: PipelineResolverServiceInput) {
+    if (!config) {
+      return;
+    }
+
     for (const [namespace, serviceConfig] of Object.entries(config)) {
       const pipelineService = new PipelineResolverService(
         namespace,
@@ -57,7 +65,11 @@ export class Application {
   }
 
   @measure
-  defineAuth(config: AuthServiceInput) {
+  defineAuth(config?: AuthServiceInput) {
+    if (!config) {
+      return;
+    }
+
     const authService = new AuthService(config);
     this._authService = authService;
     this.addSubgraph("auth", authService.config.namespace);

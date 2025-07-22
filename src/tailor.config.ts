@@ -26,7 +26,7 @@ export default defineConfig({
         userProfileProvider: "TAILORDB",
         userProfileProviderConfig: {
           Kind: "TAILORDB",
-          Namespace: "my-db",
+          Namespace: "tailordb",
           Type: "User",
           UsernameField: "email",
           AttributesFields: ["roles"],
@@ -41,6 +41,7 @@ export default defineConfig({
       },
     },
   },
+  executor: { files: ["./src/executors/*.ts"] },
   generators: [
     "@tailor/sdl",
     [
@@ -49,5 +50,4 @@ export default defineConfig({
     ],
     ["@tailor/db-type", { distPath: () => `./src/tailordb/types.ts` }],
   ],
-  tsConfig: "./tsconfig.json",
 });

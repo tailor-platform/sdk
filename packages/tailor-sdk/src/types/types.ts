@@ -2,6 +2,12 @@ import { AllowedValue } from "./field";
 
 export type Region = "asia-northeast" | "us-west";
 
+// Secret manager types
+export interface SecretValue {
+  VaultName: string;
+  SecretKey: string;
+}
+
 export type TailorFieldType =
   | "uuid"
   | "string"
@@ -61,18 +67,6 @@ export type GraphQLType =
   | "Boolean"
   | "ID"
   | string;
-
-export const scalarTypes = [
-  "String",
-  "Int",
-  "Float",
-  "Boolean",
-  "ID",
-  "JSON",
-  "Date",
-  "Time",
-  "DateTime",
-];
 
 export interface FieldMetadata {
   description?: string;

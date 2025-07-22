@@ -10,7 +10,7 @@ type StrictParse<T extends ArgsDef> = {
       : K]: ParsedArgs<T>[K];
 };
 
-export const commonCommandArgs = {
+const commonCommandArgs = {
   config: {
     type: "string",
     description: "Path to the Tailor config file",
@@ -42,11 +42,9 @@ export const commandArgs = {
   generate: cliGenerateOption,
 } as const;
 
-export type _ApplyOptions = StrictParse<typeof commandArgs.apply>;
-export type _GenerateOptions = StrictParse<typeof commandArgs.generate>;
+type _ApplyOptions = StrictParse<typeof commandArgs.apply>;
+type _GenerateOptions = StrictParse<typeof commandArgs.generate>;
 
 export type CommandArgs =
   | ["apply", _ApplyOptions]
   | ["generate", _GenerateOptions];
-
-export { type ApplyOptions, type GenerateOptions } from "@/generator/options";

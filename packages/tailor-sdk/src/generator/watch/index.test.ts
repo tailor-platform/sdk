@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { DependencyWatcher, WatcherError, WatcherErrorCode } from "./index";
+import {
+  DependencyWatcher,
+  WatcherError,
+  WatcherErrorCode,
+  DependencyGraphManager,
+} from "./index";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+
+const manager = new DependencyGraphManager();
 
 /**
  * テスト用の一時ディレクトリを作成
@@ -195,9 +202,6 @@ describe("DependencyGraphManager", () => {
   });
 
   it("空のファイル配列でグラフを構築できる", async () => {
-    const { DependencyGraphManager } = await import("./index");
-    const manager = new DependencyGraphManager();
-
     await expect(manager.buildGraph([])).resolves.not.toThrow();
   });
 });

@@ -9,7 +9,7 @@ type DefinedFieldMetadata = Partial<
   Omit<FieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-export type FieldReference<T extends TailorField<any, any, any>> = DeepWritable<
+type FieldReference<T extends TailorField<any, any, any>> = DeepWritable<
   Exclude<T["reference"], null | undefined>
 >;
 
@@ -270,13 +270,6 @@ function object<const F extends Record<string, TailorField<any, any, any>>>(
   return objectField;
 }
 
-type TailorTypeDef = InstanceType<
-  typeof TailorType<
-    DefinedFieldMetadata,
-    Record<string, TailorField<DefinedFieldMetadata, any, any>>
-  >
->;
-
 function tailorType<const F extends Record<string, TailorField<any, any, any>>>(
   fields: F,
 ): TailorType<DefinedFieldMetadata, F> {
@@ -299,17 +292,4 @@ const t = {
   object,
 };
 export default t;
-export {
-  t,
-  tailorType as type,
-  uuid,
-  string,
-  bool,
-  int,
-  float,
-  date,
-  datetime,
-  _enum as enum,
-  object,
-  TailorTypeDef,
-};
+export { t, tailorType as type, _enum as enum };

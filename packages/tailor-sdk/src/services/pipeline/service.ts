@@ -1,20 +1,33 @@
 import path from "node:path";
 import fs from "node:fs";
-import { ResolverBundler } from "./bundler";
+import { Bundler, BundlerConfig } from "@/bundler";
+import { ResolverLoader } from "./bundler/loader";
+import { CodeTransformer } from "./bundler/transformer";
 import { PipelineResolverServiceConfig } from "./types";
 import { measure } from "@/performance";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
 
 export class PipelineResolverService {
-  private bundler: ResolverBundler;
+  private bundler: Bundler<Resolver<any, any, any, any, any, any>>;
   private resolvers: Record<string, Resolver> = {};
 
   constructor(
     public readonly namespace: string,
     private readonly config: PipelineResolverServiceConfig,
   ) {
-    this.bundler = new ResolverBundler(namespace, config);
+    const bundlerConfig: BundlerConfig<Resolver<any, any, any, any, any, any>> =
+      {
+        namespace,
+        serviceConfig: config,
+        loader: new ResolverLoader(),
+        transformer: new CodeTransformer(),
+        outputDirs: {
+          preBundle: "resolvers",
+          postBundle: "functions",
+        },
+      };
+    this.bundler = new Bundler(bundlerConfig);
   }
 
   @measure

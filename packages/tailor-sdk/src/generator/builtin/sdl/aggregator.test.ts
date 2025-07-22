@@ -67,6 +67,7 @@ describe("SDLAggregator", () => {
       > = {
         types: { User: typeMetadata },
         resolvers: { getUser: resolverMetadata },
+        executors: [],
       };
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
@@ -121,6 +122,7 @@ describe("SDLAggregator", () => {
       > = {
         types: { User: userType, Post: postType },
         resolvers: { getUser: getUserResolver, createPost: createPostResolver },
+        executors: [],
       };
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
@@ -152,6 +154,7 @@ describe("SDLAggregator", () => {
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
@@ -174,6 +177,7 @@ describe("SDLAggregator", () => {
       > = {
         types: { User: userType },
         resolvers: {},
+        executors: [],
       };
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
@@ -202,6 +206,7 @@ describe("SDLAggregator", () => {
       > = {
         types: {},
         resolvers: { ping: resolverMetadata },
+        executors: [],
       };
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
@@ -227,6 +232,7 @@ describe("SDLAggregator", () => {
       > = {
         types: { User: userType },
         resolvers: {},
+        executors: [],
       };
 
       // SDLUtils.generateSDLFromMetadataでエラーを投げる
@@ -248,6 +254,7 @@ describe("SDLAggregator", () => {
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       (SDLUtils.combineSDL as any).mockReturnValue(
@@ -295,6 +302,7 @@ describe("SDLAggregator", () => {
       > = {
         types: { User: userType, Post: postType, Product: productType },
         resolvers: {},
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -344,6 +352,7 @@ describe("SDLAggregator", () => {
       > = {
         types: { UserInput: userInputType, User: userOutputType },
         resolvers: {},
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -371,6 +380,7 @@ describe("SDLAggregator", () => {
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -394,6 +404,7 @@ describe("SDLAggregator", () => {
       > = {
         types: { User_Profile_Data: specialNameType },
         resolvers: {},
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -444,6 +455,7 @@ describe("SDLAggregator", () => {
           createUser: createUserResolver,
           deleteUser: deleteUserResolver,
         },
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -500,6 +512,7 @@ describe("SDLAggregator", () => {
           updateUser: mutationResolver,
           userUpdated: subscriptionResolver,
         },
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -525,6 +538,7 @@ describe("SDLAggregator", () => {
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -581,6 +595,7 @@ extend type Query {
       > = {
         types: {},
         resolvers: { complexQuery: complexResolver },
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -615,6 +630,7 @@ extend type Query {
       > = {
         types: { User: userType },
         resolvers: { getUser: getUserResolver },
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -656,6 +672,7 @@ extend type Query {
       > = {
         types,
         resolvers,
+        executors: [],
       };
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
@@ -678,6 +695,7 @@ extend type Query {
       > = {
         types: { User: userType },
         resolvers: {},
+        executors: [],
       };
 
       // SDLUtils.combineSDLでエラーを投げる
@@ -711,6 +729,7 @@ extend type Query {
       > = {
         types: { ValidType: validType, InvalidType: invalidType },
         resolvers: {},
+        executors: [],
       };
 
       // 2回目の呼び出しでエラーを投げる
@@ -769,6 +788,7 @@ extend type Query {
           getUser: getUserResolver,
           updateProfile: updateProfileResolver,
         },
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -816,6 +836,7 @@ extend type Query {
       > = {
         types: { User_Profile_Data_V2: specialType },
         resolvers: { get_user_profile_by_id_v2: specialResolver },
+        executors: [],
       };
 
       SDLAggregator.aggregate(metadata, "/test/output");
@@ -839,6 +860,7 @@ extend type Query {
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       const baseDirs = [
@@ -877,6 +899,7 @@ extend type Query {
       > = {
         types: { User: userType },
         resolvers: { getUser: getUserResolver },
+        executors: [],
       };
 
       (SDLUtils.combineSDL as any).mockReturnValue(
@@ -898,6 +921,7 @@ extend type Query {
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       (SDLUtils.combineSDL as any).mockReturnValue("");
@@ -915,6 +939,7 @@ extend type Query {
       > = {
         types: {},
         resolvers: {},
+        executors: [],
       };
 
       const largeSDLContent = "type User {\n  id: String!\n}\n".repeat(1000);

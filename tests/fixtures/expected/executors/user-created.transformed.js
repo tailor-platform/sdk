@@ -1,0 +1,8 @@
+import { user } from "src/tailordb/user";
+
+//#region src/executors/userCreated.ts
+
+//#endregion
+
+// Export the executor function
+export const __executor_function = async({newRecord,client})=>{const record=await client.execOne(`select * from User where id = '${newRecord.id}'`);console.log(`New user created: ${record.name} (${record.email})`)};

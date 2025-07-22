@@ -4,96 +4,109 @@ import * as rolldown from "rolldown";
 import * as rollup from "rollup";
 import { minify } from "rollup-plugin-esbuild-minify";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
-import { ResolverLoader } from "./loader";
-import { CodeTransformer } from "./transformer";
 import { getDistDir } from "@/config";
-import { PipelineResolverServiceConfig } from "../types";
 import { measure } from "@/performance";
+import { BundlerConfig, ILoader, ITransformer } from "./types";
 
-export class ResolverBundler {
-  private readonly resolverLoader: ResolverLoader;
-  private readonly transformer: CodeTransformer;
+export class Bundler<T> {
+  private readonly loader: ILoader<T>;
+  private readonly transformer: ITransformer<T>;
 
-  constructor(
-    private readonly namespace: string,
-    private readonly config: PipelineResolverServiceConfig,
-  ) {
-    this.resolverLoader = new ResolverLoader();
-    this.transformer = new CodeTransformer();
+  constructor(private readonly config: BundlerConfig<T>) {
+    this.loader = config.loader;
+    this.transformer = config.transformer;
   }
 
   @measure
   async bundle(): Promise<void> {
     try {
-      const resolverFiles = await this.detectResolverFiles();
-      if (resolverFiles.length === 0) {
+      const files = await this.detectFiles();
+      if (files.length === 0) {
         throw new Error(
-          `No resolver files found matching pattern: ${this.config.files?.join(
+          `No files found matching pattern: ${this.config.serviceConfig.files?.join(
             ", ",
           )}`,
         );
       }
 
       console.log(
-        `Found ${resolverFiles.length} resolver files for service "${this.namespace}"`,
+        `Found ${files.length} files for service "${this.config.namespace}"`,
       );
 
       await Promise.all(
-        resolverFiles.map(async (resolverFile) => {
-          await this.processResolverFile(resolverFile);
+        files.map(async (file) => {
+          await this.processFile(file);
         }),
       );
 
       console.log(
-        `Successfully bundled resolvers for service "${this.namespace}"`,
+        `Successfully bundled files for service "${this.config.namespace}"`,
       );
     } catch (error) {
-      console.error(`Bundle failed for service ${this.namespace}:`, error);
+      console.error(
+        `Bundle failed for service ${this.config.namespace}:`,
+        error,
+      );
       throw error;
     }
   }
 
   @measure
-  private async detectResolverFiles(): Promise<string[]> {
-    if (!this.config.files || this.config.files.length === 0) {
+  private async detectFiles(): Promise<string[]> {
+    if (
+      !this.config.serviceConfig.files ||
+      this.config.serviceConfig.files.length === 0
+    ) {
       return [];
     }
 
-    const resolverFiles: string[] = [];
+    const files: string[] = [];
 
-    for (const pattern of this.config.files) {
+    for (const pattern of this.config.serviceConfig.files) {
       const absolutePattern = path.resolve(process.cwd(), pattern);
 
       try {
         const matchedFiles = fs.globSync(absolutePattern);
-        resolverFiles.push(...matchedFiles);
+        files.push(...matchedFiles);
       } catch (error) {
         console.warn(`Failed to glob pattern "${pattern}":`, error);
       }
     }
 
-    return resolverFiles;
+    return files;
   }
 
   @measure
-  private async processResolverFile(resolverFile: string): Promise<void> {
-    const resolver = await this.resolverLoader.load(resolverFile);
+  private async processFile(file: string): Promise<void> {
+    const item = await this.loader.load(file);
+
+    // Check if this item should be processed
+    if (this.config.shouldProcess && !this.config.shouldProcess(item)) {
+      console.log(`Skipping item based on shouldProcess condition`);
+      return;
+    }
+
+    // Extract name from item - assume it has a 'name' property
+    const itemName = (item as any).name;
 
     const outputFile = path.join(
       getDistDir(),
-      "resolvers",
-      `${resolver.name}.js`,
+      this.config.outputDirs.preBundle,
+      `${itemName}.js`,
     );
 
-    await this.preBundle(resolverFile, outputFile);
+    await this.preBundle(file, outputFile);
 
-    const stepOutputFiles = this.transformer.transform(
+    const transformedFiles = this.transformer.transform(
       outputFile,
-      resolver,
+      item,
       getDistDir(),
     );
 
-    await this.postBundle(stepOutputFiles);
+    // Post-bundle the transformed files
+    if (transformedFiles.length > 0) {
+      await this.postBundle(transformedFiles);
+    }
   }
 
   @measure
@@ -139,20 +152,22 @@ export class ResolverBundler {
       }) as rolldown.BuildOptions,
     );
 
-    // Log bundle size for debugging
     const stats = fs.statSync(output);
     console.log(`Pre-bundle output size: ${(stats.size / 1024).toFixed(2)} KB`);
   }
 
   @measure
-  private async postBundle(stepFiles: string[]): Promise<void> {
-    const outputDir = path.join(getDistDir(), "functions");
+  private async postBundle(files: string[]): Promise<void> {
+    const outputDir = path.join(
+      getDistDir(),
+      this.config.outputDirs.postBundle,
+    );
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
     await Promise.all(
-      stepFiles.map(async (file) => {
+      files.map(async (file) => {
         const outputFile = path.join(outputDir, path.basename(file));
 
         const bundle = await rollup.rollup(

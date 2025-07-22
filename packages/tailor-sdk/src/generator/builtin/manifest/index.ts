@@ -1,10 +1,13 @@
 import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { Resolver } from "@/services/pipeline/resolver";
+import { Executor } from "@/services/executor/types";
 import { measure } from "@/performance";
 import { ManifestTypeMetadata, ResolverManifestMetadata } from "./types";
+import { ExecutorManifestMetadata } from "./executor-processor";
 import { TypeProcessor } from "./type-processor";
 import { ResolverProcessor } from "./resolver-processor";
+import { ExecutorProcessor } from "./executor-processor";
 import { ManifestAggregator } from "./aggregator";
 import type { Workspace } from "@/workspace";
 import type { ApplyOptions } from "@/generator/options";
@@ -17,6 +20,7 @@ export class ManifestGenerator
     CodeGenerator<
       ManifestTypeMetadata,
       ResolverManifestMetadata,
+      ExecutorManifestMetadata,
       Record<string, ManifestTypeMetadata>,
       Record<string, ResolverManifestMetadata>
     >
@@ -45,6 +49,14 @@ export class ManifestGenerator
   }
 
   /**
+   * Executorを処理してExecutorManifestMetadataを生成
+   */
+  @measure
+  async processExecutor(executor: Executor): Promise<ExecutorManifestMetadata> {
+    return await ExecutorProcessor.processExecutor(executor);
+  }
+
+  /**
    * 処理されたメタデータを統合してManifest JSONを生成
    */
   @measure
@@ -53,6 +65,7 @@ export class ManifestGenerator
       Record<string, ManifestTypeMetadata>,
       Record<string, ResolverManifestMetadata>
     >[],
+    executorResults: ExecutorManifestMetadata[],
     _baseDir: string,
   ): Promise<GeneratorResult> {
     // 現時点では最初のapplicationのみを処理（将来的には複数application対応可能）
@@ -63,6 +76,7 @@ export class ManifestGenerator
     // すべてのnamespaceのメタデータを統合
     const allTypes: Record<string, ManifestTypeMetadata> = {};
     const allResolvers: Record<string, ResolverManifestMetadata> = {};
+    const allExecutors: ExecutorManifestMetadata[] = [];
     let pipelineNamespace: string | undefined;
 
     for (const input of inputs) {
@@ -78,12 +92,15 @@ export class ManifestGenerator
           pipelineNamespace = nsResult.namespace;
         }
       }
+      // Executors
+      allExecutors.push(...executorResults);
     }
 
     return await ManifestAggregator.aggregate(
       {
         types: allTypes,
         resolvers: allResolvers,
+        executors: allExecutors,
       },
       this.workspace,
     );

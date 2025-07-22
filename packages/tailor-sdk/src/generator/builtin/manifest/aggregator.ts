@@ -3,9 +3,13 @@ import { BasicGeneratorMetadata, GeneratorResult } from "../../types";
 import {
   ManifestTypeMetadata,
   WorkspaceManifest,
-  ServiceManifest,
+  ExecutorManifest,
+  AuthManifest,
+  TailordbManifest,
+  PipelineManifest,
 } from "./types";
 import { ResolverManifestMetadata } from "./resolver-processor";
+import { ExecutorManifestMetadata } from "./executor-processor";
 import { measure } from "@/performance";
 import { getDistDir } from "@/config";
 import type { Workspace } from "@/workspace";
@@ -28,7 +32,7 @@ export class ManifestAggregator {
     metadata: BasicGeneratorMetadata<
       ManifestTypeMetadata,
       ResolverManifestMetadata
-    >,
+    > & { executors: ExecutorManifestMetadata[] },
     workspace: Workspace,
   ): Promise<GeneratorResult> {
     try {
@@ -62,7 +66,7 @@ export class ManifestAggregator {
     metadata: BasicGeneratorMetadata<
       ManifestTypeMetadata,
       ResolverManifestMetadata
-    >,
+    > & { executors: ExecutorManifestMetadata[] },
   ): Promise<WorkspaceManifest> {
     const manifest: WorkspaceManifest = {
       Apps: [],
@@ -83,6 +87,7 @@ export class ManifestAggregator {
         const tailordbManifest = ManifestAggregator.generateTailorDBManifest(
           db,
           metadata,
+          metadata.executors,
         );
         manifest.Services.push(tailordbManifest);
         manifest.Tailordbs.push(tailordbManifest);
@@ -90,10 +95,12 @@ export class ManifestAggregator {
 
       for (const pipeline of app.pipelineResolverServices) {
         await pipeline.build();
-        await pipeline.loadResolvers();
-        const pipelineManifest =
-          await ManifestAggregator.generatePipelineManifest(pipeline, metadata);
-        manifest.Services.push(pipelineManifest as unknown as ServiceManifest);
+        await pipeline.getResolvers();
+        const pipelineManifest = ManifestAggregator.generatePipelineManifest(
+          pipeline,
+          metadata,
+        );
+        manifest.Services.push(pipelineManifest);
         manifest.Pipelines.push(pipelineManifest);
       }
 
@@ -104,6 +111,27 @@ export class ManifestAggregator {
         manifest.Services.push(authManifest);
         manifest.Auths.push(authManifest);
       }
+    }
+
+    // Build executor service if it exists
+    if (workspace.executorService) {
+      await workspace.executorService.build();
+    }
+
+    // Process executors from metadata
+    if (metadata.executors && metadata.executors.length > 0) {
+      // Group executors by namespace (from their original service)
+      const serviceExecutors = metadata.executors.filter(() => {
+        // Match executors to their service by checking workspace
+        return true; // For now, we'll include all executors
+      });
+      // Create executor manifests for each namespace
+      const executorManifest =
+        ManifestAggregator.generateExecutorManifestFromMetadata(
+          serviceExecutors,
+        );
+      manifest.Services.push(executorManifest);
+      manifest.Executors.push(executorManifest);
     }
 
     return manifest;
@@ -141,13 +169,13 @@ export class ManifestAggregator {
    * metadataから既に生成されたマニフェストを使用する純粋な統合処理
    */
   @measure
-  static async generatePipelineManifest(
+  static generatePipelineManifest(
     service: PipelineResolverService,
     metadata: BasicGeneratorMetadata<
       ManifestTypeMetadata,
       ResolverManifestMetadata
     >,
-  ) {
+  ): PipelineManifest {
     const resolverManifests = Object.entries(metadata.resolvers)
       .filter(([_, resolverMetadata]) => resolverMetadata != null)
       .map(([_, resolverMetadata]) => {
@@ -174,10 +202,31 @@ export class ManifestAggregator {
       ManifestTypeMetadata,
       ResolverManifestMetadata
     >,
-  ): any {
+    executors?: ExecutorManifestMetadata[],
+  ): TailordbManifest {
+    const usedTypeNames = new Set<string>();
+    if (executors) {
+      for (const executor of executors) {
+        if (executor.usedTailorDBType) {
+          usedTypeNames.add(executor.usedTailorDBType);
+        }
+      }
+    }
+
     const types = Object.values(metadata.types)
       .filter((typeMetadata) => typeMetadata != null)
-      .map((typeMetadata) => typeMetadata.typeManifest);
+      .map((typeMetadata) => {
+        const typeManifest = { ...typeMetadata.typeManifest };
+
+        if (usedTypeNames.has(typeManifest.Name)) {
+          typeManifest.Settings = {
+            ...typeManifest.Settings,
+            PublishRecordEvents: true,
+          };
+        }
+
+        return typeManifest;
+      });
 
     return {
       Kind: "tailordb",
@@ -191,7 +240,7 @@ export class ManifestAggregator {
    * AuthServiceからManifest JSON生成
    */
   @measure
-  static generateAuthManifest(service: AuthService): any {
+  static generateAuthManifest(service: AuthService): AuthManifest {
     return {
       Kind: "auth",
       Namespace: service.config.namespace,
@@ -220,6 +269,32 @@ export class ManifestAggregator {
       MachineUsers: service.config.machineUsers,
       OAuth2Clients: service.config.oauth2Clients || [],
       Version: service.config.version,
+    };
+  }
+
+  /**
+   * ExecutorManifestMetadataからManifest JSON生成
+   */
+  @measure
+  static generateExecutorManifestFromMetadata(
+    executors: ExecutorManifestMetadata[],
+  ): ExecutorManifest {
+    const executorManifests = executors
+      .filter(
+        (
+          e,
+        ): e is ExecutorManifestMetadata & {
+          executorManifest: NonNullable<
+            ExecutorManifestMetadata["executorManifest"]
+          >;
+        } => e.executorManifest != null,
+      )
+      .map((e) => e.executorManifest);
+
+    return {
+      Kind: "executor",
+      Executors: executorManifests,
+      Version: "v2",
     };
   }
 }

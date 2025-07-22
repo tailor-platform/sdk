@@ -1,5 +1,6 @@
 import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
+import { Executor } from "@/services/executor/types";
 import { measure } from "@/performance";
 import { DbTypeMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
@@ -10,7 +11,8 @@ export const DbTypeGeneratorID = "@tailor/db-type";
  * TypeScript型定義生成システムのメインエントリーポイント
  */
 export class DbTypeGenerator
-  implements CodeGenerator<DbTypeMetadata, undefined, string, undefined>
+  implements
+    CodeGenerator<DbTypeMetadata, undefined, undefined, string, undefined>
 {
   readonly id = DbTypeGeneratorID;
   readonly description =
@@ -29,6 +31,11 @@ export class DbTypeGenerator
 
   @measure
   processResolver(): undefined {
+    return undefined;
+  }
+
+  @measure
+  processExecutor(_executor: Executor): undefined {
     return undefined;
   }
 

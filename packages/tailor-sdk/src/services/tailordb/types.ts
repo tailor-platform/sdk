@@ -16,11 +16,6 @@ export type DefinedFieldMetadata = Partial<
   Omit<DBFieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-export type DBTypeConfig = {
-  withTimestamps?: boolean;
-  description?: string;
-};
-
 type IsDateType<T> = Date extends T ? true : false;
 
 type DBTypeLike = {
@@ -79,7 +74,7 @@ export type Validators<P extends DBTypeLike> = {
   };
 };
 
-export type ValidateFn<O, D = unknown> = (args: {
+type ValidateFn<O, D = unknown> = (args: {
   value: O;
   data: D;
   user: TailorUser;
@@ -87,14 +82,9 @@ export type ValidateFn<O, D = unknown> = (args: {
 
 export type ValidateConfig<O, D = unknown> = [ValidateFn<O, D>, string];
 
-export type FieldValidateFn<O> = ValidateFn<O>;
-export type FieldValidateConfig<O> = ValidateConfig<O>;
+type FieldValidateFn<O> = ValidateFn<O>;
+type FieldValidateConfig<O> = ValidateConfig<O>;
 export type FieldValidateInput<O> = FieldValidateFn<O> | FieldValidateConfig<O>;
-export type TypeValidateFn<P, O> = (args: {
-  value: O;
-  data: P;
-  user: TailorUser;
-}) => boolean;
 
 export type TailorDBServiceConfig = { files: string[] };
 export type TailorDBServiceInput = {
