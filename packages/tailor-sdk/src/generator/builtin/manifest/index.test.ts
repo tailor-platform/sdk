@@ -1,17 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { ManifestGenerator } from "./index";
 import { db } from "@/services/tailordb/schema";
 import {
   createQueryResolver,
   createMutationResolver,
 } from "@/services/pipeline/resolver";
-import type { Workspace } from "@/workspace";
 import type { ApplyOptions } from "@/generator/options";
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import t from "@/types/type";
 
-// モックデータ - db.type を使用した正しい構造
-const mockTailorDBType = db.type("User", {
+const dbType = db.type("User", {
   name: db.string().description("User name"),
   email: db.string().description("User email"),
   age: db.int().optional().description("User age"),
@@ -24,7 +22,7 @@ const mockTailorDBType = db.type("User", {
   ...db.fields.timestamps,
 });
 
-const mockResolver = createQueryResolver(
+const resolver = createQueryResolver(
   "getUser",
   t.type({
     id: t.string(),
@@ -50,44 +48,7 @@ const mockResolver = createQueryResolver(
     }),
   );
 
-const mockWorkspace: Workspace = {
-  config: { name: "test-workspace", app: {}, generators: [] },
-  applications: [
-    {
-      name: "test-app",
-      tailorDBServices: [
-        {
-          loadTypes: vi.fn().mockResolvedValue({ User: mockTailorDBType }),
-          toManifestJSON: vi.fn().mockReturnValue({
-            Kind: "tailordb",
-            Namespace: "test-db",
-          }),
-        },
-      ],
-      pipelineResolverServices: [
-        {
-          build: vi.fn().mockResolvedValue(undefined),
-          loadResolvers: vi
-            .fn()
-            .mockImplementation(() => Promise.resolve(undefined)),
-          getResolvers: vi.fn().mockReturnValue({}),
-        },
-      ],
-      authService: {
-        toManifest: vi.fn().mockImplementation(() => ({
-          Kind: "auth",
-          Namespace: "test-auth",
-        })),
-      },
-      toManifestJSON: vi.fn().mockReturnValue({
-        Kind: "application",
-        Name: "test-app",
-      }),
-    },
-  ],
-} as any;
-
-const mockApplyOptions: ApplyOptions = {
+const applyOptions: ApplyOptions = {
   dryRun: false,
 };
 
@@ -95,8 +56,7 @@ describe("ManifestGenerator統合テスト", () => {
   let manifestGenerator: ManifestGenerator;
 
   beforeEach(() => {
-    manifestGenerator = new ManifestGenerator(mockApplyOptions);
-    manifestGenerator.workspace = mockWorkspace;
+    manifestGenerator = new ManifestGenerator(applyOptions);
   });
 
   describe("基本的な動作テスト", () => {
@@ -105,12 +65,11 @@ describe("ManifestGenerator統合テスト", () => {
       expect(manifestGenerator.description).toBe(
         "Generates Manifest JSON files for TailorDB types and resolvers",
       );
-      expect(manifestGenerator.option).toBe(mockApplyOptions);
-      expect(manifestGenerator.workspace).toBe(mockWorkspace);
+      expect(manifestGenerator.option).toBe(applyOptions);
     });
 
     it("processType メソッドが TailorDBType を正しく処理する", async () => {
-      const result = await manifestGenerator.processType(mockTailorDBType);
+      const result = await manifestGenerator.processType(dbType);
 
       // db.type を使用した場合、自動的に id フィールドが追加される
       expect(result.name).toBe("User");
@@ -134,7 +93,7 @@ describe("ManifestGenerator統合テスト", () => {
     });
 
     it("processResolver メソッドが Resolver を正しく処理する", async () => {
-      const result = await manifestGenerator.processResolver(mockResolver);
+      const result = await manifestGenerator.processResolver(resolver);
 
       expect(result.name).toBe("getUser");
       expect(result.inputType).toBe("GetUserInput");
@@ -160,7 +119,7 @@ describe("ManifestGenerator統合テスト", () => {
   describe("エラーハンドリングのテスト", () => {
     it("processType でエラーが発生した場合の処理", async () => {
       const invalidType = {
-        ...mockTailorDBType,
+        ...dbType,
         fields: null, // 無効なフィールド
       } as any;
 

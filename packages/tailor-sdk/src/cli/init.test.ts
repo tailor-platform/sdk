@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import fs from "fs-extra";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import path from "node:path";
+import fs from "fs-extra";
 import {
   validateProjectName,
   generatePackageJson,
@@ -9,12 +9,9 @@ import {
   addToExistingProject,
 } from "./init";
 
-// Mock fs-extra
-vi.mock("fs-extra");
-
 describe("init command", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("validateProjectName", () => {
@@ -119,9 +116,11 @@ describe("init command", () => {
 
   describe("checkExistingProject", () => {
     it("should detect existing project with package.json", async () => {
-      vi.mocked(fs.pathExists).mockImplementation(async (filePath) => {
-        return filePath.toString().includes("package.json");
-      });
+      const pathExistsSpy = vi
+        .spyOn(fs, "pathExists")
+        .mockImplementation(async (filePath) => {
+          return filePath.toString().includes("package.json");
+        });
 
       const result = await checkExistingProject("/test/path");
 
@@ -129,10 +128,13 @@ describe("init command", () => {
       expect(result.packageJsonPath).toBe(
         path.join("/test/path", "package.json"),
       );
+      expect(pathExistsSpy).toHaveBeenCalledWith(
+        path.join("/test/path", "package.json"),
+      );
     });
 
     it("should detect project without package.json", async () => {
-      vi.mocked(fs.pathExists).mockResolvedValue(false as any);
+      vi.spyOn(fs, "pathExists").mockResolvedValue(false as never);
 
       const result = await checkExistingProject("/test/path");
 
@@ -141,31 +143,28 @@ describe("init command", () => {
   });
 
   describe("addToExistingProject", () => {
-    const mockPackageJson = {
-      name: "existing-project",
-      version: "1.0.0",
-      scripts: {
-        test: "jest",
-      },
-      dependencies: {
-        express: "^4.0.0",
-      },
-    };
-
     beforeEach(() => {
-      vi.mocked(fs.readJson).mockResolvedValue(mockPackageJson);
-      vi.mocked(fs.writeJson).mockResolvedValue(undefined);
-      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
-      vi.mocked(fs.ensureDir).mockResolvedValue(undefined as any);
-      vi.mocked(fs.pathExists).mockResolvedValue(false as any);
-      vi.mocked(fs.readFile).mockResolvedValue("" as any);
-      vi.mocked(fs.appendFile).mockResolvedValue(undefined);
+      vi.spyOn(fs, "readJson").mockResolvedValue({
+        name: "existing-project",
+        version: "1.0.0",
+        scripts: {
+          test: "jest",
+        },
+        dependencies: {
+          express: "^4.0.0",
+        },
+      });
+      vi.spyOn(fs, "writeJson").mockResolvedValue(undefined);
+      vi.spyOn(fs, "writeFile").mockResolvedValue(undefined);
+      vi.spyOn(fs, "ensureDir").mockResolvedValue(undefined as never);
     });
 
     it("should add tailor-sdk to dependencies", async () => {
+      const writeJsonSpy = vi.spyOn(fs, "writeJson");
+
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+      expect(writeJsonSpy).toHaveBeenCalledWith(
         "/test/path/package.json",
         expect.objectContaining({
           dependencies: expect.objectContaining({
@@ -178,9 +177,11 @@ describe("init command", () => {
     });
 
     it("should add tailor scripts to package.json", async () => {
+      const writeJsonSpy = vi.spyOn(fs, "writeJson");
+
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+      expect(writeJsonSpy).toHaveBeenCalledWith(
         "/test/path/package.json",
         expect.objectContaining({
           scripts: expect.objectContaining({
@@ -195,23 +196,23 @@ describe("init command", () => {
     });
 
     it("should create tailor.config.ts", async () => {
+      const writeFileSpy = vi.spyOn(fs, "writeFile");
+
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(vi.mocked(fs.writeFile)).toHaveBeenCalledWith(
+      expect(writeFileSpy).toHaveBeenCalledWith(
         "/test/path/tailor.config.ts",
         expect.stringContaining('name: "existing-project"'),
       );
     });
 
     it("should create src directories", async () => {
+      const ensureDirSpy = vi.spyOn(fs, "ensureDir");
+
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(vi.mocked(fs.ensureDir)).toHaveBeenCalledWith(
-        "/test/path/src/tailordb",
-      );
-      expect(vi.mocked(fs.ensureDir)).toHaveBeenCalledWith(
-        "/test/path/src/resolvers",
-      );
+      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/tailordb");
+      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/resolvers");
     });
   });
 });
