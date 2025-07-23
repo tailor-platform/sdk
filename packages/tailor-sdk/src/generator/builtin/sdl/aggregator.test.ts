@@ -1,42 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { SDLAggregator } from "./aggregator";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { BasicGeneratorMetadata } from "../../types";
 import { SDLTypeMetadata, ResolverSDLMetadata } from "./types";
-import { SDLUtils } from "./utils";
 import path from "node:path";
-
-// SDLUtilsのモック
-vi.mock("./utils", () => ({
-  SDLUtils: {
-    combineSDL: vi.fn(),
-    generateSDLFromMetadata: vi.fn(),
-    addComment: vi.fn(),
-  },
-}));
+import { SDLUtils } from "./utils";
+import { SDLAggregator } from "./aggregator";
 
 describe("SDLAggregator", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    // デフォルトのモック実装
-    (SDLUtils.combineSDL as any).mockImplementation((...sdls: string[]) => {
-      return sdls.filter(Boolean).join("\n\n");
-    });
-
-    (SDLUtils.generateSDLFromMetadata as any).mockImplementation(
-      (metadata: SDLTypeMetadata) => {
-        const typeName = metadata.isInput ? "input" : "type";
-        return `${typeName} ${metadata.name} {\n  id: String!\n}\n`;
-      },
-    );
-
-    (SDLUtils.addComment as any).mockImplementation(
-      (sdl: string, comment: string) => {
-        return `# ${comment}\n${sdl}`;
-      },
-    );
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -125,23 +94,26 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       const result = SDLAggregator.aggregate(metadata, "/test/output");
 
       expect(result.files).toHaveLength(1);
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledTimes(2);
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(generateSDLSpy).toHaveBeenCalledTimes(2);
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: User",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: Post",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Resolver: getUser",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Resolver: createPost",
       );
@@ -157,11 +129,13 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+
       const result = SDLAggregator.aggregate(metadata, "/test/output");
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].content).toBe("\n\n");
-      expect(SDLUtils.generateSDLFromMetadata).not.toHaveBeenCalled();
+      expect(generateSDLSpy).not.toHaveBeenCalled();
     });
 
     it("型のみの場合を正しく処理すること", () => {
@@ -180,11 +154,14 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       const result = SDLAggregator.aggregate(metadata, "/test/output");
 
       expect(result.files).toHaveLength(1);
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledTimes(1);
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(generateSDLSpy).toHaveBeenCalledTimes(1);
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: User",
       );
@@ -209,11 +186,14 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       const result = SDLAggregator.aggregate(metadata, "/test/output");
 
       expect(result.files).toHaveLength(1);
-      expect(SDLUtils.generateSDLFromMetadata).not.toHaveBeenCalled();
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(generateSDLSpy).not.toHaveBeenCalled();
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Resolver: ping",
       );
@@ -236,7 +216,7 @@ describe("SDLAggregator", () => {
       };
 
       // SDLUtils.generateSDLFromMetadataでエラーを投げる
-      (SDLUtils.generateSDLFromMetadata as any).mockImplementation(() => {
+      vi.spyOn(SDLUtils, "generateSDLFromMetadata").mockImplementation(() => {
         throw new Error("SDL generation failed");
       });
 
@@ -257,7 +237,7 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
-      (SDLUtils.combineSDL as any).mockReturnValue(
+      vi.spyOn(SDLUtils, "combineSDL").mockReturnValue(
         "type User {\n  id: String!\n}",
       );
 
@@ -305,24 +285,25 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledTimes(3);
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledWith(userType);
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledWith(postType);
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledWith(
-        productType,
-      );
+      expect(generateSDLSpy).toHaveBeenCalledTimes(3);
+      expect(generateSDLSpy).toHaveBeenCalledWith(userType);
+      expect(generateSDLSpy).toHaveBeenCalledWith(postType);
+      expect(generateSDLSpy).toHaveBeenCalledWith(productType);
 
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: User",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: Post",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: Product",
       );
@@ -355,19 +336,18 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledWith(
-        userInputType,
-      );
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledWith(
-        userOutputType,
-      );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(generateSDLSpy).toHaveBeenCalledWith(userInputType);
+      expect(generateSDLSpy).toHaveBeenCalledWith(userOutputType);
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: UserInput",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: User",
       );
@@ -383,10 +363,13 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+      const combineSDLSpy = vi.spyOn(SDLUtils, "combineSDL");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.generateSDLFromMetadata).not.toHaveBeenCalled();
-      expect(SDLUtils.combineSDL).toHaveBeenCalledWith();
+      expect(generateSDLSpy).not.toHaveBeenCalled();
+      expect(combineSDLSpy).toHaveBeenCalledWith();
     });
 
     it("型名に特殊文字が含まれている場合を処理すること", () => {
@@ -407,9 +390,11 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: User_Profile_Data",
       );
@@ -458,17 +443,19 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         getUserResolver.sdl,
         "Resolver: getUser",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         createUserResolver.sdl,
         "Resolver: createUser",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         deleteUserResolver.sdl,
         "Resolver: deleteUser",
       );
@@ -515,17 +502,19 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         queryResolver.sdl,
         "Resolver: getUsers",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         mutationResolver.sdl,
         "Resolver: updateUser",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         subscriptionResolver.sdl,
         "Resolver: userUpdated",
       );
@@ -541,10 +530,12 @@ describe("SDLAggregator", () => {
         executors: [],
       };
 
+      // リゾルバー関連のSDLUtilsメソッドが呼ばれないことを確認
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      // リゾルバー関連のSDLUtilsメソッドが呼ばれないことを確認
-      expect(SDLUtils.addComment).not.toHaveBeenCalledWith(
+      expect(addCommentSpy).not.toHaveBeenCalledWith(
         expect.any(String),
         expect.stringMatching(/^Resolver:/),
       );
@@ -598,9 +589,11 @@ extend type Query {
         executors: [],
       };
 
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         complexResolver.sdl,
         "Resolver: complexQuery",
       );
@@ -633,10 +626,12 @@ extend type Query {
         executors: [],
       };
 
+      // combineSDLが2回呼ばれることを確認（型用とリゾルバー用、そして全体統合用）
+      const combineSDLSpy = vi.spyOn(SDLUtils, "combineSDL");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      // combineSDLが2回呼ばれることを確認（型用とリゾルバー用、そして全体統合用）
-      expect(SDLUtils.combineSDL).toHaveBeenCalledTimes(3);
+      expect(combineSDLSpy).toHaveBeenCalledTimes(3);
     });
 
     it("大量の型とリゾルバーを処理できること", () => {
@@ -675,11 +670,14 @@ extend type Query {
         executors: [],
       };
 
+      const generateSDLSpy = vi.spyOn(SDLUtils, "generateSDLFromMetadata");
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       const result = SDLAggregator.aggregate(metadata, "/test/output");
 
       expect(result.files).toHaveLength(1);
-      expect(SDLUtils.generateSDLFromMetadata).toHaveBeenCalledTimes(50);
-      expect(SDLUtils.addComment).toHaveBeenCalledTimes(80); // 50型 + 30リゾルバー
+      expect(generateSDLSpy).toHaveBeenCalledTimes(50);
+      expect(addCommentSpy).toHaveBeenCalledTimes(80); // 50型 + 30リゾルバー
     });
 
     it("SDLUtilsのエラーを適切にハンドリングすること", () => {
@@ -699,7 +697,7 @@ extend type Query {
       };
 
       // SDLUtils.combineSDLでエラーを投げる
-      (SDLUtils.combineSDL as any).mockImplementation(() => {
+      vi.spyOn(SDLUtils, "combineSDL").mockImplementation(() => {
         throw new Error("Combine SDL failed");
       });
 
@@ -733,7 +731,7 @@ extend type Query {
       };
 
       // 2回目の呼び出しでエラーを投げる
-      (SDLUtils.generateSDLFromMetadata as any)
+      vi.spyOn(SDLUtils, "generateSDLFromMetadata")
         .mockReturnValueOnce("type ValidType {\n  id: String!\n}\n")
         .mockImplementationOnce(() => {
           throw new Error("Invalid type generation failed");
@@ -791,24 +789,26 @@ extend type Query {
         executors: [],
       };
 
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
       // 型のコメント確認
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: User",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: Profile",
       );
 
       // リゾルバーのコメント確認
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         getUserResolver.sdl,
         "Resolver: getUser",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         updateProfileResolver.sdl,
         "Resolver: updateProfile",
       );
@@ -839,13 +839,15 @@ extend type Query {
         executors: [],
       };
 
+      const addCommentSpy = vi.spyOn(SDLUtils, "addComment");
+
       SDLAggregator.aggregate(metadata, "/test/output");
 
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         expect.any(String),
         "Type: User_Profile_Data_V2",
       );
-      expect(SDLUtils.addComment).toHaveBeenCalledWith(
+      expect(addCommentSpy).toHaveBeenCalledWith(
         specialResolver.sdl,
         "Resolver: get_user_profile_by_id_v2",
       );
@@ -902,7 +904,7 @@ extend type Query {
         executors: [],
       };
 
-      (SDLUtils.combineSDL as any).mockReturnValue(
+      vi.spyOn(SDLUtils, "combineSDL").mockReturnValue(
         "# Type: User\ntype User {\n  id: String!\n}\n\n# Resolver: getUser\nextend type Query {\n  getUser: User\n}",
       );
 
@@ -924,7 +926,7 @@ extend type Query {
         executors: [],
       };
 
-      (SDLUtils.combineSDL as any).mockReturnValue("");
+      vi.spyOn(SDLUtils, "combineSDL").mockReturnValue("");
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
 
@@ -943,7 +945,7 @@ extend type Query {
       };
 
       const largeSDLContent = "type User {\n  id: String!\n}\n".repeat(1000);
-      (SDLUtils.combineSDL as any).mockReturnValue(largeSDLContent);
+      vi.spyOn(SDLUtils, "combineSDL").mockReturnValue(largeSDLContent);
 
       const result = SDLAggregator.aggregate(metadata, "/test/output");
 

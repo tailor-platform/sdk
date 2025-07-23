@@ -163,6 +163,9 @@ importers:
       vitest:
         specifier: ^3.1.4
         version: 3.1.4(@types/node@22.15.3)
+      vitest-mock-extended:
+        specifier: ^3.1.0
+        version: 3.1.0(typescript@5.8.3)(vitest@3.1.4(@types/node@22.15.3))
 
 packages:
 
@@ -2528,6 +2531,14 @@ packages:
   ts-cron-validator@1.1.5:
     resolution: {integrity: sha512-vqk4cGxcOK5Dsdg3xF8X2J61BZqdfDdBzdP0Mz5Hf1LXiC6dHk9UNK7QMl4zuT4tMo74O4FhLs7dvtHo/GcR1Q==}
 
+  ts-essentials@10.1.1:
+    resolution: {integrity: sha512-4aTB7KLHKmUvkjNj8V+EdnmuVTiECzn3K+zIbRthumvHu+j44x3w63xpfs0JL3NGIzGXqoQ7AV591xHO+XrOTw==}
+    peerDependencies:
+      typescript: '>=4.5.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   ts-graphviz@2.1.6:
     resolution: {integrity: sha512-XyLVuhBVvdJTJr2FJJV2L1pc4MwSjMhcunRVgDE9k4wbb2ee7ORYnPewxMWUav12vxyfUM686MSGsqnVRIInuw==}
     engines: {node: '>=18'}
@@ -2671,6 +2682,12 @@ packages:
         optional: true
       terser:
         optional: true
+
+  vitest-mock-extended@3.1.0:
+    resolution: {integrity: sha512-vCM0VkuocOUBwwqwV7JB7YStw07pqeKvEIrZnR8l3PtwYi6rAAJAyJACeC1UYNfbQWi85nz7EdiXWBFI5hll2g==}
+    peerDependencies:
+      typescript: 3.x || 4.x || 5.x
+      vitest: '>=3.0.0'
 
   vitest@3.1.4:
     resolution: {integrity: sha512-Ta56rT7uWxCSJXlBtKgIlApJnT6e6IGmTYxYcmxjJ4ujuZDI59GUQgVDObXXJujOmPDBYXHK1qmaGtneu6TNIQ==}
@@ -4953,6 +4970,10 @@ snapshots:
 
   ts-cron-validator@1.1.5: {}
 
+  ts-essentials@10.1.1(typescript@5.8.3):
+    optionalDependencies:
+      typescript: 5.8.3
+
   ts-graphviz@2.1.6:
     dependencies:
       '@ts-graphviz/adapter': 2.0.6
@@ -5089,6 +5110,12 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.15.3
       fsevents: 2.3.3
+
+  vitest-mock-extended@3.1.0(typescript@5.8.3)(vitest@3.1.4(@types/node@22.15.3)):
+    dependencies:
+      ts-essentials: 10.1.1(typescript@5.8.3)
+      typescript: 5.8.3
+      vitest: 3.1.4(@types/node@22.15.3)
 
   vitest@3.1.4(@types/node@22.15.3):
     dependencies:

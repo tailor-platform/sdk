@@ -7,36 +7,35 @@ import {
 import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import fs from "node:fs";
 import path from "node:path";
-import { getDistDir } from "@/config";
 import { t } from "@/types";
-
-// モックの設定
-vi.mock("node:fs");
-vi.mock("@/config", () => ({
-  getDistDir: vi.fn(() => "/mock/dist"),
-}));
+import type { PathOrFileDescriptor } from "fs-extra";
+import { getDistDir } from "@/config";
 
 describe("ResolverProcessor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // fs.readFileSyncのデフォルトモック
-    (fs.readFileSync as any).mockImplementation((filePath: string) => {
-      if (filePath.includes("fetchData.js")) {
-        return "function fetchData() { return { id: '1', data: 'test' }; }";
-      }
-      if (filePath.includes("processData.js")) {
-        return "function processData(input) { return { processed: true, input }; }";
-      }
-      if (filePath.includes("queryUsers.js")) {
-        return "SELECT * FROM users WHERE id = $1";
-      }
-      if (filePath.includes("step1.js")) return "step1 function";
-      if (filePath.includes("step2.js")) return "step2 sql";
-      if (filePath.includes("step3.js")) return "step3 function";
-      if (filePath.includes("step5.js")) return "step5 sql";
-      throw new Error(`File not found: ${filePath}`);
-    });
+    vi.spyOn(fs, "readFileSync").mockImplementation(
+      (filePath: PathOrFileDescriptor) => {
+        if (typeof filePath !== "string") {
+          throw new Error("Invalid file path");
+        }
+        if (filePath.includes("fetchData.js")) {
+          return "function fetchData() { return { id: '1', data: 'test' }; }";
+        }
+        if (filePath.includes("processData.js")) {
+          return "function processData(input) { return { processed: true, input }; }";
+        }
+        if (filePath.includes("queryUsers.js")) {
+          return "SELECT * FROM users WHERE id = $1";
+        }
+        if (filePath.includes("step1.js")) return "step1 function";
+        if (filePath.includes("step2.js")) return "step2 sql";
+        if (filePath.includes("step3.js")) return "step3 function";
+        if (filePath.includes("step5.js")) return "step5 sql";
+        throw new Error(`File not found: ${filePath}`);
+      },
+    );
   });
 
   afterEach(() => {
@@ -212,7 +211,7 @@ describe("ResolverProcessor", () => {
         .mockImplementation(() => {});
 
       // ファイルが見つからない場合のエラーをシミュレート
-      (fs.readFileSync as any).mockImplementation(() => {
+      vi.spyOn(fs, "readFileSync").mockImplementation(() => {
         throw new Error("ENOENT: no such file or directory");
       });
 
@@ -346,6 +345,8 @@ describe("ResolverProcessor", () => {
 
   describe("ファイルシステム操作のテスト", () => {
     it("正しいファイルパスでファイルを読み込むこと", async () => {
+      const readFileSpy = vi.spyOn(fs, "readFileSync");
+
       const testResolver = createQueryResolver(
         "testResolver",
         t.type({ id: t.string() }),
@@ -361,10 +362,12 @@ describe("ResolverProcessor", () => {
         "testResolver__testFunction.js",
       );
 
-      expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
+      expect(readFileSpy).toHaveBeenCalledWith(expectedPath, "utf-8");
     });
 
     it("複数のステップで異なるファイルパスを使用すること", async () => {
+      const readFileSpy = vi.spyOn(fs, "readFileSync");
+
       const testResolver = createQueryResolver(
         "multiStepResolver",
         t.type({ id: t.string() }),
@@ -383,7 +386,7 @@ describe("ResolverProcessor", () => {
       ];
 
       expectedPaths.forEach((expectedPath) => {
-        expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, "utf-8");
+        expect(readFileSpy).toHaveBeenCalledWith(expectedPath, "utf-8");
       });
     });
   });
