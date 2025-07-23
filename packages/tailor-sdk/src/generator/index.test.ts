@@ -25,20 +25,6 @@ import { ManifestGenerator } from "./builtin/manifest";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/types";
 
-vi.mock("@/config", () => ({
-  AppConfig: {},
-  WorkspaceConfig: {},
-  getDistDir: () => path.join(os.tmpdir(), "tailor-test-dist"),
-  defineConfig: (config: any) => config,
-}));
-
-vi.mock("@/workspace", async () => {
-  const actual = (await vi.importActual("@/workspace")) as any;
-  return {
-    ...actual,
-  };
-});
-
 vi.mock("@/ctl", () => ({
   TailorCtl: vi.fn().mockImplementation(() => ({
     apply: vi.fn(),

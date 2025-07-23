@@ -9,21 +9,14 @@ import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
 import { TypeProcessor } from "./type-processor";
 import { t } from "@/types";
 
-// TypeProcessorのモック
-vi.mock("./type-processor", () => ({
-  TypeProcessor: {
-    processType: vi.fn(),
-  },
-}));
-
 describe("SDL ResolverProcessor", () => {
   let mockResolver: Resolver;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // TypeProcessor.processTypeのデフォルトモック
-    (TypeProcessor.processType as any).mockImplementation(
+    // TypeProcessor.processTypeのスパイ設定
+    vi.spyOn(TypeProcessor, "processType").mockImplementation(
       async (type: any, isInput = false, name?: string) => {
         const actualName = name || type?.name || "UnknownType";
         return {
@@ -153,7 +146,9 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("正しいSDLを生成すること", async () => {
-      (TypeProcessor.processType as any)
+      const processTypeSpy = vi.spyOn(TypeProcessor, "processType");
+
+      processTypeSpy
         .mockResolvedValueOnce({
           name: "GetUserByIdInput",
           fields: [
@@ -181,12 +176,14 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("TypeProcessorに正しいパラメーターを渡すこと", async () => {
+      const processTypeSpy = vi.spyOn(TypeProcessor, "processType");
+
       await ResolverProcessor.processResolver(mockResolver);
 
-      expect(TypeProcessor.processType).toHaveBeenCalledTimes(2);
+      expect(processTypeSpy).toHaveBeenCalledTimes(2);
 
       // input型の処理
-      expect(TypeProcessor.processType).toHaveBeenNthCalledWith(
+      expect(processTypeSpy).toHaveBeenNthCalledWith(
         1,
         mockResolver.input,
         true,
@@ -194,7 +191,7 @@ describe("SDL ResolverProcessor", () => {
       );
 
       // output型の処理
-      expect(TypeProcessor.processType).toHaveBeenNthCalledWith(
+      expect(processTypeSpy).toHaveBeenNthCalledWith(
         2,
         mockResolver.output,
         false,
@@ -424,7 +421,7 @@ describe("SDL ResolverProcessor", () => {
         }),
       ).returns(() => ({}), t.type({}));
 
-      (TypeProcessor.processType as any).mockResolvedValueOnce({
+      vi.spyOn(TypeProcessor, "processType").mockResolvedValueOnce({
         name: "ComplexInput",
         fields: [
           { name: "user", type: "UserInput", required: true, array: false },
@@ -464,7 +461,7 @@ describe("SDL ResolverProcessor", () => {
         }),
       );
 
-      (TypeProcessor.processType as any)
+      vi.spyOn(TypeProcessor, "processType")
         .mockResolvedValueOnce({
           name: "GetUserByIdInput",
           fields: [],
@@ -510,7 +507,7 @@ describe("SDL ResolverProcessor", () => {
         }),
       );
 
-      (TypeProcessor.processType as any)
+      vi.spyOn(TypeProcessor, "processType")
         .mockResolvedValueOnce({
           name: "GetUserByIdInput",
           fields: [
@@ -601,7 +598,7 @@ describe("SDL ResolverProcessor", () => {
 
   describe("エラーハンドリングとリカバリのテスト", () => {
     it("TypeProcessor.processTypeでエラーが発生した場合の処理", async () => {
-      (TypeProcessor.processType as any).mockRejectedValueOnce(
+      vi.spyOn(TypeProcessor, "processType").mockRejectedValueOnce(
         new Error("Type processing failed"),
       );
 
@@ -611,14 +608,6 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("不正なステップ定義でエラーが発生した場合の処理", async () => {
-      // const invalidStepResolver = {
-      //   ...mockResolver,
-      //   steps: [
-      //     ["fn", "validStep", () => {}, {}],
-      //     ["invalid", "invalidStep", () => {}, {}],
-      //     ["sql", "anotherValidStep", () => {}, {}],
-      //   ],
-      // } as any;
       const invalidStepResolver = createQueryResolver(
         "invalidStepResolver",
         t.type({}),
@@ -638,8 +627,8 @@ describe("SDL ResolverProcessor", () => {
     });
 
     it("TypeProcessorから不正なメタデータが返された場合の処理", async () => {
-      (TypeProcessor.processType as any)
-        .mockResolvedValueOnce(null) // 不正な戻り値
+      vi.spyOn(TypeProcessor, "processType")
+        .mockResolvedValueOnce(null as any) // 不正な戻り値
         .mockResolvedValueOnce({
           name: "ValidOutput",
           fields: [],
