@@ -1,9 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
 import * as rolldown from "rolldown";
-import * as rollup from "rollup";
-import { minify } from "rollup-plugin-esbuild-minify";
-import { nodeResolve } from "@rollup/plugin-node-resolve";
 import { getDistDir } from "@/config";
 import { measure } from "@/performance";
 import { BundlerConfig, ILoader, ITransformer } from "./types";
@@ -170,33 +167,23 @@ export class Bundler<T> {
       files.map(async (file) => {
         const outputFile = path.join(outputDir, path.basename(file));
 
-        const bundle = await rollup.rollup(
-          rollup.defineConfig({
+        await rolldown.build(
+          rolldown.defineConfig({
             input: file,
+            output: {
+              file: outputFile,
+              format: "esm",
+              sourcemap: true,
+              minify: true,
+            },
             treeshake: {
               moduleSideEffects: false,
-              propertyReadSideEffects: false,
-              tryCatchDeoptimization: false,
+              annotations: true,
               unknownGlobalSideEffects: false,
-              preset: "smallest",
             },
-            plugins: [
-              nodeResolve({
-                preferBuiltins: false,
-                browser: false,
-              }),
-              minify({}),
-            ],
             logLevel: "silent",
-          }) as rollup.RollupOptions,
+          }) as rolldown.BuildOptions,
         );
-
-        await bundle.write({
-          file: outputFile,
-          format: "esm",
-          compact: true,
-          sourcemap: true,
-        });
       }),
     );
   }
