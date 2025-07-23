@@ -45,7 +45,7 @@
     "lefthook": "^1.11.14",
     "prettier": "3.5.3",
     "tsx": "^4.19.2",
-    "turbo": "^2.5.4",
+    "turbo": "^2.5.5",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.1",
     "vitest": "^3.1.4"
