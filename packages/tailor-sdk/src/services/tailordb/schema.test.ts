@@ -568,6 +568,132 @@ describe("TailorDBType 型の一貫性テスト", () => {
   });
 });
 
+describe("TailorDBType plural form テスト", () => {
+  it("単一の名前でtype定義した場合、pluralFormは未定義", () => {
+    const _userType = db.type("User", {
+      name: db.string(),
+    });
+
+    expect(_userType.metadata.schema?.settings?.pluralForm).toBeUndefined();
+  });
+
+  it("タプルで名前とplural formを指定した場合、pluralFormが設定される", () => {
+    const _personType = db.type(["Person", "People"], {
+      name: db.string(),
+    });
+
+    expect(_personType.metadata.schema?.settings?.pluralForm).toBe("People");
+  });
+
+  it("複数形が明示的に指定された場合、デフォルトの複数形変換は使用されない", () => {
+    const _childType = db.type(["Child", "Children"], {
+      name: db.string(),
+      age: db.int(),
+    });
+
+    expect(_childType.metadata.schema?.settings?.pluralForm).toBe("Children");
+  });
+
+  it("空文字列のplural formも設定可能", () => {
+    const _dataType = db.type(["Data", ""], {
+      value: db.string(),
+    });
+
+    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe("");
+  });
+
+  it("日本語のplural formも設定可能", () => {
+    const _bookType = db.type(["Book", "本"], {
+      title: db.string(),
+      author: db.string(),
+    });
+
+    expect(_bookType.metadata.schema?.settings?.pluralForm).toBe("本");
+  });
+
+  it("タプル形式でもすべての既存機能が正常に動作する", () => {
+    const _postType = db.type(["Post", "Posts"], {
+      title: db.string(),
+      content: db.string().optional(),
+      ...db.fields.timestamps(),
+    });
+
+    expectTypeOf<output<typeof _postType>>().toEqualTypeOf<{
+      id: string;
+      title: string;
+      content?: string | null;
+      createdAt: Date;
+      updatedAt?: Date | null;
+    }>();
+
+    expect(_postType.name).toBe("Post");
+    expect(_postType.metadata.schema?.settings?.pluralForm).toBe("Posts");
+  });
+
+  it("特殊文字を含むplural formも設定可能", () => {
+    const _deviceType = db.type(["Device", "Device's"], {
+      name: db.string(),
+      status: db.enum("active", "inactive"),
+    });
+
+    expect(_deviceType.metadata.schema?.settings?.pluralForm).toBe("Device's");
+  });
+
+  it("数字を含むplural formも設定可能", () => {
+    const _itemType = db.type(["Item", "100Items"], {
+      name: db.string(),
+      quantity: db.int(),
+    });
+
+    expect(_itemType.metadata.schema?.settings?.pluralForm).toBe("100Items");
+  });
+
+  it("タプル形式でvalidationとplural formが共存する", () => {
+    const _userType = db
+      .type(["User", "Users"], {
+        name: db.string(),
+        email: db.string(),
+      })
+      .validate({
+        name: [({ value }) => value.length > 0],
+        email: [({ value }) => value.includes("@"), "Invalid email format"],
+      });
+
+    expect(_userType.name).toBe("User");
+    expect(_userType.metadata.schema?.settings?.pluralForm).toBe("Users");
+
+    const emailConfig = (_userType as any).fields.email.config;
+    expect(emailConfig.validate[0].errorMessage).toBe("Invalid email format");
+  });
+
+  it("リレーションを持つ型でもplural formが正しく動作する", () => {
+    const _categoryType = db.type(["Category", "Categories"], {
+      name: db.string(),
+    });
+
+    const _productType = db.type(["Product", "Products"], {
+      name: db.string(),
+      categoryId: db.uuid().relation({
+        type: "oneToOne",
+        toward: { type: _categoryType },
+      }),
+    });
+
+    expect(_categoryType.metadata.schema?.settings?.pluralForm).toBe(
+      "Categories",
+    );
+    expect(_productType.metadata.schema?.settings?.pluralForm).toBe("Products");
+  });
+
+  it("大文字小文字が混在するplural formも設定可能", () => {
+    const _dataType = db.type(["Data", "DataSet"], {
+      value: db.string(),
+    });
+
+    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe("DataSet");
+  });
+});
+
 describe("db.object テスト", () => {
   it("基本的なオブジェクト型を正しく推論する", () => {
     const _objectType = db.type("Test", {

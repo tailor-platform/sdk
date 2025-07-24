@@ -169,7 +169,7 @@ export class Bundler<T> {
 
         await rolldown.build(
           rolldown.defineConfig({
-            input: file,
+            input: path.resolve(file),
             output: {
               file: outputFile,
               format: "esm",
