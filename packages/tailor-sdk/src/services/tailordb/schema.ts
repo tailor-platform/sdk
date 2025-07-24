@@ -466,6 +466,11 @@ export class TailorDBType<
     });
     return this;
   }
+
+  features(features: { aggregation?: true; bulkUpsert?: true }) {
+    this._settings = { ...this._settings, ...features };
+    return this;
+  }
 }
 
 const idField = uuid();
