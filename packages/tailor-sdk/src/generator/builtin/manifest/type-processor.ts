@@ -107,7 +107,10 @@ export class TypeProcessor {
       Draft: false,
       DefaultQueryLimitSize: 100,
       MaxBulkUpsertSize: 1000,
-      PluralForm: "",
+      PluralForm: schema?.settings?.pluralForm
+        ? schema.settings.pluralForm.charAt(0).toLowerCase() +
+          schema.settings.pluralForm.slice(1)
+        : "",
       PublishRecordEvents: false,
     };
 
@@ -123,12 +126,12 @@ export class TypeProcessor {
               fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
             Description: fieldConfig.description || "",
             Validate: (fieldConfig.validate || []).map((val: any) => ({
-              Action: "allow",
+              Action: "deny",
               ErrorMessage: val.errorMessage || "",
               Expr: val.expr || "",
               ...(val.script && {
                 Script: {
-                  Expr: val.script.expr || "",
+                  Expr: val.script.expr ? `!${val.script.expr}` : "",
                 },
               }),
             })),

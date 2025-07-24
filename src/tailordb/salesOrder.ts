@@ -1,7 +1,7 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { customer } from "./customer";
 
-export const salesOrder = db.type("SalesOrder", {
+export const salesOrder = db.type(["SalesOrder", "SalesOrderList"], {
   customerID: db.uuid().relation({
     type: "1-n",
     toward: { type: customer },

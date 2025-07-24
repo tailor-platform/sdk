@@ -16,6 +16,7 @@ jobs:
           in-details: true
           exclude: "node_modules, tests, *.test.ts"
           include-index-file-dependencies: true
+          max-size: 100
 
   sdk-typescript-graph:
     runs-on: ubuntu-latest
@@ -31,4 +32,5 @@ jobs:
           in-details: true
           exclude: "node_modules, tests, *.test.ts, dist"
           include-index-file-dependencies: true
+          max-size: 100
           show-metrics: true
