@@ -47,6 +47,33 @@ describe("TailorType 基本フィールド型テスト", () => {
       id: string;
     }>();
   });
+
+  it("date型フィールドが正しくDate型を出力する", () => {
+    const _dateType = t.type({
+      birthDate: t.date(),
+    });
+    expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
+      birthDate: Date;
+    }>();
+  });
+
+  it("datetime型フィールドが正しくDate型を出力する", () => {
+    const _datetimeType = t.type({
+      createdAt: t.datetime(),
+    });
+    expectTypeOf<output<typeof _datetimeType>>().toEqualTypeOf<{
+      createdAt: Date;
+    }>();
+  });
+
+  it("time型フィールドが正しくDate型を出力する", () => {
+    const _timeType = t.type({
+      openingTime: t.time(),
+    });
+    expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
+      openingTime: Date;
+    }>();
+  });
 });
 
 describe("TailorField オプショナル修飾子テスト", () => {
@@ -175,6 +202,9 @@ describe("TailorField assertNonNull修飾子テスト", () => {
     ).toBe(true);
     expect(
       t.datetime().optional({ assertNonNull: true }).metadata.assertNonNull,
+    ).toBe(true);
+    expect(
+      t.time().optional({ assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
   });
 
