@@ -241,6 +241,10 @@ function datetime() {
   return createField("datetime", ["allowedValues"]);
 }
 
+function time() {
+  return createField("time", ["allowedValues"]);
+}
+
 function _enum<const V extends AllowedValues>(values: V) {
   return createField("enum", []).values(values);
 }
@@ -288,6 +292,7 @@ const t = {
   float,
   date,
   datetime,
+  time,
   enum: _enum,
   object,
 };

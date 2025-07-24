@@ -72,6 +72,16 @@ describe("TailorDBField 基本フィールド型テスト", () => {
       timestamp: Date;
     }>();
   });
+
+  it("time型フィールドが正しくDate型を出力する", () => {
+    const _timeType = db.type("Test", {
+      openingTime: db.time(),
+    });
+    expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
+      id: string;
+      openingTime: Date;
+    }>();
+  });
 });
 
 describe("TailorDBField オプショナル修飾子テスト", () => {
@@ -438,6 +448,7 @@ describe("TailorDBType 複合型テスト", () => {
       score: db.float(),
       birthDate: db.date(),
       lastLogin: db.datetime().optional(),
+      closingTime: db.time(),
     });
     expectTypeOf<output<typeof _complexType>>().toMatchObjectType<{
       id: string;
@@ -450,6 +461,7 @@ describe("TailorDBType 複合型テスト", () => {
       score: number;
       birthDate: Date;
       lastLogin?: Date | null;
+      closingTime: Date;
     }>();
   });
 });

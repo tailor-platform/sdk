@@ -17,6 +17,7 @@ export type TailorFieldType =
   | "enum"
   | "date"
   | "datetime"
+  | "time"
   | "nested";
 
 export type TailorToTs = {
@@ -27,6 +28,7 @@ export type TailorToTs = {
   uuid: string;
   date: Date;
   datetime: Date;
+  time: Date;
   enum: string;
   object: Record<string, unknown>;
   nested: Record<string, unknown>;
@@ -41,6 +43,7 @@ export const tailorToGraphQL = {
   uuid: "ID",
   date: "Date",
   datetime: "DateTime",
+  time: "Time",
   enum: "enum",
   nested: "JSON",
 } as const;
@@ -55,6 +58,7 @@ export const tailorToManifestScalar = {
   uuid: "uuid",
   date: "date",
   datetime: "datetime",
+  time: "time",
   enum: "enum",
   nested: "nested",
 } as const;
