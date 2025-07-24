@@ -10,6 +10,7 @@ A development kit for building applications on the Tailor Platform.
 - [TailorDB](#tailordb)
   - [Defining Models](#defining-models)
   - [Field Types](#field-types)
+  - [Plural Forms](#plural-forms)
   - [Timestamps and Common Fields](#timestamps-and-common-fields)
   - [Type Inference](#type-inference)
 - [Pipeline Resolvers](#pipeline-resolvers)
@@ -285,6 +286,44 @@ db.string().hooks({
   update: ({ data, user }) => computeValue(data),
 });
 ```
+
+### Plural Forms
+
+When defining models, you can specify a custom plural form for better GraphQL query naming:
+
+```typescript
+// Default pluralization (User -> Users)
+export const person = db.type("User", {
+  name: db.string(),
+  age: db.int().optional(),
+});
+
+// Custom plural form (User -> UserList)
+export const person = db.type(["User", "UserList"], {
+  name: db.string(),
+  age: db.int().optional(),
+});
+```
+
+When using the tuple syntax `[singular, plural]`:
+
+- The first element is the singular form (model name)
+- The second element is the plural form used in GraphQL queries
+
+```gql
+query {
+  # Use `userList` instead of `users` to fetch records
+  userList {
+    edges {
+      node {
+        name
+      }
+    }
+  }
+}
+```
+
+For more details, please [refer to the documentation](https://docs.tailor.tech/guides/tailordb/advanced-settings/uncountable-nouns).
 
 ### Timestamps and Common Fields
 

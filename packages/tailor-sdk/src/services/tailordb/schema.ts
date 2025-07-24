@@ -62,7 +62,7 @@ class TailorDBField<
       validate: this._metadata.validate?.map((v) => {
         const { fn, message } =
           typeof v === "function"
-            ? { fn: v, message: `failed by "${v.toString().trim()}"` }
+            ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
             : { fn: v[0], message: v[1] };
 
         return new TailorDBType_ValidateConfig({
@@ -375,14 +375,17 @@ export class TailorDBType<
   private _metadata?: TDB;
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
+  private _settings: { pluralForm?: string } = {};
 
   constructor(
     public readonly name: string,
     public readonly fields: F,
+    pluralForm?: string,
   ) {
     super(
       fields as F & Record<string, TailorField<M, any, any, DBFieldMetadata>>,
     );
+    this._settings.pluralForm = pluralForm;
 
     Object.entries(this.fields).forEach(([fieldName, field]) => {
       if (field.reference) {
@@ -430,6 +433,7 @@ export class TailorDBType<
         description: this._description,
         extends: false,
         fields: metadataFields,
+        settings: this._settings,
       },
     });
 
@@ -468,11 +472,18 @@ type DBType<
 
 function dbType<
   const F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
->(name: string, fields: F): DBType<F> {
-  return new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(name, {
-    id: idField,
-    ...fields,
-  }) as DBType<F>;
+>(name: string | [string, string], fields: F): DBType<F> {
+  const typeName = Array.isArray(name) ? name[0] : name;
+  const pluralForm = Array.isArray(name) ? name[1] : undefined;
+
+  return new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(
+    typeName,
+    {
+      id: idField,
+      ...fields,
+    },
+    pluralForm,
+  ) as DBType<F>;
 }
 
 const db = {

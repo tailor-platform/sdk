@@ -43,11 +43,11 @@
               "Description": "",
               "Validate": [
                 {
-                  "Action": "allow",
+                  "Action": "deny",
                   "ErrorMessage": "Name must be longer than 5 characters",
                   "Expr": "",
                   "Script": {
-                    "Expr": "(({value})=>value.length>5)({ value: _value, user })"
+                    "Expr": "!(({value})=>value.length>5)({ value: _value, user })"
                   }
                 }
               ],
@@ -124,19 +124,19 @@
               "Description": "",
               "Validate": [
                 {
-                  "Action": "allow",
-                  "ErrorMessage": "failed by \"({value})=>value.length>1\"",
+                  "Action": "deny",
+                  "ErrorMessage": "failed by `({value})=>value.length>1`",
                   "Expr": "",
                   "Script": {
-                    "Expr": "(({value})=>value.length>1)({ value: _value, user })"
+                    "Expr": "!(({value})=>value.length>1)({ value: _value, user })"
                   }
                 },
                 {
-                  "Action": "allow",
-                  "ErrorMessage": "failed by \"({value})=>value.length<100\"",
+                  "Action": "deny",
+                  "ErrorMessage": "failed by `({value})=>value.length<100`",
                   "Expr": "",
                   "Script": {
-                    "Expr": "(({value})=>value.length<100)({ value: _value, user })"
+                    "Expr": "!(({value})=>value.length<100)({ value: _value, user })"
                   }
                 }
               ],
@@ -842,7 +842,7 @@
             "Draft": false,
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
-            "PluralForm": "",
+            "PluralForm": "purchaseOrderList",
             "PublishRecordEvents": false
           },
           "Extends": false,
@@ -1081,7 +1081,7 @@
             "Draft": false,
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
-            "PluralForm": "",
+            "PluralForm": "salesOrderList",
             "PublishRecordEvents": true
           },
           "Extends": false,
@@ -2238,11 +2238,11 @@
               "Description": "",
               "Validate": [
                 {
-                  "Action": "allow",
+                  "Action": "deny",
                   "ErrorMessage": "Name must be longer than 5 characters",
                   "Expr": "",
                   "Script": {
-                    "Expr": "(({value})=>value.length>5)({ value: _value, user })"
+                    "Expr": "!(({value})=>value.length>5)({ value: _value, user })"
                   }
                 }
               ],
@@ -2319,19 +2319,19 @@
               "Description": "",
               "Validate": [
                 {
-                  "Action": "allow",
-                  "ErrorMessage": "failed by \"({value})=>value.length>1\"",
+                  "Action": "deny",
+                  "ErrorMessage": "failed by `({value})=>value.length>1`",
                   "Expr": "",
                   "Script": {
-                    "Expr": "(({value})=>value.length>1)({ value: _value, user })"
+                    "Expr": "!(({value})=>value.length>1)({ value: _value, user })"
                   }
                 },
                 {
-                  "Action": "allow",
-                  "ErrorMessage": "failed by \"({value})=>value.length<100\"",
+                  "Action": "deny",
+                  "ErrorMessage": "failed by `({value})=>value.length<100`",
                   "Expr": "",
                   "Script": {
-                    "Expr": "(({value})=>value.length<100)({ value: _value, user })"
+                    "Expr": "!(({value})=>value.length<100)({ value: _value, user })"
                   }
                 }
               ],
@@ -3037,7 +3037,7 @@
             "Draft": false,
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
-            "PluralForm": "",
+            "PluralForm": "purchaseOrderList",
             "PublishRecordEvents": false
           },
           "Extends": false,
@@ -3276,7 +3276,7 @@
             "Draft": false,
             "DefaultQueryLimitSize": 100,
             "MaxBulkUpsertSize": 1000,
-            "PluralForm": "",
+            "PluralForm": "salesOrderList",
             "PublishRecordEvents": true
           },
           "Extends": false,
