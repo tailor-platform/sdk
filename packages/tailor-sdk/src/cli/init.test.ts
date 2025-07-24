@@ -1,13 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import path from "node:path";
+
 import fs from "fs-extra";
+import path from "node:path";
+import inquirer from "inquirer";
+import { spawn } from "node:child_process";
+
 import {
   validateProjectName,
   generatePackageJson,
   generateTailorConfig,
   checkExistingProject,
   addToExistingProject,
+  initCommand,
 } from "./init";
+
+// Mock fs-extra
+vi.mock("fs-extra");
+// Mock inquirer
+vi.mock("inquirer");
+// Mock child_process
+vi.mock("node:child_process", () => ({
+  spawn: vi.fn(),
+}));
 
 describe("init command", () => {
   afterEach(() => {
@@ -213,6 +227,345 @@ describe("init command", () => {
 
       expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/tailordb");
       expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/resolvers");
+    });
+  });
+
+  describe("initCommand interactive interface", () => {
+    let mockSpawn: any;
+
+    beforeEach(() => {
+      // Reset all mocks
+      vi.clearAllMocks();
+
+      // Mock process.cwd
+      vi.spyOn(process, "cwd").mockReturnValue("/test/cwd");
+
+      // Mock fs methods
+      vi.spyOn(fs, "existsSync").mockReturnValue(false);
+      vi.spyOn(fs, "pathExists").mockResolvedValue(false as any);
+      vi.spyOn(fs, "ensureDir").mockResolvedValue(undefined as any);
+      vi.spyOn(fs, "writeJson").mockResolvedValue(undefined);
+      vi.spyOn(fs, "writeFile").mockResolvedValue(undefined);
+
+      // Mock spawn for npm install
+      mockSpawn = {
+        on: vi.fn((event, callback) => {
+          if (event === "exit" && callback) {
+            // Simulate successful npm install
+            setTimeout(() => callback(0), 10);
+          }
+          return mockSpawn;
+        }),
+      };
+      (spawn as any).mockReturnValue(mockSpawn);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("should skip project name prompt when provided as positional argument", async () => {
+      // Mock inquirer to only expect region and template prompts
+      (inquirer.prompt as any).mockResolvedValueOnce({
+        region: "asia-northeast",
+        template: "basic",
+      });
+
+      // Run the command with positional argument
+      await initCommand.run?.({
+        args: {
+          _: [],
+          name: "test-project",
+          region: "",
+          "skip-install": true,
+          template: "",
+          yes: false,
+          "add-to-existing": false,
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      } as any);
+
+      // Verify inquirer was called with only region and template prompts
+      expect(inquirer.prompt).toHaveBeenCalledOnce();
+      const promptCall = (inquirer.prompt as any).mock.calls[0][0];
+      const prompts = Array.isArray(promptCall) ? promptCall : [];
+
+      // Should not include projectName prompt
+      expect(
+        prompts.find((p: any) => p.name === "projectName"),
+      ).toBeUndefined();
+
+      // Should include region and template prompts
+      expect(prompts.find((p: any) => p.name === "region")).toBeDefined();
+      expect(prompts.find((p: any) => p.name === "template")).toBeDefined();
+
+      // Verify project was created with the provided name
+      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+        expect.stringContaining("test-project/package.json"),
+        expect.objectContaining({ name: "test-project" }),
+        expect.any(Object),
+      );
+    });
+
+    it("should prompt for project name when not provided", async () => {
+      // Mock inquirer to expect all prompts
+      (inquirer.prompt as any).mockResolvedValueOnce({
+        projectName: "prompted-project",
+        region: "us-west",
+        template: "fullstack",
+      });
+
+      // Run the command without positional argument
+      await initCommand.run?.({
+        args: {
+          _: [],
+          name: undefined as any,
+          region: "",
+          "skip-install": true,
+          template: "",
+          yes: false,
+          "add-to-existing": false,
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      } as any);
+
+      // Verify inquirer was called with all prompts
+      expect(inquirer.prompt).toHaveBeenCalledOnce();
+      const promptCall = (inquirer.prompt as any).mock.calls[0][0];
+      const prompts = Array.isArray(promptCall) ? promptCall : [];
+
+      // Should include all prompts
+      expect(prompts.find((p: any) => p.name === "projectName")).toBeDefined();
+      expect(prompts.find((p: any) => p.name === "region")).toBeDefined();
+      expect(prompts.find((p: any) => p.name === "template")).toBeDefined();
+
+      // Verify project was created with the prompted name
+      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+        expect.stringContaining("prompted-project/package.json"),
+        expect.objectContaining({ name: "prompted-project" }),
+        expect.any(Object),
+      );
+    });
+
+    it("should skip all prompts with --yes flag", async () => {
+      // Run the command with --yes flag
+      await initCommand.run?.({
+        args: {
+          _: [],
+          name: "yes-project",
+          region: "",
+          "skip-install": true,
+          template: "",
+          yes: true,
+          "add-to-existing": false,
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      } as any);
+
+      // Verify inquirer was not called
+      expect(inquirer.prompt).not.toHaveBeenCalled();
+
+      // Verify project was created with defaults
+      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+        expect.stringContaining("yes-project/package.json"),
+        expect.objectContaining({ name: "yes-project" }),
+        expect.any(Object),
+      );
+
+      // Verify default config values
+      expect(vi.mocked(fs.writeFile)).toHaveBeenCalledWith(
+        expect.stringContaining("tailor.config.ts"),
+        expect.stringContaining('region: "asia-northeast"'), // default region
+      );
+    });
+
+    it("should require project name with --yes flag", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const processExitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation(() => {
+          throw new Error("Process exit");
+        });
+
+      // Run with --yes flag but no project name
+      await expect(
+        initCommand.run?.({
+          args: {
+            _: [],
+            name: undefined as any,
+            region: "",
+            "skip-install": true,
+            template: "",
+            yes: true,
+            "add-to-existing": false,
+          },
+          rawArgs: [],
+          cmd: initCommand,
+        } as any),
+      ).rejects.toThrow("Process exit");
+
+      // Verify error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Error: Project name is required when using --yes flag",
+        ),
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Usage: npx @tailor-platform/tailor-sdk init <project-name> --yes",
+        ),
+      );
+
+      consoleErrorSpy.mockRestore();
+      processExitSpy.mockRestore();
+    });
+
+    it("should validate project name from positional argument", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const processExitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation(() => {
+          throw new Error("Process exit");
+        });
+
+      // Run with invalid project name
+      await expect(
+        initCommand.run?.({
+          args: {
+            _: [],
+            name: "-invalid-name",
+            region: "",
+            "skip-install": true,
+            template: "",
+            yes: true,
+            "add-to-existing": false,
+          },
+          rawArgs: [],
+          cmd: initCommand,
+        } as any),
+      ).rejects.toThrow("Process exit");
+
+      // Verify error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Error: Project name must start with a letter or number",
+        ),
+      );
+
+      consoleErrorSpy.mockRestore();
+      processExitSpy.mockRestore();
+    });
+
+    it("should cancel when user declines to overwrite existing directory", async () => {
+      // Mock process.exit
+      const processExitSpy = vi
+        .spyOn(process, "exit")
+        .mockImplementation((() => {}) as any);
+      const consoleLogSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+
+      // Mock existing directory (but not a project with package.json)
+      vi.spyOn(fs, "existsSync").mockReturnValue(true);
+      vi.spyOn(fs, "pathExists").mockResolvedValue(false as any);
+
+      // Mock user choosing not to overwrite (which causes cancellation)
+      (inquirer.prompt as any).mockResolvedValue({ overwrite: false });
+
+      // Run the command
+      await initCommand.run?.({
+        args: {
+          _: [],
+          name: "existing-project",
+          region: "",
+          "skip-install": true,
+          template: "",
+          yes: false,
+          "add-to-existing": false,
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      } as any);
+
+      // Verify prompt for overwrite
+      expect(inquirer.prompt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "confirm",
+          name: "overwrite",
+          message: expect.stringContaining("already exists"),
+        }),
+      );
+
+      // Verify cancellation was logged
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Cancelled"),
+      );
+
+      // Verify process exit
+      expect(processExitSpy).toHaveBeenCalledWith(0);
+
+      processExitSpy.mockRestore();
+      consoleLogSpy.mockRestore();
+    });
+
+    it("should add to existing project when detected", async () => {
+      // Mock current directory as existing project
+      vi.spyOn(fs, "pathExists").mockImplementation(async (filePath) => {
+        return filePath.toString().includes("package.json");
+      });
+
+      // Mock existing package.json
+      vi.spyOn(fs, "readJson").mockResolvedValue({
+        name: "existing-app",
+        version: "1.0.0",
+      });
+
+      // Mock user confirming to add to existing project
+      (inquirer.prompt as any).mockResolvedValueOnce({
+        confirmAdd: true,
+      });
+
+      // Run without project name
+      await initCommand.run?.({
+        args: {
+          _: [],
+          name: undefined as any,
+          region: "",
+          "skip-install": true,
+          template: "",
+          yes: false,
+          "add-to-existing": false,
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      } as any);
+
+      // Verify prompt for adding to existing project
+      expect(inquirer.prompt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "confirm",
+          name: "confirmAdd",
+          message: expect.stringContaining("Add Tailor SDK to it?"),
+        }),
+      );
+
+      // Verify tailor-sdk was added to existing project
+      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+        expect.stringContaining("package.json"),
+        expect.objectContaining({
+          dependencies: expect.objectContaining({
+            "@tailor-platform/tailor-sdk": "latest",
+          }),
+        }),
+        expect.any(Object),
+      );
     });
   });
 });

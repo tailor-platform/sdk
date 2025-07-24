@@ -390,7 +390,7 @@ export const initCommand = defineCommand({
   },
   args: {
     name: {
-      type: "string",
+      type: "positional",
       description: "Project name",
       required: false,
     },
@@ -398,7 +398,7 @@ export const initCommand = defineCommand({
       type: "string",
       alias: "r",
       description: "Deployment region",
-      default: "asia-northeast",
+      default: "",
     },
     "skip-install": {
       type: "boolean",
@@ -409,7 +409,7 @@ export const initCommand = defineCommand({
       type: "string",
       alias: "t",
       description: "Template to use (basic|fullstack)",
-      default: "basic",
+      default: "",
     },
     yes: {
       type: "boolean",
@@ -498,17 +498,23 @@ export const initCommand = defineCommand({
     }
 
     if (!args.yes && !useExistingProject) {
-      const answers = await inquirer.prompt([
-        {
+      const prompts: any[] = [];
+
+      // Only prompt for project name if not already provided
+      if (!projectName) {
+        prompts.push({
           type: "input",
           name: "projectName",
           message: "Project name:",
-          default: projectName || "my-tailor-app",
+          default: "my-tailor-app",
           validate: (input: string) => {
             const validation = validateProjectName(input);
             return validation === true ? true : validation;
           },
-        },
+        });
+      }
+
+      prompts.push(
         {
           type: "list",
           name: "region",
@@ -529,17 +535,34 @@ export const initCommand = defineCommand({
           ],
           default: template,
         },
-      ]);
+      );
 
-      projectName = answers.projectName;
+      const answers = await inquirer.prompt(prompts);
+
+      projectName = answers.projectName || projectName;
       region = answers.region;
       template = answers.template;
     } else {
-      projectName = projectName || "my-tailor-app";
-      const validation = validateProjectName(projectName);
-      if (validation !== true) {
-        console.error(chalk.red(`Error: ${validation}`));
+      // Project name is required when using --yes flag (unless adding to existing project)
+      if (!useExistingProject && !projectName) {
+        console.error(
+          chalk.red("Error: Project name is required when using --yes flag"),
+        );
+        console.error(
+          chalk.yellow(
+            "Usage: npx @tailor-platform/tailor-sdk init <project-name> --yes",
+          ),
+        );
         process.exit(1);
+      }
+
+      // Validate project name if provided
+      if (projectName) {
+        const validation = validateProjectName(projectName);
+        if (validation !== true) {
+          console.error(chalk.red(`Error: ${validation}`));
+          process.exit(1);
+        }
       }
     }
 
@@ -644,7 +667,7 @@ export const initCommand = defineCommand({
         console.log(chalk.cyan("Next steps:"));
         let step = 1;
         if (args["skip-install"]) {
-          console.log(chalk.white(`  ${step++}. npm install`));
+          console.log(`  ${step++}. npm install`);
         }
         console.log(
           chalk.white(
@@ -727,19 +750,15 @@ export const initCommand = defineCommand({
 
       console.log(chalk.green("\n✅ Project initialized successfully!\n"));
       console.log(chalk.cyan("Next steps:"));
-      console.log(chalk.white(`  1. cd ${projectName}`));
-      console.log(
-        chalk.white("  2. Set GITHUB_PACKAGES_TOKEN environment variable"),
-      );
+      console.log(`  1. cd ${projectName}`);
+      console.log("  2. Set GITHUB_PACKAGES_TOKEN environment variable");
       if (args["skip-install"]) {
-        console.log(chalk.white("  3. npm install"));
-        console.log(chalk.white("  4. npm run dev (start development mode)"));
+        console.log("  3. npm install");
+        console.log("  4. npm run dev (start development mode)");
       } else {
-        console.log(chalk.white("  3. npm run dev (start development mode)"));
+        console.log("  3. npm run dev (start development mode)");
       }
-      console.log(
-        chalk.white("  4. Edit src/tailordb/*.ts to define your data models"),
-      );
+      console.log("  4. Edit src/tailordb/*.ts to define your data models");
       console.log(
         chalk.white(
           "  5. Edit src/resolvers/**/resolver.ts to create API endpoints",
