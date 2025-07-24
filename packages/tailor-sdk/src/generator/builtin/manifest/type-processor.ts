@@ -102,8 +102,8 @@ export class TypeProcessor {
     };
 
     const defaultSettings = {
-      Aggregation: false,
-      BulkUpsert: false,
+      Aggregation: schema?.settings?.aggregation || false,
+      BulkUpsert: schema?.settings?.bulkUpsert || false,
       Draft: false,
       DefaultQueryLimitSize: 100,
       MaxBulkUpsertSize: 1000,
