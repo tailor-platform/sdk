@@ -3,7 +3,7 @@ import path from "node:path";
 import { Resolver } from "@/services/pipeline/resolver";
 import type { ResolverManifestMetadata, PipelineInfo } from "./types";
 import { measure } from "@/performance";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 import { getDistDir } from "@/config";
 import { StepDef } from "@/services/pipeline/types";
 
@@ -41,7 +41,7 @@ export class ResolverProcessor {
             return {
               name,
               description: name,
-              operationType: PipelineResolver_OperationType.FUNCTION,
+              operationType: OperationType.FUNCTION,
               operationSource: functionCode,
             };
           }
@@ -49,7 +49,7 @@ export class ResolverProcessor {
             return {
               name,
               description: name,
-              operationType: PipelineResolver_OperationType.GRAPHQL,
+              operationType: OperationType.GRAPHQL,
               operationSource: "",
             };
           default:
@@ -127,7 +127,7 @@ export class ResolverProcessor {
         Name: `__construct_output`,
         OperationName: `__construct_output`,
         Description: "Construct output from resolver",
-        OperationType: PipelineResolver_OperationType.FUNCTION,
+        OperationType: OperationType.FUNCTION,
         OperationSource: `globalThis.main = ${resolverMetadata.outputMapper || "() => ({})"}`,
         OperationHook: {
           Expr: "({ ...context.pipeline, ...context.args });",

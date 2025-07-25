@@ -1,3 +1,5 @@
+import { SecretValue } from "@/types/types";
+
 // Common types
 export type WithArgs<T = unknown> = {
   _args: T;
@@ -16,12 +18,6 @@ export type WithContext<TContext> = {
 export type ManifestAndContext<TManifest, TContext> = WithManifest<TManifest> &
   WithContext<TContext>;
 
-export interface Script {
-  Expr: string;
-}
-
-import { SecretValue } from "@/types/types";
-
 // Auth types
 export interface Invoker {
   AuthNamespace: string;
@@ -36,7 +32,7 @@ export interface GraphqlOperation {
   AppName?: string;
   Url?: string | null;
   Query: string;
-  Variables?: Script;
+  Variables?: { Expr: string };
   Invoker?: Invoker;
 }
 
@@ -45,7 +41,7 @@ export interface FunctionOperation {
   Name: string;
   Script?: string | null;
   ScriptPath?: string | null;
-  Variables?: Script;
+  Variables?: { Expr: string };
   Invoker?: Invoker;
 }
 
@@ -58,9 +54,9 @@ export interface WebhookHeader {
 
 export interface WebhookOperation {
   Kind: "webhook";
-  URL: Script;
+  URL: { Expr: string };
   Headers?: WebhookHeader[];
-  Body?: Script;
+  Body?: { Expr: string };
   Secret?: SecretValue;
 }
 
@@ -78,7 +74,7 @@ export interface EventTrigger {
   EventType:
     | `tailordb.type_record.${"created" | "updated" | "deleted"}`
     | "pipeline.resolver.executed";
-  Condition?: Script;
+  Condition?: { Expr: string };
 }
 
 export interface IncomingWebhookTrigger {

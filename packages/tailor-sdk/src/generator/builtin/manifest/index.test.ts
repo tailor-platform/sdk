@@ -6,7 +6,7 @@ import {
   createMutationResolver,
 } from "@/services/pipeline/resolver";
 import type { ApplyOptions } from "@/generator/options";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 import t from "@/types/type";
 
 const dbType = db.type("User", {
@@ -103,13 +103,13 @@ describe("ManifestGenerator統合テスト", () => {
       expect(result.pipelines[0]).toEqual({
         name: "fetchUser",
         description: "fetchUser",
-        operationType: PipelineResolver_OperationType.FUNCTION,
+        operationType: OperationType.FUNCTION,
         operationSource: "",
       });
       expect(result.pipelines[1]).toEqual({
         name: "validateUser",
         description: "validateUser",
-        operationType: PipelineResolver_OperationType.FUNCTION,
+        operationType: OperationType.FUNCTION,
         operationSource: "",
       });
       expect(result.outputMapper).toBeDefined();
@@ -203,10 +203,10 @@ describe("ManifestGenerator統合テスト", () => {
         "finalizeOperation",
       ]);
       expect(result.pipelines.map((p) => p.operationType)).toEqual([
-        PipelineResolver_OperationType.FUNCTION,
-        PipelineResolver_OperationType.FUNCTION,
-        PipelineResolver_OperationType.GRAPHQL,
-        PipelineResolver_OperationType.FUNCTION,
+        OperationType.FUNCTION,
+        OperationType.FUNCTION,
+        OperationType.GRAPHQL,
+        OperationType.FUNCTION,
       ]);
     });
   });

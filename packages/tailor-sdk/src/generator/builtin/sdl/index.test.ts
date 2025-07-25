@@ -5,7 +5,7 @@ import {
   createQueryResolver,
   createMutationResolver,
 } from "@/services/pipeline/resolver";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 import path from "node:path";
 import { t } from "@/types";
 
@@ -196,14 +196,14 @@ describe("SdlGenerator統合テスト", () => {
       expect(result.pipelines[0]).toEqual({
         name: "fetchUser",
         description: "fetchUser",
-        operationType: PipelineResolver_OperationType.FUNCTION,
+        operationType: OperationType.FUNCTION,
         operationSource: "",
         operationName: "fetchUser",
       });
       expect(result.pipelines[1]).toEqual({
         name: "validateUser",
         description: "validateUser",
-        operationType: PipelineResolver_OperationType.FUNCTION,
+        operationType: OperationType.FUNCTION,
         operationSource: "",
         operationName: "validateUser",
       });
@@ -224,7 +224,7 @@ describe("SdlGenerator統合テスト", () => {
       expect(result.pipelines[2]).toEqual({
         name: "notifyServices",
         description: "notifyServices",
-        operationType: PipelineResolver_OperationType.GRAPHQL,
+        operationType: OperationType.GRAPHQL,
         operationSource: "",
         operationName: "notifyServices",
       });
@@ -450,10 +450,10 @@ extend type Mutation {
         "combineResults",
       ]);
       expect(result.pipelines.map((p: any) => p.operationType)).toEqual([
-        PipelineResolver_OperationType.FUNCTION,
-        PipelineResolver_OperationType.FUNCTION,
-        PipelineResolver_OperationType.GRAPHQL,
-        PipelineResolver_OperationType.FUNCTION,
+        OperationType.FUNCTION,
+        OperationType.FUNCTION,
+        OperationType.GRAPHQL,
+        OperationType.FUNCTION,
       ]);
 
       expect(result.sdl).toContain("input ComplexOperationInput {");

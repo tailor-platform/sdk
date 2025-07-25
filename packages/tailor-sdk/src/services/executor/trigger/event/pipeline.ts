@@ -35,7 +35,7 @@ export function resolverExecutedTrigger<R extends Resolver>(
     },
     context: {
       args: {} as ResolverTriggerConditionArgs<R>,
-      variables: { Expr: `(${argsMap})` },
+      variables: { expr: `(${argsMap})` },
     },
   } satisfies EventTriggerWithManifestAndContext<
     ResolverTriggerConditionArgs<R>

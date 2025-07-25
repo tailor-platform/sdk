@@ -129,7 +129,7 @@ export class TypeProcessor {
     if (schema?.fields) {
       Object.entries(schema.fields)
         .filter(([fieldName]) => fieldName !== "id")
-        .forEach(([fieldName, fieldConfig]: [string, any]) => {
+        .forEach(([fieldName, fieldConfig]) => {
           const fieldType = fieldConfig.type || "string";
           const fieldEntry: any = {
             Type: fieldType,
