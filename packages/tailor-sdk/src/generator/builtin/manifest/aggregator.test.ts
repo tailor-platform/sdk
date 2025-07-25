@@ -10,7 +10,7 @@ import { PipelineResolverService } from "@/services/pipeline/service";
 import { AuthService } from "@/services/auth/service";
 import path from "node:path";
 import { getDistDir } from "@/config";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 
 // getDistDirのモック
 vi.mock("@/config", () => ({
@@ -196,7 +196,7 @@ describe("ManifestAggregator", () => {
               {
                 name: "step1",
                 description: "Step 1",
-                operationType: PipelineResolver_OperationType.FUNCTION,
+                operationType: OperationType.FUNCTION,
               },
             ],
             inputFields: undefined, // 無効な入力フィールド

@@ -72,6 +72,16 @@ export type GraphQLType =
   | "ID"
   | string;
 
+// Common types for operator and SDK
+export interface Script {
+  expr: string;
+}
+
+export interface EnumValue {
+  value: string;
+  description?: string;
+}
+
 export interface FieldMetadata {
   description?: string;
   type: TailorFieldType;

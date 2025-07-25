@@ -1,13 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import {
-  Script,
-  TailorDBType as TDB,
-  TailorDBType_FieldConfig,
-  TailorDBType_FieldHook,
-  TailorDBType_ValidateConfig,
-  TailorDBType_Serial,
-} from "@tailor-inc/operator-client";
+import { OperatorFieldConfig } from "@/types/operator";
+import { TailorDBTypeConfig } from "./operator-types";
 import {
   DBFieldMetadata,
   Hooks,
@@ -59,8 +53,8 @@ class TailorDBField<
     return { ...this._metadata };
   }
 
-  get config() {
-    return new TailorDBType_FieldConfig({
+  get config(): OperatorFieldConfig {
+    return {
       ...this._metadata,
       validate: this._metadata.validate?.map((v) => {
         const { fn, message } =
@@ -68,44 +62,42 @@ class TailorDBField<
             ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
             : { fn: v[0], message: v[1] };
 
-        return new TailorDBType_ValidateConfig({
-          script: new Script({
+        return {
+          script: {
             expr: `(${fn.toString().trim()})({ value: _value, user })`,
-          }),
+          },
           errorMessage: message,
-        });
+        };
       }),
       hooks: this._metadata.hooks
-        ? new TailorDBType_FieldHook({
+        ? {
             create: this._metadata.hooks.create
-              ? new Script({
+              ? {
                   expr: `(${this._metadata.hooks.create
                     .toString()
                     .trim()})({ value: _value, data: _data, user })`,
-                })
+                }
               : undefined,
             update: this._metadata.hooks.update
-              ? new Script({
+              ? {
                   expr: `(${this._metadata.hooks.update
                     .toString()
                     .trim()})({ value: _value, data: _data, user })`,
-                })
+                }
               : undefined,
-          })
+          }
         : undefined,
       serial: this._metadata.serial
-        ? new TailorDBType_Serial({
-            start: BigInt(this._metadata.serial.start),
-            maxValue: this._metadata.serial.maxValue
-              ? BigInt(this._metadata.serial.maxValue)
-              : undefined,
+        ? {
+            start: this._metadata.serial.start,
+            maxValue: this._metadata.serial.maxValue,
             format:
               "format" in this._metadata.serial
                 ? this._metadata.serial.format
                 : undefined,
-          })
+          }
         : undefined,
-    });
+    };
   }
 
   private constructor(
@@ -417,7 +409,7 @@ export class TailorDBType<
   M,
   F & Record<string, TailorField<M, any, any, DBFieldMetadata>>
 > {
-  private _metadata?: TDB;
+  private _metadata?: TailorDBTypeConfig;
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
   private _settings: { pluralForm?: string } = {};
@@ -463,16 +455,16 @@ export class TailorDBType<
     this._description = description;
   }
 
-  get metadata(): TDB {
+  get metadata(): TailorDBTypeConfig {
     const metadataFields = Object.entries(this.fields).reduce(
       (acc, [key, field]) => {
         acc[key] = field.config;
         return acc;
       },
-      {} as Record<string, TailorDBType_FieldConfig>,
+      {} as Record<string, OperatorFieldConfig>,
     );
 
-    this._metadata = new TDB({
+    this._metadata = {
       name: this.name,
       schema: {
         description: this._description,
@@ -480,7 +472,7 @@ export class TailorDBType<
         fields: metadataFields,
         settings: this._settings,
       },
-    });
+    };
 
     return this._metadata;
   }

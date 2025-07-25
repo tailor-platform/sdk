@@ -4,7 +4,7 @@ import { Resolver } from "@/services/pipeline/resolver";
 import { SDLUtils } from "./utils";
 import { measure } from "@/performance";
 import { ResolverSDLMetadata } from "./types";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 import { TypeProcessor } from "./type-processor";
 
 /**
@@ -56,7 +56,7 @@ export class ResolverProcessor {
             return {
               name,
               description: name,
-              operationType: PipelineResolver_OperationType.FUNCTION,
+              operationType: OperationType.FUNCTION,
               operationSource: "",
               operationName: name,
             };
@@ -65,7 +65,7 @@ export class ResolverProcessor {
             return {
               name,
               description: name,
-              operationType: PipelineResolver_OperationType.GRAPHQL,
+              operationType: OperationType.GRAPHQL,
               operationSource: "",
               operationName: name,
             };

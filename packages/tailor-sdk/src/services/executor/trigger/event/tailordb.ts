@@ -39,7 +39,7 @@ export function recordCreatedTrigger<T extends TailorDBType>(
       args: {} as RecordTriggerConditionArgs<T> & withNewRecord<T>,
       type: type.name,
       variables: {
-        Expr: `(${argsMap})`,
+        expr: `(${argsMap})`,
       },
     },
   } satisfies EventTriggerWithManifestAndContext<
@@ -71,7 +71,7 @@ export function recordUpdatedTrigger<T extends TailorDBType>(
         withOldRecord<T>,
       type: type.name,
       variables: {
-        Expr: `(${argsMap})`,
+        expr: `(${argsMap})`,
       },
     },
   } satisfies EventTriggerWithManifestAndContext<
@@ -101,7 +101,7 @@ export function recordDeletedTrigger<T extends TailorDBType>(
       args: {} as RecordTriggerConditionArgs<T> & withOldRecord<T>,
       type: type.name,
       variables: {
-        Expr: `(${argsMap})`,
+        expr: `(${argsMap})`,
       },
     },
   } satisfies EventTriggerWithManifestAndContext<

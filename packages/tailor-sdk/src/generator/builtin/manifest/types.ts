@@ -1,4 +1,4 @@
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 
 /**
  * Manifest生成専用の型定義
@@ -133,7 +133,7 @@ interface PipelineItemManifest {
   Name: string;
   OperationName: string;
   Description: string;
-  OperationType: PipelineResolver_OperationType;
+  OperationType: OperationType;
   OperationSource?: string;
   OperationSourcePath?: string;
   OperationHook: { Expr: string };
@@ -162,6 +162,6 @@ export interface ResolverManifestMetadata {
 export interface PipelineInfo {
   name: string;
   description: string;
-  operationType: PipelineResolver_OperationType;
+  operationType: OperationType;
   operationSource?: string;
 }

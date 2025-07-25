@@ -4,7 +4,7 @@ import {
   createQueryResolver,
   createMutationResolver,
 } from "@/services/pipeline";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 import fs from "node:fs";
 import path from "node:path";
 import { t } from "@/types";
@@ -145,9 +145,7 @@ describe("ResolverProcessor", () => {
       const fnStep = result.pipelines.find((p) => p.name === "fetchData");
       expect(fnStep).toBeDefined();
       expect(fnStep!.description).toBe("fetchData");
-      expect(fnStep!.operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
-      );
+      expect(fnStep!.operationType).toBe(OperationType.FUNCTION);
       expect(fnStep!.operationSource).toBe(
         "function fetchData() { return { id: '1', data: 'test' }; }",
       );
@@ -166,9 +164,7 @@ describe("ResolverProcessor", () => {
       const sqlStep = result.pipelines.find((p) => p.name === "queryUsers");
       expect(sqlStep).toBeDefined();
       expect(sqlStep!.description).toBe("queryUsers");
-      expect(sqlStep!.operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
-      );
+      expect(sqlStep!.operationType).toBe(OperationType.FUNCTION);
       expect(sqlStep!.operationSource).toBe(
         "SELECT * FROM users WHERE id = $1",
       );
@@ -249,13 +245,9 @@ describe("ResolverProcessor", () => {
 
       expect(result.pipelines).toHaveLength(3);
       expect(result.pipelines[0].name).toBe("step1");
-      expect(result.pipelines[0].operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
-      );
+      expect(result.pipelines[0].operationType).toBe(OperationType.FUNCTION);
       expect(result.pipelines[1].name).toBe("step2");
-      expect(result.pipelines[1].operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
-      );
+      expect(result.pipelines[1].operationType).toBe(OperationType.FUNCTION);
       expect(result.pipelines[2].name).toBe("step3");
     });
   });
@@ -403,9 +395,7 @@ describe("ResolverProcessor", () => {
       const result = await ResolverProcessor.processResolver(fnOnlyResolver);
 
       expect(result.pipelines).toHaveLength(1);
-      expect(result.pipelines[0].operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
-      );
+      expect(result.pipelines[0].operationType).toBe(OperationType.FUNCTION);
     });
 
     it("sqlのみのResolverを正しく処理すること", async () => {
@@ -419,9 +409,7 @@ describe("ResolverProcessor", () => {
       const result = await ResolverProcessor.processResolver(sqlOnlyResolver);
 
       expect(result.pipelines).toHaveLength(1);
-      expect(result.pipelines[0].operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
-      );
+      expect(result.pipelines[0].operationType).toBe(OperationType.FUNCTION);
     });
 
     it("ステップが空のResolverを正しく処理すること", async () => {

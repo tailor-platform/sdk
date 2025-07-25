@@ -33,7 +33,6 @@
     "registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
-    "@tailor-inc/operator-client": "^25.313.146",
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",
     "es-toolkit": "^1.38.0",
