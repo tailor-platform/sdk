@@ -24,26 +24,24 @@
       "dependsOn": ["^build"],
       "cache": false
     },
-    "//#check": {
-      "dependsOn": ["^format", "^lint:fix", "^typecheck"],
+    "check": {
+      "dependsOn": ["format", "lint:fix", "typecheck"],
       "cache": false
     },
     "lint": {
-      "dependsOn": ["^lint"],
       "outputs": [".eslintcache"],
       "cache": true
     },
     "lint:fix": {
-      "dependsOn": ["^lint:fix"],
       "outputs": [".eslintcache"],
       "cache": true
     },
     "format": {
-      "dependsOn": ["^format", "//#format:root"],
+      "dependsOn": ["//#format:root"],
       "cache": false
     },
     "format:check": {
-      "dependsOn": ["^format:check", "//#format:check:root"],
+      "dependsOn": ["//#format:check:root"],
       "cache": false
     },
     "//#format:root": {
@@ -53,7 +51,7 @@
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["^build", "^typecheck"],
+      "dependsOn": ["^build"],
       "cache": false
     }
   }
