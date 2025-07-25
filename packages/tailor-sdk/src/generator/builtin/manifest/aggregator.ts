@@ -45,7 +45,18 @@ export class ManifestAggregator {
         files: [
           {
             path: path.join(getDistDir(), "manifest.cue"),
-            content: JSON.stringify(manifestJSON, null, 2) + "\n",
+            content:
+              JSON.stringify(
+                manifestJSON,
+                (key, value) => {
+                  // BigIntを数値に変換
+                  if (typeof value === "bigint") {
+                    return Number(value);
+                  }
+                  return value;
+                },
+                2,
+              ) + "\n",
           },
         ],
       };

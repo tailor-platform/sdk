@@ -1,6 +1,19 @@
 import { TailorUser } from "@/types";
-import { output } from "@/types/helpers";
+import { output, Prettify } from "@/types/helpers";
 import { FieldMetadata } from "@/types/types";
+
+export type SerialConfig<
+  T extends "string" | "integer" = "string" | "integer",
+> = Prettify<
+  {
+    start: number;
+    maxValue?: number;
+  } & (T extends "string"
+    ? {
+        format?: string;
+      }
+    : object)
+>;
 
 export interface DBFieldMetadata extends FieldMetadata {
   index?: boolean;
@@ -10,6 +23,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   foreignKeyType?: string;
   validate?: FieldValidateInput<any>[];
   hooks?: Hook<any, any>;
+  serial?: SerialConfig;
 }
 
 export type DefinedFieldMetadata = Partial<

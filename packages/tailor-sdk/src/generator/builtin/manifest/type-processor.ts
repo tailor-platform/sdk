@@ -46,6 +46,17 @@ export class TypeProcessor {
             Unique: false,
             ForeignKey: false,
             Vector: false,
+            ...(nestedMetadata.serial && {
+              Serial: {
+                Start: nestedMetadata.serial.start,
+                ...(nestedMetadata.serial.maxValue && {
+                  MaxValue: nestedMetadata.serial.maxValue,
+                }),
+                ...(nestedMetadata.serial.format && {
+                  Format: nestedMetadata.serial.format,
+                }),
+              },
+            }),
           };
         }
       },
@@ -144,8 +155,27 @@ export class TypeProcessor {
             Vector: fieldConfig.vector || false,
             ...(fieldConfig.hooks && {
               Hooks: {
-                Create: fieldConfig.hooks?.create,
-                Update: fieldConfig.hooks?.update,
+                Create: fieldConfig.hooks?.create
+                  ? {
+                      Expr: fieldConfig.hooks.create.expr || "",
+                    }
+                  : undefined,
+                Update: fieldConfig.hooks?.update
+                  ? {
+                      Expr: fieldConfig.hooks.update.expr || "",
+                    }
+                  : undefined,
+              },
+            }),
+            ...(fieldConfig.serial && {
+              Serial: {
+                Start: fieldConfig.serial.start,
+                ...(fieldConfig.serial.maxValue && {
+                  MaxValue: fieldConfig.serial.maxValue,
+                }),
+                ...(fieldConfig.serial.format && {
+                  Format: fieldConfig.serial.format,
+                }),
               },
             }),
           };
