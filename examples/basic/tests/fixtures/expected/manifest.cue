@@ -160,10 +160,10 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
+                  "Expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
                 },
                 "Update": {
-                  "expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
+                  "Expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -192,7 +192,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -209,7 +209,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -220,6 +220,190 @@
               "RefField": "customerID",
               "SrcField": "id",
               "Array": true,
+              "Description": ""
+            }
+          },
+          "Settings": {
+            "Aggregation": false,
+            "BulkUpsert": false,
+            "Draft": false,
+            "DefaultQueryLimitSize": 100,
+            "MaxBulkUpsertSize": 1000,
+            "PluralForm": "",
+            "PublishRecordEvents": false
+          },
+          "Extends": false,
+          "Directives": [],
+          "Indexes": {},
+          "TypePermission": {
+            "Create": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Read": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Update": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Delete": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Admin": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ]
+          }
+        },
+        {
+          "Name": "Invoice",
+          "Description": "",
+          "Fields": {
+            "invoiceNumber": {
+              "Type": "string",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Serial": {
+                "Start": 1000,
+                "Format": "INV-%05d"
+              }
+            },
+            "salesOrderID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": true,
+              "Required": true,
+              "Unique": true,
+              "ForeignKey": true,
+              "ForeignKeyType": "SalesOrder",
+              "Vector": false
+            },
+            "amount": {
+              "Type": "integer",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "sequentialId": {
+              "Type": "integer",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Serial": {
+                "Start": 1,
+                "MaxValue": 999999
+              }
+            },
+            "status": {
+              "Type": "enum",
+              "AllowedValues": [
+                {
+                  "value": "draft",
+                  "description": ""
+                },
+                {
+                  "value": "sent",
+                  "description": ""
+                },
+                {
+                  "value": "paid",
+                  "description": ""
+                },
+                {
+                  "value": "cancelled",
+                  "description": ""
+                }
+              ],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "createdAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Create": {
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                }
+              }
+            },
+            "updatedAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Update": {
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                }
+              }
+            }
+          },
+          "Relationships": {
+            "salesOrder": {
+              "RefType": "SalesOrder",
+              "RefField": "id",
+              "SrcField": "salesOrderID",
+              "Array": false,
               "Description": ""
             }
           },
@@ -805,7 +989,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -822,7 +1006,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -1044,7 +1228,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -1061,7 +1245,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -1071,6 +1255,13 @@
               "RefType": "Customer",
               "RefField": "id",
               "SrcField": "customerID",
+              "Array": false,
+              "Description": ""
+            },
+            "invoice": {
+              "RefType": "Invoice",
+              "RefField": "salesOrderID",
+              "SrcField": "id",
               "Array": false,
               "Description": ""
             }
@@ -1247,7 +1438,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -1264,7 +1455,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -1369,7 +1560,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -1386,7 +1577,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -1501,7 +1692,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -1518,7 +1709,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -2355,10 +2546,10 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
+                  "Expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
                 },
                 "Update": {
-                  "expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
+                  "Expr": "(({data})=>`\\u3012${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -2387,7 +2578,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -2404,7 +2595,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -2415,6 +2606,190 @@
               "RefField": "customerID",
               "SrcField": "id",
               "Array": true,
+              "Description": ""
+            }
+          },
+          "Settings": {
+            "Aggregation": false,
+            "BulkUpsert": false,
+            "Draft": false,
+            "DefaultQueryLimitSize": 100,
+            "MaxBulkUpsertSize": 1000,
+            "PluralForm": "",
+            "PublishRecordEvents": false
+          },
+          "Extends": false,
+          "Directives": [],
+          "Indexes": {},
+          "TypePermission": {
+            "Create": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Read": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Update": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Delete": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ],
+            "Admin": [
+              {
+                "Id": "everyone",
+                "Ids": [],
+                "Permit": "allow"
+              }
+            ]
+          }
+        },
+        {
+          "Name": "Invoice",
+          "Description": "",
+          "Fields": {
+            "invoiceNumber": {
+              "Type": "string",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Serial": {
+                "Start": 1000,
+                "Format": "INV-%05d"
+              }
+            },
+            "salesOrderID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": true,
+              "Required": true,
+              "Unique": true,
+              "ForeignKey": true,
+              "ForeignKeyType": "SalesOrder",
+              "Vector": false
+            },
+            "amount": {
+              "Type": "integer",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "sequentialId": {
+              "Type": "integer",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": true,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Serial": {
+                "Start": 1,
+                "MaxValue": 999999
+              }
+            },
+            "status": {
+              "Type": "enum",
+              "AllowedValues": [
+                {
+                  "value": "draft",
+                  "description": ""
+                },
+                {
+                  "value": "sent",
+                  "description": ""
+                },
+                {
+                  "value": "paid",
+                  "description": ""
+                },
+                {
+                  "value": "cancelled",
+                  "description": ""
+                }
+              ],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "createdAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Create": {
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                }
+              }
+            },
+            "updatedAt": {
+              "Type": "datetime",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false,
+              "Hooks": {
+                "Update": {
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                }
+              }
+            }
+          },
+          "Relationships": {
+            "salesOrder": {
+              "RefType": "SalesOrder",
+              "RefField": "id",
+              "SrcField": "salesOrderID",
+              "Array": false,
               "Description": ""
             }
           },
@@ -3000,7 +3375,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -3017,7 +3392,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -3239,7 +3614,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -3256,7 +3631,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -3266,6 +3641,13 @@
               "RefType": "Customer",
               "RefField": "id",
               "SrcField": "customerID",
+              "Array": false,
+              "Description": ""
+            },
+            "invoice": {
+              "RefType": "Invoice",
+              "RefField": "salesOrderID",
+              "SrcField": "id",
               "Array": false,
               "Description": ""
             }
@@ -3442,7 +3824,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -3459,7 +3841,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -3564,7 +3946,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -3581,7 +3963,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }
@@ -3696,7 +4078,7 @@
               "Vector": false,
               "Hooks": {
                 "Create": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             },
@@ -3713,7 +4095,7 @@
               "Vector": false,
               "Hooks": {
                 "Update": {
-                  "expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
+                  "Expr": "(() => (/* @__PURE__ */ new Date()).toISOString())({ value: _value, data: _data, user })"
                 }
               }
             }

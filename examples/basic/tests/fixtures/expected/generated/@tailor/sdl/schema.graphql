@@ -15,6 +15,20 @@ type Customer {
 }
 
 
+# Type: Invoice
+type Invoice {
+  id: ID!
+  invoiceNumber: String!
+  salesOrderID: ID!
+  salesOrder: SalesOrder!
+  amount: Int
+  sequentialId: Int!
+  status: enum
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+
 # Type: NestedProfile
 type NestedProfile {
   id: ID!

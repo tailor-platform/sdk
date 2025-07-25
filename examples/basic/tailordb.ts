@@ -42,6 +42,17 @@ export interface Customer {
   updatedAt: Timestamp | null;
 }
 
+export interface Invoice {
+  id: Generated<string>;
+  invoiceNumber: string;
+  salesOrderID: string;
+  amount: number | null;
+  sequentialId: number;
+  status: "draft" | "sent" | "paid" | "cancelled" | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp | null;
+}
+
 export interface NestedProfile {
   id: Generated<string>;
   userInfo: {
@@ -147,6 +158,7 @@ export interface UserSetting {
 
 interface DB {
   Customer: Customer;
+  Invoice: Invoice;
   NestedProfile: NestedProfile;
   PurchaseOrder: PurchaseOrder;
   Role: Role;

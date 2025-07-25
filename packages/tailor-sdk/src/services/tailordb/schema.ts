@@ -6,6 +6,7 @@ import {
   TailorDBType_FieldConfig,
   TailorDBType_FieldHook,
   TailorDBType_ValidateConfig,
+  TailorDBType_Serial,
 } from "@tailor-inc/operator-client";
 import {
   DBFieldMetadata,
@@ -15,6 +16,7 @@ import {
   FieldValidateInput,
   Hook,
   ValidateConfig,
+  SerialConfig,
 } from "./types";
 import { TailorFieldType, TailorToTs } from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
@@ -45,6 +47,7 @@ const fieldDefaults = {
   validate: undefined,
   hooks: undefined,
   assertNonNull: undefined,
+  serial: undefined,
 } as const satisfies Omit<DBFieldMetadata, "type">;
 
 class TailorDBField<
@@ -88,6 +91,18 @@ class TailorDBField<
                     .trim()})({ value: _value, data: _data, user })`,
                 })
               : undefined,
+          })
+        : undefined,
+      serial: this._metadata.serial
+        ? new TailorDBType_Serial({
+            start: BigInt(this._metadata.serial.start),
+            maxValue: this._metadata.serial.maxValue
+              ? BigInt(this._metadata.serial.maxValue)
+              : undefined,
+            format:
+              "format" in this._metadata.serial
+                ? this._metadata.serial.format
+                : undefined,
           })
         : undefined,
     });
@@ -298,6 +313,32 @@ class TailorDBField<
     this._metadata.validate = validate;
     return this as unknown as TailorDBField<
       Prettify<CurrentDefined & { validate: V }>,
+      Output,
+      Reference
+    >;
+  }
+
+  serial<
+    T extends CurrentDefined["type"] extends "integer" | "string"
+      ? CurrentDefined["type"]
+      : never,
+    const S extends SerialConfig<T>,
+    CurrentDefined extends Defined,
+  >(
+    this: CurrentDefined extends { serial: unknown }
+      ? never
+      : CurrentDefined extends { type: "integer" | "string" }
+        ? TailorDBField<CurrentDefined, Output, Reference>
+        : never,
+    config: S,
+  ): TailorDBField<
+    Prettify<CurrentDefined & { serial: S }>,
+    Output,
+    Reference
+  > {
+    this._metadata.serial = config;
+    return this as unknown as TailorDBField<
+      Prettify<CurrentDefined & { serial: S }>,
       Output,
       Reference
     >;
