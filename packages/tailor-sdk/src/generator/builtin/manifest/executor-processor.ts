@@ -4,8 +4,9 @@ import {
   FunctionOperation,
   Trigger,
   Target,
-  Script,
+  ExecutorManifest,
 } from "@/services/executor/types";
+import { Script } from "@/types/types";
 import { measure } from "@/performance";
 import { getDistDir } from "@/config";
 
@@ -17,13 +18,8 @@ export interface ExecutorManifestMetadata {
   description?: string;
   trigger: Trigger;
   target: Target;
-  executorManifest?: {
-    Name: string;
-    Description?: string;
-    Trigger: Trigger;
-    Target: Target;
-  };
-  usedTailorDBType?: string; // 使用されているTailorDBタイプ名
+  executorManifest: ExecutorManifest;
+  usedTailorDBType?: string;
 }
 
 /**
@@ -38,7 +34,7 @@ export class ExecutorProcessor {
   static async processExecutor(
     executor: Executor,
   ): Promise<ExecutorManifestMetadata> {
-    const metadata: ExecutorManifestMetadata = {
+    const metadata: Partial<ExecutorManifestMetadata> = {
       name: executor.name,
       description: executor.description,
       trigger: executor.trigger.manifest,
@@ -52,10 +48,9 @@ export class ExecutorProcessor {
     }
 
     // ExecutorをManifest形式に変換
-    const executorManifest = ExecutorProcessor.convertToManifest(executor);
-    metadata.executorManifest = executorManifest;
+    metadata.executorManifest = ExecutorProcessor.convertToManifest(executor);
 
-    return metadata;
+    return metadata as ExecutorManifestMetadata;
   }
 
   /**
@@ -67,7 +62,7 @@ export class ExecutorProcessor {
     Trigger: Trigger;
     Target: Target;
   } {
-    const manifest: any = {
+    const manifest: Partial<ExecutorManifest> = {
       Name: executor.name,
       Description: executor.description,
     };
@@ -127,7 +122,9 @@ export class ExecutorProcessor {
           `${executor.name}.js`,
         );
         if ("variables" in executor.trigger.context) {
-          functionOp.Variables = executor.trigger.context.variables as Script;
+          functionOp.Variables = {
+            Expr: (executor.trigger.context.variables as Script).expr,
+          };
         }
         manifest.TargetFunction = functionOp;
         break;
@@ -138,11 +135,6 @@ export class ExecutorProcessor {
     manifest.Trigger = trigger;
     manifest.Target = target;
 
-    return manifest as {
-      Name: string;
-      Description?: string;
-      Trigger: Trigger;
-      Target: Target;
-    };
+    return manifest as ExecutorManifest;
   }
 }

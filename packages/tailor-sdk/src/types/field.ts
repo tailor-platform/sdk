@@ -1,31 +1,24 @@
-import { TailorDBType_Value } from "@tailor-inc/operator-client";
+import { EnumValue } from "@/types/types";
 
-export type AllowedValue = InstanceType<typeof TailorDBType_Value>;
-
-interface AllowedValueObject {
-  value: string;
-  description?: string;
-}
+export type AllowedValue = EnumValue;
 
 type AllowedValueAlias = string | [string] | [string, string];
 
 export type AllowedValues =
   | [AllowedValueAlias, ...AllowedValueAlias[]]
-  | [AllowedValueObject, ...AllowedValueObject[]];
+  | [EnumValue, ...EnumValue[]];
 
 export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
   return (
-    values
-      ?.map((value) => {
-        if (typeof value === "string") {
-          return { value };
-        }
-        if (Array.isArray(value)) {
-          return { value: value[0], description: value[1] };
-        }
-        return value;
-      })
-      .map((value) => new TailorDBType_Value(value)) ?? []
+    values?.map((value) => {
+      if (typeof value === "string") {
+        return { value, description: "" };
+      }
+      if (Array.isArray(value)) {
+        return { value: value[0], description: value[1] || "" };
+      }
+      return { ...value, description: value.description || "" };
+    }) ?? []
   );
 }
 

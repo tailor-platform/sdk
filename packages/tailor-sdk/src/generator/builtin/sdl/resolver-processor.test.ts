@@ -5,7 +5,7 @@ import {
   createMutationResolver,
   createQueryResolver,
 } from "@/services/pipeline/resolver";
-import { PipelineResolver_OperationType } from "@tailor-inc/operator-client";
+import { OperationType } from "@/types/operator";
 import { TypeProcessor } from "./type-processor";
 import { t } from "@/types";
 
@@ -217,9 +217,7 @@ describe("SDL ResolverProcessor", () => {
       result.pipelines.forEach((pipeline: any, index) => {
         expect(pipeline.name).toBe(`step${index + 1}`);
         expect(pipeline.description).toBe(`step${index + 1}`);
-        expect(pipeline.operationType).toBe(
-          PipelineResolver_OperationType.FUNCTION,
-        );
+        expect(pipeline.operationType).toBe(OperationType.FUNCTION);
         expect(pipeline.operationSource).toBe("");
         expect(pipeline.operationName).toBe(`step${index + 1}`);
       });
@@ -241,11 +239,11 @@ describe("SDL ResolverProcessor", () => {
       expect(result.pipelines).toHaveLength(2);
       expect((result.pipelines[0] as any).name).toBe("getUserQuery");
       expect((result.pipelines[0] as any).operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
+        OperationType.FUNCTION,
       );
       expect((result.pipelines[1] as any).name).toBe("getPostsQuery");
       expect((result.pipelines[1] as any).operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
+        OperationType.FUNCTION,
       );
     });
 
@@ -265,11 +263,11 @@ describe("SDL ResolverProcessor", () => {
       expect(result.pipelines).toHaveLength(2);
       expect((result.pipelines[0] as any).name).toBe("fetchUserProfile");
       expect((result.pipelines[0] as any).operationType).toBe(
-        PipelineResolver_OperationType.GRAPHQL,
+        OperationType.GRAPHQL,
       );
       expect((result.pipelines[1] as any).name).toBe("fetchUserPosts");
       expect((result.pipelines[1] as any).operationType).toBe(
-        PipelineResolver_OperationType.GRAPHQL,
+        OperationType.GRAPHQL,
       );
     });
 
@@ -290,16 +288,16 @@ describe("SDL ResolverProcessor", () => {
 
       expect(result.pipelines).toHaveLength(4);
       expect((result.pipelines[0] as any).operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
+        OperationType.FUNCTION,
       );
       expect((result.pipelines[1] as any).operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
+        OperationType.FUNCTION,
       );
       expect((result.pipelines[2] as any).operationType).toBe(
-        PipelineResolver_OperationType.GRAPHQL,
+        OperationType.GRAPHQL,
       );
       expect((result.pipelines[3] as any).operationType).toBe(
-        PipelineResolver_OperationType.FUNCTION,
+        OperationType.FUNCTION,
       );
     });
   });
@@ -586,10 +584,10 @@ describe("SDL ResolverProcessor", () => {
       result.pipelines.forEach((pipeline, index) => {
         const expectedType =
           index % 3 === 0
-            ? PipelineResolver_OperationType.FUNCTION
+            ? OperationType.FUNCTION
             : index % 3 === 1
-              ? PipelineResolver_OperationType.FUNCTION
-              : PipelineResolver_OperationType.GRAPHQL;
+              ? OperationType.FUNCTION
+              : OperationType.GRAPHQL;
         expect((pipeline as any).operationType).toBe(expectedType);
         expect((pipeline as any).name).toBe(`step${index + 1}`);
       });
