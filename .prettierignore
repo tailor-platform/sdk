@@ -26,9 +26,7 @@ coverage/
 # Tailor SDK
 .tailor-sdk
 performance-reports
+
+# Other pnpm packages
 packages
-
-# Test fixtures (generated files)
-tests/fixtures/
-
-src/resolvers/tailordb.ts
+examples

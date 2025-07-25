@@ -2,7 +2,7 @@ import {
   createExecutor,
   recordCreatedTrigger,
 } from "@tailor-platform/tailor-sdk";
-import { user } from "src/tailordb/user";
+import { user } from "../tailordb/user";
 
 export default createExecutor(
   "user-created",

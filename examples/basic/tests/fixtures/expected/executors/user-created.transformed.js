@@ -1,6 +1,7 @@
-import { user } from "src/tailordb/user";
+//#region tailordb/user.ts
 
-//#region src/executors/userCreated.ts
+//#endregion
+//#region executors/userCreated.ts
 
 //#endregion
 

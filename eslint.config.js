@@ -11,8 +11,7 @@ export default defineConfig([
       "**/node_modules/**",
       "**/.tailor-sdk/**",
       "**/packages/**",
-      "**/tests/fixtures/**",
-      "src/resolvers/tailordb.ts",
+      "**/examples/**",
     ],
   },
   {

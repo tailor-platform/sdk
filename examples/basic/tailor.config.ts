@@ -6,10 +6,10 @@ export default defineConfig({
   app: {
     "my-app": {
       db: {
-        tailordb: { files: ["./src/tailordb/*.ts"] },
+        tailordb: { files: ["./tailordb/*.ts"] },
       },
       pipeline: {
-        "my-pipeline": { files: ["./src/resolvers/**/resolver.ts"] },
+        "my-pipeline": { files: ["./resolvers/**/resolver.ts"] },
       },
       auth: {
         namespace: "my-auth",
@@ -41,13 +41,10 @@ export default defineConfig({
       },
     },
   },
-  executor: { files: ["./src/executors/*.ts"] },
+  executor: { files: ["./executors/*.ts"] },
   generators: [
     "@tailor/sdl",
-    [
-      "@tailor/kysely-type",
-      { distPath: ({ tailorDB }) => `./src/resolvers/${tailorDB}.ts` },
-    ],
-    ["@tailor/db-type", { distPath: () => `./src/tailordb/types.ts` }],
+    ["@tailor/kysely-type", { distPath: ({ tailorDB }) => `./${tailorDB}.ts` }],
+    ["@tailor/db-type", { distPath: () => `./tailordb/types.ts` }],
   ],
 });

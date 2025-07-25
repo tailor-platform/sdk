@@ -9,34 +9,18 @@
       "cache": true
     },
     "test": {
-      "dependsOn": ["//#test:root"],
-      "cache": false
-    },
-    "//#test:root:prepare": {
       "dependsOn": ["^build"],
       "cache": false
     },
-    "//#test:root": {
-      "dependsOn": ["//#test:root:prepare"],
-      "cache": false
-    },
-    "//#test:root:update-expects": {
+    "gen": {
       "dependsOn": ["^build"],
       "cache": false
     },
-    "//#gen": {
+    "gen:watch": {
       "dependsOn": ["^build"],
       "cache": false
     },
-    "//#gen:watch": {
-      "dependsOn": ["^build"],
-      "cache": false
-    },
-    "//#gen:perf": {
-      "dependsOn": ["^build"],
-      "cache": false
-    },
-    "//#apply": {
+    "apply": {
       "dependsOn": ["^build"],
       "cache": false
     },
@@ -45,19 +29,13 @@
       "cache": false
     },
     "lint": {
-      "dependsOn": ["^lint", "//#lint:root"],
+      "dependsOn": ["^lint"],
       "outputs": [".eslintcache"],
       "cache": true
     },
     "lint:fix": {
-      "dependsOn": ["^lint:fix", "//#lint:fix:root"],
+      "dependsOn": ["^lint:fix"],
       "outputs": [".eslintcache"],
-      "cache": true
-    },
-    "//#lint:root": {
-      "cache": true
-    },
-    "//#lint:fix:root": {
       "cache": true
     },
     "format": {
@@ -75,11 +53,7 @@
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["^typecheck", "//#typecheck:root"],
-      "cache": false
-    },
-    "//#typecheck:root": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "^typecheck"],
       "cache": false
     }
   }

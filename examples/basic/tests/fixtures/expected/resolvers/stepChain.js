@@ -2,7 +2,7 @@ import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
 import { DummyDriver, Kysely, PostgresAdapter, PostgresIntrospector, PostgresQueryCompiler } from "kysely";
 
-//#region src/resolvers/tailordb.ts
+//#region tailordb.ts
 const getDB = () => {
 	return new Kysely({ dialect: {
 		createAdapter: () => new PostgresAdapter(),
@@ -24,7 +24,7 @@ async function kyselyWrapper(context, callback) {
 }
 
 //#endregion
-//#region src/resolvers/stepChain/resolver.ts
+//#region resolvers/stepChain/resolver.ts
 var resolver_default = createQueryResolver("stepChain", t.type({ user: t.object({ name: t.object({
 	first: t.string(),
 	last: t.string()

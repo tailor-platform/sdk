@@ -1,6 +1,6 @@
 # Dependency directories
 node_modules/
-jspm_packages/
+pnpm-lock.yaml
 
 # TypeScript compiled output
 dist/
@@ -23,15 +23,12 @@ lerna-debug.log*
 # Coverage directory used by tools like istanbul
 coverage/
 
-# IDEs and editors
-.idea/
-.vscode/
-
 # Tailor SDK
-**/.tailor-sdk/**
-!.tailor-sdk/manifest.cue
-.turbo
+.tailor-sdk
 
-# tailorctl
-cue.mod
-.mcp.json
+# Test fixtures (generated files)
+tests/fixtures/
+
+# Generated files
+tailordb.ts
+tailordb/types.ts
