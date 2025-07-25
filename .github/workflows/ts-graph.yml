@@ -2,22 +2,6 @@ name: TypeScript Graph
 
 on: pull_request
 jobs:
-  root-typescript-graph:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - uses: ysk8hori/delta-typescript-graph-action@b372d77b21e4e2aa1cd6f0c3921f979920f68b51 # v1.2.3
-        with:
-          comment-title: "TypeScript Graph for Project Root"
-          access-token: ${{ secrets.GITHUB_TOKEN }}
-          tsconfig: "./tsconfig.json"
-          debug: true
-          in-details: true
-          exclude: "node_modules, tests, *.test.ts"
-          include-index-file-dependencies: true
-          max-size: 100
-
   sdk-typescript-graph:
     runs-on: ubuntu-latest
     steps:
@@ -31,6 +15,23 @@ jobs:
           debug: true
           in-details: true
           exclude: "node_modules, tests, *.test.ts, dist"
+          include-index-file-dependencies: true
+          max-size: 100
+          show-metrics: true
+
+  examples-basic-typescript-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - uses: ysk8hori/delta-typescript-graph-action@b372d77b21e4e2aa1cd6f0c3921f979920f68b51 # v1.2.3
+        with:
+          comment-title: "TypeScript Graph for Examples/Basic"
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          tsconfig: "./examples/basic/tsconfig.json"
+          debug: true
+          in-details: true
+          exclude: "node_modules, tests, *.test.ts, dist, .tailor-sdk"
           include-index-file-dependencies: true
           max-size: 100
           show-metrics: true

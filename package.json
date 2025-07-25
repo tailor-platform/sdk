@@ -6,19 +6,10 @@
   "packageManager": "pnpm@10.8.0",
   "scripts": {
     "test": "turbo run test",
-    "test:root": "vitest run",
-    "test:root:prepare": "tsx tests/scripts/generate_files.ts actual",
-    "test:root:update-expects": "tsx tests/scripts/generate_files.ts",
-    "gen": "tailor-sdk generate -c src/tailor.config.ts",
-    "gen:watch": "tailor-sdk generate -c src/tailor.config.ts --watch",
-    "gen:perf": "dotenvx run -- tailor-sdk generate -c src/tailor.config.ts",
-    "apply": "tailor-sdk apply -c src/tailor.config.ts",
     "dev": "turbo run dev",
     "check": "echo 'check complete'",
     "lint": "turbo run lint",
-    "lint:root": "eslint --cache .",
     "lint:fix": "turbo run lint:fix",
-    "lint:fix:root": "eslint --cache . --fix --quiet",
     "format": "turbo run format",
     "format:root": "prettier --write .",
     "format:check": "turbo run format:check",
@@ -29,16 +20,12 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "date-fns": "^4.1.0",
-    "kysely": "0.27.6"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@dotenvx/dotenvx": "^1.45.1",
     "@eslint/js": "^9.29.0",
     "@tailor-platform/tailor-sdk": "workspace:^",
     "@types/node": "^22.15.3",
-    "dir-compare": "^4.2.0",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.5",
     "globals": "^16.2.0",
@@ -47,8 +34,7 @@
     "tsx": "^4.19.2",
     "turbo": "^2.5.5",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.34.1",
-    "vitest": "^3.1.4"
+    "typescript-eslint": "^8.34.1"
   },
   "engines": {
     "node": ">= 22.14.0"

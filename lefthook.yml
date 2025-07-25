@@ -3,13 +3,6 @@
 pre-commit:
   parallel: true
   jobs:
-    - name: lint:root
-      glob: "*.{ts}"
-      exclude: "packages"
-      run: |
-        echo "lint: {staged_files}"
-        npx eslint --cache {staged_files}
-
     - name: lint:tailor-sdk
       glob: "*.{ts}"
       root: "packages/tailor-sdk"
@@ -17,22 +10,29 @@ pre-commit:
         echo "lint: {staged_files}"
         npx eslint --cache {staged_files}
 
+    - name: lint:examples-basic
+      glob: "*.{ts,js}"
+      root: "examples/basic"
+      run: |
+        echo "lint: {staged_files}"
+        npx eslint --cache {staged_files}
+
     - name: format
-      glob: "*.{ts,json}"
+      glob: "*.{ts,js,json,md,yml,yaml}"
       run: |
         echo "format: {staged_files}"
         npx prettier --check {staged_files}
-
-    - name: typecheck:root
-      glob: "*.{ts}"
-      exclude: "packages"
-      run: |
-        echo "typecheck: root"
-        npx tsc --noEmit
 
     - name: typecheck:tailor-sdk
       glob: "*.{ts}"
       root: "packages/tailor-sdk"
       run: |
         echo "typecheck: tailor-sdk"
+        npx tsc --noEmit
+
+    - name: typecheck:examples-basic
+      glob: "*.{ts,js}"
+      root: "examples/basic"
+      run: |
+        echo "typecheck: examples/basic"
         npx tsc --noEmit

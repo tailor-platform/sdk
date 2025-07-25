@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Tailor SDK generated files
+.tailor-sdk/
+resolvers/tailordb.ts
+tailordb/types.ts
+
+# Test files
+tests/fixtures/actual/
+
+# Cache
+.eslintcache
+.turbo/
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log

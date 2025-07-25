@@ -2,7 +2,7 @@ import {
   createExecutor,
   recordCreatedTrigger,
 } from "@tailor-platform/tailor-sdk";
-import { salesOrder } from "src/tailordb/salesOrder";
+import { salesOrder } from "../tailordb/salesOrder";
 
 export default createExecutor(
   "sales-order-created",

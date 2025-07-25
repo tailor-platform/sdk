@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
-import config from "../../src/tailor.config";
+import config from "../../tailor.config";
 import { apply, generate } from "@tailor-platform/tailor-sdk";
 
 const __filename = url.fileURLToPath(import.meta.url);
