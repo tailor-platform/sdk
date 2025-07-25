@@ -19,15 +19,17 @@
   "dependencies": {
     "@tailor-platform/tailor-sdk": "workspace:^",
     "date-fns": "^4.1.0",
-    "kysely": "0.27.6"
+    "kysely": "0.27.6",
+    "sqlstring": "^2.3.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
+    "@types/sqlstring": "^2.3.2",
+    "dir-compare": "^4.2.0",
     "tsx": "^4.19.2",
     "typescript": "^5.8.3",
     "vitest": "^3.1.4",
-    "vitest-mock-extended": "^2.0.2",
-    "dir-compare": "^4.2.0"
+    "vitest-mock-extended": "^2.0.2"
   },
   "engines": {
     "node": ">= 22.14.0"
