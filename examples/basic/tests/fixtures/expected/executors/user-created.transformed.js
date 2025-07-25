@@ -1,3 +1,5 @@
+import sql from "sqlstring";
+
 //#region tailordb/user.ts
 
 //#endregion
@@ -6,4 +8,4 @@
 //#endregion
 
 // Export the executor function
-export const __executor_function = async({newRecord,client})=>{const record=await client.execOne(`select * from User where id = '${newRecord.id}'`);console.log(`New user created: ${record.name} (${record.email})`)};
+export const __executor_function = async({newRecord,client})=>{const record=await client.execOne(sql.format(`select * from User where id = ?`,[newRecord.id]));console.log(`New user created: ${record.name} (${record.email})`)};

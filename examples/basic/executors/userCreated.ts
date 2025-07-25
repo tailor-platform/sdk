@@ -2,6 +2,7 @@ import {
   createExecutor,
   recordCreatedTrigger,
 } from "@tailor-platform/tailor-sdk";
+import sql from "sqlstring";
 import { user } from "../tailordb/user";
 
 export default createExecutor(
@@ -16,7 +17,7 @@ export default createExecutor(
   .executeFunction(
     async ({ newRecord, client }) => {
       const record = await client.execOne<typeof newRecord>(
-        /* sql */ `select * from User where id = '${newRecord.id}'`,
+        sql.format(/* sql */ `select * from User where id = ?`, [newRecord.id]),
       );
       console.log(`New user created: ${record.name} (${record.email})`);
     },
