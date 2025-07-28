@@ -29,9 +29,6 @@
     "typecheck": "tsc --noEmit",
     "prepublish": "pnpm run build"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "dependencies": {
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",

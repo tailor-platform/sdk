@@ -750,18 +750,20 @@ export const initCommand = defineCommand({
 
       console.log(chalk.green("\n✅ Project initialized successfully!\n"));
       console.log(chalk.cyan("Next steps:"));
-      console.log(`  1. cd ${projectName}`);
-      console.log("  2. Set GITHUB_PACKAGES_TOKEN environment variable");
+      let step = 0;
+      console.log(`  ${++step}. cd ${projectName}`);
       if (args["skip-install"]) {
-        console.log("  3. npm install");
-        console.log("  4. npm run dev (start development mode)");
+        console.log(`  ${++step}. npm install`);
+        console.log(`  ${++step}. npm run dev (start development mode)`);
       } else {
-        console.log("  3. npm run dev (start development mode)");
+        console.log(`  ${++step}. npm run dev (start development mode)`);
       }
-      console.log("  4. Edit src/tailordb/*.ts to define your data models");
+      console.log(
+        `  ${++step}. Edit src/tailordb/*.ts to define your data models`,
+      );
       console.log(
         chalk.white(
-          "  5. Edit src/resolvers/**/resolver.ts to create API endpoints",
+          `  ${++step}. Edit src/resolvers/**/resolver.ts to create API endpoints`,
         ),
       );
       console.log(chalk.blue("\nDocumentation: https://docs.tailor.tech\n"));
