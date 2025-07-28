@@ -30,20 +30,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
-        env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_READ_TOKEN }}
 
       - name: Run lint
         run: pnpm lint
-        env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_READ_TOKEN }}
 
       - name: Check format
         run: pnpm format:check
-        env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_READ_TOKEN }}
 
       - name: Check type
         run: pnpm typecheck
-        env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_READ_TOKEN }}
