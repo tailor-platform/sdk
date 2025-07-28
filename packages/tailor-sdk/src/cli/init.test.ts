@@ -90,8 +90,8 @@ describe("init command", () => {
           "@tailor-platform/tailor-sdk": "latest",
         },
         devDependencies: {
-          typescript: "^5.0.0",
-          "@types/node": "^20.0.0",
+          typescript: "5.8.3",
+          "@types/node": "22.13.14",
         },
       });
     });
