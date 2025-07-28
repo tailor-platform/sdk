@@ -1,4 +1,4 @@
-name: Publish to GitHub Packages
+name: Publish
 
 on:
   push:
@@ -6,10 +6,14 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to publish (e.g., 1.0.0)"
+      bump_type:
+        description: "Version bump type"
         required: true
-        type: string
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
   publish:
@@ -29,33 +33,70 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-          registry-url: "https://npm.pkg.github.com"
 
       - name: Install dependencies
         run: pnpm install
-        env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.TAILOR_NPM_REGISTRY_READ_TOKEN }}
+
+      - name: Get latest tag and calculate new version
+        if: github.event_name == 'workflow_dispatch'
+        id: calculate_version
+        run: |
+          # Fetch all tags
+          git fetch --tags
+
+          # Get the latest version tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 --match="v*" 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Remove 'v' prefix
+          CURRENT_VERSION=${LATEST_TAG#v}
+
+          # Split version into components
+          IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]:-0}
+          MINOR=${VERSION_PARTS[1]:-0}
+          PATCH=${VERSION_PARTS[2]:-0}
+
+          # Calculate new version based on bump type
+          case "${{ github.event.inputs.bump_type }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create and push tag
         if: github.event_name == 'workflow_dispatch'
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git tag -a v${{ github.event.inputs.version }} -m "Release v${{ github.event.inputs.version }}"
-          git push origin v${{ github.event.inputs.version }}
+          git tag -a v${{ steps.calculate_version.outputs.new_version }} -m "Release v${{ steps.calculate_version.outputs.new_version }}"
+          git push origin v${{ steps.calculate_version.outputs.new_version }}
 
       - name: Set version from tag
         run: |
           cd packages/tailor-sdk
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            pnpm version ${{ github.event.inputs.version }} --no-git-tag-version
+            pnpm version ${{ steps.calculate_version.outputs.new_version }} --no-git-tag-version
           else
             pnpm version from-git --no-git-tag-version
           fi
 
-      - name: Publish to GitHub Packages
+      - name: Publish npm package
         run: |
           cd packages/tailor-sdk
           pnpm publish --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
