@@ -86,24 +86,11 @@ When adding to an existing project, the init command will:
 - Add Tailor scripts (`tailor:dev`, `tailor:build`, `tailor:deploy`) to package.json
 - Create `tailor.config.ts` with your project configuration
 - Create `src/tailordb/` and `src/resolvers/` directories with examples
-- Update `.npmrc` with GitHub Packages registry settings
 - Update `.gitignore` to exclude generated files
 
 Existing files are never overwritten - the command safely skips any files that already exist.
 
 ### Manual Installation
-
-If you prefer to add Tailor SDK to an existing project:
-
-`.npmrc`
-
-```.npmrc
-@tailor-inc:registry=https://npm.pkg.github.com
-@tailor-platform:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
-```
-
-For `GITHUB_PACKAGES_TOKEN`, please [generate a Personal Access Token](https://github.com/settings/tokens/new) with `read:packages` scope and configure SSO to `tailor-inc` / `tailor-platform`.
 
 ```bash
 npm install @tailor-platform/tailor-sdk
