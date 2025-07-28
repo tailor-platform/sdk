@@ -99,6 +99,6 @@ jobs:
 
       - name: Publish npm package
         run: |
-          pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access public
+          pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
