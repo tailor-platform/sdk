@@ -6,32 +6,42 @@ import { defineCommand, runMain } from "citty";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function getTsxPath(): Promise<string | null> {
+async function getTsxPath(): Promise<{
+  type: "bin" | "module" | "npx";
+  path: string;
+} | null> {
   // First try to find tsx in node_modules/.bin
   const localTsxPath = path.join(process.cwd(), "node_modules", ".bin", "tsx");
   if (existsSync(localTsxPath)) {
-    return localTsxPath;
+    return { type: "bin", path: localTsxPath };
   }
 
-  // For pnpm, check in @tailor-platform package's node_modules
-  const pnpmTsxPath = path.join(
-    process.cwd(),
-    "node_modules",
-    "@tailor-platform",
-    "tailor-sdk",
-    "node_modules",
-    ".bin",
-    "tsx",
-  );
-  if (existsSync(pnpmTsxPath)) {
-    return pnpmTsxPath;
+  // For pnpm, try to find the actual tsx module in .pnpm directory
+  const pnpmDir = path.join(process.cwd(), "node_modules", ".pnpm");
+  if (existsSync(pnpmDir)) {
+    // Look for tsx in .pnpm directory
+    const dirs = readdirSync(pnpmDir);
+    const tsxDir = dirs.find((dir) => dir.startsWith("tsx@"));
+    if (tsxDir) {
+      const tsxPath = path.join(
+        pnpmDir,
+        tsxDir,
+        "node_modules",
+        "tsx",
+        "dist",
+        "cli.mjs",
+      );
+      if (existsSync(tsxPath)) {
+        return { type: "module", path: tsxPath };
+      }
+    }
   }
 
   // Check if tsx is available via npx
@@ -43,7 +53,7 @@ async function getTsxPath(): Promise<string | null> {
     child.on("error", () => resolve(null));
     child.on("exit", (code) => {
       if (code === 0) {
-        resolve("npx"); // npx will handle tsx execution
+        resolve({ type: "npx", path: "npx" });
       } else {
         resolve(null);
       }
@@ -56,8 +66,8 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
   options,
 ) => {
   try {
-    const tsxPath = await getTsxPath();
-    if (!tsxPath) {
+    const tsxInfo = await getTsxPath();
+    if (!tsxInfo) {
       console.error("Error: tsx is not installed or not available in PATH.");
       process.exit(1);
     }
@@ -90,10 +100,27 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
       }
     });
 
-    const child = spawn(tsxPath, args, {
-      stdio: "inherit",
-      cwd: process.cwd(),
-    });
+    let child;
+
+    if (tsxInfo.type === "npx") {
+      // Use npx
+      child = spawn("npx", ["tsx", ...args], {
+        stdio: "inherit",
+        cwd: process.cwd(),
+      });
+    } else if (tsxInfo.type === "module") {
+      // Use node directly with the tsx module
+      child = spawn("node", [tsxInfo.path, ...args], {
+        stdio: "inherit",
+        cwd: process.cwd(),
+      });
+    } else {
+      // Use shell for bin scripts
+      child = spawn("sh", [tsxInfo.path, ...args], {
+        stdio: "inherit",
+        cwd: process.cwd(),
+      });
+    }
 
     child.on("error", (error) => {
       console.error("Failed to execute tsx:", error);
