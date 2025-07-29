@@ -102,6 +102,7 @@ type SalesOrder {
   id: ID!
   customerID: ID!
   customer: Customer!
+  approvedByUserID: ID
   totalPrice: Int
   discount: Float
   status: String

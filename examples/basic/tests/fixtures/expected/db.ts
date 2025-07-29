@@ -117,6 +117,7 @@ export interface Role {
 export interface SalesOrder {
   id: Generated<string>;
   customerID: string;
+  approvedByUserID: string | null;
   totalPrice: number | null;
   discount: number | null;
   status: string | null;

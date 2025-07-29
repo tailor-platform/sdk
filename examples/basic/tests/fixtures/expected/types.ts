@@ -92,6 +92,7 @@ export type SalesOrder = {
   id: string;
   customerID: string;
   customer: Customer;
+  approvedByUserID?: string | null;
   totalPrice?: number | null;
   discount?: number | null;
   status?: string | null;
