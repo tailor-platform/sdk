@@ -44,10 +44,10 @@ export interface Customer {
 
 export interface Invoice {
   id: Generated<string>;
-  invoiceNumber: string;
+  invoiceNumber: string | null;
   salesOrderID: string;
   amount: number | null;
-  sequentialId: number;
+  sequentialId: number | null;
   status: "draft" | "sent" | "paid" | "cancelled" | null;
   createdAt: Timestamp;
   updatedAt: Timestamp | null;

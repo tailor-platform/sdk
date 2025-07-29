@@ -35,7 +35,7 @@
       "Types": [
         {
           "Name": "Customer",
-          "Description": "",
+          "Description": "カスタマー",
           "Fields": {
             "name": {
               "Type": "string",
@@ -284,7 +284,7 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
+              "Required": false,
               "Unique": false,
               "ForeignKey": false,
               "Vector": false,
@@ -325,7 +325,7 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
+              "Required": false,
               "Unique": false,
               "ForeignKey": false,
               "Vector": false,
@@ -2421,7 +2421,7 @@
       "Types": [
         {
           "Name": "Customer",
-          "Description": "",
+          "Description": "カスタマー",
           "Fields": {
             "name": {
               "Type": "string",
@@ -2670,7 +2670,7 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
+              "Required": false,
               "Unique": false,
               "ForeignKey": false,
               "Vector": false,
@@ -2711,7 +2711,7 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
+              "Required": false,
               "Unique": false,
               "ForeignKey": false,
               "Vector": false,
