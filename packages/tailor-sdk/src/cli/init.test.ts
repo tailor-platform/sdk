@@ -86,12 +86,10 @@ describe("init command", () => {
           build: "tailor-sdk generate",
           deploy: "tailor-sdk apply",
         },
-        dependencies: {
-          "@tailor-platform/tailor-sdk": "latest",
-        },
         devDependencies: {
-          typescript: "5.8.3",
+          "@tailor-platform/tailor-sdk": "latest",
           "@types/node": "22.13.14",
+          typescript: "5.8.3",
         },
       });
     });
@@ -182,8 +180,10 @@ describe("init command", () => {
         "/test/path/package.json",
         expect.objectContaining({
           dependencies: expect.objectContaining({
-            "@tailor-platform/tailor-sdk": "latest",
             express: "^4.0.0",
+          }),
+          devDependencies: expect.objectContaining({
+            "@tailor-platform/tailor-sdk": "latest",
           }),
         }),
         { spaces: 2 },
@@ -560,7 +560,7 @@ describe("init command", () => {
       expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
         expect.stringContaining("package.json"),
         expect.objectContaining({
-          dependencies: expect.objectContaining({
+          devDependencies: expect.objectContaining({
             "@tailor-platform/tailor-sdk": "latest",
           }),
         }),
