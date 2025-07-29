@@ -417,12 +417,13 @@ export class TailorDBType<
   constructor(
     public readonly name: string,
     public readonly fields: F,
-    pluralForm?: string,
+    options: { pluralForm?: string; description?: string },
   ) {
     super(
       fields as F & Record<string, TailorField<M, any, any, DBFieldMetadata>>,
     );
-    this._settings.pluralForm = pluralForm;
+    this._settings.pluralForm = options.pluralForm;
+    this._description = options.description;
 
     Object.entries(this.fields).forEach(([fieldName, field]) => {
       if (field.reference) {
@@ -449,10 +450,6 @@ export class TailorDBType<
         }
       }
     });
-  }
-
-  set description(description: string) {
-    this._description = description;
   }
 
   get metadata(): TailorDBTypeConfig {
@@ -512,20 +509,52 @@ type DBType<
   F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
 > = TailorDBType<{ id: idField } & F, DefinedFieldMetadata>;
 
+/**
+ * Creates a new database type with the specified fields
+ * @param name - The name of the type, or a tuple of [name, pluralForm]
+ * @param fields - The field definitions for the type
+ * @returns A new TailorDBType instance
+ */
 function dbType<
   const F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
->(name: string | [string, string], fields: F): DBType<F> {
+>(name: string | [string, string], fields: F): DBType<F>;
+/**
+ * Creates a new database type with the specified fields and description
+ * @param name - The name of the type, or a tuple of [name, pluralForm]
+ * @param description - A description of the type
+ * @param fields - The field definitions for the type
+ * @returns A new TailorDBType instance
+ */
+function dbType<
+  const F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
+>(name: string | [string, string], description: string, fields: F): DBType<F>;
+function dbType<
+  const F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
+>(
+  name: string | [string, string],
+  fieldsOrDescription: string | F,
+  fields?: F,
+): DBType<F> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : undefined;
 
-  return new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(
+  let description: string | undefined;
+  let fieldDef: F;
+  if (typeof fieldsOrDescription === "string") {
+    description = fieldsOrDescription;
+    fieldDef = fields as F;
+  } else {
+    fieldDef = fieldsOrDescription as F;
+  }
+  const type = new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(
     typeName,
     {
       id: idField,
-      ...fields,
+      ...fieldDef,
     },
-    pluralForm,
+    { pluralForm, description },
   ) as DBType<F>;
+  return type;
 }
 
 const db = {
