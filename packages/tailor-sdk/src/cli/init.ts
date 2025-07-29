@@ -59,12 +59,10 @@ export const generatePackageJson = (projectName: string) => ({
     build: "tailor-sdk generate",
     deploy: "tailor-sdk apply",
   },
-  dependencies: {
-    "@tailor-platform/tailor-sdk": "latest",
-  },
   devDependencies: {
-    typescript: "5.8.3",
+    "@tailor-platform/tailor-sdk": "latest",
     "@types/node": "22.13.14",
+    typescript: "5.8.3",
   },
 });
 
@@ -308,10 +306,10 @@ export const addToExistingProject = async (
   const existingPackageJson = await fs.readJson(packageJsonPath);
 
   // Add Tailor SDK dependencies
-  if (!existingPackageJson.dependencies) {
-    existingPackageJson.dependencies = {};
+  if (!existingPackageJson.devDependencies) {
+    existingPackageJson.devDependencies = {};
   }
-  existingPackageJson.dependencies["@tailor-platform/tailor-sdk"] = "latest";
+  existingPackageJson.devDependencies["@tailor-platform/tailor-sdk"] = "latest";
 
   // Add scripts if they don't exist
   if (!existingPackageJson.scripts) {
