@@ -1155,6 +1155,19 @@
               "ForeignKeyType": "Customer",
               "Vector": false
             },
+            "approvedByUserID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": true,
+              "ForeignKeyType": "User",
+              "Vector": false
+            },
             "totalPrice": {
               "Type": "integer",
               "AllowedValues": [],
@@ -3539,6 +3552,19 @@
               "Unique": false,
               "ForeignKey": true,
               "ForeignKeyType": "Customer",
+              "Vector": false
+            },
+            "approvedByUserID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": true,
+              "ForeignKeyType": "User",
               "Vector": false
             },
             "totalPrice": {

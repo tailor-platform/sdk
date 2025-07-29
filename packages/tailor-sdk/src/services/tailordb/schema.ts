@@ -19,7 +19,7 @@ import { ReferenceConfig, TailorField, TailorType } from "@/types/type";
 import inflection from "inflection";
 
 interface RelationConfig<T extends TailorDBType> {
-  type: "oneToOne" | "1-1" | "oneToMany" | "1-n" | "1-N";
+  type: "oneToOne" | "1-1" | "oneToMany" | "1-n" | "1-N" | "keyOnly";
   toward: {
     type: T;
     as?: string;
@@ -198,20 +198,34 @@ class TailorDBField<
       ? Prettify<CurrentDefined & { unique: true; index: true }>
       : CurrentDefined,
     Output,
-    {
-      nameMap: [
-        Config["toward"]["as"] extends string
-          ? Config["toward"]["as"]
-          : Config["toward"]["type"]["name"],
-        Config["backward"] extends string ? Config["backward"] : string,
-      ];
-      type: Config["toward"]["type"];
-      key: Config["toward"]["key"] extends string
-        ? Config["toward"]["key"]
-        : "id";
-    }
+    Config["type"] extends "keyOnly"
+      ? undefined
+      : {
+          nameMap: [
+            Config["toward"]["as"] extends string
+              ? Config["toward"]["as"]
+              : Config["toward"]["type"]["name"],
+            Config["backward"] extends string ? Config["backward"] : string,
+          ];
+          type: Config["toward"]["type"];
+          key: Config["toward"]["key"] extends string
+            ? Config["toward"]["key"]
+            : "id";
+        }
   > {
     const targetTable: TailorDBType = config.toward.type;
+
+    if (config.type === "keyOnly") {
+      const result = this as unknown as TailorDBField<
+        CurrentDefined,
+        Output,
+        undefined
+      >;
+      result._metadata.foreignKeyType = targetTable.name;
+      result._metadata.foreignKey = true;
+      return result as any;
+    }
+
     const forwardName =
       config.toward.as ??
       targetTable.name.charAt(0).toLowerCase() + targetTable.name.slice(1);
@@ -426,7 +440,7 @@ export class TailorDBType<
     this._description = options.description;
 
     Object.entries(this.fields).forEach(([fieldName, field]) => {
-      if (field.reference) {
+      if (field.reference && field.reference !== undefined) {
         const ref = field.reference;
         if (ref.type) {
           let backwardFieldName = ref.nameMap?.[1]; // Get backward field name from nameMap

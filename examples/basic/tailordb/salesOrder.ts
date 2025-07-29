@@ -1,11 +1,19 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { customer } from "./customer";
+import { user } from "./user";
 
 export const salesOrder = db.type(["SalesOrder", "SalesOrderList"], {
   customerID: db.uuid().relation({
     type: "1-n",
     toward: { type: customer },
   }),
+  approvedByUserID: db
+    .uuid()
+    .optional()
+    .relation({
+      type: "keyOnly",
+      toward: { type: user },
+    }),
   totalPrice: db.int().optional(),
   discount: db.float().optional(),
   status: db.string().optional(),
