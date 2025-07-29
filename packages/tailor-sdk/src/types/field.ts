@@ -37,8 +37,10 @@ export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
 export type AllowedValuesOutput<V extends AllowedValues> =
   V[number] extends string
     ? V[number]
-    : V[number] extends [infer K, ...unknown[]]
+    : V[number] extends readonly [infer K, ...unknown[]]
       ? K
-      : V[number] extends { value: infer K }
+      : V[number] extends [infer K, ...unknown[]]
         ? K
-        : never;
+        : V[number] extends { value: infer K }
+          ? K
+          : never;
