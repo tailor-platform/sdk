@@ -6,7 +6,9 @@ type AllowedValueAlias = string | [string] | [string, string];
 
 export type AllowedValues =
   | [AllowedValueAlias, ...AllowedValueAlias[]]
-  | [EnumValue, ...EnumValue[]];
+  | [EnumValue, ...EnumValue[]]
+  | readonly [AllowedValueAlias, ...AllowedValueAlias[]]
+  | readonly [EnumValue, ...EnumValue[]];
 
 export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
   return (
