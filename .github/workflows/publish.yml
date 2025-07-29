@@ -14,6 +14,11 @@ on:
           - patch
           - minor
           - major
+      beta:
+        description: "Release as beta version"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -77,6 +82,14 @@ jobs:
           esac
 
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+
+          # Add beta suffix if beta flag is set
+          if [[ "${{ github.event.inputs.beta }}" == "true" ]]; then
+            # Get the current timestamp or build number for beta version
+            BETA_ID=$(date +%s)
+            NEW_VERSION="${NEW_VERSION}-beta.${BETA_ID}"
+          fi
+
           echo "New version: $NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
@@ -99,6 +112,10 @@ jobs:
 
       - name: Publish npm package
         run: |
-          pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public
+          if [[ "${{ github.event.inputs.beta }}" == "true" ]]; then
+            pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public --tag beta
+          else
+            pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public
+          fi
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
