@@ -2,7 +2,12 @@ import { EnumValue } from "@/types/types";
 
 export type AllowedValue = EnumValue;
 
-type AllowedValueAlias = string | [string] | [string, string];
+type AllowedValueAlias =
+  | string
+  | [string]
+  | [string, string]
+  | readonly [string]
+  | readonly [string, string];
 
 export type AllowedValues =
   | [AllowedValueAlias, ...AllowedValueAlias[]]
@@ -16,10 +21,15 @@ export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
       if (typeof value === "string") {
         return { value, description: "" };
       }
-      if (Array.isArray(value)) {
-        return { value: value[0], description: value[1] || "" };
+      if (
+        Array.isArray(value) ||
+        (value && typeof value === "object" && "length" in value)
+      ) {
+        const arr = value as readonly [string] | readonly [string, string];
+        return { value: arr[0], description: arr[1] || "" };
       }
-      return { ...value, description: value.description || "" };
+      const enumValue = value as EnumValue;
+      return { ...enumValue, description: enumValue.description || "" };
     }) ?? []
   );
 }
@@ -27,7 +37,7 @@ export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
 export type AllowedValuesOutput<V extends AllowedValues> =
   V[number] extends string
     ? V[number]
-    : V[number] extends [infer K, ...any]
+    : V[number] extends [infer K, ...unknown[]]
       ? K
       : V[number] extends { value: infer K }
         ? K
