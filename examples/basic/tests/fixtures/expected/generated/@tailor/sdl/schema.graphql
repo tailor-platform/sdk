@@ -18,11 +18,11 @@ type Customer {
 # Type: Invoice
 type Invoice {
   id: ID!
-  invoiceNumber: String!
+  invoiceNumber: String
   salesOrderID: ID!
   salesOrder: SalesOrder!
   amount: Int
-  sequentialId: Int!
+  sequentialId: Int
   status: enum
   createdAt: DateTime
   updatedAt: DateTime

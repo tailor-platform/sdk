@@ -1,7 +1,7 @@
 import { db } from "@tailor-platform/tailor-sdk";
 
 export const customer = db
-  .type("Customer", {
+  .type("Customer", "カスタマー", {
     name: db.string(),
     email: db.string(),
     phone: db.string().optional(),
