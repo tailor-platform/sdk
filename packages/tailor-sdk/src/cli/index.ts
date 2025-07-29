@@ -13,14 +13,41 @@ import { initCommand } from "./init.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function checkTsxAvailable(): Promise<boolean> {
+async function getTsxPath(): Promise<string | null> {
+  // First try to find tsx in node_modules/.bin
+  const localTsxPath = path.join(process.cwd(), "node_modules", ".bin", "tsx");
+  if (existsSync(localTsxPath)) {
+    return localTsxPath;
+  }
+
+  // For pnpm, check in @tailor-platform package's node_modules
+  const pnpmTsxPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "@tailor-platform",
+    "tailor-sdk",
+    "node_modules",
+    ".bin",
+    "tsx",
+  );
+  if (existsSync(pnpmTsxPath)) {
+    return pnpmTsxPath;
+  }
+
+  // Check if tsx is available via npx
   return new Promise((resolve) => {
     const child = spawn("npx", ["tsx", "--version"], {
       stdio: "ignore",
     });
 
-    child.on("error", () => resolve(false));
-    child.on("exit", (code) => resolve(code === 0));
+    child.on("error", () => resolve(null));
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve("npx"); // npx will handle tsx execution
+      } else {
+        resolve(null);
+      }
+    });
   });
 }
 
@@ -29,10 +56,9 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
   options,
 ) => {
   try {
-    const tsxAvailable = await checkTsxAvailable();
-    if (!tsxAvailable) {
+    const tsxPath = await getTsxPath();
+    if (!tsxPath) {
       console.error("Error: tsx is not installed or not available in PATH.");
-      console.error("Please install tsx globally: npm install -g tsx");
       process.exit(1);
     }
 
@@ -49,7 +75,7 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
     }
 
     const argsDef = commandArgs[command];
-    const args = ["tsx", cliExecPath, command];
+    const args = [cliExecPath, command];
     Object.entries(argsDef).forEach(([key, value]) => {
       if (key in options) {
         if (value.type === "boolean") {
@@ -64,7 +90,7 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
       }
     });
 
-    const child = spawn("npx", args, {
+    const child = spawn(tsxPath, args, {
       stdio: "inherit",
       cwd: process.cwd(),
     });
