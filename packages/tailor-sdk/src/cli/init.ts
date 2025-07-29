@@ -156,14 +156,14 @@ export default defineConfig({
 };
 
 const gitignoreContent = `node_modules/
-dist/
-build/
+.tailor-sdk
 .env
 .env.local
 .env.*.local
 src/generated/
 *.log
-.DS_Store`;
+.DS_Store
+`;
 
 const tsconfigContent = {
   compilerOptions: {
