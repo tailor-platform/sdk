@@ -52,8 +52,16 @@ jobs:
           # Fetch all tags
           git fetch --tags
 
-          # Get the latest version tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 --match="v*" 2>/dev/null || echo "v0.0.0")
+          # Get current branch name from GitHub context
+          # workflow_dispatch provides github.ref_name directly
+          BRANCH_NAME="${{ github.ref_name }}"
+          echo "Current branch: $BRANCH_NAME"
+
+          # Get the latest version tag (excluding beta tags)
+          LATEST_TAG=$(git tag -l "v*" | grep -v "\-beta\." | sort -V | tail -n1 || echo "v0.0.0")
+          if [[ -z "$LATEST_TAG" ]]; then
+            LATEST_TAG="v0.0.0"
+          fi
           echo "Latest tag: $LATEST_TAG"
 
           # Remove 'v' prefix
@@ -83,11 +91,23 @@ jobs:
 
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
 
-          # Add beta suffix if beta flag is set
-          if [[ "${{ github.event.inputs.beta }}" == "true" ]]; then
-            # Get the current timestamp or build number for beta version
-            BETA_ID=$(date +%s)
+          # Get the current timestamp or build number for beta version
+          BETA_ID=$(date +%s)
+
+          # Handle version based on branch and beta flag
+          if [[ "$BRANCH_NAME" != "main" ]]; then
+            # For non-main branches, always use feature tag format
+            # Sanitize branch name to be npm-compatible (alphanumeric, dash, underscore)
+            SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            NEW_VERSION="${NEW_VERSION}-${SAFE_BRANCH}.${BETA_ID}"
+            echo "publish_tag=feature" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.inputs.beta }}" == "true" ]]; then
+            # For main branch with beta flag
             NEW_VERSION="${NEW_VERSION}-beta.${BETA_ID}"
+            echo "publish_tag=beta" >> $GITHUB_OUTPUT
+          else
+            # For main branch without beta flag (stable release)
+            echo "publish_tag=latest" >> $GITHUB_OUTPUT
           fi
 
           echo "New version: $NEW_VERSION"
@@ -112,10 +132,24 @@ jobs:
 
       - name: Publish npm package
         run: |
-          if [[ "${{ github.event.inputs.beta }}" == "true" ]]; then
-            pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public --tag beta
+          # Use the publish tag determined during version calculation
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ steps.calculate_version.outputs.publish_tag }}"
           else
+            # For tag pushes, determine tag based on version format
+            if [[ "${{ github.ref }}" =~ -beta\. ]]; then
+              TAG="beta"
+            elif [[ "${{ github.ref }}" =~ -[a-zA-Z0-9._-]+\.[0-9]+$ ]]; then
+              TAG="feature"
+            else
+              TAG="latest"
+            fi
+          fi
+
+          if [[ "$TAG" == "latest" ]]; then
             pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public
+          else
+            pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public --tag "$TAG"
           fi
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
