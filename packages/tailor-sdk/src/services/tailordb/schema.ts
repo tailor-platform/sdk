@@ -197,7 +197,7 @@ class TailorDBField<
   ): TailorDBField<
     Config["type"] extends "oneToOne" | "1-1"
       ? Prettify<CurrentDefined & { unique: true; index: true }>
-      : CurrentDefined,
+      : Prettify<CurrentDefined & { index: true }>,
     Output,
     Config["type"] extends "keyOnly"
       ? undefined
@@ -214,16 +214,14 @@ class TailorDBField<
             : "id";
         }
   > {
+    const result = this as unknown as TailorDBField<any, Output, undefined>;
     const targetTable: TailorDBType = config.toward.type;
 
+    result._metadata.index = true;
+    result._metadata.foreignKeyType = targetTable.name;
+    result._metadata.foreignKey = true;
+
     if (config.type === "keyOnly") {
-      const result = this as unknown as TailorDBField<
-        CurrentDefined,
-        Output,
-        undefined
-      >;
-      result._metadata.foreignKeyType = targetTable.name;
-      result._metadata.foreignKey = true;
       return result as any;
     }
 
@@ -234,15 +232,7 @@ class TailorDBField<
     const backward: string = config.backward ?? "";
 
     const relationNames: [string, string] = [forwardName, backward];
-    const result = super.ref(
-      targetTable,
-      relationNames,
-      field,
-    ) as TailorDBField<any, Output, any>;
-
-    result._metadata.index = true;
-    result._metadata.foreignKeyType = targetTable.name;
-    result._metadata.foreignKey = true;
+    super.ref(targetTable, relationNames, field);
 
     // Store the relation type in metadata
     (result._metadata as any).relationType = config.type;
