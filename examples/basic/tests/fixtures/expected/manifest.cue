@@ -1569,9 +1569,9 @@
               "Description": "",
               "Validate": [],
               "Array": false,
-              "Index": false,
+              "Index": true,
               "Required": true,
-              "Unique": false,
+              "Unique": true,
               "ForeignKey": false,
               "Vector": false
             },
@@ -1662,7 +1662,7 @@
               ],
               "Unique": false
             },
-            "idx_status_createdAt": {
+            "user_status_created_idx": {
               "FieldNames": [
                 "status",
                 "createdAt"
@@ -4022,9 +4022,9 @@
               "Description": "",
               "Validate": [],
               "Array": false,
-              "Index": false,
+              "Index": true,
               "Required": true,
-              "Unique": false,
+              "Unique": true,
               "ForeignKey": false,
               "Vector": false
             },
@@ -4115,7 +4115,7 @@
               ],
               "Unique": false
             },
-            "idx_status_createdAt": {
+            "user_status_created_idx": {
               "FieldNames": [
                 "status",
                 "createdAt"

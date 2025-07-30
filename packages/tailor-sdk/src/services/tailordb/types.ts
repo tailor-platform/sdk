@@ -108,4 +108,5 @@ export type TailorDBServiceInput = {
 export type Indexes<T extends { fields: Record<PropertyKey, unknown> }> = {
   fields: [keyof T["fields"], keyof T["fields"], ...(keyof T["fields"])[]];
   unique?: boolean;
+  name?: string;
 };
