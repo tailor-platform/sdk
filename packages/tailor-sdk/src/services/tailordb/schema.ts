@@ -11,7 +11,7 @@ import {
   Hook,
   ValidateConfig,
   SerialConfig,
-  Indexes,
+  IndexDef,
 } from "./types";
 import { TailorFieldType, TailorToTs } from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
@@ -428,7 +428,7 @@ export class TailorDBType<
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
   private _settings: { pluralForm?: string } = {};
-  private _indexes: Indexes<this>[] = [];
+  private _indexes: IndexDef<this>[] = [];
 
   constructor(
     public readonly name: string,
@@ -532,7 +532,7 @@ export class TailorDBType<
     return this;
   }
 
-  indexes(...indexes: Indexes<this>[]) {
+  indexes(...indexes: IndexDef<this>[]) {
     this._indexes = indexes;
     return this;
   }
