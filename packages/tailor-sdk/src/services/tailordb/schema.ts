@@ -11,6 +11,7 @@ import {
   Hook,
   ValidateConfig,
   SerialConfig,
+  Indexes,
 } from "./types";
 import { TailorFieldType, TailorToTs } from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
@@ -427,6 +428,7 @@ export class TailorDBType<
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
   private _settings: { pluralForm?: string } = {};
+  private _indexes: Indexes<this>[] = [];
 
   constructor(
     public readonly name: string,
@@ -475,6 +477,19 @@ export class TailorDBType<
       {} as Record<string, OperatorFieldConfig>,
     );
 
+    // Convert indexes to the format expected by the manifest
+    const indexes: Record<string, { fields: string[]; unique?: boolean }> = {};
+    if (this._indexes && this._indexes.length > 0) {
+      this._indexes.forEach((index) => {
+        const fieldNames = index.fields.map((field) => String(field));
+        const key = `idx_${fieldNames.join("_")}`;
+        indexes[key] = {
+          fields: fieldNames,
+          unique: index.unique,
+        };
+      });
+    }
+
     this._metadata = {
       name: this.name,
       schema: {
@@ -482,6 +497,7 @@ export class TailorDBType<
         extends: false,
         fields: metadataFields,
         settings: this._settings,
+        ...(Object.keys(indexes).length > 0 && { indexes }),
       },
     };
 
@@ -513,6 +529,11 @@ export class TailorDBType<
 
   features(features: { aggregation?: true; bulkUpsert?: true }) {
     this._settings = { ...this._settings, ...features };
+    return this;
+  }
+
+  indexes(...indexes: Indexes<this>[]) {
+    this._indexes = indexes;
     return this;
   }
 }

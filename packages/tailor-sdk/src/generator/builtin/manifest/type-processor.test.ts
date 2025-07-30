@@ -3,6 +3,44 @@ import { TypeProcessor } from "./type-processor";
 import { db } from "@/services/tailordb/schema";
 
 describe("Manifest TypeProcessor", () => {
+  it("should process indexes correctly", async () => {
+    const typeWithIndexes = db
+      .type("User", {
+        email: db.string().unique(),
+        firstName: db.string().index(),
+        lastName: db.string(),
+        age: db.int(),
+        status: db.string(),
+      })
+      .indexes(
+        { fields: ["firstName", "lastName"], unique: false },
+        { fields: ["status", "age"], unique: true },
+      );
+
+    const manifest =
+      TypeProcessor.generateTailorDBTypeManifest(typeWithIndexes);
+
+    // Check indexes are generated correctly
+    expect(manifest.Indexes).toBeDefined();
+    expect(Object.keys(manifest.Indexes)).toHaveLength(2);
+
+    // Check first index
+    expect(manifest.Indexes["idx_firstName_lastName"]).toBeDefined();
+    expect(manifest.Indexes["idx_firstName_lastName"].FieldNames).toEqual([
+      "firstName",
+      "lastName",
+    ]);
+    expect(manifest.Indexes["idx_firstName_lastName"].Unique).toBe(false);
+
+    // Check second index
+    expect(manifest.Indexes["idx_status_age"]).toBeDefined();
+    expect(manifest.Indexes["idx_status_age"].FieldNames).toEqual([
+      "status",
+      "age",
+    ]);
+    expect(manifest.Indexes["idx_status_age"].Unique).toBe(true);
+  });
+
   it("should process deeply nested objects correctly", async () => {
     const nestedObjectType = db.type("UserProfile", {
       profile: db.object({
