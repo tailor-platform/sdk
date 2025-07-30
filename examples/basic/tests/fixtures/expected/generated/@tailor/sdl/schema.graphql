@@ -134,6 +134,8 @@ type User {
   id: ID!
   name: String!
   email: String!
+  status: String
+  department: String
   createdAt: DateTime
   updatedAt: DateTime
 }

@@ -145,6 +145,8 @@ export interface User {
   id: Generated<string>;
   name: string;
   email: string;
+  status: string | null;
+  department: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp | null;
 }

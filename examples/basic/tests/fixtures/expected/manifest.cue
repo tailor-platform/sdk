@@ -1290,7 +1290,22 @@
           },
           "Extends": false,
           "Directives": [],
-          "Indexes": {},
+          "Indexes": {
+            "idx_status_createdAt": {
+              "FieldNames": [
+                "status",
+                "createdAt"
+              ],
+              "Unique": false
+            },
+            "idx_customerID_status": {
+              "FieldNames": [
+                "customerID",
+                "status"
+              ],
+              "Unique": false
+            }
+          },
           "TypePermission": {
             "Create": [
               {
@@ -1560,6 +1575,30 @@
               "ForeignKey": false,
               "Vector": false
             },
+            "status": {
+              "Type": "string",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "department": {
+              "Type": "string",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
             "createdAt": {
               "Type": "datetime",
               "AllowedValues": [],
@@ -1615,7 +1654,22 @@
           },
           "Extends": false,
           "Directives": [],
-          "Indexes": {},
+          "Indexes": {
+            "idx_name_department": {
+              "FieldNames": [
+                "name",
+                "department"
+              ],
+              "Unique": false
+            },
+            "idx_status_createdAt": {
+              "FieldNames": [
+                "status",
+                "createdAt"
+              ],
+              "Unique": false
+            }
+          },
           "TypePermission": {
             "Create": [
               {
@@ -3689,7 +3743,22 @@
           },
           "Extends": false,
           "Directives": [],
-          "Indexes": {},
+          "Indexes": {
+            "idx_status_createdAt": {
+              "FieldNames": [
+                "status",
+                "createdAt"
+              ],
+              "Unique": false
+            },
+            "idx_customerID_status": {
+              "FieldNames": [
+                "customerID",
+                "status"
+              ],
+              "Unique": false
+            }
+          },
           "TypePermission": {
             "Create": [
               {
@@ -3959,6 +4028,30 @@
               "ForeignKey": false,
               "Vector": false
             },
+            "status": {
+              "Type": "string",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
+            "department": {
+              "Type": "string",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Required": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Vector": false
+            },
             "createdAt": {
               "Type": "datetime",
               "AllowedValues": [],
@@ -4014,7 +4107,22 @@
           },
           "Extends": false,
           "Directives": [],
-          "Indexes": {},
+          "Indexes": {
+            "idx_name_department": {
+              "FieldNames": [
+                "name",
+                "department"
+              ],
+              "Unique": false
+            },
+            "idx_status_createdAt": {
+              "FieldNames": [
+                "status",
+                "createdAt"
+              ],
+              "Unique": false
+            }
+          },
           "TypePermission": {
             "Create": [
               {

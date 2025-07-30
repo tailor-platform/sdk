@@ -11,5 +11,12 @@ export interface TailorDBTypeConfig {
       aggregation?: boolean;
       bulkUpsert?: boolean;
     };
+    indexes?: Record<
+      string,
+      {
+        fields: string[];
+        unique?: boolean;
+      }
+    >;
   };
 }

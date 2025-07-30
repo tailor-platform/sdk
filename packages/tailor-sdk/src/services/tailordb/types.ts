@@ -104,3 +104,8 @@ export type TailorDBServiceConfig = { files: string[] };
 export type TailorDBServiceInput = {
   [namespace: string]: TailorDBServiceConfig;
 };
+
+export type Indexes<T extends { fields: Record<PropertyKey, unknown> }> = {
+  fields: [keyof T["fields"], keyof T["fields"], ...(keyof T["fields"])[]];
+  unique?: boolean;
+};
