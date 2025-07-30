@@ -234,6 +234,17 @@ export class TypeProcessor {
       );
     }
 
+    // Process indexes from metadata
+    const indexes: Record<string, any> = {};
+    if (schema?.indexes) {
+      Object.entries(schema.indexes).forEach(([key, index]) => {
+        indexes[key] = {
+          FieldNames: index.fields,
+          Unique: index.unique || false,
+        };
+      });
+    }
+
     return {
       Name: metadata.name || type.name,
       Description: schema?.description || "",
@@ -242,7 +253,7 @@ export class TypeProcessor {
       Settings: defaultSettings,
       Extends: schema?.extends || false,
       Directives: [],
-      Indexes: {},
+      Indexes: indexes,
       TypePermission: defaultTypePermission,
     };
   }

@@ -2,23 +2,28 @@ import { db } from "@tailor-platform/tailor-sdk";
 import { customer } from "./customer";
 import { user } from "./user";
 
-export const salesOrder = db.type(["SalesOrder", "SalesOrderList"], {
-  customerID: db.uuid().relation({
-    type: "1-n",
-    toward: { type: customer },
-  }),
-  approvedByUserID: db
-    .uuid()
-    .optional()
-    .relation({
-      type: "keyOnly",
-      toward: { type: user },
+export const salesOrder = db
+  .type(["SalesOrder", "SalesOrderList"], {
+    customerID: db.uuid().relation({
+      type: "1-n",
+      toward: { type: customer },
     }),
-  totalPrice: db.int().optional(),
-  discount: db.float().optional(),
-  status: db.string().optional(),
-  cancelReason: db.string().optional(),
-  canceledAt: db.datetime().optional(),
-  ...db.fields.timestamps(),
-});
+    approvedByUserID: db
+      .uuid()
+      .optional()
+      .relation({
+        type: "keyOnly",
+        toward: { type: user },
+      }),
+    totalPrice: db.int().optional(),
+    discount: db.float().optional(),
+    status: db.string().optional(),
+    cancelReason: db.string().optional(),
+    canceledAt: db.datetime().optional(),
+    ...db.fields.timestamps(),
+  })
+  .indexes(
+    { fields: ["status", "createdAt"], unique: false },
+    { fields: ["customerID", "status"], unique: false },
+  );
 export type salesOrder = typeof salesOrder;
