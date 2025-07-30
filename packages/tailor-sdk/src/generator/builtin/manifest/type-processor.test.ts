@@ -41,6 +41,47 @@ describe("Manifest TypeProcessor", () => {
     expect(manifest.Indexes["idx_status_age"].Unique).toBe(true);
   });
 
+  it("should use custom index names when provided", async () => {
+    const typeWithNamedIndexes = db
+      .type("Product", {
+        sku: db.string().unique(),
+        category: db.string(),
+        brand: db.string(),
+        price: db.int(),
+      })
+      .indexes(
+        {
+          fields: ["category", "brand"],
+          unique: false,
+          name: "category_brand_index",
+        },
+        { fields: ["brand", "price"], unique: false, name: "brand_price_idx" },
+      );
+
+    const manifest =
+      TypeProcessor.generateTailorDBTypeManifest(typeWithNamedIndexes);
+
+    // Check custom index names are used
+    expect(manifest.Indexes).toBeDefined();
+    expect(Object.keys(manifest.Indexes)).toHaveLength(2);
+
+    // Check first custom named index
+    expect(manifest.Indexes["category_brand_index"]).toBeDefined();
+    expect(manifest.Indexes["category_brand_index"].FieldNames).toEqual([
+      "category",
+      "brand",
+    ]);
+    expect(manifest.Indexes["category_brand_index"].Unique).toBe(false);
+
+    // Check second custom named index
+    expect(manifest.Indexes["brand_price_idx"]).toBeDefined();
+    expect(manifest.Indexes["brand_price_idx"].FieldNames).toEqual([
+      "brand",
+      "price",
+    ]);
+    expect(manifest.Indexes["brand_price_idx"].Unique).toBe(false);
+  });
+
   it("should process deeply nested objects correctly", async () => {
     const nestedObjectType = db.type("UserProfile", {
       profile: db.object({

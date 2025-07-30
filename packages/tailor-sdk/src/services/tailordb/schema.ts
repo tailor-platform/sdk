@@ -482,7 +482,7 @@ export class TailorDBType<
     if (this._indexes && this._indexes.length > 0) {
       this._indexes.forEach((index) => {
         const fieldNames = index.fields.map((field) => String(field));
-        const key = `idx_${fieldNames.join("_")}`;
+        const key = index.name || `idx_${fieldNames.join("_")}`;
         indexes[key] = {
           fields: fieldNames,
           unique: index.unique,
