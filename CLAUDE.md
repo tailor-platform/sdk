@@ -10,16 +10,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `turbo run gen:watch` - Run code generation in watch mode
 - `turbo run apply` - Deploy to Tailor Platform (requires TAILOR_ACCESS_TOKEN)
 - `turbo run dev` - Start development server
+- `turbo run build` - Build all packages
 - `turbo run test` - Run all tests using Turbo
 - `turbo run test:root` - Run tests in root directory only
+- `turbo run check` - Run format, lint:fix, and typecheck in sequence
 - `turbo run lint` - Run ESLint
 - `turbo run lint:fix` - Run ESLint with auto-fix
 - `turbo run format` - Format code with Prettier
+- `turbo run format:check` - Check code formatting
 - `turbo run typecheck` - Run TypeScript type checking
+
+### Package-specific Commands (in packages/tailor-sdk)
+
+- `pnpm test` - Run all tests with Vitest
+- `pnpm test path/to/test.ts` - Run specific test file
+- `pnpm test -t "test name"` - Run tests matching pattern
+- `pnpm build` - Build SDK with tsup
+
+### CLI Commands
+
+- `pnpm exec @tailor-platform/tailor-sdk init <project-name>` - Initialize new project
+- `pnpm exec tailor-sdk generate` - Generate code and manifests
+- `pnpm exec tailor-sdk generate --watch` - Watch mode for regeneration
+- `pnpm exec tailor-sdk apply` - Deploy to Tailor Platform
 
 ## Architecture Overview
 
-This is a **monorepo** for the Tailor SDK, which enables building applications on the Tailor Platform. The main SDK package(`@tailor-platform/tailor-sdk`) is located at `packages/tailor-sdk`.
+This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK package (`@tailor-platform/tailor-sdk`) is located at `packages/tailor-sdk`, with examples in `examples/basic`.
+
+### Project Structure
+
+````
+/
+├── packages/
+│   └── tailor-sdk/          # Core SDK package
+│       ├── src/
+│       │   ├── cli/         # CLI implementation
+│       │   ├── services/    # Core services (tailordb, pipeline, executor, auth)
+│       │   ├── generator/   # Code generation system
+│       │   └── bundler/     # Rolldown bundler integration
+│       └── dist/            # Built output
+├── examples/
+│   └── basic/               # Example implementation
+└── turbo.json               # Turbo build orchestration
 
 ### Key Components
 
@@ -63,7 +96,7 @@ export const modelName = db.type("ModelName", {
   ...db.fields.timestamps(),
 });
 export type modelName = typeof modelName;
-```
+````
 
 **Resolver Pattern:**
 
@@ -86,8 +119,18 @@ export default createExecutor("name", "description")
 ### Important Notes
 
 - This project uses ESM modules and requires Node.js 22.14.0+
+- Package manager: pnpm 10.8.0 (configured in packageManager field)
 - TypeScript is configured in strict mode
-- Lefthook runs pre-commit checks automatically
+- Lefthook runs pre-commit checks automatically (lint, format, typecheck)
 - Always use parameterized queries to prevent SQL injection
 - The SDK uses Rolldown for bundling and Turbo for task orchestration
 - Kysely is integrated for type-safe SQL query building
+- Test framework: Vitest with SWC for TypeScript transformation
+- Build tool: tsup for creating ESM bundles
+
+### Testing
+
+- Run tests: `turbo run test` or `pnpm test` in specific packages
+- Tests use Vitest with mock-extended for mocking
+- Test files: `**/__tests__/**/*.ts` or `**/?(*.)+(spec|test).ts`
+- Example tests are in `examples/basic/tests/`
