@@ -7,7 +7,6 @@ import { defineWorkspace } from "@/workspace";
 import { Resolver } from "@/services/pipeline/resolver";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { Executor } from "@/services/executor/types";
-import { measure } from "@/performance";
 import {
   CodeGenerator,
   GeneratorInput,
@@ -43,7 +42,6 @@ export class GenerationManager {
     fs.mkdirSync(this.baseDir, { recursive: true });
   }
 
-  @measure
   private initGenerators() {
     if (this.generators.length > 0) {
       console.log(
@@ -84,7 +82,6 @@ export class GenerationManager {
       }) || [];
   }
 
-  @measure
   async generate(_options: GenerateOptions) {
     console.log("Generation for workspace:", this.workspace.config.name);
 

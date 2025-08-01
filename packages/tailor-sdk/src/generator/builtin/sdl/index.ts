@@ -6,7 +6,6 @@ import { SDLTypeMetadata, ResolverSDLMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
 import { ResolverProcessor } from "./resolver-processor";
 import { SDLAggregator } from "./aggregator";
-import { measure } from "@/performance";
 
 export const SdlGeneratorID = "@tailor/sdl";
 
@@ -29,7 +28,6 @@ export class SdlGenerator
   /**
    * TailorDBTypeを処理してSDLTypeMetadataを生成
    */
-  @measure
   async processType(type: TailorDBType): Promise<SDLTypeMetadata> {
     return await TypeProcessor.processDBType(type);
   }
@@ -37,7 +35,6 @@ export class SdlGenerator
   /**
    * Resolverを処理してResolverSDLMetadataを生成
    */
-  @measure
   async processResolver(resolver: Resolver): Promise<ResolverSDLMetadata> {
     return await ResolverProcessor.processResolver(resolver);
   }
@@ -45,7 +42,6 @@ export class SdlGenerator
   /**
    * Executorを処理 - SDLジェネレーターではExecutorを処理しない
    */
-  @measure
   async processExecutor(_executor: Executor): Promise<undefined> {
     return undefined;
   }
@@ -53,7 +49,6 @@ export class SdlGenerator
   /**
    * 処理されたメタデータを統合してSDLファイルを生成
    */
-  @measure
   aggregate(
     inputs: GeneratorInput<
       Record<string, SDLTypeMetadata>,

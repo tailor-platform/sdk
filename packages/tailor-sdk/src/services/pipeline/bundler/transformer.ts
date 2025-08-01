@@ -3,7 +3,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import ml from "multiline-ts";
-import { measure } from "@/performance";
 import { Resolver } from "../resolver";
 import { ITransformer } from "@/bundler";
 import { trimSDKCode } from "@/bundler/utils";
@@ -12,7 +11,6 @@ import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/bundler/wrapper";
 export class CodeTransformer implements ITransformer<Resolver> {
   constructor() {}
 
-  @measure
   transform(filePath: string, resolver: Resolver, tempDir: string): string[] {
     const trimmedContent = trimSDKCode(filePath);
     const transformedPath = path.join(

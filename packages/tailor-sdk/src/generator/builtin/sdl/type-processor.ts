@@ -1,7 +1,6 @@
 import { TailorDBType } from "@/services/tailordb/schema";
 import { TailorType } from "@/types/type";
 import { SDLTypeMetadata, SDLFieldMetadata } from "./types";
-import { measure } from "@/performance";
 import { tailorToGraphQL } from "@/types/types";
 
 export class TypeProcessor {
@@ -42,12 +41,10 @@ export class TypeProcessor {
     objectTypeDefinition += "  ".repeat(indentLevel - 1) + "}";
     return objectTypeDefinition;
   }
-  @measure
   static async processDBType(type: TailorDBType): Promise<SDLTypeMetadata> {
     return this.processType(type, false, type.name);
   }
 
-  @measure
   static async processType(
     type: TailorType<any, any>,
     isInput: boolean = false,

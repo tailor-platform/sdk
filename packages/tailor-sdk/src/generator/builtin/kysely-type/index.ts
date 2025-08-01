@@ -1,7 +1,6 @@
 import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { Executor } from "@/services/executor/types";
-import { measure } from "@/performance";
 import { KyselyTypeMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
 
@@ -23,17 +22,14 @@ export class KyselyGenerator
     },
   ) {}
 
-  @measure
   async processType(type: TailorDBType): Promise<KyselyTypeMetadata> {
     return await TypeProcessor.processType(type);
   }
 
-  @measure
   processResolver(): undefined {
     return undefined;
   }
 
-  @measure
   processExecutor(_executor: Executor): undefined {
     return undefined;
   }
@@ -46,7 +42,6 @@ export class KyselyGenerator
     return await TypeProcessor.processTypes(types);
   }
 
-  @measure
   aggregate(inputs: GeneratorInput<string, undefined>[]): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 

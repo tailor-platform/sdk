@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { measure } from "@/performance";
 import { TailorDBType } from "./schema";
 import { TailorDBServiceConfig } from "./types";
 
@@ -12,12 +11,10 @@ export class TailorDBService {
     public readonly config: TailorDBServiceConfig,
   ) {}
 
-  @measure
   getTypes() {
     return this.types;
   }
 
-  @measure
   async loadTypes() {
     if (!this.config.files || this.config.files.length === 0) {
       return;

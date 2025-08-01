@@ -1,4 +1,3 @@
-import { measure } from "@/performance";
 import { Application } from "@/application";
 import type { AppConfig, WorkspaceConfig } from "@/config";
 import { ExecutorService } from "./services/executor/service";
@@ -20,7 +19,6 @@ export class Workspace {
     return this._applications as ReadonlyArray<Application>;
   }
 
-  @measure
   newApplication(name: string, appConfig: AppConfig) {
     const app = new Application(name);
     app.defineAuth(appConfig.auth);
@@ -31,7 +29,6 @@ export class Workspace {
     return app;
   }
 
-  @measure
   private defineExecutor(config?: ExecutorServiceInput) {
     if (!config) {
       return;

@@ -1,5 +1,4 @@
 import { TailorDBType } from "@/services/tailordb/schema";
-import { measure } from "@/performance";
 import { DbTypeMetadata } from "./types";
 
 /**
@@ -9,7 +8,6 @@ export class TypeProcessor {
   /**
    * TailorDBTypeをDbTypeMetadataに変換
    */
-  @measure
   static async processType(type: TailorDBType): Promise<DbTypeMetadata> {
     const typeDef = this.generateTypeDefinition(type, new Set());
 

@@ -1,5 +1,4 @@
 import { SDLFieldMetadata, SDLTypeMetadata } from "./types";
-import { measure } from "@/performance";
 
 /**
  * SDL生成の共通ユーティリティ関数
@@ -9,7 +8,6 @@ export class SDLUtils {
   /**
    * SDLTypeMetadataからGraphQL SDL文字列を生成
    */
-  @measure
   static generateSDLFromMetadata(metadata: SDLTypeMetadata): string {
     const typeName = metadata.isInput ? "input" : "type";
     const sdl = [`${typeName} ${metadata.name} {`];
@@ -27,7 +25,6 @@ export class SDLUtils {
   /**
    * 複数のSDLTypeMetadataからGraphQL SDL文字列を生成
    */
-  @measure
   static generateSDL(metadataList: SDLTypeMetadata[] = []): string {
     const sdl: string[] = [];
 
