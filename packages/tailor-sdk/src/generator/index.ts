@@ -96,32 +96,56 @@ export class GenerationManager {
       // TailorDB services
       for (const db of app.tailorDBServices) {
         const namespace = db.namespace;
-        const types = await db.loadTypes();
-        if (types) {
-          this.applications[appNamespace].tailordbNamespaces[namespace] = {};
-          // flatten the nested structure
-          Object.values(types).forEach((nsTypes) => {
-            Object.entries(nsTypes).forEach(([typeName, type]) => {
-              this.applications[appNamespace].tailordbNamespaces[namespace][
-                typeName
-              ] = type;
+        try {
+          const types = await db.loadTypes();
+          if (types) {
+            this.applications[appNamespace].tailordbNamespaces[namespace] = {};
+            // flatten the nested structure
+            Object.values(types).forEach((nsTypes) => {
+              Object.entries(nsTypes).forEach(([typeName, type]) => {
+                this.applications[appNamespace].tailordbNamespaces[namespace][
+                  typeName
+                ] = type;
+              });
             });
-          });
+          }
+        } catch (error) {
+          console.error(
+            `Error loading types for TailorDB service ${namespace}:`,
+            error,
+          );
+          // In watch mode, continue with other services; otherwise, throw
+          if (!_options.watch) {
+            throw error;
+          }
+          this.applications[appNamespace].tailordbNamespaces[namespace] = {};
         }
       }
 
       // Pipeline services
       for (const pipelineService of app.pipelineResolverServices) {
         const namespace = pipelineService.namespace;
-        await pipelineService.loadResolvers();
-        this.applications[appNamespace].pipelineNamespaces[namespace] = {};
-        Object.entries(pipelineService.getResolvers()).forEach(
-          ([_, resolver]) => {
-            this.applications[appNamespace].pipelineNamespaces[namespace][
-              resolver.name
-            ] = resolver;
-          },
-        );
+        try {
+          await pipelineService.loadResolvers();
+          this.applications[appNamespace].pipelineNamespaces[namespace] = {};
+          Object.entries(pipelineService.getResolvers()).forEach(
+            ([_, resolver]) => {
+              this.applications[appNamespace].pipelineNamespaces[namespace][
+                resolver.name
+              ] = resolver;
+            },
+          );
+        } catch (error) {
+          console.error(
+            `Error loading resolvers for Pipeline service ${namespace}:`,
+            error,
+          );
+          // In watch mode, continue with other services; otherwise, throw
+          if (!_options.watch) {
+            throw error;
+          }
+          this.applications[appNamespace].pipelineNamespaces[namespace] = {};
+        }
       }
     }
 
@@ -406,25 +430,44 @@ export class GenerationManager {
           `TailorDB__${appNamespace}__${dbNamespace}`,
           db.config.files,
           async ({ timestamp }, { affectedFiles }) => {
-            // Reload affected types
-            for (const file of affectedFiles) {
-              const types = await db.loadTypesForFile(file, timestamp);
-              Object.entries(types).forEach(([typeName, type]) => {
-                this.applications[appNamespace].tailordbNamespaces[dbNamespace][
-                  typeName
-                ] = type;
-              });
-            }
+            try {
+              // Reload affected types
+              for (const file of affectedFiles) {
+                try {
+                  const types = await db.loadTypesForFile(file, timestamp);
+                  Object.entries(types).forEach(([typeName, type]) => {
+                    this.applications[appNamespace].tailordbNamespaces[
+                      dbNamespace
+                    ][typeName] = type;
+                  });
+                } catch (error) {
+                  console.error(
+                    `Error loading types from file ${file}:`,
+                    error,
+                  );
+                  // Continue with other files in watch mode
+                  continue;
+                }
+              }
 
-            // Process with all generators
-            for (const gen of this.generators) {
-              await this.processTailorDBNamespace(
-                gen,
-                appNamespace,
-                dbNamespace,
-                this.applications[appNamespace].tailordbNamespaces[dbNamespace],
+              // Process with all generators
+              for (const gen of this.generators) {
+                await this.processTailorDBNamespace(
+                  gen,
+                  appNamespace,
+                  dbNamespace,
+                  this.applications[appNamespace].tailordbNamespaces[
+                    dbNamespace
+                  ],
+                );
+                await this.aggregate(gen);
+              }
+            } catch (error) {
+              console.error(
+                `Error processing TailorDB changes for ${appNamespace}/${dbNamespace}:`,
+                error,
               );
-              await this.aggregate(gen);
+              // Continue watching without exiting
             }
           },
         );
@@ -437,28 +480,45 @@ export class GenerationManager {
           `Pipeline__${appNamespace}__${pipelineNamespace}`,
           pipeline["config"].files,
           async ({ timestamp }, { affectedFiles }) => {
-            // Reload affected resolvers
-            for (const file of affectedFiles) {
-              const resolver = await pipeline.loadResolverForFile(
-                file,
-                timestamp,
-              );
-              this.applications[appNamespace].pipelineNamespaces[
-                pipelineNamespace
-              ][resolver.name] = resolver;
-            }
+            try {
+              // Reload affected resolvers
+              for (const file of affectedFiles) {
+                try {
+                  const resolver = await pipeline.loadResolverForFile(
+                    file,
+                    timestamp,
+                  );
+                  this.applications[appNamespace].pipelineNamespaces[
+                    pipelineNamespace
+                  ][resolver.name] = resolver;
+                } catch (error) {
+                  console.error(
+                    `Error loading resolver from file ${file}:`,
+                    error,
+                  );
+                  // Continue with other files in watch mode
+                  continue;
+                }
+              }
 
-            // Process with all generators
-            for (const gen of this.generators) {
-              await this.processPipelineNamespace(
-                gen,
-                appNamespace,
-                pipelineNamespace,
-                this.applications[appNamespace].pipelineNamespaces[
-                  pipelineNamespace
-                ],
+              // Process with all generators
+              for (const gen of this.generators) {
+                await this.processPipelineNamespace(
+                  gen,
+                  appNamespace,
+                  pipelineNamespace,
+                  this.applications[appNamespace].pipelineNamespaces[
+                    pipelineNamespace
+                  ],
+                );
+                await this.aggregate(gen);
+              }
+            } catch (error) {
+              console.error(
+                `Error processing Pipeline changes for ${appNamespace}/${pipelineNamespace}:`,
+                error,
               );
-              await this.aggregate(gen);
+              // Continue watching without exiting
             }
           },
         );
@@ -494,5 +554,5 @@ export async function apply(config: WorkspaceConfig, options: ApplyOptions) {
   }
   const tailorCtl = new TailorCtl(options);
   tailorCtl.upsertWorkspace(applyConfig);
-  tailorCtl.apply(path.join(distDir, "manifest.cue"));
+  await tailorCtl.apply(path.join(distDir, "manifest.cue"));
 }
