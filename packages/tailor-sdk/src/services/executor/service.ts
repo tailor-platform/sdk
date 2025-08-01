@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { measure } from "@/performance";
 import { Executor, ExecutorServiceConfig } from "./types";
 import { Bundler, BundlerConfig } from "@/bundler";
 import { ExecutorLoader } from "./bundler/loader";
@@ -52,17 +51,14 @@ export class ExecutorService {
     this.bundler = new Bundler(bundlerConfig);
   }
 
-  @measure
   async build() {
     await this.bundler.bundle();
   }
 
-  @measure
   getExecutors() {
     return this.executors;
   }
 
-  @measure
   async loadExecutors() {
     if (!this.config.files || this.config.files.length === 0) {
       return;

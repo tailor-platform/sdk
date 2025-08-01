@@ -1,10 +1,8 @@
 import { Executor } from "../types";
-import { measure } from "@/performance";
 import { isExecutor } from "../utils";
 import { ILoader } from "@/bundler";
 
 export class ExecutorLoader implements ILoader<Executor> {
-  @measure
   async load(executorFilePath: string): Promise<Executor> {
     const executorModule = await import(executorFilePath);
     const executor = executorModule.default;

@@ -1,5 +1,4 @@
 import { TailorDBType } from "@/services/tailordb/schema";
-import { measure } from "@/performance";
 import { KyselyTypeMetadata } from "./types";
 import multiline from "multiline-ts";
 
@@ -10,7 +9,6 @@ export class TypeProcessor {
   /**
    * TailorDBTypeをKyselyTypeMetadataに変換
    */
-  @measure
   static async processType(type: TailorDBType): Promise<KyselyTypeMetadata> {
     const typeDef = this.generateTableInterface(type);
 

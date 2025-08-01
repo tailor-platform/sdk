@@ -2,7 +2,6 @@ import { capitalize } from "es-toolkit";
 import multiline from "multiline-ts";
 import { Resolver } from "@/services/pipeline/resolver";
 import { SDLUtils } from "./utils";
-import { measure } from "@/performance";
 import { ResolverSDLMetadata } from "./types";
 import { OperationType } from "@/types/operator";
 import { TypeProcessor } from "./type-processor";
@@ -16,7 +15,6 @@ export class ResolverProcessor {
    * ResolverからSDLメタデータを抽出（統合版）
    * 既存のResolver.toSDLMetadata()ロジックを統合
    */
-  @measure
   static async processResolver(
     resolver: Resolver,
   ): Promise<ResolverSDLMetadata> {
@@ -85,13 +83,11 @@ export class ResolverProcessor {
     };
   }
 
-  @measure
   static async processResolverToSDL(resolver: Resolver): Promise<string> {
     const metadata = await this.processResolver(resolver);
     return metadata.sdl;
   }
 
-  @measure
   static async processResolvers(resolvers: Resolver[]): Promise<string> {
     const sdlParts: string[] = [];
 

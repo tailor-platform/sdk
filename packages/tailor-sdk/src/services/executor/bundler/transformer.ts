@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import ml from "multiline-ts";
-import { measure } from "@/performance";
 import { Executor } from "../types";
 import { ITransformer } from "@/bundler";
 import { trimSDKCode } from "@/bundler/utils";
@@ -10,7 +9,6 @@ import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/bundler/wrapper";
 export class ExecutorTransformer implements ITransformer<Executor> {
   constructor() {}
 
-  @measure
   transform(filePath: string, executor: Executor, tempDir: string): string[] {
     const trimmedContent = trimSDKCode(filePath);
     const transformedPath = path.join(

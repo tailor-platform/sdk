@@ -4,7 +4,6 @@ import { Bundler, BundlerConfig } from "@/bundler";
 import { ResolverLoader } from "./bundler/loader";
 import { CodeTransformer } from "./bundler/transformer";
 import { PipelineResolverServiceConfig } from "./types";
-import { measure } from "@/performance";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
 
@@ -30,12 +29,10 @@ export class PipelineResolverService {
     this.bundler = new Bundler(bundlerConfig);
   }
 
-  @measure
   async build() {
     await this.bundler.bundle();
   }
 
-  @measure
   async loadResolvers(): Promise<void> {
     if (!this.config.files || this.config.files.length === 0) {
       return;
