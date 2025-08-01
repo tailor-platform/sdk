@@ -6,19 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 
-- `turbo run gen` - Run code generation for Tailor SDK components
-- `turbo run gen:watch` - Run code generation in watch mode
-- `turbo run apply` - Deploy to Tailor Platform (requires TAILOR_ACCESS_TOKEN)
-- `turbo run dev` - Start development server
-- `turbo run build` - Build all packages
-- `turbo run test` - Run all tests using Turbo
-- `turbo run test:root` - Run tests in root directory only
-- `turbo run check` - Run format, lint:fix, and typecheck in sequence
-- `turbo run lint` - Run ESLint
-- `turbo run lint:fix` - Run ESLint with auto-fix
-- `turbo run format` - Format code with Prettier
-- `turbo run format:check` - Check code formatting
-- `turbo run typecheck` - Run TypeScript type checking
+- `pnpm exec turbo run gen` - Run code generation for Tailor SDK components
+- `pnpm exec turbo run gen:watch` - Run code generation in watch mode
+- `pnpm exec turbo run apply` - Deploy to Tailor Platform (requires TAILOR_ACCESS_TOKEN)
+- `pnpm exec turbo run dev` - Start development server
+- `pnpm exec turbo run build` - Build all packages
+- `pnpm exec turbo run test` - Run all tests using Turbo
+- `pnpm exec turbo run test:root` - Run tests in root directory only
+- `pnpm exec turbo run check` - Run format, lint:fix, and typecheck in sequence
+- `pnpm exec turbo run lint` - Run ESLint
+- `pnpm exec turbo run lint:fix` - Run ESLint with auto-fix
+- `pnpm exec turbo run format` - Format code with Prettier
+- `pnpm exec turbo run format:check` - Check code formatting
+- `pnpm exec turbo run typecheck` - Run TypeScript type checking
 
 ### Package-specific Commands (in packages/tailor-sdk)
 
@@ -130,7 +130,7 @@ export default createExecutor("name", "description")
 
 ### Testing
 
-- Run tests: `turbo run test` or `pnpm test` in specific packages
+- Run tests: `pnpm exec turbo run test` or `pnpm test` in specific packages
 - Tests use Vitest with mock-extended for mocking
 - Test files: `**/__tests__/**/*.ts` or `**/?(*.)+(spec|test).ts`
 - Example tests are in `examples/basic/tests/`
