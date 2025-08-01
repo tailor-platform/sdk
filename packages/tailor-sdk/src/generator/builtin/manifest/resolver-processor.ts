@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { Resolver } from "@/services/pipeline/resolver";
 import type { ResolverManifestMetadata, PipelineInfo } from "./types";
-import { measure } from "@/performance";
 import { OperationType } from "@/types/operator";
 import { getDistDir } from "@/config";
 import { StepDef } from "@/services/pipeline/types";
@@ -17,7 +16,6 @@ export class ResolverProcessor {
   /**
    * ResolverからManifest用メタデータを抽出
    */
-  @measure
   static async processResolver(
     resolver: Resolver,
   ): Promise<ResolverManifestMetadata> {
@@ -97,7 +95,6 @@ export class ResolverProcessor {
    * 単一のResolverに対するマニフェスト生成処理
    * 元のManifestAggregator.generateResolverManifest相当の処理
    */
-  @measure
   static generateResolverManifest(
     name: string,
     resolverMetadata: ResolverManifestMetadata,
@@ -188,7 +185,6 @@ export class ResolverProcessor {
   /**
    * 型のFields配列を生成
    */
-  @measure
   static generateTypeFields(
     typeName: string,
     fields?: Record<
@@ -278,7 +274,6 @@ export class ResolverProcessor {
   /**
    * Nested objectのフィールドを再帰的に処理
    */
-  @measure
   static generateNestedFields(
     nestedFields: any,
     parentTypeName?: string,
@@ -354,7 +349,6 @@ export class ResolverProcessor {
   /**
    * 複数のResolverを処理
    */
-  @measure
   static async processResolvers(
     resolvers: Resolver[],
   ): Promise<Record<string, ResolverManifestMetadata>> {

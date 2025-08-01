@@ -7,7 +7,6 @@ import {
   ExecutorManifest,
 } from "@/services/executor/types";
 import { Script } from "@/types/types";
-import { measure } from "@/performance";
 import { getDistDir } from "@/config";
 
 /**
@@ -30,7 +29,6 @@ export class ExecutorProcessor {
   /**
    * Executorを処理してExecutorManifestMetadataを生成
    */
-  @measure
   static async processExecutor(
     executor: Executor,
   ): Promise<ExecutorManifestMetadata> {

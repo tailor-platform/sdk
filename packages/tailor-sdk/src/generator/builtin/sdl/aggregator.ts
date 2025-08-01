@@ -3,7 +3,6 @@ import { BasicGeneratorMetadata, GeneratorResult } from "../../types";
 import { SDLTypeMetadata } from "./types";
 import { ResolverSDLMetadata } from "./types";
 import { SDLUtils } from "./utils";
-import { measure } from "@/performance";
 
 /**
  * SDL統合ロジック
@@ -14,7 +13,6 @@ export class SDLAggregator {
   /**
    * 型とResolverのメタデータを統合してSDLファイルを生成
    */
-  @measure
   static aggregate(
     metadata: BasicGeneratorMetadata<SDLTypeMetadata, ResolverSDLMetadata>,
     baseDir: string,
@@ -44,7 +42,6 @@ export class SDLAggregator {
   /**
    * TailorDB型のSDL生成
    */
-  @measure
   private static generateTailordbSDL(
     types: Record<string, SDLTypeMetadata>,
   ): string {
@@ -59,7 +56,6 @@ export class SDLAggregator {
   /**
    * ResolverのSDL生成
    */
-  @measure
   private static generateResolverSDL(
     resolvers: Record<string, ResolverSDLMetadata>,
   ): string {

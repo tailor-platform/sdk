@@ -2,7 +2,6 @@ import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
 import { TailorDBType } from "@/services/tailordb/schema";
 import { Resolver } from "@/services/pipeline/resolver";
 import { Executor } from "@/services/executor/types";
-import { measure } from "@/performance";
 import { ManifestTypeMetadata, ResolverManifestMetadata } from "./types";
 import { ExecutorManifestMetadata } from "./executor-processor";
 import { TypeProcessor } from "./type-processor";
@@ -35,7 +34,6 @@ export class ManifestGenerator
   /**
    * TailorDBTypeを処理してManifestTypeMetadataを生成
    */
-  @measure
   async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
     return await TypeProcessor.processType(type);
   }
@@ -43,7 +41,6 @@ export class ManifestGenerator
   /**
    * Resolverを処理してResolverManifestMetadataを生成
    */
-  @measure
   async processResolver(resolver: Resolver): Promise<ResolverManifestMetadata> {
     return await ResolverProcessor.processResolver(resolver);
   }
@@ -51,7 +48,6 @@ export class ManifestGenerator
   /**
    * Executorを処理してExecutorManifestMetadataを生成
    */
-  @measure
   async processExecutor(executor: Executor): Promise<ExecutorManifestMetadata> {
     return await ExecutorProcessor.processExecutor(executor);
   }
@@ -59,7 +55,6 @@ export class ManifestGenerator
   /**
    * 処理されたメタデータを統合してManifest JSONを生成
    */
-  @measure
   async aggregate(
     inputs: GeneratorInput<
       Record<string, ManifestTypeMetadata>,

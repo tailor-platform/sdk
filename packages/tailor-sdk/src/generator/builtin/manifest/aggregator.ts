@@ -10,7 +10,6 @@ import {
 } from "./types";
 import { ResolverManifestMetadata } from "./resolver-processor";
 import { ExecutorManifestMetadata } from "./executor-processor";
-import { measure } from "@/performance";
 import { getDistDir } from "@/config";
 import type { Workspace } from "@/workspace";
 import { AuthReference } from "@/services/auth";
@@ -27,7 +26,6 @@ export class ManifestAggregator {
   /**
    * Workspace全体のManifestを生成してファイルに出力
    */
-  @measure
   static async aggregate(
     metadata: BasicGeneratorMetadata<
       ManifestTypeMetadata,
@@ -71,7 +69,6 @@ export class ManifestAggregator {
   /**
    * WorkspaceからManifest全体を生成
    */
-  @measure
   private static async generateWorkspaceManifest(
     workspace: Workspace,
     metadata: BasicGeneratorMetadata<
@@ -179,7 +176,6 @@ export class ManifestAggregator {
    * PipelineResolverServiceからManifest JSON生成
    * metadataから既に生成されたマニフェストを使用する純粋な統合処理
    */
-  @measure
   static generatePipelineManifest(
     service: PipelineResolverService,
     metadata: BasicGeneratorMetadata<
@@ -206,7 +202,6 @@ export class ManifestAggregator {
    * TailorDBServiceからManifest JSON生成
    * metadataから既に生成されたマニフェストを使用する純粋な統合処理
    */
-  @measure
   static generateTailorDBManifest(
     service: TailorDBService,
     metadata: BasicGeneratorMetadata<
@@ -250,7 +245,6 @@ export class ManifestAggregator {
   /**
    * AuthServiceからManifest JSON生成
    */
-  @measure
   static generateAuthManifest(service: AuthService): AuthManifest {
     return {
       Kind: "auth",
@@ -286,7 +280,6 @@ export class ManifestAggregator {
   /**
    * ExecutorManifestMetadataからManifest JSON生成
    */
-  @measure
   static generateExecutorManifestFromMetadata(
     executors: ExecutorManifestMetadata[],
   ): ExecutorManifest {

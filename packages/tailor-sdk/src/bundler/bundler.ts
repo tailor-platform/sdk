@@ -2,7 +2,6 @@ import path from "node:path";
 import fs from "node:fs";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/config";
-import { measure } from "@/performance";
 import { BundlerConfig, ILoader, ITransformer } from "./types";
 
 export class Bundler<T> {
@@ -14,7 +13,6 @@ export class Bundler<T> {
     this.transformer = config.transformer;
   }
 
-  @measure
   async bundle(): Promise<void> {
     try {
       const files = await this.detectFiles();
@@ -48,7 +46,6 @@ export class Bundler<T> {
     }
   }
 
-  @measure
   private async detectFiles(): Promise<string[]> {
     if (
       !this.config.serviceConfig.files ||
@@ -73,7 +70,6 @@ export class Bundler<T> {
     return files;
   }
 
-  @measure
   private async processFile(file: string): Promise<void> {
     const item = await this.loader.load(file);
 
@@ -106,7 +102,6 @@ export class Bundler<T> {
     }
   }
 
-  @measure
   private async preBundle(input: string, output: string): Promise<void> {
     const outputDir = path.dirname(output);
     if (!fs.existsSync(outputDir)) {
@@ -153,7 +148,6 @@ export class Bundler<T> {
     console.log(`Pre-bundle output size: ${(stats.size / 1024).toFixed(2)} KB`);
   }
 
-  @measure
   private async postBundle(files: string[]): Promise<void> {
     const outputDir = path.join(
       getDistDir(),

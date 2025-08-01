@@ -4,7 +4,6 @@ import { TailorDBService } from "@/services/tailordb/service";
 import { TailorDBServiceInput } from "@/services/tailordb/types";
 import { AuthService } from "@/services/auth/service";
 import { AuthServiceInput } from "@/services/auth/types";
-import { measure } from "@/performance";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
@@ -35,7 +34,6 @@ export class Application {
     return this._authService as Readonly<AuthService> | undefined;
   }
 
-  @measure
   defineTailorDB(config?: TailorDBServiceInput) {
     if (!config) {
       return;
@@ -48,7 +46,6 @@ export class Application {
     }
   }
 
-  @measure
   definePipeline(config?: PipelineResolverServiceInput) {
     if (!config) {
       return;
@@ -64,7 +61,6 @@ export class Application {
     }
   }
 
-  @measure
   defineAuth(config?: AuthServiceInput) {
     if (!config) {
       return;

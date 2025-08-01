@@ -1,6 +1,5 @@
 import { TailorDBType } from "@/services/tailordb/schema";
 import { ManifestTypeMetadata, ManifestFieldMetadata } from "./types";
-import { measure } from "@/performance";
 import { tailorToManifestScalar } from "@/types/types";
 
 export class TypeProcessor {
@@ -69,7 +68,6 @@ export class TypeProcessor {
    * 単一のTailorDBTypeに対するマニフェスト生成処理
    * 元のManifestAggregator.generateTailorDBManifest相当の処理を単一型に適用
    */
-  @measure
   static generateTailorDBTypeManifest(type: TailorDBType): any {
     const metadata = type.metadata;
     const schema = metadata.schema;
@@ -258,7 +256,6 @@ export class TypeProcessor {
     };
   }
 
-  @measure
   static async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
     const fields: ManifestFieldMetadata[] = Object.entries(type.fields).map(
       ([fieldName, fieldDef]) => {
@@ -298,7 +295,6 @@ export class TypeProcessor {
     };
   }
 
-  @measure
   static async processTypes(
     types: TailorDBType[],
   ): Promise<Record<string, ManifestTypeMetadata>> {
