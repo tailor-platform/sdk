@@ -2019,7 +2019,7 @@
           "PostHook": {
             "Expr": "({ ...context.pipeline.__construct_output });"
           },
-          "PublishExecutionEvents": false
+          "PublishExecutionEvents": true
         }
       ],
       "Version": "v2"
@@ -2122,6 +2122,68 @@
             ],
             "Body": {
               "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            }
+          }
+        },
+        {
+          "Name": "step-chain-executed",
+          "Description": "Triggered when a step chain is executed",
+          "TriggerEvent": {
+            "Kind": "Event",
+            "EventType": "pipeline.resolver.executed",
+            "Condition": {
+              "Expr": "args.resolverName === \"stepChain\" && (({result})=>{if(!result)return false;return result.result.summary.length>0})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })"
+            }
+          },
+          "TargetWebhook": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({result})=>`https://example.com/webhook/${result.result.summary.length}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "RawValue": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "SecretValue": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
+            }
+          },
+          "Trigger": {
+            "Kind": "Event",
+            "EventType": "pipeline.resolver.executed",
+            "Condition": {
+              "Expr": "args.resolverName === \"stepChain\" && (({result})=>{if(!result)return false;return result.result.summary.length>0})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })"
+            }
+          },
+          "Target": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({result})=>`https://example.com/webhook/${result.result.summary.length}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "Value": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "Value": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
             }
           }
         },
@@ -2374,7 +2436,7 @@
           "PostHook": {
             "Expr": "({ ...context.pipeline.__construct_output });"
           },
-          "PublishExecutionEvents": false
+          "PublishExecutionEvents": true
         }
       ],
       "Version": "v2"
@@ -2443,6 +2505,68 @@
             ],
             "Body": {
               "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            }
+          }
+        },
+        {
+          "Name": "step-chain-executed",
+          "Description": "Triggered when a step chain is executed",
+          "TriggerEvent": {
+            "Kind": "Event",
+            "EventType": "pipeline.resolver.executed",
+            "Condition": {
+              "Expr": "args.resolverName === \"stepChain\" && (({result})=>{if(!result)return false;return result.result.summary.length>0})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })"
+            }
+          },
+          "TargetWebhook": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({result})=>`https://example.com/webhook/${result.result.summary.length}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "RawValue": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "SecretValue": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
+            }
+          },
+          "Trigger": {
+            "Kind": "Event",
+            "EventType": "pipeline.resolver.executed",
+            "Condition": {
+              "Expr": "args.resolverName === \"stepChain\" && (({result})=>{if(!result)return false;return result.result.summary.length>0})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })"
+            }
+          },
+          "Target": {
+            "Kind": "webhook",
+            "URL": {
+              "Expr": "(({result})=>`https://example.com/webhook/${result.result.summary.length}`)(args)"
+            },
+            "Headers": [
+              {
+                "Key": "Content-Type",
+                "Value": "application/json"
+              },
+              {
+                "Key": "Authorization",
+                "Value": {
+                  "VaultName": "my-vault",
+                  "SecretKey": "my-secret"
+                }
+              }
+            ],
+            "Body": {
+              "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
             }
           }
         },

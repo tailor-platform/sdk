@@ -107,6 +107,7 @@ export class ManifestAggregator {
         const pipelineManifest = ManifestAggregator.generatePipelineManifest(
           pipeline,
           metadata,
+          metadata.executors,
         );
         manifest.Services.push(pipelineManifest);
         manifest.Pipelines.push(pipelineManifest);
@@ -182,11 +183,29 @@ export class ManifestAggregator {
       ManifestTypeMetadata,
       ResolverManifestMetadata
     >,
+    executors?: ExecutorManifestMetadata[],
   ): PipelineManifest {
+    // usedResolverNamesを収集
+    const usedResolverNames = new Set<string>();
+    if (executors) {
+      for (const executor of executors) {
+        if (executor.usedResolverName) {
+          usedResolverNames.add(executor.usedResolverName);
+        }
+      }
+    }
+
     const resolverManifests = Object.entries(metadata.resolvers)
       .filter(([_, resolverMetadata]) => resolverMetadata != null)
       .map(([_, resolverMetadata]) => {
-        return resolverMetadata.resolverManifest;
+        const resolverManifest = { ...resolverMetadata.resolverManifest };
+
+        // リゾルバーが使用されている場合、PublishExecutionEventsをtrueに設定
+        if (usedResolverNames.has(resolverManifest.Name)) {
+          resolverManifest.PublishExecutionEvents = true;
+        }
+
+        return resolverManifest;
       });
 
     return {
@@ -211,10 +230,14 @@ export class ManifestAggregator {
     executors?: ExecutorManifestMetadata[],
   ): TailordbManifest {
     const usedTypeNames = new Set<string>();
+    const usedResolverNames = new Set<string>();
     if (executors) {
       for (const executor of executors) {
         if (executor.usedTailorDBType) {
           usedTypeNames.add(executor.usedTailorDBType);
+        }
+        if (executor.usedResolverName) {
+          usedResolverNames.add(executor.usedResolverName);
         }
       }
     }
