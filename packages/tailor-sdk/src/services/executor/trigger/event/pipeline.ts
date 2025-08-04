@@ -4,14 +4,17 @@ import {
   EventTriggerWithManifestAndContext,
   RecordTriggerCondition,
 } from "./types";
+import { output } from "@/types/helpers";
 
 type ResolverTriggerConditionArgs<R extends Resolver> = ConditionArgs & {
   resolverName: R["name"];
 } & (
     | {
-        result: R["output"];
+        result: output<R["output"]>;
+        error: undefined;
       }
     | {
+        result: undefined;
         error: string;
       }
   );
