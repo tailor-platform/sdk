@@ -167,6 +167,7 @@ export class TypeProcessor {
   ): string {
     const metadata = fieldDef.metadata;
     const fieldType = metadata?.type;
+    const isArray = metadata?.array === true;
 
     // リレーションフィールドの検出（field.referenceを使用）
     if (fieldDef.reference) {
@@ -180,18 +181,23 @@ export class TypeProcessor {
       }
     }
 
+    let baseType: string;
     switch (fieldType) {
       case "uuid":
       case "string":
-        return "string";
+        baseType = "string";
+        break;
       case "integer":
       case "float":
-        return "number";
+        baseType = "number";
+        break;
       case "bool":
-        return "boolean";
+        baseType = "boolean";
+        break;
       case "date":
       case "datetime":
-        return "Date";
+        baseType = "Date";
+        break;
       case "enum": {
         const allowedValues =
           metadata?.allowedValues ||
@@ -202,20 +208,26 @@ export class TypeProcessor {
           fieldDef?.enum;
 
         if (allowedValues && Array.isArray(allowedValues)) {
-          return allowedValues.map((v) => `"${v.value}"`).join(" | ");
+          baseType = allowedValues.map((v) => `"${v.value}"`).join(" | ");
+        } else {
+          baseType = "string";
         }
-        return "string";
+        break;
       }
       case "nested": {
         const fields = fieldDef.fields || (fieldDef as any).fields;
         if (fields && typeof fields === "object") {
-          return this.processNestedObjectType(fields, 1, processing);
+          baseType = this.processNestedObjectType(fields, 1, processing);
+        } else {
+          baseType = "object";
         }
-        return "object";
+        break;
       }
       default:
-        return "string";
+        baseType = "string";
     }
+
+    return isArray ? `${baseType}[]` : baseType;
   }
 
   /**
@@ -230,13 +242,17 @@ export class TypeProcessor {
 
     for (const [fieldName, nestedFieldDef] of Object.entries(fields)) {
       const nestedMetadata = (nestedFieldDef as any).metadata;
+      const isArray = nestedMetadata?.array === true;
 
       if (nestedMetadata.type === "nested" && (nestedFieldDef as any).fields) {
-        const nestedObjectType = this.processNestedObjectType(
+        let nestedObjectType = this.processNestedObjectType(
           (nestedFieldDef as any).fields,
           indentLevel + 1,
           processing,
         );
+        if (isArray) {
+          nestedObjectType = `${nestedObjectType}[]`;
+        }
         objectFields.push(
           this.generateFieldDefinition(
             fieldName,
