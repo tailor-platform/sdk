@@ -1592,7 +1592,7 @@
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": false,
+              "Array": true,
               "Index": false,
               "Required": false,
               "Unique": false,
@@ -1637,7 +1637,7 @@
           "Relationships": {
             "setting": {
               "RefType": "UserSetting",
-              "RefField": "userID",
+              "RefField": "userIDs",
               "SrcField": "id",
               "Array": false,
               "Description": ""
@@ -1733,12 +1733,12 @@
               "ForeignKey": false,
               "Vector": false
             },
-            "userID": {
+            "userIDs": {
               "Type": "uuid",
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": false,
+              "Array": true,
               "Index": true,
               "Required": true,
               "Unique": true,
@@ -1785,8 +1785,8 @@
             "user": {
               "RefType": "User",
               "RefField": "id",
-              "SrcField": "userID",
-              "Array": false,
+              "SrcField": "userIDs",
+              "Array": true,
               "Description": ""
             }
           },
@@ -4169,7 +4169,7 @@
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": false,
+              "Array": true,
               "Index": false,
               "Required": false,
               "Unique": false,
@@ -4214,7 +4214,7 @@
           "Relationships": {
             "setting": {
               "RefType": "UserSetting",
-              "RefField": "userID",
+              "RefField": "userIDs",
               "SrcField": "id",
               "Array": false,
               "Description": ""
@@ -4310,12 +4310,12 @@
               "ForeignKey": false,
               "Vector": false
             },
-            "userID": {
+            "userIDs": {
               "Type": "uuid",
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": false,
+              "Array": true,
               "Index": true,
               "Required": true,
               "Unique": true,
@@ -4362,8 +4362,8 @@
             "user": {
               "RefType": "User",
               "RefField": "id",
-              "SrcField": "userID",
-              "Array": false,
+              "SrcField": "userIDs",
+              "Array": true,
               "Description": ""
             }
           },

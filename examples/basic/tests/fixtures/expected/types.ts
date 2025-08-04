@@ -78,7 +78,7 @@ export type PurchaseOrder = {
     name: string;
     size: number;
     type: "text" | "image";
-  };
+  }[];
   createdAt: Date;
   updatedAt?: Date | null;
 };
@@ -123,7 +123,7 @@ export type User = {
   name: string;
   email: string;
   status?: string | null;
-  department?: string | null;
+  department?: string[] | null;
   createdAt: Date;
   updatedAt?: Date | null;
   setting?: UserSetting | null;
@@ -132,8 +132,7 @@ export type User = {
 export type UserSetting = {
   id: string;
   language: "jp" | "en";
-  userID: string;
-  user: User;
+  userIDs: string;
   createdAt: Date;
   updatedAt?: Date | null;
 };
