@@ -15,10 +15,11 @@ import { getDistDir } from "@/config";
 export interface ExecutorManifestMetadata {
   name: string;
   description?: string;
-  trigger: Trigger;
-  target: Target;
-  executorManifest: ExecutorManifest;
+  trigger: any;
+  target: any;
+  executorManifest?: any;
   usedTailorDBType?: string;
+  usedResolverName?: string;
 }
 
 /**
@@ -45,7 +46,23 @@ export class ExecutorProcessor {
       metadata.usedTailorDBType = triggerContext.type;
     }
 
-    // ExecutorをManifest形式に変換
+    // resolverExecutedTriggerからリゾルバー名を抽出
+    const triggerManifest = executor.trigger.manifest;
+    if (
+      triggerManifest &&
+      "EventType" in triggerManifest &&
+      triggerManifest.EventType === "pipeline.resolver.executed"
+    ) {
+      const condition = triggerManifest.Condition?.Expr;
+      if (condition && typeof condition === "string") {
+        const match = condition.match(/args\.resolverName === "([^"]+)"/);
+        if (match) {
+          metadata.usedResolverName = match[1];
+        }
+      }
+    }
+
+    // Executorをmanifest形式に変換
     metadata.executorManifest = ExecutorProcessor.convertToManifest(executor);
 
     return metadata as ExecutorManifestMetadata;
