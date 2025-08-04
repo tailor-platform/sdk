@@ -25,7 +25,7 @@ export interface Invoker {
 }
 
 // Operation types
-export type OperationKind = "graphql" | "function" | "webhook";
+export type OperationKind = "graphql" | "function" | "job_function" | "webhook";
 
 export interface GraphqlOperation {
   Kind: "graphql";
@@ -37,7 +37,7 @@ export interface GraphqlOperation {
 }
 
 export interface FunctionOperation {
-  Kind: "function";
+  Kind: "function" | "job_function";
   Name: string;
   Script?: string | null;
   ScriptPath?: string | null;

@@ -15,11 +15,11 @@ type FunctionOperationWithManifestAndContext<A> = ManifestAndContext<
 export function executorFunction<A>(
   name: string,
   fn: (args: A & { client: SqlClient }) => void,
-  options?: { dbNamespace?: string },
+  options?: { dbNamespace?: string; jobFunction?: boolean },
 ): FunctionOperationWithManifestAndContext<A> {
   return {
     manifest: {
-      Kind: "function",
+      Kind: options?.jobFunction ? "job_function" : "function",
       Name: name,
     },
     context: {
