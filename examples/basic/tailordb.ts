@@ -146,7 +146,7 @@ export interface User {
   name: string;
   email: string;
   status: string | null;
-  department: string | null;
+  department: string[] | null;
   createdAt: Timestamp;
   updatedAt: Timestamp | null;
 }
@@ -154,12 +154,12 @@ export interface User {
 export interface UserSetting {
   id: Generated<string>;
   language: "jp" | "en";
-  userID: string;
+  userIDs: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp | null;
 }
 
-interface DB {
+export interface DB {
   Customer: Customer;
   Invoice: Invoice;
   NestedProfile: NestedProfile;

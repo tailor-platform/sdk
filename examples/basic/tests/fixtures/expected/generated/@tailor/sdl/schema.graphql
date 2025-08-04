@@ -135,7 +135,7 @@ type User {
   name: String!
   email: String!
   status: String
-  department: String
+  department: [String!]
   createdAt: DateTime
   updatedAt: DateTime
 }
@@ -145,8 +145,8 @@ type User {
 type UserSetting {
   id: ID!
   language: enum!
-  userID: ID!
-  user: User!
+  userIDs: [ID!]!
+  user: [User!]!
   createdAt: DateTime
   updatedAt: DateTime
 }
