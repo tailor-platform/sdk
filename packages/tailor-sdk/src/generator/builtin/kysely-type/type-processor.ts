@@ -71,7 +71,7 @@ export class TypeProcessor {
    */
   private static generateDBInterface(types: KyselyTypeMetadata[]): string {
     return multiline/* ts */ `
-      interface DB {
+      export interface DB {
         ${types.map((type) => `${type.name}: ${type.name};`).join("\n")}
       }
     `;

@@ -159,7 +159,7 @@ export interface UserSetting {
   updatedAt: Timestamp | null;
 }
 
-interface DB {
+export interface DB {
   Customer: Customer;
   Invoice: Invoice;
   NestedProfile: NestedProfile;
