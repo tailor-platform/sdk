@@ -32,6 +32,24 @@ export function createExecutor(name: string, description?: string) {
         } as const satisfies Executor<TTrigger>;
       },
 
+      executeJobFunction: (
+        fn: (
+          args: ExtractTriggerArgs<TTrigger> & { client: SqlClient },
+        ) => void,
+        options: { dbNamespace?: string } = {},
+      ) => {
+        const exec = executorFunction(`${name}__target`, fn, {
+          ...options,
+          jobFunction: true,
+        });
+        return {
+          name: name,
+          description,
+          trigger: trigger,
+          exec,
+        } as const satisfies Executor<TTrigger>;
+      },
+
       executeGql: (
         args: Parameters<typeof executorGql<ExtractTriggerArgs<TTrigger>>>[0],
       ) => {
