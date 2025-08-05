@@ -331,7 +331,7 @@ describe("ResolverProcessor", () => {
       expect(result.inputFields!.scores.type).toBe("float");
       expect(result.inputFields!.scores.array).toBe(true);
       expect(result.inputFields!.scores.required).toBe(false);
-      expect(result.inputFields!.active.type).toBe("bool");
+      expect(result.inputFields!.active.type).toBe("boolean");
     });
   });
 

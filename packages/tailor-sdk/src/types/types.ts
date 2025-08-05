@@ -11,7 +11,7 @@ export interface SecretValue {
 export type TailorFieldType =
   | "uuid"
   | "string"
-  | "bool"
+  | "boolean"
   | "integer"
   | "float"
   | "enum"
@@ -24,7 +24,7 @@ export type TailorToTs = {
   string: string;
   integer: number;
   float: number;
-  bool: boolean;
+  boolean: boolean;
   uuid: string;
   date: Date;
   datetime: Date;
@@ -38,7 +38,6 @@ export const tailorToGraphQL = {
   string: "String",
   integer: "Int",
   float: "Float",
-  bool: "Boolean",
   boolean: "Boolean",
   uuid: "ID",
   date: "Date",
@@ -53,7 +52,6 @@ export const tailorToManifestScalar = {
   string: "string",
   integer: "integer",
   float: "float",
-  bool: "boolean",
   boolean: "boolean",
   uuid: "uuid",
   date: "date",
