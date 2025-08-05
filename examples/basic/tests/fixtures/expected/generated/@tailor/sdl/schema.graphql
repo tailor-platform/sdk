@@ -136,7 +136,7 @@ type User {
   name: String!
   email: String!
   status: String
-  department: [String!]
+  department: String
   createdAt: DateTime
   updatedAt: DateTime
 }
