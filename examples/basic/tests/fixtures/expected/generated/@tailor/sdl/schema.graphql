@@ -159,6 +159,7 @@ input StepChainInput {
       first: String!
       last: String!
     }!
+    activatedAt: DateTime
   }!
 }
 

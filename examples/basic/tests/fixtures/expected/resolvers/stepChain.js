@@ -25,10 +25,13 @@ async function kyselyWrapper(context, callback) {
 
 //#endregion
 //#region resolvers/stepChain/resolver.ts
-var resolver_default = createQueryResolver("stepChain", t.type({ user: t.object({ name: t.object({
-	first: t.string(),
-	last: t.string()
-}) }) }), { defaults: { dbNamespace: "tailordb" } }).fnStep("step1", (context) => {
+const resolver = createQueryResolver("stepChain", t.type({ user: t.object({
+	name: t.object({
+		first: t.string(),
+		last: t.string()
+	}),
+	activatedAt: t.datetime().optional()
+}) }), { defaults: { dbNamespace: "tailordb" } }).fnStep("step1", (context) => {
 	return `step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`;
 }).fnStep("step2", async () => {
 	return `step2: recorded ${format(/* @__PURE__ */ new Date(), "yyyy-MM-dd HH:mm:ss")} on step2!`;
@@ -44,6 +47,7 @@ var resolver_default = createQueryResolver("stepChain", t.type({ user: t.object(
 	context.sqlStep,
 	context.kyselyStep
 ] } }), t.type({ result: t.object({ summary: t.string().array() }) }));
+var resolver_default = resolver;
 
 //#endregion
 export { resolver_default as default };

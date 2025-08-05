@@ -1909,6 +1909,18 @@
                           },
                           "Array": false,
                           "Required": true
+                        },
+                        {
+                          "Name": "activatedAt",
+                          "Description": "",
+                          "Type": {
+                            "Kind": "CustomScalarType",
+                            "Name": "DateTime",
+                            "Description": "",
+                            "Required": false
+                          },
+                          "Array": false,
+                          "Required": false
                         }
                       ]
                     },
@@ -2326,6 +2338,18 @@
                           },
                           "Array": false,
                           "Required": true
+                        },
+                        {
+                          "Name": "activatedAt",
+                          "Description": "",
+                          "Type": {
+                            "Kind": "CustomScalarType",
+                            "Name": "DateTime",
+                            "Description": "",
+                            "Required": false
+                          },
+                          "Array": false,
+                          "Required": false
                         }
                       ]
                     },

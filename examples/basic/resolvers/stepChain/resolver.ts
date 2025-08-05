@@ -2,10 +2,13 @@ import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
 import { kyselyWrapper } from "../../tailordb";
 
-export default createQueryResolver(
+const resolver = createQueryResolver(
   "stepChain",
   t.type({
-    user: t.object({ name: t.object({ first: t.string(), last: t.string() }) }),
+    user: t.object({
+      name: t.object({ first: t.string(), last: t.string() }),
+      activatedAt: t.datetime().optional(),
+    }),
   }),
   { defaults: { dbNamespace: "tailordb" } },
 )
@@ -55,3 +58,4 @@ export default createQueryResolver(
       }),
     }),
   );
+export default resolver;
