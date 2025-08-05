@@ -146,10 +146,6 @@ export class ExecutorProcessor {
       }
     }
 
-    // Trigger と Target を設定
-    manifest.Trigger = trigger;
-    manifest.Target = target;
-
     return manifest as ExecutorManifest;
   }
 }
