@@ -598,14 +598,10 @@ const db = {
     timestamps: () => ({
       createdAt: datetime()
         .optional({ assertNonNull: true })
-        .hooks({
-          create: () => new Date().toISOString(),
-        }),
+        .hooks({ create: () => new Date().toISOString() }),
       updatedAt: datetime()
         .optional()
-        .hooks({
-          update: () => new Date().toISOString(),
-        }),
+        .hooks({ update: () => new Date().toISOString() }),
     }),
   },
 };
