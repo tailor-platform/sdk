@@ -12,11 +12,14 @@ A development kit for building applications on the Tailor Platform.
   - [Field Types](#field-types)
   - [Plural Forms](#plural-forms)
   - [Timestamps and Common Fields](#timestamps-and-common-fields)
+  - [Nested Objects](#nested-objects)
+  - [Reusable Field Definitions](#reusable-field-definitions)
   - [Type Inference](#type-inference)
 - [Pipeline Resolvers](#pipeline-resolvers)
   - [Creating Resolvers](#creating-resolvers)
   - [Step Types](#step-types)
   - [Processing Flow Patterns](#processing-flow-patterns)
+  - [Kysely Integration](#kysely-integration)
 - [Executor](#executor)
   - [Overview](#overview)
   - [Basic Usage](#basic-usage)
@@ -325,6 +328,90 @@ export const user = db.type("User", {
 });
 ```
 
+### Nested Objects
+
+TailorDB supports deeply nested object structures:
+
+```typescript
+export const nestedProfile = db.type("NestedProfile", {
+  userInfo: db.object({
+    personal: db.object({
+      name: db.string(),
+      age: db.int().optional(),
+      bio: db.string().optional(),
+    }),
+    contact: db.object({
+      email: db.string(),
+      phone: db.string().optional(),
+      address: db.object({
+        street: db.string(),
+        city: db.string(),
+        country: db.string(),
+        coordinates: db
+          .object({
+            latitude: db.float(),
+            longitude: db.float(),
+          })
+          .optional(),
+      }),
+    }),
+    preferences: db
+      .object({
+        notifications: db.object({
+          email: db.bool(),
+          sms: db.bool(),
+          push: db.bool(),
+        }),
+        privacy: db
+          .object({
+            profileVisible: db.bool(),
+            dataSharing: db.bool(),
+          })
+          .optional(),
+      })
+      .optional(),
+  }),
+  metadata: db.object({
+    created: db.datetime(),
+    lastUpdated: db.datetime().optional(),
+    version: db.int(),
+  }),
+});
+```
+
+### Reusable Field Definitions
+
+You can extract common field definitions for reuse across models:
+
+```typescript
+// Define reusable field structure
+export const attachedFiles = db
+  .object({
+    id: db.uuid(),
+    name: db.string(),
+    size: db.int().validate(({ value }) => value > 0),
+    type: db.enum("text", "image", "pdf", "video"),
+  })
+  .array();
+
+// Use in multiple models
+export const purchaseOrder = db.type("PurchaseOrder", {
+  supplierID: db.uuid().relation({
+    type: "1-n",
+    toward: { type: supplier },
+  }),
+  totalPrice: db.int(),
+  attachedFiles, // Reuse the field definition
+  ...db.fields.timestamps(),
+});
+
+export const invoice = db.type("Invoice", {
+  invoiceNumber: db.string(),
+  attachedFiles, // Same field structure
+  ...db.fields.timestamps(),
+});
+```
+
 ### Type Inference
 
 Use TypeScript's type inference to get compile-time type safety:
@@ -485,6 +572,171 @@ import { kyselyWrapper } from "./db";
 )
 ```
 
+### Processing Flow Patterns
+
+#### Complex Multi-Step Resolver Example
+
+Here's a comprehensive example combining different step types:
+
+```typescript
+import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
+import { format } from "date-fns";
+import { kyselyWrapper } from "./db";
+
+export default createQueryResolver(
+  "complexWorkflow",
+  t.type({
+    userId: t.string(),
+    filters: t.object({
+      status: t.string().optional(),
+      dateFrom: t.datetime().optional(),
+    }),
+  }),
+  { defaults: { dbNamespace: "my-db" } },
+)
+  // Step 1: Validate and transform input
+  .fnStep("validateInput", (context) => {
+    if (!context.input.userId) {
+      throw new Error("User ID is required");
+    }
+    return {
+      userId: context.input.userId,
+      status: context.input.filters.status || "active",
+    };
+  })
+
+  // Step 2: Execute raw SQL with safe parameterization
+  .sqlStep("getUserData", async (context) => {
+    // Using sqlstring for safe query building
+    const sql = require("sqlstring");
+    const query = sql.format(
+      /* sql */ `SELECT * FROM User WHERE id = ? AND status = ?`,
+      [context.validateInput.userId, context.validateInput.status],
+    );
+    return await context.client.execOne<{ id: string; name: string }>(query);
+  })
+
+  // Step 3: Use Kysely within sqlStep for type-safe query building
+  .sqlStep("getRelatedData", (context) =>
+    kyselyWrapper(context, async (ctx) => {
+      const orders = await ctx.db
+        .selectFrom("Order")
+        .leftJoin("Product", "Order.productId", "Product.id")
+        .select([
+          "Order.id",
+          "Order.totalAmount",
+          "Product.name as productName",
+        ])
+        .where("Order.userId", "=", context.getUserData.id)
+        .where(
+          "Order.createdAt",
+          ">=",
+          context.input.filters.dateFrom || new Date(0),
+        )
+        .orderBy("Order.createdAt", "desc")
+        .limit(10)
+        .execute();
+
+      return orders;
+    }),
+  )
+
+  // Step 4: Process and format results
+  .fnStep("formatResults", (context) => {
+    return {
+      user: context.getUserData,
+      orders: context.getRelatedData.map((order) => ({
+        ...order,
+        formattedDate: format(order.createdAt, "yyyy-MM-dd"),
+      })),
+      summary: {
+        totalOrders: context.getRelatedData.length,
+        totalAmount: context.getRelatedData.reduce(
+          (sum, order) => sum + order.totalAmount,
+          0,
+        ),
+      },
+    };
+  })
+
+  .returns(
+    (context) => context.formatResults,
+    t.type({
+      user: t.object({
+        id: t.string(),
+        name: t.string(),
+      }),
+      orders: t.array(
+        t.object({
+          id: t.string(),
+          totalAmount: t.number(),
+          productName: t.string(),
+          formattedDate: t.string(),
+        }),
+      ),
+      summary: t.object({
+        totalOrders: t.integer(),
+        totalAmount: t.number(),
+      }),
+    }),
+  );
+```
+
+### Kysely Integration
+
+The SDK provides a `kyselyWrapper` helper for type-safe SQL queries:
+
+```typescript
+// In your database configuration file (e.g., src/tailordb.ts)
+import { SqlClient } from "@tailor-platform/tailor-sdk";
+import { Kysely, PostgresAdapter, DummyDriver } from "kysely";
+
+// Define your database types (usually auto-generated)
+interface DB {
+  User: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  // ... other tables
+}
+
+// Kysely wrapper implementation
+export async function kyselyWrapper<C extends { client: SqlClient }, R>(
+  context: C,
+  callback: (context: C & { db: Kysely<DB> }) => Promise<R>
+) {
+  const db = new Kysely<DB>({
+    dialect: {
+      createAdapter: () => new PostgresAdapter(),
+      createDriver: () => new DummyDriver(),
+      createIntrospector: (db) => new PostgresIntrospector(db),
+      createQueryCompiler: () => new PostgresQueryCompiler(),
+    },
+  });
+
+  const clientWrapper = {
+    exec: async (query: CompiledQuery) => {
+      return await context.client.exec(query.sql);
+    },
+  };
+
+  return await callback({ ...context, db, client: clientWrapper });
+}
+
+// Usage in resolvers
+.sqlStep("complexQuery", (context) =>
+  kyselyWrapper(context, async (ctx) => {
+    return await ctx.db
+      .selectFrom("User")
+      .innerJoin("UserSetting", "User.id", "UserSetting.userId")
+      .select(["User.name", "User.email", "UserSetting.language"])
+      .where("UserSetting.language", "=", "en")
+      .execute();
+  })
+)
+```
+
 ## Executor
 
 ### Overview
@@ -602,12 +854,16 @@ Executors support different execution methods depending on your use case:
 Execute JavaScript/TypeScript functions directly:
 
 ```typescript
+import sqlstring from "sqlstring";
+
+...
 .executeFunction(
   async ({ newRecord, oldRecord, client }) => {
-    // Your business logic here
-    const result = await client.exec(
-      /* sql */ `SELECT * FROM Orders WHERE customerId = '${newRecord.id}'`
+    const query = sqlstring.format(
+      /* sql */ `SELECT * FROM Orders WHERE customerId = ?`,
+      [newRecord.id]
     );
+    const result = await client.exec(query);
     console.log(`Found ${result.length} orders for customer`);
   },
   { dbNamespace: "my-db" } // Optional configuration
@@ -619,6 +875,7 @@ Execute JavaScript/TypeScript functions directly:
 Call external webhooks with dynamic data:
 
 ```typescript
+...
 .executeWebhook({
   url: ({ newRecord }) => `https://api.example.com/webhooks/${newRecord.type}`,
   headers: {
@@ -638,6 +895,7 @@ Call external webhooks with dynamic data:
 Execute GraphQL queries and mutations:
 
 ```typescript
+...
 .executeGql({
   appName: "my-app",
   query: gql`
