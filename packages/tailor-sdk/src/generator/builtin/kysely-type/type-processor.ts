@@ -97,6 +97,7 @@ export class TypeProcessor {
       case "datetime":
         return "Timestamp";
       case "bool":
+      case "boolean":
         return "boolean";
       case "enum": {
         const allowedValues =

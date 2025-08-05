@@ -132,7 +132,7 @@ export class TypeProcessor {
       case "integer":
       case "float":
         return "number";
-      case "bool":
+      case "boolean":
         return "boolean";
       case "date":
       case "datetime":
@@ -192,6 +192,7 @@ export class TypeProcessor {
         baseType = "number";
         break;
       case "bool":
+      case "boolean":
         baseType = "boolean";
         break;
       case "date":

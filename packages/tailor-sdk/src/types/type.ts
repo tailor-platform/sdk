@@ -222,7 +222,7 @@ function string() {
 }
 
 function bool() {
-  return createField("bool", ["allowedValues"]);
+  return createField("boolean", ["allowedValues"]);
 }
 
 function int() {
