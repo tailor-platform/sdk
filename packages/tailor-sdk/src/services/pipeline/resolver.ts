@@ -11,7 +11,7 @@ import {
   StepReturn,
 } from "./types";
 import { TailorType } from "@/types/type";
-import { output, StrictOutput } from "@/types/helpers";
+import { gqlOutput, output, StrictOutput } from "@/types/helpers";
 
 export class Resolver<
   QueryType extends "query" | "mutation" = any,
@@ -26,8 +26,8 @@ export class Resolver<
   >[],
   Output extends TailorType<any, any, any> = any,
 > {
-  readonly _input = null as output<Input>;
-  readonly _output = null as output<Output>;
+  readonly _input = null as gqlOutput<Input>;
+  readonly _output = null as gqlOutput<Output>;
   readonly _context = null as unknown as Context;
 
   #steps = [] as unknown as Steps;
@@ -155,7 +155,7 @@ export function createQueryResolver<
     "query",
     Input,
     output<Input>,
-    { input: output<Input> },
+    { input: gqlOutput<Input> },
     [],
     never
   >("query", name, input, options);

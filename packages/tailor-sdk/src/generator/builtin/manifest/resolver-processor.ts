@@ -185,6 +185,63 @@ export class ResolverProcessor {
   /**
    * 型のFields配列を生成
    */
+  private static getTypeDefinition(fieldType: string): {
+    kind: "ScalarType" | "CustomScalarType";
+    name: string;
+  } {
+    const tailorToGraphQL: Record<string, string> = {
+      string: "String",
+      number: "Int",
+      integer: "Int",
+      boolean: "Boolean",
+      float: "Float",
+      date: "String",
+      datetime: "String",
+      time: "String",
+      json: "String",
+    };
+
+    const customScalarTypes = ["date", "datetime", "time"];
+    const isCustomScalar = customScalarTypes.includes(fieldType);
+
+    return {
+      kind: isCustomScalar ? "CustomScalarType" : "ScalarType",
+      name: isCustomScalar
+        ? fieldType === "datetime"
+          ? "DateTime"
+          : fieldType === "date"
+            ? "Date"
+            : fieldType === "time"
+              ? "Time"
+              : fieldType
+        : tailorToGraphQL[fieldType as keyof typeof tailorToGraphQL] ||
+          "String",
+    };
+  }
+
+  private static createFieldDefinition(
+    fieldName: string,
+    fieldType: string,
+    required: boolean,
+    array: boolean,
+    description: string = "",
+  ): any {
+    const typeDefinition = ResolverProcessor.getTypeDefinition(fieldType);
+
+    return {
+      Name: fieldName,
+      Description: description,
+      Type: {
+        Kind: typeDefinition.kind,
+        Name: typeDefinition.name,
+        Description: "",
+        Required: false, // Note: This is always false in the CUE schema for scalar types
+      },
+      Array: array,
+      Required: required,
+    };
+  }
+
   static generateTypeFields(
     typeName: string,
     fields?: Record<
@@ -195,18 +252,6 @@ export class ResolverProcessor {
   ): any[] {
     if (fields && Object.keys(fields).length > 0) {
       return Object.entries(fields).map(([fieldName, fieldInfo]) => {
-        const tailorToGraphQL: Record<string, string> = {
-          string: "String",
-          number: "Int",
-          integer: "Int",
-          boolean: "Boolean",
-          float: "Float",
-          date: "String",
-          datetime: "String",
-          time: "String",
-          json: "String",
-        };
-
         if (fieldInfo.type === "nested") {
           const nestedTypeName =
             fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
@@ -248,20 +293,12 @@ export class ResolverProcessor {
           };
         }
 
-        return {
-          Name: fieldName,
-          Description: "",
-          Type: {
-            Kind: "ScalarType",
-            Name:
-              tailorToGraphQL[fieldInfo.type as keyof typeof tailorToGraphQL] ||
-              "String",
-            Description: "",
-            Required: false,
-          },
-          Array: fieldInfo.array,
-          Required: fieldInfo.required,
-        };
+        return ResolverProcessor.createFieldDefinition(
+          fieldName,
+          fieldInfo.type,
+          fieldInfo.required,
+          fieldInfo.array,
+        );
       });
     }
 
@@ -281,18 +318,6 @@ export class ResolverProcessor {
     if (!nestedFields || typeof nestedFields !== "object") {
       return [];
     }
-
-    const tailorToGraphQL: Record<string, string> = {
-      string: "String",
-      number: "Int",
-      integer: "Int",
-      boolean: "Boolean",
-      float: "Float",
-      date: "String",
-      datetime: "String",
-      time: "String",
-      json: "String",
-    };
 
     return Object.entries(nestedFields).map(
       ([fieldName, field]: [string, any]) => {
@@ -328,20 +353,13 @@ export class ResolverProcessor {
           };
         }
 
-        return {
-          Name: fieldName,
-          Description: metadata.description || "",
-          Type: {
-            Kind: "ScalarType",
-            Name:
-              tailorToGraphQL[fieldType as keyof typeof tailorToGraphQL] ||
-              "String",
-            Description: "",
-            Required: false,
-          },
-          Array: array,
-          Required: required,
-        };
+        return ResolverProcessor.createFieldDefinition(
+          fieldName,
+          fieldType,
+          required,
+          array,
+          metadata.description || "",
+        );
       },
     );
   }
