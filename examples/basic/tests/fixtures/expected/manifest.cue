@@ -2104,21 +2104,6 @@
             "Variables": {
               "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
             }
-          },
-          "Trigger": {
-            "Kind": "Event",
-            "EventType": "tailordb.type_record.created",
-            "Condition": {
-              "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
-            }
-          },
-          "Target": {
-            "Kind": "graphql",
-            "AppName": "my-app",
-            "Query": "\n      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {\n        salesOrderCreated(input: $input) {\n          id\n          customerID\n          totalPrice\n          status\n        }\n      }\n    ",
-            "Variables": {
-              "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
-            }
           }
         },
         {
@@ -2152,35 +2137,6 @@
             "Body": {
               "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
             }
-          },
-          "Trigger": {
-            "Kind": "Event",
-            "EventType": "pipeline.resolver.executed",
-            "Condition": {
-              "Expr": "args.resolverName === \"stepChain\" && (({result})=>{if(!result)return false;return result.result.summary.length>0})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })"
-            }
-          },
-          "Target": {
-            "Kind": "webhook",
-            "URL": {
-              "Expr": "(({result})=>`https://example.com/webhook/${result.result.summary.length}`)(args)"
-            },
-            "Headers": [
-              {
-                "Key": "Content-Type",
-                "Value": "application/json"
-              },
-              {
-                "Key": "Authorization",
-                "Value": {
-                  "VaultName": "my-vault",
-                  "SecretKey": "my-secret"
-                }
-              }
-            ],
-            "Body": {
-              "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
-            }
           }
         },
         {
@@ -2200,17 +2156,6 @@
             "Variables": {
               "Expr": "({ ...args, appNamespace: args.namespaceName })"
             }
-          },
-          "Trigger": {
-            "Kind": "Event",
-            "EventType": "tailordb.type_record.created",
-            "Condition": {
-              "Expr": "args.typeName === \"User\" && (({newRecord})=>newRecord.email.endsWith(\"@tailor.tech\"))({ ...args, appNamespace: args.namespaceName })"
-            }
-          },
-          "Target": {
-            "Kind": "function",
-            "Name": "user-created__target"
           }
         }
       ],
@@ -2471,21 +2416,6 @@
             "Variables": {
               "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
             }
-          },
-          "Trigger": {
-            "Kind": "Event",
-            "EventType": "tailordb.type_record.created",
-            "Condition": {
-              "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
-            }
-          },
-          "Target": {
-            "Kind": "graphql",
-            "AppName": "my-app",
-            "Query": "\n      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {\n        salesOrderCreated(input: $input) {\n          id\n          customerID\n          totalPrice\n          status\n        }\n      }\n    ",
-            "Variables": {
-              "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
-            }
           }
         },
         {
@@ -2519,35 +2449,6 @@
             "Body": {
               "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
             }
-          },
-          "Trigger": {
-            "Kind": "Event",
-            "EventType": "pipeline.resolver.executed",
-            "Condition": {
-              "Expr": "args.resolverName === \"stepChain\" && (({result})=>{if(!result)return false;return result.result.summary.length>0})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })"
-            }
-          },
-          "Target": {
-            "Kind": "webhook",
-            "URL": {
-              "Expr": "(({result})=>`https://example.com/webhook/${result.result.summary.length}`)(args)"
-            },
-            "Headers": [
-              {
-                "Key": "Content-Type",
-                "Value": "application/json"
-              },
-              {
-                "Key": "Authorization",
-                "Value": {
-                  "VaultName": "my-vault",
-                  "SecretKey": "my-secret"
-                }
-              }
-            ],
-            "Body": {
-              "Expr": "(({result})=>({orderId:result.result.summary[0],customerID:result.result.summary[1],totalPrice:result.result.summary[2]}))(args)"
-            }
           }
         },
         {
@@ -2567,17 +2468,6 @@
             "Variables": {
               "Expr": "({ ...args, appNamespace: args.namespaceName })"
             }
-          },
-          "Trigger": {
-            "Kind": "Event",
-            "EventType": "tailordb.type_record.created",
-            "Condition": {
-              "Expr": "args.typeName === \"User\" && (({newRecord})=>newRecord.email.endsWith(\"@tailor.tech\"))({ ...args, appNamespace: args.namespaceName })"
-            }
-          },
-          "Target": {
-            "Kind": "function",
-            "Name": "user-created__target"
           }
         }
       ],
