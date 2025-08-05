@@ -53,9 +53,9 @@
               ],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "email": {
@@ -65,9 +65,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "phone": {
@@ -77,9 +77,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "country": {
@@ -89,9 +89,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "postalCode": {
@@ -101,9 +101,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "address": {
@@ -113,9 +113,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "city": {
@@ -142,9 +142,9 @@
               ],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "fullAddress": {
@@ -154,9 +154,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -174,9 +174,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "createdAt": {
@@ -186,9 +186,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -203,9 +203,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -284,9 +284,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Serial": {
                 "Start": 1000,
@@ -300,10 +300,10 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": true,
               "ForeignKey": true,
               "ForeignKeyType": "SalesOrder",
+              "Required": true,
               "Vector": false
             },
             "amount": {
@@ -313,9 +313,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "sequentialId": {
@@ -325,9 +325,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Serial": {
                 "Start": 1,
@@ -358,9 +358,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "createdAt": {
@@ -370,9 +370,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -387,9 +387,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -468,9 +468,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Fields": {
                 "personal": {
                   "Type": "nested",
@@ -759,9 +759,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Fields": {
                 "created": {
                   "Type": "datetime",
@@ -864,10 +864,10 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": false,
               "ForeignKey": true,
               "ForeignKeyType": "Supplier",
+              "Required": true,
               "Vector": false
             },
             "totalPrice": {
@@ -877,9 +877,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "discount": {
@@ -889,9 +889,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "status": {
@@ -901,9 +901,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "attachedFiles": {
@@ -913,9 +913,9 @@
               "Validate": [],
               "Array": true,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Fields": {
                 "id": {
                   "Type": "uuid",
@@ -983,9 +983,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -1000,9 +1000,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -1081,9 +1081,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             }
           },
@@ -1149,23 +1149,23 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": false,
               "ForeignKey": true,
               "ForeignKeyType": "Customer",
+              "Required": true,
               "Vector": false
             },
-            "approvedByUserID": {
+            "approvedByUserIDs": {
               "Type": "uuid",
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": false,
-              "Index": true,
-              "Required": false,
+              "Array": true,
+              "Index": false,
               "Unique": false,
               "ForeignKey": true,
               "ForeignKeyType": "User",
+              "Required": false,
               "Vector": false
             },
             "totalPrice": {
@@ -1175,9 +1175,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "discount": {
@@ -1187,9 +1187,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "status": {
@@ -1199,9 +1199,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "cancelReason": {
@@ -1211,9 +1211,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "canceledAt": {
@@ -1223,9 +1223,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "createdAt": {
@@ -1235,9 +1235,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -1252,9 +1252,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -1355,9 +1355,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "phone": {
@@ -1367,9 +1367,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "fax": {
@@ -1379,9 +1379,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "email": {
@@ -1391,9 +1391,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "postalCode": {
@@ -1403,9 +1403,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "country": {
@@ -1415,9 +1415,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "state": {
@@ -1436,9 +1436,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "city": {
@@ -1448,9 +1448,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "createdAt": {
@@ -1460,9 +1460,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -1477,9 +1477,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -1558,9 +1558,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "email": {
@@ -1570,9 +1570,9 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": true,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "status": {
@@ -1582,9 +1582,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "department": {
@@ -1594,9 +1594,9 @@
               "Validate": [],
               "Array": true,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "createdAt": {
@@ -1606,9 +1606,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -1623,9 +1623,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -1637,7 +1637,7 @@
           "Relationships": {
             "setting": {
               "RefType": "UserSetting",
-              "RefField": "userIDs",
+              "RefField": "userID",
               "SrcField": "id",
               "Array": false,
               "Description": ""
@@ -1728,22 +1728,22 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
-            "userIDs": {
+            "userID": {
               "Type": "uuid",
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": true,
+              "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": true,
               "ForeignKey": true,
               "ForeignKeyType": "User",
+              "Required": true,
               "Vector": false
             },
             "createdAt": {
@@ -1753,9 +1753,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -1770,9 +1770,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -1785,8 +1785,8 @@
             "user": {
               "RefType": "User",
               "RefField": "id",
-              "SrcField": "userIDs",
-              "Array": true,
+              "SrcField": "userID",
+              "Array": false,
               "Description": ""
             }
           },
@@ -2654,9 +2654,9 @@
               ],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "email": {
@@ -2666,9 +2666,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "phone": {
@@ -2678,9 +2678,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "country": {
@@ -2690,9 +2690,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "postalCode": {
@@ -2702,9 +2702,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "address": {
@@ -2714,9 +2714,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "city": {
@@ -2743,9 +2743,9 @@
               ],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "fullAddress": {
@@ -2755,9 +2755,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -2775,9 +2775,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "createdAt": {
@@ -2787,9 +2787,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -2804,9 +2804,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -2885,9 +2885,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Serial": {
                 "Start": 1000,
@@ -2901,10 +2901,10 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": true,
               "ForeignKey": true,
               "ForeignKeyType": "SalesOrder",
+              "Required": true,
               "Vector": false
             },
             "amount": {
@@ -2914,9 +2914,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "sequentialId": {
@@ -2926,9 +2926,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Serial": {
                 "Start": 1,
@@ -2959,9 +2959,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "createdAt": {
@@ -2971,9 +2971,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -2988,9 +2988,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -3069,9 +3069,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Fields": {
                 "personal": {
                   "Type": "nested",
@@ -3360,9 +3360,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Fields": {
                 "created": {
                   "Type": "datetime",
@@ -3465,10 +3465,10 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": false,
               "ForeignKey": true,
               "ForeignKeyType": "Supplier",
+              "Required": true,
               "Vector": false
             },
             "totalPrice": {
@@ -3478,9 +3478,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "discount": {
@@ -3490,9 +3490,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "status": {
@@ -3502,9 +3502,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "attachedFiles": {
@@ -3514,9 +3514,9 @@
               "Validate": [],
               "Array": true,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Fields": {
                 "id": {
                   "Type": "uuid",
@@ -3584,9 +3584,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -3601,9 +3601,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -3682,9 +3682,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             }
           },
@@ -3750,23 +3750,23 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": false,
               "ForeignKey": true,
               "ForeignKeyType": "Customer",
+              "Required": true,
               "Vector": false
             },
-            "approvedByUserID": {
+            "approvedByUserIDs": {
               "Type": "uuid",
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": false,
-              "Index": true,
-              "Required": false,
+              "Array": true,
+              "Index": false,
               "Unique": false,
               "ForeignKey": true,
               "ForeignKeyType": "User",
+              "Required": false,
               "Vector": false
             },
             "totalPrice": {
@@ -3776,9 +3776,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "discount": {
@@ -3788,9 +3788,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "status": {
@@ -3800,9 +3800,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "cancelReason": {
@@ -3812,9 +3812,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "canceledAt": {
@@ -3824,9 +3824,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "createdAt": {
@@ -3836,9 +3836,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -3853,9 +3853,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -3956,9 +3956,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "phone": {
@@ -3968,9 +3968,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "fax": {
@@ -3980,9 +3980,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "email": {
@@ -3992,9 +3992,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "postalCode": {
@@ -4004,9 +4004,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "country": {
@@ -4016,9 +4016,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "state": {
@@ -4037,9 +4037,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "city": {
@@ -4049,9 +4049,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "createdAt": {
@@ -4061,9 +4061,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -4078,9 +4078,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -4159,9 +4159,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "email": {
@@ -4171,9 +4171,9 @@
               "Validate": [],
               "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": true,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
             "status": {
@@ -4183,9 +4183,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "department": {
@@ -4195,9 +4195,9 @@
               "Validate": [],
               "Array": true,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false
             },
             "createdAt": {
@@ -4207,9 +4207,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -4224,9 +4224,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -4238,7 +4238,7 @@
           "Relationships": {
             "setting": {
               "RefType": "UserSetting",
-              "RefField": "userIDs",
+              "RefField": "userID",
               "SrcField": "id",
               "Array": false,
               "Description": ""
@@ -4329,22 +4329,22 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": true,
               "Unique": false,
               "ForeignKey": false,
+              "Required": true,
               "Vector": false
             },
-            "userIDs": {
+            "userID": {
               "Type": "uuid",
               "AllowedValues": [],
               "Description": "",
               "Validate": [],
-              "Array": true,
+              "Array": false,
               "Index": true,
-              "Required": true,
               "Unique": true,
               "ForeignKey": true,
               "ForeignKeyType": "User",
+              "Required": true,
               "Vector": false
             },
             "createdAt": {
@@ -4354,9 +4354,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Create": {
@@ -4371,9 +4371,9 @@
               "Validate": [],
               "Array": false,
               "Index": false,
-              "Required": false,
               "Unique": false,
               "ForeignKey": false,
+              "Required": false,
               "Vector": false,
               "Hooks": {
                 "Update": {
@@ -4386,8 +4386,8 @@
             "user": {
               "RefType": "User",
               "RefField": "id",
-              "SrcField": "userIDs",
-              "Array": true,
+              "SrcField": "userID",
+              "Array": false,
               "Description": ""
             }
           },

@@ -145,11 +145,11 @@ export class TypeProcessor {
               }),
             })),
             Array: fieldConfig.array || false,
-            Index: fieldConfig.index || false,
-            Required: fieldConfig.required !== false,
-            Unique: fieldConfig.unique || false,
+            Index: (fieldConfig.index && !fieldConfig.array) || false,
+            Unique: (fieldConfig.unique && !fieldConfig.array) || false,
             ForeignKey: fieldConfig.foreignKey || false,
             ForeignKeyType: fieldConfig.foreignKeyType,
+            Required: fieldConfig.required !== false,
             Vector: fieldConfig.vector || false,
             ...(fieldConfig.hooks && {
               Hooks: {

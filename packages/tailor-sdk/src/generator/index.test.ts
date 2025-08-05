@@ -745,13 +745,15 @@ describe("apply function", () => {
     const { TailorCtl } = await import("@/ctl");
     const TailorCtlMock = vi.mocked(TailorCtl);
     const applySpy = vi.fn();
-    TailorCtlMock.mockImplementation(
-      () => ({ apply: applySpy, upsertWorkspace: vi.fn() }) as any,
-    );
+    TailorCtlMock.mockImplementation(() => ({ apply: applySpy }) as any);
 
     await apply(mockConfig, mockApplyOptions);
 
     expect(applySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: mockConfig.name,
+        region: mockConfig.region,
+      }),
       expect.stringContaining("manifest.cue"),
     );
   });

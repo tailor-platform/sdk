@@ -102,7 +102,7 @@ type SalesOrder {
   id: ID!
   customerID: ID!
   customer: Customer!
-  approvedByUserID: ID
+  approvedByUserIDs: [ID!]
   totalPrice: Int
   discount: Float
   status: String
@@ -145,8 +145,8 @@ type User {
 type UserSetting {
   id: ID!
   language: enum!
-  userIDs: [ID!]!
-  user: [User!]!
+  userID: ID!
+  user: User!
   createdAt: DateTime
   updatedAt: DateTime
 }

@@ -117,7 +117,7 @@ export interface Role {
 export interface SalesOrder {
   id: Generated<string>;
   customerID: string;
-  approvedByUserID: string | null;
+  approvedByUserIDs: string[] | null;
   totalPrice: number | null;
   discount: number | null;
   status: string | null;
@@ -154,7 +154,7 @@ export interface User {
 export interface UserSetting {
   id: Generated<string>;
   language: "jp" | "en";
-  userIDs: string[];
+  userID: string;
   createdAt: Timestamp;
   updatedAt: Timestamp | null;
 }

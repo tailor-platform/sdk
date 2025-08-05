@@ -5,7 +5,7 @@ import path from "node:path";
 import { styleText } from "node:util";
 import ini from "ini";
 import ml from "multiline-ts";
-import { Region } from "@/types/types";
+import { WorkspaceConfig } from "./config";
 
 interface CtlConfig {
   name: string;
@@ -56,8 +56,10 @@ export class TailorCtl {
   }
 
   private spawn(...args: string[]) {
+    console.log(
+      `[${this.options.dryRun ? "Dry Run: " : ""}spawn] tailorctl ${args.join(" ")}`,
+    );
     if (this.options.dryRun) {
-      console.log(`[Dry Run: spawn] tailorctl ${args.join(" ")}`);
       return "{}";
     }
 
@@ -75,10 +77,13 @@ export class TailorCtl {
   }
 
   private exec(...args: string[]) {
+    console.log(
+      `[${this.options.dryRun ? "Dry Run: " : ""}exec] tailorctl ${args.join(" ")}`,
+    );
     if (this.options.dryRun) {
-      console.log(`[Dry Run: exec] tailorctl ${args.join(" ")}`);
       return "{}";
     }
+
     return execSync(`tailorctl ${args.join(" ")}`).toString("utf-8");
   }
 
@@ -87,8 +92,8 @@ export class TailorCtl {
     return JSON.parse(output);
   }
 
-  async upsertWorkspace(workspace: { name: string; region: Region }) {
-    if (this.ctlConfig.workspaceName === "") {
+  private async upsertWorkspace(workspace: WorkspaceConfig) {
+    if (!workspace.id && this.ctlConfig.workspaceName === "") {
       console.log("Creating workspace...");
       this.exec(
         "workspace",
@@ -98,7 +103,10 @@ export class TailorCtl {
         "-r",
         workspace.region,
       );
-    } else if (workspace.name !== this.ctlConfig.workspaceName) {
+    } else if (
+      !workspace.id &&
+      workspace.name !== this.ctlConfig.workspaceName
+    ) {
       throw new Error(
         styleText(
           "red",
@@ -110,10 +118,21 @@ export class TailorCtl {
       );
     }
 
-    return this.execJson("workspace", "describe");
+    return this.execJson(
+      "workspace",
+      "describe",
+      ...(workspace.id ? ["-w", workspace.id] : []),
+    );
   }
 
-  async apply(manifest: string) {
-    this.spawn("workspace", "apply", "-m", manifest, "-a");
+  async apply(workspace: WorkspaceConfig, manifest: string) {
+    this.spawn(
+      "workspace",
+      "apply",
+      ...(workspace.id ? ["-w", workspace.id] : []),
+      "-m",
+      manifest,
+      "-a",
+    );
   }
 }

@@ -1,10 +1,13 @@
 #!/usr/bin/env tsx
 
 import { defineCommand, runMain } from "citty";
+import fs from "node:fs";
 import path from "node:path";
 import type { WorkspaceConfig } from "@/config";
 import { commandArgs, type CommandArgs } from "./args.js";
 import { apply, generate } from "@/generator";
+
+import * as dotenv from "dotenv";
 
 async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
   try {
@@ -31,6 +34,14 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
   command,
   options,
 ) => {
+  if (options["env-file"]) {
+    const envPath = path.resolve(process.cwd(), options["env-file"]);
+    if (!fs.existsSync(envPath)) {
+      throw new Error(`Environment file not found: ${envPath}`);
+    }
+    dotenv.config({ path: envPath });
+  }
+
   try {
     const configPath = options.config || "tailor.config.ts";
     const config = await loadConfig(configPath);

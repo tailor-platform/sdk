@@ -17,6 +17,11 @@ const commonCommandArgs = {
     alias: "c",
     default: "tailor.config.ts",
   },
+  "env-file": {
+    type: "string",
+    description: "Path to the environment file",
+    alias: "e",
+  },
 } as const;
 
 const cliGenerateOption = {
