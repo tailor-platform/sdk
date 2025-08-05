@@ -83,7 +83,10 @@ export class GenerationManager {
   }
 
   async generate(_options: GenerateOptions) {
-    console.log("Generation for workspace:", this.workspace.config.name);
+    console.log(
+      "Generation for workspace:",
+      this.workspace.config.id || this.workspace.config.name,
+    );
 
     // application毎のデータ構造を初期化
     for (const app of this.workspace.applications) {

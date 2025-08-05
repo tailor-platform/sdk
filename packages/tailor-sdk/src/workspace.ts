@@ -34,7 +34,7 @@ export class Workspace {
       return;
     }
     // Use workspace name as namespace for executor service
-    this._executorService = new ExecutorService(this.config.name, config);
+    this._executorService = new ExecutorService(config);
   }
 }
 

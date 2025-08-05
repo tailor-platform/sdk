@@ -74,7 +74,7 @@ class TestGenerator {
 describe("GenerationManager", () => {
   let tempDir: string;
   let manager: any;
-  let mockConfig: WorkspaceConfig;
+  let mockConfig: Extract<WorkspaceConfig, { id?: undefined }>;
 
   beforeAll(async () => {
     vi.spyOn(fs, "writeFile").mockImplementation((_, _2, callback: any) => {
