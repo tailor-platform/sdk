@@ -22,6 +22,7 @@ export interface AppConfig {
 }
 
 export interface WorkspaceConfig {
+  id?: string;
   name: string;
   region: Region;
   app: Record<string, AppConfig>;

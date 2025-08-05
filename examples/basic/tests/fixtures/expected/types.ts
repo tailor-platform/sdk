@@ -92,7 +92,7 @@ export type SalesOrder = {
   id: string;
   customerID: string;
   customer: Customer;
-  approvedByUserID?: string | null;
+  approvedByUserIDs?: string[] | null;
   totalPrice?: number | null;
   discount?: number | null;
   status?: string | null;
@@ -132,7 +132,8 @@ export type User = {
 export type UserSetting = {
   id: string;
   language: "jp" | "en";
-  userIDs: string;
+  userID: string;
+  user: User;
   createdAt: Date;
   updatedAt?: Date | null;
 };

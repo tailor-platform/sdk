@@ -8,13 +8,14 @@ export const salesOrder = db
       type: "1-n",
       toward: { type: customer },
     }),
-    approvedByUserID: db
+    approvedByUserIDs: db
       .uuid()
       .optional()
       .relation({
         type: "keyOnly",
         toward: { type: user },
-      }),
+      })
+      .array(),
     totalPrice: db.int().optional(),
     discount: db.float().optional(),
     status: db.string().optional(),
