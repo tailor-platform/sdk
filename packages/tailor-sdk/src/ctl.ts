@@ -92,8 +92,12 @@ export class TailorCtl {
     return JSON.parse(output);
   }
 
-  private async upsertWorkspace(workspace: WorkspaceConfig) {
-    if (!workspace.id && this.ctlConfig.workspaceName === "") {
+  private async createWorkspaceIfNeeded(workspace: WorkspaceConfig) {
+    if (workspace.id != null) {
+      return this.execJson("workspace", "describe", "-w", workspace.id);
+    }
+
+    if (this.ctlConfig.workspaceName === "") {
       console.log("Creating workspace...");
       this.exec(
         "workspace",
@@ -103,10 +107,7 @@ export class TailorCtl {
         "-r",
         workspace.region,
       );
-    } else if (
-      !workspace.id &&
-      workspace.name !== this.ctlConfig.workspaceName
-    ) {
+    } else if (workspace.name !== this.ctlConfig.workspaceName) {
       throw new Error(
         styleText(
           "red",
@@ -118,19 +119,28 @@ export class TailorCtl {
       );
     }
 
-    return this.execJson(
-      "workspace",
-      "describe",
-      ...(workspace.id ? ["-w", workspace.id] : []),
-    );
+    const description = this.execJson("workspace", "describe");
+    if (workspace.region !== description.region) {
+      throw new Error(
+        styleText(
+          "red",
+          ml`
+            Workspace region mismatch: expected ${workspace.region}, got ${description.region}
+            If you want to change the region, please create a new workspace.
+            `,
+        ),
+      );
+    }
+
+    return description;
   }
 
   async apply(workspace: WorkspaceConfig, manifest: string) {
-    this.upsertWorkspace(workspace);
+    this.createWorkspaceIfNeeded(workspace);
     this.spawn(
       "workspace",
       "apply",
-      ...(workspace.id ? ["-w", workspace.id] : []),
+      ...(workspace.id != null ? ["-w", workspace.id] : []),
       "-m",
       manifest,
       "-a",

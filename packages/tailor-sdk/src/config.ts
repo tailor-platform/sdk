@@ -21,10 +21,10 @@ export interface AppConfig {
   auth?: AuthServiceInput;
 }
 
-export interface WorkspaceConfig {
-  id?: string;
-  name: string;
-  region: Region;
+export type WorkspaceConfig = (
+  | { id: string; name?: undefined; region?: undefined }
+  | { id?: undefined; name: string; region: Region }
+) & {
   app: Record<string, AppConfig>;
   executor?: ExecutorServiceInput;
   generators?: Array<
@@ -40,7 +40,7 @@ export interface WorkspaceConfig {
     | CodeGenerator<any, any, any, any>
   >;
   tsConfig?: string;
-}
+};
 
 let distPath: string | null = null;
 
@@ -52,7 +52,7 @@ export const getDistDir = (): string => {
 };
 
 export function defineConfig(configs: WorkspaceConfig): WorkspaceConfig {
-  if (!configs || !configs.name) {
+  if (!configs || !("id" in configs || "name" in configs)) {
     throw new Error("Invalid Tailor config structure");
   }
   return configs;

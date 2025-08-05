@@ -31,12 +31,9 @@ export class ExecutorService {
   private executors: Record<string, Executor> = {};
   private bundler: Bundler<Executor>;
 
-  constructor(
-    public readonly namespace: string,
-    public readonly config: ExecutorServiceConfig,
-  ) {
+  constructor(public readonly config: ExecutorServiceConfig) {
     const bundlerConfig: BundlerConfig<Executor> = {
-      namespace,
+      namespace: "executor",
       serviceConfig: config,
       loader: new ExecutorLoader(),
       transformer: new ExecutorTransformer(),

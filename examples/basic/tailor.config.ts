@@ -1,9 +1,9 @@
 import { defineConfig } from "@tailor-platform/tailor-sdk";
 
 export default defineConfig({
-  id: process.env.WORKSPACE_ID,
-  name: "tailor-sdk-dev",
-  region: "asia-northeast",
+  id: process.env.WORKSPACE_ID!,
+  // name: "tailor-sdk-dev",
+  // region: "asia-northeast",
   app: {
     "my-app": {
       db: {
