@@ -126,6 +126,7 @@ export class TailorCtl {
   }
 
   async apply(workspace: WorkspaceConfig, manifest: string) {
+    this.upsertWorkspace(workspace);
     this.spawn(
       "workspace",
       "apply",
