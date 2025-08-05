@@ -68,6 +68,7 @@ type NestedProfile {
     lastUpdated: DateTime
     version: Int!
   }!
+  archived: Boolean
 }
 
 

@@ -91,6 +91,7 @@ export interface NestedProfile {
     lastUpdated: Timestamp | null;
     version: number;
   };
+  archived: boolean | null;
 }
 
 export interface PurchaseOrder {

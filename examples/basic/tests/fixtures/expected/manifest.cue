@@ -800,6 +800,18 @@
                   "Vector": false
                 }
               }
+            },
+            "archived": {
+              "Type": "boolean",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Required": false,
+              "Vector": false
             }
           },
           "Relationships": {},
@@ -3401,6 +3413,18 @@
                   "Vector": false
                 }
               }
+            },
+            "archived": {
+              "Type": "boolean",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Required": false,
+              "Vector": false
             }
           },
           "Relationships": {},
