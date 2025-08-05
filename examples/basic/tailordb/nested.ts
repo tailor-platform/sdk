@@ -43,4 +43,5 @@ export const nestedProfile = db.type("NestedProfile", {
     lastUpdated: db.datetime().optional(),
     version: db.int(),
   }),
+  archived: db.bool().optional(),
 });

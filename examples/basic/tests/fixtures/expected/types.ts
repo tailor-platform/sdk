@@ -64,6 +64,7 @@ export type NestedProfile = {
     lastUpdated?: Date | null;
     version: number;
   };
+  archived?: boolean | null;
 };
 
 export type PurchaseOrder = {
