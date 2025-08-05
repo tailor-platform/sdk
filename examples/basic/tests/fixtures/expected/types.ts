@@ -124,7 +124,7 @@ export type User = {
   name: string;
   email: string;
   status?: string | null;
-  department?: string[] | null;
+  department?: string | null;
   createdAt: Date;
   updatedAt?: Date | null;
   setting?: UserSetting | null;

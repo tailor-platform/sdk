@@ -5,7 +5,7 @@ export const user = db
     name: db.string(),
     email: db.string().unique(),
     status: db.string().optional(),
-    department: db.string().array().optional(),
+    department: db.string().optional(),
     ...db.fields.timestamps(),
   })
   .indexes(
