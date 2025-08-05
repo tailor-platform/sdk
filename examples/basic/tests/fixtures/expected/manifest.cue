@@ -2097,26 +2097,12 @@
               "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
             }
           },
-          "TargetWebhook": {
-            "Kind": "webhook",
-            "URL": {
-              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
-            },
-            "Headers": [
-              {
-                "Key": "Content-Type",
-                "RawValue": "application/json"
-              },
-              {
-                "Key": "Authorization",
-                "SecretValue": {
-                  "VaultName": "my-vault",
-                  "SecretKey": "my-secret"
-                }
-              }
-            ],
-            "Body": {
-              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+          "TargetTailorGraphql": {
+            "Kind": "graphql",
+            "AppName": "my-app",
+            "Query": "\n      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {\n        salesOrderCreated(input: $input) {\n          id\n          customerID\n          totalPrice\n          status\n        }\n      }\n    ",
+            "Variables": {
+              "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
             }
           },
           "Trigger": {
@@ -2127,25 +2113,11 @@
             }
           },
           "Target": {
-            "Kind": "webhook",
-            "URL": {
-              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
-            },
-            "Headers": [
-              {
-                "Key": "Content-Type",
-                "Value": "application/json"
-              },
-              {
-                "Key": "Authorization",
-                "Value": {
-                  "VaultName": "my-vault",
-                  "SecretKey": "my-secret"
-                }
-              }
-            ],
-            "Body": {
-              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            "Kind": "graphql",
+            "AppName": "my-app",
+            "Query": "\n      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {\n        salesOrderCreated(input: $input) {\n          id\n          customerID\n          totalPrice\n          status\n        }\n      }\n    ",
+            "Variables": {
+              "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
             }
           }
         },
@@ -2492,26 +2464,12 @@
               "Expr": "args.typeName === \"SalesOrder\" && (({newRecord})=>(newRecord.totalPrice??0)>1e6)({ ...args, appNamespace: args.namespaceName })"
             }
           },
-          "TargetWebhook": {
-            "Kind": "webhook",
-            "URL": {
-              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
-            },
-            "Headers": [
-              {
-                "Key": "Content-Type",
-                "RawValue": "application/json"
-              },
-              {
-                "Key": "Authorization",
-                "SecretValue": {
-                  "VaultName": "my-vault",
-                  "SecretKey": "my-secret"
-                }
-              }
-            ],
-            "Body": {
-              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+          "TargetTailorGraphql": {
+            "Kind": "graphql",
+            "AppName": "my-app",
+            "Query": "\n      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {\n        salesOrderCreated(input: $input) {\n          id\n          customerID\n          totalPrice\n          status\n        }\n      }\n    ",
+            "Variables": {
+              "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
             }
           },
           "Trigger": {
@@ -2522,25 +2480,11 @@
             }
           },
           "Target": {
-            "Kind": "webhook",
-            "URL": {
-              "Expr": "(({newRecord})=>`https://example.com/webhook/${newRecord.id}`)(args)"
-            },
-            "Headers": [
-              {
-                "Key": "Content-Type",
-                "Value": "application/json"
-              },
-              {
-                "Key": "Authorization",
-                "Value": {
-                  "VaultName": "my-vault",
-                  "SecretKey": "my-secret"
-                }
-              }
-            ],
-            "Body": {
-              "Expr": "(({newRecord})=>({orderId:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice}))(args)"
+            "Kind": "graphql",
+            "AppName": "my-app",
+            "Query": "\n      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {\n        salesOrderCreated(input: $input) {\n          id\n          customerID\n          totalPrice\n          status\n        }\n      }\n    ",
+            "Variables": {
+              "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
             }
           }
         },

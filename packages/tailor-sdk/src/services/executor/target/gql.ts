@@ -13,6 +13,7 @@ type GraphqlOperationWithManifestAndContext<A> = ManifestAndContext<
 >;
 
 export function executorGql<A>({
+  appName,
   query,
   variables,
 }: {
@@ -23,10 +24,11 @@ export function executorGql<A>({
   return {
     manifest: {
       Kind: "graphql",
+      AppName: appName,
       Query: query.toString(),
       Variables: variables
         ? {
-            Expr: `(${JSON.stringify(variables)})(args)`,
+            Expr: `(${variables.toString()})(args)`,
           }
         : undefined,
     },
