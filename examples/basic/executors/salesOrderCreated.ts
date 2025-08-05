@@ -14,15 +14,24 @@ export default createExecutor(
       ({ newRecord }) => (newRecord.totalPrice ?? 0) > 100_0000,
     ),
   )
-  .executeWebhook({
-    url: ({ newRecord }) => `https://example.com/webhook/${newRecord.id}`,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: { vault: "my-vault", key: "my-secret" },
-    },
-    body: ({ newRecord }) => ({
-      orderId: newRecord.id,
-      customerID: newRecord.customerID,
-      totalPrice: newRecord.totalPrice,
+  .executeGql({
+    appName: "my-app",
+    query: /* gql */ `
+      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {
+        salesOrderCreated(input: $input) {
+          id
+          customerID
+          totalPrice
+          status
+        }
+      }
+    `,
+    variables: ({ newRecord }) => ({
+      input: {
+        id: newRecord.id,
+        customerID: newRecord.customerID,
+        totalPrice: newRecord.totalPrice,
+        status: newRecord.status,
+      },
     }),
   });

@@ -147,7 +147,7 @@ export interface User {
   name: string;
   email: string;
   status: string | null;
-  department: string[] | null;
+  department: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp | null;
 }
