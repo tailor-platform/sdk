@@ -7,8 +7,8 @@ checksum:
   require_checksum: true
 registries:
   - type: standard
-    ref: v4.340.0 # renovate: depName=aquaproj/aqua-registry
+    ref: v4.398.0 # renovate: depName=aquaproj/aqua-registry
 packages:
   - name: rhysd/actionlint@v1.7.7
-  - name: suzuki-shunsuke/ghalint@v1.3.0
-  - name: tailor-platform/tailorctl@v1.33.2
+  - name: suzuki-shunsuke/ghalint@v1.5.3
+  - name: tailor-platform/tailorctl@v2.0.1

@@ -31,63 +31,63 @@
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.3.0/ghalint_1.3.0_darwin_amd64.tar.gz",
-      "checksum": "6E4C1C4BD7759EFD3288F7403A83012E7A180A442296FC35AE32AA2AD42729CF",
+      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.5.3/ghalint_1.5.3_darwin_amd64.tar.gz",
+      "checksum": "26B0E7F47F848EE17F7829D80CB75A8B6A77D87EADB3423A57B5FF5916DBEF24",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.3.0/ghalint_1.3.0_darwin_arm64.tar.gz",
-      "checksum": "1E8E9568BA2B424B887A7F6F85FD0B875A1F611ABB44D4B6DCC0A32147412F99",
+      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.5.3/ghalint_1.5.3_darwin_arm64.tar.gz",
+      "checksum": "F5D463AEE96EA2485903218A12143478A517C084F94A3F5CA47F1D90440B4ADB",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.3.0/ghalint_1.3.0_linux_amd64.tar.gz",
-      "checksum": "7B05A622D6F2C4098AD5D45048C457E8440A288314408D401F71976CB7F48D8D",
+      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.5.3/ghalint_1.5.3_linux_amd64.tar.gz",
+      "checksum": "5FD6696E6F736750B60A67F0C7F7E43642BDA15348D55D261C4D386940A1C02F",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.3.0/ghalint_1.3.0_linux_arm64.tar.gz",
-      "checksum": "72A604A712F00A633DC9682B3E51F51141FA64D3078C7089A954D63D15AB5989",
+      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.5.3/ghalint_1.5.3_linux_arm64.tar.gz",
+      "checksum": "40F870601461EF2FC4F5F3DF25EB79EC49506ABF1C45A0E4D02BBED0E1A88A5E",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.3.0/ghalint_1.3.0_windows_amd64.zip",
-      "checksum": "89B64FD0EE121D45A0CA679D636D1665412D46A1504310B20145654F4E66E9F8",
+      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.5.3/ghalint_1.5.3_windows_amd64.zip",
+      "checksum": "3E6E644581EA3B947F7D1FAA6D2A4BBAC2AC19249F6E8AB29A808FD4BA4ADD47",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.3.0/ghalint_1.3.0_windows_arm64.zip",
-      "checksum": "C69B1F420586E30F2D4C9B2718BF1BF57494D50C0881684A65897E6798BB5627",
+      "id": "github_release/github.com/suzuki-shunsuke/ghalint/v1.5.3/ghalint_1.5.3_windows_arm64.zip",
+      "checksum": "50A45BA46F9E2C51509F83B04C7F1869BD23CA39B2EFD3CA7106E6D0076EF199",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v1.33.2/tailorctl_darwin_v1.33.2_arm64.tar.gz",
-      "checksum": "F5626039071120028D6203396FEB8B80DF765327F134491221136913F7228563",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.1/tailorctl_darwin_v2.0.1_arm64.tar.gz",
+      "checksum": "C7AEC9B892A52E4C143F212E0FBE878068A36B3B2BBBA5D1876E34E797B7DCB0",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v1.33.2/tailorctl_darwin_v1.33.2_x86_64.tar.gz",
-      "checksum": "4838105B2DD9BF166FE2F8682350F7DBF6320A93996D6C40C1469A47CA8D683C",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.1/tailorctl_darwin_v2.0.1_x86_64.tar.gz",
+      "checksum": "BB874A57984228A3D6A348DADD6262CCE461B1EFC5B79A5FD9E905C981B30B04",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v1.33.2/tailorctl_linux_v1.33.2_arm64.tar.gz",
-      "checksum": "C8B47AD814B2B2B4E4D1E3AC53D7E0FBE501C5AC985D2F6857324D69B8799B94",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.1/tailorctl_linux_v2.0.1_arm64.tar.gz",
+      "checksum": "4E31C13796B8C8D2712809240D13F3F0379BA0D108BE21EE7C67E4839EE868E5",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v1.33.2/tailorctl_linux_v1.33.2_x86_64.tar.gz",
-      "checksum": "3356AF60B234BE549808B16CEC14C73E4646F110DCA71197FC0BB76D0D368948",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.1/tailorctl_linux_v2.0.1_x86_64.tar.gz",
+      "checksum": "2FF9A91C18D9CC2CC8B27377EDBBC4FA7D05465EE7FBBB6E27F83B5C3C41F78E",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v1.33.2/tailorctl_windows_v1.33.2_x86_64.zip",
-      "checksum": "06EACD439FC446F367EA0827BABECCA291F204738167DB0B25DD5D6F818DFCB6",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.1/tailorctl_windows_v2.0.1_x86_64.zip",
+      "checksum": "1CB84E41F80B691A7E6A88374614AA73BE575C688EB6B0FA2CCB172BDAA4D5E9",
       "algorithm": "sha256"
     },
     {
-      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.340.0/registry.yaml",
-      "checksum": "9B91642727EDF8635F564501DE23DE08E5E461543838B686154B2A7233875EEB570E8DA757E70C60B4125B3C8A428EBB42E4AF8E16B4A19314C99210244B3619",
+      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.398.0/registry.yaml",
+      "checksum": "7ECB8D2982D9147B59B8EE0FD7F01EEAEAA542BC9AD2A6E57E3FF250CB9FA8233347CC963ACC5BE4E0527B4E6967DA88613D99952B0BC42CCBE7C0FC60C562C5",
       "algorithm": "sha512"
     }
   ]
