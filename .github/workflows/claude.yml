@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      pull-requests: read
-      issues: read
+      pull-requests: write
+      issues: write
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
     steps:
