@@ -73,14 +73,14 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
     }
 
     const cliExecTsPath = path.join(__dirname, "exec.ts");
-    const cliExecMjsPath = path.join(__dirname, "exec.mjs");
+    const cliExecMjsPath = path.join(__dirname, "exec.js");
     const cliExecPath = existsSync(cliExecTsPath)
       ? cliExecTsPath
       : existsSync(cliExecMjsPath)
         ? cliExecMjsPath
         : null;
     if (!cliExecPath) {
-      console.error(`Error: exec.ts or exec.mjs not found in ${__dirname}`);
+      console.error(`Error: exec.ts or exec.js not found in ${__dirname}`);
       process.exit(1);
     }
 
