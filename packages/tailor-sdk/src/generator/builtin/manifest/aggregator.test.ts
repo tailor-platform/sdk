@@ -159,7 +159,6 @@ describe("ManifestAggregator", () => {
       const manifestJSON = JSON.parse(result.files[0].content);
       expect(manifestJSON.Kind).toBe("workspace");
       expect(manifestJSON.Apps).toHaveLength(1);
-      expect(manifestJSON.Services).toHaveLength(3); // TailorDB + Pipeline + Auth
       expect(manifestJSON.Tailordbs).toHaveLength(1);
       expect(manifestJSON.Pipelines).toHaveLength(1);
       expect(manifestJSON.Auths).toHaveLength(1);
@@ -308,7 +307,6 @@ describe("ManifestAggregator", () => {
       expect(result.files).toHaveLength(1);
       const manifestJSON = JSON.parse(result.files[0].content);
       expect(manifestJSON.Auths).toHaveLength(0);
-      expect(manifestJSON.Services).toHaveLength(2); // TailorDB + Pipeline のみ
 
       generatePipelineManifestSpy.mockRestore();
     });
@@ -440,7 +438,6 @@ describe("ManifestAggregator", () => {
       expect(result.files).toHaveLength(1);
       const manifestJSON = JSON.parse(result.files[0].content);
       expect(manifestJSON.Apps).toHaveLength(2);
-      expect(manifestJSON.Services).toHaveLength(8); // largeApp: TailorDB*2 + Pipeline*2 + Auth*1 + mockApp: TailorDB*1 + Pipeline*1 + Auth*1
       expect(manifestJSON.Tailordbs).toHaveLength(3); // largeTailorDBService + mockTailorDBService (from largeApp) + mockTailorDBService (from mockApp)
       expect(manifestJSON.Pipelines).toHaveLength(3); // largePipelineService + mockPipelineService (from largeApp) + mockPipelineService (from mockApp)
       expect(manifestJSON.Auths).toHaveLength(2);

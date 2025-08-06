@@ -24,7 +24,6 @@ export interface ManifestFieldMetadata {
 export interface WorkspaceManifest {
   Apps: AppManifest[];
   Kind: string;
-  Services: ServiceManifest[];
   Auths: AuthManifest[];
   Pipelines: PipelineManifest[];
   Executors: ExecutorManifest[];

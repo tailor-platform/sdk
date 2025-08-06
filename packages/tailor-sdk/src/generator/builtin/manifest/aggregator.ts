@@ -79,7 +79,6 @@ export class ManifestAggregator {
     const manifest: WorkspaceManifest = {
       Apps: [],
       Kind: "workspace",
-      Services: [],
       Auths: [],
       Pipelines: [],
       Executors: [],
@@ -97,7 +96,6 @@ export class ManifestAggregator {
           metadata,
           metadata.executors,
         );
-        manifest.Services.push(tailordbManifest);
         manifest.Tailordbs.push(tailordbManifest);
       }
 
@@ -109,7 +107,6 @@ export class ManifestAggregator {
           metadata,
           metadata.executors,
         );
-        manifest.Services.push(pipelineManifest);
         manifest.Pipelines.push(pipelineManifest);
       }
 
@@ -117,7 +114,6 @@ export class ManifestAggregator {
         const authManifest = ManifestAggregator.generateAuthManifest(
           app.authService,
         );
-        manifest.Services.push(authManifest);
         manifest.Auths.push(authManifest);
       }
     }
@@ -139,7 +135,6 @@ export class ManifestAggregator {
         ManifestAggregator.generateExecutorManifestFromMetadata(
           serviceExecutors,
         );
-      manifest.Services.push(executorManifest);
       manifest.Executors.push(executorManifest);
     }
 
