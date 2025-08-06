@@ -4,9 +4,15 @@ on: pull_request
 jobs:
   sdk-typescript-graph:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          persist-credentials: false
       - uses: ysk8hori/delta-typescript-graph-action@7abea70623af0422e16d374720e8dbf73e6ac674 # v1.2.4
         with:
           comment-title: "TypeScript Graph for SDK"
@@ -21,9 +27,15 @@ jobs:
 
   examples-basic-typescript-graph:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          persist-credentials: false
       - uses: ysk8hori/delta-typescript-graph-action@7abea70623af0422e16d374720e8dbf73e6ac674 # v1.2.4
         with:
           comment-title: "TypeScript Graph for Examples/Basic"

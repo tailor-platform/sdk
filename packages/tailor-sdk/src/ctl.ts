@@ -44,14 +44,18 @@ export class TailorCtl {
       return config;
     }
 
-    this.login();
-    return this.loadIni();
+    if (!process.env.TAILOR_TOKEN) {
+      this.login();
+    }
   }
 
   private loadIni() {
-    const configs = ini.parse(
-      fs.readFileSync(path.join(os.homedir(), ".tailorctl", "config"), "utf-8"),
-    );
+    const configPath = path.join(os.homedir(), ".tailorctl", "config");
+    if (!fs.existsSync(configPath)) {
+      return;
+    }
+
+    const configs = ini.parse(fs.readFileSync(configPath, "utf-8"));
     return configs[configs.global?.context || "default"];
   }
 

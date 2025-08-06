@@ -19,10 +19,11 @@ jobs:
     #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
 
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+      contents: write
+      pull-requests: write
+      issues: write
       id-token: write
 
     steps:
@@ -30,12 +31,15 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@188d526721c4b76a779f8af9a10fe73b500a2fbf # beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
           # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
           # model: "claude-opus-4-20250514"

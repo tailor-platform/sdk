@@ -23,6 +23,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       packages: write
@@ -32,6 +33,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
@@ -58,14 +60,14 @@ jobs:
           echo "Current branch: $BRANCH_NAME"
 
           # Get the latest version tag (excluding beta tags)
-          LATEST_TAG=$(git tag -l "v*" | grep -v "\-beta\." | sort -V | tail -n1 || echo "v0.0.0")
+          LATEST_TAG="$(git tag -l "v*" | grep -v "\-beta\." | sort -V | tail -n1 || echo "v0.0.0")"
           if [[ -z "$LATEST_TAG" ]]; then
             LATEST_TAG="v0.0.0"
           fi
           echo "Latest tag: $LATEST_TAG"
 
           # Remove 'v' prefix
-          CURRENT_VERSION=${LATEST_TAG#v}
+          CURRENT_VERSION="${LATEST_TAG#v}"
 
           # Split version into components
           IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
@@ -98,20 +100,20 @@ jobs:
           if [[ "$BRANCH_NAME" != "main" ]]; then
             # For non-main branches, always use feature tag format
             # Sanitize branch name to be npm-compatible (alphanumeric, dash, underscore)
-            SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            SAFE_BRANCH="${BRANCH_NAME//([^a-zA-Z0-9._-])/-}"
             NEW_VERSION="${NEW_VERSION}-${SAFE_BRANCH}.${BETA_ID}"
-            echo "publish_tag=feature" >> $GITHUB_OUTPUT
+            echo "publish_tag=feature" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.event.inputs.beta }}" == "true" ]]; then
             # For main branch with beta flag
             NEW_VERSION="${NEW_VERSION}-beta.${BETA_ID}"
-            echo "publish_tag=beta" >> $GITHUB_OUTPUT
+            echo "publish_tag=beta" >> "$GITHUB_OUTPUT"
           else
             # For main branch without beta flag (stable release)
-            echo "publish_tag=latest" >> $GITHUB_OUTPUT
+            echo "publish_tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
           echo "New version: $NEW_VERSION"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         if: github.event_name == 'workflow_dispatch'
