@@ -1,0 +1,43 @@
+---
+# actionlint　と ghalint を使って GitHub Actions の静的解析する
+#
+# - actionlint: https://github.com/rhysd/actionlint
+# - ghalint: https://github.com/suzuki-shunsuke/ghalint
+name: GitHub Actions Lint
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/*.yaml
+      - .github/workflows/*.yml
+      - aqua.yaml
+      - aqua-checksums.json
+      - .ghalint.yaml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install aqua
+        uses: ./.github/actions/install-aqua
+
+      - name: Run actionlint
+        run: actionlint -color
+
+      - name: Run ghalint workflows
+        run: ghalint run
+
+      - name: Run ghalint actions
+        run: ghalint run-action

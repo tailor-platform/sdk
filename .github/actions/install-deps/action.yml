@@ -1,0 +1,26 @@
+name: Install aqua
+description: Install aqua package manager
+
+inputs:
+  aqua_version:
+    description: "Version of aqua to install"
+    required: false
+    default: "v2.48.1"
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      name: Install pnpm
+      with:
+        run_install: false
+
+    - name: Install Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: 22
+        cache: "pnpm"
+
+    - name: Install dependencies
+      run: pnpm install
+      shell: bash

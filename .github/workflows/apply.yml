@@ -1,0 +1,67 @@
+name: "Workspace Apply Test"
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/apply.yml
+      - examples/basic/**
+      - packages/tailor-sdk/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: "false"
+
+      - name: Install aqua
+        uses: ./.github/actions/install-aqua
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Build SDK package
+        run: |
+          echo "=== Building @tailor-platform/tailor-sdk ==="
+          pnpm --filter @tailor-platform/tailor-sdk build
+          echo "=== Checking dist files after build ==="
+          ls -la packages/tailor-sdk/dist/cli/
+
+      - name: Re-install to create bin links
+        run: |
+          echo "=== Re-installing to create bin links ==="
+          pnpm install --frozen-lockfile
+
+      - name: Inject environment variables
+        run: |
+          echo "TAILOR_TOKEN=${{ secrets.TAILOR_PLATFORM_PAT }}" >> "$GITHUB_ENV"
+
+      - name: Create workspace
+        run: |
+          tailorctl workspace create --name "sdk-ci-${{ github.run_id }}" --region asia-northeast
+          WORKSPACE_ID=$(tailorctl config describe -f json | jq -r '.workspaceId')
+          echo "WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
+        env:
+          TAILOR_TOKEN: ${{ env.TAILOR_TOKEN }}
+
+      - name: Apply workspace
+        run: |
+          pnpm exec turbo run apply
+        env:
+          TAILOR_TOKEN: ${{ env.TAILOR_TOKEN }}
+          WORKSPACE_ID: ${{ env.WORKSPACE_ID }}
+
+      - name: Destroy workspace
+        run: tailorctl workspace destroy -w "${{ env.WORKSPACE_ID }}" --auto-approve
+        env:
+          TAILOR_TOKEN: ${{ env.TAILOR_TOKEN }}
+          WORKSPACE_ID: ${{ env.WORKSPACE_ID }}
