@@ -30,20 +30,10 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Build SDK package
-        run: |
-          echo "=== Building @tailor-platform/tailor-sdk ==="
-          pnpm --filter @tailor-platform/tailor-sdk build
-          echo "=== Checking dist files after build ==="
-          ls -la packages/tailor-sdk/dist/cli/
+        run: pnpm exec turbo run build
 
       - name: Re-install to create bin links
-        run: |
-          echo "=== Re-installing to create bin links ==="
-          pnpm install --frozen-lockfile
-
-      - name: Inject environment variables
-        run: |
-          echo "TAILOR_TOKEN=${{ secrets.TAILOR_PLATFORM_PAT }}" >> "$GITHUB_ENV"
+        run: pnpm install --frozen-lockfile
 
       - name: Create workspace
         run: |
@@ -51,17 +41,17 @@ jobs:
           WORKSPACE_ID=$(tailorctl config describe -f json | jq -r '.workspaceId')
           echo "WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
         env:
-          TAILOR_TOKEN: ${{ env.TAILOR_TOKEN }}
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Apply workspace
         run: |
           pnpm exec turbo run apply
         env:
-          TAILOR_TOKEN: ${{ env.TAILOR_TOKEN }}
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
           WORKSPACE_ID: ${{ env.WORKSPACE_ID }}
 
       - name: Destroy workspace
         run: tailorctl workspace destroy -w "${{ env.WORKSPACE_ID }}" --auto-approve
         env:
-          TAILOR_TOKEN: ${{ env.TAILOR_TOKEN }}
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
           WORKSPACE_ID: ${{ env.WORKSPACE_ID }}
