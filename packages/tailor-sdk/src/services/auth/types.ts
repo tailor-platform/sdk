@@ -131,5 +131,5 @@ export interface AuthServiceInput {
 
 export interface AuthReference {
   Namespace: string;
-  IdProviderConfigName: string;
+  IdProviderConfigName?: string;
 }

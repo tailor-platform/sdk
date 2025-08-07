@@ -165,13 +165,13 @@ export class ManifestAggregator {
 
     if (app.authService && app.authService.config) {
       const namespace = app.authService.config.namespace;
+      authReference = {
+        Namespace: namespace,
+      };
 
       const idProviderConfigs = app.authService.config.idProviderConfigs;
       if (idProviderConfigs && idProviderConfigs.length > 0) {
-        authReference = {
-          Namespace: namespace,
-          IdProviderConfigName: idProviderConfigs[0].Name,
-        };
+        authReference.IdProviderConfigName = idProviderConfigs[0].Name;
       }
     }
 
