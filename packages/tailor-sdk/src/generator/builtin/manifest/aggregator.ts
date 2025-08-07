@@ -7,6 +7,7 @@ import {
   AuthManifest,
   TailordbManifest,
   PipelineManifest,
+  IdPManifest,
 } from "./types";
 import { ResolverManifestMetadata } from "./resolver-processor";
 import { ExecutorManifestMetadata } from "./executor-processor";
@@ -81,6 +82,7 @@ export class ManifestAggregator {
       Kind: "workspace",
       Auths: [],
       Pipelines: [],
+      IdPs: [],
       Executors: [],
       Stateflows: [],
       Tailordbs: [],
@@ -108,6 +110,23 @@ export class ManifestAggregator {
           metadata.executors,
         );
         manifest.Pipelines.push(pipelineManifest);
+      }
+
+      for (const [namespace, idp] of Object.entries(app.idpServices)) {
+        manifest.IdPs.push({
+          Kind: "idp",
+          Namespace: namespace,
+          Authorization: (
+            {
+              insecure: "true==true",
+              loggedIn: "user != null && size(user.id) > 0",
+            } satisfies Record<
+              typeof idp.authorization,
+              IdPManifest["Authorization"]
+            >
+          )[idp.authorization],
+          Clients: idp.clients.map((client) => ({ Name: client })),
+        });
       }
 
       if (app.authService) {
@@ -277,6 +296,8 @@ export class ManifestAggregator {
               return { ...baseConfig, SamlConfig: provider.Config };
             case "OIDC":
               return { ...baseConfig, OidcConfig: provider.Config };
+            case "BuiltInIdP":
+              return { ...baseConfig, BuiltInIdPConfig: provider.Config };
             default:
               throw new Error(
                 `Unknown IdProviderConfig kind: ${provider.Config satisfies never}`,

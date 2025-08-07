@@ -12,15 +12,21 @@ export default defineConfig({
       pipeline: {
         "my-pipeline": { files: ["./resolvers/**/resolver.ts"] },
       },
+      idp: {
+        "my-idp": {
+          authorization: "loggedIn",
+          clients: ["default-idp-client"],
+        },
+      },
       auth: {
         namespace: "my-auth",
         idProviderConfigs: [
           {
             Name: "sample",
             Config: {
-              Kind: "IDToken",
-              ClientID: "exampleco",
-              ProviderURL: "https://exampleco-enterprises.auth0.com/",
+              Kind: "BuiltInIdP",
+              Namespace: "my-idp",
+              ClientName: "default-idp-client",
             },
           },
         ],

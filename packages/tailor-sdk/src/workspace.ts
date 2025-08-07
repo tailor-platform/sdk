@@ -21,9 +21,10 @@ export class Workspace {
 
   newApplication(name: string, appConfig: AppConfig) {
     const app = new Application(name);
-    app.defineAuth(appConfig.auth);
     app.defineTailorDB(appConfig.db);
     app.definePipeline(appConfig.pipeline);
+    app.defineIdp(appConfig.idp);
+    app.defineAuth(appConfig.auth);
 
     this._applications.push(app);
     return app;
