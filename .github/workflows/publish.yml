@@ -51,15 +51,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         id: calculate_version
         run: |
-          # Fetch all tags
-          git fetch --tags
-
           # Get current branch name from GitHub context
           # workflow_dispatch provides github.ref_name directly
           BRANCH_NAME="${{ github.ref_name }}"
           echo "Current branch: $BRANCH_NAME"
 
           # Get the latest version tag (excluding beta tags)
+          # Note: Tags are already fetched by checkout action with fetch-tags: true
           LATEST_TAG="$(git tag -l "v*" | grep -v "\-beta\." | sort -V | tail -n1 || echo "v0.0.0")"
           if [[ -z "$LATEST_TAG" ]]; then
             LATEST_TAG="v0.0.0"
@@ -121,7 +119,7 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
           git tag -a v${{ steps.calculate_version.outputs.new_version }} -m "Release v${{ steps.calculate_version.outputs.new_version }}"
-          git push origin v${{ steps.calculate_version.outputs.new_version }}
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git v${{ steps.calculate_version.outputs.new_version }}
 
       - name: Set version from tag
         run: |
