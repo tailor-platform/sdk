@@ -3,6 +3,7 @@ import type { TailorDBServiceInput } from "@/services/tailordb/types";
 import type { PipelineResolverServiceInput } from "@/services/pipeline/types";
 import type { AuthServiceInput } from "@/services/auth/types";
 import type { ExecutorServiceInput } from "@/services/executor/types";
+import { IdPServiceInput } from "./services/idp/types";
 import { Region } from "@/types/types";
 import { SdlGeneratorID } from "@/generator/builtin/sdl/index";
 import {
@@ -18,6 +19,7 @@ import { CodeGenerator } from "@/generator/types";
 export interface AppConfig {
   db?: TailorDBServiceInput;
   pipeline?: PipelineResolverServiceInput;
+  idp?: IdPServiceInput;
   auth?: AuthServiceInput;
 }
 

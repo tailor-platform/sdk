@@ -12,16 +12,20 @@
       },
       "Subgraphs": [
         {
-          "Type": "auth",
-          "Name": "my-auth"
-        },
-        {
           "Type": "tailordb",
           "Name": "tailordb"
         },
         {
           "Type": "pipeline",
           "Name": "my-pipeline"
+        },
+        {
+          "Type": "idp",
+          "Name": "my-idp"
+        },
+        {
+          "Type": "auth",
+          "Name": "my-auth"
         }
       ],
       "Version": "v2"
@@ -35,10 +39,10 @@
       "IdProviderConfigs": [
         {
           "Name": "sample",
-          "IdTokenConfig": {
-            "Kind": "IDToken",
-            "ClientID": "exampleco",
-            "ProviderURL": "https://exampleco-enterprises.auth0.com/"
+          "BuiltInIdPConfig": {
+            "Kind": "BuiltInIdP",
+            "Namespace": "my-idp",
+            "ClientName": "default-idp-client"
           }
         }
       ],
@@ -259,6 +263,18 @@
         }
       ],
       "Version": "v2"
+    }
+  ],
+  "IdPs": [
+    {
+      "Kind": "idp",
+      "Namespace": "my-idp",
+      "Authorization": "user != null && size(user.id) > 0",
+      "Clients": [
+        {
+          "Name": "default-idp-client"
+        }
+      ]
     }
   ],
   "Executors": [

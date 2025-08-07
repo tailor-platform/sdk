@@ -24,9 +24,15 @@ export interface IDToken {
   UsernameClaim?: string;
 }
 
+export interface BuiltinIdP {
+  Kind: "BuiltInIdP";
+  Namespace: string;
+  ClientName: string;
+}
+
 export interface IdProviderConfig {
   Name: string;
-  Config: OIDC | SAML | IDToken;
+  Config: OIDC | SAML | IDToken | BuiltinIdP;
 }
 
 export interface UserProfileProviderConfig {

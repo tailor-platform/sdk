@@ -75,11 +75,6 @@ describe("ManifestAggregator", () => {
     } as any;
 
     mockAuthService = {
-      toManifest: vi.fn().mockReturnValue({
-        Kind: "auth",
-        Namespace: "test-namespace",
-        Name: "test-auth",
-      }),
       config: {
         namespace: "test-namespace",
         idProviderConfigs: [
@@ -109,6 +104,7 @@ describe("ManifestAggregator", () => {
       tailorDBServices: [mockTailorDBService],
       pipelineResolverServices: [mockPipelineService],
       authService: mockAuthService,
+      idpServices: {},
       subgraphs: [], // subgraphs プロパティを追加
     } as any;
 
@@ -137,7 +133,7 @@ describe("ManifestAggregator", () => {
       // ManifestAggregator.generatePipelineManifestのスパイを設定
       const generatePipelineManifestSpy = vi
         .spyOn(ManifestAggregator, "generatePipelineManifest")
-        .mockResolvedValue({
+        .mockReturnValue({
           Kind: "pipeline",
           Namespace: "test-namespace",
           Resolvers: [],
@@ -162,6 +158,8 @@ describe("ManifestAggregator", () => {
       expect(manifestJSON.Tailordbs).toHaveLength(1);
       expect(manifestJSON.Pipelines).toHaveLength(1);
       expect(manifestJSON.Auths).toHaveLength(1);
+      expect(manifestJSON.Auths[0].Kind).toBe("auth");
+      expect(manifestJSON.Auths[0].Namespace).toBe("test-namespace");
 
       generatePipelineManifestSpy.mockRestore();
     });
@@ -174,6 +172,7 @@ describe("ManifestAggregator", () => {
             tailorDBServices: [],
             pipelineResolverServices: [],
             authService: null,
+            idpServices: {},
             subgraphs: [],
           },
         ],
@@ -223,6 +222,7 @@ describe("ManifestAggregator", () => {
         tailorDBServices: [],
         pipelineResolverServices: [],
         authService: null,
+        idpServices: {},
         subgraphs: [],
       } as any;
 
@@ -243,7 +243,7 @@ describe("ManifestAggregator", () => {
       // ManifestAggregator.generatePipelineManifestのスパイを設定
       const generatePipelineManifestSpy = vi
         .spyOn(ManifestAggregator, "generatePipelineManifest")
-        .mockResolvedValue({
+        .mockReturnValue({
           Kind: "pipeline",
           Namespace: "test-namespace",
           Resolvers: [],
@@ -271,6 +271,7 @@ describe("ManifestAggregator", () => {
         tailorDBServices: [mockTailorDBService],
         pipelineResolverServices: [mockPipelineService],
         authService: null,
+        idpServices: {},
         subgraphs: [],
       } as any;
 
@@ -291,7 +292,7 @@ describe("ManifestAggregator", () => {
       // ManifestAggregator.generatePipelineManifestのスパイを設定
       const generatePipelineManifestSpy = vi
         .spyOn(ManifestAggregator, "generatePipelineManifest")
-        .mockResolvedValue({
+        .mockReturnValue({
           Kind: "pipeline",
           Namespace: "test-namespace",
           Resolvers: [],
@@ -325,7 +326,7 @@ describe("ManifestAggregator", () => {
       // ManifestAggregator.generatePipelineManifestのスパイを設定
       const generatePipelineManifestSpy = vi
         .spyOn(ManifestAggregator, "generatePipelineManifest")
-        .mockResolvedValue({
+        .mockReturnValue({
           Kind: "pipeline",
           Namespace: "test-namespace",
           Resolvers: [],
@@ -402,6 +403,7 @@ describe("ManifestAggregator", () => {
         tailorDBServices: [largeTailorDBService, mockTailorDBService],
         pipelineResolverServices: [largePipelineService, mockPipelineService],
         authService: mockAuthService,
+        idpServices: {},
         subgraphs: [],
       } as any;
 
@@ -422,7 +424,7 @@ describe("ManifestAggregator", () => {
       // ManifestAggregator.generatePipelineManifestのスパイを設定
       const generatePipelineManifestSpy = vi
         .spyOn(ManifestAggregator, "generatePipelineManifest")
-        .mockResolvedValue({
+        .mockReturnValue({
           Kind: "pipeline",
           Namespace: "large-namespace",
           Resolvers: [],

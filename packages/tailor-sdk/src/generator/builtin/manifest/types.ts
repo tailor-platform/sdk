@@ -26,6 +26,7 @@ export interface WorkspaceManifest {
   Kind: string;
   Auths: AuthManifest[];
   Pipelines: PipelineManifest[];
+  IdPs: IdPManifest[];
   Executors: ExecutorManifest[];
   Stateflows: StateflowManifest[];
   Tailordbs: TailordbManifest[];
@@ -46,6 +47,13 @@ export interface AuthManifest extends ServiceManifest {
   Kind: "auth";
   Namespace: string;
   [key: string]: unknown;
+}
+
+export interface IdPManifest extends ServiceManifest {
+  Kind: "idp";
+  Namespace: string;
+  Authorization: "true==true" | "user != null && size(user.id) > 0"; // FIXME: string
+  Clients: { Name: string }[];
 }
 
 export interface ExecutorManifest extends ServiceManifest {

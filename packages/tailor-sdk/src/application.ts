@@ -4,10 +4,12 @@ import { TailorDBService } from "@/services/tailordb/service";
 import { TailorDBServiceInput } from "@/services/tailordb/types";
 import { AuthService } from "@/services/auth/service";
 import { AuthServiceInput } from "@/services/auth/types";
+import { IdPServiceInput } from "./services/idp/types";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
   private _pipelineResolverServices: PipelineResolverService[] = [];
+  private _idpService?: IdPServiceInput = {};
   private _authService?: AuthService = undefined;
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -28,6 +30,10 @@ export class Application {
   get pipelineResolverServices() {
     return this
       ._pipelineResolverServices as ReadonlyArray<PipelineResolverService>;
+  }
+
+  get idpServices() {
+    return this._idpService as Readonly<IdPServiceInput>;
   }
 
   get authService() {
@@ -59,6 +65,17 @@ export class Application {
       this._pipelineResolverServices.push(pipelineService);
       this.addSubgraph("pipeline", pipelineService.namespace);
     }
+  }
+
+  defineIdp(config?: IdPServiceInput) {
+    if (!config) {
+      return;
+    }
+
+    this._idpService = config;
+    Object.keys(config).forEach((namespace) =>
+      this.addSubgraph("idp", namespace),
+    );
   }
 
   defineAuth(config?: AuthServiceInput) {
