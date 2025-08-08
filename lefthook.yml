@@ -34,11 +34,11 @@ pre-commit:
       root: "packages/tailor-sdk"
       run: |
         echo "typecheck: tailor-sdk"
-        npx tsc --noEmit
+        npm run typecheck
 
     - name: typecheck:examples-basic
       glob: "*.{ts,js}"
       root: "examples/basic"
       run: |
         echo "typecheck: examples/basic"
-        npx tsc --noEmit
+        npm run typecheck

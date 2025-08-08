@@ -38,7 +38,7 @@ export interface Customer {
   city: string | null;
   fullAddress: string | null;
   state: string;
-  createdAt: Timestamp;
+  createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 
@@ -49,7 +49,7 @@ export interface Invoice {
   amount: number | null;
   sequentialId: number | null;
   status: "draft" | "sent" | "paid" | "cancelled" | null;
-  createdAt: Timestamp;
+  createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 
@@ -106,7 +106,7 @@ export interface PurchaseOrder {
     size: number;
     type: "text" | "image";
   }[];
-  createdAt: Timestamp;
+  createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 
@@ -124,7 +124,7 @@ export interface SalesOrder {
   status: string | null;
   cancelReason: string | null;
   canceledAt: Timestamp | null;
-  createdAt: Timestamp;
+  createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 
@@ -138,7 +138,7 @@ export interface Supplier {
   country: string;
   state: "Alabama" | "Alaska";
   city: string;
-  createdAt: Timestamp;
+  createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 
@@ -148,7 +148,7 @@ export interface User {
   email: string;
   status: string | null;
   department: string | null;
-  createdAt: Timestamp;
+  createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 
@@ -156,7 +156,7 @@ export interface UserSetting {
   id: Generated<string>;
   language: "jp" | "en";
   userID: string;
-  createdAt: Timestamp;
+  createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
 

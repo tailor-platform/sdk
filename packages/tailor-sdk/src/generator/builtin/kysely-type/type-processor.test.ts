@@ -64,7 +64,7 @@ describe("Kysely TypeProcessor", () => {
     expect(result.name).toBe("UserWithAssertNonNull");
     expect(result.typeDef).toContain("export interface UserWithAssertNonNull");
     expect(result.typeDef).toContain("name: string");
-    expect(result.typeDef).toContain("email: string"); // should be non-null due to assertNonNull
+    expect(result.typeDef).toContain("email: string | null"); // assertNonNull doesn't affect Kysely type generation
     expect(result.typeDef).toContain("phone: string | null"); // should be nullable
   });
 
@@ -80,7 +80,7 @@ describe("Kysely TypeProcessor", () => {
     expect(result.typeDef).toContain("export interface UserWithTimestamps");
     expect(result.typeDef).toContain("name: string");
     // createdAt and updatedAt should be processed through normal field logic
-    expect(result.typeDef).toContain("createdAt: Timestamp;");
+    expect(result.typeDef).toContain("createdAt: Timestamp | null;");
     expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
   });
 });

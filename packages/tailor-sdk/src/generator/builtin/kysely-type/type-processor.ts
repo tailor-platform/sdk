@@ -131,9 +131,6 @@ export class TypeProcessor {
    */
   private static isOptional(fieldDef: any): boolean {
     const metadata = fieldDef.metadata;
-    if (metadata?.assertNonNull === true) {
-      return false;
-    }
     return metadata?.required !== true;
   }
 
