@@ -257,11 +257,11 @@ export class GenerationManager {
     await Promise.allSettled(
       Object.entries(types).map(async ([typeName, type]) => {
         try {
-          results.tailordbResults[namespace][typeName] = await gen.processType(
+          results.tailordbResults[namespace][typeName] = await gen.processType({
             type,
-            appNamespace,
+            applicationNamespace: appNamespace,
             namespace,
-          );
+          });
         } catch (error) {
           console.error(
             `Error processing type ${typeName} in ${appNamespace}/${namespace} with generator ${gen.id}:`,
@@ -275,11 +275,11 @@ export class GenerationManager {
     if (gen.processTailorDBNamespace) {
       try {
         results.tailordbNamespaceResults[namespace] =
-          await gen.processTailorDBNamespace(
-            appNamespace,
+          await gen.processTailorDBNamespace({
+            applicationNamespace: appNamespace,
             namespace,
-            results.tailordbResults[namespace],
-          );
+            types: results.tailordbResults[namespace],
+          });
       } catch (error) {
         console.error(
           `Error processing TailorDB namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
@@ -306,7 +306,11 @@ export class GenerationManager {
       Object.entries(resolvers).map(async ([resolverName, resolver]) => {
         try {
           results.pipelineResults[namespace][resolverName] =
-            await gen.processResolver(resolver, appNamespace, namespace);
+            await gen.processResolver({
+              resolver,
+              applicationNamespace: appNamespace,
+              namespace,
+            });
         } catch (error) {
           console.error(
             `Error processing resolver ${resolverName} in ${appNamespace}/${namespace} with generator ${gen.id}:`,
@@ -320,11 +324,11 @@ export class GenerationManager {
     if (gen.processPipelineNamespace) {
       try {
         results.pipelineNamespaceResults[namespace] =
-          await gen.processPipelineNamespace(
-            appNamespace,
+          await gen.processPipelineNamespace({
+            applicationNamespace: appNamespace,
             namespace,
-            results.pipelineResults[namespace],
-          );
+            resolvers: results.pipelineResults[namespace],
+          });
       } catch (error) {
         console.error(
           `Error processing Pipeline namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
@@ -395,11 +399,13 @@ export class GenerationManager {
     // executor: Object.values(results.executorResults),
 
     // Call generator's aggregate method
-    const result = await gen.aggregate(
+    const result = await gen.aggregate({
       inputs,
-      Object.values(this.generatorResults[gen.id].executorResults),
-      path.join(this.baseDir, gen.id),
-    );
+      executorInputs: Object.values(
+        this.generatorResults[gen.id].executorResults,
+      ),
+      baseDir: path.join(this.baseDir, gen.id),
+    });
 
     // Write generated files
     await Promise.all(

@@ -35,36 +35,48 @@ class TestGenerator {
   readonly id = "test-generator";
   readonly description = "Test generator for unit tests";
 
-  async processType(type: TailorDBType) {
-    return { name: type.name, processed: true };
+  async processType(args: {
+    type: TailorDBType;
+    applicationNamespace: string;
+    namespace: string;
+  }) {
+    return { name: args.type.name, processed: true };
   }
 
-  async processResolver(resolver: Resolver) {
-    return { name: resolver.name, processed: true };
+  async processResolver(args: {
+    resolver: Resolver;
+    applicationNamespace: string;
+    namespace: string;
+  }) {
+    return { name: args.resolver.name, processed: true };
   }
 
-  async processTailorDBNamespace(
-    _applicationNamespace: string,
-    _namespace: string,
-    types: Record<string, any>,
-  ) {
-    return { processed: true, count: Object.keys(types).length };
+  async processTailorDBNamespace(args: {
+    applicationNamespace: string;
+    namespace: string;
+    types: Record<string, any>;
+  }) {
+    return { processed: true, count: Object.keys(args.types).length };
   }
 
-  async processPipelineNamespace(
-    _applicationNamespace: string,
-    _namespace: string,
-    resolvers: Record<string, any>,
-  ) {
-    return { processed: true, count: Object.keys(resolvers).length };
+  async processPipelineNamespace(args: {
+    applicationNamespace: string;
+    namespace: string;
+    resolvers: Record<string, any>;
+  }) {
+    return { processed: true, count: Object.keys(args.resolvers).length };
   }
 
-  async aggregate(inputs: any[], executorResults: any[], baseDir: string) {
+  async aggregate(args: {
+    inputs: any[];
+    executorInputs: any[];
+    baseDir: string;
+  }) {
     return {
       files: [
         {
-          path: path.join(baseDir, "test-output.txt"),
-          content: `Inputs: ${JSON.stringify(inputs)}`,
+          path: path.join(args.baseDir, "test-output.txt"),
+          content: `Inputs: ${JSON.stringify(args.inputs)}`,
         },
       ],
     };
@@ -488,8 +500,8 @@ describe("GenerationManager", () => {
 
       await manager.aggregate(testGenerator);
 
-      expect(aggregateSpy).toHaveBeenCalledWith(
-        [
+      expect(aggregateSpy).toHaveBeenCalledWith({
+        inputs: [
           {
             applicationNamespace: "test-app",
             tailordb: [
@@ -506,9 +518,9 @@ describe("GenerationManager", () => {
             ],
           },
         ],
-        [],
-        expect.stringContaining(testGenerator.id),
-      );
+        executorInputs: [],
+        baseDir: expect.stringContaining(testGenerator.id),
+      });
     });
 
     it("ファイルを正しく書き込み", async () => {
