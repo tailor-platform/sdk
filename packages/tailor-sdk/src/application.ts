@@ -5,6 +5,7 @@ import { TailorDBServiceInput } from "@/services/tailordb/types";
 import { AuthService } from "@/services/auth/service";
 import { AuthServiceInput } from "@/services/auth/types";
 import { IdPServiceInput } from "./services/idp/types";
+import { AppConfig } from "./config";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
@@ -13,7 +14,13 @@ export class Application {
   private _authService?: AuthService = undefined;
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  constructor(public name: string) {}
+  constructor(
+    public readonly name: string,
+    public readonly config: Pick<
+      AppConfig,
+      "cors" | "allowedIPAddresses" | "disableIntrospection"
+    >,
+  ) {}
 
   private addSubgraph(type: string, name: string) {
     this._subgraphs.push({ Type: type, Name: name });

@@ -178,9 +178,9 @@ export class ManifestAggregator {
     return {
       Kind: "application",
       Name: app.name,
-      Cors: [],
-      AllowedIPAddresses: [],
-      DisableIntrospection: false,
+      Cors: app.config.cors ?? [],
+      AllowedIPAddresses: app.config.allowedIPAddresses ?? [],
+      DisableIntrospection: app.config.disableIntrospection ?? false,
       Auth: authReference ?? {},
       Subgraphs: app.subgraphs,
       Version: "v2",
