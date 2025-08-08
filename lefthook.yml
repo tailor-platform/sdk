@@ -3,6 +3,12 @@
 pre-commit:
   parallel: true
   jobs:
+    - name: build:tailor-sdk
+      glob: "*.{ts}"
+      root: "packages/tailor-sdk"
+      run: |
+        npm run build
+
     - name: lint:tailor-sdk
       glob: "*.{ts}"
       root: "packages/tailor-sdk"
