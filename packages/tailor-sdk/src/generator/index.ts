@@ -404,6 +404,11 @@ export class GenerationManager {
       result.files.map(async (file) => {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
         return new Promise<void>((resolve, reject) => {
+          if (file.skipIfExists && fs.existsSync(file.path)) {
+            console.log(`Skipping existing file: ${file.path}`);
+            return resolve();
+          }
+
           fs.writeFile(file.path, file.content, (err) => {
             if (err) {
               console.error(`Error writing file ${file.path}:`, err);

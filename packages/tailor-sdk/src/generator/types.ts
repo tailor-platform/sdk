@@ -6,6 +6,7 @@ import { TailorDBType } from "../services/tailordb/schema";
 interface GeneratedFile {
   path: string;
   content: string;
+  skipIfExists?: boolean; // default: false
 }
 
 export interface BasicGeneratorMetadata<T = any, R = any, E = any> {
