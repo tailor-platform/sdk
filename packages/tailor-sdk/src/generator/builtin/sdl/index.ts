@@ -28,15 +28,23 @@ export class SdlGenerator
   /**
    * TailorDBTypeを処理してSDLTypeMetadataを生成
    */
-  async processType(type: TailorDBType): Promise<SDLTypeMetadata> {
-    return await TypeProcessor.processDBType(type);
+  async processType(args: {
+    type: TailorDBType;
+    applicationNamespace: string;
+    namespace: string;
+  }): Promise<SDLTypeMetadata> {
+    return await TypeProcessor.processDBType(args.type);
   }
 
   /**
    * Resolverを処理してResolverSDLMetadataを生成
    */
-  async processResolver(resolver: Resolver): Promise<ResolverSDLMetadata> {
-    return await ResolverProcessor.processResolver(resolver);
+  async processResolver(args: {
+    resolver: Resolver;
+    applicationNamespace: string;
+    namespace: string;
+  }): Promise<ResolverSDLMetadata> {
+    return await ResolverProcessor.processResolver(args.resolver);
   }
 
   /**
@@ -49,19 +57,19 @@ export class SdlGenerator
   /**
    * 処理されたメタデータを統合してSDLファイルを生成
    */
-  aggregate(
+  aggregate(args: {
     inputs: GeneratorInput<
       Record<string, SDLTypeMetadata>,
       Record<string, ResolverSDLMetadata>
-    >[],
-    _: undefined[],
-    baseDir: string,
-  ): GeneratorResult {
+    >[];
+    executorInputs: undefined[];
+    baseDir: string;
+  }): GeneratorResult {
     // すべてのnamespaceのメタデータを統合
     const allTypes: Record<string, SDLTypeMetadata> = {};
     const allResolvers: Record<string, ResolverSDLMetadata> = {};
 
-    for (const input of inputs) {
+    for (const input of args.inputs) {
       // TailorDB types
       for (const nsResult of input.tailordb) {
         Object.assign(allTypes, nsResult.types);
@@ -78,7 +86,7 @@ export class SdlGenerator
         resolvers: allResolvers,
         executors: [],
       },
-      baseDir,
+      args.baseDir,
     );
   }
 }

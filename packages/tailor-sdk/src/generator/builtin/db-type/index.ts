@@ -23,8 +23,12 @@ export class DbTypeGenerator
     },
   ) {}
 
-  async processType(type: TailorDBType): Promise<DbTypeMetadata> {
-    return await TypeProcessor.processType(type);
+  async processType(args: {
+    type: TailorDBType;
+    applicationNamespace: string;
+    namespace: string;
+  }): Promise<DbTypeMetadata> {
+    return await TypeProcessor.processType(args.type);
   }
 
   processResolver(): undefined {
@@ -35,18 +39,22 @@ export class DbTypeGenerator
     return undefined;
   }
 
-  async processTailorDBNamespace(
-    _applicationNamespace: string,
-    _namespace: string,
-    types: Record<string, DbTypeMetadata>,
-  ): Promise<string> {
-    return await TypeProcessor.processTypes(types);
+  async processTailorDBNamespace(args: {
+    applicationNamespace: string;
+    namespace: string;
+    types: Record<string, DbTypeMetadata>;
+  }): Promise<string> {
+    return await TypeProcessor.processTypes(args.types);
   }
 
-  aggregate(inputs: GeneratorInput<string, undefined>[]): GeneratorResult {
+  aggregate(args: {
+    inputs: GeneratorInput<string, undefined>[];
+    executorInputs: undefined[];
+    baseDir: string;
+  }): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
-    for (const input of inputs) {
+    for (const input of args.inputs) {
       for (const nsResult of input.tailordb) {
         if (nsResult.types) {
           files.push({

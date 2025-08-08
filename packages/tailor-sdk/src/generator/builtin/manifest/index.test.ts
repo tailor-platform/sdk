@@ -69,7 +69,11 @@ describe("ManifestGenerator統合テスト", () => {
     });
 
     it("processType メソッドが TailorDBType を正しく処理する", async () => {
-      const result = await manifestGenerator.processType(dbType);
+      const result = await manifestGenerator.processType({
+        type: dbType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       // db.type を使用した場合、自動的に id フィールドが追加される
       expect(result.name).toBe("User");
@@ -93,7 +97,11 @@ describe("ManifestGenerator統合テスト", () => {
     });
 
     it("processResolver メソッドが Resolver を正しく処理する", async () => {
-      const result = await manifestGenerator.processResolver(resolver);
+      const result = await manifestGenerator.processResolver({
+        resolver: resolver,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("getUser");
       expect(result.inputType).toBe("GetUserInput");
@@ -124,7 +132,11 @@ describe("ManifestGenerator統合テスト", () => {
       } as any;
 
       await expect(
-        manifestGenerator.processType(invalidType),
+        manifestGenerator.processType({
+          type: invalidType,
+          applicationNamespace: "test-app",
+          namespace: "test-namespace",
+        }),
       ).rejects.toThrow();
     });
   });
@@ -146,7 +158,11 @@ describe("ManifestGenerator統合テスト", () => {
         }),
       });
 
-      const result = await manifestGenerator.processType(nestedType);
+      const result = await manifestGenerator.processType({
+        type: nestedType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("ComplexUser");
       expect(result.fields).toHaveLength(2); // id, profile (withTimestamps: false by default)
@@ -191,7 +207,11 @@ describe("ManifestGenerator統合テスト", () => {
           }),
         );
 
-      const result = await manifestGenerator.processResolver(complexResolver);
+      const result = await manifestGenerator.processResolver({
+        resolver: complexResolver,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("complexOperation");
       expect(result.queryType).toBe("mutation");

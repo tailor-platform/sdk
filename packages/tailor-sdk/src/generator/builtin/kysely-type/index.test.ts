@@ -57,7 +57,11 @@ describe("KyselyGenerator統合テスト", () => {
 
   describe("基本的な動作テスト", () => {
     it("processType メソッドが基本的な TailorDBType を正しく処理する", async () => {
-      const result = await kyselyGenerator.processType(mockBasicType);
+      const result = await kyselyGenerator.processType({
+        type: mockBasicType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("User");
       expect(result.typeDef).toContain("export interface User {");
@@ -82,7 +86,11 @@ describe("KyselyGenerator統合テスト", () => {
 
   describe("型マッピングのテスト", () => {
     it("enum型を正しくKysely型にマッピングする", async () => {
-      const result = await kyselyGenerator.processType(mockEnumType);
+      const result = await kyselyGenerator.processType({
+        type: mockEnumType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.typeDef).toContain(
         'status: "active" | "inactive" | "pending";',
@@ -93,7 +101,11 @@ describe("KyselyGenerator統合テスト", () => {
     });
 
     it("ネストしたオブジェクト型を正しく処理する", async () => {
-      const result = await kyselyGenerator.processType(mockNestedType);
+      const result = await kyselyGenerator.processType({
+        type: mockNestedType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.typeDef).toContain("export interface ComplexUser {");
       expect(result.typeDef).toContain("profile: {");
@@ -117,7 +129,11 @@ describe("KyselyGenerator統合テスト", () => {
         undefinedRequiredField: db.string().optional(),
       });
 
-      const result = await kyselyGenerator.processType(testType);
+      const result = await kyselyGenerator.processType({
+        type: testType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.typeDef).toContain("requiredField: string;");
       expect(result.typeDef).toContain("optionalField: string | null;");
@@ -132,7 +148,11 @@ describe("KyselyGenerator統合テスト", () => {
         optionalIntArray: db.int().optional().array(),
       });
 
-      const result = await kyselyGenerator.processType(arrayType);
+      const result = await kyselyGenerator.processType({
+        type: arrayType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.typeDef).toContain("stringArray: string[];");
       expect(result.typeDef).toContain("optionalIntArray: number[] | null;");
@@ -160,11 +180,11 @@ describe("KyselyGenerator統合テスト", () => {
         },
       };
 
-      const result = await kyselyGenerator.processTailorDBNamespace(
-        "test-app",
-        "test-namespace",
-        typeMetadata,
-      );
+      const result = await kyselyGenerator.processTailorDBNamespace({
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+        types: typeMetadata,
+      });
 
       // 共通のimportが含まれている
       expect(result).toContain(
@@ -192,11 +212,11 @@ describe("KyselyGenerator統合テスト", () => {
     });
 
     it("空の型定義でも正常に動作する", async () => {
-      const result = await kyselyGenerator.processTailorDBNamespace(
-        "test-app",
-        "test-namespace",
-        {},
-      );
+      const result = await kyselyGenerator.processTailorDBNamespace({
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+        types: {},
+      });
 
       expect(result).toContain(
         'import { SqlClient } from "@tailor-platform/tailor-sdk";',
@@ -236,7 +256,11 @@ export async function kyselyWrapper() {}
           pipeline: [],
         },
       ];
-      const result = kyselyGenerator.aggregate(inputs);
+      const result = kyselyGenerator.aggregate({
+        inputs: inputs,
+        executorInputs: [],
+        baseDir: "/test",
+      });
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(testDistPath);
@@ -246,15 +270,23 @@ export async function kyselyWrapper() {}
 
     it("複数の型を持つ完全な統合テスト", async () => {
       const types = {
-        User: await kyselyGenerator.processType(mockBasicType),
-        Status: await kyselyGenerator.processType(mockEnumType),
+        User: await kyselyGenerator.processType({
+          type: mockBasicType,
+          applicationNamespace: "test-app",
+          namespace: "test-namespace",
+        }),
+        Status: await kyselyGenerator.processType({
+          type: mockEnumType,
+          applicationNamespace: "test-app",
+          namespace: "test-namespace",
+        }),
       };
 
-      const processedTypes = await kyselyGenerator.processTailorDBNamespace(
-        "test-app",
-        "test-namespace",
-        types,
-      );
+      const processedTypes = await kyselyGenerator.processTailorDBNamespace({
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+        types: types,
+      });
       const inputs = [
         {
           applicationNamespace: "test-app",
@@ -267,7 +299,11 @@ export async function kyselyWrapper() {}
           pipeline: [],
         },
       ];
-      const result = kyselyGenerator.aggregate(inputs);
+      const result = kyselyGenerator.aggregate({
+        inputs: inputs,
+        executorInputs: [],
+        baseDir: "/test",
+      });
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(testDistPath);
@@ -293,7 +329,13 @@ export async function kyselyWrapper() {}
         _output: {} as any,
       } as any;
 
-      await expect(kyselyGenerator.processType(invalidType)).rejects.toThrow();
+      await expect(
+        kyselyGenerator.processType({
+          type: invalidType,
+          applicationNamespace: "test-app",
+          namespace: "test-namespace",
+        }),
+      ).rejects.toThrow();
     });
 
     it("未知の型定義を文字列型として処理する", async () => {
@@ -301,7 +343,11 @@ export async function kyselyWrapper() {}
         unknownField: db.string(),
       });
 
-      const result = await kyselyGenerator.processType(unknownType);
+      const result = await kyselyGenerator.processType({
+        type: unknownType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.typeDef).toContain("unknownField: string;");
     });
@@ -314,7 +360,11 @@ export async function kyselyWrapper() {}
         ...db.fields.timestamps(),
       });
 
-      const result = await kyselyGenerator.processType(typeWithTimestamps);
+      const result = await kyselyGenerator.processType({
+        type: typeWithTimestamps,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.typeDef).toContain("createdAt: Timestamp;");
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
@@ -325,7 +375,11 @@ export async function kyselyWrapper() {}
         name: db.string(),
       });
 
-      const result = await kyselyGenerator.processType(typeWithoutTimestamps);
+      const result = await kyselyGenerator.processType({
+        type: typeWithoutTimestamps,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.typeDef).not.toContain("createdAt");
       expect(result.typeDef).not.toContain("updatedAt");

@@ -44,37 +44,37 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any> {
   readonly description: string;
 
   // 個別処理（application、service種別、namespace情報を受け取る）
-  processType(
-    type: TailorDBType,
-    applicationNamespace: string,
-    namespace: string,
-  ): T | Promise<T>;
+  processType(args: {
+    type: TailorDBType;
+    applicationNamespace: string;
+    namespace: string;
+  }): T | Promise<T>;
 
-  processResolver(
-    resolver: Resolver,
-    applicationNamespace: string,
-    namespace: string,
-  ): R | Promise<R>;
+  processResolver(args: {
+    resolver: Resolver;
+    applicationNamespace: string;
+    namespace: string;
+  }): R | Promise<R>;
 
   processExecutor(executor: Executor): E | Promise<E>;
 
   // namespace毎のまとめ処理（オプション、service種別毎）
-  processTailorDBNamespace?(
-    applicationNamespace: string,
-    namespace: string,
-    types: Record<string, T>,
-  ): Ts | Promise<Ts>;
+  processTailorDBNamespace?(args: {
+    applicationNamespace: string;
+    namespace: string;
+    types: Record<string, T>;
+  }): Ts | Promise<Ts>;
 
-  processPipelineNamespace?(
-    applicationNamespace: string,
-    namespace: string,
-    resolvers: Record<string, R>,
-  ): Rs | Promise<Rs>;
+  processPipelineNamespace?(args: {
+    applicationNamespace: string;
+    namespace: string;
+    resolvers: Record<string, R>;
+  }): Rs | Promise<Rs>;
 
   // 最終統合処理 - application毎の結果配列を受け取る
-  aggregate(
-    inputs: GeneratorInput<Ts, Rs>[],
-    executorInputs: E[],
-    baseDir: string,
-  ): GeneratorResult | Promise<GeneratorResult>;
+  aggregate(args: {
+    inputs: GeneratorInput<Ts, Rs>[];
+    executorInputs: E[];
+    baseDir: string;
+  }): GeneratorResult | Promise<GeneratorResult>;
 }

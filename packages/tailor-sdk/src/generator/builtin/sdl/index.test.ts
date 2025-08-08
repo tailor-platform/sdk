@@ -117,7 +117,11 @@ describe("SdlGenerator統合テスト", () => {
     });
 
     it("processType メソッドが TailorDBType を正しくSDLTypeMetadataに変換する", async () => {
-      const result = await sdlGenerator.processType(userType);
+      const result = await sdlGenerator.processType({
+        type: userType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("User");
       expect(result.isInput).toBe(false);
@@ -176,7 +180,11 @@ describe("SdlGenerator統合テスト", () => {
     });
 
     it("processResolver メソッドが Resolver を正しくSDLに変換する", async () => {
-      const result = await sdlGenerator.processResolver(mockResolver);
+      const result = await sdlGenerator.processResolver({
+        resolver: mockResolver,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("getUser");
       expect(result.inputType).toBe("GetUserInput");
@@ -210,7 +218,11 @@ describe("SdlGenerator統合テスト", () => {
     });
 
     it("mutation Resolver を正しく処理する", async () => {
-      const result = await sdlGenerator.processResolver(mockMutationResolver);
+      const result = await sdlGenerator.processResolver({
+        resolver: mockMutationResolver,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("createUser");
       expect(result.queryType).toBe("mutation");
@@ -321,7 +333,11 @@ extend type Mutation {
           ],
         },
       ];
-      const result = sdlGenerator.aggregate(inputs, [], baseDir);
+      const result = sdlGenerator.aggregate({
+        inputs,
+        executorInputs: [],
+        baseDir,
+      });
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(path.join(baseDir, "schema.graphql"));
@@ -375,7 +391,11 @@ extend type Mutation {
         },
       ];
 
-      const result = sdlGenerator.aggregate(inputs, [], "/test/output");
+      const result = sdlGenerator.aggregate({
+        inputs,
+        executorInputs: [],
+        baseDir: "/test/output",
+      });
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].content).toBe("\n\n");
@@ -384,7 +404,11 @@ extend type Mutation {
 
   describe("複雑なデータ構造のテスト", () => {
     it("深くネストしたオブジェクトを正しくSDLに変換する", async () => {
-      const result = await sdlGenerator.processType(complexType);
+      const result = await sdlGenerator.processType({
+        type: complexType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.name).toBe("ComplexEntity");
       expect(result.fields).toHaveLength(2); // id + metadata
@@ -440,7 +464,11 @@ extend type Mutation {
           }),
         );
 
-      const result = await sdlGenerator.processResolver(complexResolver);
+      const result = await sdlGenerator.processResolver({
+        resolver: complexResolver,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       expect(result.pipelines).toHaveLength(4);
       expect(result.pipelines.map((p: any) => p.name)).toEqual([
@@ -477,7 +505,11 @@ extend type Mutation {
       );
 
       await expect(
-        sdlGenerator.processResolver(invalidResolver),
+        sdlGenerator.processResolver({
+          resolver: invalidResolver,
+          applicationNamespace: "test-app",
+          namespace: "test-namespace",
+        }),
       ).rejects.toThrow('Resolver "getUser" must have an output type defined');
     });
 
@@ -506,7 +538,11 @@ extend type Mutation {
           ],
         },
       ];
-      const result = sdlGenerator.aggregate(inputs, [], "/test/output");
+      const result = sdlGenerator.aggregate({
+        inputs,
+        executorInputs: [],
+        baseDir: "/test/output",
+      });
 
       expect(result.files).toHaveLength(0);
       expect(result.errors).toBeDefined();
@@ -517,14 +553,28 @@ extend type Mutation {
   describe("完全な統合テスト", () => {
     it("実際のTailorDBTypeとResolverを使った完全な統合テスト", async () => {
       // 実際の型を処理
-      const userTypeMetadata = await sdlGenerator.processType(userType);
-      const complexTypeMetadata = await sdlGenerator.processType(complexType);
+      const userTypeMetadata = await sdlGenerator.processType({
+        type: userType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
+      const complexTypeMetadata = await sdlGenerator.processType({
+        type: complexType,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       // 実際のリゾルバーを処理
-      const getUserResolverMetadata =
-        await sdlGenerator.processResolver(mockResolver);
-      const createUserResolverMetadata =
-        await sdlGenerator.processResolver(mockMutationResolver);
+      const getUserResolverMetadata = await sdlGenerator.processResolver({
+        resolver: mockResolver,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
+      const createUserResolverMetadata = await sdlGenerator.processResolver({
+        resolver: mockMutationResolver,
+        applicationNamespace: "test-app",
+        namespace: "test-namespace",
+      });
 
       // 統合
       const metadata = {
@@ -555,7 +605,11 @@ extend type Mutation {
           ],
         },
       ];
-      const result = sdlGenerator.aggregate(inputs, [], "/test/output");
+      const result = sdlGenerator.aggregate({
+        inputs,
+        executorInputs: [],
+        baseDir: "/test/output",
+      });
 
       expect(result.files).toHaveLength(1);
       expect(result.errors).toBeUndefined();

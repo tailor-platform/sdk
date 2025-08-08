@@ -34,15 +34,23 @@ export class ManifestGenerator
   /**
    * TailorDBTypeを処理してManifestTypeMetadataを生成
    */
-  async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
-    return await TypeProcessor.processType(type);
+  async processType(args: {
+    type: TailorDBType;
+    applicationNamespace: string;
+    namespace: string;
+  }): Promise<ManifestTypeMetadata> {
+    return await TypeProcessor.processType(args.type);
   }
 
   /**
    * Resolverを処理してResolverManifestMetadataを生成
    */
-  async processResolver(resolver: Resolver): Promise<ResolverManifestMetadata> {
-    return await ResolverProcessor.processResolver(resolver);
+  async processResolver(args: {
+    resolver: Resolver;
+    applicationNamespace: string;
+    namespace: string;
+  }): Promise<ResolverManifestMetadata> {
+    return await ResolverProcessor.processResolver(args.resolver);
   }
 
   /**
@@ -55,16 +63,16 @@ export class ManifestGenerator
   /**
    * 処理されたメタデータを統合してManifest JSONを生成
    */
-  async aggregate(
+  async aggregate(args: {
     inputs: GeneratorInput<
       Record<string, ManifestTypeMetadata>,
       Record<string, ResolverManifestMetadata>
-    >[],
-    executorResults: ExecutorManifestMetadata[],
-    _baseDir: string,
-  ): Promise<GeneratorResult> {
+    >[];
+    executorInputs: ExecutorManifestMetadata[];
+    baseDir: string;
+  }): Promise<GeneratorResult> {
     // 現時点では最初のapplicationのみを処理（将来的には複数application対応可能）
-    if (inputs.length === 0) {
+    if (args.inputs.length === 0) {
       return { files: [], errors: [] };
     }
 
@@ -74,7 +82,7 @@ export class ManifestGenerator
     const allExecutors: ExecutorManifestMetadata[] = [];
     let pipelineNamespace: string | undefined;
 
-    for (const input of inputs) {
+    for (const input of args.inputs) {
       // TailorDB types
       for (const nsResult of input.tailordb) {
         Object.assign(allTypes, nsResult.types);
@@ -87,9 +95,9 @@ export class ManifestGenerator
           pipelineNamespace = nsResult.namespace;
         }
       }
-      // Executors
-      allExecutors.push(...executorResults);
     }
+    // Executors
+    allExecutors.push(...args.executorInputs);
 
     return await ManifestAggregator.aggregate(
       {

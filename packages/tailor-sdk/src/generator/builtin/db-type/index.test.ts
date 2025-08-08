@@ -19,7 +19,11 @@ describe("DbTypeGenerator", () => {
     const mockType = db.type("User", {
       name: db.string().optional(),
     });
-    const result = await generator.processType(mockType);
+    const result = await generator.processType({
+      type: mockType,
+      applicationNamespace: "test-app",
+      namespace: "test-namespace",
+    });
 
     expect(result.name).toBe("User");
     expect(result.typeDef).toContain("export type User = {");
@@ -49,11 +53,11 @@ describe("DbTypeGenerator", () => {
       },
     };
 
-    const result = await generator.processTailorDBNamespace(
-      "app",
-      "ns",
-      mockTypes,
-    );
+    const result = await generator.processTailorDBNamespace({
+      applicationNamespace: "app",
+      namespace: "ns",
+      types: mockTypes,
+    });
 
     expect(result).toContain("export type User = { id: string; }");
     expect(result).toContain("export type UserSetting = { id: string; }");
@@ -75,7 +79,11 @@ describe("DbTypeGenerator", () => {
       },
     ];
 
-    const result = generator.aggregate(mockInputs);
+    const result = generator.aggregate({
+      inputs: mockInputs,
+      executorInputs: [],
+      baseDir: "/test",
+    });
 
     expect(result.files).toHaveLength(1);
     expect(result.files[0].path).toBe("db/main.ts");
@@ -112,7 +120,11 @@ describe("DbTypeGenerator", () => {
       },
     ];
 
-    const result = generator.aggregate(mockInputs);
+    const result = generator.aggregate({
+      inputs: mockInputs,
+      executorInputs: [],
+      baseDir: "/test",
+    });
 
     expect(result.files).toHaveLength(3);
 
