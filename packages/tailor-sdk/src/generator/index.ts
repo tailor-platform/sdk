@@ -20,6 +20,8 @@ import { DependencyWatcher } from "./watch";
 import { ManifestGenerator } from "./builtin/manifest";
 import { TailorCtl } from "@/ctl";
 
+export type { CodeGenerator } from "./types";
+
 type Workspace = ReturnType<typeof defineWorkspace>;
 
 export class GenerationManager {

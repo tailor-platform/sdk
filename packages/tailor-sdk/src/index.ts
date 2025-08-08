@@ -15,3 +15,4 @@ export * from "@/services";
 
 export { defineConfig } from "@/config";
 export { apply, generate } from "@/generator";
+export type { CodeGenerator } from "@/generator";
