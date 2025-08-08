@@ -6,7 +6,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^aqua\\.yaml$"],
+      "managerFilePatterns": ["/^aqua\\.yaml$/"],
       "matchStrings": [
         "# renovate: depName=(?<depName>[^\\s]+)\\s+(?:datasource=(?<datasource>[^\\s]+))?\\s*\\n[^\\n]*?(?:ref|version): (?<currentValue>[^\\s]+)"
       ],
@@ -14,7 +14,7 @@
     },
     {
       "customType": "regex",
-      "fileMatch": ["^aqua\\.yaml$"],
+      "managerFilePatterns": ["/^aqua\\.yaml$/"],
       "matchStrings": ["- name: (?<depName>[^@]+)@(?<currentValue>.+?)\\s+"],
       "datasourceTemplate": "github-releases"
     }
