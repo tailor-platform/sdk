@@ -173,7 +173,6 @@ const tsconfigContent = {
     allowJs: true,
     strict: true,
     noEmit: true,
-    declaration: true,
     skipLibCheck: true,
     resolveJsonModule: true,
   },
