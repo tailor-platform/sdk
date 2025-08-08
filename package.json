@@ -20,7 +20,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {},
   "devDependencies": {
     "@dotenvx/dotenvx": "1.48.4",
     "@eslint/js": "9.32.0",
@@ -30,6 +29,7 @@
     "eslint-config-prettier": "10.1.8",
     "globals": "16.3.0",
     "lefthook": "1.12.2",
+    "pkg-pr-new": "^0.0.54",
     "prettier": "3.5.3",
     "tsx": "4.20.3",
     "turbo": "2.5.5",
