@@ -2,3 +2,6 @@ excludes:
   - policy_name: checkout_persist_credentials_should_be_false
     workflow_file_path: .github/workflows/claude.yml
     job_name: claude
+  - policy_name: checkout_persist_credentials_should_be_false
+    workflow_file_path: .github/workflows/claude-code-review.yml
+    job_name: claude-review
