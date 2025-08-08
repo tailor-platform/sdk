@@ -26,6 +26,5 @@ coverage/
 # Tailor SDK
 .tailor-sdk
 
-# Other pnpm packages
-packages
-examples
+# Examples
+examples/*/tests/fixtures/

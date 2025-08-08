@@ -12,8 +12,6 @@
     "test:update-expects": "tsx tests/scripts/generate_files.ts",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix --quiet",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

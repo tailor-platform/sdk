@@ -24,8 +24,6 @@
     "build": "tsdown",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "prepublish": "pnpm run build"
   },
