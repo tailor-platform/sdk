@@ -101,11 +101,16 @@ describe("ManifestAggregator", () => {
     // モックアプリケーションの作成
     mockApplication = {
       name: "test-app",
+      config: {
+        cors: null,
+        allowedIPAddresses: null,
+        disableIntrospection: false,
+      },
       tailorDBServices: [mockTailorDBService],
       pipelineResolverServices: [mockPipelineService],
       authService: mockAuthService,
       idpServices: {},
-      subgraphs: [], // subgraphs プロパティを追加
+      subgraphs: [],
     } as any;
 
     // モックワークスペースの作成
@@ -169,6 +174,11 @@ describe("ManifestAggregator", () => {
         applications: [
           {
             name: "error-app",
+            config: {
+              cors: null,
+              allowedIPAddresses: null,
+              disableIntrospection: false,
+            },
             tailorDBServices: [],
             pipelineResolverServices: [],
             authService: null,
@@ -219,6 +229,11 @@ describe("ManifestAggregator", () => {
     it("複数のアプリケーションを持つワークスペースを正しく処理すること", async () => {
       const secondApp = {
         name: "second-app",
+        config: {
+          cors: null,
+          allowedIPAddresses: null,
+          disableIntrospection: false,
+        },
         tailorDBServices: [],
         pipelineResolverServices: [],
         authService: null,
@@ -268,6 +283,11 @@ describe("ManifestAggregator", () => {
     it("Authサービスがnullの場合を正しく処理すること", async () => {
       const appWithoutAuth = {
         name: "app-without-auth",
+        config: {
+          cors: null,
+          allowedIPAddresses: null,
+          disableIntrospection: false,
+        },
         tailorDBServices: [mockTailorDBService],
         pipelineResolverServices: [mockPipelineService],
         authService: null,
@@ -400,6 +420,11 @@ describe("ManifestAggregator", () => {
 
       const largeApp = {
         name: "large-app",
+        config: {
+          cors: null,
+          allowedIPAddresses: null,
+          disableIntrospection: false,
+        },
         tailorDBServices: [largeTailorDBService, mockTailorDBService],
         pipelineResolverServices: [largePipelineService, mockPipelineService],
         authService: mockAuthService,
@@ -461,9 +486,15 @@ describe("ManifestAggregator", () => {
 
       const failingApp = {
         name: "failing-app",
+        config: {
+          cors: null,
+          allowedIPAddresses: null,
+          disableIntrospection: false,
+        },
         tailorDBServices: [failingTailorDBService],
-        pipelineResolverServices: [],
-        authService: null,
+        pipelineResolverServices: [mockPipelineService],
+        authService: mockAuthService,
+        idpServices: {},
         subgraphs: [],
       } as any;
 

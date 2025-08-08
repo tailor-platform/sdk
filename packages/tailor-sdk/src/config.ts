@@ -17,6 +17,9 @@ import {
 import { CodeGenerator } from "@/generator/types";
 
 export interface AppConfig {
+  cors?: string[];
+  allowedIPAddresses?: string[];
+  disableIntrospection?: boolean;
   db?: TailorDBServiceInput;
   pipeline?: PipelineResolverServiceInput;
   idp?: IdPServiceInput;

@@ -20,7 +20,7 @@ export class Workspace {
   }
 
   newApplication(name: string, appConfig: AppConfig) {
-    const app = new Application(name);
+    const app = new Application(name, appConfig);
     app.defineTailorDB(appConfig.db);
     app.definePipeline(appConfig.pipeline);
     app.defineIdp(appConfig.idp);
