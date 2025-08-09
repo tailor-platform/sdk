@@ -168,7 +168,7 @@ export function createMutationResolver<
     "mutation",
     Input,
     output<Input>,
-    { input: output<Input> },
+    { input: gqlOutput<Input> },
     [],
     never
   >("mutation", name, input, options);
