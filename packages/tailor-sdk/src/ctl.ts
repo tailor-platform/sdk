@@ -140,7 +140,7 @@ export class TailorCtl {
   }
 
   async apply(workspace: WorkspaceConfig, manifest: string) {
-    this.createWorkspaceIfNeeded(workspace);
+    await this.createWorkspaceIfNeeded(workspace);
     this.spawn(
       "workspace",
       "apply",
