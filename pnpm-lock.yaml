@@ -33,7 +33,7 @@ importers:
         specifier: 1.12.2
         version: 1.12.2
       pkg-pr-new:
-        specifier: ^0.0.54
+        specifier: 0.0.54
         version: 0.0.54
       prettier:
         specifier: 3.5.3
