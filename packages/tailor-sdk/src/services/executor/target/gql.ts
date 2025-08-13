@@ -16,10 +16,12 @@ export function executorGql<A>({
   appName,
   query,
   variables,
+  invoker,
 }: {
   appName: string;
   query: UrqlOperationArgs[0];
   variables?: (args: A) => UrqlOperationArgs[1];
+  invoker?: { authName: string; machineUser: string };
 }): GraphqlOperationWithManifestAndContext<A> {
   return {
     manifest: {
@@ -29,6 +31,12 @@ export function executorGql<A>({
       Variables: variables
         ? {
             Expr: `(${variables.toString()})(args)`,
+          }
+        : undefined,
+      Invoker: invoker
+        ? {
+            AuthNamespace: invoker.authName,
+            MachineUserName: invoker.machineUser,
           }
         : undefined,
     },
