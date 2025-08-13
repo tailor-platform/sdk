@@ -17,35 +17,53 @@ export function createExecutor(name: string, description?: string) {
     on: <TTrigger extends ManifestAndContext<Trigger, TriggerContext>>(
       trigger: TTrigger,
     ) => ({
-      executeFunction: (
+      executeFunction: ({
+        fn,
+        dbNamespace,
+        invoker,
+      }: {
         fn: (
           args: ExtractTriggerArgs<TTrigger> & { client: SqlClient },
-        ) => void,
-        options: { dbNamespace?: string } = {},
-      ) => {
-        const exec = executorFunction(`${name}__target`, fn, options);
+        ) => void;
+        dbNamespace?: string;
+        invoker?: { authName: string; machineUser: string };
+      }) => {
+        const exec = executorFunction({
+          name: `${name}__target`,
+          fn,
+          dbNamespace,
+          invoker,
+        });
         return {
-          name: name,
+          name,
           description,
           trigger: trigger,
           exec,
         } as const satisfies Executor<TTrigger>;
       },
 
-      executeJobFunction: (
+      executeJobFunction: ({
+        fn,
+        dbNamespace,
+        invoker,
+      }: {
         fn: (
           args: ExtractTriggerArgs<TTrigger> & { client: SqlClient },
-        ) => void,
-        options: { dbNamespace?: string } = {},
-      ) => {
-        const exec = executorFunction(`${name}__target`, fn, {
-          ...options,
+        ) => void;
+        dbNamespace?: string;
+        invoker?: { authName: string; machineUser: string };
+      }) => {
+        const exec = executorFunction({
+          name: `${name}__target`,
+          fn,
+          dbNamespace,
+          invoker,
           jobFunction: true,
         });
         return {
-          name: name,
+          name,
           description,
-          trigger: trigger,
+          trigger,
           exec,
         } as const satisfies Executor<TTrigger>;
       },
@@ -57,7 +75,7 @@ export function createExecutor(name: string, description?: string) {
         return {
           name,
           description,
-          trigger: trigger,
+          trigger,
           exec,
         } as const satisfies Executor<TTrigger>;
       },

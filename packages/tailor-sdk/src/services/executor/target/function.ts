@@ -12,20 +12,34 @@ type FunctionOperationWithManifestAndContext<A> = ManifestAndContext<
   FunctionOperationContext<A>
 >;
 
-export function executorFunction<A>(
-  name: string,
-  fn: (args: A & { client: SqlClient }) => void,
-  options?: { dbNamespace?: string; jobFunction?: boolean },
-): FunctionOperationWithManifestAndContext<A> {
+export function executorFunction<A>({
+  name,
+  fn,
+  dbNamespace,
+  jobFunction,
+  invoker,
+}: {
+  name: string;
+  fn: (args: A & { client: SqlClient }) => void;
+  dbNamespace?: string;
+  jobFunction?: boolean;
+  invoker?: { authName: string; machineUser: string };
+}): FunctionOperationWithManifestAndContext<A> {
   return {
     manifest: {
-      Kind: options?.jobFunction ? "job_function" : "function",
+      Kind: jobFunction ? "job_function" : "function",
       Name: name,
+      Invoker: invoker
+        ? {
+            AuthNamespace: invoker.authName,
+            MachineUserName: invoker.machineUser,
+          }
+        : undefined,
     },
     context: {
-      args: undefined as A,
-      fn: fn,
-      dbNamespace: options?.dbNamespace,
+      args: {} as A,
+      fn,
+      dbNamespace,
     },
   };
 }
