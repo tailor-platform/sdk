@@ -17,20 +17,21 @@ export function createExecutor(name: string, description?: string) {
     on: <TTrigger extends ManifestAndContext<Trigger, TriggerContext>>(
       trigger: TTrigger,
     ) => ({
-      executeFunction: ({
+      executeFunction: <V = ExtractTriggerArgs<TTrigger>>({
         fn,
+        variables,
         dbNamespace,
         invoker,
       }: {
-        fn: (
-          args: ExtractTriggerArgs<TTrigger> & { client: SqlClient },
-        ) => void;
+        fn: (args: V & { client: SqlClient }) => void;
+        variables?: (args: ExtractTriggerArgs<TTrigger>) => V;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
       }) => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
+          variables,
           dbNamespace,
           invoker,
         });
@@ -39,23 +40,24 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger: trigger,
           exec,
-        } as const satisfies Executor<TTrigger>;
+        } as const satisfies Executor<TTrigger, V>;
       },
 
-      executeJobFunction: ({
+      executeJobFunction: <V = ExtractTriggerArgs<TTrigger>>({
         fn,
+        variables,
         dbNamespace,
         invoker,
       }: {
-        fn: (
-          args: ExtractTriggerArgs<TTrigger> & { client: SqlClient },
-        ) => void;
+        fn: (args: V & { client: SqlClient }) => void;
+        variables?: (args: ExtractTriggerArgs<TTrigger>) => V;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
       }) => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
+          variables,
           dbNamespace,
           invoker,
           jobFunction: true,
@@ -65,7 +67,7 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger,
           exec,
-        } as const satisfies Executor<TTrigger>;
+        } as const satisfies Executor<TTrigger, V>;
       },
 
       executeGql: (
@@ -89,7 +91,7 @@ export function createExecutor(name: string, description?: string) {
         return {
           name,
           description,
-          trigger: trigger,
+          trigger,
           exec,
         } as const satisfies Executor<TTrigger>;
       },
