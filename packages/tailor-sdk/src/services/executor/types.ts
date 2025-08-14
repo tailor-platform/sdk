@@ -107,11 +107,15 @@ export interface Executor<
     Trigger,
     TriggerContext
   > = ManifestAndContext<Trigger, TriggerContext>,
+  V = ExtractTriggerArgs<TTrigger>,
 > {
   name: string;
   description?: string;
   trigger: TTrigger;
-  exec: ManifestAndContext<Target, TargetWithArgs<TTrigger>>;
+  exec: ManifestAndContext<
+    Target,
+    Omit<TargetWithArgs<TTrigger>, "args"> & { args: V }
+  >;
 }
 
 // Helper type to extract args from trigger context

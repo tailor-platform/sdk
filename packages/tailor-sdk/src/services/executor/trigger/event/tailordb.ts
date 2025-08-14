@@ -19,9 +19,9 @@ interface RecordTriggerConditionArgs<T extends TailorDBType>
 
 export function recordCreatedTrigger<T extends TailorDBType>(
   type: T,
-  condition: RecordTriggerCondition<
+  condition?: RecordTriggerCondition<
     RecordTriggerConditionArgs<T> & withNewRecord<T>
-  > = () => true,
+  >,
 ) {
   const argsMap = /* js */ `{ ...args, appNamespace: args.namespaceName }`;
   return {
@@ -31,7 +31,9 @@ export function recordCreatedTrigger<T extends TailorDBType>(
       Condition: {
         Expr: [
           /* js */ `args.typeName === "${type.name}"`,
-          /* js */ `(${condition.toString()})(${argsMap})`,
+          ...(condition
+            ? [/* js */ `(${condition.toString()})(${argsMap})`]
+            : []),
         ].join(" && "),
       },
     },

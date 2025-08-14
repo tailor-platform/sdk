@@ -346,10 +346,10 @@
           "TargetFunction": {
             "Kind": "function",
             "Name": "user-created__target",
-            "ScriptPath": "tests/fixtures/expected/executors/user-created.js",
             "Variables": {
               "Expr": "({ ...args, appNamespace: args.namespaceName })"
-            }
+            },
+            "ScriptPath": "tests/fixtures/expected/executors/user-created.js"
           }
         }
       ],

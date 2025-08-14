@@ -6,7 +6,6 @@ import {
   Target,
   ExecutorManifest,
 } from "@/services/executor/types";
-import { Script } from "@/types/types";
 import { getDistDir } from "@/config";
 
 /**
@@ -136,11 +135,6 @@ export class ExecutorProcessor {
           "executors",
           `${executor.name}.js`,
         );
-        if ("variables" in executor.trigger.context) {
-          functionOp.Variables = {
-            Expr: (executor.trigger.context.variables as Script).expr,
-          };
-        }
         manifest.TargetFunction = functionOp;
         break;
       }

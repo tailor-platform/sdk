@@ -1,10 +1,9 @@
 import { $tailor_resolver_step__kyselyStep } from "../resolvers/stepChain.transformed.js";
 
 const $connect_tailordb = async (namespace) => {
-  const baseClient = new tailordb.Client({ namespace });
-  if (namespace) {
-    await baseClient.connect();
-  }
+  const baseClient = namespace ? new tailordb.Client({ namespace }) : { connect: () => {}, end: () => {} };
+  await baseClient.connect();
+
   const client = {
     async exec(query) {
       const result = await baseClient.queryObject(query);
@@ -31,12 +30,25 @@ const $connect_tailordb = async (namespace) => {
           console.error("Failed to rollback transaction:", e);
         }
       }
+    },
+    async end() {
+      try {
+        await baseClient.end();
+      } catch (e) {
+        console.error("Error ending connection:", e);
+      }
     }
   };
 };
 
 const $tailor_db_wrapper = async (namespace, fn) => {
-  const client = await $connect_tailordb(namespace);
-  return async (args) => await fn({ ...args, db: client, client });
+  return async (args) => {
+    const client = await $connect_tailordb(namespace);
+    try {
+      return await fn({ ...args, client });
+    } finally {
+      await client.end();
+    }
+  };
 };
 globalThis.main = await $tailor_db_wrapper("tailordb", $tailor_resolver_step__kyselyStep);
