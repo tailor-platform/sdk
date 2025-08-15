@@ -59,7 +59,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     });
     expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
       id: string;
-      birthDate: Date;
+      birthDate: string;
     }>();
   });
 
@@ -69,7 +69,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     });
     expectTypeOf<output<typeof _datetimeType>>().toMatchObjectType<{
       id: string;
-      timestamp: Date;
+      timestamp: string;
     }>();
   });
 
@@ -79,7 +79,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     });
     expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
       id: string;
-      openingTime: Date;
+      openingTime: string;
     }>();
   });
 });
@@ -417,8 +417,8 @@ describe("TailorDBType withTimestamps オプションテスト", () => {
     expectTypeOf<output<typeof _noTimestampType>>().toEqualTypeOf<{
       id: string;
       name: string;
-      createdAt: Date;
-      updatedAt?: Date | null;
+      createdAt: string;
+      updatedAt?: string | null;
     }>();
   });
 
@@ -430,8 +430,8 @@ describe("TailorDBType withTimestamps オプションテスト", () => {
     expectTypeOf<output<typeof _timestampType>>().toEqualTypeOf<{
       id: string;
       name: string;
-      createdAt: Date;
-      updatedAt?: Date | null;
+      createdAt: string;
+      updatedAt?: string | null;
     }>();
   });
 });
@@ -459,9 +459,9 @@ describe("TailorDBType 複合型テスト", () => {
       tags: string[];
       role: "admin" | "user" | "guest";
       score: number;
-      birthDate: Date;
-      lastLogin?: Date | null;
-      closingTime: Date;
+      birthDate: string;
+      lastLogin?: string | null;
+      closingTime: string;
     }>();
   });
 });
@@ -634,8 +634,8 @@ describe("TailorDBType plural form テスト", () => {
       id: string;
       title: string;
       content?: string | null;
-      createdAt: Date;
-      updatedAt?: Date | null;
+      createdAt: string;
+      updatedAt?: string | null;
     }>();
 
     expect(_postType.name).toBe("Post");
