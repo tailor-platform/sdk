@@ -90,6 +90,15 @@ importers:
 
   packages/tailor-sdk:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: ^2.6.3
+        version: 2.6.3
+      '@connectrpc/connect':
+        specifier: ^2.0.3
+        version: 2.0.3(@bufbuild/protobuf@2.6.3)
+      '@connectrpc/connect-node':
+        specifier: ^2.0.3
+        version: 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))
       '@urql/core':
         specifier: ^5.1.1
         version: 5.2.0(graphql@16.11.0)
@@ -230,6 +239,21 @@ packages:
   '@babel/types@7.28.2':
     resolution: {integrity: sha512-ruv7Ae4J5dUYULmeXw1gmb7rYRz57OWCPM57pHojnLq/3Z1CK2lNSLTCVjxVk1F/TZHwOZZrOWi0ur95BbLxNQ==}
     engines: {node: '>=6.9.0'}
+
+  '@bufbuild/protobuf@2.6.3':
+    resolution: {integrity: sha512-w/gJKME9mYN7ZoUAmSMAWXk4hkVpxRKvEJCb3dV5g9wwWdxTJJ0ayOJAVcNxtdqaxDyFuC0uz4RSGVacJ030PQ==}
+
+  '@connectrpc/connect-node@2.0.3':
+    resolution: {integrity: sha512-GZ8WXBCeoZY31wzmnrrV4IA0nvYzEwqt9yHg304b7y/ovKh0IEbBuSWbee/hJu2Tt7PD0C8D4WUwheECCeLpQA==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      '@bufbuild/protobuf': ^2.2.0
+      '@connectrpc/connect': 2.0.3
+
+  '@connectrpc/connect@2.0.3':
+    resolution: {integrity: sha512-jAbVMHVtDCydGt2P20VpmLjbLtERqSV0RMSyQF3k2zhK8pzQ2QaCAcyVhufClqrOAFZUKL5BqVYtttaxvhmRgg==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^2.2.0
 
   '@dependents/detective-less@5.0.1':
     resolution: {integrity: sha512-Y6+WUMsTFWE5jb20IFP4YGa5IrGY/+a/FbOSjDF/wz9gepU2hwCYSXRHP/vPwBvwcY3SVMASt4yXxbXNXigmZQ==}
@@ -2750,6 +2774,17 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
+
+  '@bufbuild/protobuf@2.6.3': {}
+
+  '@connectrpc/connect-node@2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))':
+    dependencies:
+      '@bufbuild/protobuf': 2.6.3
+      '@connectrpc/connect': 2.0.3(@bufbuild/protobuf@2.6.3)
+
+  '@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3)':
+    dependencies:
+      '@bufbuild/protobuf': 2.6.3
 
   '@dependents/detective-less@5.0.1':
     dependencies:

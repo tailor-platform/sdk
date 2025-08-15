@@ -19,6 +19,7 @@ import { DbTypeGenerator } from "./builtin/db-type";
 import { DependencyWatcher } from "./watch";
 import { ManifestGenerator } from "./builtin/manifest";
 import { TailorCtl } from "@/ctl";
+import { apply as operatorApply } from "@/apply";
 
 export type { CodeGenerator } from "./types";
 
@@ -568,6 +569,14 @@ export async function apply(config: WorkspaceConfig, options: ApplyOptions) {
   if (!distDir) {
     throw new Error("Distribution directory is not configured");
   }
-  const tailorCtl = new TailorCtl(options);
-  await tailorCtl.apply(applyConfig, path.join(distDir, "manifest.cue"));
+
+  // Use operator API only when environment variables are set.
+  // TODO(remiposo): Eventually, after confirming that both behaviors match in e2e tests,
+  // remove the tailorctl implementation.
+  if (process.env.TAILOR_SDK_USE_OPERATOR_API === "true") {
+    await operatorApply(applyConfig, options);
+  } else {
+    const tailorCtl = new TailorCtl(options);
+    await tailorCtl.apply(applyConfig, path.join(distDir, "manifest.cue"));
+  }
 }

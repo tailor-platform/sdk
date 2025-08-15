@@ -25,9 +25,13 @@
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
-    "prepublish": "pnpm run build"
+    "prepublish": "pnpm run build",
+    "protogen": "buf generate"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.6.3",
+    "@connectrpc/connect": "^2.0.3",
+    "@connectrpc/connect-node": "^2.0.3",
     "@urql/core": "^5.1.1",
     "chalk": "^5.3.0",
     "chokidar": "^4.0.0",
@@ -48,7 +52,6 @@
   "devDependencies": {
     "@eslint/js": "9.32.0",
     "@swc/core": "1.13.3",
-    "tsdown": "0.14.0",
     "@types/fs-extra": "11.0.4",
     "@types/ini": "4.1.1",
     "@types/inquirer": "9.0.9",
@@ -60,6 +63,7 @@
     "gql.tada": "1.8.13",
     "prettier": "3.5.3",
     "ts-cron-validator": "1.1.5",
+    "tsdown": "0.14.0",
     "typescript": "5.9.2",
     "typescript-eslint": "8.39.0",
     "vitest": "3.2.4",
