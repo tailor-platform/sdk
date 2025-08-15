@@ -53,7 +53,7 @@ describe("TailorType 基本フィールド型テスト", () => {
       birthDate: t.date(),
     });
     expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
-      birthDate: Date;
+      birthDate: string;
     }>();
   });
 
@@ -62,7 +62,7 @@ describe("TailorType 基本フィールド型テスト", () => {
       createdAt: t.datetime(),
     });
     expectTypeOf<output<typeof _datetimeType>>().toEqualTypeOf<{
-      createdAt: Date;
+      createdAt: string;
     }>();
   });
 
@@ -71,7 +71,7 @@ describe("TailorType 基本フィールド型テスト", () => {
       openingTime: t.time(),
     });
     expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
-      openingTime: Date;
+      openingTime: string;
     }>();
   });
 });

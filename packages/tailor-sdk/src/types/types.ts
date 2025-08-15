@@ -26,9 +26,9 @@ export type TailorToTs = {
   float: number;
   boolean: boolean;
   uuid: string;
-  date: Date;
-  datetime: Date;
-  time: Date;
+  date: string;
+  datetime: string;
+  time: string;
   enum: string;
   object: Record<string, unknown>;
   nested: Record<string, unknown>;
