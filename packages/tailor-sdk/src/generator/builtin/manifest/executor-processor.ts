@@ -127,7 +127,8 @@ export class ExecutorProcessor {
       case "graphql":
         manifest.TargetTailorGraphql = target;
         break;
-      case "function": {
+      case "function":
+      case "job_function": {
         const functionOp = { ...target } as FunctionOperation;
         // Set the ScriptPath to the bundled executor file
         functionOp.ScriptPath = path.join(
