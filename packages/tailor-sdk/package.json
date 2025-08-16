@@ -44,7 +44,7 @@
     "inquirer": "^12.7.0",
     "madge": "^8.0.0",
     "multiline-ts": "^4.0.1",
-    "oxc-parser": "^0.34.0",
+    "oxc-parser": "^0.82.1",
     "pkg-types": "^2.1.0",
     "rolldown": "1.0.0-beta.14",
     "tsx": "^4.20.3"
