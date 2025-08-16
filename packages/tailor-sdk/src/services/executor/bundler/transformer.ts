@@ -17,7 +17,7 @@ export class ExecutorTransformer implements ITransformer<Executor> {
     );
 
     // Check if this is a function executor
-    if (executor.exec.manifest.Kind !== "function") {
+    if (!["function", "job_function"].includes(executor.exec.manifest.Kind)) {
       // For non-function executors (webhook, gql), return empty array
       return [];
     }
