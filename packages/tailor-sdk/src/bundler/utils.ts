@@ -22,7 +22,7 @@ export function trimSDKCode(filePath: string): string {
   const sourceText = fs.readFileSync(filePath, "utf-8");
 
   try {
-    const parseResult = parseSync(sourceText, {
+    const parseResult = parseSync(filePath, sourceText, {
       sourceType: "module",
     });
 
