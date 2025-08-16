@@ -38,7 +38,7 @@ export function createExecutor(name: string, description?: string) {
         return {
           name,
           description,
-          trigger: trigger,
+          trigger,
           exec,
         } as const satisfies Executor<TTrigger, V>;
       },

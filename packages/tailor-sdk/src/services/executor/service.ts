@@ -41,9 +41,8 @@ export class ExecutorService {
         preBundle: "executors",
         postBundle: "executors",
       },
-      shouldProcess: (executor) => {
-        return executor.exec.manifest.Kind === "function";
-      },
+      shouldProcess: (executor) =>
+        ["function", "job_function"].includes(executor.exec.manifest.Kind),
     };
     this.bundler = new Bundler(bundlerConfig);
   }
