@@ -8,6 +8,7 @@ import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
 import { applyAuth } from "./services/auth";
 import { applyIdP } from "./services/idp";
+import { applyPipeline } from "./services/pipeline";
 import { applyTailorDB } from "./services/tailordb";
 import { readTailorctlConfig, TailorctlConfig } from "./tailorctl";
 
@@ -24,6 +25,7 @@ export async function apply(
   await applyTailorDB(client, workspaceId, workspace, options);
   await applyIdP(client, workspaceId, workspace, options);
   await applyAuth(client, workspaceId, workspace, options);
+  await applyPipeline(client, workspaceId, workspace, options);
 
   if (options.dryRun) {
     console.log("Dry run enabled. No changes applied.");
