@@ -22,7 +22,7 @@ import { TailorDBService } from "@/services/tailordb/service";
 import { DBFieldMetadata } from "@/services/tailordb/types";
 import { tailorToManifestScalar } from "@/types/types";
 import { Workspace } from "@/workspace";
-import { ChangeSet } from ".";
+import { ChangeSet, HasName } from ".";
 import { fetchAll, OperatorClient } from "../client";
 
 export async function applyTailorDB(
@@ -102,7 +102,7 @@ async function planServices(
   workspaceId: string,
   tailordbs: ReadonlyArray<TailorDBService>,
 ) {
-  const changeSet: ChangeSet<CreateService, never, DeleteService> =
+  const changeSet: ChangeSet<CreateService, HasName, DeleteService> =
     new ChangeSet("TailorDB services");
 
   const existingServices = await fetchAll(async (pageToken) => {
@@ -129,6 +129,9 @@ async function planServices(
   });
   for (const tailordb of tailordbs) {
     if (existingNameSet.has(tailordb.namespace)) {
+      changeSet.updates.push({
+        name: tailordb.namespace,
+      });
       existingNameSet.delete(tailordb.namespace);
     } else {
       changeSet.creates.push({
