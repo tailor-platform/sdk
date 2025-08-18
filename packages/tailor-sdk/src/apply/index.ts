@@ -6,7 +6,8 @@ import { OperatorService } from "@/gen/tailor/v1/service_pb";
 import { ApplyOptions } from "@/generator/options";
 import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
-import { applyIdPs } from "./services/idp";
+import { applyIdP } from "./services/idp";
+import { applyTailorDB } from "./services/tailordb";
 import { readTailorctlConfig, TailorctlConfig } from "./tailorctl";
 
 export async function apply(
@@ -17,8 +18,11 @@ export async function apply(
   const client = await initOperatorClient(tailorctlConfig);
   const workspaceId = await fetchWorkspaceId(client, config, tailorctlConfig);
   const workspace = defineWorkspace(config);
+
   // TODO(remiposo): Support other services
-  await applyIdPs(client, workspaceId, workspace, options);
+  await applyTailorDB(client, workspaceId, workspace, options);
+  await applyIdP(client, workspaceId, workspace, options);
+
   if (options.dryRun) {
     console.log("Dry run enabled. No changes applied.");
   } else {

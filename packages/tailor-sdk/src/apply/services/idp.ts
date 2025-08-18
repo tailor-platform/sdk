@@ -14,13 +14,13 @@ import { Workspace } from "@/workspace";
 import { ChangeSet, HasName } from ".";
 import { fetchAll, OperatorClient } from "../client";
 
-export async function applyIdPs(
+export async function applyIdP(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,
   options: ApplyOptions,
 ) {
-  const changeSet = await planIdPs(client, workspaceId, workspace);
+  const changeSet = await planIdP(client, workspaceId, workspace);
   if (options.dryRun) {
     return;
   }
@@ -69,7 +69,7 @@ export async function applyIdPs(
   }
 }
 
-async function planIdPs(
+async function planIdP(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,
