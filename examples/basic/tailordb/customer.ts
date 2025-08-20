@@ -1,4 +1,5 @@
 import { db } from "@tailor-platform/tailor-sdk";
+import { defaultPermission, PermissionUser } from "./permissions";
 
 export const customer = db
   .type("Customer", "カスタマー", {
@@ -30,5 +31,6 @@ export const customer = db
       ({ value }) => value.length > 5,
       "Name must be longer than 5 characters",
     ],
-  });
+  })
+  .permission<PermissionUser>(defaultPermission);
 export type customer = typeof customer;

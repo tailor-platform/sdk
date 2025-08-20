@@ -1,4 +1,5 @@
 import { OperatorFieldConfig } from "@/types/operator";
+import { Permissions } from "./permission";
 
 export interface TailorDBTypeConfig {
   name: string;
@@ -11,6 +12,7 @@ export interface TailorDBTypeConfig {
       aggregation?: boolean;
       bulkUpsert?: boolean;
     };
+    permissions: Permissions;
     indexes?: Record<
       string,
       {

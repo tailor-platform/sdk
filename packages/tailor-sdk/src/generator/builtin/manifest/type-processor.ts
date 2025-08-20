@@ -1,6 +1,20 @@
 import { TailorDBType } from "@/services/tailordb/schema";
-import { ManifestTypeMetadata, ManifestFieldMetadata } from "./types";
+import {
+  ManifestTypeMetadata,
+  ManifestFieldMetadata,
+  GQLPermissionManifest,
+  GQLPermissionPolicyManifest,
+  GQLPermissionConditionManifest,
+} from "./types";
 import { tailorToManifestScalar } from "@/types/types";
+import { capitalize } from "inflection";
+import {
+  gqlOperandKeys,
+  PermissionOperand,
+  recordOperandKeys,
+  StandardGqlPermissionPolicy,
+  StandardTailorTypePermission,
+} from "@/services/tailordb/permission";
 
 export class TypeProcessor {
   /**
@@ -243,6 +257,10 @@ export class TypeProcessor {
       });
     }
 
+    const permissions = schema.permissions?.record
+      ? TypeProcessor.convertPermissionsToManifest(schema.permissions.record)
+      : undefined;
+
     return {
       Name: metadata.name || type.name,
       Description: schema?.description || "",
@@ -252,7 +270,62 @@ export class TypeProcessor {
       Extends: schema?.extends || false,
       Directives: [],
       Indexes: indexes,
-      TypePermission: defaultTypePermission,
+      ...(permissions
+        ? { Permission: permissions }
+        : { TypePermission: defaultTypePermission }),
+    };
+  }
+
+  static convertPermissionsToManifest(
+    permission: StandardTailorTypePermission,
+  ): StandardTailorTypePermission {
+    return Object.keys(permission).reduce((acc, key) => {
+      acc[capitalize(key)] = TypeProcessor.convertPermissionItems(
+        (permission as any)[key],
+      );
+      return acc;
+    }, {} as any);
+  }
+
+  static convertOperand(operand: PermissionOperand, keys: readonly string[]) {
+    if (typeof operand === "object" && !Array.isArray(operand)) {
+      const foundKey = keys.find((key) => key in operand);
+
+      if (foundKey) {
+        return {
+          Kind: foundKey,
+          Value: (operand as Record<string, string>)[foundKey],
+        };
+      }
+    }
+
+    return {
+      Kind: "value",
+      Value: operand,
+    };
+  }
+
+  static convertPermissionItems(
+    items: StandardTailorTypePermission[keyof StandardTailorTypePermission],
+  ): any[] {
+    return items.map((item) => ({
+      Conditions: item.conditions.map((cond: any) =>
+        TypeProcessor.convertCondition(cond),
+      ),
+      Permit: item.permit,
+      Description: item.description,
+    }));
+  }
+
+  static convertCondition(condition: any): any {
+    const [left, operator, right] = condition;
+
+    const leftOperand = TypeProcessor.convertOperand(left, recordOperandKeys);
+    const rightOperand = TypeProcessor.convertOperand(right, recordOperandKeys);
+    return {
+      [`Left${capitalize(leftOperand.Kind)}`]: leftOperand,
+      Operator: operator,
+      [`Right${capitalize(rightOperand.Kind)}`]: rightOperand,
     };
   }
 
@@ -287,11 +360,24 @@ export class TypeProcessor {
     );
 
     const typeManifest = TypeProcessor.generateTailorDBTypeManifest(type);
+
+    // Process GQL permissions if defined
+    let gqlPermissionManifest: GQLPermissionManifest | undefined = undefined;
+    const gqlPermission = type.metadata.schema?.permissions?.gql;
+    if (gqlPermission) {
+      const manifest = TypeProcessor.convertGqlPermissionToManifest(
+        type.name,
+        gqlPermission,
+      );
+      gqlPermissionManifest = manifest ?? undefined;
+    }
+
     return {
       name: type.name,
       fields,
       isInput: false,
       typeManifest,
+      gqlPermissionManifest,
     };
   }
 
@@ -306,5 +392,46 @@ export class TypeProcessor {
     }
 
     return result;
+  }
+
+  static convertGqlPermissionToManifest(
+    typeName: string,
+    permission: readonly StandardGqlPermissionPolicy[],
+  ): GQLPermissionManifest | null {
+    // New format: permission is already an array of policies
+    if (!Array.isArray(permission) || permission.length === 0) {
+      return null;
+    }
+
+    const policies: GQLPermissionPolicyManifest[] = permission.map(
+      (policy: StandardGqlPermissionPolicy) =>
+        ({
+          ...(policy.conditions && {
+            Conditions: policy.conditions.map((cond: any) =>
+              TypeProcessor.convertGqlCondition(cond),
+            ),
+          }),
+          Actions: policy.actions,
+          Permit: (policy.permit ?? true) ? "allow" : "deny",
+          ...(policy.description && { Description: policy.description }),
+        }) as GQLPermissionPolicyManifest,
+    );
+
+    return {
+      Type: typeName,
+      Policies: policies,
+    };
+  }
+
+  static convertGqlCondition(condition: any): GQLPermissionConditionManifest {
+    const [left, operator, right] = condition;
+
+    const leftOperand = TypeProcessor.convertOperand(left, gqlOperandKeys);
+    const rightOperand = TypeProcessor.convertOperand(right, gqlOperandKeys);
+    return {
+      [`Left${capitalize(leftOperand.Kind)}`]: leftOperand,
+      Operator: operator,
+      [`Right${capitalize(rightOperand.Kind)}`]: rightOperand,
+    };
   }
 }

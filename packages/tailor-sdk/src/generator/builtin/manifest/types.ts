@@ -10,6 +10,7 @@ export interface ManifestTypeMetadata {
   fields: ManifestFieldMetadata[];
   isInput: boolean;
   typeManifest?: any;
+  gqlPermissionManifest?: GQLPermissionManifest;
 }
 
 export interface ManifestFieldMetadata {
@@ -18,6 +19,31 @@ export interface ManifestFieldMetadata {
   type: string;
   required: boolean;
   array: boolean;
+}
+
+export interface GQLPermissionManifest {
+  Type: string;
+  Policies: GQLPermissionPolicyManifest[];
+}
+
+export interface GQLPermissionPolicyManifest {
+  Conditions?: GQLPermissionConditionManifest[];
+  Actions: string[];
+  Permit: "allow" | "deny";
+  Description?: string;
+}
+
+export interface GQLPermissionConditionManifest {
+  LeftUser?: GQLPermissionOperandManifest;
+  LeftValue?: GQLPermissionOperandManifest;
+  Operator: "eq" | "ne" | "in" | "nin";
+  RightUser?: GQLPermissionOperandManifest;
+  RightValue?: GQLPermissionOperandManifest;
+}
+
+export interface GQLPermissionOperandManifest {
+  Kind: "user" | "value";
+  Value: string | boolean | number | string[];
 }
 
 // ワークスペース全体のManifest型
@@ -82,6 +108,8 @@ interface StateflowManifest extends ServiceManifest {
 export interface TailordbManifest extends ServiceManifest {
   Kind: "tailordb";
   Namespace: string;
+  Types?: any[];
+  GQLPermissions?: any[];
   [key: string]: unknown;
 }
 

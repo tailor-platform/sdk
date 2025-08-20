@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 import { OperatorFieldConfig } from "@/types/operator";
 import { TailorDBTypeConfig } from "./operator-types";
 import {
@@ -12,12 +10,20 @@ import {
   ValidateConfig,
   SerialConfig,
   IndexDef,
+  TypeFeatures,
 } from "./types";
 import { TailorFieldType, TailorToTs } from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "@/types/field";
 import { ReferenceConfig, TailorField, TailorType } from "@/types/type";
 import inflection from "inflection";
+import {
+  Permissions,
+  TailorTypeGqlPermission,
+  TailorTypePermission,
+  normalizePermission,
+  normalizeGqlPermission,
+} from "./permission";
 
 interface RelationConfig<T extends TailorDBType> {
   type: "oneToOne" | "1-1" | "oneToMany" | "1-n" | "1-N" | "keyOnly";
@@ -29,21 +35,21 @@ interface RelationConfig<T extends TailorDBType> {
   backward?: string;
 }
 
-const fieldDefaults = {
-  required: undefined,
-  description: undefined,
-  allowedValues: undefined,
-  array: undefined,
-  index: undefined,
-  unique: undefined,
-  vector: undefined,
-  foreignKey: undefined,
-  foreignKeyType: undefined,
-  validate: undefined,
-  hooks: undefined,
-  assertNonNull: undefined,
-  serial: undefined,
-} as const satisfies Omit<DBFieldMetadata, "type">;
+interface fieldDefaults extends Omit<DBFieldMetadata, "type"> {
+  required: undefined;
+  description: undefined;
+  allowedValues: undefined;
+  array: undefined;
+  index: undefined;
+  unique: undefined;
+  vector: undefined;
+  foreignKey: undefined;
+  foreignKeyType: undefined;
+  validate: undefined;
+  hooks: undefined;
+  assertNonNull: undefined;
+  serial: undefined;
+}
 
 class TailorDBField<
   const Defined extends DefinedFieldMetadata,
@@ -119,7 +125,7 @@ class TailorDBField<
   ) {
     return new TailorDBField<
       Prettify<
-        Pick<typeof fieldDefaults, Exclude<D[number], "name" | "type">> & {
+        Pick<fieldDefaults, Exclude<D[number], "name" | "type">> & {
           type: T;
         }
       >,
@@ -405,28 +411,31 @@ function object<const F extends Record<string, TailorDBField<any, any, any>>>(
 }
 
 export class TailorDBType<
-  const F extends { id?: never } & Record<
+  const Fields extends { id?: never } & Record<
     string,
-    TailorDBField<M, any, any>
+    TailorDBField<Metadata, any, any>
   > = any,
-  M extends DefinedFieldMetadata = any,
+  Metadata extends DefinedFieldMetadata = any,
+  User extends object = never,
 > extends TailorType<
-  M,
-  F & Record<string, TailorField<M, any, any, DBFieldMetadata>>
+  Metadata,
+  Fields & Record<string, TailorField<Metadata, any, any, DBFieldMetadata>>
 > {
   private _metadata?: TailorDBTypeConfig;
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
-  private _settings: { pluralForm?: string } = {};
+  private _settings: TypeFeatures = {};
   private _indexes: IndexDef<this>[] = [];
+  private _permissions: Permissions = {};
 
   constructor(
     public readonly name: string,
-    public readonly fields: F,
+    public readonly fields: Fields,
     options: { pluralForm?: string; description?: string },
   ) {
     super(
-      fields as F & Record<string, TailorField<M, any, any, DBFieldMetadata>>,
+      fields as Fields &
+        Record<string, TailorField<Metadata, any, any, DBFieldMetadata>>,
     );
     this._settings.pluralForm = options.pluralForm;
     this._description = options.description;
@@ -487,6 +496,7 @@ export class TailorDBType<
         extends: false,
         fields: metadataFields,
         settings: this._settings,
+        permissions: this._permissions,
         ...(Object.keys(indexes).length > 0 && { indexes }),
       },
     };
@@ -517,7 +527,7 @@ export class TailorDBType<
     return this;
   }
 
-  features(features: { aggregation?: true; bulkUpsert?: true }) {
+  features(features: Omit<TypeFeatures, "pluralForm">) {
     this._settings = { ...this._settings, ...features };
     return this;
   }
@@ -525,6 +535,27 @@ export class TailorDBType<
   indexes(...indexes: IndexDef<this>[]) {
     this._indexes = indexes;
     return this;
+  }
+
+  permission<
+    U extends object = User,
+    P extends TailorTypePermission<U, output<this>> = TailorTypePermission<
+      U,
+      output<this>
+    >,
+  >(permission: P) {
+    const ret = this as unknown as TailorDBType<Fields, Metadata, U>;
+    ret._permissions.record = normalizePermission(permission);
+    return ret;
+  }
+
+  gqlPermission<
+    U extends object = User,
+    P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
+  >(permission: P) {
+    const ret = this as unknown as TailorDBType<Fields, Metadata, U>;
+    ret._permissions.gql = normalizeGqlPermission(permission);
+    return ret;
   }
 }
 

@@ -1,4 +1,9 @@
 export * from "./auth";
-export { db } from "./tailordb/index";
+export {
+  db,
+  type PermissionCondition,
+  type TailorTypePermission,
+  type TailorTypeGqlPermission,
+} from "./tailordb";
 export * from "./pipeline";
 export * from "./executor";

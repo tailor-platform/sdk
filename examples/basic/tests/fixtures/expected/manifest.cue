@@ -564,39 +564,92 @@
           "Extends": false,
           "Directives": [],
           "Indexes": {},
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -1428,7 +1481,15 @@
               "Vector": false
             }
           },
-          "Relationships": {},
+          "Relationships": {
+            "users": {
+              "RefType": "User",
+              "RefField": "roleId",
+              "SrcField": "id",
+              "Array": true,
+              "Description": ""
+            }
+          },
           "Settings": {
             "Aggregation": false,
             "BulkUpsert": false,
@@ -1940,6 +2001,19 @@
               "Required": false,
               "Vector": false
             },
+            "roleId": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": true,
+              "Unique": false,
+              "ForeignKey": true,
+              "ForeignKeyType": "Role",
+              "Required": true,
+              "Vector": false
+            },
             "createdAt": {
               "Type": "datetime",
               "AllowedValues": [],
@@ -1976,6 +2050,13 @@
             }
           },
           "Relationships": {
+            "role": {
+              "RefType": "Role",
+              "RefField": "id",
+              "SrcField": "roleId",
+              "Array": false,
+              "Description": ""
+            },
             "setting": {
               "RefType": "UserSetting",
               "RefField": "userID",
@@ -2180,6 +2261,56 @@
               }
             ]
           }
+        }
+      ],
+      "GQLPermissions": [
+        {
+          "Type": "Invoice",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
         }
       ],
       "Version": "v2"

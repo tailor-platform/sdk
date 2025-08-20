@@ -110,3 +110,9 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   unique?: boolean;
   name?: string;
 };
+
+export interface TypeFeatures {
+  pluralForm?: string;
+  aggregation?: true;
+  bulkUpsert?: true;
+}

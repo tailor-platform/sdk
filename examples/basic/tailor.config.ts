@@ -1,4 +1,5 @@
 import { defineConfig } from "@tailor-platform/tailor-sdk";
+import { defaultMachineUserRole } from "./constants";
 
 export default defineConfig({
   id: process.env.WORKSPACE_ID!,
@@ -41,7 +42,7 @@ export default defineConfig({
         machineUsers: [
           {
             Name: "admin-machine-user",
-            Attributes: ["4293a799-4398-55e6-a19a-fe8427d1a415"],
+            Attributes: [defaultMachineUserRole],
           },
         ],
         oauth2Clients: [],
