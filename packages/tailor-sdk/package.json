@@ -63,7 +63,7 @@
     "gql.tada": "1.8.13",
     "prettier": "3.5.3",
     "ts-cron-validator": "1.1.5",
-    "tsdown": "0.14.0",
+    "tsdown": "0.14.1",
     "typescript": "5.9.2",
     "typescript-eslint": "8.39.1",
     "vitest": "3.2.4",

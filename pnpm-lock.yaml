@@ -188,8 +188,8 @@ importers:
         specifier: 1.1.5
         version: 1.1.5
       tsdown:
-        specifier: 0.14.0
-        version: 0.14.0(typescript@5.9.2)
+        specifier: 0.14.1
+        version: 0.14.1(typescript@5.9.2)
       typescript:
         specifier: 5.9.2
         version: 5.9.2
@@ -2534,8 +2534,8 @@ packages:
     resolution: {integrity: sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==}
     engines: {node: '>=6'}
 
-  tsdown@0.14.0:
-    resolution: {integrity: sha512-3zBEDUC1XPnVE5rwfsm1y8REh58CJsDT319hkRwBgIpN9eMClE30dqF4HkK8zPKoczNNqFrQ2cKGrjE50WprIw==}
+  tsdown@0.14.1:
+    resolution: {integrity: sha512-/nBuFDKZeYln9hAxwWG5Cm55/823sNIVI693iVi0xRFHzf9OVUq4b/lx9PH1TErFr/IQ0kd2hutFbJIPM0XQWA==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
@@ -4986,7 +4986,7 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-  tsdown@0.14.0(typescript@5.9.2):
+  tsdown@0.14.1(typescript@5.9.2):
     dependencies:
       ansis: 4.1.0
       cac: 6.7.14
