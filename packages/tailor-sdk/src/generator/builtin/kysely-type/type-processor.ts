@@ -43,7 +43,7 @@ export class TypeProcessor {
       fields.push(`${fieldName}: ${finalType};`);
     }
 
-    return multiline/* ts */ `
+    return multiline /* ts */ `
       export interface ${type.name} {
         ${fields.join("\n")}
       }
@@ -70,7 +70,7 @@ export class TypeProcessor {
    * DBインターフェースを生成
    */
   private static generateDBInterface(types: KyselyTypeMetadata[]): string {
-    return multiline/* ts */ `
+    return multiline /* ts */ `
       export interface DB {
         ${types.map((type) => `${type.name}: ${type.name};`).join("\n")}
       }
@@ -181,7 +181,7 @@ export class TypeProcessor {
   }
 }
 
-const COMMON_PREFIX = multiline/* ts */ `
+const COMMON_PREFIX = multiline /* ts */ `
   import { SqlClient } from "@tailor-platform/tailor-sdk";
   import {
     ColumnType,
@@ -212,7 +212,7 @@ const COMMON_PREFIX = multiline/* ts */ `
   type Timestamp = ColumnType<Date, Date | string, Date | string>;
 `;
 
-const COMMON_SUFFIX = multiline/* ts */ `
+const COMMON_SUFFIX = multiline /* ts */ `
   const getDB = () => {
     return new Kysely<DB>({
       dialect: {

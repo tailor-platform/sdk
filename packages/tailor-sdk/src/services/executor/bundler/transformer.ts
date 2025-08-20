@@ -38,7 +38,7 @@ export class ExecutorTransformer implements ITransformer<Executor> {
     // Write the transformed file with the executor function
     fs.writeFileSync(
       transformedPath,
-      ml/* js */ `
+      ml /* js */ `
       ${trimmedContent}
 
       // Export the executor function
@@ -53,7 +53,7 @@ export class ExecutorTransformer implements ITransformer<Executor> {
     // Create the final executor file that will be bundled
     const executorFilePath = path.join(stepsDir, `${executor.name}.js`);
     const relativePath = path.relative(stepsDir, transformedPath);
-    const executorContent = ml/* js */ `
+    const executorContent = ml /* js */ `
       import { __executor_function } from "${relativePath}";
 
       ${DB_WRAPPER_DEFINITION}

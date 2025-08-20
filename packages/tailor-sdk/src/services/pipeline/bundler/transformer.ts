@@ -19,7 +19,7 @@ export class CodeTransformer implements ITransformer<Resolver> {
     );
     fs.writeFileSync(
       transformedPath,
-      ml/* js */ `
+      ml /* js */ `
       ${trimmedContent}
 
       ${resolver.steps
@@ -55,7 +55,7 @@ export class CodeTransformer implements ITransformer<Resolver> {
         let stepContent;
         switch (type) {
           case "fn":
-            stepContent = ml/* js */ `
+            stepContent = ml /* js */ `
                 import { ${stepFunctionVariable} } from "${relativePath}";
                 globalThis.main = ${stepFunctionVariable};
               `;
@@ -68,7 +68,7 @@ export class CodeTransformer implements ITransformer<Resolver> {
                 `Database namespace is not defined at ${resolver.name} > ${name}`,
               );
             }
-            stepContent = ml/* js */ `
+            stepContent = ml /* js */ `
                 import { ${stepFunctionVariable} } from "${relativePath}";
 
                 ${DB_WRAPPER_DEFINITION}
