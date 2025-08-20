@@ -92,7 +92,7 @@ export const modelName = db.type("ModelName", {
   field: db.string(),
   relatedId: db
     .uuid()
-    .relation({ type: "1-n", toward: { type: relatedModel } }),
+    .relation({ type: "n-1", toward: { type: relatedModel } }),
   ...db.fields.timestamps(),
 });
 export type modelName = typeof modelName;

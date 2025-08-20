@@ -26,7 +26,7 @@ import {
 } from "./permission";
 
 interface RelationConfig<T extends TailorDBType> {
-  type: "oneToOne" | "1-1" | "oneToMany" | "1-n" | "1-N" | "keyOnly";
+  type: "oneToOne" | "1-1" | "manyToOne" | "n-1" | "N-1" | "keyOnly";
   toward: {
     type: T;
     as?: string;
@@ -448,7 +448,7 @@ export class TailorDBType<
 
           if (!backwardFieldName || backwardFieldName === "") {
             const metadata = field.metadata;
-            const relationType = metadata?.unique ? "1-1" : "1-n";
+            const relationType = metadata?.unique ? "1-1" : "n-1";
 
             if (relationType === "1-1") {
               backwardFieldName = inflection.singularize(

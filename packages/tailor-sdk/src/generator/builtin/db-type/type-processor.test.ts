@@ -108,12 +108,12 @@ describe("TypeProcessor", () => {
     expect(result).toContain('language: "jp" | "en";');
   });
 
-  test("逆参照フィールドの生成（1-n関係）", async () => {
+  test("逆参照フィールドの生成（n-1関係）", async () => {
     const user = db.type("User", {});
 
     const order = db.type("Order", {
       userID: db.uuid().relation({
-        type: "1-n",
+        type: "n-1",
         toward: { type: user },
         backward: "orders",
       }),

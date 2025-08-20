@@ -49,9 +49,8 @@ export const user = db.type("User", {
 
 The example shows various relation types:
 
-- **1-n relations**: One user can have many settings
+- **1-1 relations**: One user can have one setting
 - **n-1 relations**: Many users belong to one role
-- **n-n relations**: Through junction tables
 
 ### 3. GraphQL Resolvers
 
