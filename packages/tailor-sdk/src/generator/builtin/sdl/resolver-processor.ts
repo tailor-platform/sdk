@@ -37,7 +37,7 @@ export class ResolverProcessor {
       `${resolverBaseName}Output`,
     );
 
-    const sdl = multiline/* gql */ `
+    const sdl = multiline /* gql */ `
     ${SDLUtils.generateSDLFromMetadata(inputMetadata)}
     ${SDLUtils.generateSDLFromMetadata(outputMetadata)}
     extend type ${capitalize(resolver.queryType)} {

@@ -34,7 +34,7 @@ describe("CodeTransformer", () => {
 
   describe("transform", () => {
     it("resolverのステップを適切にエクスポートする", () => {
-      const testCode = multiline/* ts */ `
+      const testCode = multiline /* ts */ `
         import { format } from "date-fns";
 
         const getDB = () => ({ query: () => {} });

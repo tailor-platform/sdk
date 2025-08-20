@@ -6,7 +6,7 @@ export function wrapDbFn(dbNamespace: string, target: string): string {
   return `await ${DB_WRAPPER_NAME}("${dbNamespace}", ${target})`;
 }
 
-export const DB_WRAPPER_DEFINITION = ml/* js */ `
+export const DB_WRAPPER_DEFINITION = ml /* js */ `
   const $connect_tailordb = async (namespace) => {
     const baseClient = namespace ? new tailordb.Client({ namespace }) : { connect: () => {}, end: () => {} };
     await baseClient.connect();
