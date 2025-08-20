@@ -148,6 +148,7 @@ export interface User {
   email: string;
   status: string | null;
   department: string | null;
+  roleId: string;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }

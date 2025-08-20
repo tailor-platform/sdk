@@ -137,6 +137,8 @@ type User {
   email: String!
   status: String
   department: String
+  roleId: ID!
+  role: Role!
   createdAt: DateTime
   updatedAt: DateTime
 }

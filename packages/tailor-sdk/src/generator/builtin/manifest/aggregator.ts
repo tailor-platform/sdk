@@ -8,6 +8,7 @@ import {
   TailordbManifest,
   PipelineManifest,
   IdPManifest,
+  GQLPermissionManifest,
 } from "./types";
 import { ResolverManifestMetadata } from "./resolver-processor";
 import { ExecutorManifestMetadata } from "./executor-processor";
@@ -271,10 +272,21 @@ export class ManifestAggregator {
         return typeManifest;
       });
 
+    const gqlPermissions = Object.values(metadata.types).reduce(
+      (acc, typeMetadata) => {
+        if (typeMetadata.gqlPermissionManifest) {
+          acc.push(typeMetadata.gqlPermissionManifest);
+        }
+        return acc;
+      },
+      [] as GQLPermissionManifest[],
+    );
+
     return {
       Kind: "tailordb",
       Namespace: service.namespace,
       Types: types,
+      ...(gqlPermissions.length > 0 && { GQLPermissions: gqlPermissions }),
       Version: "v2",
     };
   }

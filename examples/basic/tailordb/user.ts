@@ -1,4 +1,5 @@
 import { db } from "@tailor-platform/tailor-sdk";
+import { role } from "./role";
 
 export const user = db
   .type("User", {
@@ -6,6 +7,10 @@ export const user = db
     email: db.string().unique(),
     status: db.string().optional(),
     department: db.string().optional(),
+    roleId: db.uuid().relation({
+      type: "1-n",
+      toward: { type: role },
+    }),
     ...db.fields.timestamps(),
   })
   .indexes(

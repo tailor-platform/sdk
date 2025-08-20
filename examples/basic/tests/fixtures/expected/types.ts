@@ -87,6 +87,7 @@ export type PurchaseOrder = {
 export type Role = {
   id: string;
   name: string;
+  users?: User[] | null;
 };
 
 export type SalesOrder = {
@@ -125,6 +126,8 @@ export type User = {
   email: string;
   status?: string | null;
   department?: string | null;
+  roleId: string;
+  role: Role;
   createdAt: Date;
   updatedAt?: Date | null;
   setting?: UserSetting | null;
