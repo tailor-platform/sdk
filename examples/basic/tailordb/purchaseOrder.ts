@@ -4,7 +4,7 @@ import { attachedFiles } from "./file";
 
 export const purchaseOrder = db.type(["PurchaseOrder", "PurchaseOrderList"], {
   supplierID: db.uuid().relation({
-    type: "1-n",
+    type: "n-1",
     toward: { type: supplier },
   }),
   totalPrice: db.int(),

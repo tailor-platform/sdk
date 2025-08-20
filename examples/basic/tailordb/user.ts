@@ -8,7 +8,7 @@ export const user = db
     status: db.string().optional(),
     department: db.string().optional(),
     roleId: db.uuid().relation({
-      type: "1-n",
+      type: "n-1",
       toward: { type: role },
     }),
     ...db.fields.timestamps(),

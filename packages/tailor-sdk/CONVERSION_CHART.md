@@ -260,7 +260,7 @@ field {
 
 ```typescript
 customerId: db.uuid().relation({
-  type: "1-n",
+  type: "n-1",
   toward: { type: customer },
   backward: "orders",
 });
@@ -288,7 +288,7 @@ field {
   "Type": "uuid",
   "ForeignKey": true,
   "ForeignKeyType": "Customer",
-  "ForeignKeyRelation": "1-n",
+  "ForeignKeyRelation": "n-1",
   "BackwardField": "orders"
 }
 ```

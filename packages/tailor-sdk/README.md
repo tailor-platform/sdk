@@ -259,7 +259,7 @@ db.string()
 
 // Relations
 db.uuid().relation({
-  type: "1-n", // or "1-1", "oneToMany", "oneToOne"
+  type: "n-1", // or "1-1", "manyToOne", "oneToOne"
   toward: { type: customer },
   backward: "orders", // Optional: reverse relation name
 });
@@ -397,7 +397,7 @@ export const attachedFiles = db
 // Use in multiple models
 export const purchaseOrder = db.type("PurchaseOrder", {
   supplierID: db.uuid().relation({
-    type: "1-n",
+    type: "n-1",
     toward: { type: supplier },
   }),
   totalPrice: db.int(),
@@ -421,7 +421,7 @@ Use TypeScript's type inference to get compile-time type safety:
 export const order = db.type("Order", {
   orderNumber: db.string().unique(),
   customerId: db.uuid().relation({
-    type: "1-n",
+    type: "n-1",
     toward: { type: customer, as: "customer" },
     backward: "orders",
   }),

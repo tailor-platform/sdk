@@ -272,9 +272,9 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.reference!.nameMap[1]).toEqual("relatedItems");
   });
 
-  it("oneToManyリレーションでの型推論確認", () => {
+  it("manyToOneリレーションでの型推論確認", () => {
     const userField = db.uuid().relation({
-      type: "oneToMany",
+      type: "manyToOne",
       toward: {
         type: User,
         as: "author",

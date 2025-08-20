@@ -5,7 +5,7 @@ import { user } from "./user";
 export const salesOrder = db
   .type(["SalesOrder", "SalesOrderList"], {
     customerID: db.uuid().relation({
-      type: "1-n",
+      type: "n-1",
       toward: { type: customer },
     }),
     approvedByUserIDs: db
