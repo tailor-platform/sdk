@@ -8,6 +8,7 @@ import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
 import { applyApplication } from "./services/application";
 import { applyAuth } from "./services/auth";
+import { applyExecutor } from "./services/executor";
 import { applyIdP } from "./services/idp";
 import { applyPipeline } from "./services/pipeline";
 import { applyTailorDB } from "./services/tailordb";
@@ -22,12 +23,13 @@ export async function apply(
   const workspaceId = await fetchWorkspaceId(client, config, tailorctlConfig);
   const workspace = defineWorkspace(config);
 
-  // TODO(remiposo): Support other services
+  // To handle dependencies correctly, apply each service in the same order as tailorctl.
   await applyTailorDB(client, workspaceId, workspace, options);
   await applyIdP(client, workspaceId, workspace, options);
   await applyAuth(client, workspaceId, workspace, options);
   await applyPipeline(client, workspaceId, workspace, options);
   await applyApplication(client, workspaceId, workspace, options);
+  await applyExecutor(client, workspaceId, workspace, options);
 
   if (options.dryRun) {
     console.log("Dry run enabled. No changes applied.");
