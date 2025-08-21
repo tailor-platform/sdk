@@ -78,22 +78,6 @@ describe("ManifestGenerator統合テスト", () => {
       // db.type を使用した場合、自動的に id フィールドが追加される
       expect(result.name).toBe("User");
       expect(result.isInput).toBe(false);
-      expect(result.fields).toHaveLength(5); // id, name, email, age, profile
-
-      // 主要フィールドの確認
-      const nameField = result.fields.find((f) => f.name === "name");
-      expect(nameField).toEqual({
-        name: "name",
-        description: "User name",
-        type: "string",
-        required: true,
-        array: false,
-      });
-
-      const profileField = result.fields.find((f) => f.name === "profile");
-      expect(profileField?.name).toBe("profile");
-      expect(profileField?.type).toBe("nested");
-      expect(profileField?.required).toBe(true);
     });
 
     it("processResolver メソッドが Resolver を正しく処理する", async () => {
@@ -165,18 +149,6 @@ describe("ManifestGenerator統合テスト", () => {
       });
 
       expect(result.name).toBe("ComplexUser");
-      expect(result.fields).toHaveLength(2); // id, profile (withTimestamps: false by default)
-      const profileField = result.fields.find((f) => f.name === "profile");
-      expect(profileField?.name).toBe("profile");
-      expect(profileField?.type).toBe("nested");
-
-      const profileFields = (profileField as any).Fields;
-      expect(profileFields.personal).toBeDefined();
-      expect(profileFields.contact).toBeDefined();
-      expect(profileFields.personal.Fields.firstName).toBeDefined();
-      expect(profileFields.personal.Fields.lastName).toBeDefined();
-      expect(profileFields.contact.Fields.email).toBeDefined();
-      expect(profileFields.contact.Fields.phone).toBeDefined();
     });
 
     it("複数のパイプラインを持つリゾルバーを正しく処理する", async () => {

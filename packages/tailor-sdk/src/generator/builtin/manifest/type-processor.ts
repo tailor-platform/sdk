@@ -1,10 +1,11 @@
 import { TailorDBType } from "@/services/tailordb/schema";
 import {
   ManifestTypeMetadata,
-  ManifestFieldMetadata,
   GQLPermissionManifest,
   GQLPermissionPolicyManifest,
   GQLPermissionConditionManifest,
+  TailorDBTypeManifest,
+  TailorDBTypePermissionManifest,
 } from "./types";
 import { tailorToManifestScalar } from "@/types/types";
 import { capitalize } from "inflection";
@@ -17,9 +18,6 @@ import {
 } from "@/services/tailordb/permission";
 
 export class TypeProcessor {
-  /**
-   * ネストしたフィールドを再帰的に処理
-   */
   private static processNestedFields(objectFields: any): any {
     const nestedFields: any = {};
 
@@ -78,50 +76,19 @@ export class TypeProcessor {
     return nestedFields;
   }
 
-  /**
-   * 単一のTailorDBTypeに対するマニフェスト生成処理
-   * 元のManifestAggregator.generateTailorDBManifest相当の処理を単一型に適用
-   */
-  static generateTailorDBTypeManifest(type: TailorDBType): any {
+  static generateTailorDBTypeManifest(
+    type: TailorDBType,
+  ): TailorDBTypeManifest {
     const metadata = type.metadata;
     const schema = metadata.schema;
 
-    const defaultTypePermission = {
-      Create: [
-        {
-          Id: "everyone",
-          Ids: [],
-          Permit: "allow",
-        },
-      ],
-      Read: [
-        {
-          Id: "everyone",
-          Ids: [],
-          Permit: "allow",
-        },
-      ],
-      Update: [
-        {
-          Id: "everyone",
-          Ids: [],
-          Permit: "allow",
-        },
-      ],
-      Delete: [
-        {
-          Id: "everyone",
-          Ids: [],
-          Permit: "allow",
-        },
-      ],
-      Admin: [
-        {
-          Id: "everyone",
-          Ids: [],
-          Permit: "allow",
-        },
-      ],
+    const allowEveryone = { Id: "everyone", Ids: [], Permit: "allow" as const };
+    const defaultTypePermission: TailorDBTypePermissionManifest = {
+      Create: [allowEveryone],
+      Read: [allowEveryone],
+      Update: [allowEveryone],
+      Delete: [allowEveryone],
+      Admin: [allowEveryone],
     };
 
     const defaultSettings = {
@@ -278,10 +245,10 @@ export class TypeProcessor {
 
   static convertPermissionsToManifest(
     permission: StandardTailorTypePermission,
-  ): StandardTailorTypePermission {
+  ): any {
     return Object.keys(permission).reduce((acc, key) => {
       acc[capitalize(key)] = TypeProcessor.convertPermissionItems(
-        (permission as any)[key],
+        permission[key as keyof StandardTailorTypePermission],
       );
       return acc;
     }, {} as any);
@@ -330,35 +297,6 @@ export class TypeProcessor {
   }
 
   static async processType(type: TailorDBType): Promise<ManifestTypeMetadata> {
-    const fields: ManifestFieldMetadata[] = Object.entries(type.fields).map(
-      ([fieldName, fieldDef]) => {
-        const typedFieldDef = fieldDef as any;
-        const metadata = typedFieldDef.metadata;
-        const fieldMetadata: ManifestFieldMetadata = {
-          name: fieldName,
-          description: metadata.description || "",
-          type:
-            tailorToManifestScalar[
-              metadata.type as keyof typeof tailorToManifestScalar
-            ] || "string",
-          required: metadata.required ?? true,
-          array: metadata.array ?? false,
-        };
-
-        if (metadata.type === "nested") {
-          if (typedFieldDef.fields) {
-            const objectFields = typedFieldDef.fields;
-            const nestedFields =
-              TypeProcessor.processNestedFields(objectFields);
-            (fieldMetadata as any).Fields = nestedFields;
-            fieldMetadata.type = "nested";
-          }
-        }
-
-        return fieldMetadata;
-      },
-    );
-
     const typeManifest = TypeProcessor.generateTailorDBTypeManifest(type);
 
     // Process GQL permissions if defined
@@ -374,7 +312,6 @@ export class TypeProcessor {
 
     return {
       name: type.name,
-      fields,
       isInput: false,
       typeManifest,
       gqlPermissionManifest,
