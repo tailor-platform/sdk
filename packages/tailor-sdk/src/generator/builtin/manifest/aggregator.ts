@@ -286,7 +286,7 @@ export class ManifestAggregator {
       Kind: "tailordb",
       Namespace: service.namespace,
       Types: types,
-      ...(gqlPermissions.length > 0 && { GQLPermissions: gqlPermissions }),
+      GQLPermissions: gqlPermissions,
       Version: "v2",
     };
   }
