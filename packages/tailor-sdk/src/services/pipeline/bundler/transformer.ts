@@ -1,5 +1,3 @@
-/* eslint-disable no-case-declarations */
-
 import fs from "node:fs";
 import path from "node:path";
 import ml from "multiline-ts";

@@ -14,18 +14,29 @@ export default defineConfig([
     ],
   },
   {
-    files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
-    plugins: { js },
-    extends: ["js/recommended"],
-  },
-  {
-    files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
+    files: ["**/*.{js,mjs,cjs}"],
+    ...js.configs.recommended,
     languageOptions: { globals: globals.browser },
   },
-  tseslint.configs.recommended,
+  {
+    files: ["**/*.{ts,mts,cts}"],
+    ...tseslint.configs.base,
+    languageOptions: {
+      ...tseslint.configs.base.languageOptions,
+      globals: globals.browser,
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+        project: "./tsconfig.json",
+      },
+    },
+  },
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ["**/*.{ts,mts,cts}"],
+  })),
   eslintConfigPrettier,
   {
-    files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
+    files: ["**/*.{ts,mts,cts}"],
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
