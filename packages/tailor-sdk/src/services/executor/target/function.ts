@@ -3,7 +3,7 @@ import { FunctionOperation, ManifestAndContext } from "../types";
 
 type FunctionOperationContext<A> = {
   args: A;
-  fn: (args: A & { client: SqlClient }) => void;
+  fn: (args: A & { client: SqlClient }) => void | Promise<void>;
   dbNamespace?: string;
 };
 
@@ -21,7 +21,7 @@ export function executorFunction<A, V = A>({
   invoker,
 }: {
   name: string;
-  fn: (args: V & { client: SqlClient }) => void;
+  fn: (args: V & { client: SqlClient }) => void | Promise<void>;
   variables?: (args: A) => V;
   dbNamespace?: string;
   jobFunction?: boolean;

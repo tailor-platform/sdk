@@ -23,7 +23,7 @@ export function createExecutor(name: string, description?: string) {
         dbNamespace,
         invoker,
       }: {
-        fn: (args: V & { client: SqlClient }) => void;
+        fn: (args: V & { client: SqlClient }) => void | Promise<void>;
         variables?: (args: ExtractTriggerArgs<TTrigger>) => V;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
@@ -49,7 +49,7 @@ export function createExecutor(name: string, description?: string) {
         dbNamespace,
         invoker,
       }: {
-        fn: (args: V & { client: SqlClient }) => void;
+        fn: (args: V & { client: SqlClient }) => void | Promise<void>;
         variables?: (args: ExtractTriggerArgs<TTrigger>) => V;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
