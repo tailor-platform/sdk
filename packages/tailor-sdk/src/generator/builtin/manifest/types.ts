@@ -1,15 +1,97 @@
 import { OperationType } from "@/types/operator";
 
-/**
- * Manifest生成専用の型定義
- * SDL生成とは完全に独立
- */
+// TailorDB Type Manifest定義
+export interface TailorDBTypeManifest {
+  Name: string;
+  Description: string;
+  Fields: Record<string, TailorDBFieldManifest>;
+  Relationships: Record<string, TailorDBRelationshipManifest>;
+  Settings: TailorDBTypeSettings;
+  Extends: boolean;
+  Directives: any[];
+  Indexes: Record<string, TailorDBIndexManifest>;
+  Permission?: TailorDBPermissionManifest;
+  TypePermission?: TailorDBTypePermissionManifest;
+}
+
+export interface TailorDBFieldManifest {
+  Type: string;
+  AllowedValues: string[];
+  Description: string;
+  Validate: TailorDBValidationRule[];
+  Array: boolean;
+  Index: boolean;
+  Unique: boolean;
+  ForeignKey: boolean;
+  ForeignKeyType?: string;
+  Required: boolean;
+  Vector?: boolean;
+  Hooks?: {
+    Create?: { Expr: string };
+    Update?: { Expr: string };
+  };
+  Serial?: {
+    Start: number;
+    MaxValue?: number;
+    Format?: string;
+  };
+  Fields?: Record<string, TailorDBFieldManifest>; // For nested fields
+}
+
+export interface TailorDBValidationRule {
+  Action: "deny";
+  ErrorMessage: string;
+  Expr: string;
+  Script?: {
+    Expr: string;
+  };
+}
+
+export interface TailorDBRelationshipManifest {
+  RefType: string;
+  RefField: string;
+  SrcField: string;
+  Array: boolean;
+  Description: string;
+}
+
+export interface TailorDBTypeSettings {
+  Aggregation: boolean;
+  BulkUpsert: boolean;
+  Draft: boolean;
+  DefaultQueryLimitSize: number;
+  MaxBulkUpsertSize: number;
+  PluralForm: string;
+  PublishRecordEvents: boolean;
+}
+
+export interface TailorDBIndexManifest {
+  FieldNames: string[];
+  Unique: boolean;
+}
+
+export interface TailorDBPermissionManifest {
+  [operation: string]: any; // Based on the permission structure
+}
+
+export interface TailorDBTypePermissionManifest {
+  Create: TailorDBPermissionEntry[];
+  Read: TailorDBPermissionEntry[];
+  Update: TailorDBPermissionEntry[];
+  Delete: TailorDBPermissionEntry[];
+  Admin: TailorDBPermissionEntry[];
+}
+
+export interface TailorDBPermissionEntry {
+  Id: string;
+  Ids: string[];
+  Permit: "allow" | "deny";
+}
 
 export interface ManifestTypeMetadata {
   name: string;
-  fields: ManifestFieldMetadata[];
   isInput: boolean;
-  typeManifest?: any;
+  typeManifest: TailorDBTypeManifest;
   gqlPermissionManifest?: GQLPermissionManifest;
 }
 
@@ -108,8 +190,8 @@ interface StateflowManifest extends ServiceManifest {
 export interface TailordbManifest extends ServiceManifest {
   Kind: "tailordb";
   Namespace: string;
-  Types?: any[];
-  GQLPermissions?: any[];
+  Types?: TailorDBTypeManifest[];
+  GQLPermissions?: GQLPermissionManifest[];
   [key: string]: unknown;
 }
 
