@@ -6,6 +6,7 @@ import { OperatorService } from "@/gen/tailor/v1/service_pb";
 import { ApplyOptions } from "@/generator/options";
 import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
+import { applyApplication } from "./services/application";
 import { applyAuth } from "./services/auth";
 import { applyIdP } from "./services/idp";
 import { applyPipeline } from "./services/pipeline";
@@ -26,6 +27,7 @@ export async function apply(
   await applyIdP(client, workspaceId, workspace, options);
   await applyAuth(client, workspaceId, workspace, options);
   await applyPipeline(client, workspaceId, workspace, options);
+  await applyApplication(client, workspaceId, workspace, options);
 
   if (options.dryRun) {
     console.log("Dry run enabled. No changes applied.");
