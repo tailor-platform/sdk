@@ -190,8 +190,8 @@ interface StateflowManifest extends ServiceManifest {
 export interface TailordbManifest extends ServiceManifest {
   Kind: "tailordb";
   Namespace: string;
-  Types?: TailorDBTypeManifest[];
-  GQLPermissions?: GQLPermissionManifest[];
+  Types: TailorDBTypeManifest[];
+  GQLPermissions: GQLPermissionManifest[];
   [key: string]: unknown;
 }
 
