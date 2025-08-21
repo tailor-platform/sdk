@@ -4,6 +4,6 @@
     "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["**/*.ts", "**/*.js"],
+  "include": ["**/*.ts", "./tailor.config.ts", "./vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

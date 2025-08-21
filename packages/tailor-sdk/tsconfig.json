@@ -8,6 +8,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["./src/**/*"],
+  "include": ["./src/**/*.ts", "./tsdown.config.ts", "./vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
