@@ -25,7 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm test` - Run all tests with Vitest
 - `pnpm test path/to/test.ts` - Run specific test file
 - `pnpm test -t "test name"` - Run tests matching pattern
-- `pnpm build` - Build SDK with tsup
+- `pnpm build` - Build SDK with tsdown
 
 ### CLI Commands
 
@@ -40,7 +40,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 
 ### Project Structure
 
-````
+```
 /
 ├── packages/
 │   └── tailor-sdk/          # Core SDK package
@@ -53,25 +53,23 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 ├── examples/
 │   └── basic/               # Example implementation
 └── turbo.json               # Turbo build orchestration
+```
 
 ### Key Components
 
-1. **TailorDB** (`src/tailordb/`)
-
+1. **TailorDB** (`src/services/tailordb/`)
    - Define type-safe database models using `db.type()`
    - Always export both the value and type: `export const model = db.type(...); export type model = typeof model;`
    - Use `db.fields.timestamps()` for automatic timestamp fields
    - Relations are defined with `.relation()` method
 
-2. **Pipeline Resolvers** (`src/resolvers/`)
-
+2. **Pipeline Resolvers** (`src/services/pipeline/`)
    - Create GraphQL resolvers using `createQueryResolver` or `createMutationResolver`
    - Use step-based flow: `.fnStep()`, `.sqlStep()`, etc.
    - Each step's result is available in subsequent steps via context
    - Define return type with `.returns()`
 
-3. **Executors** (`src/executors/`)
-
+3. **Executors** (`src/services/executor/`)
    - Event-driven handlers using `createExecutor()`
    - Trigger on record changes: `recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`
    - Execute functions, webhooks, or GraphQL operations
@@ -96,7 +94,7 @@ export const modelName = db.type("ModelName", {
   ...db.fields.timestamps(),
 });
 export type modelName = typeof modelName;
-````
+```
 
 **Resolver Pattern:**
 
@@ -119,18 +117,18 @@ export default createExecutor("name", "description")
 ### Important Notes
 
 - This project uses ESM modules and requires Node.js 22.14.0+
-- Package manager: pnpm 10.8.0 (configured in packageManager field)
+- Package manager: pnpm 10.14.0 (configured in packageManager field)
 - TypeScript is configured in strict mode
 - Lefthook runs pre-commit checks automatically (lint, format, typecheck)
 - Always use parameterized queries to prevent SQL injection
 - The SDK uses Rolldown for bundling and Turbo for task orchestration
 - Kysely is integrated for type-safe SQL query building
 - Test framework: Vitest with SWC for TypeScript transformation
-- Build tool: tsup for creating ESM bundles
+- Build tool: tsdown for creating ESM bundles
 
 ### Testing
 
 - Run tests: `pnpm exec turbo run test` or `pnpm test` in specific packages
-- Tests use Vitest with mock-extended for mocking
+- Tests use Vitest with vitest-mock-extended for mocking
 - Test files: `**/__tests__/**/*.ts` or `**/?(*.)+(spec|test).ts`
 - Example tests are in `examples/basic/tests/`
