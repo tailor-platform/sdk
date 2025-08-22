@@ -5,7 +5,7 @@ import {
   GQLPermissionPolicyManifest,
   GQLPermissionConditionManifest,
   TailorDBTypeManifest,
-  TailorDBTypePermissionManifest,
+  TailorDBPermissionManifest,
 } from "./types";
 import { tailorToManifestScalar } from "@/types/types";
 import { capitalize } from "inflection";
@@ -81,15 +81,6 @@ export class TypeProcessor {
   ): TailorDBTypeManifest {
     const metadata = type.metadata;
     const schema = metadata.schema;
-
-    const allowEveryone = { Id: "everyone", Ids: [], Permit: "allow" as const };
-    const defaultTypePermission: TailorDBTypePermissionManifest = {
-      Create: [allowEveryone],
-      Read: [allowEveryone],
-      Update: [allowEveryone],
-      Delete: [allowEveryone],
-      Admin: [allowEveryone],
-    };
 
     const defaultSettings = {
       Aggregation: schema?.settings?.aggregation || false,
@@ -224,9 +215,17 @@ export class TypeProcessor {
       });
     }
 
-    const permissions = schema.permissions?.record
+    // To be secure by default, add Permission settings that reject everyone
+    // when Permission/RecordPermission is not configured.
+    const defaultPermission: TailorDBPermissionManifest = {
+      Create: [],
+      Read: [],
+      Update: [],
+      Delete: [],
+    };
+    const permission = schema.permissions.record
       ? TypeProcessor.convertPermissionsToManifest(schema.permissions.record)
-      : undefined;
+      : defaultPermission;
 
     return {
       Name: metadata.name || type.name,
@@ -237,9 +236,7 @@ export class TypeProcessor {
       Extends: schema?.extends || false,
       Directives: [],
       Indexes: indexes,
-      ...(permissions
-        ? { Permission: permissions }
-        : { TypePermission: defaultTypePermission }),
+      Permission: permission,
     };
   }
 
