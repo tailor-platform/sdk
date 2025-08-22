@@ -145,7 +145,7 @@ type RecordOperand<
       | { newRecord: (keyof Type & string) | "id" }
   : { record: (keyof Type & string) | "id" };
 
-type ValueOperand = string | string[] | boolean | boolean[];
+export type ValueOperand = string | string[] | boolean | boolean[];
 
 export type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",

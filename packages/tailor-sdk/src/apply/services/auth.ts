@@ -1,4 +1,5 @@
-import { MessageInitShape } from "@bufbuild/protobuf";
+import { fromJson, MessageInitShape } from "@bufbuild/protobuf";
+import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 
 import {
@@ -58,6 +59,7 @@ import {
   UserProfileProvider,
   UserProfileProviderConfig,
 } from "@/services";
+import { ValueOperand } from "@/services/tailordb/permission";
 import { Workspace } from "@/workspace";
 import { ChangeSet, HasName } from ".";
 import { fetchAll, OperatorClient } from "../client";
@@ -661,6 +663,7 @@ function protoUserProfileConfig(
           usernameField: userProfileConfig.UsernameField,
           tenantIdField: userProfileConfig.TenantIdField,
           attributesFields: userProfileConfig.AttributesFields,
+          attributeMap: userProfileConfig.AttributeMap,
         },
       },
     },
@@ -848,6 +851,9 @@ async function planMachineUsers(
             authNamespace: config.namespace,
             name: machineUser.Name,
             attributes: machineUser.Attributes,
+            attributeMap: machineUser.AttributeMap
+              ? protoMachineUserAttributeMap(machineUser.AttributeMap)
+              : undefined,
           },
         });
         existingNameSet.delete(machineUser.Name);
@@ -859,6 +865,9 @@ async function planMachineUsers(
             authNamespace: config.namespace,
             name: machineUser.Name,
             attributes: machineUser.Attributes,
+            attributeMap: machineUser.AttributeMap
+              ? protoMachineUserAttributeMap(machineUser.AttributeMap)
+              : undefined,
           },
         });
       }
@@ -886,6 +895,16 @@ async function planMachineUsers(
     });
   }
   return changeSet;
+}
+
+function protoMachineUserAttributeMap(
+  attributeMap: Record<string, ValueOperand>,
+): Record<string, MessageInitShape<typeof ValueSchema>> {
+  const ret: Record<string, MessageInitShape<typeof ValueSchema>> = {};
+  for (const [key, value] of Object.entries(attributeMap)) {
+    ret[key] = fromJson(ValueSchema, value);
+  }
+  return ret;
 }
 
 type CreateOAuth2Clients = {

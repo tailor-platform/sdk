@@ -37,12 +37,18 @@ export default defineConfig({
           Namespace: "tailordb",
           Type: "User",
           UsernameField: "email",
-          AttributesFields: ["roles"],
+          AttributesFields: ["roleId"],
+          AttributeMap: {
+            roleId: "roleId",
+          },
         },
         machineUsers: [
           {
             Name: "admin-machine-user",
             Attributes: [defaultMachineUserRole],
+            AttributeMap: {
+              roleId: defaultMachineUserRole,
+            },
           },
         ],
         oauth2Clients: [],

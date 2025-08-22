@@ -1,4 +1,5 @@
 import { SecretValue } from "@/types/types";
+import { ValueOperand } from "../tailordb/permission";
 
 export interface OIDC {
   Kind: "OIDC";
@@ -42,11 +43,13 @@ export interface UserProfileProviderConfig {
   UsernameField: string;
   TenantIdField?: string;
   AttributesFields: string[];
+  AttributeMap?: Record<string, string>;
 }
 
 export interface MachineUser {
   Name: string;
   Attributes: string[];
+  AttributeMap?: Record<string, ValueOperand>;
 }
 
 export type OAuth2ClientGrantType = "authorization_code" | "refresh_token";

@@ -53,8 +53,11 @@
         "Type": "User",
         "UsernameField": "email",
         "AttributesFields": [
-          "roles"
-        ]
+          "roleId"
+        ],
+        "AttributeMap": {
+          "roleId": "roleId"
+        }
       },
       "SCIMConfig": null,
       "TenantProvider": "",
@@ -64,7 +67,10 @@
           "Name": "admin-machine-user",
           "Attributes": [
             "4293a799-4398-55e6-a19a-fe8427d1a415"
-          ]
+          ],
+          "AttributeMap": {
+            "roleId": "4293a799-4398-55e6-a19a-fe8427d1a415"
+          }
         }
       ],
       "OAuth2Clients": []
