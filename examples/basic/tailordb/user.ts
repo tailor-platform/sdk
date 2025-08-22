@@ -1,5 +1,10 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { role } from "./role";
+import {
+  defaultGqlPermission,
+  defaultPermission,
+  PermissionUser,
+} from "./permissions";
 
 export const user = db
   .type("User", {
@@ -20,5 +25,7 @@ export const user = db
       unique: false,
       name: "user_status_created_idx",
     },
-  );
+  )
+  .permission<PermissionUser>(defaultPermission)
+  .gqlPermission<PermissionUser>(defaultGqlPermission);
 export type user = typeof user;

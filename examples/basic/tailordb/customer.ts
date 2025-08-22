@@ -1,5 +1,9 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import { defaultPermission, PermissionUser } from "./permissions";
+import {
+  defaultGqlPermission,
+  defaultPermission,
+  PermissionUser,
+} from "./permissions";
 
 export const customer = db
   .type("Customer", "カスタマー", {
@@ -32,5 +36,6 @@ export const customer = db
       "Name must be longer than 5 characters",
     ],
   })
-  .permission<PermissionUser>(defaultPermission);
+  .permission<PermissionUser>(defaultPermission)
+  .gqlPermission<PermissionUser>(defaultGqlPermission);
 export type customer = typeof customer;

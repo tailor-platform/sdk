@@ -807,39 +807,92 @@
           "Extends": false,
           "Directives": [],
           "Indexes": {},
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -1215,39 +1268,92 @@
           "Extends": false,
           "Directives": [],
           "Indexes": {},
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -1432,39 +1538,92 @@
           "Extends": false,
           "Directives": [],
           "Indexes": {},
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -1508,39 +1667,92 @@
           "Extends": false,
           "Directives": [],
           "Indexes": {},
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -1714,39 +1926,92 @@
               "Unique": false
             }
           },
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -1917,39 +2182,92 @@
           "Extends": false,
           "Directives": [],
           "Indexes": {},
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -2098,39 +2416,92 @@
               "Unique": false
             }
           },
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -2230,39 +2601,92 @@
           "Extends": false,
           "Directives": [],
           "Indexes": {},
-          "TypePermission": {
+          "Permission": {
             "Create": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Read": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Update": [
               {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ],
             "Delete": [
               {
-                "Id": "everyone",
-                "Ids": [],
-                "Permit": "allow"
-              }
-            ],
-            "Admin": [
-              {
-                "Id": "everyone",
-                "Ids": [],
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
                 "Permit": "allow"
               }
             ]
@@ -2271,7 +2695,391 @@
       ],
       "GQLPermissions": [
         {
+          "Type": "Customer",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
           "Type": "Invoice",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "NestedProfile",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "PurchaseOrder",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "Role",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "SalesOrder",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "Supplier",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "User",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "UserSetting",
           "Policies": [
             {
               "Conditions": [
