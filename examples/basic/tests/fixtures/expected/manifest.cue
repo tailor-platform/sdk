@@ -300,9 +300,9 @@
           "TargetTailorGraphql": {
             "Kind": "graphql",
             "AppName": "my-app",
-            "Query": "\n      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {\n        salesOrderCreated(input: $input) {\n          id\n          customerID\n          totalPrice\n          status\n        }\n      }\n    ",
+            "Query": "\n      mutation createSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {\n        createSalesOrderCreated(input: $input) {\n          id\n        }\n      }\n    ",
             "Variables": {
-              "Expr": "(({newRecord})=>({input:{id:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
+              "Expr": "(({newRecord})=>({input:{salesOrderID:newRecord.id,customerID:newRecord.customerID,totalPrice:newRecord.totalPrice,status:newRecord.status}}))(args)"
             }
           }
         },
@@ -2018,6 +2018,163 @@
           }
         },
         {
+          "Name": "SalesOrderCreated",
+          "Description": "",
+          "Fields": {
+            "salesOrderID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Required": true,
+              "Vector": false
+            },
+            "customerID": {
+              "Type": "uuid",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Required": true,
+              "Vector": false
+            },
+            "totalPrice": {
+              "Type": "integer",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Required": false,
+              "Vector": false
+            },
+            "status": {
+              "Type": "string",
+              "AllowedValues": [],
+              "Description": "",
+              "Validate": [],
+              "Array": false,
+              "Index": false,
+              "Unique": false,
+              "ForeignKey": false,
+              "Required": false,
+              "Vector": false
+            }
+          },
+          "Relationships": {},
+          "Settings": {
+            "Aggregation": false,
+            "BulkUpsert": false,
+            "Draft": false,
+            "DefaultQueryLimitSize": 100,
+            "MaxBulkUpsertSize": 1000,
+            "PluralForm": "salesOrderCreatedList",
+            "PublishRecordEvents": false
+          },
+          "Extends": false,
+          "Directives": [],
+          "Indexes": {},
+          "Permission": {
+            "Create": [
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              }
+            ],
+            "Read": [
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              },
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "_loggedIn"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": true
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              }
+            ],
+            "Update": [
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              }
+            ],
+            "Delete": [
+              {
+                "Conditions": [
+                  {
+                    "LeftUser": {
+                      "Kind": "user",
+                      "Value": "roleId"
+                    },
+                    "Operator": "eq",
+                    "RightValue": {
+                      "Kind": "value",
+                      "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                    }
+                  }
+                ],
+                "Permit": "allow"
+              }
+            ]
+          }
+        },
+        {
           "Name": "Supplier",
           "Description": "",
           "Fields": {
@@ -2936,6 +3093,54 @@
         },
         {
           "Type": "SalesOrder",
+          "Policies": [
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "roleId"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": "4293a799-4398-55e6-a19a-fe8427d1a415"
+                  }
+                }
+              ],
+              "Actions": [
+                "create",
+                "read",
+                "update",
+                "delete",
+                "aggregate",
+                "bulkUpsert"
+              ],
+              "Permit": "allow"
+            },
+            {
+              "Conditions": [
+                {
+                  "LeftUser": {
+                    "Kind": "user",
+                    "Value": "_loggedIn"
+                  },
+                  "Operator": "eq",
+                  "RightValue": {
+                    "Kind": "value",
+                    "Value": true
+                  }
+                }
+              ],
+              "Actions": [
+                "read"
+              ],
+              "Permit": "allow"
+            }
+          ]
+        },
+        {
+          "Type": "SalesOrderCreated",
           "Policies": [
             {
               "Conditions": [

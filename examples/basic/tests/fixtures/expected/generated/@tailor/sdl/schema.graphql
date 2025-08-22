@@ -114,6 +114,16 @@ type SalesOrder {
 }
 
 
+# Type: SalesOrderCreated
+type SalesOrderCreated {
+  id: ID!
+  salesOrderID: ID!
+  customerID: ID!
+  totalPrice: Int
+  status: String
+}
+
+
 # Type: Supplier
 type Supplier {
   id: ID!

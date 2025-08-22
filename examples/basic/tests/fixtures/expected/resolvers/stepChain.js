@@ -2,7 +2,7 @@ import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
 import { DummyDriver, Kysely, PostgresAdapter, PostgresIntrospector, PostgresQueryCompiler } from "kysely";
 
-//#region tailordb.ts
+//#region generated/tailordb.ts
 const getDB = () => {
 	return new Kysely({ dialect: {
 		createAdapter: () => new PostgresAdapter(),

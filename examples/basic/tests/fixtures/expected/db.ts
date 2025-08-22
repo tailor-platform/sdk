@@ -128,6 +128,14 @@ export interface SalesOrder {
   updatedAt: Timestamp | null;
 }
 
+export interface SalesOrderCreated {
+  id: Generated<string>;
+  salesOrderID: string;
+  customerID: string;
+  totalPrice: number | null;
+  status: string | null;
+}
+
 export interface Supplier {
   id: Generated<string>;
   name: string;
@@ -168,6 +176,7 @@ export interface DB {
   PurchaseOrder: PurchaseOrder;
   Role: Role;
   SalesOrder: SalesOrder;
+  SalesOrderCreated: SalesOrderCreated;
   Supplier: Supplier;
   User: User;
   UserSetting: UserSetting;

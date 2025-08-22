@@ -17,18 +17,15 @@ export default createExecutor(
   .executeGql({
     appName: "my-app",
     query: /* gql */ `
-      mutation SalesOrderCreated($input: SalesOrderCreatedInput!) {
-        salesOrderCreated(input: $input) {
+      mutation createSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {
+        createSalesOrderCreated(input: $input) {
           id
-          customerID
-          totalPrice
-          status
         }
       }
     `,
     variables: ({ newRecord }) => ({
       input: {
-        id: newRecord.id,
+        salesOrderID: newRecord.id,
         customerID: newRecord.customerID,
         totalPrice: newRecord.totalPrice,
         status: newRecord.status,

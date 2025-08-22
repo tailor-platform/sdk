@@ -35,3 +35,14 @@ export const salesOrder = db
   .permission<PermissionUser>(defaultPermission)
   .gqlPermission<PermissionUser>(defaultGqlPermission);
 export type salesOrder = typeof salesOrder;
+
+export const salesOrderCreated = db
+  .type(["SalesOrderCreated", "SalesOrderCreatedList"], {
+    salesOrderID: db.uuid(),
+    customerID: db.uuid(),
+    totalPrice: db.int().optional(),
+    status: db.string().optional(),
+  })
+  .permission<PermissionUser>(defaultPermission)
+  .gqlPermission<PermissionUser>(defaultGqlPermission);
+export type salesOrderCreated = typeof salesOrderCreated;

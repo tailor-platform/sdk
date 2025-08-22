@@ -8,8 +8,6 @@ build/
 
 # Tailor SDK generated files
 .tailor-sdk/
-resolvers/tailordb.ts
-tailordb/types.ts
 
 # Test files
 tests/fixtures/actual/

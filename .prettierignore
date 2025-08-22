@@ -28,6 +28,7 @@ coverage/
 
 # Examples
 examples/*/tests/fixtures/
+examples/*/generated/
 
 # Generated files
 packages/tailor-sdk/src/gen/
