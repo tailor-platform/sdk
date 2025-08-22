@@ -8,8 +8,7 @@ export default [
     ignores: [
       "node_modules/**",
       ".tailor-sdk/**",
-      "tailordb.ts",
-      "tailordb/types.ts",
+      "generated/**",
       "tests/fixtures/**",
     ],
   },
