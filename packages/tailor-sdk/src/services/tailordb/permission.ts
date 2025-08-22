@@ -129,8 +129,6 @@ type UserOperand<User extends object = object> = {
           | string[]
           | boolean
           | boolean[]
-          | Date
-          | Date[]
           ? K
           : never;
       }[keyof User]
