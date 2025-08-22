@@ -24,7 +24,7 @@ import {
   ResolverManifestMetadata,
 } from "@/generator/builtin/manifest/types";
 import { ApplyOptions } from "@/generator/options";
-import { ExecutorService, PipelineResolverService, StepDef } from "@/services";
+import { Executor, PipelineResolverService, StepDef } from "@/services";
 import { Resolver } from "@/services/pipeline/resolver";
 import { Workspace } from "@/workspace";
 import { ChangeSet } from ".";
@@ -75,16 +75,21 @@ async function planPipeline(
   const pipelines: Readonly<PipelineResolverService>[] = [];
   for (const app of workspace.applications) {
     for (const pipeline of app.pipelineResolverServices) {
+      await pipeline.loadResolvers();
       pipelines.push(pipeline);
     }
   }
+  const executors = Object.values(
+    (await workspace.executorService?.loadExecutors()) ?? {},
+  );
+
   const serviceChangeSet = await planServices(client, workspaceId, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const resolverChangeSet = await planResolvers(
     client,
     workspaceId,
     pipelines,
-    workspace.executorService,
+    executors,
     deletedServices,
   );
 
@@ -198,7 +203,7 @@ async function planResolvers(
   client: OperatorClient,
   workspaceId: string,
   pipelines: ReadonlyArray<Readonly<PipelineResolverService>>,
-  executor: Readonly<ExecutorService> | undefined,
+  executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
 ) {
   const changeSet: ChangeSet<
@@ -227,7 +232,6 @@ async function planResolvers(
   };
 
   const executorUsedResolvers = new Set<string>();
-  const executors = Object.values((await executor?.loadExecutors()) ?? {});
   for (const executor of executors) {
     const triggerManifest = executor.trigger.manifest;
     if (
@@ -251,7 +255,6 @@ async function planResolvers(
     existingResolvers.forEach((resolver) => {
       existingNameSet.add(resolver.name);
     });
-    await pipeline.loadResolvers();
     for (const resolver of Object.values(pipeline.getResolvers())) {
       if (existingNameSet.has(resolver.name)) {
         changeSet.updates.push({
