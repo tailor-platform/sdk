@@ -98,7 +98,7 @@ jobs:
           if [[ "$BRANCH_NAME" != "main" ]]; then
             # For non-main branches, always use feature tag format
             # Sanitize branch name to be npm-compatible (alphanumeric, dash, underscore)
-            SAFE_BRANCH="${BRANCH_NAME//([^a-zA-Z0-9._-])/-}"
+            SAFE_BRANCH="${BRANCH_NAME//\//-}"
             NEW_VERSION="${NEW_VERSION}-${SAFE_BRANCH}.${BETA_ID}"
             echo "publish_tag=feature" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.event.inputs.beta }}" == "true" ]]; then
