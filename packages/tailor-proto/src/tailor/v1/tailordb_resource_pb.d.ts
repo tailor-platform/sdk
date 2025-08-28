@@ -107,6 +107,11 @@ export declare type TailorDBType_TypeConfig = Message<"tailor.v1.TailorDBType.Ty
    * @generated from field: tailor.v1.TailorDBType.Permission permission = 10;
    */
   permission?: TailorDBType_Permission;
+
+  /**
+   * @generated from field: map<string, tailor.v1.TailorDBType.FileConfig> files = 11;
+   */
+  files: { [key: string]: TailorDBType_FileConfig };
 };
 
 /**
@@ -350,6 +355,22 @@ export declare type TailorDBType_RelationshipConfig = Message<"tailor.v1.TailorD
  * Use `create(TailorDBType_RelationshipConfigSchema)` to create a new message.
  */
 export declare const TailorDBType_RelationshipConfigSchema: GenMessage<TailorDBType_RelationshipConfig>;
+
+/**
+ * @generated from message tailor.v1.TailorDBType.FileConfig
+ */
+export declare type TailorDBType_FileConfig = Message<"tailor.v1.TailorDBType.FileConfig"> & {
+  /**
+   * @generated from field: string description = 1;
+   */
+  description: string;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBType.FileConfig.
+ * Use `create(TailorDBType_FileConfigSchema)` to create a new message.
+ */
+export declare const TailorDBType_FileConfigSchema: GenMessage<TailorDBType_FileConfig>;
 
 /**
  * @generated from message tailor.v1.TailorDBType.Value

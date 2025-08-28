@@ -143,24 +143,24 @@ export enum WorkflowJobExecution_Status {
   UNSPECIFIED = 0,
 
   /**
-   * @generated from enum value: STATUS_SUCCESS = 1;
+   * @generated from enum value: STATUS_RUNNING = 1;
    */
-  SUCCESS = 1,
+  RUNNING = 1,
 
   /**
-   * @generated from enum value: STATUS_FAILED = 2;
+   * @generated from enum value: STATUS_SUSPEND = 2;
    */
-  FAILED = 2,
+  SUSPEND = 2,
 
   /**
-   * @generated from enum value: STATUS_RUNNING = 3;
+   * @generated from enum value: STATUS_SUCCESS = 3;
    */
-  RUNNING = 3,
+  SUCCESS = 3,
 
   /**
-   * @generated from enum value: STATUS_SUSPENDING = 4;
+   * @generated from enum value: STATUS_FAILED = 4;
    */
-  SUSPENDING = 4,
+  FAILED = 4,
 }
 
 /**
@@ -219,14 +219,14 @@ export enum WorkflowExecution_Status {
   UNSPECIFIED = 0,
 
   /**
-   * @generated from enum value: STATUS_SUCCESS = 1;
+   * @generated from enum value: STATUS_PENDING = 1;
    */
-  SUCCESS = 1,
+  PENDING = 1,
 
   /**
-   * @generated from enum value: STATUS_FAILED = 2;
+   * @generated from enum value: STATUS_PENDING_RESUME = 2;
    */
-  FAILED = 2,
+  PENDING_RESUME = 2,
 
   /**
    * @generated from enum value: STATUS_RUNNING = 3;
@@ -234,9 +234,14 @@ export enum WorkflowExecution_Status {
   RUNNING = 3,
 
   /**
-   * @generated from enum value: STATUS_WAITING = 4;
+   * @generated from enum value: STATUS_SUCCESS = 4;
    */
-  WAITING = 4,
+  SUCCESS = 4,
+
+  /**
+   * @generated from enum value: STATUS_FAILED = 5;
+   */
+  FAILED = 5,
 }
 
 /**

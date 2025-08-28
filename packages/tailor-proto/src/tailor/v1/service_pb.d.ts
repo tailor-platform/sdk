@@ -17,7 +17,7 @@ import type { GetFunctionExecutionRequestSchema, GetFunctionExecutionResponseSch
 import type { CreateAiServiceRequestSchema, CreateAiServiceResponseSchema, CreateAiTaskRequestSchema, CreateAiTaskResponseSchema, DeleteAiServiceRequestSchema, DeleteAiServiceResponseSchema, DeleteAiTaskRequestSchema, DeleteAiTaskResponseSchema, GetAiServiceRequestSchema, GetAiServiceResponseSchema, GetAiTaskRequestSchema, GetAiTaskResponseSchema, ListAiServicesRequestSchema, ListAiServicesResponseSchema, ListAiTasksRequestSchema, ListAiTasksResponseSchema, UpdateAiTaskRequestSchema, UpdateAiTaskResponseSchema } from "./ai_pb";
 import type { ListMeterEventCountsRequestSchema, ListMeterEventCountsResponseSchema, ListMeterExecutionCountsRequestSchema, ListMeterExecutionCountsResponseSchema, ListMeterRequestCountsRequestSchema, ListMeterRequestCountsResponseSchema } from "./meter_pb";
 import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, CreateIdPServiceRequestSchema, CreateIdPServiceResponseSchema, DeleteIdPClientRequestSchema, DeleteIdPClientResponseSchema, DeleteIdPServiceRequestSchema, DeleteIdPServiceResponseSchema, GetIdPClientRequestSchema, GetIdPClientResponseSchema, GetIdPServiceRequestSchema, GetIdPServiceResponseSchema, ListIdPClientsRequestSchema, ListIdPClientsResponseSchema, ListIdPServicesRequestSchema, ListIdPServicesResponseSchema, UpdateIdPServiceRequestSchema, UpdateIdPServiceResponseSchema } from "./idp_pb";
-import type { CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema } from "./staticwebsite_pb";
+import type { CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, DeployStaticWebsiteRequestSchema, DeployStaticWebsiteResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
 import type { CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
 
 /**
@@ -2559,6 +2559,62 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof ListStaticWebsitesRequestSchema;
     output: typeof ListStaticWebsitesResponseSchema;
+  },
+  /**
+   * CreateDeployment creates a new deployment.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateDeployment
+   */
+  createDeployment: {
+    methodKind: "unary";
+    input: typeof CreateDeploymentRequestSchema;
+    output: typeof CreateDeploymentResponseSchema;
+  },
+  /**
+   * UploadFile uploads a file to a deployment.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: deployment does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.UploadFile
+   */
+  uploadFile: {
+    methodKind: "client_streaming";
+    input: typeof UploadFileRequestSchema;
+    output: typeof UploadFileResponseSchema;
+  },
+  /**
+   * PublishDeployment publishes a deployment.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: deployment does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.PublishDeployment
+   */
+  publishDeployment: {
+    methodKind: "unary";
+    input: typeof PublishDeploymentRequestSchema;
+    output: typeof PublishDeploymentResponseSchema;
+  },
+  /**
+   * TODO(haru0017): remove
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeployStaticWebsite
+   * @deprecated
+   */
+  deployStaticWebsite: {
+    methodKind: "client_streaming";
+    input: typeof DeployStaticWebsiteRequestSchema;
+    output: typeof DeployStaticWebsiteResponseSchema;
   },
   /**
    * CreateWorkflow creates a new workflow.

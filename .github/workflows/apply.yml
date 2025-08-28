@@ -6,6 +6,7 @@ on:
       - .github/workflows/apply.yml
       - examples/basic/**
       - packages/tailor-sdk/**
+      - packages/tailor-proto/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
