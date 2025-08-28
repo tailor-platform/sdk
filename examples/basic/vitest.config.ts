@@ -2,13 +2,25 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    environment: "node",
-    include: ["tests/**/*.{test,spec}.ts"],
-    globals: true,
     watch: false,
-    testTimeout: 60000,
-    hookTimeout: 60000,
-    teardownTimeout: 60000,
     outputFile: { json: "tests/results.json" },
+    projects: [
+      {
+        test: {
+          name: { label: "generator", color: "blue" },
+          environment: "node",
+          include: ["tests/**/*.{test,spec}.ts"],
+        },
+      },
+      {
+        test: {
+          name: { label: "e2e", color: "green" },
+          environment: "node",
+          include: ["e2e/**/*.{test,spec}.ts"],
+          globalSetup: "e2e/globalSetup.ts",
+          testTimeout: 60_000,
+        },
+      },
+    ],
   },
 });

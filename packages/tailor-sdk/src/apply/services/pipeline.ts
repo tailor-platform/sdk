@@ -12,13 +12,13 @@ import {
   DeletePipelineServiceRequestSchema,
   UpdatePipelineResolverRequestSchema,
   UpdatePipelineServiceRequestSchema,
-} from "@/gen/tailor/v1/pipeline_pb";
+} from "@tailor-platform/tailor-proto/pipeline_pb";
 import {
   PipelineResolver_FieldSchema,
   PipelineResolver_OperationType,
   PipelineResolver_PipelineSchema,
   PipelineResolverSchema,
-} from "@/gen/tailor/v1/pipeline_resource_pb";
+} from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import {
   PipelineInfo,
   ResolverManifestMetadata,

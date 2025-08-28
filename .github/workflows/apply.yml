@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  test-tailorctl:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,10 +48,78 @@ jobs:
           pnpm exec turbo run apply
         env:
           TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-          WORKSPACE_ID: ${{ env.WORKSPACE_ID }}
+
+      - name: Get application URL
+        run: |
+          APP_URL=$(tailorctl workspace app list -f json | jq -r '.[] | select(.name == "my-app") | .url')
+          echo "APP_URL=$APP_URL" >> "$GITHUB_ENV"
+        env:
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Run e2e tests
+        working-directory: examples/basic
+        run: pnpm test:e2e
+        env:
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Destroy workspace
+        if: ${{ always() }}
         run: tailorctl workspace destroy -w "${{ env.WORKSPACE_ID }}" --auto-approve
         env:
           TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-          WORKSPACE_ID: ${{ env.WORKSPACE_ID }}
+
+  test-operator:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - name: checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: "false"
+
+      - name: Install aqua
+        uses: ./.github/actions/install-aqua
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Build SDK package
+        run: pnpm exec turbo run build
+
+      - name: Re-install to create bin links
+        run: pnpm install --frozen-lockfile
+
+      - name: Create workspace
+        run: |
+          tailorctl workspace create --name "sdk-ci-operator-api-${{ github.run_id }}" --region asia-northeast
+          WORKSPACE_ID=$(tailorctl config describe -f json | jq -r '.workspaceId')
+          echo "WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
+        env:
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Apply workspace
+        working-directory: examples/basic
+        run: pnpm apply:operator
+        env:
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Get application URL
+        run: |
+          APP_URL=$(tailorctl workspace app list -f json | jq -r '.[] | select(.name == "my-app") | .url')
+          echo "APP_URL=$APP_URL" >> "$GITHUB_ENV"
+        env:
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Run e2e tests
+        working-directory: examples/basic
+        run: pnpm test:e2e
+        env:
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Destroy workspace
+        if: ${{ always() }}
+        run: tailorctl workspace destroy -w "${{ env.WORKSPACE_ID }}" --auto-approve
+        env:
+          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}

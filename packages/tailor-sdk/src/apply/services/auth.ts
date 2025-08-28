@@ -26,7 +26,7 @@ import {
   UpdateAuthSCIMResourceRequestSchema,
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
-} from "@/gen/tailor/v1/auth_pb";
+} from "@tailor-platform/tailor-proto/auth_pb";
 import {
   AuthIDPConfig_AuthType,
   AuthIDPConfig_ConfigSchema,
@@ -44,7 +44,7 @@ import {
   TenantProviderConfigSchema,
   UserProfileProviderConfig_UserProfileProviderType,
   UserProfileProviderConfigSchema,
-} from "@/gen/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { ApplyOptions } from "@/generator/options";
 import {
   AuthService,

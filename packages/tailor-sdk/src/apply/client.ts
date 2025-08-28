@@ -3,7 +3,7 @@ import { readPackageJSON } from "pkg-types";
 import { Client, createClient, Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 
-import { OperatorService } from "@/gen/tailor/v1/service_pb";
+import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { TailorctlConfig } from "./tailorctl";
 
 export type OperatorClient = Client<typeof OperatorService>;

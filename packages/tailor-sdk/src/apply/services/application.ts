@@ -5,11 +5,11 @@ import {
   CreateApplicationRequestSchema,
   DeleteApplicationRequestSchema,
   UpdateApplicationRequestSchema,
-} from "@/gen/tailor/v1/application_pb";
+} from "@tailor-platform/tailor-proto/application_pb";
 import {
   Subgraph_ServiceType,
   SubgraphSchema,
-} from "@/gen/tailor/v1/application_resource_pb";
+} from "@tailor-platform/tailor-proto/application_resource_pb";
 import { ApplyOptions } from "@/generator/options";
 import { Workspace } from "@/workspace";
 import { ChangeSet } from ".";
