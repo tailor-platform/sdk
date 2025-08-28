@@ -29,6 +29,11 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
    * @generated from field: string provider_url = 3;
    */
   providerUrl: string;
+
+  /**
+   * @generated from field: tailor.v1.IdPUserAuthPolicy user_auth_policy = 4;
+   */
+  userAuthPolicy?: IdPUserAuthPolicy;
 };
 
 /**
@@ -62,4 +67,20 @@ export declare type IdPClient = Message<"tailor.v1.IdPClient"> & {
  * Use `create(IdPClientSchema)` to create a new message.
  */
 export declare const IdPClientSchema: GenMessage<IdPClient>;
+
+/**
+ * @generated from message tailor.v1.IdPUserAuthPolicy
+ */
+export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> & {
+  /**
+   * @generated from field: bool use_non_email_identifier = 1;
+   */
+  useNonEmailIdentifier: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.IdPUserAuthPolicy.
+ * Use `create(IdPUserAuthPolicySchema)` to create a new message.
+ */
+export declare const IdPUserAuthPolicySchema: GenMessage<IdPUserAuthPolicy>;
 
