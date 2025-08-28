@@ -10,5 +10,4 @@ export default defineConfig({
   outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,
-  noExternal: [/^@tailor-platform\/tailor-proto/],
 });

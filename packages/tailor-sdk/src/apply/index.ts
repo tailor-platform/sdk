@@ -2,7 +2,7 @@ import ml from "multiline-ts";
 import { Client } from "@connectrpc/connect";
 
 import { WorkspaceConfig } from "@/config";
-import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
+import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { ApplyOptions } from "@/generator/options";
 import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
