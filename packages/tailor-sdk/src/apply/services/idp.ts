@@ -7,7 +7,7 @@ import {
   DeleteIdPClientRequestSchema,
   DeleteIdPServiceRequestSchema,
   UpdateIdPServiceRequestSchema,
-} from "@tailor-platform/tailor-proto/idp_pb";
+} from "@tailor-proto/tailor/v1/idp_pb";
 import { ApplyOptions } from "@/generator/options";
 import { IdPServiceInput } from "@/services/idp/types";
 import { Workspace } from "@/workspace";

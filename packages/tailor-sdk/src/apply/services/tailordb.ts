@@ -11,7 +11,7 @@ import {
   DeleteTailorDBTypeRequestSchema,
   UpdateTailorDBGQLPermissionRequestSchema,
   UpdateTailorDBTypeRequestSchema,
-} from "@tailor-platform/tailor-proto/tailordb_pb";
+} from "@tailor-proto/tailor/v1/tailordb_pb";
 import {
   TailorDBGQLPermission_Action,
   TailorDBGQLPermission_ConditionSchema,
@@ -31,7 +31,7 @@ import {
   TailorDBType_PermitAction,
   TailorDBType_RelationshipConfigSchema,
   TailorDBTypeSchema,
-} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import { ApplyOptions } from "@/generator/options";
 import { Executor } from "@/services";
 import {

@@ -123,9 +123,6 @@ importers:
       '@connectrpc/connect-node':
         specifier: ^2.0.3
         version: 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))
-      '@tailor-platform/tailor-proto':
-        specifier: workspace:^
-        version: link:../tailor-proto
       '@urql/core':
         specifier: ^5.1.1
         version: 5.2.0(graphql@16.11.0)

@@ -5,7 +5,8 @@
     "rootDir": "./",
     "baseUrl": "./",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@tailor-proto/*": ["../tailor-proto/src/*"]
     }
   },
   "include": ["./src/**/*.ts", "./tsdown.config.ts", "./vitest.config.ts"],

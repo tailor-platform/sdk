@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@tailor-proto": path.resolve(__dirname, "../tailor-proto/src"),
     },
   },
   plugins: [
