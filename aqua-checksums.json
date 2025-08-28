@@ -1,6 +1,36 @@
 {
   "checksums": [
     {
+      "id": "github_release/github.com/bufbuild/buf/v1.56.0/buf-Darwin-arm64.tar.gz",
+      "checksum": "F824239D7B16523C31748658A91F45E959876A4DC713FB307F0C9B8D307EAC26",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/bufbuild/buf/v1.56.0/buf-Darwin-x86_64.tar.gz",
+      "checksum": "02DBE138F5560BB18BD1186E7580F9124A11D3D4FA408F0BDA17DD04C90B3597",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/bufbuild/buf/v1.56.0/buf-Linux-aarch64.tar.gz",
+      "checksum": "DCAFB4A28444799827D2FE701617420B05939E53115BB46C74481BF06C6724D2",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/bufbuild/buf/v1.56.0/buf-Linux-x86_64.tar.gz",
+      "checksum": "957554A83382792F441776D872DEE96862737F241B3F93AFEA6B40DC0E691D22",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/bufbuild/buf/v1.56.0/buf-Windows-arm64.exe",
+      "checksum": "066F609CB737FB497DB23F0F1E4EEB3DAA9BF079B952FD1FFA76A4194732E69B",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "github_release/github.com/bufbuild/buf/v1.56.0/buf-Windows-x86_64.exe",
+      "checksum": "968978ABD84B39465DE1A08C4D84B788502FA82565A4F718B58200F921819E51",
+      "algorithm": "sha256"
+    },
+    {
       "id": "github_release/github.com/rhysd/actionlint/v1.7.7/actionlint_1.7.7_darwin_amd64.tar.gz",
       "checksum": "28E5DE5A05FC558474F638323D736D822FFF183D2D492F0AECB2B73CC44584F5",
       "algorithm": "sha256"
@@ -61,28 +91,28 @@
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.2/tailorctl_darwin_v2.0.2_arm64.tar.gz",
-      "checksum": "CC209FC85BBFFAB7FA9DC9019D287E14CC877A34F0DEDD57812CBE8BD6980BEA",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.2.0/tailorctl_darwin_v2.2.0_arm64.tar.gz",
+      "checksum": "540F6FE196075A503BCD1F2C8755E7FC53949A465723868017AB44956D8BFA32",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.2/tailorctl_darwin_v2.0.2_x86_64.tar.gz",
-      "checksum": "30CA4DCCC00908DACC15A23D3838A16F3603C028C7723D4287925AD72741C567",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.2.0/tailorctl_darwin_v2.2.0_x86_64.tar.gz",
+      "checksum": "78DBFC7AAC22BB64F31FBDBC0C638E02C153A6BDC72149C081DEE08B1577187C",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.2/tailorctl_linux_v2.0.2_arm64.tar.gz",
-      "checksum": "D246E27D35D56C2C381A7ED620884123388FC060AE9E6B431757BC487B9F11E9",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.2.0/tailorctl_linux_v2.2.0_arm64.tar.gz",
+      "checksum": "87A9291C0FF68ED9BA3834C179C4E133689899FA706E5923E4078135C5C4EE4A",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.2/tailorctl_linux_v2.0.2_x86_64.tar.gz",
-      "checksum": "269EAD6226A1AF9D36B453B881AA3D712AD6F0495C972ED5F334288E8D4101AC",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.2.0/tailorctl_linux_v2.2.0_x86_64.tar.gz",
+      "checksum": "F089A1813F9A8CB46502EDEB2481DC06C4C642DF71C5481FDBD064D95B1B5EF4",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.0.2/tailorctl_windows_v2.0.2_x86_64.zip",
-      "checksum": "1942BE5E3574FD7DAAF8D45BD9D0F584901F1278FC8CC70824466381572B74BE",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.2.0/tailorctl_windows_v2.2.0_x86_64.zip",
+      "checksum": "2FA86DFFF3F3A368DEED2A3D549DDEC2C6D042B3FD54ECC9618841956D6C2D3B",
       "algorithm": "sha256"
     },
     {
