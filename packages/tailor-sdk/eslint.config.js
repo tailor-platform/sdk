@@ -6,12 +6,7 @@ import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
   {
-    ignores: [
-      "**/dist/**",
-      "**/node_modules/**",
-      "**/.tailor-sdk/**",
-      "src/gen/",
-    ],
+    ignores: ["**/dist/**", "**/node_modules/**", "**/.tailor-sdk/**"],
   },
   {
     files: ["**/*.{js,mjs,cjs}"],

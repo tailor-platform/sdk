@@ -24,10 +24,10 @@ const resolver = createQueryResolver(
   })
 
   .sqlStep("sqlStep", async (context) => {
-    const result = await context.client.execOne<{ name: string }>(
-      /* sql */ `SELECT name FROM User`,
+    const result = await context.client.execOne<{ name: string } | null>(
+      /* sql */ `SELECT name FROM User ORDER BY createdAt DESC`,
     );
-    return result.name;
+    return result ? result.name : "no user found";
   })
 
   .sqlStep("kyselyStep", (context) =>

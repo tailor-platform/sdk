@@ -9,7 +9,7 @@ import {
   CreateExecutorExecutorRequestSchema,
   DeleteExecutorExecutorRequestSchema,
   UpdateExecutorExecutorRequestSchema,
-} from "@/gen/tailor/v1/executor_pb";
+} from "@tailor-platform/tailor-proto/executor_pb";
 import {
   ExecutorExecutorSchema,
   ExecutorTargetConfigSchema,
@@ -17,7 +17,7 @@ import {
   ExecutorTargetWebhookHeaderSchema,
   ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
-} from "@/gen/tailor/v1/executor_resource_pb";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { ApplyOptions } from "@/generator/options";
 import { Executor } from "@/services";
 import { Workspace } from "@/workspace";

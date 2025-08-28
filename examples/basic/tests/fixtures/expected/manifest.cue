@@ -73,7 +73,18 @@
           }
         }
       ],
-      "OAuth2Clients": []
+      "OAuth2Clients": [
+        {
+          "Name": "sample",
+          "GrantTypes": [
+            "authorization_code",
+            "refresh_token"
+          ],
+          "RedirectURIs": [
+            "https://example.com/callback"
+          ]
+        }
+      ]
     }
   ],
   "Pipelines": [

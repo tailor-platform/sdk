@@ -36,8 +36,8 @@ const resolver = createQueryResolver("stepChain", t.type({ user: t.object({
 }).fnStep("step2", async () => {
 	return `step2: recorded ${format(/* @__PURE__ */ new Date(), "yyyy-MM-dd HH:mm:ss")} on step2!`;
 }).sqlStep("sqlStep", async (context) => {
-	const result = await context.client.execOne(`SELECT name FROM User`);
-	return result.name;
+	const result = await context.client.execOne(`SELECT name FROM User ORDER BY createdAt DESC`);
+	return result ? result.name : "no user found";
 }).sqlStep("kyselyStep", (context) => kyselyWrapper(context, async (context$1) => {
 	const query = context$1.db.selectFrom("Supplier").select(["state"]).compile();
 	return (await context$1.client.exec(query)).map((r) => r.state).join(", ");
