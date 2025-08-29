@@ -208,6 +208,7 @@ describe("dataplane", () => {
           }
         }
       `;
+
       const result = await graphQLClient.rawRequest(query);
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
@@ -484,6 +485,48 @@ describe("dataplane", () => {
         },
       );
       expect(result.errors).toBeDefined();
+    });
+  });
+
+  describe("file", async () => {
+    test("file type field returns", async () => {
+      const query = gql`
+        mutation {
+          createUser(input: {
+            name: "bob"
+            email: "bob-${randomUUID()}@example.com"
+            roleId: "${roleId}"
+          }) {
+            id
+            name
+            avatar {
+              url
+              contentType
+              size
+              sha256sum
+              lastUploadedAt
+              __typename
+            }
+          }
+        }
+      `;
+
+      const result = await graphQLClient.rawRequest<{
+        createUser: { avatar: { url: string } };
+      }>(query);
+      expect(result.errors).toBeUndefined();
+      expect(result.data).toMatchObject({
+        createUser: {
+          avatar: {
+            url: expect.any(String),
+            contentType: null,
+            size: null,
+            sha256sum: null,
+            lastUploadedAt: null,
+            __typename: "File",
+          },
+        },
+      });
     });
   });
 });

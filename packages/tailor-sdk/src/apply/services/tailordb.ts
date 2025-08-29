@@ -21,6 +21,7 @@ import {
   TailorDBGQLPermission_PolicySchema,
   TailorDBGQLPermissionSchema,
   TailorDBType_FieldConfigSchema,
+  TailorDBType_FileConfigSchema,
   TailorDBType_IndexSchema,
   TailorDBType_Permission_ConditionSchema,
   TailorDBType_Permission_OperandSchema,
@@ -361,7 +362,7 @@ function generateTailorDBTypeManifest(
     string,
     MessageInitShape<typeof TailorDBType_FieldConfigSchema>
   > = {};
-  if (schema?.fields) {
+  if (schema.fields) {
     Object.entries(schema.fields)
       .filter(([fieldName]) => fieldName !== "id")
       .forEach(([fieldName, fieldConfig]) => {
@@ -476,12 +477,23 @@ function generateTailorDBTypeManifest(
     string,
     MessageInitShape<typeof TailorDBType_IndexSchema>
   > = {};
-  if (schema?.indexes) {
+  if (schema.indexes) {
     Object.entries(schema.indexes).forEach(([key, index]) => {
       indexes[key] = {
         fieldNames: index.fields,
         unique: index.unique || false,
       };
+    });
+  }
+
+  // Process files from metadata
+  const files: Record<
+    string,
+    MessageInitShape<typeof TailorDBType_FileConfigSchema>
+  > = {};
+  if (schema.files) {
+    Object.entries(schema.files).forEach(([key, description]) => {
+      files[key] = { description: description || "" };
     });
   }
 
@@ -503,12 +515,13 @@ function generateTailorDBTypeManifest(
     name: metadata.name || type.name,
     schema: {
       description: schema?.description || "",
-      fields: fields,
+      fields,
       relationships: relationships,
       settings: defaultSettings,
       extends: schema?.extends || false,
       directives: [],
-      indexes: indexes,
+      indexes,
+      files,
       permission,
     },
   };

@@ -18,6 +18,9 @@ export const user = db
     }),
     ...db.fields.timestamps(),
   })
+  .files({
+    avatar: "profile image",
+  })
   .indexes(
     { fields: ["name", "department"], unique: false },
     {
