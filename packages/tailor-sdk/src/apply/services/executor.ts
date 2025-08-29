@@ -18,10 +18,10 @@ import {
   ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { ApplyOptions } from "@/generator/options";
 import { Executor } from "@/services";
 import { Workspace } from "@/workspace";
 import { ChangeSet } from ".";
+import { ApplyOptions } from "..";
 import { fetchAll, OperatorClient } from "../client";
 
 export async function applyExecutor(

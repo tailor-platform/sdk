@@ -14,5 +14,6 @@ export const t = { ..._t };
 export * from "@/services";
 
 export { defineConfig } from "@/config";
-export { apply, generate } from "@/generator";
+export { apply } from "@/apply";
+export { generate } from "@/generator";
 export type { CodeGenerator } from "@/generator";

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `pnpm exec turbo run gen` - Run code generation for Tailor SDK components
 - `pnpm exec turbo run gen:watch` - Run code generation in watch mode
-- `pnpm exec turbo run apply` - Deploy to Tailor Platform (requires TAILOR_ACCESS_TOKEN)
+- `pnpm exec turbo run apply` - Deploy to Tailor Platform (requires TAILOR_TOKEN or tailorctl authentication)
 - `pnpm exec turbo run dev` - Start development server
 - `pnpm exec turbo run build` - Build all packages
 - `pnpm exec turbo run test` - Run all tests using Turbo
@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### CLI Commands
 
 - `pnpm exec @tailor-platform/tailor-sdk init <project-name>` - Initialize new project
-- `pnpm exec tailor-sdk generate` - Generate code and manifests
+- `pnpm exec tailor-sdk generate` - Generate code (types, SDL, bundled functions)
 - `pnpm exec tailor-sdk generate --watch` - Watch mode for regeneration
 - `pnpm exec tailor-sdk apply` - Deploy to Tailor Platform
 
@@ -43,13 +43,16 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 ```
 /
 ├── packages/
-│   └── tailor-sdk/          # Core SDK package
-│       ├── src/
-│       │   ├── cli/         # CLI implementation
-│       │   ├── services/    # Core services (tailordb, pipeline, executor, auth)
-│       │   ├── generator/   # Code generation system
-│       │   └── bundler/     # Rolldown bundler integration
-│       └── dist/            # Built output
+│   ├── tailor-sdk/          # Core SDK package
+│   │   ├── src/
+│   │   │   ├── cli/         # CLI implementation
+│   │   │   ├── services/    # Core services (tailordb, pipeline, executor, auth, idp)
+│   │   │   ├── generator/   # Code generation system
+│   │   │   ├── bundler/     # Rolldown bundler integration
+│   │   │   ├── apply/       # Deployment API client and services
+│   │   │   └── types/       # Core type definitions
+│   │   └── dist/            # Built output
+│   └── tailor-proto/        # Generated protobuf definitions
 ├── examples/
 │   └── basic/               # Example implementation
 └── turbo.json               # Turbo build orchestration
@@ -93,7 +96,7 @@ export const modelName = db.type("ModelName", {
     .relation({ type: "n-1", toward: { type: relatedModel } }),
   ...db.fields.timestamps(),
 });
-export type modelName = typeof modelName;
+export type ModelName = typeof modelName;
 ```
 
 **Resolver Pattern:**

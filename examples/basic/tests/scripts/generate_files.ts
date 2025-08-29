@@ -53,7 +53,7 @@ export async function generateExpectedFiles(): Promise<void> {
     process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
     const config = getConfig("expected");
     await generate(config);
-    await apply(config, { dryRun: true });
+    await apply(config, { buildOnly: true });
 
     console.log("\nGenerated files:");
     await listGeneratedFiles(expectedDir);
@@ -102,16 +102,7 @@ export async function generateActualFiles(): Promise<void> {
   process.env.TAILOR_SDK_OUTPUT_DIR = actualDir;
   const config = getConfig("actual");
   await generate(config);
-  await apply(config, { dryRun: true });
-
-  const manifestPath = path.join(actualDir, "manifest.cue");
-
-  const manifest = fs.readFileSync(manifestPath, "utf-8");
-
-  fs.writeFileSync(
-    manifestPath,
-    manifest.replaceAll(actualDir, "tests/fixtures/expected"),
-  );
+  await apply(config, { buildOnly: true });
 }
 
 if (process.argv[1] === __filename) {

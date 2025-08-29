@@ -3,7 +3,6 @@ import { Client } from "@connectrpc/connect";
 
 import { WorkspaceConfig } from "@/config";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
-import { ApplyOptions } from "@/generator/options";
 import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
 import { applyApplication } from "./services/application";
@@ -14,14 +13,33 @@ import { applyPipeline } from "./services/pipeline";
 import { applyTailorDB } from "./services/tailordb";
 import { readTailorctlConfig, TailorctlConfig } from "./tailorctl";
 
+export type ApplyOptions = {
+  dryRun?: boolean;
+  // NOTE(remiposo): Provide an option to run build-only for testing purposes.
+  // This could potentially be exposed as a CLI option.
+  buildOnly?: boolean;
+};
+
 export async function apply(
   config: Readonly<WorkspaceConfig>,
   options: ApplyOptions,
 ) {
+  const workspace = defineWorkspace(config);
+
+  // Build functions
+  for (const app of workspace.applications) {
+    for (const pipeline of app.pipelineResolverServices) {
+      await pipeline.build();
+    }
+  }
+  await workspace.executorService?.build();
+  if (options.buildOnly) {
+    return;
+  }
+
   const tailorctlConfig = readTailorctlConfig();
   const client = await initOperatorClient(tailorctlConfig);
   const workspaceId = await fetchWorkspaceId(client, config, tailorctlConfig);
-  const workspace = defineWorkspace(config);
 
   // To handle dependencies correctly, apply each service in the same order as tailorctl.
   await applyTailorDB(client, workspaceId, workspace, options);

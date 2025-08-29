@@ -99,8 +99,9 @@ pnpm gen:watch
 pnpm test
 
 # Deploy to Tailor Platform
-export TAILOR_ACCESS_TOKEN=your-token
+export TAILOR_TOKEN=your-token
 pnpm apply
+# Or use tailorctl authentication
 ```
 
 ### Testing
@@ -120,7 +121,6 @@ pnpm test:update-expects
 Tests verify:
 
 - Code generation output
-- Manifest generation
 - Function bundling
 - Type definitions
 - GraphQL schema generation
@@ -137,8 +137,8 @@ This example uses the local SDK package (`@tailor-platform/tailor-sdk`) through 
 
 ## Environment Variables
 
-- `TAILOR_ACCESS_TOKEN`: Required for deploying to Tailor Platform
-- `TAILOR_ENVIRONMENT`: Target environment (default: development)
+- `TAILOR_TOKEN`: Required for deploying to Tailor Platform (or use tailorctl authentication)
+- `PLATFORM_URL`: Optional Tailor Platform API URL (default: https://api.tailor.tech)
 
 ## Next Steps
 

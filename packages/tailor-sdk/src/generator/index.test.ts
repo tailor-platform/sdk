@@ -12,7 +12,7 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { generate, apply, GenerationManager } from "./index";
+import { generate, GenerationManager } from "./index";
 import type { WorkspaceConfig } from "@/config";
 import { db, type TailorDBType } from "@/services/tailordb/schema";
 import {
@@ -21,15 +21,8 @@ import {
 } from "@/services/pipeline/resolver";
 import { SdlGenerator } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
-import { ManifestGenerator } from "./builtin/manifest";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/types";
-
-vi.mock("@/ctl", () => ({
-  TailorCtl: vi.fn().mockImplementation(() => ({
-    apply: vi.fn(),
-  })),
-}));
 
 class TestGenerator {
   readonly id = "test-generator";
@@ -184,21 +177,6 @@ describe("GenerationManager", () => {
           (gen: any) => gen instanceof KyselyGenerator,
         ),
       ).toBe(true);
-    });
-
-    it("ManifestGeneratorのworkspaceを設定", () => {
-      const manifestGen = new ManifestGenerator({
-        dryRun: false,
-      });
-      const configWithManifest = {
-        ...mockConfig,
-        generators: [manifestGen],
-      };
-      const managerWithManifest = new GenerationManager(
-        configWithManifest as any,
-      );
-      (managerWithManifest as any).initGenerators();
-      expect(manifestGen.workspace).toBe(managerWithManifest.workspace);
     });
 
     it("未知のジェネレーターIDでエラー", () => {
@@ -731,79 +709,6 @@ describe("generate function", () => {
     await generate(mockConfig, { watch: false });
 
     expect(watchSpy).not.toHaveBeenCalled();
-  });
-});
-
-describe("apply function", () => {
-  let mockConfig: WorkspaceConfig;
-  let mockApplyOptions: any;
-
-  beforeEach(() => {
-    mockConfig = {
-      name: "test-workspace",
-      region: "us-west-2",
-      app: {},
-      generators: [],
-    } as any;
-
-    mockApplyOptions = {
-      namespace: "test-namespace",
-      host: "test-host",
-      dryRun: false,
-    };
-  });
-
-  it("ManifestGeneratorを使用してapplyを実行", async () => {
-    const { TailorCtl } = await import("@/ctl");
-    const TailorCtlMock = vi.mocked(TailorCtl);
-    const applySpy = vi.fn();
-    TailorCtlMock.mockImplementation(() => ({ apply: applySpy }) as any);
-
-    await apply(mockConfig, mockApplyOptions);
-
-    expect(applySpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: mockConfig.name,
-        region: mockConfig.region,
-      }),
-      expect.stringContaining("manifest.cue"),
-    );
-  });
-
-  it("ManifestGeneratorがgeneratorsに設定される", async () => {
-    const indexModule = await import("./index");
-    const GenerationManager = (indexModule as any).GenerationManager;
-    const generateSpy = vi
-      .spyOn(GenerationManager.prototype, "generate")
-      .mockImplementation(() => Promise.resolve());
-
-    await apply(mockConfig, mockApplyOptions);
-
-    expect(generateSpy).toHaveBeenCalled();
-    expect(generateSpy.mock.calls).toHaveLength(1);
-    expect(generateSpy.mock.calls[0]).toHaveLength(1);
-
-    const calledOptions = generateSpy.mock.calls[0][0] as any;
-    expect(calledOptions).toBeDefined();
-    expect(calledOptions.watch).toBe(false);
-  });
-
-  it("watch: false で generate が呼ばれる", async () => {
-    const indexModule = await import("./index");
-    const GenerationManager = (indexModule as any).GenerationManager;
-    const generateSpy = vi
-      .spyOn(GenerationManager.prototype, "generate")
-      .mockImplementation(() => Promise.resolve());
-
-    await apply(mockConfig, mockApplyOptions);
-
-    expect(generateSpy).toHaveBeenCalled();
-    expect(generateSpy.mock.calls).toHaveLength(1);
-    expect(generateSpy.mock.calls[0]).toHaveLength(1);
-
-    const calledGenerateOptions = generateSpy.mock.calls[0][0] as any;
-    expect(calledGenerateOptions).toBeDefined();
-    expect(calledGenerateOptions.watch).toBe(false);
   });
 });
 

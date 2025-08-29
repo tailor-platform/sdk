@@ -19,15 +19,11 @@ import {
   PipelineResolver_PipelineSchema,
   PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
-import {
-  PipelineInfo,
-  ResolverManifestMetadata,
-} from "@/generator/builtin/manifest/types";
-import { ApplyOptions } from "@/generator/options";
 import { Executor, PipelineResolverService, StepDef } from "@/services";
 import { Resolver } from "@/services/pipeline/resolver";
 import { Workspace } from "@/workspace";
 import { ChangeSet } from ".";
+import { ApplyOptions } from "..";
 import { fetchAll, OperatorClient } from "../client";
 import { OperationType } from "@/types/operator";
 
@@ -304,6 +300,32 @@ async function planResolvers(
 
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
 // This will need refactoring later.
+
+export interface ResolverManifestMetadata {
+  name: string;
+  inputType: string;
+  outputType: string;
+  queryType: "query" | "mutation";
+  pipelines: PipelineInfo[];
+  outputMapper?: string; // 関数の文字列表現
+  inputFields?: Record<
+    string,
+    { type: string; required: boolean; array: boolean }
+  >;
+  outputFields?: Record<
+    string,
+    { type: string; required: boolean; array: boolean }
+  >;
+  resolverManifest?: any; // 生成されたResolverManifest
+}
+
+export interface PipelineInfo {
+  name: string;
+  description: string;
+  operationType: OperationType;
+  operationSource?: string;
+}
+
 function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,

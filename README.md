@@ -20,7 +20,7 @@ tailor-sdk/
 ### Prerequisites
 
 - Node.js 22.14.0+
-- pnpm 10.8.0+
+- pnpm 10.14.0+
 
 ### Installation
 
@@ -85,7 +85,7 @@ The main SDK package that provides:
 - TailorDB ORM for database models
 - Pipeline system for GraphQL resolvers
 - Executor framework for event handling
-- Code generator for manifests and types
+- Code generator for types and GraphQL SDL
 - CLI tools for project management
 - Bundler integration using Rolldown
 
@@ -134,5 +134,5 @@ Releases are automated through CI/CD pipelines. Version updates and publishing a
 ## Troubleshooting
 
 - If you encounter module resolution issues, ensure you're using Node.js 22.14.0+
-- For pnpm issues, check that you're using version 10.8.0+
+- For pnpm issues, check that you're using version 10.14.0+
 - Clear Turbo cache if needed: `turbo daemon clean`
