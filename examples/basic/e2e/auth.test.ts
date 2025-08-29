@@ -8,17 +8,17 @@ import {
 import { createOperatorClient } from "./utils";
 import { defaultMachineUserRole } from "../constants";
 
-describe("control plane", async () => {
+describe("controlplane", async () => {
   const [client, workspaceId] = createOperatorClient();
   const namespaceName = "my-auth";
 
-  test("service applied successfully", async () => {
+  test("service applied", async () => {
     const { authServices } = await client.listAuthServices({ workspaceId });
     expect(authServices.length).toBe(1);
     expect(authServices[0].namespace?.name).toBe(namespaceName);
   });
 
-  test("idpConfig applied successfully", async () => {
+  test("idpConfig applied", async () => {
     const { idpConfigs } = await client.listAuthIDPConfigs({
       workspaceId,
       namespaceName,
@@ -30,12 +30,15 @@ describe("control plane", async () => {
       config: {
         config: {
           case: "oidc",
+          value: {
+            usernameClaim: "name",
+          },
         },
       },
     });
   });
 
-  test("userProfileConfig applied successfully", async () => {
+  test("userProfileConfig applied", async () => {
     const { userProfileProviderConfig } = await client.getUserProfileConfig({
       workspaceId,
       namespaceName,
@@ -59,7 +62,7 @@ describe("control plane", async () => {
     });
   });
 
-  test("machineUser applied successfully", async () => {
+  test("machineUser applied", async () => {
     const { machineUsers } = await client.listAuthMachineUsers({
       workspaceId,
       authNamespace: namespaceName,
@@ -68,13 +71,14 @@ describe("control plane", async () => {
     expect(machineUsers[0]).toMatchObject({
       name: "admin-machine-user",
       attributes: [defaultMachineUserRole],
+      // TODO(remiposo): fix platform
       // attributeMap: {
       //   roleId: defaultMachineUserRole,
       // },
     });
   });
 
-  test("oauth2Client applied successfully", async () => {
+  test("oauth2Client applied", async () => {
     const { oauth2Clients } = await client.listAuthOAuth2Clients({
       workspaceId,
       namespaceName,
@@ -82,6 +86,7 @@ describe("control plane", async () => {
     expect(oauth2Clients.length).toBe(1);
     expect(oauth2Clients[0]).toMatchObject({
       name: "sample",
+      description: "Sample OAuth2 client",
       grantTypes: [
         AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
         AuthOAuth2Client_GrantType.REFRESH_TOKEN,

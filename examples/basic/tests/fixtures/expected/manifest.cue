@@ -76,6 +76,7 @@
       "OAuth2Clients": [
         {
           "Name": "sample",
+          "Description": "Sample OAuth2 client",
           "GrantTypes": [
             "authorization_code",
             "refresh_token"

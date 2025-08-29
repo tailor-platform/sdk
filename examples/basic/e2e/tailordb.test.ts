@@ -2,9 +2,153 @@ import { randomUUID } from "node:crypto";
 import { gql } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
 
-import { createGraphQLClient } from "./utils";
+import { TailorDBType_Permission_Operator } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import { createGraphQLClient, createOperatorClient } from "./utils";
 
-describe("tailordb service", () => {
+describe("controlplane", () => {
+  const [client, workspaceId] = createOperatorClient();
+  const namespaceName = "tailordb";
+
+  test("service applied", async () => {
+    const { tailordbServices } = await client.listTailorDBServices({
+      workspaceId,
+    });
+    expect(tailordbServices.length).toBe(1);
+    expect(tailordbServices[0].namespace?.name).toBe(namespaceName);
+  });
+
+  test("type applied", async () => {
+    const { tailordbTypes } = await client.listTailorDBTypes({
+      workspaceId,
+      namespaceName,
+    });
+
+    const role = tailordbTypes.find((e) => e.name === "Role");
+    expect(role).toMatchObject({
+      name: "Role",
+      schema: {
+        fields: {
+          name: { type: "string", required: true, array: false },
+        },
+        relationships: {
+          users: {
+            refType: "User",
+            refField: "roleId",
+            srcField: "id",
+            array: true,
+          },
+        },
+        permission: {
+          create: [
+            {
+              conditions: [
+                {
+                  left: { kind: { case: "userField", value: "roleId" } },
+                  operator: TailorDBType_Permission_Operator.EQ,
+                  right: { kind: { case: "value", value: expect.any(Object) } },
+                },
+              ],
+            },
+          ],
+          read: [
+            {
+              conditions: [
+                {
+                  left: { kind: { case: "userField", value: "roleId" } },
+                  operator: TailorDBType_Permission_Operator.EQ,
+                  right: { kind: { case: "value", value: expect.any(Object) } },
+                },
+              ],
+            },
+            {
+              conditions: [
+                {
+                  left: { kind: { case: "userField", value: "_loggedIn" } },
+                  operator: TailorDBType_Permission_Operator.EQ,
+                  right: { kind: { case: "value", value: expect.any(Object) } },
+                },
+              ],
+            },
+          ],
+          update: [
+            {
+              conditions: [
+                {
+                  left: { kind: { case: "userField", value: "roleId" } },
+                  operator: TailorDBType_Permission_Operator.EQ,
+                  right: { kind: { case: "value", value: expect.any(Object) } },
+                },
+              ],
+            },
+          ],
+          delete: [
+            {
+              conditions: [
+                {
+                  left: { kind: { case: "userField", value: "roleId" } },
+                  operator: TailorDBType_Permission_Operator.EQ,
+                  right: { kind: { case: "value", value: expect.any(Object) } },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    const user = tailordbTypes.find((e) => e.name === "User");
+    expect(user).toMatchObject({
+      name: "User",
+      schema: {
+        fields: {
+          name: { type: "string", required: true, array: false },
+          email: {
+            type: "string",
+            required: true,
+            array: false,
+            unique: true,
+            index: true,
+          },
+          status: { type: "string", required: false, array: false },
+          department: { type: "string", required: false, array: false },
+          roleId: { type: "uuid", required: true, array: false },
+          createdAt: {
+            type: "datetime",
+            required: false,
+            array: false,
+            hooks: expect.any(Object),
+          },
+          updatedAt: {
+            type: "datetime",
+            required: false,
+            array: false,
+            hooks: expect.any(Object),
+          },
+        },
+        relationships: {
+          role: {
+            refType: "Role",
+            refField: "id",
+            srcField: "roleId",
+            array: false,
+          },
+        },
+        indexes: {
+          idx_name_department: {
+            fieldNames: ["name", "department"],
+            unique: false,
+          },
+          user_status_created_idx: {
+            fieldNames: ["status", "createdAt"],
+            unique: false,
+          },
+        },
+      },
+    });
+  });
+});
+
+describe("dataplane", () => {
   const graphQLClient = createGraphQLClient(inject("token"));
   let roleId: string;
 
