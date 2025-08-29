@@ -37,6 +37,31 @@ function getConfig(dist: "expected" | "actual") {
   return config;
 }
 
+function replaceAbsolutePaths(dirPath: string) {
+  const items = fs.readdirSync(dirPath);
+
+  for (const item of items) {
+    const fullPath = path.join(dirPath, item);
+    const stat = fs.statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      replaceAbsolutePaths(fullPath);
+    } else if (item.endsWith(".js")) {
+      replaceAbsolutePathsInFile(fullPath);
+    }
+  }
+}
+
+function replaceAbsolutePathsInFile(filePath: string) {
+  const content = fs.readFileSync(filePath, "utf-8");
+
+  const importPattern = /from "\/.*\/node_modules\/(.*)"/g;
+  const modifiedContent = content.replace(importPattern, (_, pkgPath) => {
+    return `from "/dummy/path/${pkgPath}"`;
+  });
+  fs.writeFileSync(filePath, modifiedContent, "utf-8");
+}
+
 /**
  * 期待値ファイルを生成するスクリプト
  * 現在の実装で正常な出力を生成し、期待値として保存する
@@ -54,6 +79,7 @@ export async function generateExpectedFiles(): Promise<void> {
     const config = getConfig("expected");
     await generate(config);
     await apply(config, { buildOnly: true });
+    replaceAbsolutePaths(expectedDir);
 
     console.log("\nGenerated files:");
     await listGeneratedFiles(expectedDir);
@@ -95,7 +121,7 @@ async function listGeneratedFiles(
 
 export async function generateActualFiles(): Promise<void> {
   if (fs.existsSync(actualDir)) {
-    await fs.rmdirSync(actualDir, { recursive: true });
+    fs.rmdirSync(actualDir, { recursive: true });
     console.log("Removed existing actual directory");
   }
 
@@ -103,6 +129,7 @@ export async function generateActualFiles(): Promise<void> {
   const config = getConfig("actual");
   await generate(config);
   await apply(config, { buildOnly: true });
+  replaceAbsolutePaths(actualDir);
 }
 
 if (process.argv[1] === __filename) {

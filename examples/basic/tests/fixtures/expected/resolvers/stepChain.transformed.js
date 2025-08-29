@@ -1,5 +1,5 @@
-import { format } from "date-fns";
-import { DummyDriver, Kysely, PostgresAdapter, PostgresIntrospector, PostgresQueryCompiler } from "kysely";
+import { format } from "/dummy/path/date-fns/index.js";
+import { DummyDriver, Kysely, PostgresAdapter, PostgresIntrospector, PostgresQueryCompiler } from "/dummy/path/kysely/dist/esm/index.js";
 
 //#region generated/tailordb.ts
 const getDB = () => {
