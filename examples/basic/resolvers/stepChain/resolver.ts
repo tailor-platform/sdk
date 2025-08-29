@@ -1,6 +1,6 @@
 import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
-import { kyselyWrapper } from "../../generated/tailordb";
+import { kyselyWrapper } from "generated/tailordb";
 
 const resolver = createQueryResolver(
   "stepChain",

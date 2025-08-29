@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/config";
 import { BundlerConfig, ILoader, ITransformer } from "./types";
@@ -108,6 +109,14 @@ export class Bundler<T> {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
+    let tsconfig: string | undefined;
+    try {
+      tsconfig = await resolveTSConfig();
+    } catch {
+      // If tsconfig is not found, continue without it
+      tsconfig = undefined;
+    }
+
     await rolldown.build(
       rolldown.defineConfig({
         input: input,
@@ -118,23 +127,18 @@ export class Bundler<T> {
           minify: false,
         },
         external: (id) => {
-          if (id.includes("node_modules")) {
-            return true;
-          }
-
           if (
-            !id.startsWith(".") &&
-            !id.startsWith("/") &&
-            !id.startsWith("@/") &&
-            !id.startsWith("#") &&
-            !id.startsWith("~") &&
-            !id.includes("\\")
+            id.includes("node_modules") ||
+            // Explicitly mark as external to prevent it from being resolved
+            // to packages/tailor-sdk and bundled in examples/basic.
+            id === "@tailor-platform/tailor-sdk"
           ) {
             return true;
           }
 
           return false;
         },
+        tsconfig,
         treeshake: {
           moduleSideEffects: false,
           annotations: true,
@@ -157,6 +161,14 @@ export class Bundler<T> {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
+    let tsconfig: string | undefined;
+    try {
+      tsconfig = await resolveTSConfig();
+    } catch {
+      // If tsconfig is not found, continue without it
+      tsconfig = undefined;
+    }
+
     await Promise.all(
       files.map(async (file) => {
         const outputFile = path.join(outputDir, path.basename(file));
@@ -170,6 +182,7 @@ export class Bundler<T> {
               sourcemap: true,
               minify: true,
             },
+            tsconfig,
             treeshake: {
               moduleSideEffects: false,
               annotations: true,

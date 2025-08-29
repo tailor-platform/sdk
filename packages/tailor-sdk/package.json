@@ -45,7 +45,7 @@
     "multiline-ts": "^4.0.1",
     "oxc-parser": "^0.82.1",
     "pkg-types": "^2.1.0",
-    "rolldown": "1.0.0-beta.14",
+    "rolldown": "1.0.0-beta.34",
     "tsx": "^4.20.3"
   },
   "devDependencies": {
