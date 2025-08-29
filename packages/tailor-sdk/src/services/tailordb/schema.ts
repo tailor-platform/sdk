@@ -421,12 +421,12 @@ export class TailorDBType<
   Metadata,
   Fields & Record<string, TailorField<Metadata, any, any, DBFieldMetadata>>
 > {
-  private _metadata?: TailorDBTypeConfig;
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
   private _settings: TypeFeatures = {};
   private _indexes: IndexDef<this>[] = [];
   private _permissions: Permissions = {};
+  private _files: Record<string, string> = {};
 
   constructor(
     public readonly name: string,
@@ -489,7 +489,7 @@ export class TailorDBType<
       });
     }
 
-    this._metadata = {
+    return {
       name: this.name,
       schema: {
         description: this._description,
@@ -497,11 +497,10 @@ export class TailorDBType<
         fields: metadataFields,
         settings: this._settings,
         permissions: this._permissions,
+        files: this._files,
         ...(Object.keys(indexes).length > 0 && { indexes }),
       },
     };
-
-    return this._metadata;
   }
 
   hooks(hooks: Hooks<typeof this>) {
@@ -534,6 +533,13 @@ export class TailorDBType<
 
   indexes(...indexes: IndexDef<this>[]) {
     this._indexes = indexes;
+    return this;
+  }
+
+  files<const F extends string>(
+    files: Record<F, string> & Partial<Record<keyof output<this>, never>>,
+  ) {
+    this._files = files;
     return this;
   }
 

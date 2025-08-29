@@ -13,6 +13,7 @@ export interface TailorDBTypeConfig {
       bulkUpsert?: boolean;
     };
     permissions: Permissions;
+    files: Record<string, string>;
     indexes?: Record<
       string,
       {
