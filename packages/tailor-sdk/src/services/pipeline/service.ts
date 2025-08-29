@@ -6,6 +6,7 @@ import { CodeTransformer } from "./bundler/transformer";
 import { PipelineResolverServiceConfig } from "./types";
 import { Resolver } from "./resolver";
 import { isResolver } from "./utils";
+import { pathToFileURL } from "node:url";
 
 export class PipelineResolverService {
   private bundler: Bundler<Resolver<any, any, any, any, any, any>>;
@@ -57,7 +58,10 @@ export class PipelineResolverService {
   async loadResolverForFile(resolverFile: string, timestamp?: Date) {
     try {
       const resolverModule = await import(
-        [resolverFile, ...(timestamp ? [timestamp.getTime()] : [])].join("?t=")
+        [
+          pathToFileURL(resolverFile).toString(),
+          ...(timestamp ? [timestamp.getTime()] : []),
+        ].join("?t=")
       );
       const resolver = resolverModule.default;
       if (isResolver(resolver)) {

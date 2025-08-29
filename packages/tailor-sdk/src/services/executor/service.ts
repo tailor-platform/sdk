@@ -4,6 +4,7 @@ import { Executor, ExecutorServiceConfig } from "./types";
 import { Bundler, BundlerConfig } from "@/bundler";
 import { ExecutorLoader } from "./bundler/loader";
 import { ExecutorTransformer } from "./bundler/transformer";
+import { pathToFileURL } from "node:url";
 
 export class ExecutorService {
   private isValidExecutor(executor: any): executor is Executor {
@@ -80,7 +81,10 @@ export class ExecutorService {
   async loadExecutorForFile(executorFile: string, timestamp?: Date) {
     try {
       const module = await import(
-        [executorFile, ...(timestamp ? [timestamp.getTime()] : [])].join("?t=")
+        [
+          pathToFileURL(executorFile).toString(),
+          ...(timestamp ? [timestamp.getTime()] : []),
+        ].join("?t=")
       );
 
       const executor = module.default;
