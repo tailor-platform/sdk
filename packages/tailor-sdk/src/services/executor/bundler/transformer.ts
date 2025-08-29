@@ -52,7 +52,9 @@ export class ExecutorTransformer implements ITransformer<Executor> {
 
     // Create the final executor file that will be bundled
     const executorFilePath = path.join(stepsDir, `${executor.name}.js`);
-    const relativePath = path.relative(stepsDir, transformedPath);
+    const relativePath = path
+      .relative(stepsDir, transformedPath)
+      .replace(/\\/g, "/");
     const executorContent = ml /* js */ `
       import { __executor_function } from "${relativePath}";
 

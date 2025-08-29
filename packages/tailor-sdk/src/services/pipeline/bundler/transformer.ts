@@ -49,7 +49,9 @@ export class CodeTransformer implements ITransformer<Resolver> {
       .flatMap(([type, name, _, options]) => {
         const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
         const stepFunctionVariable = stepVariableName(name);
-        const relativePath = path.relative(stepDir, transformedPath);
+        const relativePath = path
+          .relative(stepDir, transformedPath)
+          .replace(/\\/g, "/");
         let stepContent;
         switch (type) {
           case "fn":
