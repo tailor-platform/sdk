@@ -4,9 +4,10 @@ on:
   pull_request:
     paths:
       - .github/workflows/apply.yml
-      - examples/basic/**
-      - packages/tailor-sdk/**
-      - packages/tailor-proto/**
+      - examples/**
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
