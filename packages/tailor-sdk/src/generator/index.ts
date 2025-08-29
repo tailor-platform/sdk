@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from "node:fs";
 import path from "node:path";
-import type { GenerateOptions, ApplyOptions } from "./options";
+import type { GenerateOptions } from "./options";
 import { getDistDir, WorkspaceConfig } from "@/config";
 import { defineWorkspace } from "@/workspace";
 import { Resolver } from "@/services/pipeline/resolver";
@@ -17,9 +17,6 @@ import { SdlGenerator, SdlGeneratorID } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DbTypeGenerator } from "./builtin/db-type";
 import { DependencyWatcher } from "./watch";
-import { ManifestGenerator } from "./builtin/manifest";
-import { TailorCtl } from "@/ctl";
-import { apply as operatorApply } from "@/apply";
 
 export type { CodeGenerator } from "./types";
 
@@ -74,11 +71,6 @@ export class GenerationManager {
             return new DbTypeGenerator(gen[1]);
           }
           throw new Error(`Unknown generator ID: ${gen[0]}`);
-        }
-
-        if (gen instanceof ManifestGenerator) {
-          gen.workspace = this.workspace;
-          return gen;
         }
 
         return gen as CodeGenerator<any, any, any, any>;
@@ -552,31 +544,5 @@ export async function generate(
   await manager.generate(options);
   if (options.watch) {
     await manager.watch();
-  }
-}
-
-export async function apply(config: WorkspaceConfig, options: ApplyOptions) {
-  const applyConfig: WorkspaceConfig = {
-    ...config,
-    generators: [new ManifestGenerator(options)],
-  };
-  await new GenerationManager(applyConfig).generate({
-    ...options,
-    watch: false,
-  });
-
-  const distDir = getDistDir();
-  if (!distDir) {
-    throw new Error("Distribution directory is not configured");
-  }
-
-  // Use operator API only when environment variables are set.
-  // TODO(remiposo): Eventually, after confirming that both behaviors match in e2e tests,
-  // remove the tailorctl implementation.
-  if (process.env.TAILOR_SDK_USE_OPERATOR_API === "true") {
-    await operatorApply(applyConfig, options);
-  } else {
-    const tailorCtl = new TailorCtl(options);
-    await tailorCtl.apply(applyConfig, path.join(distDir, "manifest.cue"));
   }
 }

@@ -7,7 +7,6 @@
     "gen": "tailor-sdk generate -c tailor.config.ts",
     "gen:watch": "tailor-sdk generate -c tailor.config.ts --watch",
     "apply": "tailor-sdk apply -c tailor.config.ts",
-    "apply:operator": "TAILOR_SDK_USE_OPERATOR_API=true tailor-sdk apply -c tailor.config.ts",
     "test": "pnpm test:generator",
     "test:all": "pnpm test:generator:prepare && vitest",
     "test:generator": "pnpm test:generator:prepare && vitest --project generator",

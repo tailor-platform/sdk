@@ -45,7 +45,6 @@ import {
   UserProfileProviderConfig_UserProfileProviderType,
   UserProfileProviderConfigSchema,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { ApplyOptions } from "@/generator/options";
 import {
   AuthService,
   BuiltinIdP,
@@ -62,6 +61,7 @@ import {
 import { ValueOperand } from "@/services/tailordb/permission";
 import { Workspace } from "@/workspace";
 import { ChangeSet, HasName } from ".";
+import { ApplyOptions } from "..";
 import { fetchAll, OperatorClient } from "../client";
 
 export async function applyAuth(

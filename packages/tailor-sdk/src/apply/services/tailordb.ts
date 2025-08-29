@@ -32,7 +32,6 @@ import {
   TailorDBType_RelationshipConfigSchema,
   TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
-import { ApplyOptions } from "@/generator/options";
 import { Executor } from "@/services";
 import {
   PermissionOperand,
@@ -48,6 +47,7 @@ import { DBFieldMetadata } from "@/services/tailordb/types";
 import { tailorToManifestScalar } from "@/types/types";
 import { Workspace } from "@/workspace";
 import { ChangeSet, HasName } from ".";
+import { ApplyOptions } from "..";
 import { fetchAll, OperatorClient } from "../client";
 
 export async function applyTailorDB(

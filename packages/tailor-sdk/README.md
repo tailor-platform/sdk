@@ -994,7 +994,7 @@ The SDK includes built-in code generators that run automatically:
 
 - **@tailor/sdl**: Generates GraphQL SDL files
 - **@tailor/kysely-type**: Generates TypeScript types for Kysely queries
-- **@tailor/manifest**: Generates deployment manifests
+- **@tailor/db-type**: Generates TypeScript types for database models
 
 Configure generators in your `tailor.config.ts`:
 
@@ -1016,7 +1016,7 @@ The SDK provides CLI commands for development:
 # Initialize a new project
 npx tailor-sdk init [project-name]
 
-# Generate code and manifests
+# Generate code
 npx tailor-sdk generate
 
 # Watch mode - regenerate on file changes
@@ -1025,8 +1025,8 @@ npx tailor-sdk generate --watch
 # Deploy to Tailor Platform
 npx tailor-sdk apply
 
-# Deploy with custom manifest
-npx tailor-sdk apply --manifest ./custom-manifest.cue
+# Deploy with dry run to preview changes
+npx tailor-sdk apply --dry-run
 ```
 
 ### Environment Variables
@@ -1034,5 +1034,8 @@ npx tailor-sdk apply --manifest ./custom-manifest.cue
 Set these environment variables for deployment:
 
 ```bash
-TAILOR_ACCESS_TOKEN=<your personal access token>
+# Option 1: Use environment variable
+TAILOR_TOKEN=<your personal access token>
+
+# Option 2: Use tailorctl authentication
 ```

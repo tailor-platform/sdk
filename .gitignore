@@ -29,7 +29,6 @@ coverage/
 
 # Tailor SDK
 **/.tailor-sdk/**
-!.tailor-sdk/manifest.cue
 .turbo
 
 # tailorctl

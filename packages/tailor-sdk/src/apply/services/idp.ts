@@ -8,10 +8,10 @@ import {
   DeleteIdPServiceRequestSchema,
   UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { ApplyOptions } from "@/generator/options";
 import { IdPServiceInput } from "@/services/idp/types";
 import { Workspace } from "@/workspace";
 import { ChangeSet, HasName } from ".";
+import { ApplyOptions } from "..";
 import { fetchAll, OperatorClient } from "../client";
 
 export async function applyIdP(

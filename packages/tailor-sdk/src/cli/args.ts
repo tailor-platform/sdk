@@ -1,6 +1,7 @@
 import type { ArgsDef, ParsedArgs } from "citty";
 import type { CliOption } from "./types";
-import type { GenerateOptions, ApplyOptions } from "@/generator/options";
+import type { ApplyOptions } from "@/apply";
+import type { GenerateOptions } from "@/generator/options";
 
 type StrictParse<T extends ArgsDef> = {
   [K in keyof ParsedArgs<T> as string extends K
@@ -40,7 +41,7 @@ const cliApplyOption = {
     description: "Run the command without making any changes",
     alias: "d",
   },
-} as const satisfies CliOption<ApplyOptions>;
+} as const satisfies CliOption<Omit<ApplyOptions, "buildOnly">>;
 
 export const commandArgs = {
   apply: cliApplyOption,
