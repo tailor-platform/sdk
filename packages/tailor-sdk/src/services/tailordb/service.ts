@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { TailorDBType } from "./schema";
 import { TailorDBServiceConfig } from "./types";
 
@@ -45,7 +46,10 @@ export class TailorDBService {
     this.types[typeFile] = {};
     try {
       const module = await import(
-        [typeFile, ...(timestamp ? [timestamp.getTime()] : [])].join("?t=")
+        [
+          pathToFileURL(typeFile).toString(),
+          ...(timestamp ? [timestamp.getTime()] : []),
+        ].join("?t=")
       );
 
       for (const exportName of Object.keys(module)) {

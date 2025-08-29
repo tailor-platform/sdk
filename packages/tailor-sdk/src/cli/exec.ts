@@ -9,11 +9,12 @@ import { apply } from "@/apply";
 import { generate } from "@/generator";
 
 import * as dotenv from "dotenv";
+import { pathToFileURL } from "node:url";
 
 async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
   try {
     const resolvedPath = path.resolve(process.cwd(), configPath);
-    const configModule = await import(resolvedPath);
+    const configModule = await import(pathToFileURL(resolvedPath).toString());
 
     if (!configModule || !configModule.default) {
       throw new Error("Invalid Tailor config module: default export not found");
