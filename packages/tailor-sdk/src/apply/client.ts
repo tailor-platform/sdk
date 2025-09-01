@@ -11,7 +11,7 @@ import {
 import { createConnectTransport } from "@connectrpc/connect-node";
 
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
-import { TailorctlConfig } from "./tailorctl";
+import { TailorctlConfig, writeTailorctlConfig } from "./tailorctl";
 
 export type OperatorClient = Client<typeof OperatorService>;
 
@@ -23,7 +23,7 @@ export async function initOperatorClient(tailorctlConfig?: TailorctlConfig) {
     baseUrl,
     interceptors: [
       await userAgentInterceptor(),
-      bearerTokenInterceptor(tailorctlConfig),
+      await bearerTokenInterceptor(baseUrl, tailorctlConfig),
       retryInterceptor(),
     ],
   });
@@ -31,25 +31,32 @@ export async function initOperatorClient(tailorctlConfig?: TailorctlConfig) {
 }
 
 async function userAgentInterceptor(): Promise<Interceptor> {
-  const packageJson = await readPackageJSON(import.meta.url);
-  const userAgent = `tailor-sdk/${packageJson.version ?? "unknown"}`;
-
+  const ua = await userAgent();
   return (next) => async (req) => {
     if (req.stream) {
       return await next(req);
     }
 
-    req.header.set("User-Agent", userAgent);
+    req.header.set("User-Agent", ua);
     return await next(req);
   };
 }
 
-function bearerTokenInterceptor(
+async function userAgent() {
+  const packageJson = await readPackageJSON(import.meta.url);
+  return `tailor-sdk/${packageJson.version ?? "unknown"}`;
+}
+
+async function bearerTokenInterceptor(
+  baseUrl: string,
   tailorctlConfig?: TailorctlConfig,
-): Interceptor {
-  // TODO(remiposo): Refresh token when expired.
-  const token =
-    process.env.TAILOR_TOKEN ?? tailorctlConfig?.controlplaneaccesstoken;
+): Promise<Interceptor> {
+  let token: string | undefined;
+  if (process.env.TAILOR_TOKEN) {
+    token = process.env.TAILOR_TOKEN;
+  } else if (tailorctlConfig) {
+    token = await refreshToken(baseUrl, tailorctlConfig);
+  }
   if (token === undefined) {
     throw new Error(
       ml`
@@ -67,6 +74,46 @@ function bearerTokenInterceptor(
     req.header.set("Authorization", `Bearer ${token}`);
     return await next(req);
   };
+}
+
+async function refreshToken(baseUrl: string, config: TailorctlConfig) {
+  // Refresh when invalid string (Invalid Date).
+  const expiresAt = new Date(config.controlplanetokenexpiresat);
+  const isExpired = !(expiresAt > new Date());
+  if (!isExpired || !config.controlplanerefreshtoken) {
+    return config.controlplaneaccesstoken;
+  }
+
+  const refreshUrl = new URL("/auth/platform/token/refresh", baseUrl).href;
+  const formData = new URLSearchParams();
+  formData.append("refresh_token", config.controlplanerefreshtoken);
+  const resp = await fetch(refreshUrl, {
+    method: "POST",
+    headers: {
+      "User-Agent": await userAgent(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData,
+  });
+  if (!resp.ok) {
+    throw new Error("Failed to refresh token");
+  }
+  const data = (await resp.json()) as {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+  };
+
+  const newExpiresAt = new Date();
+  newExpiresAt.setSeconds(newExpiresAt.getSeconds() + data.expires_in);
+  const updatedConfig: TailorctlConfig = {
+    ...config,
+    controlplaneaccesstoken: data.access_token,
+    controlplanerefreshtoken: data.refresh_token,
+    controlplanetokenexpiresat: newExpiresAt.toISOString(),
+  };
+  writeTailorctlConfig(updatedConfig);
+  return data.access_token;
 }
 
 function retryInterceptor(): Interceptor {
