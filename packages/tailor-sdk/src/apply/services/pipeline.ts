@@ -26,6 +26,7 @@ import { ChangeSet } from ".";
 import { ApplyOptions } from "..";
 import { fetchAll, OperatorClient } from "../client";
 import { OperationType } from "@/types/operator";
+import inflection from "inflection";
 
 export async function applyPipeline(
   client: OperatorClient,
@@ -375,9 +376,7 @@ function processResolver(
     ? extractTypeFields(resolver.output)
     : undefined;
 
-  const typeBaseName =
-    resolver.name.charAt(0).toUpperCase() + resolver.name.slice(1);
-
+  const typeBaseName = inflection.camelize(resolver.name);
   const metadata: ResolverManifestMetadata = {
     name: resolver.name,
     inputType: `${typeBaseName}Input`,
@@ -559,12 +558,7 @@ function generateTypeFields(
   if (fields && Object.keys(fields).length > 0) {
     return Object.entries(fields).map(([fieldName, fieldInfo]) => {
       if (fieldInfo.type === "nested") {
-        const nestedTypeName =
-          fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
-        const capitalizedTypeName =
-          typeName +
-          nestedTypeName.charAt(0).toUpperCase() +
-          nestedTypeName.slice(1);
+        const capitalizedTypeName = typeName + inflection.camelize(fieldName);
 
         let nestedFields: MessageInitShape<
           typeof PipelineResolver_FieldSchema
@@ -634,11 +628,7 @@ function generateNestedFields(
       const array = metadata.array === true;
 
       if (fieldType === "nested" && fieldObj.fields) {
-        const nestedTypeName = parentTypeName
-          ? parentTypeName +
-            fieldName.charAt(0).toUpperCase() +
-            fieldName.slice(1)
-          : fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+        const nestedTypeName = `${parentTypeName ?? ""}${inflection.camelize(fieldName)}`;
 
         return {
           name: fieldName,

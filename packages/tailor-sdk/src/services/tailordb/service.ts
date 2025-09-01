@@ -71,6 +71,7 @@ export class TailorDBService {
       }
     } catch (error) {
       console.error(`Failed to load type from ${typeFile}:`, error);
+      throw error;
     }
     return this.types[typeFile];
   }
