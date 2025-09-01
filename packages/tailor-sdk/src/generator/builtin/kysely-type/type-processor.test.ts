@@ -69,15 +69,15 @@ describe("Kysely TypeProcessor", () => {
   });
 
   it("should process timestamp fields through normal field processing", async () => {
-    const typeWithTimestamps = db.type("UserWithTimestamps", {
+    const typeWithTimestamps = db.type("UserWithTimestamp", {
       name: db.string(),
       ...db.fields.timestamps(),
     });
 
     const result = await TypeProcessor.processType(typeWithTimestamps);
 
-    expect(result.name).toBe("UserWithTimestamps");
-    expect(result.typeDef).toContain("export interface UserWithTimestamps");
+    expect(result.name).toBe("UserWithTimestamp");
+    expect(result.typeDef).toContain("export interface UserWithTimestamp");
     expect(result.typeDef).toContain("name: string");
     // createdAt and updatedAt should be processed through normal field logic
     expect(result.typeDef).toContain("createdAt: Timestamp | null;");

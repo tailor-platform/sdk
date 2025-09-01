@@ -436,8 +436,16 @@ export class TailorDBType<
       fields as Fields &
         Record<string, TailorField<Metadata, any, any, DBFieldMetadata>>,
     );
-    this._settings.pluralForm = options.pluralForm;
+
     this._description = options.description;
+
+    const pluralForm = options.pluralForm || inflection.pluralize(name);
+    if (name === pluralForm) {
+      throw new Error(
+        `The name and the plural form must be different. name=${name}`,
+      );
+    }
+    this._settings.pluralForm = pluralForm;
 
     Object.entries(this.fields).forEach(([fieldName, field]) => {
       if (field.reference && field.reference !== undefined) {

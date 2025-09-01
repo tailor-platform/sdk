@@ -1,6 +1,7 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "./schema";
 import type { output } from "@/types/helpers";
+import inflection from "inflection";
 
 describe("TailorDBField 基本フィールド型テスト", () => {
   it("string型フィールドが正しくstring型を出力する", () => {
@@ -423,7 +424,7 @@ describe("TailorDBType withTimestamps オプションテスト", () => {
   });
 
   it("withTimestamps: trueでタイムスタンプフィールドが追加される", () => {
-    const _timestampType = db.type("TestWithTimestamps", {
+    const _timestampType = db.type("TestWithTimestamp", {
       name: db.string(),
       ...db.fields.timestamps(),
     });
@@ -492,7 +493,7 @@ describe("TailorDBType エッジケーステスト", () => {
   });
 
   it("すべて配列フィールドの型が正しく動作する", () => {
-    const _allArrayType = db.type("Arrays", {
+    const _allArrayType = db.type("Array", {
       strings: db.string().array(),
       numbers: db.int().array(),
       booleans: db.bool().array(),
@@ -581,12 +582,15 @@ describe("TailorDBType 型の一貫性テスト", () => {
 });
 
 describe("TailorDBType plural form テスト", () => {
-  it("単一の名前でtype定義した場合、pluralFormは未定義", () => {
+  it("単一の名前でtype定義した場合でも、pluralFormがinflectionで設定される", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
 
-    expect(_userType.metadata.schema?.settings?.pluralForm).toBeUndefined();
+    expect(_userType.metadata.schema?.settings?.pluralForm).toBe("Users");
+    expect(_userType.metadata.schema?.settings?.pluralForm).toBe(
+      inflection.pluralize("User"),
+    );
   });
 
   it("タプルで名前とplural formを指定した場合、pluralFormが設定される", () => {
@@ -606,12 +610,23 @@ describe("TailorDBType plural form テスト", () => {
     expect(_childType.metadata.schema?.settings?.pluralForm).toBe("Children");
   });
 
-  it("空文字列のplural formも設定可能", () => {
-    const _dataType = db.type(["Data", ""], {
+  it("空文字列のplural formの場合、inflectionで設定される", () => {
+    const _dataType = db.type(["Datum", ""], {
       value: db.string(),
     });
 
-    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe("");
+    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe(
+      inflection.pluralize("Data"),
+    );
+    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe(
+      inflection.pluralize("Datum"),
+    );
+  });
+
+  it("plural formがnameと同じ場合エラー", () => {
+    expect(() => db.type("Data", {})).toThrowError(
+      "The name and the plural form must be different. name=Data",
+    );
   });
 
   it("日本語のplural formも設定可能", () => {
