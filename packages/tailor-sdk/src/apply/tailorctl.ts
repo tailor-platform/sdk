@@ -2,30 +2,49 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import ini from "ini";
+import { parse, stringify } from "smol-toml";
 
 type TailorctlConfigMap = Partial<
   {
-    readonly global: {
-      readonly context: string;
+    global: {
+      context: string;
     };
-  } & Readonly<Record<string, TailorctlConfig>>
+  } & Record<string, TailorctlConfig>
 >;
 
-export type TailorctlConfig = Readonly<{
+export type TailorctlConfig = {
   controlplaneaccesstoken: string;
-  // controlplanerefreshtoken: string;
-  // controlplanetokenexpiresat: string;
+  controlplanerefreshtoken: string;
+  controlplanetokenexpiresat: string;
   workspaceid: string;
-}>;
+};
 
 export function readTailorctlConfig() {
-  const configPath = path.join(os.homedir(), ".tailorctl", "config");
+  const configMap = readTailorctlConfigMap();
+  return configMap ? configMap[tailorctlContext(configMap)] : undefined;
+}
+
+export function writeTailorctlConfig(config: TailorctlConfig) {
+  const configMap = readTailorctlConfigMap();
+  if (!configMap) {
+    return;
+  }
+  configMap[tailorctlContext(configMap)] = config;
+  fs.writeFileSync(tailorctlConfigPath(), stringify(configMap));
+}
+
+function readTailorctlConfigMap() {
+  const configPath = tailorctlConfigPath();
   if (!fs.existsSync(configPath)) {
     return;
   }
-  const configMap = ini.parse(
-    fs.readFileSync(configPath, "utf-8"),
-  ) as TailorctlConfigMap;
-  return configMap[configMap.global?.context || "default"];
+  return parse(fs.readFileSync(configPath, "utf-8")) as TailorctlConfigMap;
+}
+
+function tailorctlConfigPath() {
+  return path.join(os.homedir(), ".tailorctl", "config");
+}
+
+function tailorctlContext(configMap: TailorctlConfigMap) {
+  return configMap.global?.context || "default";
 }
