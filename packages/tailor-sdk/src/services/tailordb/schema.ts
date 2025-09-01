@@ -232,8 +232,7 @@ class TailorDBField<
     }
 
     const forwardName =
-      config.toward.as ??
-      targetTable.name.charAt(0).toLowerCase() + targetTable.name.slice(1);
+      config.toward.as ?? inflection.camelize(targetTable.name, true);
     const field: string = config.toward.key ?? "id";
     const backward: string = config.backward ?? "";
 
@@ -447,18 +446,10 @@ export class TailorDBType<
           let backwardFieldName = ref.nameMap?.[1]; // Get backward field name from nameMap
 
           if (!backwardFieldName || backwardFieldName === "") {
-            const metadata = field.metadata;
-            const relationType = metadata?.unique ? "1-1" : "n-1";
-
-            if (relationType === "1-1") {
-              backwardFieldName = inflection.singularize(
-                this.name.charAt(0).toLowerCase() + this.name.slice(1),
-              );
-            } else {
-              backwardFieldName = inflection.pluralize(
-                this.name.charAt(0).toLowerCase() + this.name.slice(1),
-              );
-            }
+            const lowerName = inflection.camelize(this.name, true);
+            backwardFieldName = field.metadata?.unique
+              ? inflection.singularize(lowerName)
+              : inflection.pluralize(lowerName);
           }
 
           ref.type.referenced[backwardFieldName] = [this, fieldName];

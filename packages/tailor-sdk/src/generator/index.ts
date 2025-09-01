@@ -112,11 +112,7 @@ export class GenerationManager {
             `Error loading types for TailorDB service ${namespace}:`,
             error,
           );
-          // In watch mode, continue with other services; otherwise, throw
-          if (!_options.watch) {
-            throw error;
-          }
-          this.applications[appNamespace].tailordbNamespaces[namespace] = {};
+          throw error;
         }
       }
 
@@ -138,11 +134,7 @@ export class GenerationManager {
             `Error loading resolvers for Pipeline service ${namespace}:`,
             error,
           );
-          // In watch mode, continue with other services; otherwise, throw
-          if (!_options.watch) {
-            throw error;
-          }
-          this.applications[appNamespace].pipelineNamespaces[namespace] = {};
+          throw error;
         }
       }
     }
@@ -454,7 +446,6 @@ export class GenerationManager {
                     `Error loading types from file ${file}:`,
                     error,
                   );
-                  // Continue with other files in watch mode
                   continue;
                 }
               }
@@ -476,7 +467,6 @@ export class GenerationManager {
                 `Error processing TailorDB changes for ${appNamespace}/${dbNamespace}:`,
                 error,
               );
-              // Continue watching without exiting
             }
           },
         );
@@ -527,7 +517,6 @@ export class GenerationManager {
                 `Error processing Pipeline changes for ${appNamespace}/${pipelineNamespace}:`,
                 error,
               );
-              // Continue watching without exiting
             }
           },
         );
@@ -541,7 +530,13 @@ export async function generate(
   options: GenerateOptions = { watch: false },
 ) {
   const manager = new GenerationManager(config);
-  await manager.generate(options);
+  try {
+    await manager.generate(options);
+  } catch (e) {
+    if (!options.watch) {
+      throw e;
+    }
+  }
   if (options.watch) {
     await manager.watch();
   }

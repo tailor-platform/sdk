@@ -541,8 +541,8 @@ describe("SDL ResolverProcessor", () => {
         await ResolverProcessor.processResolver(specialNameResolver);
 
       expect(result.name).toBe("get_user_by_id");
-      expect(result.inputType).toBe("Get_user_by_idInput");
-      expect(result.outputType).toBe("Get_user_by_idOutput");
+      expect(result.inputType).toBe("GetUserByIdInput");
+      expect(result.outputType).toBe("GetUserByIdOutput");
     });
 
     it("非常に複雑なパイプライン構成を処理できること", async () => {

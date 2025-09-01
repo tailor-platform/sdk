@@ -69,6 +69,7 @@ export class PipelineResolverService {
       }
     } catch (error) {
       console.error(`Failed to load resolver from ${resolverFile}:`, error);
+      throw error;
     }
     return this.resolvers[resolverFile];
   }

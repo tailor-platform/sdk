@@ -95,6 +95,7 @@ export class ExecutorService {
       }
     } catch (error) {
       console.error(`Failed to load type from ${executorFile}:`, error);
+      throw error;
     }
     return this.executors[executorFile];
   }

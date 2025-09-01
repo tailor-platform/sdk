@@ -5,6 +5,7 @@ import { SDLUtils } from "./utils";
 import { ResolverSDLMetadata } from "./types";
 import { OperationType } from "@/types/operator";
 import { TypeProcessor } from "./type-processor";
+import inflection from "inflection";
 
 /**
  * Resolver処理ロジック
@@ -24,8 +25,7 @@ export class ResolverProcessor {
       );
     }
 
-    const resolverBaseName =
-      resolver.name.charAt(0).toUpperCase() + resolver.name.slice(1);
+    const resolverBaseName = inflection.camelize(resolver.name);
     const inputMetadata = await TypeProcessor.processType(
       resolver.input,
       true,
