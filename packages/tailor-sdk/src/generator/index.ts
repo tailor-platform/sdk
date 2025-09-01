@@ -77,7 +77,7 @@ export class GenerationManager {
       }) || [];
   }
 
-  async generate(_options: GenerateOptions) {
+  async generate(options: GenerateOptions) {
     console.log(
       "Generation for workspace:",
       this.workspace.config.id || this.workspace.config.name,
@@ -112,7 +112,9 @@ export class GenerationManager {
             `Error loading types for TailorDB service ${namespace}:`,
             error,
           );
-          throw error;
+          if (!options.watch) {
+            throw error;
+          }
         }
       }
 
@@ -134,7 +136,9 @@ export class GenerationManager {
             `Error loading resolvers for Pipeline service ${namespace}:`,
             error,
           );
-          throw error;
+          if (!options.watch) {
+            throw error;
+          }
         }
       }
     }
@@ -530,13 +534,7 @@ export async function generate(
   options: GenerateOptions = { watch: false },
 ) {
   const manager = new GenerationManager(config);
-  try {
-    await manager.generate(options);
-  } catch (e) {
-    if (!options.watch) {
-      throw e;
-    }
-  }
+  await manager.generate(options);
   if (options.watch) {
     await manager.watch();
   }

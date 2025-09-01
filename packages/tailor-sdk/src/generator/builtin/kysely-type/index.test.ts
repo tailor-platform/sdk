@@ -355,7 +355,7 @@ export async function kyselyWrapper() {}
 
   describe("withTimestamps オプションのテスト", () => {
     it("withTimestamps: true でタイムスタンプフィールドが追加される", async () => {
-      const typeWithTimestamps = db.type("WithTimestamps", {
+      const typeWithTimestamps = db.type("WithTimestamp", {
         name: db.string(),
         ...db.fields.timestamps(),
       });
@@ -371,7 +371,7 @@ export async function kyselyWrapper() {}
     });
 
     it("withTimestamps: false でタイムスタンプフィールドが追加されない", async () => {
-      const typeWithoutTimestamps = db.type("WithoutTimestamps", {
+      const typeWithoutTimestamps = db.type("WithoutTimestamp", {
         name: db.string(),
       });
 
