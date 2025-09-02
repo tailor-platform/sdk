@@ -13,7 +13,6 @@ import {
   TailorDBNamespaceResult,
   PipelineNamespaceResult,
 } from "./types";
-import { SdlGenerator, SdlGeneratorID } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DbTypeGenerator } from "./builtin/db-type";
 import { DependencyWatcher } from "./watch";
@@ -58,12 +57,7 @@ export class GenerationManager {
 
     this.generators =
       this.config.generators?.map((gen) => {
-        if (typeof gen === "string") {
-          if (gen === SdlGeneratorID) {
-            return new SdlGenerator();
-          }
-          throw new Error(`Unknown generator ID: ${gen}`);
-        } else if (Array.isArray(gen)) {
+        if (Array.isArray(gen)) {
           if (gen[0] === "@tailor/kysely-type") {
             return new KyselyGenerator(gen[1]);
           }

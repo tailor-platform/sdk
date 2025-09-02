@@ -5,7 +5,6 @@ import type { AuthServiceInput } from "@/services/auth/types";
 import type { ExecutorServiceInput } from "@/services/executor/types";
 import { IdPServiceInput } from "./services/idp/types";
 import { Region } from "@/types/types";
-import { SdlGeneratorID } from "@/generator/builtin/sdl/index";
 import {
   KyselyGenerator,
   KyselyGeneratorID,
@@ -33,7 +32,6 @@ export type WorkspaceConfig = (
   app: Record<string, AppConfig>;
   executor?: ExecutorServiceInput;
   generators?: Array<
-    | typeof SdlGeneratorID
     | [
         typeof KyselyGeneratorID,
         ConstructorParameters<typeof KyselyGenerator>[0],

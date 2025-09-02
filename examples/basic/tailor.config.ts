@@ -64,7 +64,6 @@ export default defineConfig({
   },
   executor: { files: ["./executors/*.ts"] },
   generators: [
-    "@tailor/sdl",
     [
       "@tailor/kysely-type",
       { distPath: ({ tailorDB }) => `./generated/${tailorDB}.ts` },

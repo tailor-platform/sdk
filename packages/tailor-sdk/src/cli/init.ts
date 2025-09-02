@@ -125,7 +125,6 @@ export default defineConfig({
     },
   },
   generators: [
-    "@tailor/sdl",
     ["@tailor/kysely-type", { distPath: ({ tailorDB }) => \`./src/generated/\${tailorDB}.ts\` }],
     ["@tailor/db-type", { distPath: () => "./src/tailordb/types.ts" }],
   ],

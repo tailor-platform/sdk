@@ -189,7 +189,6 @@ defineConfig({
   },
   executor: { files: string[] },
   generators?: [            // Code generators
-    "@tailor/sdl",
     ["@tailor/kysely-type", { distPath: ({ tailorDB }) => `./src/resolvers/${tailorDB}.ts` }],
     ["@tailor/db-type", { distPath: () => `./src/tailordb/types.ts` }],
   ],
@@ -992,7 +991,6 @@ Executors include built-in error handling and retry logic. Failed executions are
 
 The SDK includes built-in code generators that run automatically:
 
-- **@tailor/sdl**: Generates GraphQL SDL files
 - **@tailor/kysely-type**: Generates TypeScript types for Kysely queries
 - **@tailor/db-type**: Generates TypeScript types for database models
 
@@ -1001,10 +999,7 @@ Configure generators in your `tailor.config.ts`:
 ```typescript
 export default defineConfig({
   // ... other config
-  generators: [
-    "@tailor/sdl",
-    ["@tailor/kysely-type", { distPath: "./src/generated/db.ts" }],
-  ],
+  generators: [["@tailor/kysely-type", { distPath: "./src/generated/db.ts" }]],
 });
 ```
 
