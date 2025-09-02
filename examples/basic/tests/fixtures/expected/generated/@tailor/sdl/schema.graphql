@@ -124,6 +124,17 @@ type SalesOrderCreated {
 }
 
 
+# Type: Selfie
+type Selfie {
+  id: ID!
+  name: String!
+  parentID: ID
+  dependId: ID
+  dependsOn: Selfie
+  dependedBy: Selfie
+}
+
+
 # Type: Supplier
 type Supplier {
   id: ID!

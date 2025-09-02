@@ -88,7 +88,8 @@ export class TypeProcessor {
     fieldDef: any,
     processing: Set<string>,
   ): string[] {
-    const targetType = (fieldDef as any).reference?.type?.name;
+    const refCfg = (fieldDef as any).reference;
+    const targetType = refCfg?.type?.name;
     if (!targetType) {
       const fieldType = this.mapFieldToTypeScript(fieldDef, processing);
       const fieldDefinition = this.generateFieldDefinition(
@@ -107,9 +108,9 @@ export class TypeProcessor {
       this.generateFieldDefinition(fieldName, originalFieldType, fieldDef),
     );
 
-    // 2. 参照先オブジェクト（フィールド名から"ID"を除いた名前）
-    const relationFieldName = fieldName.replace(/(ID|Id|id)$/, "");
-    if (relationFieldName !== fieldName) {
+    // 2. 参照先オブジェクト（nameMapの前方名を利用）
+    const relationFieldName = refCfg?.nameMap?.[0];
+    if (relationFieldName && relationFieldName !== fieldName) {
       fields.push(
         this.generateFieldDefinition(relationFieldName, targetType, fieldDef),
       );

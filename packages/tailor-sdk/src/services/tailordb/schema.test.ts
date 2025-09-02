@@ -581,6 +581,73 @@ describe("TailorDBType 型の一貫性テスト", () => {
   });
 });
 
+describe("TailorDBType self relation テスト", () => {
+  it("toward.typeがselfのとき、前方名はフィールド名由来/別名、後方名は指定どおりに解決される", () => {
+    const TestType = db.type("TestType", {
+      name: db.string(),
+      parentID: db.uuid().relation({
+        type: "n-1",
+        toward: { type: "self" },
+        backward: "children",
+      }),
+      dependId: db.uuid().relation({
+        type: "1-1",
+        toward: { type: "self", as: "dependsOn" },
+        backward: "dependedBy",
+      }),
+    });
+
+    // parentID: forward 名は parent（ID suffix を除去したデフォルト）
+    const parentRef = (TestType as any).fields.parentID.reference!;
+    expect(parentRef.type.name).toBe("TestType");
+    expect(parentRef.nameMap[0]).toBe("parent");
+    expect(parentRef.key).toBe("id");
+
+    // dependId: forward 名は as 指定の dependsOn、1-1 のため unique が付与される
+    const dependsRef = (TestType as any).fields.dependId.reference!;
+    expect(dependsRef.type.name).toBe("TestType");
+    expect(dependsRef.nameMap[0]).toBe("dependsOn");
+    expect((TestType as any).fields.dependId.metadata.unique).toBe(true);
+
+    // referenced マップに backward が登録される
+    expect((TestType as any).referenced.children).toEqual([
+      TestType,
+      "parentID",
+    ]);
+    expect((TestType as any).referenced.dependedBy).toEqual([
+      TestType,
+      "dependId",
+    ]);
+
+    // 外部キーのメタ情報が自身の型名で設定される
+    expect((TestType as any).fields.parentID.metadata.foreignKeyType).toBe(
+      "TestType",
+    );
+    expect((TestType as any).fields.dependId.metadata.foreignKeyType).toBe(
+      "TestType",
+    );
+  });
+
+  it("backward未指定時は型名に基づくデフォルト（単数/複数）が設定される", () => {
+    const A = db.type("Node", {
+      // 多対1（unique でない）: 後方は複数形（nodes）
+      parentID: db.uuid().relation({ type: "n-1", toward: { type: "self" } }),
+      // 1対1（unique）: 後方は単数形（node）
+      pairId: db.uuid().relation({ type: "1-1", toward: { type: "self" } }),
+    });
+
+    // forward はフィールド名由来
+    expect((A as any).fields.parentID.reference!.nameMap[0]).toBe("parent");
+    expect((A as any).fields.pairId.reference!.nameMap[0]).toBe("pair");
+
+    // backward のデフォルト: Node -> camelize("Node") = "node"
+    // parentID は non-unique のため pluralize("node"): "nodes"
+    expect((A as any).referenced.nodes).toEqual([A, "parentID"]);
+    // pairId は unique のため singularize("node"): "node"
+    expect((A as any).referenced.node).toEqual([A, "pairId"]);
+  });
+});
+
 describe("TailorDBType plural form テスト", () => {
   it("単一の名前でtype定義した場合でも、pluralFormがinflectionで設定される", () => {
     const _userType = db.type("User", {

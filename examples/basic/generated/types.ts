@@ -113,6 +113,17 @@ export type SalesOrderCreated = {
   status?: string | null;
 };
 
+export type Selfie = {
+  id: string;
+  name: string;
+  parentID?: string | null;
+  parent?: Selfie | null;
+  dependId?: string | null;
+  dependsOn?: Selfie | null;
+  children?: Selfie[] | null;
+  dependedBy?: Selfie | null;
+};
+
 export type Supplier = {
   id: string;
   name: string;

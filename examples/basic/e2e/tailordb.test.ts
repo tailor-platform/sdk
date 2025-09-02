@@ -285,6 +285,120 @@ describe("dataplane", () => {
     });
   });
 
+  describe("self relation", async () => {
+    test("n-1 parent/children work", async () => {
+      const createParent = gql`
+        mutation {
+          createSelfie(input: { name: "parent" }) {
+            id
+            name
+          }
+        }
+      `;
+      const parentRes = await graphQLClient.rawRequest<{
+        createSelfie: { id: string; name: string };
+      }>(createParent);
+      expect(parentRes.errors).toBeUndefined();
+      const parentId = parentRes.data.createSelfie.id;
+
+      const createChild = gql`
+        mutation {
+          createSelfie(input: { name: "child", parentID: "${parentId}" }) {
+            id name parent { id name }
+          }
+        }
+      `;
+      const childRes = await graphQLClient.rawRequest<{
+        createSelfie: { id: string; name: string; parent: { id: string } };
+      }>(createChild);
+      expect(childRes.errors).toBeUndefined();
+      const childId = childRes.data.createSelfie.id;
+      expect(childRes.data.createSelfie.parent.id).toBe(parentId);
+
+      const queryParent = gql`
+        query {
+          selfie(id: "${parentId}") {
+            id
+            name
+            children { edges { node { id name } } }
+          }
+        }
+      `;
+      const parentQueryRes = await graphQLClient.rawRequest<{
+        selfie: { id: string; children: { edges: { node: { id: string } }[] } };
+      }>(queryParent);
+      expect(parentQueryRes.errors).toBeUndefined();
+      expect(parentQueryRes.data.selfie.children.edges).toEqual(
+        expect.arrayContaining([{ node: { id: childId, name: "child" } }]),
+      );
+    });
+
+    test("1-1 dependsOn/dependedBy work (and uniqueness)", async () => {
+      const createA = gql`
+        mutation {
+          createSelfie(input: { name: "A" }) {
+            id
+            name
+          }
+        }
+      `;
+      const createB = gql`
+        mutation {
+          createSelfie(input: { name: "B" }) {
+            id
+            name
+          }
+        }
+      `;
+      const [aRes, bRes] = await Promise.all([
+        graphQLClient.rawRequest<{ createSelfie: { id: string } }>(createA),
+        graphQLClient.rawRequest<{ createSelfie: { id: string } }>(createB),
+      ]);
+      const aId = aRes.data.createSelfie.id;
+      const bId = bRes.data.createSelfie.id;
+
+      const setDepends = gql`
+        mutation {
+          updateSelfie(id: "${aId}", input: { dependId: "${bId}" }) {
+            id
+            dependsOn { id name }
+          }
+        }
+      `;
+      const setRes = await graphQLClient.rawRequest<{
+        updateSelfie: { id: string; dependsOn: { id: string } };
+      }>(setDepends);
+      expect(setRes.errors).toBeUndefined();
+      expect(setRes.data.updateSelfie.dependsOn.id).toBe(bId);
+
+      const queryDependedBy = gql`
+        query { selfie(id: "${bId}") { id dependedBy { id name } } }
+      `;
+      const depByRes = await graphQLClient.rawRequest<{
+        selfie: { id: string; dependedBy: { id: string } | null };
+      }>(queryDependedBy);
+      expect(depByRes.errors).toBeUndefined();
+      expect(depByRes.data.selfie.dependedBy?.id).toBe(aId);
+
+      const createC = gql`
+        mutation {
+          createSelfie(input: { name: "C" }) {
+            id
+          }
+        }
+      `;
+      const cRes = await graphQLClient.rawRequest<{
+        createSelfie: { id: string };
+      }>(createC);
+      const cId = cRes.data.createSelfie.id;
+      const violate = gql`
+        mutation { updateSelfie(id: "${cId}", input: { dependId: "${bId}" }) { id } }
+      `;
+      const violRes = await graphQLClient.rawRequest(violate);
+      expect(violRes.errors).toBeDefined();
+    });
+  });
+
   describe("serial field", async () => {
     test("serial values are set correctly", async () => {
       const createCustomer = gql`

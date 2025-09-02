@@ -46,7 +46,7 @@ export class TypeProcessor {
   }
 
   static async processType(
-    type: TailorType<any, any>,
+    type: TailorType<any, any> | TailorDBType,
     isInput: boolean = false,
     typeName: string,
   ): Promise<SDLTypeMetadata> {
@@ -93,13 +93,37 @@ export class TypeProcessor {
       }
 
       if (ref) {
-        fields.push({
-          name: ref.nameMap[0],
-          type: ref.type.name,
-          required: !!fieldMetadata.required,
-          array: !!fieldMetadata.array,
-        });
+        const isSelf = ref.type.name === typeName;
+        const explicitSelf =
+          (field as any)._pendingSelfRelation?.as !== undefined;
+        if (!isSelf || explicitSelf) {
+          fields.push({
+            name: ref.nameMap?.[0],
+            type: ref.type.name,
+            required: !!fieldMetadata.required,
+            array: !!fieldMetadata.array,
+          });
+        }
       }
+    }
+
+    // Add backward relations for unique (1-1) references only
+    if ("referenced" in type && Object.keys(type.referenced ?? {}).length > 0) {
+      Object.entries(type.referenced).forEach(
+        ([backwardFieldName, [referencedType, refFieldName]]) => {
+          const refField = referencedType.fields[refFieldName] as any;
+          const isArray = !(refField.metadata?.unique ?? false);
+          // Only include backward fields for self-referencing relations
+          if (!isArray && referencedType.name === typeName) {
+            fields.push({
+              name: backwardFieldName,
+              type: referencedType.name,
+              required: false,
+              array: false,
+            });
+          }
+        },
+      );
     }
 
     return {
