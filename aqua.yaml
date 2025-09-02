@@ -11,5 +11,5 @@ registries:
 packages:
   - name: rhysd/actionlint@v1.7.7
   - name: suzuki-shunsuke/ghalint@v1.5.3
-  - name: tailor-platform/tailorctl@v2.2.0
+  - name: tailor-platform/tailorctl@v2.4.0
   - name: bufbuild/buf@v1.56.0
