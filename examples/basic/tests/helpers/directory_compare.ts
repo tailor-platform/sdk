@@ -130,10 +130,6 @@ function buildTreeStructureWithContentComparison(
  */
 function isEmptyDirectory(dirPath: string): boolean {
   const items = fs.readdirSync(dirPath).filter((item) => item !== ".DS_Store");
-  if (items.length === 0) {
-    return true;
-  }
-
   for (const item of items) {
     const fullPath = path.join(dirPath, item);
     const stat = fs.statSync(fullPath);
