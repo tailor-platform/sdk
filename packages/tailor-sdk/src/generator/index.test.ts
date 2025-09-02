@@ -19,7 +19,6 @@ import {
   createQueryResolver,
   type Resolver,
 } from "@/services/pipeline/resolver";
-import { SdlGenerator } from "./builtin/sdl";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/types";
@@ -149,20 +148,6 @@ describe("GenerationManager", () => {
       expect(manager.generators.length).toBe(firstCount);
     });
 
-    it("SDL ジェネレーターを正しく初期化", () => {
-      const configWithSdl = {
-        ...mockConfig,
-        generators: ["@tailor/sdl" as const],
-      };
-      const managerWithSdl = new GenerationManager(configWithSdl as any);
-      (managerWithSdl as any).initGenerators();
-      expect(
-        (managerWithSdl as any).generators.some(
-          (gen: any) => gen instanceof SdlGenerator,
-        ),
-      ).toBe(true);
-    });
-
     it("Kysely ジェネレーターを正しく初期化", () => {
       const configWithKysely = {
         ...mockConfig,
@@ -177,19 +162,6 @@ describe("GenerationManager", () => {
           (gen: any) => gen instanceof KyselyGenerator,
         ),
       ).toBe(true);
-    });
-
-    it("未知のジェネレーターIDでエラー", () => {
-      const configWithUnknown = {
-        ...mockConfig,
-        generators: ["unknown-generator" as any],
-      };
-      const managerWithUnknown = new GenerationManager(
-        configWithUnknown as any,
-      );
-      expect(() => (managerWithUnknown as any).initGenerators()).toThrow(
-        "Unknown generator ID: unknown-generator",
-      );
     });
   });
 
@@ -741,7 +713,6 @@ describe("Integration Tests", () => {
       },
       generators: [
         new TestGenerator(),
-        "@tailor/sdl",
         ["@tailor/kysely-type", { outputPath: "db.ts" }],
       ],
     } as any;
@@ -763,13 +734,10 @@ describe("Integration Tests", () => {
 
     await expect(manager.generate({ watch: false })).resolves.not.toThrow();
 
-    expect(manager.generators.length).toBe(3);
+    expect(manager.generators.length).toBe(2);
     expect(
       manager.generators.some((g: any) => g instanceof TestGenerator),
     ).toBe(true);
-    expect(manager.generators.some((g: any) => g instanceof SdlGenerator)).toBe(
-      true,
-    );
     expect(
       manager.generators.some((g: any) => g instanceof KyselyGenerator),
     ).toBe(true);

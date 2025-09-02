@@ -34,6 +34,7 @@ export async function compareDirectories(
     compareDate: false,
     compareContent: true,
     excludeFilter: ".DS_Store,*.js.map",
+    skipEmptyDirs: true, // 空のディレクトリをスキップ
     ...options,
   };
 
@@ -124,6 +125,28 @@ function buildTreeStructureWithContentComparison(
 }
 
 /**
+ * ディレクトリが空かどうかを再帰的にチェックする
+ * 空のディレクトリのみを含むディレクトリも空とみなす
+ */
+function isEmptyDirectory(dirPath: string): boolean {
+  const items = fs.readdirSync(dirPath).filter((item) => item !== ".DS_Store");
+  if (items.length === 0) {
+    return true;
+  }
+
+  for (const item of items) {
+    const fullPath = path.join(dirPath, item);
+    const stat = fs.statSync(fullPath);
+
+    if (stat.isFile() || !isEmptyDirectory(fullPath)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * ディレクトリをスキャンしてツリー構造に追加する
  */
 function scanDirectoryWithContentComparison(
@@ -141,6 +164,11 @@ function scanDirectoryWithContentComparison(
       const fullPath = path.join(dirPath, item);
       const stat = fs.statSync(fullPath);
       const isDirectory = stat.isDirectory();
+
+      // 空のディレクトリをスキップ
+      if (isDirectory && isEmptyDirectory(fullPath)) {
+        continue;
+      }
 
       let child = parentNode.children.get(item);
       if (!child) {
