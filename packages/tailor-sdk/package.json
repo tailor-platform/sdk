@@ -54,7 +54,7 @@
     "@types/ini": "4.1.1",
     "@types/inquirer": "9.0.9",
     "@types/madge": "5.0.3",
-    "@types/node": "22.17.2",
+    "@types/node": "22.18.0",
     "eslint": "9.33.0",
     "eslint-config-prettier": "10.1.8",
     "globals": "16.3.0",
