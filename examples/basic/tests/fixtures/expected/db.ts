@@ -136,6 +136,13 @@ export interface SalesOrderCreated {
   status: string | null;
 }
 
+export interface Selfie {
+  id: Generated<string>;
+  name: string;
+  parentID: string | null;
+  dependId: string | null;
+}
+
 export interface Supplier {
   id: Generated<string>;
   name: string;
@@ -177,6 +184,7 @@ export interface DB {
   Role: Role;
   SalesOrder: SalesOrder;
   SalesOrderCreated: SalesOrderCreated;
+  Selfie: Selfie;
   Supplier: Supplier;
   User: User;
   UserSetting: UserSetting;
