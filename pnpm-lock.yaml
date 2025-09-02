@@ -68,10 +68,10 @@ importers:
     devDependencies:
       '@connectrpc/connect':
         specifier: ^2.0.3
-        version: 2.0.3(@bufbuild/protobuf@2.6.3)
+        version: 2.1.0(@bufbuild/protobuf@2.6.3)
       '@connectrpc/connect-node':
         specifier: ^2.0.3
-        version: 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))
+        version: 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.6.3))
       '@types/node':
         specifier: ^22.15.3
         version: 22.17.2
@@ -107,7 +107,7 @@ importers:
         version: 2.6.3
       '@connectrpc/connect':
         specifier: ^2.0.3
-        version: 2.0.3(@bufbuild/protobuf@2.6.3)
+        version: 2.1.0(@bufbuild/protobuf@2.6.3)
 
   packages/tailor-sdk:
     dependencies:
@@ -116,10 +116,10 @@ importers:
         version: 2.6.3
       '@connectrpc/connect':
         specifier: ^2.0.3
-        version: 2.0.3(@bufbuild/protobuf@2.6.3)
+        version: 2.1.0(@bufbuild/protobuf@2.6.3)
       '@connectrpc/connect-node':
         specifier: ^2.0.3
-        version: 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))
+        version: 2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.6.3))
       '@urql/core':
         specifier: ^5.1.1
         version: 5.2.0(graphql@16.11.0)
@@ -280,10 +280,10 @@ packages:
       '@bufbuild/protobuf': ^2.2.0
       '@connectrpc/connect': 2.0.3
 
-  '@connectrpc/connect@2.0.3':
-    resolution: {integrity: sha512-jAbVMHVtDCydGt2P20VpmLjbLtERqSV0RMSyQF3k2zhK8pzQ2QaCAcyVhufClqrOAFZUKL5BqVYtttaxvhmRgg==}
+  '@connectrpc/connect@2.1.0':
+    resolution: {integrity: sha512-xhiwnYlJNHzmFsRw+iSPIwXR/xweTvTw8x5HiwWp10sbVtd4OpOXbRgE7V58xs1EC17fzusF1f5uOAy24OkBuA==}
     peerDependencies:
-      '@bufbuild/protobuf': ^2.2.0
+      '@bufbuild/protobuf': ^2.7.0
 
   '@dependents/detective-less@5.0.1':
     resolution: {integrity: sha512-Y6+WUMsTFWE5jb20IFP4YGa5IrGY/+a/FbOSjDF/wz9gepU2hwCYSXRHP/vPwBvwcY3SVMASt4yXxbXNXigmZQ==}
@@ -2675,12 +2675,12 @@ snapshots:
 
   '@bufbuild/protobuf@2.6.3': {}
 
-  '@connectrpc/connect-node@2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3))':
+  '@connectrpc/connect-node@2.0.3(@bufbuild/protobuf@2.6.3)(@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.6.3))':
     dependencies:
       '@bufbuild/protobuf': 2.6.3
-      '@connectrpc/connect': 2.0.3(@bufbuild/protobuf@2.6.3)
+      '@connectrpc/connect': 2.1.0(@bufbuild/protobuf@2.6.3)
 
-  '@connectrpc/connect@2.0.3(@bufbuild/protobuf@2.6.3)':
+  '@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.6.3)':
     dependencies:
       '@bufbuild/protobuf': 2.6.3
 
