@@ -212,7 +212,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
       },
     });
 
-    expectTypeOf(userField.reference!.key).toEqualTypeOf<"id">();
+    expect(userField.reference!.key).toEqual("id");
   });
 
   it("toward.as、toward.key、backwardが全て明示的に指定された場合の動作", () => {
@@ -402,6 +402,23 @@ describe("TailorDBField relation修飾子テスト", () => {
       title: string;
       authorId: string;
     }>();
+  });
+
+  it("relationを2回設定しようとすると型エラーが発生する", () => {
+    const _userType = db.type("User", {
+      name: db.string(),
+    });
+
+    // @ts-expect-error relation() cannot be called after relation() has already been called
+    db.uuid()
+      .relation({
+        type: "oneToOne",
+        toward: { type: _userType },
+      })
+      .relation({
+        type: "oneToOne",
+        toward: { type: _userType },
+      });
   });
 });
 

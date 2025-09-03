@@ -1,26 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { clone } from "es-toolkit";
 import { TailorFieldType, TailorToTs, FieldMetadata } from "./types";
-import type { DeepWritable, output, Prettify } from "./helpers";
+import type { output, Prettify } from "./helpers";
 import { AllowedValues, AllowedValuesOutput, mapAllowedValues } from "./field";
 
 type DefinedFieldMetadata = Partial<
   Omit<FieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
-
-export type ReferenceConfig<
-  T extends { _output: any; fields: Record<string, unknown> } = {
-    _output: any;
-    fields: Record<string, unknown>;
-  },
-  M extends [string, string] = [string, string],
-  K extends keyof T["fields"] & string = keyof T["fields"] & string,
-> = {
-  nameMap: M;
-  type: T;
-  key: K;
-};
 
 const fieldDefaults = {
   required: undefined,
@@ -61,32 +47,19 @@ export class TailorType<
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   const Output = any,
-  const Reference extends
-    | ReferenceConfig<
-        TailorType<
-          DefinedFieldMetadata,
-          { id?: never } & Record<string, TailorField<DefinedFieldMetadata>>
-        >
-      >
-    | undefined = undefined,
   M extends FieldMetadata = FieldMetadata,
 > {
   protected _metadata: M;
   public readonly _defined: Defined = undefined as unknown as Defined;
   public readonly _output = undefined as Output;
-  private _ref: Reference = undefined as Reference;
 
   get metadata() {
     return { ...this._metadata };
   }
 
-  get reference(): Readonly<Reference> | null {
-    return clone(this._ref);
-  }
-
   protected constructor(
     type: TailorFieldType,
-    public readonly fields?: Record<string, TailorField<any, any, any>>,
+    public readonly fields?: Record<string, TailorField<any, any>>,
   ) {
     this._metadata = { type, required: true } as M;
   }
@@ -94,15 +67,14 @@ export class TailorField<
   static create<
     const T extends TailorFieldType,
     const D extends (keyof FieldMetadata)[],
-  >(type: T, _defines: D, fields?: Record<string, TailorField<any, any, any>>) {
+  >(type: T, _defines: D, fields?: Record<string, TailorField<any, any>>) {
     return new TailorField<
       Prettify<
         Pick<typeof fieldDefaults, Exclude<D[number], "name" | "type">> & {
           type: T;
         }
       >,
-      TailorToTs[T],
-      undefined
+      TailorToTs[T]
     >(type, fields);
   }
 
@@ -114,7 +86,7 @@ export class TailorField<
       ? never
       : CurrentDefined extends { assertNonNull: unknown }
         ? never
-        : TailorField<CurrentDefined, Output, Reference>,
+        : TailorField<CurrentDefined, Output>,
     options?: O,
   ) {
     this._metadata.required = false;
@@ -125,74 +97,45 @@ export class TailorField<
       Prettify<
         CurrentDefined & { required: false; assertNonNull: O["assertNonNull"] }
       >,
-      Output,
-      Reference
+      Output
     >;
   }
 
   description<const D extends string, CurrentDefined extends Defined>(
     this: CurrentDefined extends { description: unknown }
       ? never
-      : TailorField<CurrentDefined, Output, Reference>,
+      : TailorField<CurrentDefined, Output>,
     description: D,
   ) {
     this._metadata.description = description;
     return this as unknown as TailorField<
       Prettify<CurrentDefined & { description: D }>,
-      Output,
-      Reference
+      Output
     >;
   }
 
   array<CurrentDefined extends Defined>(
     this: CurrentDefined extends { array: unknown }
       ? never
-      : TailorField<CurrentDefined, Output, Reference>,
+      : TailorField<CurrentDefined, Output>,
   ) {
     this._metadata.array = true;
     return this as TailorField<
       Prettify<CurrentDefined & { array: true }>,
-      Output[],
-      Reference
+      Output[]
     >;
   }
 
   values<CurrentDefined extends Defined, const V extends AllowedValues>(
     this: CurrentDefined extends { allowedValues: unknown }
       ? never
-      : TailorField<CurrentDefined, Output, Reference>,
+      : TailorField<CurrentDefined, Output>,
     values: V,
   ) {
     this._metadata.allowedValues = mapAllowedValues(values);
     return this as unknown as TailorField<
       Prettify<CurrentDefined & { allowedValues: V }>,
-      AllowedValuesOutput<V>,
-      Reference
-    >;
-  }
-
-  ref<
-    const M extends [string, string],
-    const T extends TailorType,
-    const F extends keyof T["fields"] & string,
-    CurrentDefined extends Defined,
-  >(
-    this: Reference extends undefined
-      ? TailorField<CurrentDefined, Output, Reference>
-      : never,
-    type: T,
-    nameMap: M,
-    key: F = "id" as F,
-  ) {
-    (this as any)._ref = {
-      nameMap,
-      type,
-      key,
-    };
-    return this as unknown as TailorField<
-      CurrentDefined,
-      Output,
-      { nameMap: M; type: T; key: F }
+      AllowedValuesOutput<V>
     >;
   }
 }
@@ -234,7 +177,7 @@ function _enum<const V extends AllowedValues>(values: V) {
   return createField("enum", []).values(values);
 }
 
-function object<const F extends Record<string, TailorField<any, any, any>>>(
+function object<const F extends Record<string, TailorField<any, any>>>(
   fields: F,
 ) {
   const objectField = createField(
@@ -253,13 +196,12 @@ function object<const F extends Record<string, TailorField<any, any, any>>>(
           ? K
           : never]?: output<F[K]> | null;
       }
-    >,
-    undefined
+    >
   >;
   return objectField;
 }
 
-function tailorType<const F extends Record<string, TailorField<any, any, any>>>(
+function tailorType<const F extends Record<string, TailorField<any, any>>>(
   fields: F,
 ): TailorType<DefinedFieldMetadata, F> {
   return new TailorType<DefinedFieldMetadata, F>(fields) as TailorType<

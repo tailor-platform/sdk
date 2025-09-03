@@ -24,6 +24,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   validate?: FieldValidateInput<any>[];
   hooks?: Hook<any, any>;
   serial?: SerialConfig;
+  relation?: boolean;
 }
 
 export type DefinedFieldMetadata = Partial<
