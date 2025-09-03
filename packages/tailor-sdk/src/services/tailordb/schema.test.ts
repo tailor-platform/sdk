@@ -384,8 +384,8 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
   });
 });
 
-describe("TailorDBField ref修飾子テスト", () => {
-  it("ref()修飾子が参照型を生成する", () => {
+describe("TailorDBField relation修飾子テスト", () => {
+  it("relation によって参照型は作成されない", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -401,10 +401,6 @@ describe("TailorDBField ref修飾子テスト", () => {
       id: string;
       title: string;
       authorId: string;
-      author: {
-        id: string;
-        name: string;
-      };
     }>();
   });
 });
