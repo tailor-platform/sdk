@@ -12,7 +12,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
-          persist-credentials: false
+          persist-credentials: true
       - uses: ysk8hori/delta-typescript-graph-action@7abea70623af0422e16d374720e8dbf73e6ac674 # v1.2.4
         with:
           comment-title: "TypeScript Graph for SDK"
@@ -35,7 +35,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
-          persist-credentials: false
+          persist-credentials: true
       - uses: ysk8hori/delta-typescript-graph-action@7abea70623af0422e16d374720e8dbf73e6ac674 # v1.2.4
         with:
           comment-title: "TypeScript Graph for Examples/Basic"
