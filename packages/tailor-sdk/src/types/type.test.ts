@@ -48,7 +48,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("date型フィールドが正しくDate型を出力する", () => {
+  it("date型フィールドが正しくstring型を出力する", () => {
     const _dateType = t.type({
       birthDate: t.date(),
     });
@@ -57,7 +57,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("datetime型フィールドが正しくDate型を出力する", () => {
+  it("datetime型フィールドが正しくstring型を出力する", () => {
     const _datetimeType = t.type({
       createdAt: t.datetime(),
     });
@@ -66,7 +66,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("time型フィールドが正しくDate型を出力する", () => {
+  it("time型フィールドが正しくstring型を出力する", () => {
     const _timeType = t.type({
       openingTime: t.time(),
     });
