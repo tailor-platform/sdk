@@ -2,7 +2,7 @@
   "name": "@tailor-platform/tailor-sdk",
   "version": "0.0.0",
   "description": "Tailor SDK Core Package",
-  "main": "dist/index.js",
+  "main": "dist/index.mjs",
   "type": "module",
   "files": [
     "dist",
@@ -10,15 +10,15 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     }
   },
   "bin": {
-    "tailor-sdk": "./dist/cli/index.js"
+    "tailor-sdk": "./dist/cli/index.mjs"
   },
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.mts",
   "scripts": {
     "test": "vitest",
     "build": "tsdown",

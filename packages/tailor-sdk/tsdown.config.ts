@@ -10,4 +10,8 @@ export default defineConfig({
   outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,
+  outExtensions: () => ({
+    js: ".mjs",
+    dts: ".d.mts",
+  }),
 });
