@@ -54,6 +54,7 @@ export const generatePackageJson = (projectName: string) => ({
   name: projectName,
   version: "0.1.0",
   private: true,
+  type: "module",
   scripts: {
     dev: "tailor-sdk generate --watch",
     build: "tailor-sdk generate",
