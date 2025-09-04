@@ -14,7 +14,13 @@ import {
   IndexDef,
   TypeFeatures,
 } from "./types";
-import { TailorFieldType, TailorToTs } from "@/types/types";
+import {
+  InferFieldInput,
+  InferFieldOutput,
+  NullableToOptional,
+  TailorFieldType,
+  TailorToTs,
+} from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
 import { AllowedValues, AllowedValuesOutput } from "@/types/field";
 import { TailorField, TailorType } from "@/types/type";
@@ -331,7 +337,14 @@ class TailorDBField<
     >;
   }
 
-  hooks<const H extends Hook<output<this>>, CurrentDefined extends Defined>(
+  hooks<
+    const H extends Hook<
+      InferFieldInput<this>,
+      unknown,
+      InferFieldOutput<this>
+    >,
+    CurrentDefined extends Defined,
+  >(
     this: CurrentDefined extends { hooks: unknown }
       ? never
       : TailorDBField<CurrentDefined, Output>,
@@ -429,15 +442,9 @@ function object<const F extends Record<string, TailorDBField<any, any>>>(
   ) as TailorDBField<
     DefinedFieldMetadata & { type: "nested" },
     Prettify<
-      {
-        [K in keyof F as F[K]["_defined"] extends { required: false }
-          ? never
-          : K]: output<F[K]>;
-      } & {
-        [K in keyof F as F[K]["_defined"] extends { required: false }
-          ? K
-          : never]?: output<F[K]> | null;
-      }
+      NullableToOptional<{
+        [K in keyof F]: InferFieldOutput<F[K]>;
+      }>
     >
   >;
   return objectField;

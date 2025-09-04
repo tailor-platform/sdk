@@ -1,5 +1,6 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "./schema";
+import { Hook } from "./types";
 import type { output } from "@/types/helpers";
 import inflection from "inflection";
 
@@ -422,6 +423,53 @@ describe("TailorDBField relation修飾子テスト", () => {
   });
 });
 
+describe("TailorDBField hooks修飾子テスト", () => {
+  it("hooks修飾子がoutput型に影響しない", () => {
+    const _hookType = db.type("Test", {
+      name: db.string().hooks({
+        create: () => "created",
+        update: () => "updated",
+      }),
+    });
+    expectTypeOf<output<typeof _hookType>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+    }>();
+  });
+
+  it("hooks修飾子を2回以上呼び出すと型エラーが発生する", () => {
+    // @ts-expect-error hooks() cannot be called after hooks() has already been called
+    db.string()
+      .hooks({
+        create: () => "created",
+      })
+      .hooks({
+        update: () => "updated",
+      });
+  });
+
+  it("stringフィールドでhooks修飾子はstringを受け取る", () => {
+    const _hooks = db.string().hooks;
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
+      Hook<string, unknown, string>
+    >();
+  });
+
+  it("optionalフィールドでhooks修飾子はnullを受け取る", () => {
+    const _hooks = db.string().optional().hooks;
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
+      Hook<string | null, unknown, string | null>
+    >();
+  });
+
+  it("assertNonNullフィールドでhooks修飾子はnonNullを返す", () => {
+    const _hooks = db.string().optional({ assertNonNull: true }).hooks;
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
+      Hook<string | null, unknown, string>
+    >();
+  });
+});
+
 describe("TailorDBType withTimestamps オプションテスト", () => {
   it("withTimestamps: falseでタイムスタンプフィールドが追加されない", () => {
     const _noTimestampType = db.type("Test", {
@@ -798,6 +846,83 @@ describe("TailorDBType plural form テスト", () => {
     });
 
     expect(_dataType.metadata.schema?.settings?.pluralForm).toBe("DataSet");
+  });
+});
+
+describe("TailorDBType hooks修飾子テスト", () => {
+  it("hooks修飾子がoutput型に影響しない", () => {
+    const _hookType = db
+      .type("Test", {
+        name: db.string(),
+      })
+      .hooks({
+        name: {
+          create: () => "created",
+          update: () => "updated",
+        },
+      });
+    expectTypeOf<output<typeof _hookType>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+    }>();
+  });
+
+  it("TailorDBFieldでhooksが設定済みの場合に型エラーが発生する", () => {
+    db.type("Test", {
+      name: db.string().hooks({ create: () => "created" }),
+    }).hooks({
+      // @ts-expect-error hooks() cannot be called after hooks() has already been called
+      name: {
+        create: () => "created",
+      },
+    });
+  });
+
+  it("stringフィールドでhooks修飾子はstringを受け取る", () => {
+    const _hooks = db.type("Test", { name: db.string() }).hooks;
+    expectTypeOf<Parameters<typeof _hooks>[0]["name"]>().toEqualTypeOf<
+      | Hook<
+          string,
+          {
+            id: string;
+            name: string;
+          },
+          string
+        >
+      | undefined
+    >();
+  });
+
+  it("optionalフィールドでhooks修飾子はnullを受け取る", () => {
+    const _hooks = db.type("Test", { name: db.string().optional() }).hooks;
+    expectTypeOf<Parameters<typeof _hooks>[0]["name"]>().toEqualTypeOf<
+      | Hook<
+          string | null,
+          {
+            id: string;
+            name?: string | null;
+          },
+          string | null
+        >
+      | undefined
+    >();
+  });
+
+  it("assertNonNullフィールドでhooks修飾子はnonNullを返す", () => {
+    const _hooks = db.type("Test", {
+      name: db.string().optional({ assertNonNull: true }),
+    }).hooks;
+    expectTypeOf<Parameters<typeof _hooks>[0]["name"]>().toEqualTypeOf<
+      | Hook<
+          string | null,
+          {
+            id: string;
+            name?: string | null;
+          },
+          string
+        >
+      | undefined
+    >();
   });
 });
 
