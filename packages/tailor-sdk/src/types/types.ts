@@ -1,4 +1,6 @@
 import { AllowedValue } from "./field";
+import { DeepWritable, Prettify } from "./helpers";
+import { TailorField, TailorType } from "./type";
 
 export type Region = "asia-northeast" | "us-west";
 
@@ -88,3 +90,43 @@ export interface FieldMetadata {
   allowedValues?: AllowedValue[];
   assertNonNull?: boolean;
 }
+
+// Derive the output type for TailorField considering optional().
+// When assertNonNull is set, we assume that the value is injected by hooks and never null.
+// TODO(remiposo): Since array() directly modify type parameter (O), it would be better to unify them.
+export type InferFieldOutput<T extends TailorField<any>> =
+  T extends TailorField<any, infer O>
+    ? DeepWritable<
+        T["_defined"] extends { required: false }
+          ? T["_defined"] extends { assertNonNull: true }
+            ? O
+            : O | null
+          : O
+      >
+    : never;
+
+// Derive the input type for TailorField considering optional().
+// TODO(remiposo): Since array() directly modify type parameter(infer O), it would be better to unify them.
+export type InferFieldInput<T extends TailorField<any>> =
+  T extends TailorField<any, infer O>
+    ? DeepWritable<T["_defined"] extends { required: false } ? O | null : O>
+    : never;
+
+// Derive the input type for TailorType.
+// NOTE(remiposo): Like output<T>, this might be worth making public.
+export type InferTypeInput<T extends TailorType<any>> =
+  T extends TailorType<any, infer F>
+    ? DeepWritable<
+        Prettify<
+          NullableToOptional<{
+            [K in keyof F]: InferFieldInput<F[K]>;
+          }>
+        >
+      >
+    : never;
+
+export type NullableToOptional<T> = {
+  [K in keyof T as null extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as null extends T[K] ? K : never]?: T[K];
+};

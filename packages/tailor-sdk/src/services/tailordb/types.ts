@@ -1,6 +1,12 @@
 import { TailorUser } from "@/types";
 import { output, Prettify } from "@/types/helpers";
-import { FieldMetadata } from "@/types/types";
+import {
+  FieldMetadata,
+  InferFieldInput,
+  InferFieldOutput,
+  InferTypeInput,
+} from "@/types/types";
+import { TailorDBType } from "./schema";
 
 export type SerialConfig<
   T extends "string" | "integer" = "string" | "integer",
@@ -22,7 +28,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   foreignKey?: boolean;
   foreignKeyType?: string;
   validate?: FieldValidateInput<any>[];
-  hooks?: Hook<any, any>;
+  hooks?: Hook<any, any, any>;
   serial?: SerialConfig;
   relation?: boolean;
 }
@@ -50,20 +56,27 @@ type UndefinedFields<
   K extends keyof DBFieldMetadata,
 > = Exclude<keyof T["fields"], DefinedFields<T, K>>;
 
-type HookFn<O, P> = (args: { value: O; data: P; user: TailorUser }) => O;
+type HookFn<TValue, TData, TReturn> = (args: {
+  value: TValue;
+  data: TData;
+  user: TailorUser;
+}) => TReturn;
 
-export type Hook<O, P = unknown> = {
-  create?: HookFn<O, P>;
-  update?: HookFn<O, P>;
+export type Hook<TValue, TData, TReturn> = {
+  create?: HookFn<TValue, TData, TReturn>;
+  update?: HookFn<TValue, TData, TReturn>;
 };
-export type Hooks<P extends DBTypeLike> = {
-  [K in UndefinedFields<P, "hooks">]?: K extends keyof output<P>
-    ? Hook<output<P>[K], output<P>>
-    : never;
-} & {
-  [K in DefinedFields<P, "hooks">]?: {
-    "hooks already defined in field": never;
-  };
+
+export type Hooks<P extends TailorDBType> = {
+  [K in keyof P["fields"] as P["fields"][K]["_defined"] extends {
+    hooks: unknown;
+  }
+    ? never
+    : K]?: Hook<
+    InferFieldInput<P["fields"][K]>,
+    InferTypeInput<P>,
+    InferFieldOutput<P["fields"][K]>
+  >;
 };
 
 export type Validators<P extends DBTypeLike> = {

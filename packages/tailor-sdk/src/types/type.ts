@@ -1,6 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { TailorFieldType, TailorToTs, FieldMetadata } from "./types";
+import {
+  TailorFieldType,
+  TailorToTs,
+  FieldMetadata,
+  NullableToOptional,
+  InferFieldOutput,
+} from "./types";
 import type { output, Prettify } from "./helpers";
 import { AllowedValues, AllowedValuesOutput, mapAllowedValues } from "./field";
 
@@ -20,23 +26,9 @@ export class TailorType<
   M extends DefinedFieldMetadata = DefinedFieldMetadata,
   const F extends Record<string, TailorField<M>> = any,
   Output = Prettify<
-    {
-      [K in keyof F as F[K]["_defined"] extends { required: false }
-        ? never
-        : K]: output<F[K]>;
-    } & {
-      [K in keyof F as F[K]["_defined"] extends { required: false }
-        ? F[K]["_defined"] extends { assertNonNull: true }
-          ? never
-          : K
-        : never]?: output<F[K]> | null;
-    } & {
-      [K in keyof F as F[K]["_defined"] extends { required: false }
-        ? F[K]["_defined"] extends { assertNonNull: true }
-          ? K
-          : never
-        : never]-?: NonNullable<output<F[K]>>;
-    }
+    NullableToOptional<{
+      [K in keyof F]: InferFieldOutput<F[K]>;
+    }>
   >,
 > {
   public readonly _output = null as unknown as Output;
@@ -187,15 +179,9 @@ function object<const F extends Record<string, TailorField<any, any>>>(
   ) as TailorField<
     DefinedFieldMetadata & { type: "nested" },
     Prettify<
-      {
-        [K in keyof F as F[K]["_defined"] extends { required: false }
-          ? never
-          : K]: output<F[K]>;
-      } & {
-        [K in keyof F as F[K]["_defined"] extends { required: false }
-          ? K
-          : never]?: output<F[K]> | null;
-      }
+      NullableToOptional<{
+        [K in keyof F]: InferFieldOutput<F[K]>;
+      }>
     >
   >;
   return objectField;
