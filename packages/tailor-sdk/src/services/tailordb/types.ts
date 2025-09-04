@@ -31,8 +31,6 @@ export type DefinedFieldMetadata = Partial<
   Omit<DBFieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-type IsDateType<T> = Date extends T ? true : false;
-
 type DBTypeLike = {
   fields: Record<string, { _defined: Record<string, unknown> }>;
 };
@@ -52,13 +50,8 @@ type UndefinedFields<
   K extends keyof DBFieldMetadata,
 > = Exclude<keyof T["fields"], DefinedFields<T, K>>;
 
-type HookReturn<T> = IsDateType<T> extends true ? string : T;
-type HookValue<T> = IsDateType<T> extends true ? string : T;
-type HookFn<O, P> = (args: {
-  value: HookValue<O>;
-  data: P;
-  user: TailorUser;
-}) => HookReturn<O>;
+type HookFn<O, P> = (args: { value: O; data: P; user: TailorUser }) => O;
+
 export type Hook<O, P = unknown> = {
   create?: HookFn<O, P>;
   update?: HookFn<O, P>;
