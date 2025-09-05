@@ -1,7 +1,7 @@
 import { Application } from "@/application";
 import type { AppConfig, WorkspaceConfig } from "@/config";
 import { ExecutorService } from "./services/executor/service";
-import { ExecutorServiceInput } from "./services/executor/types";
+import { type ExecutorServiceInput } from "./services/executor/types";
 
 export class Workspace {
   private _executorService?: ExecutorService = undefined;

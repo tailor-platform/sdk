@@ -1,8 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import ml from "multiline-ts";
-import { Resolver } from "../resolver";
-import { ITransformer } from "@/bundler";
+import { type Resolver } from "../resolver";
+import { type ITransformer } from "@/bundler";
 import { trimSDKCode } from "@/bundler/utils";
 import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/bundler/wrapper";
 

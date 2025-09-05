@@ -5,13 +5,12 @@ import {
   beforeEach,
   afterEach,
   vi,
-  beforeAll,
   afterAll,
 } from "vitest";
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import fs from "node:fs";
-import path from "node:path";
-import os from "node:os";
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import { generate, GenerationManager } from "./index";
 import type { WorkspaceConfig } from "@/config";
 import { db, type TailorDBType } from "@/services/tailordb/schema";
@@ -22,6 +21,19 @@ import {
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/types";
+
+// ESM-safe explicit mock for Node's fs
+vi.mock("node:fs", () => {
+  return {
+    writeFile: vi.fn((_, _2, callback: any) => {
+      if (typeof callback === "function") callback(null);
+    }),
+    mkdirSync: vi.fn(() => ""),
+    mkdtempSync: vi.fn((prefix: string) => `${prefix}xxxxxx`),
+    rmSync: vi.fn(() => {}),
+    existsSync: vi.fn(() => true),
+  };
+});
 
 class TestGenerator {
   readonly id = "test-generator";
@@ -80,18 +92,8 @@ describe("GenerationManager", () => {
   let manager: any;
   let mockConfig: Extract<WorkspaceConfig, { id?: undefined }>;
 
-  beforeAll(async () => {
-    vi.spyOn(fs, "writeFile").mockImplementation((_, _2, callback: any) => {
-      if (typeof callback === "function") {
-        callback(null);
-      }
-    });
-
-    vi.spyOn(fs, "mkdirSync").mockImplementation(() => "");
-  });
-
   afterAll(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   beforeEach(() => {

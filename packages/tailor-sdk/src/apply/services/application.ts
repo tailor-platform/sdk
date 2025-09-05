@@ -1,19 +1,19 @@
-import { MessageInitShape } from "@bufbuild/protobuf";
+import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 
 import {
-  CreateApplicationRequestSchema,
-  DeleteApplicationRequestSchema,
-  UpdateApplicationRequestSchema,
+  type CreateApplicationRequestSchema,
+  type DeleteApplicationRequestSchema,
+  type UpdateApplicationRequestSchema,
 } from "@tailor-proto/tailor/v1/application_pb";
 import {
   Subgraph_ServiceType,
-  SubgraphSchema,
+  type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { Workspace } from "@/workspace";
+import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
-import { ApplyOptions } from "..";
-import { fetchAll, OperatorClient } from "../client";
+import { type ApplyOptions } from "..";
+import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyApplication(
   client: OperatorClient,

@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
-import { Executor } from "../types";
+import { type Executor } from "../types";
 import { isExecutor } from "../utils";
-import { ILoader } from "@/bundler";
+import { type ILoader } from "@/bundler";
 
 export class ExecutorLoader implements ILoader<Executor> {
   async load(executorFilePath: string): Promise<Executor> {

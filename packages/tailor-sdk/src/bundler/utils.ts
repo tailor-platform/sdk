@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 
 interface ImportInfo {

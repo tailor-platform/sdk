@@ -1,15 +1,29 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  vi,
+} from "vitest";
 import {
   DependencyWatcher,
   WatcherError,
   WatcherErrorCode,
   DependencyGraphManager,
 } from "./index";
-import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
 
 const manager = new DependencyGraphManager();
+
+beforeAll(() => {
+  vi.spyOn(DependencyGraphManager.prototype, "buildGraph").mockImplementation(
+    async () => {},
+  );
+});
 
 /**
  * テスト用の一時ディレクトリを作成

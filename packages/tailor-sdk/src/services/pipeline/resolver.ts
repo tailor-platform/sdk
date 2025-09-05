@@ -1,17 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { gqlFactory } from "./gql";
-import { sqlFactory } from "./sql";
+import { type gqlFactory } from "./gql";
+import { type sqlFactory } from "./sql";
 import {
-  FnStepOptions,
-  GqlStepOptions,
-  ResolverOptions,
-  SqlStepOptions,
-  Step,
-  StepDef,
-  StepReturn,
+  type FnStepOptions,
+  type GqlStepOptions,
+  type ResolverOptions,
+  type SqlStepOptions,
+  type Step,
+  type StepDef,
+  type StepReturn,
 } from "./types";
-import { TailorType } from "@/types/type";
-import { output, StrictOutput } from "@/types/helpers";
+import { type TailorType } from "@/types/type";
+import { type output, type StrictOutput } from "@/types/helpers";
 
 export class Resolver<
   QueryType extends "query" | "mutation" = any,
@@ -51,7 +50,7 @@ export class Resolver<
     this.#output = value;
   }
   get output() {
-    return this.#output as Output;
+    return this.#output;
   }
 
   #outputMapper = null as unknown as (c: Context) => Output;

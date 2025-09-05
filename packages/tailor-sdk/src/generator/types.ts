@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { Executor } from "@/services/executor/types";
-import { Resolver } from "../services/pipeline/resolver";
-import { TailorDBType } from "../services/tailordb/schema";
+import { type Executor } from "@/services/executor/types";
+import { type Resolver } from "../services/pipeline/resolver";
+import { type TailorDBType } from "../services/tailordb/schema";
 
 interface GeneratedFile {
   path: string;

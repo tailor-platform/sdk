@@ -1,10 +1,10 @@
-import path from "node:path";
-import fs from "node:fs";
-import { Bundler, BundlerConfig } from "@/bundler";
+import * as path from "node:path";
+import * as fs from "node:fs";
+import { Bundler, type BundlerConfig } from "@/bundler";
 import { ResolverLoader } from "./bundler/loader";
 import { CodeTransformer } from "./bundler/transformer";
-import { PipelineResolverServiceConfig } from "./types";
-import { Resolver } from "./resolver";
+import { type PipelineResolverServiceConfig } from "./types";
+import { type Resolver } from "./resolver";
 import { isResolver } from "./utils";
 import { pathToFileURL } from "node:url";
 

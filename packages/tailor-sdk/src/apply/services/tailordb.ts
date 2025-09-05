@@ -1,55 +1,55 @@
-import { fromJson, MessageInitShape } from "@bufbuild/protobuf";
+import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 
 import {
-  CreateTailorDBGQLPermissionRequestSchema,
-  CreateTailorDBServiceRequestSchema,
-  CreateTailorDBTypeRequestSchema,
-  DeleteTailorDBGQLPermissionRequestSchema,
-  DeleteTailorDBServiceRequestSchema,
-  DeleteTailorDBTypeRequestSchema,
-  UpdateTailorDBGQLPermissionRequestSchema,
-  UpdateTailorDBTypeRequestSchema,
+  type CreateTailorDBGQLPermissionRequestSchema,
+  type CreateTailorDBServiceRequestSchema,
+  type CreateTailorDBTypeRequestSchema,
+  type DeleteTailorDBGQLPermissionRequestSchema,
+  type DeleteTailorDBServiceRequestSchema,
+  type DeleteTailorDBTypeRequestSchema,
+  type UpdateTailorDBGQLPermissionRequestSchema,
+  type UpdateTailorDBTypeRequestSchema,
 } from "@tailor-proto/tailor/v1/tailordb_pb";
 import {
   TailorDBGQLPermission_Action,
-  TailorDBGQLPermission_ConditionSchema,
-  TailorDBGQLPermission_OperandSchema,
+  type TailorDBGQLPermission_ConditionSchema,
+  type TailorDBGQLPermission_OperandSchema,
   TailorDBGQLPermission_Operator,
   TailorDBGQLPermission_Permit,
-  TailorDBGQLPermission_PolicySchema,
-  TailorDBGQLPermissionSchema,
-  TailorDBType_FieldConfigSchema,
-  TailorDBType_FileConfigSchema,
-  TailorDBType_IndexSchema,
-  TailorDBType_Permission_ConditionSchema,
-  TailorDBType_Permission_OperandSchema,
+  type TailorDBGQLPermission_PolicySchema,
+  type TailorDBGQLPermissionSchema,
+  type TailorDBType_FieldConfigSchema,
+  type TailorDBType_FileConfigSchema,
+  type TailorDBType_IndexSchema,
+  type TailorDBType_Permission_ConditionSchema,
+  type TailorDBType_Permission_OperandSchema,
   TailorDBType_Permission_Operator,
   TailorDBType_Permission_Permit,
-  TailorDBType_Permission_PolicySchema,
-  TailorDBType_PermissionSchema,
+  type TailorDBType_Permission_PolicySchema,
+  type TailorDBType_PermissionSchema,
   TailorDBType_PermitAction,
-  TailorDBType_RelationshipConfigSchema,
-  TailorDBTypeSchema,
+  type TailorDBType_RelationshipConfigSchema,
+  type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
-import { Executor } from "@/services";
+import { type Executor } from "@/services";
 import {
-  PermissionOperand,
-  StandardActionPermission,
-  StandardGqlPermissionPolicy,
-  StandardPermissionCondition,
-  StandardTailorTypeGqlPermission,
-  StandardTailorTypePermission,
+  type PermissionOperand,
+  type StandardActionPermission,
+  type StandardGqlPermissionPolicy,
+  type StandardPermissionCondition,
+  type StandardTailorTypeGqlPermission,
+  type StandardTailorTypePermission,
 } from "@/services/tailordb/permission";
-import { TailorDBType } from "@/services/tailordb/schema";
-import { TailorDBService } from "@/services/tailordb/service";
-import { DBFieldMetadata } from "@/services/tailordb/types";
+import { type TailorDBType } from "@/services/tailordb/schema";
+import { type TailorDBService } from "@/services/tailordb/service";
+import { type DBFieldMetadata } from "@/services/tailordb/types";
 import { tailorToManifestScalar } from "@/types/types";
-import { Workspace } from "@/workspace";
-import { ChangeSet, HasName } from ".";
-import { ApplyOptions } from "..";
-import { fetchAll, OperatorClient } from "../client";
+import { type Workspace } from "@/workspace";
+import { ChangeSet, type HasName } from ".";
+import { type ApplyOptions } from "..";
+import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyTailorDB(
   client: OperatorClient,

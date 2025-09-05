@@ -1,4 +1,4 @@
-import { SecretValue } from "@/types/types";
+import { type SecretValue } from "@/types/types";
 
 // Common types
 export type WithArgs<T = unknown> = {

@@ -1,4 +1,4 @@
-import { Executor } from "./types";
+import { type Executor } from "./types";
 
 export function isExecutor(obj: any): obj is Executor {
   return (

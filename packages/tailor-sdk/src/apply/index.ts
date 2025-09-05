@@ -1,8 +1,8 @@
 import ml from "multiline-ts";
-import { Client } from "@connectrpc/connect";
+import { type Client } from "@connectrpc/connect";
 
-import { WorkspaceConfig } from "@/config";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { type WorkspaceConfig } from "@/config";
+import { type OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
 import { applyApplication } from "./services/application";
@@ -11,7 +11,7 @@ import { applyExecutor } from "./services/executor";
 import { applyIdP } from "./services/idp";
 import { applyPipeline } from "./services/pipeline";
 import { applyTailorDB } from "./services/tailordb";
-import { readTailorctlConfig, TailorctlConfig } from "./tailorctl";
+import { readTailorctlConfig, type TailorctlConfig } from "./tailorctl";
 
 export type ApplyOptions = {
   dryRun?: boolean;

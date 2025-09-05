@@ -1,9 +1,9 @@
-import { TailorDBType } from "@/services/tailordb/schema";
-import { output } from "@/types/helpers";
+import { type TailorDBType } from "@/services/tailordb/schema";
+import { type output } from "@/types/helpers";
 import {
-  ConditionArgs,
-  EventTriggerWithManifestAndContext,
-  RecordTriggerCondition,
+  type ConditionArgs,
+  type EventTriggerWithManifestAndContext,
+  type RecordTriggerCondition,
 } from "./types";
 
 interface withNewRecord<T extends TailorDBType> {

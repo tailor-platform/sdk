@@ -1,5 +1,5 @@
-import { SqlClient } from "@/services/pipeline";
-import { FunctionOperation, ManifestAndContext } from "../types";
+import { type SqlClient } from "@/services/pipeline";
+import { type FunctionOperation, type ManifestAndContext } from "../types";
 
 type FunctionOperationContext<A> = {
   args: A;

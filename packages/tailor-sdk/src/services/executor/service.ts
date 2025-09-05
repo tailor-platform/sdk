@@ -1,7 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
-import { Executor, ExecutorServiceConfig } from "./types";
-import { Bundler, BundlerConfig } from "@/bundler";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { type Executor, type ExecutorServiceConfig } from "./types";
+import { Bundler, type BundlerConfig } from "@/bundler";
 import { ExecutorLoader } from "./bundler/loader";
 import { ExecutorTransformer } from "./bundler/transformer";
 import { pathToFileURL } from "node:url";
@@ -89,7 +89,7 @@ export class ExecutorService {
 
       const executor = module.default;
       if (this.isValidExecutor(executor)) {
-        this.executors[executorFile] = executor as Executor;
+        this.executors[executorFile] = executor;
       } else {
         console.warn(`Invalid executor in file ${executorFile}`);
       }

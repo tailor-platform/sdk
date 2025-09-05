@@ -1,6 +1,6 @@
-import { AllowedValue } from "./field";
-import { DeepWritable, Prettify } from "./helpers";
-import { TailorField, TailorType } from "./type";
+import { type AllowedValue } from "./field";
+import { type DeepWritable, type Prettify } from "./helpers";
+import { type TailorField, type TailorType } from "./type";
 
 export type Region = "asia-northeast" | "us-west";
 

@@ -1,28 +1,28 @@
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
-import { MessageInitShape } from "@bufbuild/protobuf";
+import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 
 import { getDistDir } from "@/config";
 import {
-  CreateExecutorExecutorRequestSchema,
-  DeleteExecutorExecutorRequestSchema,
-  UpdateExecutorExecutorRequestSchema,
+  type CreateExecutorExecutorRequestSchema,
+  type DeleteExecutorExecutorRequestSchema,
+  type UpdateExecutorExecutorRequestSchema,
 } from "@tailor-proto/tailor/v1/executor_pb";
 import {
-  ExecutorExecutorSchema,
-  ExecutorTargetConfigSchema,
+  type ExecutorExecutorSchema,
+  type ExecutorTargetConfigSchema,
   ExecutorTargetType,
-  ExecutorTargetWebhookHeaderSchema,
-  ExecutorTriggerConfigSchema,
+  type ExecutorTargetWebhookHeaderSchema,
+  type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { Executor } from "@/services";
-import { Workspace } from "@/workspace";
+import { type Executor } from "@/services";
+import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
-import { ApplyOptions } from "..";
-import { fetchAll, OperatorClient } from "../client";
+import { type ApplyOptions } from "..";
+import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyExecutor(
   client: OperatorClient,

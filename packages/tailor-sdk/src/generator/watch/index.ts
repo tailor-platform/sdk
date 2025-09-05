@@ -1,7 +1,7 @@
 import chokidar from "chokidar";
-import madge from "madge";
+import * as madge from "madge";
 import { glob } from "node:fs/promises";
-import path from "node:path";
+import * as path from "node:path";
 
 /**
  * ファイル変更イベントの種類
@@ -144,7 +144,7 @@ export class WatcherError extends Error {
  */
 export class DependencyGraphManager {
   private graph: Map<string, DependencyNode> = new Map();
-  private madgeInstance: madge.MadgeInstance | null = null;
+  private madgeInstance: any | null = null;
 
   constructor(private readonly options: any = {}) {}
 
@@ -162,7 +162,10 @@ export class DependencyGraphManager {
         ...this.options,
       });
 
-      const dependencyObj = this.madgeInstance.obj();
+      const dependencyObj = this.madgeInstance.obj() as Record<
+        string,
+        string[]
+      >;
       this.graph.clear();
 
       for (const filePath of filePaths) {
@@ -568,7 +571,7 @@ class DependencyWatcher {
     const key = `${event}:${filePath}`;
 
     if (this.debounceTimers.has(key)) {
-      clearTimeout(this.debounceTimers.get(key)!);
+      clearTimeout(this.debounceTimers.get(key));
     }
 
     const timer = setTimeout(() => {
