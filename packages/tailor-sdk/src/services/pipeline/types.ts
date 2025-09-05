@@ -1,6 +1,6 @@
-import { DeepWidening } from "@/types/helpers";
-import { gqlFactory } from "./gql";
-import { sqlFactory } from "./sql";
+import { type DeepWidening } from "@/types/helpers";
+import { type gqlFactory } from "./gql";
+import { type sqlFactory } from "./sql";
 
 export type StepType = "fn" | "sql" | "gql";
 export type Step<R, Context extends Record<string, unknown>> =
@@ -22,10 +22,10 @@ export type SqlStepOptions = {
   dbNamespace?: string;
 };
 export type GqlStepOptions = object;
-export type StepOptions = FnStepOptions | SqlStepOptions | GqlStepOptions;
+export type StepOptions = FnStepOptions | SqlStepOptions;
 export type ResolverOptions = {
   description?: string;
-  defaults?: FnStepOptions & SqlStepOptions & GqlStepOptions;
+  defaults?: FnStepOptions & SqlStepOptions;
 };
 
 export type PipelineResolverServiceConfig = { files: string[] };

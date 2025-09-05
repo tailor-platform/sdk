@@ -1,4 +1,4 @@
-import { WebhookOperation, ManifestAndContext } from "../types";
+import { type WebhookOperation, type ManifestAndContext } from "../types";
 
 type URLFn<A> = (args: A) => string;
 type BodyFn<A> = (args: A) => Record<string, unknown>;

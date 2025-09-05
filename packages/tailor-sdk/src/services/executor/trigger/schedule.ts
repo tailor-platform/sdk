@@ -1,5 +1,5 @@
 import type { StandardCRON } from "ts-cron-validator";
-import { ScheduleTrigger, ManifestAndContext } from "../types";
+import { type ScheduleTrigger, type ManifestAndContext } from "../types";
 
 export type ScheduleTriggerWithManifestAndContext = ManifestAndContext<
   ScheduleTrigger,

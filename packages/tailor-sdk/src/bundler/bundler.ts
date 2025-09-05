@@ -1,9 +1,9 @@
-import path from "node:path";
-import fs from "node:fs";
+import * as path from "node:path";
+import * as fs from "node:fs";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/config";
-import { BundlerConfig, ILoader, ITransformer } from "./types";
+import { type BundlerConfig, type ILoader, type ITransformer } from "./types";
 
 export class Bundler<T> {
   private readonly loader: ILoader<T>;

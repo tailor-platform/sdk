@@ -1,17 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { GenerateOptions } from "./options";
-import { getDistDir, WorkspaceConfig } from "@/config";
+import { getDistDir, type WorkspaceConfig } from "@/config";
 import { defineWorkspace } from "@/workspace";
-import { Resolver } from "@/services/pipeline/resolver";
-import { TailorDBType } from "@/services/tailordb/schema";
-import { Executor } from "@/services/executor/types";
+import { type Resolver } from "@/services/pipeline/resolver";
+import { type TailorDBType } from "@/services/tailordb/schema";
+import { type Executor } from "@/services/executor/types";
 import {
-  CodeGenerator,
-  GeneratorInput,
-  TailorDBNamespaceResult,
-  PipelineNamespaceResult,
+  type CodeGenerator,
+  type GeneratorInput,
+  type TailorDBNamespaceResult,
+  type PipelineNamespaceResult,
 } from "./types";
 import { KyselyGenerator } from "./builtin/kysely-type";
 import { DbTypeGenerator } from "./builtin/db-type";
@@ -67,7 +66,7 @@ export class GenerationManager {
           throw new Error(`Unknown generator ID: ${gen[0]}`);
         }
 
-        return gen as CodeGenerator<any, any, any, any>;
+        return gen;
       }) || [];
   }
 

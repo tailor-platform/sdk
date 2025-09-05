@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "citty";
 import { spawn } from "node:child_process";
-import path from "node:path";
+import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readdirSync } from "node:fs";
 import { commandArgs, type CommandArgs } from "./args.js";

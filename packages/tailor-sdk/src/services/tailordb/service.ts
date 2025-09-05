@@ -1,8 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { TailorDBType } from "./schema";
-import { TailorDBServiceConfig } from "./types";
+import { type TailorDBType } from "./schema";
+import { type TailorDBServiceConfig } from "./types";
 
 export class TailorDBService {
   private types: Record<string, Record<string, TailorDBType>> = {};
@@ -39,7 +39,7 @@ export class TailorDBService {
     for (const typeFile of typeFiles) {
       await this.loadTypesForFile(typeFile);
     }
-    return this.types as Record<string, Record<string, TailorDBType>>;
+    return this.types;
   }
 
   async loadTypesForFile(typeFile: string, timestamp?: Date) {

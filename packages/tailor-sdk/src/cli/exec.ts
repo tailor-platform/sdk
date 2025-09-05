@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 
 import { defineCommand, runMain } from "citty";
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { WorkspaceConfig } from "@/config";
 import { commandArgs, type CommandArgs } from "./args.js";
 import { apply } from "@/apply";

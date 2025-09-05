@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import fs from "fs-extra";
-import path from "node:path";
+import * as path from "node:path";
 import inquirer from "inquirer";
 import { spawn } from "node:child_process";
 
@@ -14,8 +13,18 @@ import {
   initCommand,
 } from "./init";
 
-// Mock fs-extra
-vi.mock("fs-extra");
+// Provide explicit mock functions for ESM-safe overrides.
+// Note: Keep import style `import * as fs from "fs-extra"` for ESM/CJS.
+const fsMock = vi.hoisted(() => ({
+  pathExists: vi.fn(),
+  readJson: vi.fn(),
+  writeJson: vi.fn(),
+  writeFile: vi.fn(),
+  ensureDir: vi.fn(),
+  existsSync: vi.fn(),
+  rm: vi.fn(),
+}));
+vi.mock("fs-extra", () => fsMock);
 // Mock inquirer
 vi.mock("inquirer");
 // Mock child_process
@@ -25,7 +34,7 @@ vi.mock("node:child_process", () => ({
 
 describe("init command", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("validateProjectName", () => {
@@ -129,11 +138,11 @@ describe("init command", () => {
 
   describe("checkExistingProject", () => {
     it("should detect existing project with package.json", async () => {
-      const pathExistsSpy = vi
-        .spyOn(fs, "pathExists")
-        .mockImplementation(async (filePath) => {
+      const pathExistsSpy = fsMock.pathExists.mockImplementation(
+        async (filePath: string) => {
           return filePath.toString().includes("package.json");
-        });
+        },
+      );
 
       const result = await checkExistingProject("/test/path");
 
@@ -147,7 +156,7 @@ describe("init command", () => {
     });
 
     it("should detect project without package.json", async () => {
-      vi.spyOn(fs, "pathExists").mockResolvedValue(false as never);
+      fsMock.pathExists.mockResolvedValue(false as never);
 
       const result = await checkExistingProject("/test/path");
 
@@ -157,7 +166,7 @@ describe("init command", () => {
 
   describe("addToExistingProject", () => {
     beforeEach(() => {
-      vi.spyOn(fs, "readJson").mockResolvedValue({
+      fsMock.readJson.mockResolvedValue({
         name: "existing-project",
         version: "1.0.0",
         scripts: {
@@ -167,13 +176,13 @@ describe("init command", () => {
           express: "^4.0.0",
         },
       });
-      vi.spyOn(fs, "writeJson").mockResolvedValue(undefined);
-      vi.spyOn(fs, "writeFile").mockResolvedValue(undefined);
-      vi.spyOn(fs, "ensureDir").mockResolvedValue(undefined as never);
+      fsMock.writeJson.mockResolvedValue(undefined as never);
+      fsMock.writeFile.mockResolvedValue(undefined as never);
+      fsMock.ensureDir.mockResolvedValue(undefined as never);
     });
 
     it("should add tailor-sdk to dependencies", async () => {
-      const writeJsonSpy = vi.spyOn(fs, "writeJson");
+      const writeJsonSpy = fsMock.writeJson;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
@@ -192,7 +201,7 @@ describe("init command", () => {
     });
 
     it("should add tailor scripts to package.json", async () => {
-      const writeJsonSpy = vi.spyOn(fs, "writeJson");
+      const writeJsonSpy = fsMock.writeJson;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
@@ -211,7 +220,7 @@ describe("init command", () => {
     });
 
     it("should create tailor.config.ts", async () => {
-      const writeFileSpy = vi.spyOn(fs, "writeFile");
+      const writeFileSpy = fsMock.writeFile;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
@@ -222,7 +231,7 @@ describe("init command", () => {
     });
 
     it("should create src directories", async () => {
-      const ensureDirSpy = vi.spyOn(fs, "ensureDir");
+      const ensureDirSpy = fsMock.ensureDir;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
@@ -242,11 +251,11 @@ describe("init command", () => {
       vi.spyOn(process, "cwd").mockReturnValue("/test/cwd");
 
       // Mock fs methods
-      vi.spyOn(fs, "existsSync").mockReturnValue(false);
-      vi.spyOn(fs, "pathExists").mockResolvedValue(false as any);
-      vi.spyOn(fs, "ensureDir").mockResolvedValue(undefined as any);
-      vi.spyOn(fs, "writeJson").mockResolvedValue(undefined);
-      vi.spyOn(fs, "writeFile").mockResolvedValue(undefined);
+      fsMock.existsSync.mockReturnValue(false as never);
+      fsMock.pathExists.mockResolvedValue(false as any);
+      fsMock.ensureDir.mockResolvedValue(undefined as any);
+      fsMock.writeJson.mockResolvedValue(undefined as never);
+      fsMock.writeFile.mockResolvedValue(undefined as never);
 
       // Mock spawn for npm install
       mockSpawn = {
@@ -302,7 +311,7 @@ describe("init command", () => {
       expect(prompts.find((p: any) => p.name === "template")).toBeDefined();
 
       // Verify project was created with the provided name
-      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+      expect(vi.mocked(fsMock.writeJson)).toHaveBeenCalledWith(
         expect.stringContaining("test-project/package.json"),
         expect.objectContaining({ name: "test-project" }),
         expect.any(Object),
@@ -343,7 +352,7 @@ describe("init command", () => {
       expect(prompts.find((p: any) => p.name === "template")).toBeDefined();
 
       // Verify project was created with the prompted name
-      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+      expect(vi.mocked(fsMock.writeJson)).toHaveBeenCalledWith(
         expect.stringContaining("prompted-project/package.json"),
         expect.objectContaining({ name: "prompted-project" }),
         expect.any(Object),
@@ -370,14 +379,14 @@ describe("init command", () => {
       expect(inquirer.prompt).not.toHaveBeenCalled();
 
       // Verify project was created with defaults
-      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+      expect(vi.mocked(fsMock.writeJson)).toHaveBeenCalledWith(
         expect.stringContaining("yes-project/package.json"),
         expect.objectContaining({ name: "yes-project" }),
         expect.any(Object),
       );
 
       // Verify default config values
-      expect(vi.mocked(fs.writeFile)).toHaveBeenCalledWith(
+      expect(fsMock.writeFile).toHaveBeenCalledWith(
         expect.stringContaining("tailor.config.ts"),
         expect.stringContaining('region: "asia-northeast"'), // default region
       );
@@ -474,8 +483,8 @@ describe("init command", () => {
         .mockImplementation(() => {});
 
       // Mock existing directory (but not a project with package.json)
-      vi.spyOn(fs, "existsSync").mockReturnValue(true);
-      vi.spyOn(fs, "pathExists").mockResolvedValue(false as any);
+      fsMock.existsSync.mockReturnValue(true as never);
+      fsMock.pathExists.mockResolvedValue(false as any);
 
       // Mock user choosing not to overwrite (which causes cancellation)
       (inquirer.prompt as any).mockResolvedValue({ overwrite: false });
@@ -518,12 +527,12 @@ describe("init command", () => {
 
     it("should add to existing project when detected", async () => {
       // Mock current directory as existing project
-      vi.spyOn(fs, "pathExists").mockImplementation(async (filePath) => {
+      fsMock.pathExists.mockImplementation(async (filePath) => {
         return filePath.toString().includes("package.json");
       });
 
       // Mock existing package.json
-      vi.spyOn(fs, "readJson").mockResolvedValue({
+      fsMock.readJson.mockResolvedValue({
         name: "existing-app",
         version: "1.0.0",
       });
@@ -558,7 +567,7 @@ describe("init command", () => {
       );
 
       // Verify tailor-sdk was added to existing project
-      expect(vi.mocked(fs.writeJson)).toHaveBeenCalledWith(
+      expect(fsMock.writeJson).toHaveBeenCalledWith(
         expect.stringContaining("package.json"),
         expect.objectContaining({
           devDependencies: expect.objectContaining({

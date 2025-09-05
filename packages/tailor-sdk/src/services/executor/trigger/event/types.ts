@@ -1,5 +1,5 @@
-import { EventTrigger, ManifestAndContext } from "../../types";
-import { Script } from "@/types/types";
+import { type EventTrigger, type ManifestAndContext } from "../../types";
+import { type Script } from "@/types/types";
 
 export type RecordTriggerCondition<A> = (args: A) => boolean;
 export type ConditionArgs = {

@@ -1,34 +1,34 @@
 import { clone } from "es-toolkit";
 
-import { OperatorFieldConfig } from "@/types/operator";
-import { TailorDBTypeConfig } from "./operator-types";
+import { type OperatorFieldConfig } from "@/types/operator";
+import { type TailorDBTypeConfig } from "./operator-types";
 import {
-  DBFieldMetadata,
-  Hooks,
-  Validators,
-  DefinedFieldMetadata,
-  FieldValidateInput,
-  Hook,
-  ValidateConfig,
-  SerialConfig,
-  IndexDef,
-  TypeFeatures,
+  type DBFieldMetadata,
+  type Hooks,
+  type Validators,
+  type DefinedFieldMetadata,
+  type FieldValidateInput,
+  type Hook,
+  type ValidateConfig,
+  type SerialConfig,
+  type IndexDef,
+  type TypeFeatures,
 } from "./types";
 import {
-  InferFieldInput,
-  InferFieldOutput,
-  NullableToOptional,
-  TailorFieldType,
-  TailorToTs,
+  type InferFieldInput,
+  type InferFieldOutput,
+  type NullableToOptional,
+  type TailorFieldType,
+  type TailorToTs,
 } from "@/types/types";
 import type { Prettify, output } from "@/types/helpers";
-import { AllowedValues, AllowedValuesOutput } from "@/types/field";
+import { type AllowedValues, type AllowedValuesOutput } from "@/types/field";
 import { TailorField, TailorType } from "@/types/type";
-import inflection from "inflection";
+import * as inflection from "inflection";
 import {
-  Permissions,
-  TailorTypeGqlPermission,
-  TailorTypePermission,
+  type Permissions,
+  type TailorTypeGqlPermission,
+  type TailorTypePermission,
   normalizePermission,
   normalizeGqlPermission,
 } from "./permission";
@@ -672,7 +672,7 @@ function dbType<
     description = fieldsOrDescription;
     fieldDef = fields as F;
   } else {
-    fieldDef = fieldsOrDescription as F;
+    fieldDef = fieldsOrDescription;
   }
   const type = new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(
     typeName,

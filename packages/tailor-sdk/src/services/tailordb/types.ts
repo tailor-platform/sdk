@@ -1,12 +1,12 @@
-import { TailorUser } from "@/types";
-import { output, Prettify } from "@/types/helpers";
+import { type TailorUser } from "@/types";
+import { type output, type Prettify } from "@/types/helpers";
 import {
-  FieldMetadata,
-  InferFieldInput,
-  InferFieldOutput,
-  InferTypeInput,
+  type FieldMetadata,
+  type InferFieldInput,
+  type InferFieldOutput,
+  type InferTypeInput,
 } from "@/types/types";
-import { TailorDBType } from "./schema";
+import { type TailorDBType } from "./schema";
 
 export type SerialConfig<
   T extends "string" | "integer" = "string" | "integer",

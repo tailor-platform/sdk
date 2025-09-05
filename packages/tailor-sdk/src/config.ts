@@ -1,19 +1,18 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TailorDBServiceInput } from "@/services/tailordb/types";
 import type { PipelineResolverServiceInput } from "@/services/pipeline/types";
 import type { AuthServiceInput } from "@/services/auth/types";
 import type { ExecutorServiceInput } from "@/services/executor/types";
-import { IdPServiceInput } from "./services/idp/types";
-import { Region } from "@/types/types";
+import { type IdPServiceInput } from "./services/idp/types";
+import { type Region } from "@/types/types";
 import {
-  KyselyGenerator,
-  KyselyGeneratorID,
+  type KyselyGenerator,
+  type KyselyGeneratorID,
 } from "@/generator/builtin/kysely-type/index";
 import {
-  DbTypeGenerator,
-  DbTypeGeneratorID,
+  type DbTypeGenerator,
+  type DbTypeGeneratorID,
 } from "@/generator/builtin/db-type/index";
-import { CodeGenerator } from "@/generator/types";
+import { type CodeGenerator } from "@/generator/types";
 
 export interface AppConfig {
   cors?: string[];

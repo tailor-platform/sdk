@@ -1,5 +1,5 @@
-import { OperatorFieldConfig } from "@/types/operator";
-import { Permissions } from "./permission";
+import { type OperatorFieldConfig } from "@/types/operator";
+import { type Permissions } from "./permission";
 
 export interface TailorDBTypeConfig {
   name: string;

@@ -4,6 +4,9 @@
     "outDir": "./dist",
     "rootDir": "./",
     "baseUrl": "./",
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": false,
+    "verbatimModuleSyntax": true,
     "paths": {
       "@/*": ["./src/*"],
       "@tailor-proto/*": ["../tailor-proto/src/*"]

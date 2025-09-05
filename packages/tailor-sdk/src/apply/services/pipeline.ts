@@ -1,32 +1,36 @@
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
-import { MessageInitShape } from "@bufbuild/protobuf";
+import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 
 import { getDistDir } from "@/config";
 import {
-  CreatePipelineResolverRequestSchema,
-  CreatePipelineServiceRequestSchema,
-  DeletePipelineResolverRequestSchema,
-  DeletePipelineServiceRequestSchema,
-  UpdatePipelineResolverRequestSchema,
-  UpdatePipelineServiceRequestSchema,
+  type CreatePipelineResolverRequestSchema,
+  type CreatePipelineServiceRequestSchema,
+  type DeletePipelineResolverRequestSchema,
+  type DeletePipelineServiceRequestSchema,
+  type UpdatePipelineResolverRequestSchema,
+  type UpdatePipelineServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/pipeline_pb";
 import {
-  PipelineResolver_FieldSchema,
+  type PipelineResolver_FieldSchema,
   PipelineResolver_OperationType,
-  PipelineResolver_PipelineSchema,
-  PipelineResolverSchema,
+  type PipelineResolver_PipelineSchema,
+  type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
-import { Executor, PipelineResolverService, StepDef } from "@/services";
-import { Resolver } from "@/services/pipeline/resolver";
-import { Workspace } from "@/workspace";
+import {
+  type Executor,
+  type PipelineResolverService,
+  type StepDef,
+} from "@/services";
+import { type Resolver } from "@/services/pipeline/resolver";
+import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
-import { ApplyOptions } from "..";
-import { fetchAll, OperatorClient } from "../client";
+import { type ApplyOptions } from "..";
+import { fetchAll, type OperatorClient } from "../client";
 import { OperationType } from "@/types/operator";
-import inflection from "inflection";
+import * as inflection from "inflection";
 
 export async function applyPipeline(
   client: OperatorClient,
@@ -520,7 +524,7 @@ function getTypeDefinition(fieldType: string): {
           : fieldType === "time"
             ? "Time"
             : fieldType
-      : tailorToGraphQL[fieldType as keyof typeof tailorToGraphQL] || "String",
+      : tailorToGraphQL[fieldType] || "String",
   };
 }
 
@@ -620,7 +624,7 @@ function generateNestedFields(
 
   return Object.entries(nestedFields).map(
     ([fieldName, field]: [string, any]) => {
-      const fieldObj = field as any;
+      const fieldObj = field;
 
       const metadata = fieldObj?.metadata || {};
       const fieldType = metadata.type || "string";

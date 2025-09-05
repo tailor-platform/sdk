@@ -171,7 +171,7 @@ function normalizeOperand<T extends PermissionOperand<any, any, any, any>>(
   operand: T,
 ): T {
   if (typeof operand === "object" && "user" in operand) {
-    return { user: { id: "_id" }[operand.user as string] ?? operand.user } as T;
+    return { user: { id: "_id" }[operand.user] ?? operand.user } as T;
   }
   return operand;
 }

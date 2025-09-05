@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
-import { Resolver } from "../resolver";
+import { type Resolver } from "../resolver";
 import { isResolver } from "../utils";
-import { ILoader } from "@/bundler";
+import { type ILoader } from "@/bundler";
 
 export class ResolverLoader
   implements ILoader<Resolver<any, any, any, any, any, any>>

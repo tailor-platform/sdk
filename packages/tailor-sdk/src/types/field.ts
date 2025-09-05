@@ -1,4 +1,4 @@
-import { EnumValue } from "@/types/types";
+import { type EnumValue } from "@/types/types";
 
 export type AllowedValue = EnumValue;
 
@@ -28,7 +28,7 @@ export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
         const arr = value as readonly [string] | readonly [string, string];
         return { value: arr[0], description: arr[1] || "" };
       }
-      const enumValue = value as EnumValue;
+      const enumValue = value;
       return { ...enumValue, description: enumValue.description || "" };
     }) ?? []
   );

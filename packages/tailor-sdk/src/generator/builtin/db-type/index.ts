@@ -1,7 +1,11 @@
-import { CodeGenerator, GeneratorResult, GeneratorInput } from "../../types";
-import { TailorDBType } from "@/services/tailordb/schema";
-import { Executor } from "@/services/executor/types";
-import { DbTypeMetadata } from "./types";
+import {
+  type CodeGenerator,
+  type GeneratorResult,
+  type GeneratorInput,
+} from "../../types";
+import { type TailorDBType } from "@/services/tailordb/schema";
+import { type Executor } from "@/services/executor/types";
+import { type DbTypeMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
 
 export const DbTypeGeneratorID = "@tailor/db-type";

@@ -1,18 +1,18 @@
-import { MessageInitShape } from "@bufbuild/protobuf";
+import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 
 import {
-  CreateIdPClientRequestSchema,
-  CreateIdPServiceRequestSchema,
-  DeleteIdPClientRequestSchema,
-  DeleteIdPServiceRequestSchema,
-  UpdateIdPServiceRequestSchema,
+  type CreateIdPClientRequestSchema,
+  type CreateIdPServiceRequestSchema,
+  type DeleteIdPClientRequestSchema,
+  type DeleteIdPServiceRequestSchema,
+  type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { IdPServiceInput } from "@/services/idp/types";
-import { Workspace } from "@/workspace";
-import { ChangeSet, HasName } from ".";
-import { ApplyOptions } from "..";
-import { fetchAll, OperatorClient } from "../client";
+import { type IdPServiceInput } from "@/services/idp/types";
+import { type Workspace } from "@/workspace";
+import { ChangeSet, type HasName } from ".";
+import { type ApplyOptions } from "..";
+import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyIdP(
   client: OperatorClient,

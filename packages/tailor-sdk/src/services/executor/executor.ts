@@ -1,8 +1,13 @@
-import { SqlClient } from "../pipeline";
+import { type SqlClient } from "../pipeline";
 import { executorFunction } from "./target/function";
 import { executorGql } from "./target/gql";
 import { executorWebhook } from "./target/webhook";
-import { Executor, Trigger, ManifestAndContext, TriggerContext } from "./types";
+import {
+  type Executor,
+  type Trigger,
+  type ManifestAndContext,
+  type TriggerContext,
+} from "./types";
 
 // Helper type to extract args from trigger context
 type ExtractTriggerArgs<T> =

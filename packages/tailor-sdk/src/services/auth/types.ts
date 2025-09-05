@@ -1,5 +1,5 @@
-import { SecretValue } from "@/types/types";
-import { ValueOperand } from "../tailordb/permission";
+import { type SecretValue } from "@/types/types";
+import { type ValueOperand } from "../tailordb/permission";
 
 export interface OIDC {
   Kind: "OIDC";

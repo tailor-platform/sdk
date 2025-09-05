@@ -1,5 +1,5 @@
-import { TailorDBType } from "@/services/tailordb/schema";
-import { KyselyTypeMetadata } from "./types";
+import { type TailorDBType } from "@/services/tailordb/schema";
+import { type KyselyTypeMetadata } from "./types";
 import multiline from "multiline-ts";
 
 /**
@@ -115,7 +115,7 @@ export class TypeProcessor {
       }
       case "nested": {
         // nestedの場合、fieldsプロパティからネストした型を生成
-        const fields = fieldDef.fields || (fieldDef as any).fields;
+        const fields = fieldDef.fields || fieldDef.fields;
         if (fields && typeof fields === "object") {
           return this.processNestedObjectType(fields, 1);
         }

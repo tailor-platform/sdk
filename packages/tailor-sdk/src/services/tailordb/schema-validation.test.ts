@@ -37,11 +37,11 @@ describe("TailorDBType validation functionality", () => {
     });
 
     // Check that validators were set on the fields
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     expect((UserType.fields.name as any)._metadata.validate).toEqual([
       nameValidator,
     ]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     expect((UserType.fields.email as any)._metadata.validate).toEqual([
       emailValidator,
     ]);
@@ -61,15 +61,15 @@ describe("TailorDBType validation functionality", () => {
     });
 
     // Field-level validator should still be there
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     expect((UserType.fields.name as any)._metadata.validate).toHaveLength(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     expect((UserType.fields.name as any)._metadata.validate[0]).toBeInstanceOf(
       Function,
     );
 
     // Type-level validator should be set
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     expect((UserType.fields.email as any)._metadata.validate).toEqual([
       emailValidator,
     ]);

@@ -1,4 +1,4 @@
-import { IncomingWebhookTrigger, ManifestAndContext } from "../types";
+import { type IncomingWebhookTrigger, type ManifestAndContext } from "../types";
 
 interface WebhookArgs<
   T extends {

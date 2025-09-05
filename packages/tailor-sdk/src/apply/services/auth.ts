@@ -1,68 +1,68 @@
-import { fromJson, MessageInitShape } from "@bufbuild/protobuf";
+import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 
 import {
-  CreateAuthIDPConfigRequestSchema,
-  CreateAuthMachineUserRequestSchema,
-  CreateAuthOAuth2ClientRequestSchema,
-  CreateAuthSCIMConfigRequestSchema,
-  CreateAuthSCIMResourceRequestSchema,
-  CreateAuthServiceRequestSchema,
-  CreateTenantConfigRequestSchema,
-  CreateUserProfileConfigRequestSchema,
-  DeleteAuthIDPConfigRequestSchema,
-  DeleteAuthMachineUserRequestSchema,
-  DeleteAuthOAuth2ClientRequestSchema,
-  DeleteAuthSCIMConfigRequestSchema,
-  DeleteAuthSCIMResourceRequestSchema,
-  DeleteAuthServiceRequestSchema,
-  DeleteTenantConfigRequestSchema,
-  DeleteUserProfileConfigRequestSchema,
-  UpdateAuthIDPConfigRequestSchema,
-  UpdateAuthMachineUserRequestSchema,
-  UpdateAuthOAuth2ClientRequestSchema,
-  UpdateAuthSCIMConfigRequestSchema,
-  UpdateAuthSCIMResourceRequestSchema,
-  UpdateTenantConfigRequestSchema,
-  UpdateUserProfileConfigRequestSchema,
+  type CreateAuthIDPConfigRequestSchema,
+  type CreateAuthMachineUserRequestSchema,
+  type CreateAuthOAuth2ClientRequestSchema,
+  type CreateAuthSCIMConfigRequestSchema,
+  type CreateAuthSCIMResourceRequestSchema,
+  type CreateAuthServiceRequestSchema,
+  type CreateTenantConfigRequestSchema,
+  type CreateUserProfileConfigRequestSchema,
+  type DeleteAuthIDPConfigRequestSchema,
+  type DeleteAuthMachineUserRequestSchema,
+  type DeleteAuthOAuth2ClientRequestSchema,
+  type DeleteAuthSCIMConfigRequestSchema,
+  type DeleteAuthSCIMResourceRequestSchema,
+  type DeleteAuthServiceRequestSchema,
+  type DeleteTenantConfigRequestSchema,
+  type DeleteUserProfileConfigRequestSchema,
+  type UpdateAuthIDPConfigRequestSchema,
+  type UpdateAuthMachineUserRequestSchema,
+  type UpdateAuthOAuth2ClientRequestSchema,
+  type UpdateAuthSCIMConfigRequestSchema,
+  type UpdateAuthSCIMResourceRequestSchema,
+  type UpdateTenantConfigRequestSchema,
+  type UpdateUserProfileConfigRequestSchema,
 } from "@tailor-proto/tailor/v1/auth_pb";
 import {
   AuthIDPConfig_AuthType,
-  AuthIDPConfig_ConfigSchema,
-  AuthIDPConfigSchema,
+  type AuthIDPConfig_ConfigSchema,
+  type AuthIDPConfigSchema,
   AuthOAuth2Client_GrantType,
-  AuthOAuth2ClientSchema,
+  type AuthOAuth2ClientSchema,
   AuthSCIMAttribute_Mutability,
   AuthSCIMAttribute_Type,
   AuthSCIMAttribute_Uniqueness,
-  AuthSCIMAttributeSchema,
+  type AuthSCIMAttributeSchema,
   AuthSCIMConfig_AuthorizationType,
-  AuthSCIMConfigSchema,
-  AuthSCIMResourceSchema,
+  type AuthSCIMConfigSchema,
+  type AuthSCIMResourceSchema,
   TenantProviderConfig_TenantProviderType,
-  TenantProviderConfigSchema,
+  type TenantProviderConfigSchema,
   UserProfileProviderConfig_UserProfileProviderType,
-  UserProfileProviderConfigSchema,
+  type UserProfileProviderConfigSchema,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import {
-  AuthService,
-  BuiltinIdP,
-  IdProviderConfig,
-  OAuth2Client,
-  SCIMAttribute,
-  SCIMConfig,
-  SCIMResource,
-  TenantProvider,
-  TenantProviderConfig,
-  UserProfileProvider,
-  UserProfileProviderConfig,
+  type AuthService,
+  type BuiltinIdP,
+  type IdProviderConfig,
+  type OAuth2Client,
+  type SCIMAttribute,
+  type SCIMConfig,
+  type SCIMResource,
+  type TenantProvider,
+  type TenantProviderConfig,
+  type UserProfileProvider,
+  type UserProfileProviderConfig,
 } from "@/services";
-import { ValueOperand } from "@/services/tailordb/permission";
-import { Workspace } from "@/workspace";
-import { ChangeSet, HasName } from ".";
-import { ApplyOptions } from "..";
-import { fetchAll, OperatorClient } from "../client";
+import { type ValueOperand } from "@/services/tailordb/permission";
+import { type Workspace } from "@/workspace";
+import { ChangeSet, type HasName } from ".";
+import { type ApplyOptions } from "..";
+import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyAuth(
   client: OperatorClient,

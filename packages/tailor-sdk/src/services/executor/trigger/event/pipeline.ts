@@ -1,10 +1,10 @@
-import { Resolver } from "@/services/pipeline/resolver";
+import { type Resolver } from "@/services/pipeline/resolver";
 import {
-  ConditionArgs,
-  EventTriggerWithManifestAndContext,
-  RecordTriggerCondition,
+  type ConditionArgs,
+  type EventTriggerWithManifestAndContext,
+  type RecordTriggerCondition,
 } from "./types";
-import { output } from "@/types/helpers";
+import { type output } from "@/types/helpers";
 
 type ResolverTriggerConditionArgs<R extends Resolver> = ConditionArgs & {
   resolverName: R["name"];

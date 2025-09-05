@@ -1,46 +1,28 @@
-import js from "@eslint/js";
-import globals from "globals";
-import tseslint from "typescript-eslint";
+import * as tseslint from "typescript-eslint";
 import { defineConfig } from "eslint/config";
-import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/.tailor-sdk/**"],
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      ".tailor-sdk/**",
+      "eslint.config.js",
+    ],
   },
+  ...tseslint.configs.recommended,
   {
-    files: ["**/*.{js,mjs,cjs}"],
-    ...js.configs.recommended,
-    languageOptions: { globals: globals.browser },
-  },
-  {
-    files: ["**/*.{ts,mts,cts}"],
-    ...tseslint.configs.base,
-    languageOptions: {
-      ...tseslint.configs.base.languageOptions,
-      globals: globals.browser,
-      parserOptions: {
-        tsconfigRootDir: import.meta.dirname,
-        project: "./tsconfig.json",
-      },
-    },
-  },
-  ...tseslint.configs.recommended.map((config) => ({
-    ...config,
-    files: ["**/*.{ts,mts,cts}"],
-  })),
-  eslintConfigPrettier,
-  {
-    files: ["**/*.{ts,mts,cts}"],
+    files: ["src/**/*.{ts,tsx,cts}", "tsdown.config.ts", "vitest.config.ts"],
     rules: {
-      "@typescript-eslint/no-unused-vars": [
+      "@typescript-eslint/consistent-type-imports": [
         "error",
-        {
-          varsIgnorePattern: "^_",
-          argsIgnorePattern: "^_",
-        },
+        { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
       "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
 ]);

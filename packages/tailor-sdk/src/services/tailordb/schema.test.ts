@@ -1,8 +1,8 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "./schema";
-import { FieldValidateInput, Hook, ValidateConfig } from "./types";
+import type { FieldValidateInput, Hook, ValidateConfig } from "./types";
 import type { output } from "@/types/helpers";
-import inflection from "inflection";
+import * as inflection from "inflection";
 
 describe("TailorDBField 基本フィールド型テスト", () => {
   it("string型フィールドが正しくstring型を出力する", () => {

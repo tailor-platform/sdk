@@ -1,14 +1,18 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 import {
-  TailorFieldType,
-  TailorToTs,
-  FieldMetadata,
-  NullableToOptional,
-  InferFieldOutput,
+  type TailorFieldType,
+  type TailorToTs,
+  type FieldMetadata,
+  type NullableToOptional,
+  type InferFieldOutput,
 } from "./types";
 import type { output, Prettify } from "./helpers";
-import { AllowedValues, AllowedValuesOutput, mapAllowedValues } from "./field";
+import {
+  type AllowedValues,
+  type AllowedValuesOutput,
+  mapAllowedValues,
+} from "./field";
 
 type DefinedFieldMetadata = Partial<
   Omit<FieldMetadata, "allowedValues"> & { allowedValues: string[] }
@@ -190,10 +194,7 @@ function object<const F extends Record<string, TailorField<any, any>>>(
 function tailorType<const F extends Record<string, TailorField<any, any>>>(
   fields: F,
 ): TailorType<DefinedFieldMetadata, F> {
-  return new TailorType<DefinedFieldMetadata, F>(fields) as TailorType<
-    DefinedFieldMetadata,
-    F
-  >;
+  return new TailorType<DefinedFieldMetadata, F>(fields);
 }
 
 const t = {

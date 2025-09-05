@@ -1,4 +1,4 @@
-import { Script, EnumValue } from "@/types/types";
+import { type Script, type EnumValue } from "@/types/types";
 
 export const OperationType = {
   FUNCTION: 2,

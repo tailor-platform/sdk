@@ -2,8 +2,8 @@
 
 import { defineCommand } from "citty";
 import inquirer from "inquirer";
-import fs from "fs-extra";
-import path from "node:path";
+import * as fs from "fs-extra";
+import * as path from "node:path";
 import chalk from "chalk";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";

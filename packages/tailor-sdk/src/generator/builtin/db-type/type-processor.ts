@@ -1,5 +1,5 @@
-import { TailorDBType } from "@/services/tailordb/schema";
-import { DbTypeMetadata } from "./types";
+import { type TailorDBType } from "@/services/tailordb/schema";
+import { type DbTypeMetadata } from "./types";
 
 /**
  * TailorDBTypeをTypeScript型定義に変換するプロセッサー
@@ -88,7 +88,7 @@ export class TypeProcessor {
     fieldDef: any,
     processing: Set<string>,
   ): string[] {
-    const refCfg = (fieldDef as any).reference;
+    const refCfg = fieldDef.reference;
     const targetType = refCfg?.type?.name;
     if (!targetType) {
       const fieldType = this.mapFieldToTypeScript(fieldDef, processing);
@@ -151,7 +151,7 @@ export class TypeProcessor {
     fieldType: string,
     fieldDef: any,
   ): string {
-    const metadata = (fieldDef as any).metadata;
+    const metadata = fieldDef.metadata;
     const isRequired = metadata?.required === true;
     const assertNonNull = metadata?.assertNonNull === true;
 
@@ -217,7 +217,7 @@ export class TypeProcessor {
         break;
       }
       case "nested": {
-        const fields = fieldDef.fields || (fieldDef as any).fields;
+        const fields = fieldDef.fields || fieldDef.fields;
         if (fields && typeof fields === "object") {
           baseType = this.processNestedObjectType(fields, 1, processing);
         } else {
