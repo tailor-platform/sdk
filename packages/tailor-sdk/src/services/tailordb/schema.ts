@@ -358,7 +358,7 @@ class TailorDBField<
   }
 
   validate<
-    const V extends FieldValidateInput<Output>[],
+    const V extends FieldValidateInput<InferFieldOutput<this>>[],
     CurrentDefined extends Defined,
   >(
     this: CurrentDefined extends { validate: unknown }
@@ -572,12 +572,21 @@ export class TailorDBType<
       const field = this.fields[fieldName] as TailorDBField<any, any>;
 
       const validators = fieldValidators as
-        | ValidateConfig<any>
-        | FieldValidateInput<any>[];
-      if (validators.length === 2 && typeof validators[1] === "string") {
-        field.validate(validators as ValidateConfig<any>);
+        | FieldValidateInput<unknown>
+        | FieldValidateInput<unknown>[];
+
+      const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
+        return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
+      };
+
+      if (Array.isArray(validators)) {
+        if (isValidateConfig(validators)) {
+          field.validate(validators);
+        } else {
+          field.validate(...validators);
+        }
       } else {
-        field.validate(...(validators as FieldValidateInput<any>[]));
+        field.validate(validators);
       }
     });
     return this;

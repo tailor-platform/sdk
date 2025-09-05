@@ -37,25 +37,6 @@ export type DefinedFieldMetadata = Partial<
   Omit<DBFieldMetadata, "allowedValues"> & { allowedValues: string[] }
 >;
 
-type DBTypeLike = {
-  fields: Record<string, { _defined: Record<string, unknown> }>;
-};
-type DefinedFields<
-  T extends DBTypeLike,
-  K extends keyof DBFieldMetadata,
-> = keyof {
-  [P in keyof T["fields"] as T["fields"][P]["_defined"] extends {
-    [Key in K]: unknown;
-  }
-    ? P
-    : never]: keyof T["fields"][P]["_defined"];
-};
-
-type UndefinedFields<
-  T extends DBTypeLike,
-  K extends keyof DBFieldMetadata,
-> = Exclude<keyof T["fields"], DefinedFields<T, K>>;
-
 type HookFn<TValue, TData, TReturn> = (args: {
   value: TValue;
   data: TData;
@@ -79,20 +60,18 @@ export type Hooks<P extends TailorDBType> = {
   >;
 };
 
-export type Validators<P extends DBTypeLike> = {
-  [K in UndefinedFields<P, "validate">]?: K extends keyof output<P>
-    ?
-        | ValidateFn<output<P>[K], output<P>>
-        | ValidateConfig<output<P>[K], output<P>>
-        | (
-            | ValidateFn<output<P>[K], output<P>>
-            | ValidateConfig<output<P>[K], output<P>>
-          )[]
-    : never;
-} & {
-  [K in DefinedFields<P, "validate">]?: {
-    "validator already defined in field": never;
-  };
+export type Validators<P extends TailorDBType> = {
+  [K in keyof P["fields"] as P["fields"][K]["_defined"] extends {
+    validate: unknown;
+  }
+    ? never
+    : K]?:
+    | ValidateFn<InferFieldOutput<P["fields"][K]>, output<P>>
+    | ValidateConfig<InferFieldOutput<P["fields"][K]>, output<P>>
+    | (
+        | ValidateFn<InferFieldOutput<P["fields"][K]>, output<P>>
+        | ValidateConfig<InferFieldOutput<P["fields"][K]>, output<P>>
+      )[];
 };
 
 type ValidateFn<O, D = unknown> = (args: {

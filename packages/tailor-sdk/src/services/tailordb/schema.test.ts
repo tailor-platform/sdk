@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "./schema";
-import { Hook } from "./types";
+import { FieldValidateInput, Hook, ValidateConfig } from "./types";
 import type { output } from "@/types/helpers";
 import inflection from "inflection";
 
@@ -322,56 +322,6 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
     }>();
   });
 
-  it("validate()修飾子が型に影響しない", () => {
-    const _validateType = db.type("Test", {
-      email: db.string().validate(() => true),
-    });
-    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
-      id: string;
-      email: string;
-    }>();
-  });
-
-  it("validate()修飾子がメッセージ付きオブジェクトを受け取れる", () => {
-    const _validateType = db.type("Test", {
-      email: db
-        .string()
-        .validate([
-          ({ value }: { value: string }) => value.includes("@"),
-          "Email must contain @",
-        ]),
-    });
-    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
-      id: string;
-      email: string;
-    }>();
-
-    // Test that the field config is generated correctly
-    const fieldConfig = (_validateType as any).fields.email.config;
-    expect(fieldConfig.validate).toBeDefined();
-    expect(fieldConfig.validate[0].errorMessage).toBe("Email must contain @");
-  });
-
-  it("validate()修飾子が複数のバリデーターを受け取れる", () => {
-    const _validateType = db.type("Test", {
-      password: db
-        .string()
-        .validate(
-          ({ value }) => value.length >= 8,
-          [
-            ({ value }) => /[A-Z]/.test(value),
-            "Password must contain uppercase letter",
-          ],
-        ),
-    });
-
-    const fieldConfig = (_validateType as any).fields.password.config;
-    expect(fieldConfig.validate).toHaveLength(2);
-    expect(fieldConfig.validate[1].errorMessage).toBe(
-      "Password must contain uppercase letter",
-    );
-  });
-
   it("修飾子の順序が結果に影響しない", () => {
     const _chainType1 = db.type("Test", {
       field: db.string().optional().array(),
@@ -466,6 +416,84 @@ describe("TailorDBField hooks修飾子テスト", () => {
     const _hooks = db.string().optional({ assertNonNull: true }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
       Hook<string | null, unknown, string>
+    >();
+  });
+});
+
+describe("TailorDBField validate修飾子テスト", () => {
+  it("validate修飾子が型に影響しない", () => {
+    const _validateType = db.type("Test", {
+      email: db.string().validate(() => true),
+    });
+    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
+      id: string;
+      email: string;
+    }>();
+  });
+
+  it("validate修飾子がメッセージ付きオブジェクトを受け取れる", () => {
+    const _validateType = db.type("Test", {
+      email: db
+        .string()
+        .validate([({ value }) => value.includes("@"), "Email must contain @"]),
+    });
+    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
+      id: string;
+      email: string;
+    }>();
+
+    const fieldConfig = _validateType.fields.email.config;
+    expect(fieldConfig.validate).toBeDefined();
+    expect(fieldConfig?.validate?.[0].errorMessage).toBe(
+      "Email must contain @",
+    );
+  });
+
+  it("validate修飾子が複数のバリデーターを受け取れる", () => {
+    const _validateType = db.type("Test", {
+      password: db
+        .string()
+        .validate(
+          ({ value }) => value.length >= 8,
+          [
+            ({ value }) => /[A-Z]/.test(value),
+            "Password must contain uppercase letter",
+          ],
+        ),
+    });
+
+    const fieldConfig = _validateType.fields.password.config;
+    expect(fieldConfig.validate).toHaveLength(2);
+    expect(fieldConfig?.validate?.[1].errorMessage).toBe(
+      "Password must contain uppercase letter",
+    );
+  });
+
+  it("validate修飾子を2回以上呼び出すと型エラーが発生する", () => {
+    // @ts-expect-error validate() cannot be called after validate() has already been called
+    db.string()
+      .validate(() => true)
+      .validate(() => true);
+  });
+
+  it("stringフィールドでvalidate修飾子はstringを受け取る", () => {
+    const _validate = db.string().validate;
+    expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
+      FieldValidateInput<string>
+    >();
+  });
+
+  it("optionalフィールドでvalidate修飾子はnullを受け取る", () => {
+    const _validate = db.string().optional().validate;
+    expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
+      FieldValidateInput<string | null>
+    >();
+  });
+
+  it("assertNonNullフィールドでvalidate修飾子はnonNullを受け取る", () => {
+    const _validate = db.string().optional({ assertNonNull: true }).validate;
+    expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
+      FieldValidateInput<string>
     >();
   });
 });
@@ -590,55 +618,6 @@ describe("TailorDBType 型の一貫性テスト", () => {
     expectTypeOf<output<typeof _typeWithoutId>>().toMatchTypeOf<{
       id: string;
     }>();
-  });
-
-  it("type-level validate method should exist and work", () => {
-    const _userType = db.type("User", {
-      name: db.string(),
-      email: db.string(),
-    });
-
-    // Test that the validate method exists
-    const result = _userType.validate({
-      name: [({ value }) => value.length > 0],
-      email: [({ value }) => value.includes("@")],
-    });
-
-    // Should return the same type instance for chaining
-    expect(result).toBe(_userType);
-  });
-
-  it("type-level validate method should accept message objects", () => {
-    const _userType = db.type("User", {
-      name: db.string(),
-      email: db.string(),
-    });
-
-    // Test that the validate method accepts both function and object formats
-    const result = _userType.validate({
-      name: [
-        ({ value }) => value.length > 0,
-        [
-          ({ value }) => value.length <= 50,
-          "Name must be 50 characters or less",
-        ],
-      ],
-      email: [({ value }) => value.includes("@"), "Email must be valid"],
-    });
-
-    // Should return the same type instance for chaining
-    expect(result).toBe(_userType);
-
-    // Check that fields have correct validation config
-    const nameConfig = (_userType as any).fields.name.config;
-    expect(nameConfig.validate).toHaveLength(2);
-    expect(nameConfig.validate[1].errorMessage).toBe(
-      "Name must be 50 characters or less",
-    );
-
-    const emailConfig = (_userType as any).fields.email.config;
-    expect(emailConfig.validate).toHaveLength(1);
-    expect(emailConfig.validate[0].errorMessage).toBe("Email must be valid");
   });
 });
 
@@ -923,6 +902,97 @@ describe("TailorDBType hooks修飾子テスト", () => {
         >
       | undefined
     >();
+  });
+});
+
+describe("TailorDBType validate修飾子テスト", () => {
+  it("validate修飾子が関数を受け取れる", () => {
+    const _validateType = db
+      .type("Test", {
+        email: db.string(),
+      })
+      .validate({
+        email: () => true,
+      });
+
+    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
+      id: string;
+      email: string;
+    }>();
+    const fieldConfig = _validateType.fields.email.config;
+    expect(fieldConfig.validate).toHaveLength(1);
+  });
+
+  it("validate修飾子がメッセージ付きオブジェクトを受け取れる", () => {
+    const _validateType = db
+      .type("Test", {
+        email: db.string(),
+      })
+      .validate({
+        email: [({ value }) => value.includes("@"), "Email must contain @"],
+      });
+
+    const fieldConfig = _validateType.fields.email.config;
+    expect(fieldConfig.validate).toHaveLength(1);
+    expect(fieldConfig?.validate?.[0].errorMessage).toBe(
+      "Email must contain @",
+    );
+  });
+
+  it("validate修飾子が複数のバリデーターを受け取れる", () => {
+    const _validateType = db
+      .type("Test", {
+        password: db.string(),
+      })
+      .validate({
+        password: [
+          ({ value }) => value.length >= 8,
+          [
+            ({ value }) => /[A-Z]/.test(value),
+            "Password must contain uppercase letter",
+          ],
+        ],
+      });
+
+    const fieldConfig = _validateType.fields.password.config;
+    expect(fieldConfig.validate).toHaveLength(2);
+    expect(fieldConfig?.validate?.[1].errorMessage).toBe(
+      "Password must contain uppercase letter",
+    );
+  });
+
+  it("TailorDBFieldでvalidateが設定済みの場合に型エラーが発生する", () => {
+    db.type("Test", {
+      name: db.string().validate(() => true),
+    }).validate({
+      // @ts-expect-error validate() cannot be called after validate() has already been called
+      name: () => true,
+    });
+  });
+
+  it("stringフィールドでvalidate修飾子はstringを受け取る", () => {
+    const _validate = db.type("Test", { name: db.string() }).validate;
+    expectTypeOf<
+      ValidateConfig<string, { id: string; name: string }>
+    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
+  });
+
+  it("optionalフィールドでvalidate修飾子はnullを受け取る", () => {
+    const _validate = db.type("Test", {
+      name: db.string().optional(),
+    }).validate;
+    expectTypeOf<
+      ValidateConfig<string | null, { id: string; name?: string | null }>
+    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
+  });
+
+  it("assertNonNullフィールドでvalidate修飾子はnonNullを返す", () => {
+    const _validate = db.type("Test", {
+      name: db.string().optional({ assertNonNull: true }),
+    }).validate;
+    expectTypeOf<
+      ValidateConfig<string, { id: string; name: string }>
+    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
   });
 });
 
