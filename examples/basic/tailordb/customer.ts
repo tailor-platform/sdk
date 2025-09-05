@@ -17,8 +17,8 @@ export const customer = db
       .string()
       .optional()
       .validate(
-        ({ value }) => value.length > 1,
-        ({ value }) => value.length < 100,
+        ({ value }) => (value ? value.length > 1 : true),
+        ({ value }) => (value ? value.length < 100 : true),
       ),
     fullAddress: db.string().optional(),
     state: db.string(),
