@@ -23,10 +23,13 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(1);
-    expect(pipelineResolvers[0]).toMatchObject({
+    expect(pipelineResolvers.length).toBe(2);
+
+    const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
+    expect(stepChain).toMatchObject({
       name: "stepChain",
       description: "stepChain resolver",
+      operationType: "query",
       authorization: "true==true",
       inputs: [
         {
@@ -79,6 +82,47 @@ describe("controlplane", async () => {
         { name: "__construct_output" },
       ],
       publishExecutionEvents: true,
+    });
+
+    const add = pipelineResolvers.find((e) => e.name === "add");
+    expect(add).toMatchObject({
+      name: "add",
+      description: "add resolver",
+      operationType: "mutation",
+      authorization: "true==true",
+      inputs: [
+        {
+          name: "input",
+          array: false,
+          required: true,
+          type: {
+            kind: "UserDefined",
+            name: "AddInput",
+            fields: expect.any(Array),
+          },
+        },
+      ],
+      response: {
+        array: false,
+        required: true,
+        type: {
+          kind: "UserDefined",
+          name: "AddOutput",
+          fields: [
+            {
+              name: "result",
+              array: false,
+              required: true,
+              type: {
+                kind: "ScalarType",
+                name: "Int",
+              },
+            },
+          ],
+        },
+      },
+      pipelines: [{ name: "step1" }, { name: "__construct_output" }],
+      publishExecutionEvents: false,
     });
   });
 });
