@@ -488,6 +488,7 @@ function generateResolverManifest(
     description: `${name} resolver`,
     inputs: inputs,
     name: name,
+    operationType: resolverMetadata.queryType,
     response: response,
     pipelines: pipelines,
     postHook: { expr: "({ ...context.pipeline.__construct_output });" },
