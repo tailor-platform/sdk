@@ -7,3 +7,4 @@ export {
 } from "./tailordb";
 export * from "./pipeline";
 export * from "./executor";
+export * from "./staticwebsite";

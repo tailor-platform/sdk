@@ -95,6 +95,12 @@ async function planApplication(
       }
     }
 
+    const resolvedCors = await resolveCorsUrls(
+      client,
+      workspaceId,
+      application.config.cors,
+    );
+
     if (existingNameSet.has(application.name)) {
       changeSet.updates.push({
         name: application.name,
@@ -103,7 +109,7 @@ async function planApplication(
           applicationName: application.name,
           authNamespace,
           authIdpConfigName,
-          cors: application.config.cors,
+          cors: resolvedCors,
           subgraphs: application.subgraphs.map((subgraph) =>
             protoSubgraph(subgraph),
           ),
@@ -120,7 +126,7 @@ async function planApplication(
           applicationName: application.name,
           authNamespace,
           authIdpConfigName,
-          cors: application.config.cors,
+          cors: resolvedCors,
           subgraphs: application.subgraphs.map((subgraph) =>
             protoSubgraph(subgraph),
           ),
@@ -142,6 +148,49 @@ async function planApplication(
 
   changeSet.print();
   return changeSet;
+}
+
+// Converting "name:url" patterns to actual Static Website URLs
+async function resolveCorsUrls(
+  client: OperatorClient,
+  workspaceId: string,
+  cors: string[] | undefined,
+): Promise<string[]> {
+  if (!cors) {
+    return [];
+  }
+
+  const results = await Promise.all(
+    cors.map(async (origin) => {
+      if (origin.endsWith(":url")) {
+        const siteName = origin.slice(0, -4);
+
+        try {
+          const response = await client.getStaticWebsite({
+            workspaceId,
+            name: siteName,
+          });
+
+          if (response.staticwebsite?.url) {
+            return [response.staticwebsite.url];
+          } else {
+            console.warn(
+              `Static website "${siteName}" has no URL assigned yet. Excluding from CORS.`,
+            );
+            return [];
+          }
+        } catch {
+          console.warn(
+            `Static website "${siteName}" not found for CORS configuration. Excluding from CORS.`,
+          );
+          return [];
+        }
+      }
+      return [origin];
+    }),
+  );
+
+  return results.flat();
 }
 
 function protoSubgraph(

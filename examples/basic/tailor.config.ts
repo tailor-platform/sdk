@@ -7,6 +7,9 @@ export default defineConfig({
   // region: "asia-northeast",
   app: {
     "my-app": {
+      cors: [
+        "my-frontend:url", // This will be replaced with the actual Static Website URL
+      ],
       db: {
         tailordb: { files: ["./tailordb/*.ts"] },
       },
@@ -63,6 +66,11 @@ export default defineConfig({
     },
   },
   executor: { files: ["./executors/*.ts"] },
+  staticWebsites: {
+    "my-frontend": {
+      description: "my frontend application",
+    },
+  },
   generators: [
     [
       "@tailor/kysely-type",
