@@ -13,6 +13,12 @@ export default defineConfig([
   ...tseslint.configs.recommended,
   {
     files: ["src/**/*.{ts,tsx,cts}", "tsdown.config.ts", "vitest.config.ts"],
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+        project: "./tsconfig.json",
+      },
+    },
     rules: {
       "@typescript-eslint/consistent-type-imports": [
         "error",
