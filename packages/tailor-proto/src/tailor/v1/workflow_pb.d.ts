@@ -6,6 +6,7 @@ import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Workflow, WorkflowExecution, WorkflowJobFunction } from "./workflow_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
+import type { AuthInvoker } from "./auth_resource_pb";
 
 /**
  * Describes the file tailor/v1/workflow.proto.
@@ -583,4 +584,88 @@ export declare type ListWorkflowExecutionsResponse = Message<"tailor.v1.ListWork
  * Use `create(ListWorkflowExecutionsResponseSchema)` to create a new message.
  */
 export declare const ListWorkflowExecutionsResponseSchema: GenMessage<ListWorkflowExecutionsResponse>;
+
+/**
+ * @generated from message tailor.v1.TestStartWorkflowRequest
+ */
+export declare type TestStartWorkflowRequest = Message<"tailor.v1.TestStartWorkflowRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string workflow_id = 2;
+   */
+  workflowId: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthInvoker auth_invoker = 3;
+   */
+  authInvoker?: AuthInvoker;
+
+  /**
+   * @generated from field: optional string arg = 4;
+   */
+  arg?: string;
+};
+
+/**
+ * Describes the message tailor.v1.TestStartWorkflowRequest.
+ * Use `create(TestStartWorkflowRequestSchema)` to create a new message.
+ */
+export declare const TestStartWorkflowRequestSchema: GenMessage<TestStartWorkflowRequest>;
+
+/**
+ * @generated from message tailor.v1.TestStartWorkflowResponse
+ */
+export declare type TestStartWorkflowResponse = Message<"tailor.v1.TestStartWorkflowResponse"> & {
+  /**
+   * @generated from field: string execution_id = 1;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.TestStartWorkflowResponse.
+ * Use `create(TestStartWorkflowResponseSchema)` to create a new message.
+ */
+export declare const TestStartWorkflowResponseSchema: GenMessage<TestStartWorkflowResponse>;
+
+/**
+ * @generated from message tailor.v1.TestResumeWorkflowRequest
+ */
+export declare type TestResumeWorkflowRequest = Message<"tailor.v1.TestResumeWorkflowRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string execution_id = 2;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.TestResumeWorkflowRequest.
+ * Use `create(TestResumeWorkflowRequestSchema)` to create a new message.
+ */
+export declare const TestResumeWorkflowRequestSchema: GenMessage<TestResumeWorkflowRequest>;
+
+/**
+ * @generated from message tailor.v1.TestResumeWorkflowResponse
+ */
+export declare type TestResumeWorkflowResponse = Message<"tailor.v1.TestResumeWorkflowResponse"> & {
+  /**
+   * @generated from field: string execution_id = 1;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.TestResumeWorkflowResponse.
+ * Use `create(TestResumeWorkflowResponseSchema)` to create a new message.
+ */
+export declare const TestResumeWorkflowResponseSchema: GenMessage<TestResumeWorkflowResponse>;
 

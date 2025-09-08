@@ -993,6 +993,11 @@ export enum AuthOAuth2Client_ClientType {
    * @generated from enum value: CLIENT_TYPE_PUBLIC = 2;
    */
   PUBLIC = 2,
+
+  /**
+   * @generated from enum value: CLIENT_TYPE_BROWSER = 3;
+   */
+  BROWSER = 3,
 }
 
 /**
