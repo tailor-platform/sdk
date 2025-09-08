@@ -59,6 +59,7 @@ export interface OAuth2Client {
   Description?: string;
   GrantTypes?: OAuth2ClientGrantType[];
   RedirectURIs: string[];
+  ClientType?: "confidential" | "public" | "browser";
 }
 
 export interface SCIMAuthorization {

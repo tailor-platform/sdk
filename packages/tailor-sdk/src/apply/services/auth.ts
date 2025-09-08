@@ -32,6 +32,7 @@ import {
   type AuthIDPConfig_ConfigSchema,
   type AuthIDPConfigSchema,
   AuthOAuth2Client_GrantType,
+  AuthOAuth2Client_ClientType,
   type AuthOAuth2ClientSchema,
   AuthSCIMAttribute_Mutability,
   AuthSCIMAttribute_Type,
@@ -1026,6 +1027,16 @@ function protoOAuth2Client(
       }
     }),
     redirectUris: oauth2Client.RedirectURIs,
+    clientType: (
+      {
+        confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+        public: AuthOAuth2Client_ClientType.PUBLIC,
+        browser: AuthOAuth2Client_ClientType.BROWSER,
+      } satisfies Record<
+        NonNullable<OAuth2Client["ClientType"]>,
+        AuthOAuth2Client_ClientType
+      >
+    )[oauth2Client.ClientType ?? "confidential"],
   };
 }
 

@@ -2,7 +2,7 @@
 // @generated from file tailor/v1/staticwebsite.proto (package tailor.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { StaticWebsite } from "./staticwebsite_resource_pb";
 import type { PageDirection } from "./resource_pb";
@@ -296,6 +296,11 @@ export declare type UploadFileRequest_InitialUploadMetadata = Message<"tailor.v1
    * @generated from field: string file_path = 3;
    */
   filePath: string;
+
+  /**
+   * @generated from field: string content_type = 4;
+   */
+  contentType: string;
 };
 
 /**
@@ -352,99 +357,4 @@ export declare type PublishDeploymentResponse = Message<"tailor.v1.PublishDeploy
  * Use `create(PublishDeploymentResponseSchema)` to create a new message.
  */
 export declare const PublishDeploymentResponseSchema: GenMessage<PublishDeploymentResponse>;
-
-/**
- * @generated from message tailor.v1.DeployStaticWebsiteRequest
- */
-export declare type DeployStaticWebsiteRequest = Message<"tailor.v1.DeployStaticWebsiteRequest"> & {
-  /**
-   * @generated from oneof tailor.v1.DeployStaticWebsiteRequest.payload
-   */
-  payload: {
-    /**
-     * @generated from field: tailor.v1.DeployStaticWebsiteRequest.InitialUploadMetadata initial_metadata = 1;
-     */
-    value: DeployStaticWebsiteRequest_InitialUploadMetadata;
-    case: "initialMetadata";
-  } | {
-    /**
-     * @generated from field: bytes chunk_data = 2;
-     */
-    value: Uint8Array;
-    case: "chunkData";
-  } | { case: undefined; value?: undefined };
-};
-
-/**
- * Describes the message tailor.v1.DeployStaticWebsiteRequest.
- * Use `create(DeployStaticWebsiteRequestSchema)` to create a new message.
- */
-export declare const DeployStaticWebsiteRequestSchema: GenMessage<DeployStaticWebsiteRequest>;
-
-/**
- * @generated from message tailor.v1.DeployStaticWebsiteRequest.InitialUploadMetadata
- */
-export declare type DeployStaticWebsiteRequest_InitialUploadMetadata = Message<"tailor.v1.DeployStaticWebsiteRequest.InitialUploadMetadata"> & {
-  /**
-   * @generated from field: string workspace_id = 1;
-   */
-  workspaceId: string;
-
-  /**
-   * @generated from field: string name = 2;
-   */
-  name: string;
-
-  /**
-   * @generated from field: tailor.v1.DeployStaticWebsiteRequest.ArchiveFormat archive_format = 3;
-   */
-  archiveFormat: DeployStaticWebsiteRequest_ArchiveFormat;
-};
-
-/**
- * Describes the message tailor.v1.DeployStaticWebsiteRequest.InitialUploadMetadata.
- * Use `create(DeployStaticWebsiteRequest_InitialUploadMetadataSchema)` to create a new message.
- */
-export declare const DeployStaticWebsiteRequest_InitialUploadMetadataSchema: GenMessage<DeployStaticWebsiteRequest_InitialUploadMetadata>;
-
-/**
- * @generated from enum tailor.v1.DeployStaticWebsiteRequest.ArchiveFormat
- */
-export enum DeployStaticWebsiteRequest_ArchiveFormat {
-  /**
-   * @generated from enum value: ARCHIVE_FORMAT_UNSPECIFIED = 0;
-   */
-  UNSPECIFIED = 0,
-
-  /**
-   * @generated from enum value: ARCHIVE_FORMAT_TARGZ = 1;
-   */
-  TARGZ = 1,
-}
-
-/**
- * Describes the enum tailor.v1.DeployStaticWebsiteRequest.ArchiveFormat.
- */
-export declare const DeployStaticWebsiteRequest_ArchiveFormatSchema: GenEnum<DeployStaticWebsiteRequest_ArchiveFormat>;
-
-/**
- * @generated from message tailor.v1.DeployStaticWebsiteResponse
- */
-export declare type DeployStaticWebsiteResponse = Message<"tailor.v1.DeployStaticWebsiteResponse"> & {
-  /**
-   * @generated from field: string deployment_id = 1;
-   */
-  deploymentId: string;
-
-  /**
-   * @generated from field: string url = 2;
-   */
-  url: string;
-};
-
-/**
- * Describes the message tailor.v1.DeployStaticWebsiteResponse.
- * Use `create(DeployStaticWebsiteResponseSchema)` to create a new message.
- */
-export declare const DeployStaticWebsiteResponseSchema: GenMessage<DeployStaticWebsiteResponse>;
 

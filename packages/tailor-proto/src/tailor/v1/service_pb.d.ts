@@ -17,8 +17,8 @@ import type { GetFunctionExecutionRequestSchema, GetFunctionExecutionResponseSch
 import type { CreateAiServiceRequestSchema, CreateAiServiceResponseSchema, CreateAiTaskRequestSchema, CreateAiTaskResponseSchema, DeleteAiServiceRequestSchema, DeleteAiServiceResponseSchema, DeleteAiTaskRequestSchema, DeleteAiTaskResponseSchema, GetAiServiceRequestSchema, GetAiServiceResponseSchema, GetAiTaskRequestSchema, GetAiTaskResponseSchema, ListAiServicesRequestSchema, ListAiServicesResponseSchema, ListAiTasksRequestSchema, ListAiTasksResponseSchema, UpdateAiTaskRequestSchema, UpdateAiTaskResponseSchema } from "./ai_pb";
 import type { ListMeterEventCountsRequestSchema, ListMeterEventCountsResponseSchema, ListMeterExecutionCountsRequestSchema, ListMeterExecutionCountsResponseSchema, ListMeterRequestCountsRequestSchema, ListMeterRequestCountsResponseSchema } from "./meter_pb";
 import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, CreateIdPServiceRequestSchema, CreateIdPServiceResponseSchema, DeleteIdPClientRequestSchema, DeleteIdPClientResponseSchema, DeleteIdPServiceRequestSchema, DeleteIdPServiceResponseSchema, GetIdPClientRequestSchema, GetIdPClientResponseSchema, GetIdPServiceRequestSchema, GetIdPServiceResponseSchema, ListIdPClientsRequestSchema, ListIdPClientsResponseSchema, ListIdPServicesRequestSchema, ListIdPServicesResponseSchema, UpdateIdPServiceRequestSchema, UpdateIdPServiceResponseSchema } from "./idp_pb";
-import type { CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, DeployStaticWebsiteRequestSchema, DeployStaticWebsiteResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
-import type { CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
+import type { CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
+import type { CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
 
 /**
  * Describes the file tailor/v1/service.proto.
@@ -2606,17 +2606,6 @@ export declare const OperatorService: GenService<{
     output: typeof PublishDeploymentResponseSchema;
   },
   /**
-   * TODO(haru0017): remove
-   *
-   * @generated from rpc tailor.v1.OperatorService.DeployStaticWebsite
-   * @deprecated
-   */
-  deployStaticWebsite: {
-    methodKind: "client_streaming";
-    input: typeof DeployStaticWebsiteRequestSchema;
-    output: typeof DeployStaticWebsiteResponseSchema;
-  },
-  /**
    * CreateWorkflow creates a new workflow.
    *
    * [Errors]
@@ -2807,6 +2796,37 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof ListWorkflowExecutionsRequestSchema;
     output: typeof ListWorkflowExecutionsResponseSchema;
+  },
+  /**
+   * TestStartWorkflow starts a workflow execution for testing purposes.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workflow does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.TestStartWorkflow
+   */
+  testStartWorkflow: {
+    methodKind: "unary";
+    input: typeof TestStartWorkflowRequestSchema;
+    output: typeof TestStartWorkflowResponseSchema;
+  },
+  /**
+   * TestResumeWorkflow resumes a failed workflow execution for testing purposes.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: execution does not exist or can not be accessed
+   * - FailedPrecondition: execution is not in a resumable state
+   *
+   * @generated from rpc tailor.v1.OperatorService.TestResumeWorkflow
+   */
+  testResumeWorkflow: {
+    methodKind: "unary";
+    input: typeof TestResumeWorkflowRequestSchema;
+    output: typeof TestResumeWorkflowResponseSchema;
   },
 }>;
 
