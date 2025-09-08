@@ -3,6 +3,7 @@ import type { PipelineResolverServiceInput } from "@/services/pipeline/types";
 import type { AuthServiceInput } from "@/services/auth/types";
 import type { ExecutorServiceInput } from "@/services/executor/types";
 import { type IdPServiceInput } from "./services/idp/types";
+import type { StaticWebsiteServiceInput } from "@/services/staticwebsite/types";
 import { type Region } from "@/types/types";
 import {
   type KyselyGenerator,
@@ -30,6 +31,7 @@ export type WorkspaceConfig = (
 ) & {
   app: Record<string, AppConfig>;
   executor?: ExecutorServiceInput;
+  staticWebsites?: Record<string, StaticWebsiteServiceInput>;
   generators?: Array<
     | [
         typeof KyselyGeneratorID,

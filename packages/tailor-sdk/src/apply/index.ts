@@ -10,6 +10,7 @@ import { applyAuth } from "./services/auth";
 import { applyExecutor } from "./services/executor";
 import { applyIdP } from "./services/idp";
 import { applyPipeline } from "./services/pipeline";
+import { applyStaticWebsite } from "./services/staticwebsite";
 import { applyTailorDB } from "./services/tailordb";
 import { readTailorctlConfig, type TailorctlConfig } from "./tailorctl";
 
@@ -46,6 +47,7 @@ export async function apply(
   await applyIdP(client, workspaceId, workspace, options);
   await applyAuth(client, workspaceId, workspace, options);
   await applyPipeline(client, workspaceId, workspace, options);
+  await applyStaticWebsite(client, workspaceId, workspace, options);
   await applyApplication(client, workspaceId, workspace, options);
   await applyExecutor(client, workspaceId, workspace, options);
 
