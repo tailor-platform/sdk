@@ -5,7 +5,7 @@ import inquirer from "inquirer";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
-import chalk from "chalk";
+import { styleText } from "node:util";
 import { spawn } from "node:child_process";
 
 export const validateProjectName = (name: string): boolean | string => {
@@ -328,7 +328,9 @@ export const addToExistingProject = async (
   template: string,
   srcDir: string = "src",
 ) => {
-  console.log(chalk.blue("\n📦 Adding Tailor SDK to existing project...\n"));
+  console.log(
+    styleText("blue", "\n📦 Adding Tailor SDK to existing project...\n"),
+  );
 
   // Read existing package.json
   const packageJsonPath = path.join(projectPath, "package.json");
@@ -356,12 +358,14 @@ export const addToExistingProject = async (
 
   // Write updated package.json
   await writeJson(packageJsonPath, existingPackageJson, 2);
-  console.log(chalk.green("✅ Updated package.json"));
+  console.log(styleText("green", "✅ Updated package.json"));
 
   // Create tailor.config.ts
   const configPath = path.join(projectPath, "tailor.config.ts");
   if (await pathExists(configPath)) {
-    console.log(chalk.yellow("⚠️  tailor.config.ts already exists, skipping"));
+    console.log(
+      styleText("yellow", "⚠️  tailor.config.ts already exists, skipping"),
+    );
   } else {
     await fsp.writeFile(
       configPath,
@@ -372,7 +376,7 @@ export const addToExistingProject = async (
         srcDir,
       ),
     );
-    console.log(chalk.green("✅ Created tailor.config.ts"));
+    console.log(styleText("green", "✅ Created tailor.config.ts"));
   }
 
   // Create directories and sample files
@@ -387,11 +391,13 @@ export const addToExistingProject = async (
   for (const [filePath, content] of Object.entries(templateFiles)) {
     const fullPath = path.join(projectPath, filePath);
     if (await pathExists(fullPath)) {
-      console.log(chalk.yellow(`⚠️  ${filePath} already exists, skipping`));
+      console.log(
+        styleText("yellow", `⚠️  ${filePath} already exists, skipping`),
+      );
     } else {
       await ensureDir(path.dirname(fullPath));
       await fsp.writeFile(fullPath, content);
-      console.log(chalk.green(`✅ Created ${filePath}`));
+      console.log(styleText("green", `✅ Created ${filePath}`));
     }
   }
 
@@ -406,7 +412,7 @@ export const addToExistingProject = async (
         gitignorePath,
         "\n# Tailor SDK\n" + additions.join("\n") + "\n",
       );
-      console.log(chalk.green("✅ Updated .gitignore"));
+      console.log(styleText("green", "✅ Updated .gitignore"));
     }
   }
 
@@ -460,7 +466,7 @@ export const initCommand = defineCommand({
     },
   },
   async run({ args }) {
-    console.log(chalk.blue("\n🎯 Welcome to Tailor SDK!\n"));
+    console.log(styleText("blue", "\n🎯 Welcome to Tailor SDK!\n"));
 
     let projectName = args.name;
     const isAddToExisting = args["add-to-existing"];
@@ -509,9 +515,9 @@ export const initCommand = defineCommand({
       if (validRegions.includes(args.region as Region)) {
         region = args.region as Region;
       } else {
-        console.error(chalk.red(`Invalid region: ${args.region}`));
+        console.error(styleText("red", `Invalid region: ${args.region}`));
         console.error(
-          chalk.yellow(`Valid regions: ${validRegions.join(", ")}`),
+          styleText("yellow", `Valid regions: ${validRegions.join(", ")}`),
         );
         process.exit(1);
       }
@@ -526,9 +532,9 @@ export const initCommand = defineCommand({
       if (validTemplates.includes(args.template as Template)) {
         template = args.template as Template;
       } else {
-        console.error(chalk.red(`Invalid template: ${args.template}`));
+        console.error(styleText("red", `Invalid template: ${args.template}`));
         console.error(
-          chalk.yellow(`Valid templates: ${validTemplates.join(", ")}`),
+          styleText("yellow", `Valid templates: ${validTemplates.join(", ")}`),
         );
         process.exit(1);
       }
@@ -583,10 +589,14 @@ export const initCommand = defineCommand({
       // Project name is required when using --yes flag (unless adding to existing project)
       if (!useExistingProject && !projectName) {
         console.error(
-          chalk.red("Error: Project name is required when using --yes flag"),
+          styleText(
+            "red",
+            "Error: Project name is required when using --yes flag",
+          ),
         );
         console.error(
-          chalk.yellow(
+          styleText(
+            "yellow",
             "Usage: npx @tailor-platform/tailor-sdk init <project-name> --yes",
           ),
         );
@@ -597,7 +607,7 @@ export const initCommand = defineCommand({
       if (projectName) {
         const validation = validateProjectName(projectName);
         if (validation !== true) {
-          console.error(chalk.red(`Error: ${validation}`));
+          console.error(styleText("red", `Error: ${validation}`));
           process.exit(1);
         }
       }
@@ -631,7 +641,7 @@ export const initCommand = defineCommand({
         });
 
         if (action === "cancel") {
-          console.log(chalk.yellow("Cancelled"));
+          console.log(styleText("yellow", "Cancelled"));
           process.exit(0);
         } else if (action === "add") {
           useExistingProject = true;
@@ -641,14 +651,15 @@ export const initCommand = defineCommand({
           const { confirmOverwrite } = await inquirer.prompt({
             type: "confirm",
             name: "confirmOverwrite",
-            message: chalk.red(
+            message: styleText(
+              "red",
               "⚠️  This will DELETE all existing files. Are you sure?",
             ),
             default: false,
           });
 
           if (!confirmOverwrite) {
-            console.log(chalk.yellow("Cancelled"));
+            console.log(styleText("yellow", "Cancelled"));
             process.exit(0);
           }
 
@@ -665,12 +676,12 @@ export const initCommand = defineCommand({
         });
 
         if (!overwrite) {
-          console.log(chalk.yellow("Cancelled"));
+          console.log(styleText("yellow", "Cancelled"));
           process.exit(0);
         }
       } else if (args.yes) {
         console.error(
-          chalk.red(`Error: Directory ${projectName} already exists`),
+          styleText("red", `Error: Directory ${projectName} already exists`),
         );
         process.exit(1);
       }
@@ -682,51 +693,59 @@ export const initCommand = defineCommand({
         await addToExistingProject(targetPath, region, template, srcDir);
 
         if (!args["skip-install"]) {
-          console.log(chalk.blue("\n📦 Installing dependencies..."));
+          console.log(styleText("blue", "\n📦 Installing dependencies..."));
           try {
             await runNpmInstall(targetPath);
-            console.log(chalk.green("✅ Dependencies installed"));
+            console.log(styleText("green", "✅ Dependencies installed"));
           } catch (error) {
             console.error(
-              chalk.yellow(
+              styleText(
+                "yellow",
                 "⚠️  Failed to install dependencies. You can run 'npm install' manually later.",
               ),
             );
             if (error instanceof Error) {
-              console.error(chalk.gray(`Error details: ${error.message}`));
+              console.error(
+                styleText("gray", `Error details: ${error.message}`),
+              );
             }
           }
         }
 
         console.log(
-          chalk.green("\n✅ Tailor SDK added to existing project!\n"),
+          styleText("green", "\n✅ Tailor SDK added to existing project!\n"),
         );
-        console.log(chalk.cyan("Next steps:"));
+        console.log(styleText("cyan", "Next steps:"));
         let step = 1;
         if (args["skip-install"]) {
           console.log(`  ${step++}. npm install`);
         }
         console.log(
-          chalk.white(
+          styleText(
+            "white",
             `  ${step++}. npm run tailor:dev (start development mode)`,
           ),
         );
         console.log(
-          chalk.white(
+          styleText(
+            "white",
             `  ${step++}. Edit ${srcDir}/tailordb/*.ts to define your data models`,
           ),
         );
         console.log(
-          chalk.white(
+          styleText(
+            "white",
             `  ${step++}. Edit ${srcDir}/resolvers/**/resolver.ts to create API endpoints`,
           ),
         );
-        console.log(chalk.blue("\nDocumentation: https://docs.tailor.tech\n"));
+        console.log(
+          styleText("blue", "\nDocumentation: https://docs.tailor.tech\n"),
+        );
         return;
       }
 
       // Create new project
-      console.log(chalk.blue("\n📁 Creating project structure..."));
+      console.log(styleText("blue", "\n📁 Creating project structure..."));
 
       await ensureDir(projectPath);
       await ensureDir(path.join(projectPath, srcDir, "tailordb"));
@@ -768,27 +787,30 @@ export const initCommand = defineCommand({
         await fsp.writeFile(fullPath, content);
       }
 
-      console.log(chalk.green("✅ Project structure created"));
+      console.log(styleText("green", "✅ Project structure created"));
 
       if (!args["skip-install"]) {
-        console.log(chalk.blue("\n📦 Installing dependencies..."));
+        console.log(styleText("blue", "\n📦 Installing dependencies..."));
         try {
           await runNpmInstall(projectPath);
-          console.log(chalk.green("✅ Dependencies installed"));
+          console.log(styleText("green", "✅ Dependencies installed"));
         } catch (error) {
           console.error(
-            chalk.yellow(
+            styleText(
+              "yellow",
               "⚠️  Failed to install dependencies. You can run 'npm install' manually later.",
             ),
           );
           if (error instanceof Error) {
-            console.error(chalk.gray(`Error details: ${error.message}`));
+            console.error(styleText("gray", `Error details: ${error.message}`));
           }
         }
       }
 
-      console.log(chalk.green("\n✅ Project initialized successfully!\n"));
-      console.log(chalk.cyan("Next steps:"));
+      console.log(
+        styleText("green", "\n✅ Project initialized successfully!\n"),
+      );
+      console.log(styleText("cyan", "Next steps:"));
       let step = 0;
       console.log(`  ${++step}. cd ${projectName}`);
       if (args["skip-install"]) {
@@ -801,13 +823,16 @@ export const initCommand = defineCommand({
         `  ${++step}. Edit ${srcDir}/tailordb/*.ts to define your data models`,
       );
       console.log(
-        chalk.white(
+        styleText(
+          "white",
           `  ${++step}. Edit ${srcDir}/resolvers/**/resolver.ts to create API endpoints`,
         ),
       );
-      console.log(chalk.blue("\nDocumentation: https://docs.tailor.tech\n"));
+      console.log(
+        styleText("blue", "\nDocumentation: https://docs.tailor.tech\n"),
+      );
     } catch (error) {
-      console.error(chalk.red("Error creating project:"), error);
+      console.error(styleText("red", "Error creating project:"), error);
       process.exit(1);
     }
   },
