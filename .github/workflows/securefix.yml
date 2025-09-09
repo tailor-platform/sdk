@@ -20,7 +20,7 @@ jobs:
           files_yaml: |
             paths:
               - .github/workflows/securefix.yml
-              - aqua.yml
+              - aqua.yaml
               - aqua-checksums.json
   update-aqua-deps:
     runs-on: ubuntu-latest
