@@ -71,6 +71,7 @@ export const generateTailorConfig = (
   projectName: string,
   region: string,
   template: string,
+  srcDir: string = "src",
 ) => {
   const baseConfig = `import { defineConfig } from "@tailor-platform/tailor-sdk";
 
@@ -81,12 +82,12 @@ export default defineConfig({
     "app-name": {
       db: {
         "main-db": {
-          files: ["./src/tailordb/**/*.ts"]
+          files: [\`./${srcDir}/tailordb/**/*.ts\`]
         }
       },
       pipeline: {
         "main-pipeline": {
-          files: ["./src/resolvers/**/resolver.ts"]
+          files: [\`./${srcDir}/resolvers/**/resolver.ts\`]
         },
       },`;
 
@@ -126,6 +127,7 @@ export default defineConfig({
     },
   },
   generators: [
+    "@tailor/sdl",
     ["@tailor/kysely-type", { distPath: ({ tailorDB }) => \`./src/generated/\${tailorDB}.ts\` }],
     ["@tailor/db-type", { distPath: () => "./src/tailordb/types.ts" }],
   ],
@@ -163,7 +165,7 @@ src/generated/
 .DS_Store
 `;
 
-const tsconfigContent = {
+const tsconfigContent = (srcDir: string = "src") => ({
   compilerOptions: {
     target: "ES2022",
     module: "ESNext",
@@ -176,11 +178,14 @@ const tsconfigContent = {
     skipLibCheck: true,
     resolveJsonModule: true,
   },
-  include: ["src/**/*", "tailor.config.ts"],
-  exclude: ["node_modules", "dist", "src/generated"],
-};
+  include: [`${srcDir}/**/*`, "tailor.config.ts"],
+  exclude: ["node_modules", "dist", `${srcDir}/generated`],
+});
 
-const readmeContent = (projectName: string) => `# ${projectName}
+const readmeContent = (
+  projectName: string,
+  srcDir: string = "src",
+) => `# ${projectName}
 
 A Tailor SDK project
 
@@ -198,8 +203,8 @@ A Tailor SDK project
 
 ## Project Structure
 
-- \`src/tailordb/\` - Data model definitions
-- \`src/resolvers/\` - API resolver definitions
+- \`${srcDir}/tailordb/\` - Data model definitions
+- \`${srcDir}/resolvers/\` - API resolver definitions
 - \`tailor.config.ts\` - Tailor configuration
 
 ## Available Scripts
@@ -213,8 +218,8 @@ A Tailor SDK project
 For more information, visit [Tailor Documentation](https://docs.tailor.tech)
 `;
 
-const basicTemplateFiles = {
-  "src/tailordb/index.ts": `import { db, t } from "@tailor-platform/tailor-sdk";
+const basicTemplateFiles = (srcDir: string = "src") => ({
+  [`${srcDir}/tailordb/index.ts`]: `import { db, t } from "@tailor-platform/tailor-sdk";
 
 export const user = db.type("User", {
   name: db.string(),
@@ -224,7 +229,7 @@ export const user = db.type("User", {
 
 export type User = t.infer<typeof user>;
 `,
-  "src/resolvers/hello/resolver.ts": `import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
+  [`${srcDir}/resolvers/hello/resolver.ts`]: `import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
 
 export default createQueryResolver(
   "hello",
@@ -244,11 +249,11 @@ export default createQueryResolver(
     })
   );
 `,
-};
+});
 
-const fullstackTemplateFiles = {
-  ...basicTemplateFiles,
-  "src/tailordb/user.ts": `import { db, t } from "@tailor-platform/tailor-sdk";
+const fullstackTemplateFiles = (srcDir: string = "src") => ({
+  ...basicTemplateFiles(srcDir),
+  [`${srcDir}/tailordb/user.ts`]: `import { db, t } from "@tailor-platform/tailor-sdk";
 
 export const user = db.type("User", {
   email: db.string().unique(),
@@ -262,7 +267,7 @@ export const user = db.type("User", {
 
 export type User = t.infer<typeof user>;
 `,
-};
+});
 
 const runNpmInstall = (projectPath: string): Promise<void> => {
   return new Promise((resolve, reject) => {
@@ -297,6 +302,7 @@ export const addToExistingProject = async (
   projectPath: string,
   region: string,
   template: string,
+  srcDir: string = "src",
 ) => {
   console.log(chalk.blue("\n📦 Adding Tailor SDK to existing project...\n"));
 
@@ -339,17 +345,20 @@ export const addToExistingProject = async (
         existingPackageJson.name || "my-project",
         region,
         template,
+        srcDir,
       ),
     );
     console.log(chalk.green("✅ Created tailor.config.ts"));
   }
 
   // Create directories and sample files
-  await fs.ensureDir(path.join(projectPath, "src", "tailordb"));
-  await fs.ensureDir(path.join(projectPath, "src", "resolvers"));
+  await fs.ensureDir(path.join(projectPath, srcDir, "tailordb"));
+  await fs.ensureDir(path.join(projectPath, srcDir, "resolvers"));
 
   const templateFiles =
-    template === "fullstack" ? fullstackTemplateFiles : basicTemplateFiles;
+    template === "fullstack"
+      ? fullstackTemplateFiles(srcDir)
+      : basicTemplateFiles(srcDir);
 
   for (const [filePath, content] of Object.entries(templateFiles)) {
     const fullPath = path.join(projectPath, filePath);
@@ -366,7 +375,7 @@ export const addToExistingProject = async (
   const gitignorePath = path.join(projectPath, ".gitignore");
   if (await fs.pathExists(gitignorePath)) {
     const existingGitignore = await fs.readFile(gitignorePath, "utf-8");
-    const toAdd = ["src/generated/", ".tailor-sdk/"];
+    const toAdd = [`${srcDir}/generated/`, ".tailor-sdk/"];
     const additions = toAdd.filter((item) => !existingGitignore.includes(item));
     if (additions.length > 0) {
       await fs.appendFile(
@@ -419,12 +428,19 @@ export const initCommand = defineCommand({
       description: "Add Tailor SDK to an existing TypeScript project",
       default: false,
     },
+    "src-dir": {
+      type: "string",
+      alias: "s",
+      description: "Source directory name (default: src)",
+      default: "src",
+    },
   },
   async run({ args }) {
     console.log(chalk.blue("\n🎯 Welcome to Tailor SDK!\n"));
 
     let projectName = args.name;
     const isAddToExisting = args["add-to-existing"];
+    const srcDir = args["src-dir"] || "src";
     const currentDirPath = process.cwd();
 
     // Check if current directory is an existing project when no project name is provided
@@ -639,7 +655,7 @@ export const initCommand = defineCommand({
     try {
       // Handle existing project
       if (useExistingProject) {
-        await addToExistingProject(targetPath, region, template);
+        await addToExistingProject(targetPath, region, template, srcDir);
 
         if (!args["skip-install"]) {
           console.log(chalk.blue("\n📦 Installing dependencies..."));
@@ -673,12 +689,12 @@ export const initCommand = defineCommand({
         );
         console.log(
           chalk.white(
-            `  ${step++}. Edit src/tailordb/*.ts to define your data models`,
+            `  ${step++}. Edit ${srcDir}/tailordb/*.ts to define your data models`,
           ),
         );
         console.log(
           chalk.white(
-            `  ${step++}. Edit src/resolvers/**/resolver.ts to create API endpoints`,
+            `  ${step++}. Edit ${srcDir}/resolvers/**/resolver.ts to create API endpoints`,
           ),
         );
         console.log(chalk.blue("\nDocumentation: https://docs.tailor.tech\n"));
@@ -689,8 +705,8 @@ export const initCommand = defineCommand({
       console.log(chalk.blue("\n📁 Creating project structure..."));
 
       await fs.ensureDir(projectPath);
-      await fs.ensureDir(path.join(projectPath, "src", "tailordb"));
-      await fs.ensureDir(path.join(projectPath, "src", "resolvers"));
+      await fs.ensureDir(path.join(projectPath, srcDir, "tailordb"));
+      await fs.ensureDir(path.join(projectPath, srcDir, "resolvers"));
 
       await fs.writeJson(
         path.join(projectPath, "package.json"),
@@ -700,7 +716,7 @@ export const initCommand = defineCommand({
 
       await fs.writeFile(
         path.join(projectPath, "tailor.config.ts"),
-        generateTailorConfig(projectName, region, template),
+        generateTailorConfig(projectName, region, template, srcDir),
       );
 
       await fs.writeFile(
@@ -709,16 +725,18 @@ export const initCommand = defineCommand({
       );
       await fs.writeFile(
         path.join(projectPath, "README.md"),
-        readmeContent(projectName),
+        readmeContent(projectName, srcDir),
       );
       await fs.writeJson(
         path.join(projectPath, "tsconfig.json"),
-        tsconfigContent,
+        tsconfigContent(srcDir),
         { spaces: 2 },
       );
 
       const templateFiles =
-        template === "fullstack" ? fullstackTemplateFiles : basicTemplateFiles;
+        template === "fullstack"
+          ? fullstackTemplateFiles(srcDir)
+          : basicTemplateFiles(srcDir);
 
       for (const [filePath, content] of Object.entries(templateFiles)) {
         const fullPath = path.join(projectPath, filePath);
@@ -756,11 +774,11 @@ export const initCommand = defineCommand({
         console.log(`  ${++step}. npm run dev (start development mode)`);
       }
       console.log(
-        `  ${++step}. Edit src/tailordb/*.ts to define your data models`,
+        `  ${++step}. Edit ${srcDir}/tailordb/*.ts to define your data models`,
       );
       console.log(
         chalk.white(
-          `  ${++step}. Edit src/resolvers/**/resolver.ts to create API endpoints`,
+          `  ${++step}. Edit ${srcDir}/resolvers/**/resolver.ts to create API endpoints`,
         ),
       );
       console.log(chalk.blue("\nDocumentation: https://docs.tailor.tech\n"));
