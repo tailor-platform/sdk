@@ -134,7 +134,7 @@ importers:
         version: 0.1.6
       dotenv:
         specifier: ^17.2.1
-        version: 17.2.1
+        version: 17.2.2
       es-toolkit:
         specifier: ^1.38.0
         version: 1.39.10
@@ -1545,8 +1545,8 @@ packages:
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
 
-  dotenv@17.2.1:
-    resolution: {integrity: sha512-kQhDYKZecqnM0fCnzI5eIv5L4cAe/iRI+HqMbO/hbRdTAeXDG+M9FjipUxNfbARuEg4iHIbhnhs78BCHNbSxEQ==}
+  dotenv@17.2.2:
+    resolution: {integrity: sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==}
     engines: {node: '>=12'}
 
   dts-resolver@2.1.2:
@@ -3877,7 +3877,7 @@ snapshots:
       minimatch: 3.1.2
       p-limit: 3.1.0
 
-  dotenv@17.2.1: {}
+  dotenv@17.2.2: {}
 
   dts-resolver@2.1.2: {}
 
