@@ -2,7 +2,8 @@
 
 import { defineCommand } from "citty";
 import inquirer from "inquirer";
-import * as fs from "fs-extra";
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import chalk from "chalk";
 import { spawn } from "node:child_process";
@@ -269,6 +270,34 @@ export type User = t.infer<typeof user>;
 `,
 });
 
+// --- FS helpers (use Node built-ins; avoid fs-extra at runtime) ---
+// Check if path exists (file or directory)
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fsp.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Ensure directory recursively
+async function ensureDir(dir: string): Promise<void> {
+  await fsp.mkdir(dir, { recursive: true });
+}
+
+// Read JSON file
+async function readJson<T = any>(file: string): Promise<T> {
+  const txt = await fsp.readFile(file, "utf-8");
+  return JSON.parse(txt) as T;
+}
+
+// Write JSON file with spacing
+async function writeJson(file: string, data: any, spaces = 2): Promise<void> {
+  const txt = JSON.stringify(data, null, spaces);
+  await fsp.writeFile(file, txt);
+}
+
 const runNpmInstall = (projectPath: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     const child = spawn("npm", ["install"], {
@@ -292,8 +321,8 @@ export const checkExistingProject = async (projectPath: string) => {
   const tsconfigPath = path.join(projectPath, "tsconfig.json");
 
   return {
-    hasPackageJson: await fs.pathExists(packageJsonPath),
-    hasTsConfig: await fs.pathExists(tsconfigPath),
+    hasPackageJson: await pathExists(packageJsonPath),
+    hasTsConfig: await pathExists(tsconfigPath),
     packageJsonPath,
   };
 };
@@ -308,7 +337,7 @@ export const addToExistingProject = async (
 
   // Read existing package.json
   const packageJsonPath = path.join(projectPath, "package.json");
-  const existingPackageJson = await fs.readJson(packageJsonPath);
+  const existingPackageJson = await readJson<any>(packageJsonPath);
 
   // Add Tailor SDK dependencies
   if (!existingPackageJson.devDependencies) {
@@ -331,15 +360,15 @@ export const addToExistingProject = async (
   }
 
   // Write updated package.json
-  await fs.writeJson(packageJsonPath, existingPackageJson, { spaces: 2 });
+  await writeJson(packageJsonPath, existingPackageJson, 2);
   console.log(chalk.green("✅ Updated package.json"));
 
   // Create tailor.config.ts
   const configPath = path.join(projectPath, "tailor.config.ts");
-  if (await fs.pathExists(configPath)) {
+  if (await pathExists(configPath)) {
     console.log(chalk.yellow("⚠️  tailor.config.ts already exists, skipping"));
   } else {
-    await fs.writeFile(
+    await fsp.writeFile(
       configPath,
       generateTailorConfig(
         existingPackageJson.name || "my-project",
@@ -352,8 +381,8 @@ export const addToExistingProject = async (
   }
 
   // Create directories and sample files
-  await fs.ensureDir(path.join(projectPath, srcDir, "tailordb"));
-  await fs.ensureDir(path.join(projectPath, srcDir, "resolvers"));
+  await ensureDir(path.join(projectPath, srcDir, "tailordb"));
+  await ensureDir(path.join(projectPath, srcDir, "resolvers"));
 
   const templateFiles =
     template === "fullstack"
@@ -362,23 +391,23 @@ export const addToExistingProject = async (
 
   for (const [filePath, content] of Object.entries(templateFiles)) {
     const fullPath = path.join(projectPath, filePath);
-    if (await fs.pathExists(fullPath)) {
+    if (await pathExists(fullPath)) {
       console.log(chalk.yellow(`⚠️  ${filePath} already exists, skipping`));
     } else {
-      await fs.ensureDir(path.dirname(fullPath));
-      await fs.writeFile(fullPath, content);
+      await ensureDir(path.dirname(fullPath));
+      await fsp.writeFile(fullPath, content);
       console.log(chalk.green(`✅ Created ${filePath}`));
     }
   }
 
   // Update .gitignore if needed
   const gitignorePath = path.join(projectPath, ".gitignore");
-  if (await fs.pathExists(gitignorePath)) {
-    const existingGitignore = await fs.readFile(gitignorePath, "utf-8");
+  if (await pathExists(gitignorePath)) {
+    const existingGitignore = await fsp.readFile(gitignorePath, "utf-8");
     const toAdd = [`${srcDir}/generated/`, ".tailor-sdk/"];
     const additions = toAdd.filter((item) => !existingGitignore.includes(item));
     if (additions.length > 0) {
-      await fs.appendFile(
+      await fsp.appendFile(
         gitignorePath,
         "\n# Tailor SDK\n" + additions.join("\n") + "\n",
       );
@@ -628,8 +657,8 @@ export const initCommand = defineCommand({
             process.exit(0);
           }
 
-          // Remove existing directory
-          await fs.remove(projectPath);
+          // Remove existing directory (recursive)
+          await fsp.rm(projectPath, { recursive: true, force: true });
         }
       } else if (!projectCheck.hasPackageJson && !args.yes) {
         // Directory exists but no package.json
@@ -704,33 +733,33 @@ export const initCommand = defineCommand({
       // Create new project
       console.log(chalk.blue("\n📁 Creating project structure..."));
 
-      await fs.ensureDir(projectPath);
-      await fs.ensureDir(path.join(projectPath, srcDir, "tailordb"));
-      await fs.ensureDir(path.join(projectPath, srcDir, "resolvers"));
+      await ensureDir(projectPath);
+      await ensureDir(path.join(projectPath, srcDir, "tailordb"));
+      await ensureDir(path.join(projectPath, srcDir, "resolvers"));
 
-      await fs.writeJson(
+      await writeJson(
         path.join(projectPath, "package.json"),
         generatePackageJson(projectName),
-        { spaces: 2 },
+        2,
       );
 
-      await fs.writeFile(
+      await fsp.writeFile(
         path.join(projectPath, "tailor.config.ts"),
         generateTailorConfig(projectName, region, template, srcDir),
       );
 
-      await fs.writeFile(
+      await fsp.writeFile(
         path.join(projectPath, ".gitignore"),
         gitignoreContent,
       );
-      await fs.writeFile(
+      await fsp.writeFile(
         path.join(projectPath, "README.md"),
         readmeContent(projectName, srcDir),
       );
-      await fs.writeJson(
+      await writeJson(
         path.join(projectPath, "tsconfig.json"),
         tsconfigContent(srcDir),
-        { spaces: 2 },
+        2,
       );
 
       const templateFiles =
@@ -740,8 +769,8 @@ export const initCommand = defineCommand({
 
       for (const [filePath, content] of Object.entries(templateFiles)) {
         const fullPath = path.join(projectPath, filePath);
-        await fs.ensureDir(path.dirname(fullPath));
-        await fs.writeFile(fullPath, content);
+        await ensureDir(path.dirname(fullPath));
+        await fsp.writeFile(fullPath, content);
       }
 
       console.log(chalk.green("✅ Project structure created"));

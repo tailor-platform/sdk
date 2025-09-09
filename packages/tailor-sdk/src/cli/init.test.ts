@@ -13,18 +13,20 @@ import {
   initCommand,
 } from "./init";
 
-// Provide explicit mock functions for ESM-safe overrides.
-// Note: Keep import style `import * as fs from "fs-extra"` for ESM/CJS.
+// Mocks for Node FS modules used by init.ts implementation
 const fsMock = vi.hoisted(() => ({
-  pathExists: vi.fn(),
-  readJson: vi.fn(),
-  writeJson: vi.fn(),
-  writeFile: vi.fn(),
-  ensureDir: vi.fn(),
   existsSync: vi.fn(),
+}));
+const fspMock = vi.hoisted(() => ({
+  access: vi.fn(),
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+  appendFile: vi.fn(),
+  mkdir: vi.fn(),
   rm: vi.fn(),
 }));
-vi.mock("fs-extra", () => fsMock);
+vi.mock("node:fs", () => fsMock);
+vi.mock("node:fs/promises", () => fspMock);
 // Mock inquirer
 vi.mock("inquirer");
 // Mock child_process
@@ -150,9 +152,10 @@ describe("init command", () => {
 
   describe("checkExistingProject", () => {
     it("should detect existing project with package.json", async () => {
-      const pathExistsSpy = fsMock.pathExists.mockImplementation(
+      const accessSpy = fspMock.access.mockImplementation(
         async (filePath: string) => {
-          return filePath.toString().includes("package.json");
+          if (filePath.toString().includes("package.json")) return;
+          throw new Error("not found");
         },
       );
 
@@ -162,13 +165,13 @@ describe("init command", () => {
       expect(result.packageJsonPath).toBe(
         path.join("/test/path", "package.json"),
       );
-      expect(pathExistsSpy).toHaveBeenCalledWith(
+      expect(accessSpy).toHaveBeenCalledWith(
         path.join("/test/path", "package.json"),
       );
     });
 
     it("should detect project without package.json", async () => {
-      fsMock.pathExists.mockResolvedValue(false as never);
+      fspMock.access.mockRejectedValue(new Error("not found"));
 
       const result = await checkExistingProject("/test/path");
 
@@ -178,81 +181,90 @@ describe("init command", () => {
 
   describe("addToExistingProject", () => {
     beforeEach(() => {
-      fsMock.readJson.mockResolvedValue({
-        name: "existing-project",
-        version: "1.0.0",
-        scripts: {
-          test: "jest",
-        },
-        dependencies: {
-          express: "^4.0.0",
-        },
-      });
-      fsMock.writeJson.mockResolvedValue(undefined as never);
-      fsMock.writeFile.mockResolvedValue(undefined as never);
-      fsMock.ensureDir.mockResolvedValue(undefined as never);
+      fspMock.readFile.mockResolvedValue(
+        JSON.stringify({
+          name: "existing-project",
+          version: "1.0.0",
+          scripts: {
+            test: "jest",
+          },
+          dependencies: {
+            express: "^4.0.0",
+          },
+        }),
+      );
+      fspMock.writeFile.mockResolvedValue(undefined as never);
+      fspMock.mkdir.mockResolvedValue(undefined as never);
     });
 
     it("should add tailor-sdk to dependencies", async () => {
-      const writeJsonSpy = fsMock.writeJson;
+      const writeFileSpy = fspMock.writeFile;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(writeJsonSpy).toHaveBeenCalledWith(
-        "/test/path/package.json",
-        expect.objectContaining({
-          dependencies: expect.objectContaining({
-            express: "^4.0.0",
-          }),
-          devDependencies: expect.objectContaining({
-            "@tailor-platform/tailor-sdk": "latest",
-          }),
-        }),
-        { spaces: 2 },
+      const pkgWrite = writeFileSpy.mock.calls.find(
+        ([fp]) => fp === "/test/path/package.json",
+      );
+      expect(pkgWrite).toBeDefined();
+      const [, content] = pkgWrite!;
+      const json = JSON.parse(String(content));
+      expect(json.dependencies).toEqual(
+        expect.objectContaining({ express: "^4.0.0" }),
+      );
+      expect(json.devDependencies).toEqual(
+        expect.objectContaining({ "@tailor-platform/tailor-sdk": "latest" }),
       );
     });
 
     it("should add tailor scripts to package.json", async () => {
-      const writeJsonSpy = fsMock.writeJson;
+      const writeFileSpy = fspMock.writeFile;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(writeJsonSpy).toHaveBeenCalledWith(
-        "/test/path/package.json",
+      const pkgWrite = writeFileSpy.mock.calls.find(
+        ([fp]) => fp === "/test/path/package.json",
+      );
+      expect(pkgWrite).toBeDefined();
+      const [, content] = pkgWrite!;
+      const json = JSON.parse(String(content));
+      expect(json.scripts).toEqual(
         expect.objectContaining({
-          scripts: expect.objectContaining({
-            test: "jest",
-            "tailor:dev": "tailor-sdk generate --watch",
-            "tailor:build": "tailor-sdk generate",
-            "tailor:deploy": "tailor-sdk apply",
-          }),
+          test: "jest",
+          "tailor:dev": "tailor-sdk generate --watch",
+          "tailor:build": "tailor-sdk generate",
+          "tailor:deploy": "tailor-sdk apply",
         }),
-        { spaces: 2 },
       );
     });
 
     it("should create tailor.config.ts", async () => {
-      const writeFileSpy = fsMock.writeFile;
+      const writeFileSpy = fspMock.writeFile;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(writeFileSpy).toHaveBeenCalledWith(
-        "/test/path/tailor.config.ts",
+      const confWrite = writeFileSpy.mock.calls.find(
+        ([fp]) => fp === "/test/path/tailor.config.ts",
+      );
+      expect(confWrite?.[1]).toEqual(
         expect.stringContaining('name: "existing-project"'),
       );
     });
 
     it("should create src directories", async () => {
-      const ensureDirSpy = fsMock.ensureDir;
+      const mkdirSpy = fspMock.mkdir;
 
       await addToExistingProject("/test/path", "asia-northeast", "basic");
 
-      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/tailordb");
-      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/resolvers");
+      expect(mkdirSpy).toHaveBeenCalledWith("/test/path/src/tailordb", {
+        recursive: true,
+      });
+      expect(mkdirSpy).toHaveBeenCalledWith("/test/path/src/resolvers", {
+        recursive: true,
+      });
     });
 
     it("should create custom source directories", async () => {
-      const ensureDirSpy = fsMock.ensureDir;
+      const mkdirSpy = fspMock.mkdir;
 
       await addToExistingProject(
         "/test/path",
@@ -261,8 +273,12 @@ describe("init command", () => {
         "app",
       );
 
-      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/app/tailordb");
-      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/app/resolvers");
+      expect(mkdirSpy).toHaveBeenCalledWith("/test/path/app/tailordb", {
+        recursive: true,
+      });
+      expect(mkdirSpy).toHaveBeenCalledWith("/test/path/app/resolvers", {
+        recursive: true,
+      });
     });
   });
 
@@ -278,10 +294,9 @@ describe("init command", () => {
 
       // Mock fs methods
       fsMock.existsSync.mockReturnValue(false as never);
-      fsMock.pathExists.mockResolvedValue(false as any);
-      fsMock.ensureDir.mockResolvedValue(undefined as any);
-      fsMock.writeJson.mockResolvedValue(undefined as never);
-      fsMock.writeFile.mockResolvedValue(undefined as never);
+      fspMock.access.mockRejectedValue(new Error("not found"));
+      fspMock.mkdir.mockResolvedValue(undefined as any);
+      fspMock.writeFile.mockResolvedValue(undefined as never);
 
       // Mock spawn for npm install
       mockSpawn = {
@@ -338,11 +353,12 @@ describe("init command", () => {
       expect(prompts.find((p: any) => p.name === "template")).toBeDefined();
 
       // Verify project was created with the provided name
-      expect(vi.mocked(fsMock.writeJson)).toHaveBeenCalledWith(
-        expect.stringContaining("test-project/package.json"),
-        expect.objectContaining({ name: "test-project" }),
-        expect.any(Object),
+      const pkgWrite = fspMock.writeFile.mock.calls.find(([p]) =>
+        String(p).includes("test-project/package.json"),
       );
+      expect(pkgWrite).toBeDefined();
+      const json = JSON.parse(String(pkgWrite?.[1]));
+      expect(json).toEqual(expect.objectContaining({ name: "test-project" }));
     });
 
     it("should prompt for project name when not provided", async () => {
@@ -380,10 +396,12 @@ describe("init command", () => {
       expect(prompts.find((p: any) => p.name === "template")).toBeDefined();
 
       // Verify project was created with the prompted name
-      expect(vi.mocked(fsMock.writeJson)).toHaveBeenCalledWith(
-        expect.stringContaining("prompted-project/package.json"),
+      const pkgWrite2 = fspMock.writeFile.mock.calls.find(([p]) =>
+        String(p).includes("prompted-project/package.json"),
+      );
+      const json2 = JSON.parse(String(pkgWrite2?.[1]));
+      expect(json2).toEqual(
         expect.objectContaining({ name: "prompted-project" }),
-        expect.any(Object),
       );
     });
 
@@ -408,16 +426,18 @@ describe("init command", () => {
       expect(inquirer.prompt).not.toHaveBeenCalled();
 
       // Verify project was created with defaults
-      expect(vi.mocked(fsMock.writeJson)).toHaveBeenCalledWith(
-        expect.stringContaining("yes-project/package.json"),
-        expect.objectContaining({ name: "yes-project" }),
-        expect.any(Object),
+      const pkgWrite3 = fspMock.writeFile.mock.calls.find(([p]) =>
+        String(p).includes("yes-project/package.json"),
       );
+      const json3 = JSON.parse(String(pkgWrite3?.[1]));
+      expect(json3).toEqual(expect.objectContaining({ name: "yes-project" }));
 
       // Verify default config values
-      expect(fsMock.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining("tailor.config.ts"),
-        expect.stringContaining('region: "asia-northeast"'), // default region
+      const cfgCall = fspMock.writeFile.mock.calls.find(([p]) =>
+        String(p).includes("tailor.config.ts"),
+      );
+      expect(cfgCall?.[1]).toEqual(
+        expect.stringContaining('region: "asia-northeast"'),
       );
     });
 
@@ -513,7 +533,7 @@ describe("init command", () => {
 
       // Mock existing directory (but not a project with package.json)
       fsMock.existsSync.mockReturnValue(true as never);
-      fsMock.pathExists.mockResolvedValue(false as any);
+      fspMock.access.mockRejectedValue(new Error("not found"));
 
       // Mock user choosing not to overwrite (which causes cancellation)
       (inquirer.prompt as any).mockResolvedValue({ overwrite: false });
@@ -557,15 +577,18 @@ describe("init command", () => {
 
     it("should add to existing project when detected", async () => {
       // Mock current directory as existing project
-      fsMock.pathExists.mockImplementation(async (filePath) => {
-        return filePath.toString().includes("package.json");
+      fspMock.access.mockImplementation(async (filePath) => {
+        if (filePath.toString().includes("package.json")) return;
+        throw new Error("not found");
       });
 
       // Mock existing package.json
-      fsMock.readJson.mockResolvedValue({
-        name: "existing-app",
-        version: "1.0.0",
-      });
+      fspMock.readFile.mockResolvedValue(
+        JSON.stringify({
+          name: "existing-app",
+          version: "1.0.0",
+        }),
+      );
 
       // Mock user confirming to add to existing project
       (inquirer.prompt as any).mockResolvedValueOnce({
@@ -598,14 +621,12 @@ describe("init command", () => {
       );
 
       // Verify tailor-sdk was added to existing project
-      expect(fsMock.writeJson).toHaveBeenCalledWith(
-        expect.stringContaining("package.json"),
-        expect.objectContaining({
-          devDependencies: expect.objectContaining({
-            "@tailor-platform/tailor-sdk": "latest",
-          }),
-        }),
-        expect.any(Object),
+      const pkgWrite4 = fspMock.writeFile.mock.calls.find(([p]) =>
+        String(p).endsWith("package.json"),
+      );
+      const json4 = JSON.parse(String(pkgWrite4?.[1]));
+      expect(json4.devDependencies).toEqual(
+        expect.objectContaining({ "@tailor-platform/tailor-sdk": "latest" }),
       );
     });
   });
