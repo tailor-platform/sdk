@@ -7,10 +7,6 @@ import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import chalk from "chalk";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export const validateProjectName = (name: string): boolean | string => {
   // Check if name is empty or too short
@@ -270,7 +266,6 @@ export type User = t.infer<typeof user>;
 `,
 });
 
-// --- FS helpers (use Node built-ins; avoid fs-extra at runtime) ---
 // Check if path exists (file or directory)
 async function pathExists(p: string): Promise<boolean> {
   try {
