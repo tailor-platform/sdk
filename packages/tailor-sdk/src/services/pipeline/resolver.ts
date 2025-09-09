@@ -14,7 +14,7 @@ import { type output, type StrictOutput } from "@/types/helpers";
 
 export class Resolver<
   QueryType extends "query" | "mutation" = any,
-  Input extends TailorType<any, any, any> = any,
+  Input extends TailorType<any, any> = any,
   _CurrentOutput = any,
   Context extends Record<string, unknown> = any,
   Steps extends StepDef<string, any, any, any>[] = StepDef<
@@ -23,7 +23,7 @@ export class Resolver<
     any,
     any
   >[],
-  Output extends TailorType<any, any, any> = any,
+  Output extends TailorType<any, any> = any,
 > {
   readonly _input = null as output<Input>;
   readonly _output = null as output<Output>;
@@ -64,7 +64,7 @@ export class Resolver<
   constructor(
     public readonly queryType: QueryType,
     public readonly name: string,
-    public readonly input: TailorType<any, any, Input>,
+    public readonly input: TailorType<any, Input>,
     options: ResolverOptions = { defaults: {} },
   ) {
     this.steps = [] as unknown as Steps;
@@ -129,7 +129,7 @@ export class Resolver<
 
   returns<
     R extends Record<string, unknown>,
-    const O extends TailorType<any, any, any>,
+    const O extends TailorType<any, any>,
   >(
     map: (context: Context) => StrictOutput<O, R>,
     output: O,
@@ -147,9 +147,11 @@ export class Resolver<
   }
 }
 
-export function createQueryResolver<
-  const Input extends TailorType<any, any, any>,
->(name: string, input: Input, options?: ResolverOptions) {
+export function createQueryResolver<const Input extends TailorType<any, any>>(
+  name: string,
+  input: Input,
+  options?: ResolverOptions,
+) {
   return new Resolver<
     "query",
     Input,
@@ -161,7 +163,7 @@ export function createQueryResolver<
 }
 
 export function createMutationResolver<
-  const Input extends TailorType<any, any, any>,
+  const Input extends TailorType<any, any>,
 >(name: string, input: Input, options?: ResolverOptions) {
   return new Resolver<
     "mutation",

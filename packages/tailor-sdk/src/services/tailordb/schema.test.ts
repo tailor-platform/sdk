@@ -1,6 +1,7 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "./schema";
 import type { FieldValidateInput, Hook, ValidateConfig } from "./types";
+import { t, type TailorType } from "@/types";
 import type { output } from "@/types/helpers";
 import * as inflection from "inflection";
 
@@ -1234,5 +1235,23 @@ describe("db.object テスト", () => {
         };
       };
     }>();
+  });
+});
+
+describe("TailorField/TailorType 互換性テスト", () => {
+  it("t.type の中で TailorDBField を使用できる", () => {
+    const _stringType = t.type({
+      name: db.string(),
+    });
+    expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
+      name: string;
+    }>();
+  });
+
+  it("TailorType に TailorDBType を代入できる", () => {
+    const _dbType = db.type("Test", {
+      name: db.string(),
+    });
+    expectTypeOf<typeof _dbType>().toExtend<TailorType>();
   });
 });
