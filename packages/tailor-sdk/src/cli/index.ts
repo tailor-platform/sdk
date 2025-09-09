@@ -5,7 +5,7 @@ import { defineCommand, runMain } from "citty";
 import { spawn } from "node:child_process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readdirSync } from "node:fs";
+import * as fs from "node:fs";
 import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
 
@@ -18,15 +18,16 @@ async function getTsxPath(): Promise<{
 } | null> {
   // First try to find tsx in node_modules/.bin
   const localTsxPath = path.join(process.cwd(), "node_modules", ".bin", "tsx");
-  if (existsSync(localTsxPath)) {
+  // Note: Use namespace import to avoid bundler renaming issues with existsSync.
+  if (fs.existsSync(localTsxPath)) {
     return { type: "bin", path: localTsxPath };
   }
 
   // For pnpm, try to find the actual tsx module in .pnpm directory
   const pnpmDir = path.join(process.cwd(), "node_modules", ".pnpm");
-  if (existsSync(pnpmDir)) {
+  if (fs.existsSync(pnpmDir)) {
     // Look for tsx in .pnpm directory
-    const dirs = readdirSync(pnpmDir);
+    const dirs = fs.readdirSync(pnpmDir);
     const tsxDir = dirs.find((dir) => dir.startsWith("tsx@"));
     if (tsxDir) {
       const tsxPath = path.join(
@@ -37,7 +38,7 @@ async function getTsxPath(): Promise<{
         "dist",
         "cli.mjs",
       );
-      if (existsSync(tsxPath)) {
+      if (fs.existsSync(tsxPath)) {
         return { type: "module", path: tsxPath };
       }
     }
@@ -73,9 +74,9 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
 
     const cliExecTsPath = path.join(__dirname, "exec.ts");
     const cliExecMjsPath = path.join(__dirname, "exec.mjs");
-    const cliExecPath = existsSync(cliExecTsPath)
+    const cliExecPath = fs.existsSync(cliExecTsPath)
       ? cliExecTsPath
-      : existsSync(cliExecMjsPath)
+      : fs.existsSync(cliExecMjsPath)
         ? cliExecMjsPath
         : null;
     if (!cliExecPath) {
