@@ -1,4 +1,4 @@
-type execQuery = <T>(query: string) => Promise<T>;
+type execQuery = <T>(query: string, params?: readonly unknown[]) => Promise<T>;
 
 export type SqlClient = {
   readonly exec: execQuery;
