@@ -134,6 +134,18 @@ describe("init command", () => {
       expect(config).toContain('userProfileProvider: "TAILORDB"');
       expect(config).toContain("generators:");
     });
+
+    it("should use custom source directory", () => {
+      const config = generateTailorConfig(
+        "test-project",
+        "asia-northeast",
+        "basic",
+        "app",
+      );
+
+      expect(config).toContain("./app/tailordb/**/*.ts");
+      expect(config).toContain("./app/resolvers/**/resolver.ts");
+    });
   });
 
   describe("checkExistingProject", () => {
@@ -238,6 +250,20 @@ describe("init command", () => {
       expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/tailordb");
       expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/src/resolvers");
     });
+
+    it("should create custom source directories", async () => {
+      const ensureDirSpy = fsMock.ensureDir;
+
+      await addToExistingProject(
+        "/test/path",
+        "asia-northeast",
+        "basic",
+        "app",
+      );
+
+      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/app/tailordb");
+      expect(ensureDirSpy).toHaveBeenCalledWith("/test/path/app/resolvers");
+    });
   });
 
   describe("initCommand interactive interface", () => {
@@ -291,6 +317,7 @@ describe("init command", () => {
           template: "",
           yes: false,
           "add-to-existing": false,
+          "src-dir": "src",
         },
         rawArgs: [],
         cmd: initCommand,
@@ -336,6 +363,7 @@ describe("init command", () => {
           template: "",
           yes: false,
           "add-to-existing": false,
+          "src-dir": "src",
         },
         rawArgs: [],
         cmd: initCommand,
@@ -370,6 +398,7 @@ describe("init command", () => {
           template: "",
           yes: true,
           "add-to-existing": false,
+          "src-dir": "src",
         },
         rawArgs: [],
         cmd: initCommand,
@@ -499,6 +528,7 @@ describe("init command", () => {
           template: "",
           yes: false,
           "add-to-existing": false,
+          "src-dir": "src",
         },
         rawArgs: [],
         cmd: initCommand,
@@ -552,6 +582,7 @@ describe("init command", () => {
           template: "",
           yes: false,
           "add-to-existing": false,
+          "src-dir": "src",
         },
         rawArgs: [],
         cmd: initCommand,
