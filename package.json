@@ -21,10 +21,10 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@eslint/js": "9.34.0",
+    "@eslint/js": "9.35.0",
     "@tailor-platform/tailor-sdk": "workspace:^",
     "@types/node": "22.18.1",
-    "eslint": "9.34.0",
+    "eslint": "9.35.0",
     "eslint-config-prettier": "10.1.8",
     "globals": "16.3.0",
     "lefthook": "1.12.3",
