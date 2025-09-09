@@ -12,12 +12,12 @@ export const DB_WRAPPER_DEFINITION = ml /* js */ `
     await baseClient.connect();
 
     const client = {
-      async exec(query) {
-        const result = await baseClient.queryObject(query);
+      async exec(query, params) {
+        const result = await baseClient.queryObject(query, params ?? []);
         return result.rows;
       },
-      async execOne(query) {
-        const result = await baseClient.queryObject(query);
+      async execOne(query, params) {
+        const result = await baseClient.queryObject(query, params ?? []);
         return result.rows[0];
       },
     };

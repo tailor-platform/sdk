@@ -242,7 +242,7 @@ const COMMON_SUFFIX = multiline /* ts */ `
     const db = getDB();
     const clientWrapper = {
       exec: async <Q extends CompiledQuery>(query: Q) => {
-        return await context.client.exec<QueryReturnType<Q>[]>(query.sql);
+        return await context.client.exec<QueryReturnType<Q>[]>(query.sql, query.parameters);
       },
     };
 
