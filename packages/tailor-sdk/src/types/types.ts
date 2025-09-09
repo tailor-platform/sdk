@@ -91,6 +91,14 @@ export interface FieldMetadata {
   assertNonNull?: boolean;
 }
 
+export interface DefinedFieldMetadata {
+  description?: boolean;
+  type: TailorFieldType;
+  required?: boolean;
+  array?: boolean;
+  assertNonNull?: boolean;
+}
+
 // Derive the output type for TailorField considering optional().
 // When assertNonNull is set, we assume that the value is injected by hooks and never null.
 // TODO(remiposo): Since array() directly modify type parameter (O), it would be better to unify them.
@@ -114,8 +122,8 @@ export type InferFieldInput<T extends TailorField<any>> =
 
 // Derive the input type for TailorType.
 // NOTE(remiposo): Like output<T>, this might be worth making public.
-export type InferTypeInput<T extends TailorType<any>> =
-  T extends TailorType<any, infer F>
+export type InferTypeInput<T extends TailorType> =
+  T extends TailorType<infer F>
     ? DeepWritable<
         Prettify<
           NullableToOptional<{

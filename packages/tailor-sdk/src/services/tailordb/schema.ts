@@ -4,9 +4,9 @@ import { type OperatorFieldConfig } from "@/types/operator";
 import { type TailorDBTypeConfig } from "./operator-types";
 import {
   type DBFieldMetadata,
+  type DefinedDBFieldMetadata,
   type Hooks,
   type Validators,
-  type DefinedFieldMetadata,
   type FieldValidateInput,
   type Hook,
   type ValidateConfig,
@@ -60,24 +60,8 @@ interface ReferenceConfig<T extends TailorDBType> {
   nameMap: [string, string];
 }
 
-interface fieldDefaults extends Omit<DBFieldMetadata, "type"> {
-  required: undefined;
-  description: undefined;
-  allowedValues: undefined;
-  array: undefined;
-  index: undefined;
-  unique: undefined;
-  vector: undefined;
-  foreignKey: undefined;
-  foreignKeyType: undefined;
-  validate: undefined;
-  hooks: undefined;
-  assertNonNull: undefined;
-  serial: undefined;
-}
-
 class TailorDBField<
-  const Defined extends DefinedFieldMetadata,
+  const Defined extends DefinedDBFieldMetadata,
   const Output,
 > extends TailorField<Defined, Output, DBFieldMetadata> {
   private _ref: ReferenceConfig<TailorDBType> | undefined = undefined;
@@ -140,23 +124,17 @@ class TailorDBField<
   private constructor(
     type: TailorFieldType,
     fields?: Record<string, TailorDBField<any, any>>,
+    values?: AllowedValues,
   ) {
-    super(type, fields);
-    this._metadata = { type, required: true };
+    super(type, fields, values);
   }
 
-  static create<
-    const T extends TailorFieldType,
-    const D extends (keyof DBFieldMetadata)[],
-  >(type: T, _defines: D, fields?: Record<string, TailorDBField<any, any>>) {
-    return new TailorDBField<
-      Prettify<
-        Pick<fieldDefaults, Exclude<D[number], "name" | "type">> & {
-          type: T;
-        }
-      >,
-      TailorToTs[T]
-    >(type, fields);
+  static create<const T extends TailorFieldType>(
+    type: T,
+    fields?: Record<string, TailorDBField<any, any>>,
+    values?: AllowedValues,
+  ) {
+    return new TailorDBField<{ type: T }, TailorToTs[T]>(type, fields, values);
   }
 
   optional<
@@ -178,12 +156,12 @@ class TailorDBField<
     return super.optional(options) as any;
   }
 
-  description<const D extends string, CurrentDefined extends Defined>(
+  description<CurrentDefined extends Defined>(
     this: CurrentDefined extends { description: unknown }
       ? never
       : TailorField<CurrentDefined, Output>,
-    description: D,
-  ): TailorDBField<Prettify<CurrentDefined & { description: D }>, Output> {
+    description: string,
+  ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output> {
     return super.description(description) as any;
   }
 
@@ -193,18 +171,6 @@ class TailorDBField<
       : TailorField<CurrentDefined, Output>,
   ): TailorDBField<Prettify<CurrentDefined & { array: true }>, Output[]> {
     return super.array() as any;
-  }
-
-  values<CurrentDefined extends Defined, const V extends AllowedValues>(
-    this: CurrentDefined extends { allowedValues: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
-    values: V,
-  ): TailorDBField<
-    Prettify<CurrentDefined & { allowedValues: V }>,
-    AllowedValuesOutput<V>
-  > {
-    return super.values(values) as any;
   }
 
   relation<
@@ -239,14 +205,11 @@ class TailorDBField<
   >;
 
   // Implementation
-  relation<
-    const Config extends RelationConfig<TailorDBType> | RelationSelfConfig,
-    CurrentDefined extends Defined,
-  >(
+  relation<CurrentDefined extends Defined>(
     this: CurrentDefined extends { relation: unknown }
       ? never
       : TailorDBField<CurrentDefined, Output>,
-    config: Config,
+    config: RelationConfig<TailorDBType> | RelationSelfConfig,
   ): any {
     const result = this as unknown as TailorDBField<any, Output>;
     // Allow special self-referencing config as well (handled at runtime in TailorDBType)
@@ -337,59 +300,43 @@ class TailorDBField<
     >;
   }
 
-  hooks<
-    const H extends Hook<
-      InferFieldInput<this>,
-      unknown,
-      InferFieldOutput<this>
-    >,
-    CurrentDefined extends Defined,
-  >(
+  hooks<CurrentDefined extends Defined>(
     this: CurrentDefined extends { hooks: unknown }
       ? never
       : TailorDBField<CurrentDefined, Output>,
-    hooks: H,
+    hooks: Hook<InferFieldInput<this>, unknown, InferFieldOutput<this>>,
   ) {
     this._metadata.hooks = hooks;
-    return this as unknown as TailorDBField<
-      Prettify<CurrentDefined & { hooks: H }>,
+    return this as TailorDBField<
+      Prettify<CurrentDefined & { hooks: true }>,
       Output
     >;
   }
 
-  validate<
-    const V extends FieldValidateInput<InferFieldOutput<this>>[],
-    CurrentDefined extends Defined,
-  >(
+  validate<CurrentDefined extends Defined>(
     this: CurrentDefined extends { validate: unknown }
       ? never
       : TailorDBField<CurrentDefined, Output>,
-    ...validate: V
+    ...validate: FieldValidateInput<InferFieldOutput<this>>[]
   ) {
     this._metadata.validate = validate;
-    return this as unknown as TailorDBField<
-      Prettify<CurrentDefined & { validate: V }>,
+    return this as TailorDBField<
+      Prettify<CurrentDefined & { validate: true }>,
       Output
     >;
   }
 
-  serial<
-    T extends CurrentDefined["type"] extends "integer" | "string"
-      ? CurrentDefined["type"]
-      : never,
-    const S extends SerialConfig<T>,
-    CurrentDefined extends Defined,
-  >(
+  serial<CurrentDefined extends Defined>(
     this: CurrentDefined extends { serial: unknown }
       ? never
       : CurrentDefined extends { type: "integer" | "string" }
         ? TailorDBField<CurrentDefined, Output>
         : never,
-    config: S,
-  ): TailorDBField<Prettify<CurrentDefined & { serial: S }>, Output> {
+    config: SerialConfig<CurrentDefined["type"] & ("integer" | "string")>,
+  ) {
     this._metadata.serial = config;
-    return this as unknown as TailorDBField<
-      Prettify<CurrentDefined & { serial: S }>,
+    return this as TailorDBField<
+      Prettify<CurrentDefined & { serial: true }>,
       Output
     >;
   }
@@ -397,70 +344,61 @@ class TailorDBField<
 
 const createField = TailorDBField.create;
 function uuid() {
-  return createField("uuid", ["allowedValues"]);
+  return createField("uuid");
 }
 
 function string() {
-  return createField("string", ["allowedValues"]);
+  return createField("string");
 }
 
 function bool() {
-  return createField("boolean", ["allowedValues"]);
+  return createField("boolean");
 }
 
 function int() {
-  return createField("integer", ["allowedValues"]);
+  return createField("integer");
 }
 
 function float() {
-  return createField("float", ["allowedValues"]);
+  return createField("float");
 }
 
 function date() {
-  return createField("date", ["allowedValues"]);
+  return createField("date");
 }
 
 function datetime() {
-  return createField("datetime", ["allowedValues"]);
+  return createField("datetime");
 }
 
 function time() {
-  return createField("time", ["allowedValues"]);
+  return createField("time");
 }
 
 function _enum<const V extends AllowedValues>(...values: V) {
-  return createField("enum", []).values(values);
+  return createField("enum", undefined, values) as unknown as TailorDBField<
+    { type: "enum" },
+    AllowedValuesOutput<V>
+  >;
 }
 
 function object<const F extends Record<string, TailorDBField<any, any>>>(
   fields: F,
 ) {
-  const objectField = createField(
-    "nested",
-    ["allowedValues"],
-    fields,
-  ) as TailorDBField<
-    DefinedFieldMetadata & { type: "nested" },
+  return createField("nested", fields) as TailorDBField<
+    { type: "nested" },
     Prettify<
       NullableToOptional<{
         [K in keyof F]: InferFieldOutput<F[K]>;
       }>
     >
   >;
-  return objectField;
 }
 
 export class TailorDBType<
-  const Fields extends { id?: never } & Record<
-    string,
-    TailorDBField<Metadata, any>
-  > = any,
-  Metadata extends DefinedFieldMetadata = any,
+  const Fields extends Record<string, TailorDBField<any, any>> = any,
   User extends object = never,
-> extends TailorType<
-  Metadata,
-  Fields & Record<string, TailorField<Metadata, any, DBFieldMetadata>>
-> {
+> extends TailorType<Fields> {
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
   private _settings: TypeFeatures = {};
@@ -473,10 +411,7 @@ export class TailorDBType<
     public readonly fields: Fields,
     options: { pluralForm?: string; description?: string },
   ) {
-    super(
-      fields as Fields &
-        Record<string, TailorField<Metadata, any, DBFieldMetadata>>,
-    );
+    super(fields);
 
     this._description = options.description;
 
@@ -616,7 +551,7 @@ export class TailorDBType<
       output<this>
     >,
   >(permission: P) {
-    const ret = this as unknown as TailorDBType<Fields, Metadata, U>;
+    const ret = this as TailorDBType<Fields, U>;
     ret._permissions.record = normalizePermission(permission);
     return ret;
   }
@@ -625,7 +560,7 @@ export class TailorDBType<
     U extends object = User,
     P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
   >(permission: P) {
-    const ret = this as unknown as TailorDBType<Fields, Metadata, U>;
+    const ret = this as TailorDBType<Fields, U>;
     ret._permissions.gql = normalizeGqlPermission(permission);
     return ret;
   }
@@ -635,7 +570,7 @@ const idField = uuid();
 type idField = typeof idField;
 type DBType<
   F extends { id?: never } & Record<string, TailorDBField<any, any>>,
-> = TailorDBType<{ id: idField } & F, DefinedFieldMetadata>;
+> = TailorDBType<{ id: idField } & F>;
 
 /**
  * Creates a new database type with the specified fields
@@ -674,7 +609,7 @@ function dbType<
   } else {
     fieldDef = fieldsOrDescription;
   }
-  const type = new TailorDBType<{ id: idField } & F, DefinedFieldMetadata>(
+  return new TailorDBType<{ id: idField } & F>(
     typeName,
     {
       id: idField,
@@ -682,7 +617,6 @@ function dbType<
     },
     { pluralForm, description },
   ) as DBType<F>;
-  return type;
 }
 
 const db = {

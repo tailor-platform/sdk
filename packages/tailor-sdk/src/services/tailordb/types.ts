@@ -1,6 +1,7 @@
 import { type TailorUser } from "@/types";
 import { type output, type Prettify } from "@/types/helpers";
 import {
+  type DefinedFieldMetadata,
   type FieldMetadata,
   type InferFieldInput,
   type InferFieldOutput,
@@ -33,9 +34,17 @@ export interface DBFieldMetadata extends FieldMetadata {
   relation?: boolean;
 }
 
-export type DefinedFieldMetadata = Partial<
-  Omit<DBFieldMetadata, "allowedValues"> & { allowedValues: string[] }
->;
+export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
+  index?: boolean;
+  unique?: boolean;
+  vector?: boolean;
+  foreignKey?: boolean;
+  foreignKeyType?: boolean;
+  validate?: boolean;
+  hooks?: boolean;
+  serial?: boolean;
+  relation?: boolean;
+}
 
 type HookFn<TValue, TData, TReturn> = (args: {
   value: TValue;
