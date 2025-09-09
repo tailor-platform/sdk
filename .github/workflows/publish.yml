@@ -130,6 +130,9 @@ jobs:
             pnpm version from-git --no-git-tag-version
           fi
 
+      - name: Update npm
+        run: npm install -g npm@latest
+
       - name: Publish npm package
         run: |
           # Use the publish tag determined during version calculation
@@ -151,5 +154,3 @@ jobs:
           else
             pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public --tag "$TAG"
           fi
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
