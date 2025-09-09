@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { styleText } from "node:util";
 
 export interface HasName {
   name: string;
@@ -24,12 +24,12 @@ export class ChangeSet<
       return;
     }
 
-    console.log(chalk.bold(`${this.title}:`));
+    console.log(styleText("bold", `${this.title}:`));
     this.creates.forEach((item) => {
-      console.log(chalk.green(`  + ${item.name}`));
+      console.log(styleText("green", `  + ${item.name}`));
     });
     this.deletes.forEach((item) => {
-      console.log(chalk.red(`  - ${item.name}`));
+      console.log(styleText("red", `  - ${item.name}`));
     });
     this.updates.forEach((item) => {
       console.log(`  * ${item.name}`);
