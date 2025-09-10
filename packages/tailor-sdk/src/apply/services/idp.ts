@@ -145,7 +145,7 @@ async function planServices(
     let authorization;
     switch (idp.authorization) {
       case "insecure":
-        authorization = "true===true";
+        authorization = "true==true";
         break;
       case "loggedIn":
         authorization = "user != null && size(user.id) > 0";
