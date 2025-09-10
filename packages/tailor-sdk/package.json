@@ -47,21 +47,14 @@
     "tsx": "^4.20.3"
   },
   "devDependencies": {
-    "@eslint/js": "9.35.0",
-    "@types/ini": "4.1.1",
-    "@types/inquirer": "9.0.9",
     "@types/madge": "5.0.3",
     "@types/node": "22.18.1",
     "eslint": "9.35.0",
-    "eslint-config-prettier": "10.1.8",
-    "globals": "16.3.0",
     "gql.tada": "1.8.13",
-    "prettier": "3.6.2",
     "ts-cron-validator": "1.1.5",
     "tsdown": "0.14.2",
     "typescript": "5.9.2",
     "typescript-eslint": "8.42.0",
-    "vitest": "3.2.4",
-    "vitest-mock-extended": "3.1.0"
+    "vitest": "3.2.4"
   }
 }

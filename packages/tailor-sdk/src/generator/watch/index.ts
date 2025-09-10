@@ -744,17 +744,4 @@ class DependencyWatcher {
   }
 }
 
-export {
-  DependencyWatcher,
-  type FileChangeEvent,
-  type FileChangeInfo,
-  type WatchGroup,
-  type DependencyNode,
-  type ImpactAnalysisResult,
-  type ChangeCallback,
-  type ErrorCallback,
-  type WatcherOptions,
-  type WatchStatus,
-  type GraphStats,
-  WatcherErrorCode,
-};
+export { DependencyWatcher, WatcherErrorCode };

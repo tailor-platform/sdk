@@ -36,19 +36,6 @@ export type TailorToTs = {
   nested: Record<string, unknown>;
 } & Record<TailorFieldType, unknown>;
 
-export const tailorToGraphQL = {
-  string: "String",
-  integer: "Int",
-  float: "Float",
-  boolean: "Boolean",
-  uuid: "ID",
-  date: "Date",
-  datetime: "DateTime",
-  time: "Time",
-  enum: "enum",
-  nested: "JSON",
-} as const;
-
 // Manifest用の型マッピング（mapTypeToScalarの代替）
 export const tailorToManifestScalar = {
   string: "string",
@@ -62,15 +49,6 @@ export const tailorToManifestScalar = {
   enum: "enum",
   nested: "nested",
 } as const;
-export type tailorToGraphQL = typeof tailorToGraphQL;
-
-export type GraphQLType =
-  | "String"
-  | "Int"
-  | "Float"
-  | "Boolean"
-  | "ID"
-  | string;
 
 // Common types for operator and SDK
 export interface Script {

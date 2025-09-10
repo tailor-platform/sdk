@@ -165,7 +165,7 @@ function tailorType<const F extends Record<string, TailorField<any>>>(
   return new TailorType<F>(fields);
 }
 
-const t = {
+export const t = {
   type: tailorType,
   uuid,
   string,
@@ -178,5 +178,3 @@ const t = {
   enum: _enum,
   object,
 };
-export default t;
-export { t, tailorType as type, _enum as enum };

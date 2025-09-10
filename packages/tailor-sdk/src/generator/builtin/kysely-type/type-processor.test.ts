@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TypeProcessor } from "./type-processor";
-import db from "@/services/tailordb/schema";
+import { db } from "@/services/tailordb/schema";
 
 describe("Kysely TypeProcessor", () => {
   it("should process deeply nested objects correctly", async () => {

@@ -8,12 +8,12 @@ export const OperationType = {
 
 export type OperationType = (typeof OperationType)[keyof typeof OperationType];
 
-export interface OperatorValidateConfig {
+interface OperatorValidateConfig {
   script: Script;
   errorMessage: string;
 }
 
-export interface OperatorFieldHook {
+interface OperatorFieldHook {
   create?: Script;
   update?: Script;
 }

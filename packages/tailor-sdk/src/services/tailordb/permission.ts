@@ -20,7 +20,7 @@ export type StandardTailorTypePermission = {
   delete: readonly StandardActionPermission<"record", false>[];
 };
 
-export type ActionPermission<
+type ActionPermission<
   Level extends "record" | "gql" = "record" | "gql",
   User extends object = object,
   Type extends object = object,
@@ -59,7 +59,7 @@ export type TailorTypeGqlPermission<
 export type StandardTailorTypeGqlPermission =
   readonly StandardGqlPermissionPolicy[];
 
-export type GqlPermissionPolicy<
+type GqlPermissionPolicy<
   User extends object = object,
   Type extends object = object,
 > = {
@@ -76,7 +76,7 @@ export type StandardGqlPermissionPolicy = {
   description?: string;
 };
 
-export type GqlPermissionAction =
+type GqlPermissionAction =
   | "read"
   | "create"
   | "update"
@@ -114,13 +114,6 @@ export type StandardPermissionCondition<
   >,
 ];
 
-export const recordOperandKeys = [
-  "user",
-  "record",
-  "oldRecord",
-  "newRecord",
-] as const;
-export const gqlOperandKeys = ["user"] as const;
 type UserOperand<User extends object = object> = {
   user:
     | {
