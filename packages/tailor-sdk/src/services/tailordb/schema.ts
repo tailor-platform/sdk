@@ -397,7 +397,7 @@ function object<const F extends Record<string, TailorDBField<any, any>>>(
 
 export class TailorDBType<
   const Fields extends Record<string, TailorDBField<any, any>> = any,
-  User extends object = never,
+  User extends object = object,
 > extends TailorType<Fields> {
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
