@@ -1,4 +1,4 @@
-export type IdPServiceConfig = {
+type IdPServiceConfig = {
   authorization: "insecure" | "loggedIn"; // FIXME: string | () => boolean?
   clients: string[];
 };

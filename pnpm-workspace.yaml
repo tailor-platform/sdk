@@ -7,3 +7,4 @@ onlyBuiltDependencies:
   - esbuild
   - lefthook
   - multiline-ts
+  - oxc-resolver

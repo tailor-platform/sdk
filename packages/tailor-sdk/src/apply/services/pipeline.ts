@@ -306,7 +306,7 @@ async function planResolvers(
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
 // This will need refactoring later.
 
-export interface ResolverManifestMetadata {
+interface ResolverManifestMetadata {
   name: string;
   inputType: string;
   outputType: string;
@@ -324,7 +324,7 @@ export interface ResolverManifestMetadata {
   resolverManifest?: any; // 生成されたResolverManifest
 }
 
-export interface PipelineInfo {
+interface PipelineInfo {
   name: string;
   description: string;
   operationType: OperationType;

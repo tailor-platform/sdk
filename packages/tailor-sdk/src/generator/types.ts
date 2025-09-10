@@ -8,12 +8,6 @@ interface GeneratedFile {
   skipIfExists?: boolean; // default: false
 }
 
-export interface BasicGeneratorMetadata<T = any, R = any, E = any> {
-  types: Record<string, T>;
-  resolvers: Record<string, R>;
-  executors: E[];
-}
-
 export interface GeneratorResult {
   files: GeneratedFile[];
   errors?: string[];

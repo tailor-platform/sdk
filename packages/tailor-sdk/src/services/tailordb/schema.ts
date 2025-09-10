@@ -619,7 +619,7 @@ function dbType<
   ) as DBType<F>;
 }
 
-const db = {
+export const db = {
   type: dbType,
   uuid,
   string,
@@ -642,6 +642,3 @@ const db = {
     }),
   },
 };
-
-export default db;
-export { _enum as enum, db, dbType as type };
