@@ -2,9 +2,8 @@ import {
   type TailorFieldType,
   type TailorToTs,
   type FieldMetadata,
-  type NullableToOptional,
-  type InferFieldOutput,
   type DefinedFieldMetadata,
+  type InferFieldsOutput,
 } from "./types";
 import type { Prettify } from "./helpers";
 import {
@@ -15,11 +14,7 @@ import {
 
 export class TailorType<
   const F extends Record<string, TailorField<any>> = any,
-  Output = Prettify<
-    NullableToOptional<{
-      [K in keyof F]: InferFieldOutput<F[K]>;
-    }>
-  >,
+  Output = InferFieldsOutput<F>,
 > {
   public readonly _output = null as unknown as Output;
 
@@ -150,11 +145,7 @@ function _enum<const V extends AllowedValues>(values: V) {
 function object<const F extends Record<string, TailorField<any>>>(fields: F) {
   const objectField = createField("nested", fields) as TailorField<
     { type: "nested" },
-    Prettify<
-      NullableToOptional<{
-        [K in keyof F]: InferFieldOutput<F[K]>;
-      }>
-    >
+    InferFieldsOutput<F>
   >;
   return objectField;
 }

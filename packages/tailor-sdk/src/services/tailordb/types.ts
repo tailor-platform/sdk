@@ -1,13 +1,14 @@
 import { type TailorUser } from "@/types";
-import { type output, type Prettify } from "@/types/helpers";
+import { type Prettify } from "@/types/helpers";
 import {
   type DefinedFieldMetadata,
   type FieldMetadata,
   type InferFieldInput,
   type InferFieldOutput,
-  type InferTypeInput,
+  type InferFieldsInput,
+  type InferFieldsOutput,
 } from "@/types/types";
-import { type TailorDBType } from "./schema";
+import { type TailorDBField } from "./schema";
 
 export type SerialConfig<
   T extends "string" | "integer" = "string" | "integer",
@@ -57,31 +58,38 @@ export type Hook<TValue, TData, TReturn> = {
   update?: HookFn<TValue, TData, TReturn>;
 };
 
-export type Hooks<P extends TailorDBType> = {
-  [K in keyof P["fields"] as P["fields"][K]["_defined"] extends {
-    hooks: unknown;
-  }
-    ? never
-    : K]?: Hook<
-    InferFieldInput<P["fields"][K]>,
-    InferTypeInput<P>,
-    InferFieldOutput<P["fields"][K]>
-  >;
-};
+// Since empty object type {} would allow any key, return never instead.
+type NoEmptyObject<T extends object> = keyof T extends never ? never : T;
 
-export type Validators<P extends TailorDBType> = {
-  [K in keyof P["fields"] as P["fields"][K]["_defined"] extends {
-    validate: unknown;
-  }
-    ? never
-    : K]?:
-    | ValidateFn<InferFieldOutput<P["fields"][K]>, output<P>>
-    | ValidateConfig<InferFieldOutput<P["fields"][K]>, output<P>>
-    | (
-        | ValidateFn<InferFieldOutput<P["fields"][K]>, output<P>>
-        | ValidateConfig<InferFieldOutput<P["fields"][K]>, output<P>>
-      )[];
-};
+export type Hooks<F extends Record<string, TailorDBField<any, any>>> =
+  NoEmptyObject<{
+    [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
+      hooks: unknown;
+    }
+      ? never
+      : F[K]["_defined"] extends { type: "nested" }
+        ? never
+        : K]?: Hook<
+      InferFieldInput<F[K]>,
+      InferFieldsInput<F>,
+      InferFieldOutput<F[K]>
+    >;
+  }>;
+
+export type Validators<F extends Record<string, TailorDBField<any, any>>> =
+  NoEmptyObject<{
+    [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
+      validate: unknown;
+    }
+      ? never
+      : K]?:
+      | ValidateFn<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
+      | ValidateConfig<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
+      | (
+          | ValidateFn<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
+          | ValidateConfig<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
+        )[];
+  }>;
 
 type ValidateFn<O, D = unknown> = (args: {
   value: O;

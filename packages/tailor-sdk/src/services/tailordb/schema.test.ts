@@ -399,6 +399,14 @@ describe("TailorDBField hooks修飾子テスト", () => {
       });
   });
 
+  it("nestedフィールドにhooksを設定すると型エラーが発生する", () => {
+    // @ts-expect-error hooks() cannot be called on nested fields
+    db.object({
+      first: db.string(),
+      last: db.string(),
+    }).hooks({ create: () => ({ first: "A", last: "B" }) });
+  });
+
   it("stringフィールドでhooks修飾子はstringを受け取る", () => {
     const _hooks = db.string().hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
@@ -850,8 +858,33 @@ describe("TailorDBType hooks修飾子テスト", () => {
   it("TailorDBFieldでhooksが設定済みの場合に型エラーが発生する", () => {
     db.type("Test", {
       name: db.string().hooks({ create: () => "created" }),
-    }).hooks({
       // @ts-expect-error hooks() cannot be called after hooks() has already been called
+    }).hooks({
+      name: {
+        create: () => "created",
+      },
+    });
+  });
+
+  it("idにhooksを設定すると型エラーが発生する", () => {
+    db.type("Test", {
+      name: db.string(),
+    }).hooks({
+      // @ts-expect-error hooks() cannot be called on the "id" field
+      id: {
+        create: () => "created",
+      },
+    });
+  });
+
+  it("nestedフィールドにhooksを設定すると型エラーが発生する", () => {
+    db.type("Test", {
+      name: db.object({
+        first: db.string(),
+        last: db.string(),
+      }),
+      // @ts-expect-error hooks() cannot be called on nested fields
+    }).hooks({
       name: {
         create: () => "created",
       },
@@ -965,9 +998,18 @@ describe("TailorDBType validate修飾子テスト", () => {
   it("TailorDBFieldでvalidateが設定済みの場合に型エラーが発生する", () => {
     db.type("Test", {
       name: db.string().validate(() => true),
-    }).validate({
       // @ts-expect-error validate() cannot be called after validate() has already been called
+    }).validate({
       name: () => true,
+    });
+  });
+
+  it("idにvalidateを設定すると型エラーが発生する", () => {
+    db.type("Test", {
+      name: db.string(),
+    }).validate({
+      // @ts-expect-error validate() cannot be called on the "id" field
+      id: () => true,
     });
   });
 

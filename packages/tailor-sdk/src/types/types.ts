@@ -1,6 +1,6 @@
 import { type AllowedValue } from "./field";
 import { type DeepWritable, type Prettify } from "./helpers";
-import { type TailorField, type TailorType } from "./type";
+import { type TailorField } from "./type";
 
 export type Region = "asia-northeast" | "us-west";
 
@@ -98,18 +98,26 @@ export type InferFieldInput<T extends TailorField<any>> =
     ? DeepWritable<T["_defined"] extends { required: false } ? O | null : O>
     : never;
 
-// Derive the input type for TailorType.
+// Derive the input type for TailorFields.
 // NOTE(remiposo): Like output<T>, this might be worth making public.
-export type InferTypeInput<T extends TailorType> =
-  T extends TailorType<infer F>
-    ? DeepWritable<
-        Prettify<
-          NullableToOptional<{
-            [K in keyof F]: InferFieldInput<F[K]>;
-          }>
-        >
-      >
-    : never;
+export type InferFieldsInput<F extends Record<string, TailorField<any, any>>> =
+  DeepWritable<
+    Prettify<
+      NullableToOptional<{
+        [K in keyof F]: InferFieldInput<F[K]>;
+      }>
+    >
+  >;
+
+// Derive the output type for TailorFields.
+export type InferFieldsOutput<F extends Record<string, TailorField<any, any>>> =
+  DeepWritable<
+    Prettify<
+      NullableToOptional<{
+        [K in keyof F]: InferFieldOutput<F[K]>;
+      }>
+    >
+  >;
 
 export type NullableToOptional<T> = {
   [K in keyof T as null extends T[K] ? never : K]: T[K];

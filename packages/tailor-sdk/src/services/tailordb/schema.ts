@@ -17,7 +17,7 @@ import {
 import {
   type InferFieldInput,
   type InferFieldOutput,
-  type NullableToOptional,
+  type InferFieldsOutput,
   type TailorFieldType,
   type TailorToTs,
 } from "@/types/types";
@@ -60,7 +60,7 @@ interface ReferenceConfig<T extends TailorDBType> {
   nameMap: [string, string];
 }
 
-class TailorDBField<
+export class TailorDBField<
   const Defined extends DefinedDBFieldMetadata,
   const Output,
 > extends TailorField<Defined, Output, DBFieldMetadata> {
@@ -303,7 +303,9 @@ class TailorDBField<
   hooks<CurrentDefined extends Defined>(
     this: CurrentDefined extends { hooks: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output>,
+      : CurrentDefined extends { type: "nested" }
+        ? never
+        : TailorDBField<CurrentDefined, Output>,
     hooks: Hook<InferFieldInput<this>, unknown, InferFieldOutput<this>>,
   ) {
     this._metadata.hooks = hooks;
@@ -385,13 +387,9 @@ function _enum<const V extends AllowedValues>(...values: V) {
 function object<const F extends Record<string, TailorDBField<any, any>>>(
   fields: F,
 ) {
-  return createField("nested", fields) as TailorDBField<
+  return createField("nested", fields) as unknown as TailorDBField<
     { type: "nested" },
-    Prettify<
-      NullableToOptional<{
-        [K in keyof F]: InferFieldOutput<F[K]>;
-      }>
-    >
+    InferFieldsOutput<F>
   >;
 }
 
@@ -495,14 +493,14 @@ export class TailorDBType<
     };
   }
 
-  hooks(hooks: Hooks<typeof this>) {
+  hooks(hooks: Hooks<Fields>) {
     Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
       (this.fields[fieldName] as any).hooks(fieldHooks);
     });
     return this;
   }
 
-  validate(validators: Validators<typeof this>) {
+  validate(validators: Validators<Fields>) {
     Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
       const field = this.fields[fieldName] as TailorDBField<any, any>;
 
