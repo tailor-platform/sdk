@@ -1,5 +1,5 @@
 type IdPServiceConfig = {
-  authorization: "insecure" | "loggedIn"; // FIXME: string | () => boolean?
+  authorization: "insecure" | "loggedIn" | { cel: string };
   clients: string[];
 };
 export type IdPServiceInput = {

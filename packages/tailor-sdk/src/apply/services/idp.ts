@@ -150,6 +150,9 @@ async function planServices(
       case "loggedIn":
         authorization = "user != null && size(user.id) > 0";
         break;
+      default:
+        authorization = idp.authorization.cel;
+        break;
     }
 
     if (existingNameSet.has(namespaceName)) {
