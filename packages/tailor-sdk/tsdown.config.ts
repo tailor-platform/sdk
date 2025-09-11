@@ -10,6 +10,9 @@ export default defineConfig({
   outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,
+  outputOptions: {
+    inlineDynamicImports: true,
+  },
   outExtensions: () => ({
     js: ".mjs",
     dts: ".d.mts",

@@ -125,6 +125,7 @@ export class Bundler<T> {
           format: "esm",
           sourcemap: false,
           minify: false,
+          inlineDynamicImports: true,
         },
         external: (id) => {
           if (
@@ -181,6 +182,7 @@ export class Bundler<T> {
               format: "esm",
               sourcemap: true,
               minify: true,
+              inlineDynamicImports: true,
             },
             tsconfig,
             treeshake: {
