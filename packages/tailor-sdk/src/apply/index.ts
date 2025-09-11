@@ -44,10 +44,10 @@ export async function apply(
 
   // To handle dependencies correctly, apply each service in the same order as tailorctl.
   await applyTailorDB(client, workspaceId, workspace, options);
+  await applyStaticWebsite(client, workspaceId, workspace, options);
   await applyIdP(client, workspaceId, workspace, options);
   await applyAuth(client, workspaceId, workspace, options);
   await applyPipeline(client, workspaceId, workspace, options);
-  await applyStaticWebsite(client, workspaceId, workspace, options);
   await applyApplication(client, workspaceId, workspace, options);
   await applyExecutor(client, workspaceId, workspace, options);
 

@@ -59,7 +59,10 @@ export default defineConfig({
             Name: "sample",
             Description: "Sample OAuth2 client",
             GrantTypes: ["authorization_code", "refresh_token"],
-            RedirectURIs: ["https://example.com/callback"],
+            RedirectURIs: [
+              "https://example.com/callback",
+              "my-frontend:url/callback",
+            ],
           },
         ],
       },

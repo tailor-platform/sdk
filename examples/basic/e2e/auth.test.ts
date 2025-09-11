@@ -91,7 +91,11 @@ describe("controlplane", async () => {
         AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
         AuthOAuth2Client_GrantType.REFRESH_TOKEN,
       ],
-      redirectUris: ["https://example.com/callback"],
     });
+
+    // Check that redirect URIs include both direct URL and resolved static website URL
+    const redirectUris = oauth2Clients[0].redirectUris;
+    expect(redirectUris).toContain("https://example.com/callback");
+    expect(redirectUris.length).toBe(2);
   });
 });

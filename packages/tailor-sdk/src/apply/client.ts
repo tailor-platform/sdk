@@ -184,3 +184,51 @@ export async function fetchAll<T>(
   }
   return items;
 }
+
+// Converting "name:url" patterns to actual Static Website URLs
+export async function resolveStaticWebsiteUrls(
+  client: OperatorClient,
+  workspaceId: string,
+  urls: string[] | undefined,
+  context: string, // for logging context (e.g., "CORS", "OAuth2 redirect URIs")
+): Promise<string[]> {
+  if (!urls) {
+    return [];
+  }
+
+  const results = await Promise.all(
+    urls.map(async (url) => {
+      const urlPattern = /:url(\/.*)?$/;
+      const match = url.match(urlPattern);
+
+      if (match && match.index !== undefined) {
+        const siteName = url.substring(0, match.index);
+        const pathSuffix = match[1] || "";
+
+        try {
+          const response = await client.getStaticWebsite({
+            workspaceId,
+            name: siteName,
+          });
+
+          if (response.staticwebsite?.url) {
+            return [response.staticwebsite.url + pathSuffix];
+          } else {
+            console.warn(
+              `Static website "${siteName}" has no URL assigned yet. Excluding from ${context}.`,
+            );
+            return [];
+          }
+        } catch {
+          console.warn(
+            `Static website "${siteName}" not found for ${context} configuration. Excluding from ${context}.`,
+          );
+          return [];
+        }
+      }
+      return [url];
+    }),
+  );
+
+  return results.flat();
+}

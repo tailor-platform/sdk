@@ -63,7 +63,11 @@ import { type ValueOperand } from "@/services/tailordb/permission";
 import { type Workspace } from "@/workspace";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyOptions } from "..";
-import { fetchAll, type OperatorClient } from "../client";
+import {
+  fetchAll,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
+} from "../client";
 
 export async function applyAuth(
   client: OperatorClient,
@@ -962,13 +966,20 @@ async function planOAuth2Clients(
       existingNameSet.add(oauth2Client.name);
     });
     for (const oauth2Client of config.oauth2Clients ?? []) {
+      const resolvedRedirectUris = await resolveStaticWebsiteUrls(
+        client,
+        workspaceId,
+        oauth2Client.RedirectURIs,
+        "OAuth2 redirect URIs",
+      );
+
       if (existingNameSet.has(oauth2Client.Name)) {
         changeSet.updates.push({
           name: oauth2Client.Name,
           request: {
             workspaceId,
             namespaceName: config.namespace,
-            oauth2Client: protoOAuth2Client(oauth2Client),
+            oauth2Client: protoOAuth2Client(oauth2Client, resolvedRedirectUris),
           },
         });
         existingNameSet.delete(oauth2Client.Name);
@@ -978,7 +989,7 @@ async function planOAuth2Clients(
           request: {
             workspaceId,
             namespaceName: config.namespace,
-            oauth2Client: protoOAuth2Client(oauth2Client),
+            oauth2Client: protoOAuth2Client(oauth2Client, resolvedRedirectUris),
           },
         });
       }
@@ -1010,6 +1021,7 @@ async function planOAuth2Clients(
 
 function protoOAuth2Client(
   oauth2Client: OAuth2Client,
+  resolvedRedirectUris: string[],
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
   return {
     name: oauth2Client.Name,
@@ -1026,7 +1038,7 @@ function protoOAuth2Client(
           );
       }
     }),
-    redirectUris: oauth2Client.RedirectURIs,
+    redirectUris: resolvedRedirectUris,
     clientType: (
       {
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
