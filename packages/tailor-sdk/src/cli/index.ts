@@ -115,8 +115,7 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
         cwd: process.cwd(),
       });
     } else {
-      // Use shell for bin scripts
-      child = spawn("sh", [tsxInfo.path, ...args], {
+      child = spawn(tsxInfo.path, [...args], {
         stdio: "inherit",
         cwd: process.cwd(),
       });
