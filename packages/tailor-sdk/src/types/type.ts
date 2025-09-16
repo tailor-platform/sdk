@@ -4,6 +4,8 @@ import {
   type FieldMetadata,
   type DefinedFieldMetadata,
   type InferFieldsOutput,
+  type FieldOptions,
+  type FieldOutput,
 } from "./types";
 import type { Prettify } from "./helpers";
 import {
@@ -36,44 +38,40 @@ export class TailorField<
 
   protected constructor(
     type: TailorFieldType,
+    options?: FieldOptions,
     public readonly fields?: Record<string, TailorField<any>>,
     values?: AllowedValues,
   ) {
     this._metadata = { type, required: true } as M;
+    if (options) {
+      if (options.optional === true) {
+        this._metadata.required = false;
+        if (options.assertNonNull === true) {
+          this._metadata.assertNonNull = true;
+        }
+      }
+      if (options.array === true) {
+        this._metadata.array = true;
+      }
+    }
     if (values) {
       this._metadata.allowedValues = mapAllowedValues(values);
     }
   }
 
-  static create<const T extends TailorFieldType>(
-    type: T,
+  static create<
+    const TType extends TailorFieldType,
+    const TOptions extends FieldOptions,
+  >(
+    type: TType,
+    options?: TOptions,
     fields?: Record<string, TailorField<any>>,
     values?: AllowedValues,
   ) {
-    return new TailorField<{ type: T }, TailorToTs[T]>(type, fields, values);
-  }
-
-  optional<
-    CurrentDefined extends Defined,
-    const O extends { assertNonNull?: boolean } = { assertNonNull: false },
-  >(
-    this: CurrentDefined extends { required: unknown }
-      ? never
-      : CurrentDefined extends { assertNonNull: unknown }
-        ? never
-        : TailorField<CurrentDefined, Output>,
-    options?: O,
-  ) {
-    this._metadata.required = false;
-    if (options?.assertNonNull === true) {
-      this._metadata.assertNonNull = true;
-    }
-    return this as TailorField<
-      Prettify<
-        CurrentDefined & { required: false; assertNonNull: O["assertNonNull"] }
-      >,
-      Output
-    >;
+    return new TailorField<
+      { type: TType },
+      FieldOutput<TailorToTs[TType], TOptions>
+    >(type, options, fields, values);
   }
 
   description<CurrentDefined extends Defined>(
@@ -88,64 +86,73 @@ export class TailorField<
       Output
     >;
   }
-
-  array<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { array: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
-  ) {
-    this._metadata.array = true;
-    return this as TailorField<
-      Prettify<CurrentDefined & { array: true }>,
-      Output[]
-    >;
-  }
 }
 
 const createField = TailorField.create;
-function uuid() {
-  return createField("uuid");
+function uuid<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("uuid", options);
 }
 
-function string() {
-  return createField("string");
+function string<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("string", options);
 }
 
-function bool() {
-  return createField("boolean");
+function bool<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("boolean", options);
 }
 
-function int() {
-  return createField("integer");
+function int<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("integer", options);
 }
 
-function float() {
-  return createField("float");
+function float<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("float", options);
 }
 
-function date() {
-  return createField("date");
+function date<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("date", options);
 }
 
-function datetime() {
-  return createField("datetime");
+function datetime<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("datetime", options);
 }
 
-function time() {
-  return createField("time");
+function time<const Opt extends FieldOptions>(options?: Opt) {
+  return createField("time", options);
 }
 
-function _enum<const V extends AllowedValues>(values: V) {
-  return createField("enum", undefined, values) as TailorField<
-    { type: "enum" },
-    AllowedValuesOutput<V>
-  >;
+function _enum<const V extends AllowedValues>(
+  ...values: V
+): TailorField<
+  { type: "enum" },
+  FieldOutput<AllowedValuesOutput<V>, { optional: false; array: false }>
+>;
+function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
+  ...args: [...V, Opt]
+): TailorField<{ type: "enum" }, FieldOutput<AllowedValuesOutput<V>, Opt>>;
+function _enum(
+  ...args: (AllowedValues[number] | FieldOptions)[]
+): TailorField<{ type: "enum" }, any> {
+  let values: AllowedValues;
+  let options: FieldOptions | undefined;
+  const lastArg = args[args.length - 1];
+  if (typeof lastArg === "object" && !("value" in lastArg)) {
+    values = args.slice(0, -1) as AllowedValues;
+    options = lastArg;
+  } else {
+    values = args as AllowedValues;
+    options = undefined;
+  }
+  return createField("enum", options, undefined, values);
 }
 
-function object<const F extends Record<string, TailorField<any>>>(fields: F) {
-  const objectField = createField("nested", fields) as TailorField<
+function object<
+  const F extends Record<string, TailorField<any>>,
+  const Opt extends FieldOptions,
+>(fields: F, options?: Opt) {
+  const objectField = createField("nested", options, fields) as TailorField<
     { type: "nested" },
-    InferFieldsOutput<F>
+    FieldOutput<InferFieldsOutput<F>, Opt>
   >;
   return objectField;
 }

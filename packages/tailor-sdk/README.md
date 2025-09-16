@@ -4,757 +4,754 @@ Development kit for building applications on the Tailor Platform.
 
 ## Table of Contents
 
-- [Installation](#installation)
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
 - [TailorDB](#tailordb)
-  - [Defining Models](#defining-models)
-  - [Field Types](#field-types)
-  - [Plural Forms](#plural-forms)
-  - [Timestamps and common fields](#timestamps-and-common-fields)
-  - [Nested objects](#nested-objects)
-  - [Reusable field definitions](#reusable-field-definitions)
-  - [Type inference](#type-inference)
-- [Pipeline Resolvers](#pipeline-resolvers)
-  - [Creating Resolvers](#creating-resolvers)
-  - [Step Types](#step-types)
-  - [Processing Flow Patterns](#processing-flow-patterns)
+- [Pipeline](#pipeline-1)
 - [Executor](#executor)
-  - [Overview](#overview)
-  - [Creating Executors](#creating-executors)
-  - [Trigger Types](#trigger-types)
-  - [Execution](#execution)
-  - [Execution Context](#execution-context)
-  - [Advanced Features](#advanced-features)
 - [Generators](#generators)
 - [CLI Commands](#cli-commands)
-  - [Environment Variables](#environment-variables)
-
-## Installation
-
-### Quick Start with `init`
-
-The easiest way to start a new Tailor SDK project is using the init command:
-
-```bash
-npx @tailor-platform/tailor-sdk init my-project
-```
-
-This will create a new project with all necessary configuration files and example code.
-
-#### Init Options
-
-```bash
-npx @tailor-platform/tailor-sdk init [project-name] [options]
-```
-
-Options:
-
-- `-r, --region <region>` Deployment region (`asia-northeast` | `us-west`, default: `asia-northeast`)
-- `--skip-install` Skip npm install after project creation
-- `-t, --template <tpl>` Template (`basic` | `fullstack`, default: `basic`)
-- `-y, --yes` Skip prompts and use defaults
-- `--add-to-existing` Add Tailor SDK to an existing TypeScript project
-- `-s, --src-dir <dir>` Source directory name (default: `src`)
-
-Templates:
-
-- basic: minimal setup with TailorDB and a sample resolver
-- fullstack: includes sample Auth configuration and TailorDB `User` type
-
-#### Adding to existing projects
-
-The `init` command can add Tailor SDK to an existing TypeScript project:
-
-1. Use the flag:
-
-   ```bash
-   cd your-existing-project
-   npx @tailor-platform/tailor-sdk init --add-to-existing
-   ```
-
-2. Interactive mode:
-
-   ```bash
-   # Run in a directory with package.json
-   npx @tailor-platform/tailor-sdk init
-   # Choose "Add Tailor SDK to existing project" when prompted
-   ```
-
-3. Specify a directory:
-   npx @tailor-platform/tailor-sdk init existing-project-name
-   # Choose "Add Tailor SDK to existing project" when prompted
-
-When adding to an existing project, `init` will:
-
-- add `@tailor-platform/tailor-sdk` to `devDependencies`
-- add scripts to package.json: `tailor:dev`, `tailor:build`, `tailor:deploy`
-- create `tailor.config.ts`
-- create `src/tailordb/` and `src/resolvers/` with examples
-- update `.gitignore` for generated outputs
-
-Existing files are not overwritten — existing files are skipped safely.
-
-### Manual installation
-
-```bash
-npm install -D @tailor-platform/tailor-sdk
-# or
-yarn add -D @tailor-platform/tailor-sdk
-# or
-pnpm add -D @tailor-platform/tailor-sdk
-```
 
 ## Getting Started
 
-Create a `tailor.config.ts` file in your project root:
+### 1. Create a new Tailor SDK project
 
-```typescript
-import { defineConfig } from "@tailor-platform/tailor-sdk";
+The easiest way to create a new SDK project is using the init command:
 
-export default defineConfig({
-  // Choose one of the following identifiers.
-  // id: "ws-xxxxxxxx",        // If you already know the workspace id
-  name: "my-project", // Otherwise use name + region
-  region: "asia-northeast",
-
-  app: {
-    "my-app": {
-      db: {
-        "my-db": { files: ["./src/tailordb/**/*.ts"] },
-      },
-      pipeline: {
-        "my-pipeline": { files: ["./src/resolvers/**/resolver.ts"] },
-      },
-      // Optional Identity Provider and Auth services (fullstack template adds examples)
-      auth: {
-        namespace: "my-auth",
-        idProviderConfigs: [
-          {
-            Name: "sample",
-            Config: {
-              Kind: "IDToken",
-              ClientID: "exampleco",
-              ProviderURL: "https://exampleco-enterprises.auth0.com/",
-            },
-          },
-        ],
-        userProfileProvider: "TAILORDB",
-        userProfileProviderConfig: {
-          Kind: "TAILORDB",
-          Namespace: "my-db",
-          Type: "User",
-          UsernameField: "email",
-          AttributesFields: ["roles"],
-        },
-        machineUsers: [
-          { Name: "admin-machine-user", Attributes: ["role-uuid"] },
-        ],
-        oauth2Clients: [],
-      },
-    },
-  },
-
-  // Executors are configured at workspace level
-  executor: { files: ["./src/executors/*.ts"] },
-
-  // Optional: code generators
-  generators: [
-    [
-      "@tailor/kysely-type",
-      { distPath: ({ tailorDB }) => `./src/generated/${tailorDB}.ts` },
-    ],
-    [
-      "@tailor/db-type",
-      { distPath: ({ tailorDB }) => `./src/tailordb/${tailorDB}.types.ts` },
-    ],
-  ],
-});
+```bash
+npx @tailor-platform/tailor-sdk init my-first-sdk
 ```
 
-This configuration file defines:
+For setup, select the following options:
 
-- Workspace identifier (either `id` or `name`+`region`)
-- Applications with their services (TailorDB, pipeline, optional IdP/Auth)
-- File patterns for TailorDB models / pipeline resolvers / executors
-- Optional code generators
+- `Select deployment region`: Choose `Asia Northeast`
+- `Select project template`: Choose `Basic`
 
-## Configuration
+Once setup is complete, navigate to the newly created directory as prompted.
 
-The `defineConfig` function accepts the following options:
-
-```typescript
-defineConfig({
-  // One of:
-  // id: string,
-  // or
-  name: string,
-  region: "asia-northeast" | "us-west",
-
-  app: {
-    [appName: string]: {
-      cors?: string[];
-      allowedIPAddresses?: string[];
-      disableIntrospection?: boolean;
-
-      db?: {
-        [namespace: string]: { files: string[] };
-      };
-      pipeline?: {
-        [namespace: string]: { files: string[] };
-      };
-      idp?: { [namespace: string]: { authorization: "insecure" | "loggedIn"; clients: string[] } };
-      auth?: {
-        namespace: string;
-        idProviderConfigs?: Array<{
-          Name: string;
-          Config:
-            | { Kind: "OIDC"; ClientID: string; ClientSecret: { VaultName: string; SecretKey: string }; ProviderURL: string; IssuerURL?: string; UsernameClaim?: string }
-            | { Kind: "SAML"; MetadataURL: string; SpCertBase64: { VaultName: string; SecretKey: string }; SpKeyBase64: { VaultName: string; SecretKey: string } }
-            | { Kind: "IDToken"; ProviderURL: string; IssuerURL?: string; ClientID: string; UsernameClaim?: string }
-            | { Kind: "BuiltInIdP"; Namespace: string; ClientName: string };
-        }>;
-        userProfileProvider?: "TAILORDB" | string;
-        userProfileProviderConfig?: {
-          Kind: "TAILORDB";
-          Namespace: string;
-          Type: string;
-          UsernameField: string;
-          TenantIdField?: string;
-          AttributesFields: string[];
-          AttributeMap?: Record<string, string>;
-        } | null;
-        scimConfig?: {
-          MachineUserName: string;
-          Authorization: { Type: "oauth2" | "bearer"; BearerSecret?: { VaultName: string; SecretKey: string } };
-          Resources: Array<{
-            Name: string;
-            TailorDBNamespace: string;
-            TailorDBType: string;
-            CoreSchema: {
-              Name: string;
-              Attributes: Array<{
-                Type: "string" | "number" | "boolean" | "datetime" | "complex";
-                Name: string;
-                Description?: string;
-                Mutability?: "readOnly" | "readWrite" | "writeOnly";
-                Required?: boolean;
-                MultiValued?: boolean;
-                Uniqueness?: "none" | "server" | "global";
-                CanonicalValues?: string[] | null;
-                SubAttributes?: any[] | null;
-              }>;
-            };
-            AttributeMapping: Array<{ TailorDBField: string; SCIMPath: string }>;
-          }>;
-        } | null;
-        tenantProvider?: "" | string;
-        tenantProviderConfig?: { Kind: "TAILORDB"; Namespace: string; Type: string; SignatureField: string } | null;
-        machineUsers?: Array<{ Name: string; Attributes: string[]; AttributeMap?: Record<string, string | string[] | boolean | boolean[]> }>;
-        oauth2Clients?: Array<{ Name: string; Description?: string; GrantTypes?: ("authorization_code" | "refresh_token")[]; RedirectURIs: string[]; ClientType?: "confidential" | "public" | "browser" }>;
-      };
-    };
-  },
-
-  executor?: { files: string[] };
-  staticWebsites?: { [name: string]: { description?: string; allowedIpAddresses?: string[] } };
-
-  generators?: Array<
-    ["@tailor/kysely-type", { distPath: ({ app, tailorDB }: { app: string; tailorDB: string }) => string }]
-    | ["@tailor/db-type", { distPath: ({ app, tailorDB }: { app: string; tailorDB: string }) => string }]
-  >;
-
-  tsConfig?: string; // custom tsconfig path for bundling
-})
+```bash
+cd my-first-sdk
 ```
 
-Notes:
+The project includes the following key components:
 
-- Output directory defaults to `.tailor-sdk`. Override with `TAILOR_SDK_OUTPUT_DIR`.
-- When `id` is not set, `apply` validates the selected workspace (via tailorctl) matches `name` and `region`.
+- `tailor.config.ts`: Tailor SDK configuration file
+- `src/tailordb/`: TailorDB service definitions directory
+- `src/resolvers/`: Pipeline service definitions directory
 
-## TailorDB
+### 2. Deploy your project
 
-TailorDB provides a type-safe way to define your data models using TypeScript.
+Before deploying your project, you need to create a corresponding workspace using either tailorctl or the console.
 
-### Defining Models
-
-Create model files in your TailorDB directory (e.g., `src/tailordb/`):
-
-```typescript
-import { db, t } from "@tailor-platform/tailor-sdk";
-
-// Define a simple model
-export const product = db.type("Product", {
-  name: db.string(), // required by default
-  description: db.string().optional(),
-  price: db.int(),
-  weight: db.float().optional(),
-  inStock: db
-    .bool()
-    .hooks({ create: ({ value }) => value ?? false })
-    .optional({ assertNonNull: true }),
-  category: db.enum("electronics", "clothing", "food"),
-  tags: db.string().array(),
-  ...db.fields.timestamps(),
-});
-
-export type Product = t.infer<typeof product>;
+```bash
+tailorctl auth login
+tailorctl workspace create --name my-first-sdk --region asia-northeast
 ```
 
-### Field Types
+Next, run the apply command to deploy your project:
 
-TailorDB supports the following field types:
-
-| Method          | TypeScript Type | Database Type |
-| --------------- | --------------- | ------------- |
-| `db.string()`   | string          | String        |
-| `db.int()`      | number          | Integer       |
-| `db.float()`    | number          | Float         |
-| `db.bool()`     | boolean         | Boolean       |
-| `db.date()`     | string          | Date          |
-| `db.datetime()` | string          | DateTime      |
-| `db.time()`     | string          | Time          |
-| `db.uuid()`     | string          | UUID          |
-| `db.enum()`     | string          | Enum          |
-| `db.object()`   | object          | Nested Object |
-
-Each field type supports modifiers:
-
-```typescript
-// Basic field with modifiers
-db.string()
-  .optional() // Field can be null
-  .optional({ assertNonNull: true }) // Optional but non-null at runtime
-  .description("Field description") // Add description
-  .unique() // Values must be unique
-  .index() // Create database index
-  .array() // Array of values
-  .values(["A", "B", "C"]); // Allowed values constraint
-
-// Relations
-db.uuid().relation({
-  type: "n-1", // or "1-1" | "oneToOne" | "manyToOne" | "keyOnly"
-  toward: { type: customer },
-  backward: "orders", // optional reverse relation name
-});
-
-// Validation
-db.string().validate(
-  ({ value }) => value.length > 0,
-  ({ value }) => value.length < 100,
-);
-
-// Hooks for computed fields
-db.string().hooks({
-  create: ({ data, user }) => computeValue(data),
-  update: ({ data, user }) => computeValue(data),
-});
+```bash
+npm run deploy
 ```
 
-### Plural Forms
+You can now open the GraphQL Playground and execute the `hello` query:
 
-When defining models, you can specify a custom plural form for better GraphQL query naming:
-
-```typescript
-// Default pluralization (User -> Users)
-export const user = db.type("User", { name: db.string() });
-
-// Custom plural form (User -> UserList)
-export const person = db.type(["User", "UserList"], {
-  name: db.string(),
-});
-```
-
-When using the tuple syntax `[singular, plural]`:
-
-- The first element is the singular form (model name)
-- The second element is the plural form used in GraphQL queries
-
-```gql
+```graphql
 query {
-  # Use `userList` instead of `users` to fetch records
-  userList {
-    edges {
-      node {
-        name
-      }
-    }
+  hello(input: { name: "sdk" }) {
+    message
   }
 }
 ```
 
-You can also set via `features({ pluralForm: "UserList" })`.
+### 3. Edit your project
 
-### Timestamps and common fields
+Let's try editing `src/resolvers/hello/resolver.ts`:
 
-Add timestamp fields using the built-in helper:
+```typescript
+import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
+
+export default createQueryResolver(
+  "hello",
+  t.type({
+    name: t.string(),
+  }),
+)
+  .fnStep("greet", async (context) => {
+    // return `Hello, ${context.input.name}!`;
+    return `Goodbye, ${context.input.name}!`;
+  })
+  .returns(
+    (context) => ({
+      message: context.greet,
+    }),
+    t.type({
+      message: t.string(),
+    }),
+  );
+```
+
+Deploy again and you'll see that the `hello` query response has been updated:
+
+```bash
+npm run deploy
+```
+
+## Configuration
+
+Tailor SDK uses TypeScript for configuration files.
+By default, it uses `tailor.config.ts` in the project root.
+You can specify a different path using the `--config` option.
+
+### name, region
+
+Specify target workspace for deployment.
+Deployment will fail if name and region don't match the current tailorctl context.
+To specify a workspace without using tailorctl information, use the id field instead.
+
+### id
+
+Specify workspace ID in UUID format.
+
+### app
+
+Specify application settings as a map.
+Key becomes application name, and value is configuration object.
+
+#### cors
+
+Specify CORS settings as an array.
+You can also specify Static Website URLs in the format `<staticWebsiteName>:url`.
+
+#### allowedIPAddresses
+
+Specify IP addresses allowed to access the application.
+
+#### disableIntrospection
+
+Disable GraphQL introspection. Default is `false`.
+
+#### db
+
+Specify TailorDB service settings as a map.
+Key becomes TailorDB service name, and value is configuration object.
+
+- files: Specify an array of glob patterns for definition files.
+
+#### pipeline
+
+Specify Pipeline service settings as a map.
+Key becomes Pipeline service name, and value is configuration object.
+
+- files: Specify an array of glob patterns for definition files.
+
+#### idp
+
+Specify IDP service settings as a map.
+Key becomes IDP service name, and value is configuration object.
+
+- authorization: Specify conditions for executing user management queries.
+  - insecure: Allow all users.
+  - loggedIn: Allow logged-in users.
+  - cel: Specify a custom CEL expression.
+- clients: Specify an array of OAuth client names.
+
+#### auth
+
+Specify Auth service settings as a map.
+
+> [!WARNING]
+> Auth configuration interface is expected to undergo significant changes in future releases.
+> For current configuration examples, please refer to examples directory.
+
+## TailorDB
+
+Define TailorDB Types in files matching glob patterns specified in `tailor.config.ts`.
+
+### Field
+
+Define TailorDB Fields using methods like db.string(), db.int(), etc.
+
+All TailorDB Field types are supported.
+
+| Method          | TailorDB | TypeScript |
+| --------------- | -------- | ---------- |
+| `db.string()`   | String   | string     |
+| `db.int()`      | Integer  | number     |
+| `db.float()`    | Float    | number     |
+| `db.bool()`     | Boolean  | boolean    |
+| `db.date()`     | Date     | string     |
+| `db.datetime()` | DateTime | string     |
+| `db.time()`     | Time     | string     |
+| `db.uuid()`     | UUID     | string     |
+| `db.enum()`     | Enum     | string     |
+| `db.object()`   | Nested   | object     |
+
+For enum fields, specify allowed values as arguments:
+
+```typescript
+db.enum("red", "green", "blue");
+db.enum(
+  { value: "active", description: "Active status" },
+  { value: "inactive", description: "Inactive status" },
+);
+```
+
+For object fields, specify field structure as an argument:
+
+```typescript
+db.object({
+  street: db.string(),
+  city: db.string(),
+  country: db.string(),
+});
+```
+
+#### optional / array
+
+You can make fields optional or arrays by specifying options when creating field:
+
+```typescript
+db.string({ optional: true }); // string | null
+db.string({ array: true }); // string[]
+db.string({ optional: true, array: true }); // string[] | null
+```
+
+By specifying assertNonNull option along with optional, you can create a field that doesn't allow null in TypeScript types but does allow null in TailorDB.
+This is useful for fields like createdAt where non-null values are set through hooks.
+
+```typescript
+const optionalField = db
+  .string({ optional: true })
+  .hooks({
+    create: () => "initial value", // return type is string | null
+    update: () => "updated value", // return type is string | null
+  })
+  .validate(({ value }) => value !== ""); // value type is string | null
+
+type optionalField = t.infer<typeof optionalField>; // type is string | null
+
+const assertNonNullField = db
+  .string({ optional: true, assertNonNull: true })
+  .hooks({
+    create: () => "initial value", // return type is string
+    update: () => "updated value", // return type is string
+  })
+  .validate(({ value }) => value !== ""); // value type is string
+
+type assertNonNullField = t.infer<typeof assertNonNullField>; // type is string
+```
+
+> [!WARNING]
+> The assertNonNull option only affects TypeScript's type system and doesn't affect the created TailorDB Field.
+> If hooks or application logic don't guarantee that a non-null value will be set, the actual value may not match the type.
+
+#### description
+
+Add a description to field:
+
+```typescript
+db.string().description("User's full name");
+```
+
+#### index / unique
+
+Add an index to field.
+Use unique instead of index to create an index with a unique constraint:
+
+```typescript
+db.string().index(); // Creates an index
+db.string().unique(); // Creates a unique index
+```
+
+#### relation
+
+Add a relation to field.
+An index and foreign key constraint are automatically configured.
+
+```typescript
+const user = db.type("User", {
+  name: db.string(),
+  roleId: db.uuid().relation({
+    type: "n-1",
+    toward: { type: role },
+  }),
+});
+
+const role = db.type("Role", {
+  name: db.string(),
+});
+```
+
+By specifying `type: "keyOnly"`, you can set only the foreign key constraint without creating a relation:
+
+```typescript
+const user = db.type("User", {
+  name: db.string(),
+  roleId: db.uuid().relation({
+    type: "keyOnly",
+    toward: { type: role },
+  }),
+});
+
+const role = db.type("Role", {
+  name: db.string(),
+});
+```
+
+By specifying `type: "1-1"`, you can create a one-to-one relation.
+In this case, a unique constraint is also automatically configured:
+
+```typescript
+const user = db.type("User", {
+  name: db.string(),
+});
+
+const userProfile = db.type("UserProfile", {
+  // userId is a unique field
+  userId: db.uuid().relation({
+    type: "1-1",
+    toward: { type: user },
+  }),
+  bio: db.string(),
+});
+```
+
+By default, a relation is created against the id field of the specified TailorDB Type.
+You can create a relation against a different field using `toward.key` option:
+
+```typescript
+const user = db.type("User", {
+  email: db.string().unique(),
+});
+
+const userProfile = db.type("UserProfile", {
+  userEmail: db.string().relation({
+    type: "1-1",
+    toward: { type: user, key: "email" },
+  }),
+  bio: db.string(),
+});
+```
+
+By default, the relation name is automatically determined.
+You can customize relation name using `toward.as` / `backward` options:
+
+```typescript
+const user = db.type("User", {
+  name: db.string(),
+});
+
+const userProfile = db.type("UserProfile", {
+  userId: db.uuid().relation({
+    type: "1-1",
+    toward: { type: user, as: "base" },
+    backward: "profile",
+  }),
+  bio: db.string(),
+});
+```
+
+#### hooks
+
+Add hooks to field.
+You can specify functions to be executed during data creation or update:
+
+```typescript
+db.created().hooks({
+  create: ({ value }) => `Created: ${value}`,
+  update: ({ value }) => `Updated: ${value}`,
+});
+```
+
+Function arguments include the following properties:
+
+- `value`: Field value being created or updated
+- `data`: Entire record value
+- `user`: Information about the user performing the operation
+
+> [!NOTE]
+> Due to TypeScript type inference limitations, field hooks cannot accurately determine entire record type, so data type is unknown.
+> If you need to reference data, use TailorDB Type hooks instead of field hooks.
+
+#### validate
+
+Add a validation function to field:
+
+```typescript
+db.string().validate(
+  ({ value }) => value.length > 5,
+  [
+    ({ value }) => value.length < 10,
+    "Value must be shorter than 10 characters",
+  ],
+);
+```
+
+Function arguments include the same properties as hooks.
+value / data receive values after hooks have been executed.
+
+- `value`: Field value being created or updated
+- `data`: Entire record value
+- `user`: Information about the user performing the operation
+
+> [!NOTE]
+> Similar to hooks, data type is unknown. If you need to reference data, use TailorDB Type validate instead of field validate.
+
+#### vector
+
+Enable field for vector search:
+
+```typescript
+db.string().vector();
+```
+
+#### serial
+
+Enable field auto-increment.
+Can be used with int / string fields:
+
+```typescript
+db.int().serial({
+  start: 0,
+});
+db.string().serial({
+  start: 0,
+});
+```
+
+You can specify the upper limit of the serial value by specifying the `maxValue` option:
+
+```typescript
+db.int().serial({
+  start: 0,
+  maxValue: 100,
+});
+```
+
+For string fields, you can specify the serial value format by specifying the `format` option:
+
+```typescript
+db.string().serial({
+  start: 0,
+  format: "CUST_%d", // CUST_0, CUST_1, ...
+});
+```
+
+#### common fields
+
+Add common fields using built-in helper:
 
 ```typescript
 export const user = db.type("User", {
-  email: db.string().unique(), // Required and unique
-  name: db.string().optional(), // Optional field
-  role: db.string().values(["admin", "user", "guest"]), // With allowed values
+  name: db.string(),
   ...db.fields.timestamps(), // Adds createdAt and updatedAt
 });
 ```
 
-### Nested objects
+### Type
 
-TailorDB supports deeply nested object structures:
+Define a TailorDB Type using db.type() method:
 
 ```typescript
-export const nestedProfile = db.type("NestedProfile", {
-  userInfo: db.object({
-    personal: db.object({
-      name: db.string(),
-      age: db.int().optional(),
-      bio: db.string().optional(),
-    }),
-    contact: db.object({
-      email: db.string(),
-      phone: db.string().optional(),
-      address: db.object({
-        street: db.string(),
-        city: db.string(),
-        country: db.string(),
-        coordinates: db
-          .object({
-            latitude: db.float(),
-            longitude: db.float(),
-          })
-          .optional(),
-      }),
-    }),
-    preferences: db
-      .object({
-        notifications: db.object({
-          email: db.bool(),
-          sms: db.bool(),
-          push: db.bool(),
-        }),
-        privacy: db
-          .object({
-            profileVisible: db.bool(),
-            dataSharing: db.bool(),
-          })
-          .optional(),
-      })
-      .optional(),
-  }),
-  metadata: db.object({
-    created: db.datetime(),
-    lastUpdated: db.datetime().optional(),
-    version: db.int(),
-  }),
+db.type("User", {
+  name: db.string(),
 });
 ```
 
-### Reusable field definitions
-
-You can extract common field definitions for reuse across models:
+You can specify PluralForm by passing an array as first argument:
 
 ```typescript
-// Define reusable field structure
-export const attachedFiles = db
-  .object({
-    id: db.uuid(),
-    name: db.string(),
-    size: db.int().validate(({ value }) => value > 0),
-    type: db.enum("text", "image", "pdf", "video"),
+db.type(["User", "UserList"], {
+  name: db.string(),
+});
+```
+
+You can also pass a description as second argument:
+
+```typescript
+db.type("User", "User in the system", {
+  name: db.string(),
+  description: db.string().optional(),
+});
+```
+
+#### indexes
+
+Configure composite indexes:
+
+```typescript
+db.type("User", {
+  firstName: db.string(),
+  lastName: db.string(),
+}).indexes({ fields: ["firstName", "lastName"] });
+```
+
+You can create an index with unique constraint by specifying `unique: true`:
+
+```typescript
+db.type("User", {
+  firstName: db.string(),
+  lastName: db.string(),
+}).indexes({ fields: ["firstName", "lastName"], unique: true });
+```
+
+You can customize index name by specifying `name` option:
+
+```typescript
+db.type("User", {
+  firstName: db.string(),
+  lastName: db.string(),
+}).indexes({
+  fields: ["firstName", "lastName"],
+  name: "user_name_idx",
+});
+```
+
+#### files
+
+Add file fields:
+
+```typescript
+db.type("User", {
+  name: db.string(),
+}).files({
+  avatar: "profile image",
+});
+```
+
+#### features
+
+Enable additional features:
+
+- aggregation: Enable aggregation queries.
+- bulkUpsert: Enable bulkUpsert queries.
+
+```typescript
+db.type("User", {
+  name: db.string(),
+}).features({
+  aggregation: true,
+  bulkUpsert: true,
+});
+```
+
+#### permission
+
+Configure Permission.
+For details about Permission, see the [TailorDB documentation](https://docs.tailor.tech/guides/tailordb/permission).
+
+```typescript
+db.type("User", {
+  name: db.string(),
+  role: db.enum("admin", "user").index(),
+}).permission<{ role: string }>({
+  create: [[{ user: "role" }, "=", "admin"]],
+  read: [
+    [{ user: "role" }, "=", "admin"],
+    [{ record: "id" }, "=", { user: "id" }],
+  ],
+  update: [[{ user: "role" }, "=", "admin"]],
+  delete: [[{ user: "role" }, "=", "admin"]],
+});
+```
+
+In above example, users with the admin role can freely manipulate User records, while users without the admin role can only read their own records.
+
+> [!NOTE]
+> Following the secure-by-default principle, all operations are denied if permissions are not configured.
+
+#### gqlPermission
+
+Configure GQLPermission.
+For details about GQLPermission, see the [TailorDB documentation](https://docs.tailor.tech/guides/tailordb/permission).
+
+```typescript
+db.type("User", {
+  name: db.string(),
+  role: db.enum("admin", "user").index(),
+}).gqlPermission<{ role: string }>([
+  { conditions: [[{ user: "role" }, "=", "admin"]], actions: "all" },
+  { conditions: [[{ user: "role" }, "=", "user"]], actions: ["read"] },
+]);
+```
+
+In above example, users with the admin role can execute all GraphQL queries, while users with the user role can only execute read queries.
+
+> [!NOTE]
+> Following the secure-by-default principle, all GraphQL queries are denied if gqlPermission is not configured.
+
+## Pipeline
+
+Define Pipeline Resolvers in files matching glob patterns specified in `tailor.config.ts`.
+
+### Resolver
+
+Define Resolvers using `createQueryResolver` / `createMutationResolver` methods.
+`createQueryResolver` corresponds to GraphQL queries, while `createMutationResolver` corresponds to mutations.
+Specify Resolver name as first argument and input schema as second.
+
+```typescript
+createQueryResolver(
+  // Resolver name
+  "add",
+  // Input schema
+  t.type({
+    left: t.int(),
+    right: t.int(),
+  }),
+)
+  .fnStep("step1", (context) => {
+    return context.input.left + context.input.right;
   })
-  .array();
-
-// Use in multiple models
-export const purchaseOrder = db.type("PurchaseOrder", {
-  supplierID: db.uuid().relation({
-    type: "n-1",
-    toward: { type: supplier },
-  }),
-  totalPrice: db.int(),
-  attachedFiles, // Reuse the field definition
-  ...db.fields.timestamps(),
-});
-
-export const invoice = db.type("Invoice", {
-  invoiceNumber: db.string(),
-  attachedFiles, // Same field structure
-  ...db.fields.timestamps(),
-});
+  .returns(
+    (context) => ({
+      result: context.step1,
+    }),
+    t.type({
+      result: t.int(),
+    }),
+  );
 ```
 
-### Type inference
+### Input/Output
 
-Use TypeScript's type inference to get compile-time type safety:
+Define Input/Output schemas using methods of `t` object.
+Basic usage and supported field types are the same as TailorDB.
+TailorDB-specific options (e.g., index, relation) are not supported.
+You can reuse fields defined with `db` object, but note that unsupported options will be ignored:
 
 ```typescript
-// Define the model with relations and validations
-export const order = db.type("Order", {
-  orderNumber: db.string().unique(),
-  customerId: db.uuid().relation({
-    type: "n-1",
-    toward: { type: customer, as: "customer" },
-    backward: "orders",
-  }),
-  totalAmount: db.float().validate(({ value }) => value >= 0),
-  status: db
-    .string()
-    .values(["pending", "processing", "completed", "cancelled"]),
-  items: db
-    .object({
-      productId: db.uuid(),
-      quantity: db.int(),
-      price: db.float(),
-    })
-    .array(),
-  ...db.fields.timestamps(),
+const user = db.type("User", {
+  name: db.string().unique(),
+  age: db.int(),
 });
 
-// Infer the TypeScript type
-export type Order = t.infer<typeof order>;
-
-// Now you can use Order as a TypeScript type
-function processOrder(order: Order) {
-  console.log(order.orderNumber); // Type-safe access
-  console.log(order.customer); // Related customer data
-}
-```
-
-## Pipeline Resolvers
-
-Pipeline Resolvers allow you to create GraphQL resolvers with multiple processing steps.
-
-### Creating Resolvers
-
-Create resolver files in your resolver directory (e.g., `src/resolvers/`):
-
-```typescript
-import {
-  createQueryResolver,
-  createMutationResolver,
-  t,
-} from "@tailor-platform/tailor-sdk";
-
-// Query resolver
-export default createQueryResolver(
+createQueryResolver(
   "getUser",
   t.type({
-    id: t.string(),
+    name: user.fields.name,
   }),
-  { defaults: { dbNamespace: "my-db" } },
-)
-  .fnStep("fetchUser", async (context) => {
-    // Access input via context.input
-    const userId = context.input.id;
-    // Your logic here
-    return { id: userId, name: "John Doe" };
-  })
-  .returns(
-    (context) => ({
-      user: context.fetchUser,
-    }),
-    t.type({
-      user: t.object({
-        id: t.string(),
-        name: t.string(),
-      }),
-    }),
-  );
+)...
+```
 
-// Mutation resolver
-export default createMutationResolver(
-  "createOrder",
+### Step
+
+Chain multiple steps to define actual resolver logic.
+Each step's context includes input and results from previous steps.
+Call `returns` as final step to define final output:
+
+```typescript
+createQueryResolver(
+  "calc",
   t.type({
-    items: t.array(
-      t.object({
-        productId: t.string(),
-        quantity: t.int(),
-      }),
-    ),
+    value: t.int(),
   }),
 )
-  .fnStep("validateItems", async (context) => {
-    // Validation logic
-    return context.input.items;
+  .fnStep("add1", (context) => {
+    return context.input.value + 1;
   })
-  .fnStep("createOrder", async (context) => {
-    // Create order logic
-    return { orderId: "123", items: context.validateItems };
+  .fnStep("subtract1", (context) => {
+    return context.add1 - 1;
   })
   .returns(
     (context) => ({
-      order: context.createOrder,
+      result: context.subtract1,
     }),
     t.type({
-      order: t.object({
-        orderId: t.string(),
-        items: t.array(t.any()),
-      }),
+      result: t.int(),
     }),
   );
 ```
 
-### Step Types
+#### fnStep
 
-Resolvers support different types of steps:
+Add a step without database access.
 
-#### Function steps
+#### sqlStep
 
-Execute TypeScript functions:
-
-```typescript
-.fnStep("stepName", async (context) => {
-  // Access previous steps via context
-  // Access input via context.input
-  return result;
-})
-```
-
-#### SQL steps
-
-Execute SQL queries. Provide `dbNamespace` (resolver defaults or per-step option):
+Add a step with database access.
+Context includes a `client` property that can be used to execute SQL queries.
+You need to specify which TailorDB service to use with the `dbNamespace` option when creating resolver or step:
 
 ```typescript
-.sqlStep(
-  "queryUsers",
-  async (context) => {
-    const rows = await context.client.exec<{ name: string }>(
-      /* sql */ `SELECT name FROM "User" WHERE active = true`,
-    );
-    return rows;
-  },
-  { dbNamespace: "my-db" },
-)
-```
-
-Note: Kysely types can be generated via the `@tailor/kysely-type` generator, but the runtime SQL API here is the provided `SqlClient` (`exec`, `execOne`).
-
-### Processing Flow Patterns
-
-#### Complex Multi-Step Resolver Example
-
-Here's a comprehensive example combining different step types:
-
-```typescript
-import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
-import { format } from "date-fns";
-// No custom DB wrapper required
-
-export default createQueryResolver(
-  "complexWorkflow",
+createQueryResolver(
+  "getUser",
   t.type({
-    userId: t.string(),
-    filters: t.object({
-      status: t.string().optional(),
-      dateFrom: t.datetime().optional(),
-    }),
+    name: t.string(),
   }),
-  { defaults: { dbNamespace: "my-db" } },
+  { defaults: { dbNamespace: "tailordb" } },
 )
-  // Step 1: Validate and transform input
-  .fnStep("validateInput", (context) => {
-    if (!context.input.userId) {
-      throw new Error("User ID is required");
-    }
-    return {
-      userId: context.input.userId,
-      status: context.input.filters.status || "active",
-    };
-  })
-
-  // Step 2: Execute raw SQL with safe parameterization
-  .sqlStep("getUserData", async (context) => {
-    // Using sqlstring for safe query building
-    const sql = require("sqlstring");
-    const query = sql.format(
-      /* sql */ `SELECT * FROM User WHERE id = ? AND status = ?`,
-      [context.validateInput.userId, context.validateInput.status],
+  .sqlStep("step1", async (context) => {
+    const result = await context.client.execOne<{ id: string } | null>(
+      `SELECT id FROM User WHERE name = ? LIMIT 1`,
+      [context.input.name],
     );
-    return await context.client.execOne<{ id: string; name: string }>(query);
+    return result?.id;
   })
+  .returns(
+    (context) => ({
+      result: context.step1,
+    }),
+    t.type({
+      result: t.uuid({ optional: true }),
+    }),
+  );
+```
 
-  // Step 3: Another SQL step
-  .sqlStep(
-    "getRelatedData",
-    async (ctx) => {
-      const q = /* sql */ `SELECT id, totalAmount FROM "Order" WHERE userId = $1 ORDER BY createdAt DESC LIMIT 10`;
-      return await ctx.client.exec<{ id: string; totalAmount: number }>(q, [
-        ctx.getUserData.id,
-      ]);
-    },
-    { dbNamespace: "my-db" },
+If you're generating Kysely types with a generator, you can use `kyselyWrapper` to execute typed queries:
+
+```typescript
+createQueryResolver(
+  "getUser",
+  t.type({
+    name: t.string(),
+  }),
+  { defaults: { dbNamespace: "tailordb" } },
+)
+  .sqlStep("step1", async (context) =>
+    kyselyWrapper(context, async (context) => {
+      const query = context.db
+        .selectFrom("User")
+        .select("id")
+        .where("name", "=", context.input.name)
+        .limit(1)
+        .compile();
+      const result = await context.client.exec(query);
+      return result[0]?.id;
+    }),
   )
-
-  // Step 4: Process and format results
-  .fnStep("formatResults", (context) => {
-    return {
-      user: context.getUserData,
-      orders: context.getRelatedData.map((order) => ({
-        ...order,
-        formattedDate: format(order.createdAt, "yyyy-MM-dd"),
-      })),
-      summary: {
-        totalOrders: context.getRelatedData.length,
-        totalAmount: context.getRelatedData.reduce(
-          (sum, order) => sum + order.totalAmount,
-          0,
-        ),
-      },
-    };
-  })
-
   .returns(
-    (context) => context.formatResults,
+    (context) => ({
+      result: context.step1,
+    }),
     t.type({
-      user: t.object({
-        id: t.string(),
-        name: t.string(),
-      }),
-      orders: t.array(
-        t.object({
-          id: t.string(),
-          totalAmount: t.float(),
-          productName: t.string(),
-          formattedDate: t.string(),
-        }),
-      ),
-      summary: t.object({
-        totalOrders: t.int(),
-        totalAmount: t.float(),
-      }),
+      result: t.uuid({ optional: true }),
     }),
   );
 ```
+
+#### gqlStep
+
+TODO
+
+#### returns
+
+Define final output.
+Similar to fnStep, except you specify output schema as second argument.
 
 ## Executor
 
-### Overview
+Define Executors in files matching glob patterns specified in `tailor.config.ts`.
 
-Executors are event-driven workflows that respond to database events, schedules, or external triggers. They enable you to build reactive systems that automatically execute code or call webhooks when specific conditions are met.
+Executors follow a simple pattern:
 
-### Configuration
-
-Add executor configuration to your `tailor.config.ts`:
-
-```typescript
-export default defineConfig({
-  // ... other config
-  executor: { files: ["./src/executors/*.ts"] },
-});
-```
-
-### Creating Executors
-
-Create executor files in your executor directory (e.g., `src/executors/`):
+1. Create an executor with `createExecutor(name, description)`
+2. Add a trigger with `.on(...)`
+3. Choose a target: `.executeFunction({ ... })`, `.executeJobFunction({ ... })`, `.executeWebhook({ ... })`, or `.executeGql({ ... })`
 
 ```typescript
-import {
-  createExecutor,
-  recordCreatedTrigger,
-} from "@tailor-platform/tailor-sdk";
-import { user } from "../tailordb/user";
-
-export default createExecutor("user-welcome", "Send welcome email to new users")
+createExecutor("user-welcome", "Send welcome email to new users")
   .on(
     recordCreatedTrigger(
       user,
@@ -764,26 +761,17 @@ export default createExecutor("user-welcome", "Send welcome email to new users")
   .executeFunction({
     fn: async ({ newRecord, client }) => {
       // Send welcome email logic here
-      console.log(`Sending welcome email to ${newRecord.email}`);
-      await client.exec("/* sql */ SELECT 1");
     },
-    dbNamespace: "my-db",
   });
 ```
 
-Executors follow a simple pattern:
+### Trigger
 
-1. Create an executor with `createExecutor(name, description)`
-2. Add a trigger with `.on(...)`
-3. Choose a target: `.executeFunction({ ... })`, `.executeJobFunction({ ... })`, `.executeWebhook({ ... })`, or `.executeGql({ ... })`
+#### Record trigger
 
-### Trigger Types
-
-#### Record triggers
-
-- `recordCreatedTrigger(type, filter?)` - Fires when a new record is created
-- `recordUpdatedTrigger(type, filter?)` - Fires when a record is updated
-- `recordDeletedTrigger(type, filter?)` - Fires when a record is deleted
+- `recordCreatedTrigger(type, filter?)`: Fires when a new record is created
+- `recordUpdatedTrigger(type, filter?)`: Fires when a record is updated
+- `recordDeletedTrigger(type, filter?)`: Fires when a record is deleted
 
 Each trigger can include an optional filter function:
 
@@ -795,9 +783,9 @@ recordUpdatedTrigger(
 );
 ```
 
-#### Schedule triggers
+#### Schedule trigger
 
-- `scheduleTrigger(cron)` - Fires on a cron schedule
+- `scheduleTrigger(cron, timezone?)`: Fires on a cron schedule
 
 Use cron expressions. Optional timezone defaults to `UTC`.
 
@@ -805,13 +793,12 @@ Use cron expressions. Optional timezone defaults to `UTC`.
 scheduleTrigger("*/5 * * * *"); // Every 5 minutes
 scheduleTrigger("0 9 * * 1"); // Every Monday at 9 AM
 scheduleTrigger("0 0 1 * *"); // First day of every month
-// With timezone
-// scheduleTrigger("0 * * * *", "Asia/Tokyo");
+scheduleTrigger("0 * * * *", "Asia/Tokyo"); // With timezone
 ```
 
 #### Incoming webhook triggers
 
-- `incomingWebhookTrigger<T>()` - Fires when an external webhook is received
+- `incomingWebhookTrigger<T>()`: Fires when an external webhook is received
 
 Use typed payloads for type safety:
 
@@ -821,7 +808,7 @@ incomingWebhookTrigger<WebhookPayload>();
 
 #### Resolver executed triggers
 
-- `resolverExecutedTrigger(resolver, filter?)` - Fires when a pipeline resolver is executed
+- `resolverExecutedTrigger(resolver, filter?)`: Fires when a pipeline resolver is executed
 
 Filter based on execution results:
 
@@ -832,7 +819,7 @@ resolverExecutedTrigger(
 );
 ```
 
-### Execution
+### Target
 
 Executors support different execution methods depending on your use case:
 
@@ -878,6 +865,16 @@ Call external webhooks with dynamic data:
 })
 ```
 
+Securely access secrets for webhook authentication:
+
+```typescript
+.executeWebhook({
+  headers: {
+    "X-API-Key": { vault: "external-apis", key: "partner-api-key" },
+  },
+})
+```
+
 #### executeGql
 
 Execute GraphQL queries and mutations:
@@ -906,15 +903,15 @@ Execute GraphQL queries and mutations:
 
 ### Execution Context
 
-The execution context varies based on the trigger type:
+Execution context varies based on trigger type:
 
 #### Record trigger context
 
 For `recordCreatedTrigger`, `recordUpdatedTrigger`, and `recordDeletedTrigger`:
 
-- `newRecord` - The new record state (not available for delete triggers)
-- `oldRecord` - The previous record state (only for update triggers)
-- `client` — Database client with methods:
+- `newRecord`: New record state (not available for delete triggers)
+- `oldRecord`: Previous record state (only for update triggers)
+- `client`: Database client with methods:
   - `exec<T>(sql: string, params?: readonly unknown[])` → `T[]`
   - `execOne<T>(sql: string, params?: readonly unknown[])` → `T`
 
@@ -922,24 +919,24 @@ For `recordCreatedTrigger`, `recordUpdatedTrigger`, and `recordDeletedTrigger`:
 
 For `scheduleTrigger`:
 
-- same `client` as above
+- `client`: Same database client as above
 
 #### Incoming webhook trigger context
 
 For `incomingWebhookTrigger`:
 
-- `payload` — Webhook request body (typed)
-- `headers` — Webhook request headers
-- `client` — Same `SqlClient` as above
+- `payload`: Webhook request body (typed)
+- `headers`: Webhook request headers
+- `client`: Same `SqlClient` as above
 
 #### Resolver executed trigger context
 
 For `resolverExecutedTrigger`:
 
-- `result` - The resolver's return value (when execution succeeds)
-- `error` - The error object (when execution fails)
-- `input` - The input that was passed to the resolver
-- `client` — Same `SqlClient` as above
+- `result`: Resolver's return value (when execution succeeds)
+- `error`: Error object (when execution fails)
+- `input`: Input that was passed to resolver
+- `client`: Same `SqlClient` as above
 
 ### Advanced Features
 
@@ -956,28 +953,12 @@ Use filters to control when executors run:
 )
 ```
 
-#### Vault integration
-
-Securely access secrets for webhook authentication:
-
-```typescript
-.executeWebhook({
-  headers: {
-    "X-API-Key": { vault: "external-apis", key: "partner-api-key" },
-  },
-})
-```
-
-#### Error handling
-
-Executors include built-in error handling and retry logic. Failed executions are logged and can be monitored through the Tailor console.
-
 ## Generators
 
-The SDK includes built-in code generators:
+SDK includes built-in code generators:
 
-- `@tailor/kysely-type`: generates Kysely table types from TailorDB
-- `@tailor/db-type`: generates TypeScript types for TailorDB models
+- `@tailor/kysely-type`: Generate Kysely table types from TailorDB
+- `@tailor/db-type`: Generate TypeScript types for TailorDB models
 
 Configure generators in your `tailor.config.ts`:
 
@@ -999,7 +980,7 @@ export default defineConfig({
 
 ## CLI Commands
 
-The SDK provides the following CLI commands:
+SDK provides the following CLI commands:
 
 ```bash
 # Initialize a new project
@@ -1024,20 +1005,20 @@ npx @tailor-platform/tailor-sdk apply --dry-run
 
 ### Environment Variables
 
-Set these environment variables for deployment:
+Configure these environment variables for deployment:
 
 ```bash
 # Option 1: Provide an access token directly
 export TAILOR_TOKEN=...  # Personal access token
 
 # Option 2: Use tailorctl authentication (preferred for long-lived dev)
-#   The SDK reads ~/.tailorctl/config and refreshes tokens automatically.
+#   SDK reads ~/.tailorctl/config and refreshes tokens automatically.
 
 # Optional: override API base URL (default: https://api.tailor.tech)
 export PLATFORM_URL=https://api.tailor.tech
 ```
 
-Outputs:
+### Outputs
 
 - Bundled functions and executors are written under `.tailor-sdk/`.
-- You can customize the output root with `TAILOR_SDK_OUTPUT_DIR`.
+- You can customize output root with `TAILOR_SDK_OUTPUT_DIR`.

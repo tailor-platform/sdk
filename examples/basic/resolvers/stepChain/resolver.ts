@@ -7,7 +7,7 @@ const resolver = createQueryResolver(
   t.type({
     user: t.object({
       name: t.object({ first: t.string(), last: t.string() }),
-      activatedAt: t.datetime().optional(),
+      activatedAt: t.datetime({ optional: true }),
     }),
   }),
   { defaults: { dbNamespace: "tailordb" } },
@@ -54,7 +54,7 @@ const resolver = createQueryResolver(
     }),
     t.type({
       result: t.object({
-        summary: t.string().array(),
+        summary: t.string({ array: true }),
       }),
     }),
   );

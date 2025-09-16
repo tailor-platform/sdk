@@ -8,22 +8,16 @@ import {
 export const selfie = db
   .type("Selfie", {
     name: db.string(),
-    parentID: db
-      .uuid()
-      .relation({
-        type: "n-1",
-        toward: { type: "self" },
-        backward: "children",
-      })
-      .optional(),
-    dependId: db
-      .uuid()
-      .relation({
-        type: "1-1",
-        toward: { type: "self", as: "dependsOn" },
-        backward: "dependedBy",
-      })
-      .optional(),
+    parentID: db.uuid({ optional: true }).relation({
+      type: "n-1",
+      toward: { type: "self" },
+      backward: "children",
+    }),
+    dependId: db.uuid({ optional: true }).relation({
+      type: "1-1",
+      toward: { type: "self", as: "dependsOn" },
+      backward: "dependedBy",
+    }),
   })
   .permission<PermissionUser>(defaultPermission)
   .gqlPermission(defaultGqlPermission);

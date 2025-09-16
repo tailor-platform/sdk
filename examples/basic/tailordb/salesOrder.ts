@@ -13,19 +13,15 @@ export const salesOrder = db
       type: "n-1",
       toward: { type: customer },
     }),
-    approvedByUserIDs: db
-      .uuid()
-      .optional()
-      .relation({
-        type: "keyOnly",
-        toward: { type: user },
-      })
-      .array(),
-    totalPrice: db.int().optional(),
-    discount: db.float().optional(),
-    status: db.string().optional(),
-    cancelReason: db.string().optional(),
-    canceledAt: db.datetime().optional(),
+    approvedByUserIDs: db.uuid({ optional: true, array: true }).relation({
+      type: "keyOnly",
+      toward: { type: user },
+    }),
+    totalPrice: db.int({ optional: true }),
+    discount: db.float({ optional: true }),
+    status: db.string({ optional: true }),
+    cancelReason: db.string({ optional: true }),
+    canceledAt: db.datetime({ optional: true }),
     ...db.fields.timestamps(),
   })
   .indexes(
@@ -40,8 +36,8 @@ export const salesOrderCreated = db
   .type(["SalesOrderCreated", "SalesOrderCreatedList"], {
     salesOrderID: db.uuid(),
     customerID: db.uuid(),
-    totalPrice: db.int().optional(),
-    status: db.string().optional(),
+    totalPrice: db.int({ optional: true }),
+    status: db.string({ optional: true }),
   })
   .permission<PermissionUser>(defaultPermission)
   .gqlPermission<PermissionUser>(defaultGqlPermission);

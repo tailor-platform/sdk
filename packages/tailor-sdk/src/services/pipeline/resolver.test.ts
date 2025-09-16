@@ -4,7 +4,7 @@ import { t } from "@/types/type";
 
 const UserInput = t.type({
   id: t.string(),
-  name: t.string().optional(),
+  name: t.string({ optional: true }),
 });
 const UserOutput = t.type({
   id: t.string(),
@@ -243,7 +243,7 @@ describe("createQueryResolver type tests", () => {
   it("オプショナルフィールドを含む型が正しく処理されること", () => {
     const OptionalInput = t.type({
       required: t.string(),
-      optional: t.string().optional(),
+      optional: t.string({ optional: true }),
     });
 
     const _resolver = createQueryResolver("optionalTest", OptionalInput).fnStep(
@@ -269,8 +269,8 @@ describe("createQueryResolver type tests", () => {
 
   it("配列型を含む型が正しく処理されること", () => {
     const ArrayInput = t.type({
-      ids: t.string().array(),
-      tags: t.string().array().optional(),
+      ids: t.string({ array: true }),
+      tags: t.string({ optional: true, array: true }),
     });
 
     const _resolver = createQueryResolver("arrayTest", ArrayInput).fnStep(
@@ -353,10 +353,10 @@ describe("createQueryResolver type tests", () => {
     const ComplexInput = t.type({
       id: t.string(),
       count: t.int(),
-      price: t.float().optional(),
+      price: t.float({ optional: true }),
       active: t.bool(),
-      tags: t.string().array(),
-      data: t.string().optional(), // jsonの代わりにstringを使用
+      tags: t.string({ array: true }),
+      data: t.string({ optional: true }), // jsonの代わりにstringを使用
     });
 
     const _resolver = createQueryResolver("complexTest", ComplexInput).fnStep(
@@ -408,8 +408,8 @@ describe("createQueryResolver type tests", () => {
 
   it("enum型を含む場合の型が正しいこと", () => {
     const EnumInput = t.type({
-      status: t.enum(["active", "inactive", "pending"]),
-      priority: t.enum(["low", "medium", "high"]).optional(),
+      status: t.enum("active", "inactive", "pending"),
+      priority: t.enum("low", "medium", "high", { optional: true }),
     });
 
     const _resolver = createQueryResolver("enumTest", EnumInput).fnStep(
@@ -463,8 +463,8 @@ describe("createQueryResolver type tests", () => {
       userId: t.string(),
       userName: t.string(),
       profileName: t.string(),
-      profileAge: t.int().optional(),
-      tags: t.string().array(),
+      profileAge: t.int({ optional: true }),
+      tags: t.string({ array: true }),
     });
 
     const _resolver = createQueryResolver("nestedTest", NestedInput).fnStep(

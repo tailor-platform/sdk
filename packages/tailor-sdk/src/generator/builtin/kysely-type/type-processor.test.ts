@@ -8,14 +8,15 @@ describe("Kysely TypeProcessor", () => {
       profile: db.object({
         personal: db.object({
           name: db.string(),
-          age: db.int().optional(),
+          age: db.int({ optional: true }),
         }),
-        contact: db
-          .object({
+        contact: db.object(
+          {
             email: db.string(),
-            phone: db.string().optional(),
-          })
-          .optional(),
+            phone: db.string({ optional: true }),
+          },
+          { optional: true },
+        ),
       }),
     });
 
@@ -39,7 +40,7 @@ describe("Kysely TypeProcessor", () => {
     const simpleNestedType = db.type("SimpleUser", {
       profile: db.object({
         name: db.string(),
-        email: db.string().optional(),
+        email: db.string({ optional: true }),
       }),
     });
 
@@ -55,8 +56,8 @@ describe("Kysely TypeProcessor", () => {
   it("should handle assertNonNull field correctly", async () => {
     const typeWithAssertNonNull = db.type("UserWithAssertNonNull", {
       name: db.string(),
-      email: db.string().optional({ assertNonNull: true }), // optional but assertNonNull
-      phone: db.string().optional(), // optional and nullable
+      email: db.string({ optional: true, assertNonNull: true }), // optional but assertNonNull
+      phone: db.string({ optional: true }), // optional and nullable
     });
 
     const result = await TypeProcessor.processType(typeWithAssertNonNull);

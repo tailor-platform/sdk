@@ -30,7 +30,7 @@ const resolver = createQueryResolver("stepChain", t.type({ user: t.object({
 		first: t.string(),
 		last: t.string()
 	}),
-	activatedAt: t.datetime().optional()
+	activatedAt: t.datetime({ optional: true })
 }) }), { defaults: { dbNamespace: "tailordb" } }).fnStep("step1", (context) => {
 	return `step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`;
 }).fnStep("step2", async () => {
@@ -46,7 +46,7 @@ const resolver = createQueryResolver("stepChain", t.type({ user: t.object({
 	context.step2,
 	context.sqlStep,
 	context.kyselyStep
-] } }), t.type({ result: t.object({ summary: t.string().array() }) }));
+] } }), t.type({ result: t.object({ summary: t.string({ array: true }) }) }));
 var resolver_default = resolver;
 
 //#endregion

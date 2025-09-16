@@ -17,7 +17,7 @@ describe("DbTypeGenerator", () => {
     const generator = new DbTypeGenerator({ distPath: mockDistPath });
 
     const mockType = db.type("User", {
-      name: db.string().optional(),
+      name: db.string({ optional: true }),
     });
     const result = await generator.processType({
       type: mockType,

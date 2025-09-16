@@ -9,18 +9,15 @@ export const customer = db
   .type("Customer", "カスタマー", {
     name: db.string(),
     email: db.string(),
-    phone: db.string().optional(),
+    phone: db.string({ optional: true }),
     country: db.string(),
     postalCode: db.string(),
-    address: db.string().optional(),
-    city: db
-      .string()
-      .optional()
-      .validate(
-        ({ value }) => (value ? value.length > 1 : true),
-        ({ value }) => (value ? value.length < 100 : true),
-      ),
-    fullAddress: db.string().optional(),
+    address: db.string({ optional: true }),
+    city: db.string({ optional: true }).validate(
+      ({ value }) => (value ? value.length > 1 : true),
+      ({ value }) => (value ? value.length < 100 : true),
+    ),
+    fullAddress: db.string({ optional: true }),
     state: db.string(),
     ...db.fields.timestamps(),
   })

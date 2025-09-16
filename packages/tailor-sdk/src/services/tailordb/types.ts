@@ -1,11 +1,15 @@
 import { type TailorUser } from "@/types";
-import { type Prettify } from "@/types/helpers";
 import {
+  type DeepWritable,
+  type NullableToOptional,
+  type output,
+  type Prettify,
+} from "@/types/helpers";
+import {
+  type ArrayFieldOutput,
   type DefinedFieldMetadata,
   type FieldMetadata,
-  type InferFieldInput,
-  type InferFieldOutput,
-  type InferFieldsInput,
+  type FieldOptions,
   type InferFieldsOutput,
 } from "@/types/types";
 import { type TailorDBField } from "./schema";
@@ -61,7 +65,7 @@ export type Hook<TValue, TData, TReturn> = {
 // Since empty object type {} would allow any key, return never instead.
 type NoEmptyObject<T extends object> = keyof T extends never ? never : T;
 
-export type Hooks<F extends Record<string, TailorDBField<any, any>>> =
+export type Hooks<F extends Record<string, TailorDBField<any, any, any>>> =
   NoEmptyObject<{
     [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
       hooks: unknown;
@@ -69,25 +73,21 @@ export type Hooks<F extends Record<string, TailorDBField<any, any>>> =
       ? never
       : F[K]["_defined"] extends { type: "nested" }
         ? never
-        : K]?: Hook<
-      InferFieldInput<F[K]>,
-      InferFieldsInput<F>,
-      InferFieldOutput<F[K]>
-    >;
+        : K]?: Hook<InferFieldInput<F[K]>, InferFieldsInput<F>, output<F[K]>>;
   }>;
 
-export type Validators<F extends Record<string, TailorDBField<any, any>>> =
+export type Validators<F extends Record<string, TailorDBField<any, any, any>>> =
   NoEmptyObject<{
     [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
       validate: unknown;
     }
       ? never
       : K]?:
-      | ValidateFn<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
-      | ValidateConfig<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
+      | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
+      | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
       | (
-          | ValidateFn<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
-          | ValidateConfig<InferFieldOutput<F[K]>, InferFieldsOutput<F>>
+          | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
+          | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
         )[];
   }>;
 
@@ -119,3 +119,31 @@ export interface TypeFeatures {
   aggregation?: true;
   bulkUpsert?: true;
 }
+
+// Return Input type based on FieldOptions.
+// Unlike FieldOutput, it remains nullable even when assertNonNull is set to true.
+export type FieldInput<T, O extends FieldOptions> = OptionalFieldInput<
+  ArrayFieldOutput<T, O>,
+  O
+>;
+
+type OptionalFieldInput<T, O extends FieldOptions> = [O] extends [
+  {
+    optional: true;
+  },
+]
+  ? T | null
+  : T;
+
+// Return Input type for TailorDBFields.
+type InferFieldsInput<F extends Record<string, TailorDBField<any, any, any>>> =
+  DeepWritable<
+    Prettify<
+      NullableToOptional<{
+        [K in keyof F]: InferFieldInput<F[K]>;
+      }>
+    >
+  >;
+
+type InferFieldInput<T extends TailorDBField<any, any, any>> =
+  T extends TailorDBField<any, any, infer I> ? I : never;

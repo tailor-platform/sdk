@@ -27,3 +27,9 @@ export type StrictOutput<O, R extends Record<string, unknown>> =
       ? R
       : ["unnecessary fields", Exclude<keyof R, keyof output<O>>]
     : output<O>;
+
+export type NullableToOptional<T> = {
+  [K in keyof T as null extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as null extends T[K] ? K : never]?: T[K];
+};

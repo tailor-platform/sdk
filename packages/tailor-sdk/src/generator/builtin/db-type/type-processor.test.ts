@@ -5,9 +5,9 @@ import { db } from "@/services/tailordb/schema";
 describe("TypeProcessor", () => {
   test("基本型の変換", async () => {
     const user = db.type("User", {
-      name: db.string().optional(),
-      age: db.int().optional(),
-      active: db.bool().optional(),
+      name: db.string({ optional: true }),
+      age: db.int({ optional: true }),
+      active: db.bool({ optional: true }),
     });
 
     const result = await TypeProcessor.processType(user);
@@ -53,11 +53,11 @@ describe("TypeProcessor", () => {
 
   test("複数型の処理と相互参照", async () => {
     const user = db.type("User", {
-      name: db.string().optional(),
+      name: db.string({ optional: true }),
     });
 
     const userSetting = db.type("UserSetting", {
-      language: db.enum("jp", "en").optional(),
+      language: db.enum("jp", "en", { optional: true }),
       userID: db.uuid().relation({
         type: "1-1",
         toward: { type: user },
@@ -79,7 +79,7 @@ describe("TypeProcessor", () => {
 
   test("逆参照フィールドの生成（1-1関係）", async () => {
     const user = db.type("User", {
-      name: db.string().optional(),
+      name: db.string({ optional: true }),
     });
 
     const userSetting = db.type("UserSetting", {

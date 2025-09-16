@@ -5,12 +5,12 @@ import { db } from "@/services/tailordb/schema";
 const mockBasicType = db.type("User", {
   name: db.string().description("User name"),
   email: db.string().description("User email"),
-  age: db.int().optional(),
+  age: db.int({ optional: true }),
   isActive: db.bool(),
-  score: db.float().optional(),
-  birthDate: db.date().optional(),
-  lastLogin: db.datetime().optional(),
-  tags: db.string().array(),
+  score: db.float({ optional: true }),
+  birthDate: db.date({ optional: true }),
+  lastLogin: db.datetime({ optional: true }),
+  tags: db.string({ array: true }),
   ...db.fields.timestamps(),
 });
 
@@ -20,30 +20,34 @@ const mockEnumType = db.type("Status", {
     { value: "inactive" },
     { value: "pending" },
   ),
-  priority: db
-    .enum({ value: "high" }, { value: "medium" }, { value: "low" })
-    .optional(),
+  priority: db.enum(
+    { value: "high" },
+    { value: "medium" },
+    { value: "low" },
+    { optional: true },
+  ),
 });
 
 const mockNestedType = db.type("ComplexUser", {
   profile: db.object({
     firstName: db.string(),
     lastName: db.string(),
-    address: db
-      .object({
+    address: db.object(
+      {
         street: db.string(),
         city: db.string(),
-        zipCode: db.string().optional(),
-      })
-      .optional(),
+        zipCode: db.string({ optional: true }),
+      },
+      { optional: true },
+    ),
   }),
-  preferences: db
-    .object({
+  preferences: db.object(
+    {
       key: db.string(),
       value: db.string(),
-    })
-    .optional()
-    .array(),
+    },
+    { optional: true, array: true },
+  ),
   ...db.fields.timestamps(),
 });
 
@@ -125,8 +129,8 @@ describe("KyselyGenerator統合テスト", () => {
     it("required/optional フィールドを正しく処理する", async () => {
       const testType = db.type("TestRequired", {
         requiredField: db.string(),
-        optionalField: db.string().optional(),
-        undefinedRequiredField: db.string().optional(),
+        optionalField: db.string({ optional: true }),
+        undefinedRequiredField: db.string({ optional: true }),
       });
 
       const result = await kyselyGenerator.processType({
@@ -144,8 +148,8 @@ describe("KyselyGenerator統合テスト", () => {
 
     it("配列型を正しく処理する", async () => {
       const arrayType = db.type("ArrayTest", {
-        stringArray: db.string().array(),
-        optionalIntArray: db.int().optional().array(),
+        stringArray: db.string({ array: true }),
+        optionalIntArray: db.int({ optional: true, array: true }),
       });
 
       const result = await kyselyGenerator.processType({

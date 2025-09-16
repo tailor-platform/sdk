@@ -10,8 +10,8 @@ export const user = db
   .type("User", {
     name: db.string(),
     email: db.string().unique(),
-    status: db.string().optional(),
-    department: db.string().optional(),
+    status: db.string({ optional: true }),
+    department: db.string({ optional: true }),
     roleId: db.uuid().relation({
       type: "n-1",
       toward: { type: role },

@@ -87,10 +87,10 @@ describe("TailorDBField 基本フィールド型テスト", () => {
   });
 });
 
-describe("TailorDBField オプショナル修飾子テスト", () => {
-  it("optional()修飾子がnull許可型を生成する", () => {
+describe("TailorDBField optionalオプションテスト", () => {
+  it("optionalオプションがnull許可型を生成する", () => {
     const _optionalType = db.type("Test", {
-      description: db.string().optional(),
+      description: db.string({ optional: true }),
     });
     expectTypeOf<output<typeof _optionalType>>().toEqualTypeOf<{
       id: string;
@@ -101,8 +101,8 @@ describe("TailorDBField オプショナル修飾子テスト", () => {
   it("複数のオプショナルフィールドが正しく動作する", () => {
     const _multiOptionalType = db.type("Test", {
       title: db.string(),
-      description: db.string().optional(),
-      count: db.int().optional(),
+      description: db.string({ optional: true }),
+      count: db.int({ optional: true }),
     });
     expectTypeOf<output<typeof _multiOptionalType>>().toEqualTypeOf<{
       id: string;
@@ -113,10 +113,10 @@ describe("TailorDBField オプショナル修飾子テスト", () => {
   });
 });
 
-describe("TailorDBField 配列修飾子テスト", () => {
-  it("array()修飾子が配列型を生成する", () => {
+describe("TailorDBField arrayオプションテスト", () => {
+  it("arrayオプションが配列型を生成する", () => {
     const _arrayType = db.type("Test", {
-      tags: db.string().array(),
+      tags: db.string({ array: true }),
     });
     expectTypeOf<output<typeof _arrayType>>().toEqualTypeOf<{
       id: string;
@@ -126,7 +126,7 @@ describe("TailorDBField 配列修飾子テスト", () => {
 
   it("オプショナル配列が正しく動作する", () => {
     const _optionalArrayType = db.type("Test", {
-      items: db.string().array().optional(),
+      items: db.string({ optional: true, array: true }),
     });
     expectTypeOf<output<typeof _optionalArrayType>>().toEqualTypeOf<{
       id: string;
@@ -136,9 +136,9 @@ describe("TailorDBField 配列修飾子テスト", () => {
 
   it("複数の配列フィールドが正しく動作する", () => {
     const _multiArrayType = db.type("Test", {
-      tags: db.string().array(),
-      numbers: db.int().array(),
-      flags: db.bool().array(),
+      tags: db.string({ array: true }),
+      numbers: db.int({ array: true }),
+      flags: db.bool({ array: true }),
     });
     expectTypeOf<output<typeof _multiArrayType>>().toEqualTypeOf<{
       id: string;
@@ -150,19 +150,60 @@ describe("TailorDBField 配列修飾子テスト", () => {
 });
 
 describe("TailorDBField enum フィールドテスト", () => {
-  it("enum()でユニオン型を生成する", () => {
-    const _enumType = db.type("Test", {
-      status: db.enum("active", "inactive", "pending"),
-    });
-    expectTypeOf<output<typeof _enumType>>().toEqualTypeOf<{
-      id: string;
-      status: "active" | "inactive" | "pending";
-    }>();
+  it("stringを渡してenumフィールドを設定する", () => {
+    const enumField = db.enum("active", "inactive", "pending");
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
+      "active" | "inactive" | "pending"
+    >();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+  });
+
+  it("objectを渡してenumフィールドを設定する", () => {
+    const enumField = db.enum(
+      { value: "small", description: "Small size" },
+      { value: "medium" },
+      { value: "large", description: "Large size" },
+    );
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
+      "small" | "medium" | "large"
+    >();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "small", description: "Small size" },
+      { value: "medium", description: "" },
+      { value: "large", description: "Large size" },
+    ]);
+  });
+
+  it("stringとobjectを混在させてenumフィールドを設定する", () => {
+    const enumField = db.enum(
+      "red",
+      { value: "green", description: "Green color" },
+      "blue",
+    );
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
+      "red" | "green" | "blue"
+    >();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "red", description: "" },
+      { value: "green", description: "Green color" },
+      { value: "blue", description: "" },
+    ]);
+  });
+
+  it("値を持たないenumを設定すると型エラーになる", () => {
+    // @ts-expect-error AllowedValues requires at least one value
+    db.enum();
+    // @ts-expect-error AllowedValues requires at least one value
+    db.enum({ optional: true });
   });
 
   it("オプショナルenum()が正しく動作する", () => {
     const _optionalEnumType = db.type("Test", {
-      priority: db.enum("high", "medium", "low").optional(),
+      priority: db.enum("high", "medium", "low", { optional: true }),
     });
     expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
       id: string;
@@ -172,7 +213,7 @@ describe("TailorDBField enum フィールドテスト", () => {
 
   it("enum配列が正しく動作する", () => {
     const _enumArrayType = db.type("Test", {
-      categories: db.enum("a", "b", "c").array(),
+      categories: db.enum("a", "b", "c", { array: true }),
     });
     expectTypeOf<output<typeof _enumArrayType>>().toEqualTypeOf<{
       id: string;
@@ -322,18 +363,6 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
       embedding: string;
     }>();
   });
-
-  it("修飾子の順序が結果に影響しない", () => {
-    const _chainType1 = db.type("Test", {
-      field: db.string().optional().array(),
-    });
-    const _chainType2 = db.type("Test", {
-      field: db.string().array().optional(),
-    });
-    expectTypeOf<output<typeof _chainType1>>().toEqualTypeOf<
-      output<typeof _chainType2>
-    >();
-  });
 });
 
 describe("TailorDBField relation修飾子テスト", () => {
@@ -415,14 +444,14 @@ describe("TailorDBField hooks修飾子テスト", () => {
   });
 
   it("optionalフィールドでhooks修飾子はnullを受け取る", () => {
-    const _hooks = db.string().optional().hooks;
+    const _hooks = db.string({ optional: true }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
       Hook<string | null, unknown, string | null>
     >();
   });
 
   it("assertNonNullフィールドでhooks修飾子はnonNullを返す", () => {
-    const _hooks = db.string().optional({ assertNonNull: true }).hooks;
+    const _hooks = db.string({ optional: true, assertNonNull: true }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
       Hook<string | null, unknown, string>
     >();
@@ -493,14 +522,17 @@ describe("TailorDBField validate修飾子テスト", () => {
   });
 
   it("optionalフィールドでvalidate修飾子はnullを受け取る", () => {
-    const _validate = db.string().optional().validate;
+    const _validate = db.string({ optional: true }).validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
       FieldValidateInput<string | null>
     >();
   });
 
   it("assertNonNullフィールドでvalidate修飾子はnonNullを受け取る", () => {
-    const _validate = db.string().optional({ assertNonNull: true }).validate;
+    const _validate = db.string({
+      optional: true,
+      assertNonNull: true,
+    }).validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
       FieldValidateInput<string>
     >();
@@ -540,13 +572,13 @@ describe("TailorDBType 複合型テスト", () => {
     const _complexType = db.type("User", {
       name: db.string(),
       email: db.string(),
-      age: db.int().optional(),
+      age: db.int({ optional: true }),
       isActive: db.bool(),
-      tags: db.string().array(),
+      tags: db.string({ array: true }),
       role: db.enum("admin", "user", "guest"),
       score: db.float(),
       birthDate: db.date(),
-      lastLogin: db.datetime().optional(),
+      lastLogin: db.datetime({ optional: true }),
       closingTime: db.time(),
     });
     expectTypeOf<output<typeof _complexType>>().toMatchObjectType<{
@@ -578,9 +610,9 @@ describe("TailorDBType エッジケーステスト", () => {
 
   it("すべてオプショナルフィールドの型が正しく動作する", () => {
     const _allOptionalType = db.type("Optional", {
-      a: db.string().optional(),
-      b: db.int().optional(),
-      c: db.bool().optional(),
+      a: db.string({ optional: true }),
+      b: db.int({ optional: true }),
+      c: db.bool({ optional: true }),
     });
     expectTypeOf<output<typeof _allOptionalType>>().toEqualTypeOf<{
       id: string;
@@ -592,9 +624,9 @@ describe("TailorDBType エッジケーステスト", () => {
 
   it("すべて配列フィールドの型が正しく動作する", () => {
     const _allArrayType = db.type("Array", {
-      strings: db.string().array(),
-      numbers: db.int().array(),
-      booleans: db.bool().array(),
+      strings: db.string({ array: true }),
+      numbers: db.int({ array: true }),
+      booleans: db.bool({ array: true }),
     });
     expectTypeOf<output<typeof _allArrayType>>().toEqualTypeOf<{
       id: string;
@@ -757,7 +789,7 @@ describe("TailorDBType plural form テスト", () => {
   it("タプル形式でもすべての既存機能が正常に動作する", () => {
     const _postType = db.type(["Post", "Posts"], {
       title: db.string(),
-      content: db.string().optional(),
+      content: db.string({ optional: true }),
       ...db.fields.timestamps(),
     });
 
@@ -907,7 +939,9 @@ describe("TailorDBType hooks修飾子テスト", () => {
   });
 
   it("optionalフィールドでhooks修飾子はnullを受け取る", () => {
-    const _hooks = db.type("Test", { name: db.string().optional() }).hooks;
+    const _hooks = db.type("Test", {
+      name: db.string({ optional: true }),
+    }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]["name"]>().toEqualTypeOf<
       | Hook<
           string | null,
@@ -923,7 +957,7 @@ describe("TailorDBType hooks修飾子テスト", () => {
 
   it("assertNonNullフィールドでhooks修飾子はnonNullを返す", () => {
     const _hooks = db.type("Test", {
-      name: db.string().optional({ assertNonNull: true }),
+      name: db.string({ optional: true, assertNonNull: true }),
     }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]["name"]>().toEqualTypeOf<
       | Hook<
@@ -1022,7 +1056,7 @@ describe("TailorDBType validate修飾子テスト", () => {
 
   it("optionalフィールドでvalidate修飾子はnullを受け取る", () => {
     const _validate = db.type("Test", {
-      name: db.string().optional(),
+      name: db.string({ optional: true }),
     }).validate;
     expectTypeOf<
       ValidateConfig<string | null, { id: string; name?: string | null }>
@@ -1031,7 +1065,7 @@ describe("TailorDBType validate修飾子テスト", () => {
 
   it("assertNonNullフィールドでvalidate修飾子はnonNullを返す", () => {
     const _validate = db.type("Test", {
-      name: db.string().optional({ assertNonNull: true }),
+      name: db.string({ optional: true, assertNonNull: true }),
     }).validate;
     expectTypeOf<
       ValidateConfig<string, { id: string; name: string }>
@@ -1060,8 +1094,8 @@ describe("db.object テスト", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
-        age: db.int().optional(),
-        email: db.string().optional(),
+        age: db.int({ optional: true }),
+        email: db.string({ optional: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
@@ -1081,7 +1115,7 @@ describe("db.object テスト", () => {
         address: db.object({
           street: db.string(),
           city: db.string(),
-          zipCode: db.string().optional(),
+          zipCode: db.string({ optional: true }),
         }),
       }),
     });
@@ -1098,17 +1132,18 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("オプショナル修飾子を持つオブジェクト型を正しく推論する", () => {
+  it("optionalオプションを持つオブジェクト型を正しく推論する", () => {
     const _objectType = db.type("Test", {
-      user: db
-        .object({
+      user: db.object(
+        {
           name: db.string(),
           profile: db.object({
             bio: db.string(),
-            avatar: db.string().optional(),
+            avatar: db.string({ optional: true }),
           }),
-        })
-        .optional(),
+        },
+        { optional: true },
+      ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       id: string;
@@ -1122,14 +1157,15 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("配列修飾子を持つオブジェクト型を正しく推論する", () => {
+  it("arrayオプションを持つオブジェクト型を正しく推論する", () => {
     const _objectType = db.type("Test", {
-      users: db
-        .object({
+      users: db.object(
+        {
           name: db.string(),
           age: db.int(),
-        })
-        .array(),
+        },
+        { array: true },
+      ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       id: string;
@@ -1144,8 +1180,8 @@ describe("db.object テスト", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
-        tags: db.string().array(),
-        scores: db.int().array(),
+        tags: db.string({ array: true }),
+        scores: db.int({ array: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
@@ -1160,14 +1196,14 @@ describe("db.object テスト", () => {
 
   it("複数の修飾子を組み合わせたオブジェクト型を正しく推論する", () => {
     const _objectType = db.type("Test", {
-      optionalUsers: db
-        .object({
+      optionalUsers: db.object(
+        {
           name: db.string(),
-          age: db.int().optional(),
-          tags: db.string().array(),
-        })
-        .array()
-        .optional(),
+          age: db.int({ optional: true }),
+          tags: db.string({ array: true }),
+        },
+        { optional: true, array: true },
+      ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       id: string;
@@ -1185,21 +1221,23 @@ describe("db.object テスト", () => {
     const _objectType = db.type("Test", {
       company: db.object({
         name: db.string(),
-        departments: db
-          .object({
+        departments: db.object(
+          {
             name: db.string(),
-            employees: db
-              .object({
+            employees: db.object(
+              {
                 name: db.string(),
                 position: db.string(),
                 contact: db.object({
                   email: db.string(),
-                  phone: db.string().optional(),
+                  phone: db.string({ optional: true }),
                 }),
-              })
-              .array(),
-          })
-          .array(),
+              },
+              { array: true },
+            ),
+          },
+          { array: true },
+        ),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
@@ -1227,7 +1265,7 @@ describe("db.object テスト", () => {
         enabled: db.bool(),
         notifications: db.object({
           email: db.bool(),
-          push: db.bool().optional(),
+          push: db.bool({ optional: true }),
         }),
       }),
     });
@@ -1250,14 +1288,15 @@ describe("db.object テスト", () => {
         price: db.float(),
         category: db.enum("electronics", "books", "clothing"),
         metadata: db.object({
-          weight: db.float().optional(),
-          dimensions: db
-            .object({
+          weight: db.float({ optional: true }),
+          dimensions: db.object(
+            {
               width: db.float(),
               height: db.float(),
               depth: db.float(),
-            })
-            .optional(),
+            },
+            { optional: true },
+          ),
         }),
       }),
     });

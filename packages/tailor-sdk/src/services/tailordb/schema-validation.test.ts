@@ -7,7 +7,7 @@ describe("TailorDBType validation functionality", () => {
     db.type("User", {
       name: db.string(),
       email: db.string(),
-      age: db.int().optional(),
+      age: db.int({ optional: true }),
     });
   let UserType!: ReturnType<typeof generateUserType>;
   beforeEach(() => {

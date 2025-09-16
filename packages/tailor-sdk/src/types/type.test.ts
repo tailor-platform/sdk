@@ -76,10 +76,10 @@ describe("TailorType 基本フィールド型テスト", () => {
   });
 });
 
-describe("TailorField オプショナル修飾子テスト", () => {
-  it("optional()修飾子がnull許可型を生成する", () => {
+describe("TailorField optionalオプションテスト", () => {
+  it("optionalオプションがnull許可型を生成する", () => {
     const _optionalType = t.type({
-      description: t.string().optional(),
+      description: t.string({ optional: true }),
     });
     expectTypeOf<output<typeof _optionalType>>().toEqualTypeOf<{
       description?: string | null;
@@ -89,8 +89,8 @@ describe("TailorField オプショナル修飾子テスト", () => {
   it("複数のオプショナルフィールドが正しく動作する", () => {
     const _multiOptionalType = t.type({
       title: t.string(),
-      description: t.string().optional(),
-      count: t.int().optional(),
+      description: t.string({ optional: true }),
+      count: t.int({ optional: true }),
     });
     expectTypeOf<output<typeof _multiOptionalType>>().toEqualTypeOf<{
       title: string;
@@ -100,10 +100,10 @@ describe("TailorField オプショナル修飾子テスト", () => {
   });
 });
 
-describe("TailorField 配列修飾子テスト", () => {
-  it("array()修飾子が配列型を生成する", () => {
+describe("TailorField arrayオプションテスト", () => {
+  it("arrayオプションが配列型を生成する", () => {
     const _arrayType = t.type({
-      tags: t.string().array(),
+      tags: t.string({ array: true }),
     });
     expectTypeOf<output<typeof _arrayType>>().toEqualTypeOf<{
       tags: string[];
@@ -112,7 +112,7 @@ describe("TailorField 配列修飾子テスト", () => {
 
   it("オプショナル配列が正しく動作する", () => {
     const _optionalArrayType = t.type({
-      items: t.string().array().optional(),
+      items: t.string({ optional: true, array: true }),
     });
     expectTypeOf<output<typeof _optionalArrayType>>().toEqualTypeOf<{
       items?: string[] | null;
@@ -121,9 +121,9 @@ describe("TailorField 配列修飾子テスト", () => {
 
   it("複数の配列フィールドが正しく動作する", () => {
     const _multiArrayType = t.type({
-      tags: t.string().array(),
-      numbers: t.int().array(),
-      flags: t.bool().array(),
+      tags: t.string({ array: true }),
+      numbers: t.int({ array: true }),
+      flags: t.bool({ array: true }),
     });
     expectTypeOf<output<typeof _multiArrayType>>().toEqualTypeOf<{
       tags: string[];
@@ -134,18 +134,60 @@ describe("TailorField 配列修飾子テスト", () => {
 });
 
 describe("TailorField enum フィールドテスト", () => {
-  it("enum()でユニオン型を生成する", () => {
-    const _enumType = t.type({
-      status: t.enum(["active", "inactive", "pending"]),
-    });
-    expectTypeOf<output<typeof _enumType>>().toEqualTypeOf<{
-      status: "active" | "inactive" | "pending";
-    }>();
+  it("stringを渡してenumフィールドを設定する", () => {
+    const enumField = t.enum("active", "inactive", "pending");
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
+      "active" | "inactive" | "pending"
+    >();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+  });
+
+  it("objectを渡してenumフィールドを設定する", () => {
+    const enumField = t.enum(
+      { value: "small", description: "Small size" },
+      { value: "medium" },
+      { value: "large", description: "Large size" },
+    );
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
+      "small" | "medium" | "large"
+    >();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "small", description: "Small size" },
+      { value: "medium", description: "" },
+      { value: "large", description: "Large size" },
+    ]);
+  });
+
+  it("stringとobjectを混在させてenumフィールドを設定する", () => {
+    const enumField = t.enum(
+      "red",
+      { value: "green", description: "Green color" },
+      "blue",
+    );
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
+      "red" | "green" | "blue"
+    >();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "red", description: "" },
+      { value: "green", description: "Green color" },
+      { value: "blue", description: "" },
+    ]);
+  });
+
+  it("値を持たないenumを設定すると型エラーになる", () => {
+    // @ts-expect-error AllowedValues requires at least one value
+    t.enum();
+    // @ts-expect-error AllowedValues requires at least one value
+    t.enum({ optional: true });
   });
 
   it("オプショナルenum()が正しく動作する", () => {
     const _optionalEnumType = t.type({
-      priority: t.enum(["high", "medium", "low"]).optional(),
+      priority: t.enum("high", "medium", "low", { optional: true }),
     });
     expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
       priority?: "high" | "medium" | "low" | null;
@@ -154,7 +196,7 @@ describe("TailorField enum フィールドテスト", () => {
 
   it("enum配列が正しく動作する", () => {
     const _enumArrayType = t.type({
-      categories: t.enum(["a", "b", "c"]).array(),
+      categories: t.enum("a", "b", "c", { array: true }),
     });
     expectTypeOf<output<typeof _enumArrayType>>().toEqualTypeOf<{
       categories: ("a" | "b" | "c")[];
@@ -162,64 +204,69 @@ describe("TailorField enum フィールドテスト", () => {
   });
 });
 
-describe("TailorField assertNonNull修飾子テスト", () => {
-  it("optional({ assertNonNull: true })修飾子がメタデータを正しく設定する", () => {
-    const field = t.string().optional({ assertNonNull: true });
+describe("TailorField assertNonNullオプションテスト", () => {
+  it("optional({ assertNonNull: true })オプションがメタデータを正しく設定する", () => {
+    const field = t.string({ optional: true, assertNonNull: true });
     expect(field.metadata.assertNonNull).toBe(true);
     expect(field.metadata.required).toBe(false);
   });
 
-  it("optional({ assertNonNull: false })修飾子がメタデータを正しく設定する", () => {
-    const field = t.string().optional({ assertNonNull: false });
+  it("optional({ assertNonNull: false })オプションがメタデータを正しく設定する", () => {
+    const field = t.string({ optional: true, assertNonNull: false });
     expect(field.metadata.assertNonNull).toBe(undefined);
     expect(field.metadata.required).toBe(false);
   });
 
   it("optional()がデフォルトでassertNonNullをfalseとして扱う", () => {
-    const field = t.string().optional();
+    const field = t.string({ optional: true });
     expect(field.metadata.assertNonNull).toBe(undefined);
     expect(field.metadata.required).toBe(false);
   });
 
-  it("optional({ assertNonNull: true })修飾子が各型で動作する", () => {
+  it("optional({ assertNonNull: true })オプションが各型で動作する", () => {
     expect(
-      t.string().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.string({ optional: true, assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
     expect(
-      t.int().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.int({ optional: true, assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
     expect(
-      t.bool().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.bool({ optional: true, assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
     expect(
-      t.uuid().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.uuid({ optional: true, assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
     expect(
-      t.float().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.float({ optional: true, assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
     expect(
-      t.date().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.date({ optional: true, assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
     expect(
-      t.datetime().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.datetime({ optional: true, assertNonNull: true }).metadata
+        .assertNonNull,
     ).toBe(true);
     expect(
-      t.time().optional({ assertNonNull: true }).metadata.assertNonNull,
+      t.time({ optional: true, assertNonNull: true }).metadata.assertNonNull,
     ).toBe(true);
   });
 
-  it("optional({ assertNonNull: true })修飾子がenum型で動作する", () => {
-    const enumField = t.enum(["a", "b", "c"]).optional({ assertNonNull: true });
+  it("optional({ assertNonNull: true })オプションがenum型で動作する", () => {
+    const enumField = t.enum("a", "b", "c", {
+      optional: true,
+      assertNonNull: true,
+    });
     expect(enumField.metadata.assertNonNull).toBe(true);
     expect(enumField.metadata.required).toBe(false);
   });
 
-  it("optional({ assertNonNull: true })修飾子がobject型で動作する", () => {
-    const objectField = t
-      .object({
+  it("optional({ assertNonNull: true })オプションがobject型で動作する", () => {
+    const objectField = t.object(
+      {
         name: t.string(),
-      })
-      .optional({ assertNonNull: true });
+      },
+      { optional: true, assertNonNull: true },
+    );
     expect(objectField.metadata.assertNonNull).toBe(true);
     expect(objectField.metadata.required).toBe(false);
   });
@@ -231,10 +278,10 @@ describe("TailorType 複合型テスト", () => {
       id: t.uuid(),
       name: t.string(),
       email: t.string(),
-      age: t.int().optional(),
+      age: t.int({ optional: true }),
       isActive: t.bool(),
-      tags: t.string().array(),
-      role: t.enum(["admin", "user", "guest"]),
+      tags: t.string({ array: true }),
+      role: t.enum("admin", "user", "guest"),
     });
     expectTypeOf<output<typeof _complexType>>().toEqualTypeOf<{
       id: string;
@@ -260,9 +307,9 @@ describe("TailorType エッジケーステスト", () => {
 
   it("すべてオプショナルフィールドの型が正しく動作する", () => {
     const _allOptionalType = t.type({
-      a: t.string().optional(),
-      b: t.int().optional(),
-      c: t.bool().optional(),
+      a: t.string({ optional: true }),
+      b: t.int({ optional: true }),
+      c: t.bool({ optional: true }),
     });
     expectTypeOf<output<typeof _allOptionalType>>().toEqualTypeOf<{
       a?: string | null;
@@ -273,29 +320,15 @@ describe("TailorType エッジケーステスト", () => {
 
   it("すべて配列フィールドの型が正しく動作する", () => {
     const _allArrayType = t.type({
-      strings: t.string().array(),
-      numbers: t.int().array(),
-      booleans: t.bool().array(),
+      strings: t.string({ array: true }),
+      numbers: t.int({ array: true }),
+      booleans: t.bool({ array: true }),
     });
     expectTypeOf<output<typeof _allArrayType>>().toEqualTypeOf<{
       strings: string[];
       numbers: number[];
       booleans: boolean[];
     }>();
-  });
-});
-
-describe("TailorField 修飾子チェーンテスト", () => {
-  it("修飾子の順序が結果に影響しない", () => {
-    const _chainType1 = t.type({
-      field: t.string().optional().array(),
-    });
-    const _chainType2 = t.type({
-      field: t.string().array().optional(),
-    });
-    expectTypeOf<output<typeof _chainType1>>().toEqualTypeOf<
-      output<typeof _chainType2>
-    >();
   });
 });
 
@@ -335,8 +368,8 @@ describe("t.object テスト", () => {
     const _objectType = t.type({
       profile: t.object({
         name: t.string(),
-        age: t.int().optional(),
-        email: t.string().optional(),
+        age: t.int({ optional: true }),
+        email: t.string({ optional: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
@@ -352,8 +385,8 @@ describe("t.object テスト", () => {
     const _objectType = t.type({
       data: t.object({
         name: t.string(),
-        tags: t.string().array(),
-        scores: t.int().array().optional(),
+        tags: t.string({ array: true }),
+        scores: t.int({ optional: true, array: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
@@ -372,14 +405,15 @@ describe("t.object テスト", () => {
         address: t.object({
           street: t.string(),
           city: t.string(),
-          zipCode: t.string().optional(),
+          zipCode: t.string({ optional: true }),
         }),
-        contacts: t
-          .object({
+        contacts: t.object(
+          {
             email: t.string(),
-            phone: t.string().optional(),
-          })
-          .optional(),
+            phone: t.string({ optional: true }),
+          },
+          { optional: true },
+        ),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
@@ -398,14 +432,15 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("オプショナル修飾子を持つオブジェクト型を正しく推論する", () => {
+  it("optionalオプションを持つオブジェクト型を正しく推論する", () => {
     const _objectType = t.type({
-      metadata: t
-        .object({
+      metadata: t.object(
+        {
           version: t.string(),
           author: t.string(),
-        })
-        .optional(),
+        },
+        { optional: true },
+      ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       metadata?: {
@@ -415,14 +450,15 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("配列修飾子を持つオブジェクト型を正しく推論する", () => {
+  it("arrayオプションを持つオブジェクト型を正しく推論する", () => {
     const _objectType = t.type({
-      items: t
-        .object({
+      items: t.object(
+        {
           id: t.uuid(),
           name: t.string(),
-        })
-        .array(),
+        },
+        { array: true },
+      ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       items: {
@@ -434,13 +470,13 @@ describe("t.object テスト", () => {
 
   it("複数の修飾子を組み合わせたオブジェクト型を正しく推論する", () => {
     const _objectType = t.type({
-      optionalItems: t
-        .object({
+      optionalItems: t.object(
+        {
           id: t.uuid(),
-          value: t.string().optional(),
-        })
-        .array()
-        .optional(),
+          value: t.string({ optional: true }),
+        },
+        { optional: true, array: true },
+      ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       optionalItems?:
@@ -456,8 +492,8 @@ describe("t.object テスト", () => {
     const _objectType = t.type({
       config: t.object({
         name: t.string(),
-        status: t.enum(["active", "inactive"]),
-        priority: t.enum(["high", "medium", "low"]).optional(),
+        status: t.enum("active", "inactive"),
+        priority: t.enum("high", "medium", "low", { optional: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{

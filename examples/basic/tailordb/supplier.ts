@@ -9,8 +9,8 @@ export const supplier = db
   .type("Supplier", {
     name: db.string(),
     phone: db.string(),
-    fax: db.string().optional(),
-    email: db.string().optional(),
+    fax: db.string({ optional: true }),
+    email: db.string({ optional: true }),
     postalCode: db.string(),
     country: db.string(),
     state: db.enum("Alabama", "Alaska"),

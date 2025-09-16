@@ -14,7 +14,7 @@ export const purchaseOrder = db
       toward: { type: supplier },
     }),
     totalPrice: db.int(),
-    discount: db.float().optional(),
+    discount: db.float({ optional: true }),
     status: db.string(),
     attachedFiles,
     ...db.fields.timestamps(),
