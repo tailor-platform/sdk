@@ -34,8 +34,16 @@ import {
   normalizeGqlPermission,
 } from "./permission";
 
-interface RelationConfig<T extends TailorDBType> {
-  type: "oneToOne" | "1-1" | "manyToOne" | "n-1" | "N-1" | "keyOnly";
+type RelationType =
+  | "oneToOne"
+  | "1-1"
+  | "manyToOne"
+  | "n-1"
+  | "N-1"
+  | "keyOnly";
+
+interface RelationConfig<S extends RelationType, T extends TailorDBType> {
+  type: S;
   toward: {
     type: T;
     as?: string;
@@ -162,15 +170,16 @@ export class TailorDBField<
   }
 
   relation<
-    const Config extends RelationConfig<TailorDBType>,
+    S extends RelationType,
+    T extends TailorDBType,
     CurrentDefined extends Defined,
   >(
     this: CurrentDefined extends { relation: unknown }
       ? never
       : TailorDBField<CurrentDefined, Output, Input>,
-    config: Config,
+    config: RelationConfig<S, T>,
   ): TailorDBField<
-    Config["type"] extends "oneToOne" | "1-1"
+    S extends "oneToOne" | "1-1"
       ? Prettify<CurrentDefined & { unique: true; index: true; relation: true }>
       : Prettify<CurrentDefined & { index: true; relation: true }>,
     Output,
@@ -199,7 +208,7 @@ export class TailorDBField<
     this: CurrentDefined extends { relation: unknown }
       ? never
       : TailorDBField<CurrentDefined, Output, Input>,
-    config: RelationConfig<TailorDBType> | RelationSelfConfig,
+    config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
   ): any {
     const result = this as unknown as TailorDBField<any, Output, Input>;
     // Allow special self-referencing config as well (handled at runtime in TailorDBType)
@@ -212,7 +221,7 @@ export class TailorDBField<
     // Set foreignKeyType for non-self relation as early as possible
     if (!isSelf) {
       const targetTable: TailorDBType = (
-        config as RelationConfig<TailorDBType>
+        config as RelationConfig<RelationType, TailorDBType>
       )["toward"].type;
       result._metadata.foreignKeyType = targetTable.name;
     }
@@ -237,7 +246,7 @@ export class TailorDBField<
       return result as any;
     }
 
-    const typeConfig = config as RelationConfig<TailorDBType>;
+    const typeConfig = config as RelationConfig<RelationType, TailorDBType>;
     const targetTable: TailorDBType = typeConfig.toward.type;
 
     const forwardName =

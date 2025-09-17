@@ -302,6 +302,17 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(customerField.reference!.nameMap[1]).toEqual("");
   });
 
+  it("toward.keyに存在しないフィールド名を指定した場合、型エラーが発生する", () => {
+    // @ts-expect-error 'nonExisting' does not exist on type 'Customer'
+    db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: Customer,
+        key: "nonExisting",
+      },
+    });
+  });
+
   it("backwardのみ明示的に指定した場合の動作", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
