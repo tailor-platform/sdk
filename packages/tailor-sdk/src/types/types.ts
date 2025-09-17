@@ -75,8 +75,9 @@ export interface FieldMetadata {
 }
 
 export interface DefinedFieldMetadata {
-  description?: boolean;
   type: TailorFieldType;
+  array: boolean;
+  description?: boolean;
 }
 
 export type FieldOptions = (

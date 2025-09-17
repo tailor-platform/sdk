@@ -142,7 +142,7 @@ export class TailorDBField<
     values?: AllowedValues,
   ) {
     return new TailorDBField<
-      { type: T },
+      { type: T; array: TOptions extends { array: true } ? true : false },
       FieldOutput<TailorToTs[T], TOptions>,
       FieldInput<TailorToTs[T], TOptions>
     >(type, options, fields, values);
@@ -283,7 +283,9 @@ export class TailorDBField<
   vector<CurrentDefined extends Defined>(
     this: CurrentDefined extends { vector: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output, Input>,
+      : CurrentDefined extends { type: "string"; array: false }
+        ? TailorDBField<CurrentDefined, Output, Input>
+        : never,
   ) {
     this._metadata.vector = true;
     return this as TailorDBField<
@@ -326,7 +328,7 @@ export class TailorDBField<
   serial<CurrentDefined extends Defined>(
     this: CurrentDefined extends { serial: unknown }
       ? never
-      : CurrentDefined extends { type: "integer" | "string" }
+      : CurrentDefined extends { type: "integer" | "string"; array: false }
         ? TailorDBField<CurrentDefined, Output, Input>
         : never,
     config: SerialConfig<CurrentDefined["type"] & ("integer" | "string")>,
@@ -376,20 +378,20 @@ function time<const Opt extends FieldOptions>(options?: Opt) {
 function _enum<const V extends AllowedValues>(
   ...values: V
 ): TailorDBField<
-  { type: "enum" },
+  { type: "enum"; array: false },
   FieldOutput<AllowedValuesOutput<V>, { optional: false; array: false }>,
   FieldInput<AllowedValuesOutput<V>, { optional: false; array: false }>
 >;
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   ...args: [...V, Opt]
 ): TailorDBField<
-  { type: "enum" },
+  { type: "enum"; array: Opt extends { array: true } ? true : false },
   FieldOutput<AllowedValuesOutput<V>, Opt>,
   FieldInput<AllowedValuesOutput<V>, Opt>
 >;
 function _enum(
   ...args: (AllowedValues[number] | FieldOptions)[]
-): TailorDBField<{ type: "enum" }, any, any> {
+): TailorDBField<{ type: "enum"; array: boolean }, any, any> {
   let values: AllowedValues;
   let options: FieldOptions | undefined;
   const lastArg = args[args.length - 1];
@@ -408,7 +410,7 @@ function object<
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<
-    { type: "nested" },
+    { type: "nested"; array: Opt extends { array: true } ? true : false },
     FieldOutput<InferFieldsOutput<F>, Opt>,
     FieldInput<InferFieldsOutput<F>, Opt>
   >;

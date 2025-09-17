@@ -353,16 +353,6 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
       username: string;
     }>();
   });
-
-  it("vector()修飾子が型に影響しない", () => {
-    const _vectorType = db.type("Test", {
-      embedding: db.string().vector(),
-    });
-    expectTypeOf<output<typeof _vectorType>>().toEqualTypeOf<{
-      id: string;
-      embedding: string;
-    }>();
-  });
 });
 
 describe("TailorDBField relation修飾子テスト", () => {
@@ -536,6 +526,46 @@ describe("TailorDBField validate修飾子テスト", () => {
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
       FieldValidateInput<string>
     >();
+  });
+});
+
+describe("TailorDBField vector修飾子テスト", () => {
+  it("vector修飾子はstringフィールドでのみ使用できる", () => {
+    const _vector = db.string().vector();
+    expectTypeOf<output<typeof _vector>>().toEqualTypeOf<string>();
+    expect(_vector.metadata.vector).toBe(true);
+
+    // @ts-expect-error vector() can only be called on string fields
+    db.int().vector();
+    // @ts-expect-error vector() cannot be called on array fields
+    db.string({ array: true }).vector();
+  });
+
+  it("vector修飾子を2回以上呼び出すと型エラーが発生する", () => {
+    // @ts-expect-error vector() cannot be called after vector() has already been called
+    db.string().vector().vector();
+  });
+});
+
+describe("TailorDBField serial修飾子テスト", () => {
+  it("serial修飾子はstringおよびintフィールドでのみ使用できる", () => {
+    const _stringSerial = db.string().serial({ start: 0 });
+    expectTypeOf<output<typeof _stringSerial>>().toEqualTypeOf<string>();
+    expect(_stringSerial.metadata.serial).toEqual({ start: 0 });
+
+    const _intSerial = db.int().serial({ start: 100 });
+    expectTypeOf<output<typeof _intSerial>>().toEqualTypeOf<number>();
+    expect(_intSerial.metadata.serial).toEqual({ start: 100 });
+
+    // @ts-expect-error serial() can only be called on string or integer fields
+    db.bool().serial({ start: 0 });
+    // @ts-expect-error serial() cannot be called on array fields
+    db.string({ array: true }).serial({ start: 0 });
+  });
+
+  it("serial修飾子を2回以上呼び出すと型エラーが発生する", () => {
+    // @ts-expect-error serial() cannot be called after serial() has already been called
+    db.string().serial({ start: 0 }).serial({ start: 0 });
   });
 });
 

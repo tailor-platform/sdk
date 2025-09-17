@@ -69,7 +69,7 @@ export class TailorField<
     values?: AllowedValues,
   ) {
     return new TailorField<
-      { type: TType },
+      { type: TType; array: TOptions extends { array: true } ? true : false },
       FieldOutput<TailorToTs[TType], TOptions>
     >(type, options, fields, values);
   }
@@ -124,15 +124,18 @@ function time<const Opt extends FieldOptions>(options?: Opt) {
 function _enum<const V extends AllowedValues>(
   ...values: V
 ): TailorField<
-  { type: "enum" },
+  { type: "enum"; array: false },
   FieldOutput<AllowedValuesOutput<V>, { optional: false; array: false }>
 >;
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   ...args: [...V, Opt]
-): TailorField<{ type: "enum" }, FieldOutput<AllowedValuesOutput<V>, Opt>>;
+): TailorField<
+  { type: "enum"; array: Opt extends { array: true } ? true : false },
+  FieldOutput<AllowedValuesOutput<V>, Opt>
+>;
 function _enum(
   ...args: (AllowedValues[number] | FieldOptions)[]
-): TailorField<{ type: "enum" }, any> {
+): TailorField<{ type: "enum"; array: boolean }, any> {
   let values: AllowedValues;
   let options: FieldOptions | undefined;
   const lastArg = args[args.length - 1];
@@ -151,7 +154,7 @@ function object<
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   const objectField = createField("nested", options, fields) as TailorField<
-    { type: "nested" },
+    { type: "nested"; array: Opt extends { array: true } ? true : false },
     FieldOutput<InferFieldsOutput<F>, Opt>
   >;
   return objectField;
