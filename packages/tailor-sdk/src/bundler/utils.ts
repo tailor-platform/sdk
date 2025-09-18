@@ -18,6 +18,12 @@ interface NodeWithRange {
   [key: string]: any;
 }
 
+type VisitCallback = (
+  node: NodeWithRange,
+  parent: NodeWithRange | null,
+  parentKey: string | number | null,
+) => void;
+
 export function trimSDKCode(filePath: string): string {
   const sourceText = fs.readFileSync(filePath, "utf-8");
 
@@ -96,15 +102,15 @@ export function trimSDKCode(filePath: string): string {
         // トップレベルの文を対象とする
         if (isTopLevelStatement(node, program)) {
           const usedIdentifiers = extractIdentifiers(node);
-          const usesRemovedIdentifier = usedIdentifiers.some((id) =>
-            removedIdentifiers.has(id),
+          const definedIdentifiers = getDefinedIdentifiersFromNode(node);
+          const usesRemovedIdentifier = usedIdentifiers.some(
+            (id) => removedIdentifiers.has(id) && !definedIdentifiers.has(id),
           );
 
           if (usesRemovedIdentifier) {
             removedRanges.add(`${node.start}-${node.end}`);
 
             // この文で定義される識別子も削除対象に追加
-            const definedIdentifiers = getDefinedIdentifiersFromNode(node);
             for (const id of definedIdentifiers) {
               if (!removedIdentifiers.has(id)) {
                 removedIdentifiers.add(id);
@@ -125,19 +131,24 @@ export function trimSDKCode(filePath: string): string {
   }
 }
 
-function visitNode(node: any, callback: (node: NodeWithRange) => void): void {
+function visitNode(
+  node: any,
+  callback: VisitCallback,
+  parent: NodeWithRange | null = null,
+  parentKey: string | number | null = null,
+): void {
   if (!node || typeof node !== "object") return;
 
-  callback(node);
+  callback(node, parent, parentKey);
 
   for (const key in node) {
     const value = node[key];
     if (Array.isArray(value)) {
       for (const item of value) {
-        visitNode(item, callback);
+        visitNode(item, callback, node, key);
       }
     } else if (value && typeof value === "object") {
-      visitNode(value, callback);
+      visitNode(value, callback, node, key);
     }
   }
 }
@@ -160,43 +171,134 @@ function isTopLevelStatement(node: NodeWithRange, program: any): boolean {
 }
 
 function extractIdentifiers(node: NodeWithRange): string[] {
-  const identifiers: string[] = [];
+  const identifiers = new Set<string>();
 
-  visitNode(node, (n: NodeWithRange) => {
-    if (n.type === "Identifier" && n.name) {
-      identifiers.push(n.name);
+  visitNode(node, (n, parent, parentKey) => {
+    if (
+      n.type === "Identifier" &&
+      n.name &&
+      isRelevantIdentifier(n, parent, parentKey)
+    ) {
+      identifiers.add(n.name);
     }
   });
 
-  return identifiers;
+  return Array.from(identifiers);
 }
 
-function getDefinedIdentifiersFromNode(node: NodeWithRange): string[] {
-  const identifiers: string[] = [];
+function isRelevantIdentifier(
+  node: NodeWithRange,
+  parent: NodeWithRange | null,
+  parentKey: string | number | null,
+): boolean {
+  if (!parent) {
+    return true;
+  }
+
+  if (
+    parent.type === "MemberExpression" &&
+    parent.property === node &&
+    parent.computed === false
+  ) {
+    return false;
+  }
+
+  if (
+    PROPERTY_LIKE_TYPES.has(parent.type) &&
+    parent.key === node &&
+    parent.computed === false
+  ) {
+    return false;
+  }
+
+  if (FUNCTION_LIKE_TYPES.has(parent.type) && parentKey === "params") {
+    return false;
+  }
+
+  return true;
+}
+
+function getDefinedIdentifiersFromNode(node: NodeWithRange): Set<string> {
+  const identifiers = new Set<string>();
 
   switch (node.type) {
     case "VariableDeclaration":
       if (node.declarations) {
         for (const decl of node.declarations) {
-          if (decl.id?.type === "Identifier" && decl.id.name) {
-            identifiers.push(decl.id.name);
-          }
+          collectPatternIdentifiers(decl.id, identifiers);
         }
       }
       break;
     case "FunctionDeclaration":
       if (node.id?.name) {
-        identifiers.push(node.id.name);
+        identifiers.add(node.id.name);
       }
+      collectFunctionParams(node, identifiers);
       break;
     case "ClassDeclaration":
       if (node.id?.name) {
-        identifiers.push(node.id.name);
+        identifiers.add(node.id.name);
+      }
+      if (node.body?.body) {
+        for (const element of node.body.body) {
+          if (
+            (element.type === "MethodDefinition" ||
+              element.type === "PropertyDefinition") &&
+            element.value &&
+            typeof element.value === "object"
+          ) {
+            collectFunctionParams(element.value, identifiers);
+          }
+        }
       }
       break;
   }
 
   return identifiers;
+}
+
+function collectFunctionParams(node: NodeWithRange, acc: Set<string>): void {
+  if (!node.params) {
+    return;
+  }
+  for (const param of node.params) {
+    collectPatternIdentifiers(param, acc);
+  }
+}
+
+function collectPatternIdentifiers(node: any, acc: Set<string>): void {
+  if (!node) {
+    return;
+  }
+  switch (node.type) {
+    case "Identifier":
+      if (node.name) {
+        acc.add(node.name);
+      }
+      break;
+    case "AssignmentPattern":
+      collectPatternIdentifiers(node.left, acc);
+      break;
+    case "RestElement":
+      collectPatternIdentifiers(node.argument, acc);
+      break;
+    case "ArrayPattern":
+      for (const element of node.elements || []) {
+        if (element) {
+          collectPatternIdentifiers(element, acc);
+        }
+      }
+      break;
+    case "ObjectPattern":
+      for (const property of node.properties || []) {
+        if (property.type === "Property") {
+          collectPatternIdentifiers(property.value, acc);
+        } else if (property.type === "RestElement") {
+          collectPatternIdentifiers(property.argument, acc);
+        }
+      }
+      break;
+  }
 }
 
 function removeRangesFromSource(
@@ -239,3 +341,17 @@ function removeRangesFromSource(
 
   return result.replace(/(\n\s*){3,}/g, "\n\n").trim();
 }
+const PROPERTY_LIKE_TYPES = new Set([
+  "Property",
+  "PropertyDefinition",
+  "MethodDefinition",
+  "TSPropertySignature",
+]);
+
+const FUNCTION_LIKE_TYPES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "ObjectMethod",
+  "ClassMethod",
+]);
