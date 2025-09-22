@@ -40,7 +40,7 @@
     "inquirer": "^12.7.0",
     "madge": "^8.0.0",
     "multiline-ts": "^4.0.1",
-    "oxc-parser": "^0.86.0",
+    "oxc-parser": "^0.90.0",
     "pkg-types": "^2.1.0",
     "rolldown": "catalog:",
     "smol-toml": "^1.4.2",
