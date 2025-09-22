@@ -28,7 +28,7 @@
     "eslint-config-prettier": "10.1.8",
     "globals": "16.3.0",
     "lefthook": "1.13.0",
-    "pkg-pr-new": "0.0.59",
+    "pkg-pr-new": "0.0.60",
     "prettier": "3.6.2",
     "tsx": "4.20.5",
     "turbo": "2.5.6",
