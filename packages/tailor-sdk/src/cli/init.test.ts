@@ -117,8 +117,7 @@ describe("init command", () => {
 
       expect(config).toContain('name: "test-project"');
       expect(config).toContain('region: "asia-northeast"');
-      expect(config).toContain("auth: {");
-      expect(config).toContain('namespace: "main-auth"');
+      expect(config).not.toContain("auth:");
       expect(config).not.toContain("generators:");
     });
 
@@ -131,7 +130,7 @@ describe("init command", () => {
 
       expect(config).toContain('name: "test-project"');
       expect(config).toContain('region: "us-west"');
-      expect(config).toContain("auth: {");
+      expect(config).toContain("auth:");
       expect(config).toContain("idProviderConfigs:");
       expect(config).toContain('userProfileProvider: "TAILORDB"');
       expect(config).toContain("generators:");

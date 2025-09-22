@@ -92,15 +92,21 @@ export default defineConfig({
     return (
       baseConfig +
       `
+      idp: {
+        "main-idp": {
+          authorization: "insecure",
+          clients: ["main-idp-client"],
+        },
+      },
       auth: {
         namespace: "main-auth",
         idProviderConfigs: [
           {
-            Name: "local-dev",
+            Name: "main-idp",
             Config: {
-              Kind: "IDToken",
-              ClientID: "your-client-id",
-              ProviderURL: "https://your-auth-provider.com/",
+              Kind: "BuiltInIdP",
+              Namespace: "main-idp",
+              ClientName: "main-idp-client",
             },
           },
         ],
@@ -110,35 +116,31 @@ export default defineConfig({
           Namespace: "main-db",
           Type: "User",
           UsernameField: "email",
-          AttributesFields: ["roles"],
+          AttributesFields: [],
+          AttributeMap: {
+            role: "role",
+          },
         },
         machineUsers: [
           {
             Name: "admin-machine-user",
-            Attributes: ["admin-role-uuid"],
+            Attributes: [],
+            AttributeMap: {
+              role: "ADMIN",
+            },
           },
         ],
-        oauth2Clients: [],
       },` +
       `
     },
   },
   generators: [
-    "@tailor/sdl",
-    ["@tailor/kysely-type", { distPath: ({ tailorDB }) => \`./src/generated/\${tailorDB}.ts\` }],
+    [
+      "@tailor/kysely-type",
+      { distPath: ({ tailorDB }) => \`./src/generated/\${tailorDB}.ts\` },
+    ],
     ["@tailor/db-type", { distPath: () => "./src/tailordb/types.ts" }],
   ],
-});`
-    );
-  } else if (template === "basic") {
-    return (
-      baseConfig +
-      `
-      auth: {
-        namespace: "main-auth",
-      },
-    },
-  },
 });`
     );
   }
@@ -188,15 +190,63 @@ A Tailor SDK project
 
 ## Getting Started
 
-1. Install dependencies:
-   \`\`\`bash
-   npm install
-   \`\`\`
+### 1. Deploy your project
 
-2. Start development mode:
-   \`\`\`bash
-   npm run dev
-   \`\`\`
+Before deploying your project, you need to create a corresponding workspace using either tailorctl or the console.
+
+\`\`\`bash
+tailorctl auth login
+tailorctl workspace create --name <workspace-name> --region <region>
+\`\`\`
+
+Next, run the apply command to deploy your project:
+
+\`\`\`bash
+npm run deploy
+\`\`\`
+
+You can now open the GraphQL Playground and execute the \`hello\` query:
+
+\`\`\`graphql
+query {
+  hello(input: { name: "sdk" }) {
+    message
+  }
+}
+\`\`\`
+
+### 2. Edit your project
+
+Let's try editing \`src/resolvers/hello/resolver.ts\`:
+
+\`\`\`typescript
+import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
+
+export default createQueryResolver(
+  "hello",
+  t.type({
+    name: t.string(),
+  })
+)
+  .fnStep("greet", async (context) => {
+    // return \`Hello, \${context.input.name}!\`;
+    return \`Goodbye, \${context.input.name}!\`;
+  })
+  .returns(
+    (context) => ({
+      message: context.greet,
+    }),
+    t.type({
+      message: t.string(),
+    })
+  );
+\`\`\`
+
+Deploy again and you'll see that the \`hello\` query response has been updated:
+
+\`\`\`bash
+npm run deploy
+\`\`\`
 
 ## Project Structure
 
@@ -218,11 +268,20 @@ For more information, visit [Tailor Documentation](https://docs.tailor.tech)
 const basicTemplateFiles = (srcDir: string = "src") => ({
   [`${srcDir}/tailordb/index.ts`]: `import { db, t } from "@tailor-platform/tailor-sdk";
 
-export const user = db.type("User", {
-  name: db.string(),
-  email: db.string().unique(),
-  ...db.fields.timestamps(),
-});
+export const user = db
+  .type("User", {
+    name: db.string(),
+    email: db.string().unique(),
+    role: db.enum("ADMIN", "USER"),
+    ...db.fields.timestamps(),
+  })
+  .permission({
+    create: [{ conditions: [], permit: true }],
+    read: [{ conditions: [], permit: true }],
+    update: [{ conditions: [], permit: true }],
+    delete: [{ conditions: [], permit: true }],
+  })
+  .gqlPermission([{ conditions: [], actions: "all", permit: true }]);
 
 export type User = t.infer<typeof user>;
 `,
@@ -248,22 +307,9 @@ export default createQueryResolver(
 `,
 });
 
+// Use same files as basic for now
 const fullstackTemplateFiles = (srcDir: string = "src") => ({
   ...basicTemplateFiles(srcDir),
-  [`${srcDir}/tailordb/user.ts`]: `import { db, t } from "@tailor-platform/tailor-sdk";
-
-export const user = db.type("User", {
-  email: db.string().unique(),
-  name: db.string(),
-  roles: db.string().array().optional(),
-  isActive: db.bool().hooks({
-    create: () => true,
-  }),
-  ...db.fields.timestamps(),
-});
-
-export type User = t.infer<typeof user>;
-`,
 });
 
 // Check if path exists (file or directory)
