@@ -24,4 +24,4 @@ jobs:
       - name: Build
         run: pnpm exec turbo run build
 
-      - run: pnpm dlx pkg-pr-new publish --bin "packages/tailor-sdk"
+      - run: pnpm dlx pkg-pr-new publish --pnpm --bin "packages/tailor-sdk"
