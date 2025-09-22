@@ -1,2 +1,2 @@
-const e=e=>e.input.a+e.input.b;globalThis.main=e;
+globalThis.main=e=>e.input.a+e.input.b;
 //# sourceMappingURL=add__step1.js.map
