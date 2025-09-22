@@ -54,7 +54,7 @@
     "ts-cron-validator": "1.1.5",
     "tsdown": "0.14.2",
     "typescript": "5.9.2",
-    "typescript-eslint": "8.42.0",
+    "typescript-eslint": "8.44.0",
     "vitest": "3.2.4"
   }
 }
