@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Tailor Development Kit - Workspace Root",
   "type": "module",
-  "packageManager": "pnpm@10.16.1",
+  "packageManager": "pnpm@10.17.0",
   "scripts": {
     "test": "turbo run test",
     "dev": "turbo run dev",
