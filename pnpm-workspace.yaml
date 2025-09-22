@@ -10,3 +10,14 @@ onlyBuiltDependencies:
   - lefthook
   - multiline-ts
   - oxc-resolver
+
+# Since tsdown depends on rolldown@latest, and rolldown has published incorrect semver,
+# when updating any package, even unrelated rolldown gets updated to the wrong version.
+# To prevent this, we'll fix the version using pnpm overrides.
+# https://github.com/rolldown/tsdown/issues/500
+# https://github.com/rolldown/rolldown/issues/6267
+overrides:
+  rolldown: "catalog:" # Reference the catalog for automatic updates by renovate
+
+catalog:
+  rolldown: "1.0.0-beta.38"
