@@ -91,28 +91,28 @@
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.4.3/tailorctl_darwin_v2.4.3_arm64.tar.gz",
-      "checksum": "FF446760B30D38F8851917C31BD5AAD51C8F4E4037C7578686EDB1236BE41F8D",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.5.1/tailorctl_darwin_v2.5.1_arm64.tar.gz",
+      "checksum": "C896B73C794BEBAA249875C811347142C605D88B83C7E335899D040B240C8FDA",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.4.3/tailorctl_darwin_v2.4.3_x86_64.tar.gz",
-      "checksum": "26B62E0CF7E1ADB7B05D7801A161991065AD2D3B3984E4386EA89712BF103CC1",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.5.1/tailorctl_darwin_v2.5.1_x86_64.tar.gz",
+      "checksum": "C5E1CDC8A7CF2F31F2F1CFB88D6B8966DCB10108765226F92650767277A55B20",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.4.3/tailorctl_linux_v2.4.3_arm64.tar.gz",
-      "checksum": "CE08938646F07F3DEF46A4C553E6F00F0B1AC62D31EAAD660B80C550045C6337",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.5.1/tailorctl_linux_v2.5.1_arm64.tar.gz",
+      "checksum": "AD82234B1BB0D2CF61C424E14894F9194FDD2EEF89D24780EF522CE8D2438D74",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.4.3/tailorctl_linux_v2.4.3_x86_64.tar.gz",
-      "checksum": "0F0DDA5C3B029D9747074B4BA665E28D4052ABC011BDBA5087283483843F691D",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.5.1/tailorctl_linux_v2.5.1_x86_64.tar.gz",
+      "checksum": "B735DA31D4B31553CD318D0443ED981BF363CEA50A338F8A1471CBF9626FCAC4",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.4.3/tailorctl_windows_v2.4.3_x86_64.zip",
-      "checksum": "F2436762D782E1B580E2617547D3C8DDE28089692723ECD7B2CF57A68BEB38CE",
+      "id": "github_release/github.com/tailor-platform/tailorctl/v2.5.1/tailorctl_windows_v2.5.1_x86_64.zip",
+      "checksum": "5F0DE1BB0832CA94B083D598AAB6D4E29062614ECB65CBA7A158A6C565B0EFF3",
       "algorithm": "sha256"
     },
     {
