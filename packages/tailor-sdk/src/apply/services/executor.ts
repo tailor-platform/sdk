@@ -21,29 +21,28 @@ import {
 import { type Executor } from "@/services";
 import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
-import { type ApplyOptions } from "..";
+import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyExecutor(
   client: OperatorClient,
-  workspaceId: string,
-  workspace: Readonly<Workspace>,
-  options: ApplyOptions,
+  changeSet: Awaited<ReturnType<typeof planExecutor>>,
+  phase: ApplyPhase = "create-update",
 ) {
-  const changeSet = await planExecutor(client, workspaceId, workspace);
-  if (options.dryRun) {
-    return;
-  }
-
-  // Executors
-  for (const create of changeSet.creates) {
-    await client.createExecutorExecutor(create.request);
-  }
-  for (const update of changeSet.updates) {
-    await client.updateExecutorExecutor(update.request);
-  }
-  for (const del of changeSet.deletes) {
-    await client.deleteExecutorExecutor(del.request);
+  if (phase === "create-update") {
+    // Executors
+    for (const create of changeSet.creates) {
+      await client.createExecutorExecutor(create.request);
+    }
+    for (const update of changeSet.updates) {
+      await client.updateExecutorExecutor(update.request);
+    }
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // Executors
+    for (const del of changeSet.deletes) {
+      await client.deleteExecutorExecutor(del.request);
+    }
   }
 }
 
@@ -62,7 +61,7 @@ type DeleteExecutor = {
   request: MessageInitShape<typeof DeleteExecutorExecutorRequestSchema>;
 };
 
-async function planExecutor(
+export async function planExecutor(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,

@@ -5,13 +5,16 @@ import { type WorkspaceConfig } from "@/config";
 import { type OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { defineWorkspace } from "@/workspace";
 import { fetchAll, initOperatorClient } from "./client";
-import { applyApplication } from "./services/application";
-import { applyAuth } from "./services/auth";
-import { applyExecutor } from "./services/executor";
-import { applyIdP } from "./services/idp";
-import { applyPipeline } from "./services/pipeline";
-import { applyStaticWebsite } from "./services/staticwebsite";
-import { applyTailorDB } from "./services/tailordb";
+import { applyApplication, planApplication } from "./services/application";
+import { applyAuth, planAuth } from "./services/auth";
+import { applyExecutor, planExecutor } from "./services/executor";
+import { applyIdP, planIdP } from "./services/idp";
+import { applyPipeline, planPipeline } from "./services/pipeline";
+import {
+  applyStaticWebsite,
+  planStaticWebsite,
+} from "./services/staticwebsite";
+import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { readTailorctlConfig, type TailorctlConfig } from "./tailorctl";
 
 export type ApplyOptions = {
@@ -20,6 +23,8 @@ export type ApplyOptions = {
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
 };
+
+export type ApplyPhase = "create-update" | "delete";
 
 export async function apply(
   config: Readonly<WorkspaceConfig>,
@@ -42,20 +47,38 @@ export async function apply(
   const client = await initOperatorClient(tailorctlConfig);
   const workspaceId = await fetchWorkspaceId(client, config, tailorctlConfig);
 
-  // To handle dependencies correctly, apply each service in the same order as tailorctl.
-  await applyTailorDB(client, workspaceId, workspace, options);
-  await applyStaticWebsite(client, workspaceId, workspace, options);
-  await applyIdP(client, workspaceId, workspace, options);
-  await applyAuth(client, workspaceId, workspace, options);
-  await applyPipeline(client, workspaceId, workspace, options);
-  await applyApplication(client, workspaceId, workspace, options);
-  await applyExecutor(client, workspaceId, workspace, options);
-
+  // Phase 1: Plan
+  const tailorDB = await planTailorDB(client, workspaceId, workspace);
+  const staticWebsite = await planStaticWebsite(client, workspaceId, workspace);
+  const idp = await planIdP(client, workspaceId, workspace);
+  const auth = await planAuth(client, workspaceId, workspace);
+  const pipeline = await planPipeline(client, workspaceId, workspace);
+  const application = await planApplication(client, workspaceId, workspace);
+  const executor = await planExecutor(client, workspaceId, workspace);
   if (options.dryRun) {
     console.log("Dry run enabled. No changes applied.");
-  } else {
-    console.log("Successfully applied changes.");
+    return;
   }
+
+  // Phase 2: Apply Create/Update
+  await applyTailorDB(client, tailorDB, "create-update");
+  await applyStaticWebsite(client, staticWebsite, "create-update");
+  await applyIdP(client, idp, "create-update");
+  await applyAuth(client, auth, "create-update");
+  await applyPipeline(client, pipeline, "create-update");
+  await applyApplication(client, application, "create-update");
+  await applyExecutor(client, executor, "create-update");
+
+  // Phase 3: Apply Delete in reverse order
+  await applyExecutor(client, executor, "delete");
+  await applyApplication(client, application, "delete");
+  await applyPipeline(client, pipeline, "delete");
+  await applyAuth(client, auth, "delete");
+  await applyIdP(client, idp, "delete");
+  await applyStaticWebsite(client, staticWebsite, "delete");
+  await applyTailorDB(client, tailorDB, "delete");
+
+  console.log("Successfully applied changes.");
 }
 
 async function fetchWorkspaceId(

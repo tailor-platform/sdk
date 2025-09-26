@@ -48,60 +48,55 @@ import { type DBFieldMetadata } from "@/services/tailordb/types";
 import { tailorToManifestScalar } from "@/types/types";
 import { type Workspace } from "@/workspace";
 import { ChangeSet, type HasName } from ".";
-import { type ApplyOptions } from "..";
+import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyTailorDB(
   client: OperatorClient,
-  workspaceId: string,
-  workspace: Readonly<Workspace>,
-  options: ApplyOptions,
+  changeSet: Awaited<ReturnType<typeof planTailorDB>>,
+  phase: ApplyPhase = "create-update",
 ) {
-  const changeSet = await planTailorDB(client, workspaceId, workspace);
-  if (options.dryRun) {
-    return;
-  }
-
-  // Create / Update
-  // Services
-  for (const create of changeSet.service.creates) {
-    await client.createTailorDBService(create.request);
-  }
-  // Types
-  for (const create of changeSet.type.creates) {
-    await client.createTailorDBType(create.request);
-  }
-  for (const update of changeSet.type.updates) {
-    await client.updateTailorDBType(update.request);
-  }
-  // GQLPermissions
-  for (const create of changeSet.gqlPermission.creates) {
-    await client.createTailorDBGQLPermission(create.request);
-  }
-  for (const update of changeSet.gqlPermission.updates) {
-    await client.updateTailorDBGQLPermission(update.request);
-  }
-
-  // Delete (Execute in reverse order considering dependencies)
-  // GQLPermissions
-  for (const del of changeSet.gqlPermission.deletes) {
-    if (del.tag === "gql-permission-deleted") {
-      await client.deleteTailorDBGQLPermission(del.request);
+  if (phase === "create-update") {
+    // Services
+    for (const create of changeSet.service.creates) {
+      await client.createTailorDBService(create.request);
     }
-  }
-  // Types
-  for (const del of changeSet.type.deletes) {
-    if (del.tag === "type-deleted") {
-      await client.deleteTailorDBType(del.request);
+    // Types
+    for (const create of changeSet.type.creates) {
+      await client.createTailorDBType(create.request);
     }
-  }
-  // Services
-  for (const del of changeSet.service.deletes) {
-    await client.deleteTailorDBService(del.request);
+    for (const update of changeSet.type.updates) {
+      await client.updateTailorDBType(update.request);
+    }
+    // GQLPermissions
+    for (const create of changeSet.gqlPermission.creates) {
+      await client.createTailorDBGQLPermission(create.request);
+    }
+    for (const update of changeSet.gqlPermission.updates) {
+      await client.updateTailorDBGQLPermission(update.request);
+    }
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // GQLPermissions
+    for (const del of changeSet.gqlPermission.deletes) {
+      if (del.tag === "gql-permission-deleted") {
+        await client.deleteTailorDBGQLPermission(del.request);
+      }
+    }
+    // Types
+    for (const del of changeSet.type.deletes) {
+      if (del.tag === "type-deleted") {
+        await client.deleteTailorDBType(del.request);
+      }
+    }
+    // Services
+    for (const del of changeSet.service.deletes) {
+      await client.deleteTailorDBService(del.request);
+    }
   }
 }
 
-async function planTailorDB(
+export async function planTailorDB(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,

@@ -11,65 +11,66 @@ import {
 import { type IdPServiceInput } from "@/services/idp/types";
 import { type Workspace } from "@/workspace";
 import { ChangeSet, type HasName } from ".";
-import { type ApplyOptions } from "..";
+import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyIdP(
   client: OperatorClient,
-  workspaceId: string,
-  workspace: Readonly<Workspace>,
-  options: ApplyOptions,
+  changeSet: Awaited<ReturnType<typeof planIdP>>,
+  phase: ApplyPhase = "create-update",
 ) {
-  const changeSet = await planIdP(client, workspaceId, workspace);
-  if (options.dryRun) {
-    return;
-  }
-
-  // Services
-  for (const create of changeSet.service.creates) {
-    await client.createIdPService(create.request);
-  }
-  for (const update of changeSet.service.updates) {
-    await client.updateIdPService(update.request);
-  }
-  for (const del of changeSet.service.deletes) {
-    await client.deleteIdPService(del.request);
-  }
-
-  // Clients
-  for (const create of changeSet.client.creates) {
-    const resp = await client.createIdPClient(create.request);
-
-    // Create the secret manager vault and secret
-    const vaultName = `idp-${create.request.namespaceName}-${create.request.client?.name}`;
-    const secretName = `client-secret-${create.request.namespaceName}-${create.request.client?.name}`;
-    await client.createSecretManagerVault({
-      workspaceId: create.request.workspaceId,
-      secretmanagerVaultName: vaultName,
-    });
-    await client.createSecretManagerSecret({
-      workspaceId: create.request.workspaceId,
-      secretmanagerVaultName: vaultName,
-      secretmanagerSecretName: secretName,
-      secretmanagerSecretValue: resp.client?.clientSecret,
-    });
-  }
-  for (const del of changeSet.client.deletes) {
-    if (del.tag === "service-deleted") {
-      continue;
+  if (phase === "create-update") {
+    // Services
+    for (const create of changeSet.service.creates) {
+      await client.createIdPService(create.request);
     }
-    await client.deleteIdPClient(del.request);
+    for (const update of changeSet.service.updates) {
+      await client.updateIdPService(update.request);
+    }
 
-    // Delete the secret manager vault and secret
-    const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
-    await client.deleteSecretManagerVault({
-      workspaceId: del.request.workspaceId,
-      secretmanagerVaultName: vaultName,
-    });
+    // Clients
+    for (const create of changeSet.client.creates) {
+      const resp = await client.createIdPClient(create.request);
+
+      // Create the secret manager vault and secret
+      const vaultName = `idp-${create.request.namespaceName}-${create.request.client?.name}`;
+      const secretName = `client-secret-${create.request.namespaceName}-${create.request.client?.name}`;
+      await client.createSecretManagerVault({
+        workspaceId: create.request.workspaceId,
+        secretmanagerVaultName: vaultName,
+      });
+      await client.createSecretManagerSecret({
+        workspaceId: create.request.workspaceId,
+        secretmanagerVaultName: vaultName,
+        secretmanagerSecretName: secretName,
+        secretmanagerSecretValue: resp.client?.clientSecret,
+      });
+    }
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // Clients
+    for (const del of changeSet.client.deletes) {
+      if (del.tag === "service-deleted") {
+        continue;
+      }
+      await client.deleteIdPClient(del.request);
+
+      // Delete the secret manager vault and secret
+      const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
+      await client.deleteSecretManagerVault({
+        workspaceId: del.request.workspaceId,
+        secretmanagerVaultName: vaultName,
+      });
+    }
+
+    // Services
+    for (const del of changeSet.service.deletes) {
+      await client.deleteIdPService(del.request);
+    }
   }
 }
 
-async function planIdP(
+export async function planIdP(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,

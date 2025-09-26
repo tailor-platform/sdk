@@ -12,7 +12,7 @@ import {
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
-import { type ApplyOptions } from "..";
+import { type ApplyPhase } from "..";
 import {
   fetchAll,
   resolveStaticWebsiteUrls,
@@ -21,24 +21,37 @@ import {
 
 export async function applyApplication(
   client: OperatorClient,
-  workspaceId: string,
-  workspace: Readonly<Workspace>,
-  options: ApplyOptions,
+  changeSet: Awaited<ReturnType<typeof planApplication>>,
+  phase: ApplyPhase = "create-update",
 ) {
-  const changeSet = await planApplication(client, workspaceId, workspace);
-  if (options.dryRun) {
-    return;
-  }
+  if (phase === "create-update") {
+    // Applications
+    for (const create of changeSet.creates) {
+      create.request.cors = await resolveStaticWebsiteUrls(
+        client,
+        create.request.workspaceId!,
+        create.request.cors,
+        "CORS",
+      );
 
-  // Applications
-  for (const create of changeSet.creates) {
-    await client.createApplication(create.request);
-  }
-  for (const update of changeSet.updates) {
-    await client.updateApplication(update.request);
-  }
-  for (const del of changeSet.deletes) {
-    await client.deleteApplication(del.request);
+      await client.createApplication(create.request);
+    }
+    for (const update of changeSet.updates) {
+      update.request.cors = await resolveStaticWebsiteUrls(
+        client,
+        update.request.workspaceId!,
+        update.request.cors,
+        "CORS",
+      );
+
+      await client.updateApplication(update.request);
+    }
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // Applications
+    for (const del of changeSet.deletes) {
+      await client.deleteApplication(del.request);
+    }
   }
 }
 
@@ -57,7 +70,7 @@ type DeleteApplication = {
   request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
 };
 
-async function planApplication(
+export async function planApplication(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,
@@ -99,13 +112,6 @@ async function planApplication(
       }
     }
 
-    const resolvedCors = await resolveStaticWebsiteUrls(
-      client,
-      workspaceId,
-      application.config.cors,
-      "CORS",
-    );
-
     if (existingNameSet.has(application.name)) {
       changeSet.updates.push({
         name: application.name,
@@ -114,7 +120,7 @@ async function planApplication(
           applicationName: application.name,
           authNamespace,
           authIdpConfigName,
-          cors: resolvedCors,
+          cors: application.config.cors,
           subgraphs: application.subgraphs.map((subgraph) =>
             protoSubgraph(subgraph),
           ),
@@ -131,7 +137,7 @@ async function planApplication(
           applicationName: application.name,
           authNamespace,
           authIdpConfigName,
-          cors: resolvedCors,
+          cors: application.config.cors,
           subgraphs: application.subgraphs.map((subgraph) =>
             protoSubgraph(subgraph),
           ),

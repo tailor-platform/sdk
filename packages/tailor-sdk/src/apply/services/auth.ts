@@ -62,7 +62,7 @@ import {
 import { type ValueOperand } from "@/services/tailordb/permission";
 import { type Workspace } from "@/workspace";
 import { ChangeSet, type HasName } from ".";
-import { type ApplyOptions } from "..";
+import { type ApplyPhase } from "..";
 import {
   fetchAll,
   resolveStaticWebsiteUrls,
@@ -71,130 +71,159 @@ import {
 
 export async function applyAuth(
   client: OperatorClient,
-  workspaceId: string,
-  workspace: Readonly<Workspace>,
-  options: ApplyOptions,
+  changeSet: Awaited<ReturnType<typeof planAuth>>,
+  phase: ApplyPhase = "create-update",
 ) {
-  const changeSet = await planAuth(client, workspaceId, workspace);
-  if (options.dryRun) {
-    return;
-  }
-
-  // Services
-  for (const create of changeSet.service.creates) {
-    await client.createAuthService(create.request);
-  }
-  for (const del of changeSet.service.deletes) {
-    await client.deleteAuthService(del.request);
-  }
-
-  // IdPConfigs
-  for (const create of changeSet.idpConfig.creates) {
-    if (create.idpConfig.Config.Kind === "BuiltInIdP") {
-      create.request.idpConfig!.config = await protoBuiltinIdPConfig(
-        client,
-        workspaceId,
-        create.idpConfig.Config,
-      );
+  if (phase === "create-update") {
+    // Services
+    for (const create of changeSet.service.creates) {
+      await client.createAuthService(create.request);
     }
-    await client.createAuthIDPConfig(create.request);
-  }
-  for (const update of changeSet.idpConfig.updates) {
-    if (update.idpConfig.Config.Kind === "BuiltInIdP") {
-      update.request.idpConfig!.config = await protoBuiltinIdPConfig(
-        client,
-        workspaceId,
-        update.idpConfig.Config,
-      );
-    }
-    await client.updateAuthIDPConfig(update.request);
-  }
-  for (const del of changeSet.idpConfig.deletes) {
-    if (del.tag === "idp-config-deleted") {
-      await client.deleteAuthIDPConfig(del.request);
-    }
-  }
 
-  // UserProfileConfigs
-  for (const create of changeSet.userProfileConfig.creates) {
-    await client.createUserProfileConfig(create.request);
-  }
-  for (const update of changeSet.userProfileConfig.updates) {
-    await client.updateUserProfileConfig(update.request);
-  }
-  for (const del of changeSet.userProfileConfig.deletes) {
-    if (del.tag === "user-profile-config-deleted") {
-      await client.deleteUserProfileConfig(del.request);
+    // IdPConfigs
+    for (const create of changeSet.idpConfig.creates) {
+      if (create.idpConfig.Config.Kind === "BuiltInIdP") {
+        create.request.idpConfig!.config = await protoBuiltinIdPConfig(
+          client,
+          create.request.workspaceId!,
+          create.idpConfig.Config,
+        );
+      }
+      await client.createAuthIDPConfig(create.request);
     }
-  }
-
-  // TenantConfigs
-  for (const create of changeSet.tenantConfig.creates) {
-    await client.createTenantConfig(create.request);
-  }
-  for (const update of changeSet.tenantConfig.updates) {
-    await client.updateTenantConfig(update.request);
-  }
-  for (const del of changeSet.tenantConfig.deletes) {
-    if (del.tag === "tenant-config-deleted") {
-      await client.deleteTenantConfig(del.request);
+    for (const update of changeSet.idpConfig.updates) {
+      if (update.idpConfig.Config.Kind === "BuiltInIdP") {
+        update.request.idpConfig!.config = await protoBuiltinIdPConfig(
+          client,
+          update.request.workspaceId!,
+          update.idpConfig.Config,
+        );
+      }
+      await client.updateAuthIDPConfig(update.request);
     }
-  }
 
-  // MachineUsers
-  for (const create of changeSet.machineUser.creates) {
-    await client.createAuthMachineUser(create.request);
-  }
-  for (const update of changeSet.machineUser.updates) {
-    await client.updateAuthMachineUser(update.request);
-  }
-  for (const del of changeSet.machineUser.deletes) {
-    if (del.tag === "machine-user-deleted") {
-      await client.deleteAuthMachineUser(del.request);
+    // UserProfileConfigs
+    for (const create of changeSet.userProfileConfig.creates) {
+      await client.createUserProfileConfig(create.request);
     }
-  }
-
-  // OAuth2Clients
-  for (const create of changeSet.oauth2Client.creates) {
-    await client.createAuthOAuth2Client(create.request);
-  }
-  for (const update of changeSet.oauth2Client.updates) {
-    await client.updateAuthOAuth2Client(update.request);
-  }
-  for (const del of changeSet.oauth2Client.deletes) {
-    if (del.tag === "oauth2-client-deleted") {
-      await client.deleteAuthOAuth2Client(del.request);
+    for (const update of changeSet.userProfileConfig.updates) {
+      await client.updateUserProfileConfig(update.request);
     }
-  }
 
-  // SCIMConfigs
-  for (const create of changeSet.scimConfig.creates) {
-    await client.createAuthSCIMConfig(create.request);
-  }
-  for (const update of changeSet.scimConfig.updates) {
-    await client.updateAuthSCIMConfig(update.request);
-  }
-  for (const del of changeSet.scimConfig.deletes) {
-    if (del.tag === "scim-config-deleted") {
-      await client.deleteAuthSCIMConfig(del.request);
+    // TenantConfigs
+    for (const create of changeSet.tenantConfig.creates) {
+      await client.createTenantConfig(create.request);
     }
-  }
+    for (const update of changeSet.tenantConfig.updates) {
+      await client.updateTenantConfig(update.request);
+    }
 
-  // SCIMResources
-  for (const create of changeSet.scimResource.creates) {
-    await client.createAuthSCIMResource(create.request);
-  }
-  for (const update of changeSet.scimResource.updates) {
-    await client.updateAuthSCIMResource(update.request);
-  }
-  for (const del of changeSet.scimResource.deletes) {
-    if (del.tag === "scim-resource-deleted") {
-      await client.deleteAuthSCIMResource(del.request);
+    // MachineUsers
+    for (const create of changeSet.machineUser.creates) {
+      await client.createAuthMachineUser(create.request);
+    }
+    for (const update of changeSet.machineUser.updates) {
+      await client.updateAuthMachineUser(update.request);
+    }
+
+    // OAuth2Clients
+    for (const create of changeSet.oauth2Client.creates) {
+      create.request.oauth2Client!.redirectUris =
+        await resolveStaticWebsiteUrls(
+          client,
+          create.request.workspaceId!,
+          create.request.oauth2Client!.redirectUris,
+          "OAuth2 redirect URIs",
+        );
+
+      await client.createAuthOAuth2Client(create.request);
+    }
+    for (const update of changeSet.oauth2Client.updates) {
+      update.request.oauth2Client!.redirectUris =
+        await resolveStaticWebsiteUrls(
+          client,
+          update.request.workspaceId!,
+          update.request.oauth2Client!.redirectUris,
+          "OAuth2 redirect URIs",
+        );
+
+      await client.updateAuthOAuth2Client(update.request);
+    }
+
+    // SCIMConfigs
+    for (const create of changeSet.scimConfig.creates) {
+      await client.createAuthSCIMConfig(create.request);
+    }
+    for (const update of changeSet.scimConfig.updates) {
+      await client.updateAuthSCIMConfig(update.request);
+    }
+
+    // SCIMResources
+    for (const create of changeSet.scimResource.creates) {
+      await client.createAuthSCIMResource(create.request);
+    }
+    for (const update of changeSet.scimResource.updates) {
+      await client.updateAuthSCIMResource(update.request);
+    }
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // SCIMResources
+    for (const del of changeSet.scimResource.deletes) {
+      if (del.tag === "scim-resource-deleted") {
+        await client.deleteAuthSCIMResource(del.request);
+      }
+    }
+
+    // SCIMConfigs
+    for (const del of changeSet.scimConfig.deletes) {
+      if (del.tag === "scim-config-deleted") {
+        await client.deleteAuthSCIMConfig(del.request);
+      }
+    }
+
+    // OAuth2Clients
+    for (const del of changeSet.oauth2Client.deletes) {
+      if (del.tag === "oauth2-client-deleted") {
+        await client.deleteAuthOAuth2Client(del.request);
+      }
+    }
+
+    // MachineUsers
+    for (const del of changeSet.machineUser.deletes) {
+      if (del.tag === "machine-user-deleted") {
+        await client.deleteAuthMachineUser(del.request);
+      }
+    }
+
+    // TenantConfigs
+    for (const del of changeSet.tenantConfig.deletes) {
+      if (del.tag === "tenant-config-deleted") {
+        await client.deleteTenantConfig(del.request);
+      }
+    }
+
+    // UserProfileConfigs
+    for (const del of changeSet.userProfileConfig.deletes) {
+      if (del.tag === "user-profile-config-deleted") {
+        await client.deleteUserProfileConfig(del.request);
+      }
+    }
+
+    // IdPConfigs
+    for (const del of changeSet.idpConfig.deletes) {
+      if (del.tag === "idp-config-deleted") {
+        await client.deleteAuthIDPConfig(del.request);
+      }
+    }
+
+    // Services
+    for (const del of changeSet.service.deletes) {
+      await client.deleteAuthService(del.request);
     }
   }
 }
 
-async function planAuth(
+export async function planAuth(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,
@@ -966,20 +995,13 @@ async function planOAuth2Clients(
       existingNameSet.add(oauth2Client.name);
     });
     for (const oauth2Client of config.oauth2Clients ?? []) {
-      const resolvedRedirectUris = await resolveStaticWebsiteUrls(
-        client,
-        workspaceId,
-        oauth2Client.RedirectURIs,
-        "OAuth2 redirect URIs",
-      );
-
       if (existingNameSet.has(oauth2Client.Name)) {
         changeSet.updates.push({
           name: oauth2Client.Name,
           request: {
             workspaceId,
             namespaceName: config.namespace,
-            oauth2Client: protoOAuth2Client(oauth2Client, resolvedRedirectUris),
+            oauth2Client: protoOAuth2Client(oauth2Client),
           },
         });
         existingNameSet.delete(oauth2Client.Name);
@@ -989,7 +1011,7 @@ async function planOAuth2Clients(
           request: {
             workspaceId,
             namespaceName: config.namespace,
-            oauth2Client: protoOAuth2Client(oauth2Client, resolvedRedirectUris),
+            oauth2Client: protoOAuth2Client(oauth2Client),
           },
         });
       }
@@ -1021,7 +1043,6 @@ async function planOAuth2Clients(
 
 function protoOAuth2Client(
   oauth2Client: OAuth2Client,
-  resolvedRedirectUris: string[],
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
   return {
     name: oauth2Client.Name,
@@ -1038,7 +1059,7 @@ function protoOAuth2Client(
           );
       }
     }),
-    redirectUris: resolvedRedirectUris,
+    redirectUris: oauth2Client.RedirectURIs,
     clientType: (
       {
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,

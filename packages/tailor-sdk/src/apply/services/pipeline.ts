@@ -27,48 +27,48 @@ import {
 import { type Resolver } from "@/services/pipeline/resolver";
 import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
-import { type ApplyOptions } from "..";
+import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
 import { OperationType } from "@/types/operator";
 import * as inflection from "inflection";
 
 export async function applyPipeline(
   client: OperatorClient,
-  workspaceId: string,
-  workspace: Readonly<Workspace>,
-  options: ApplyOptions,
+  changeSet: Awaited<ReturnType<typeof planPipeline>>,
+  phase: ApplyPhase = "create-update",
 ) {
-  const changeSet = await planPipeline(client, workspaceId, workspace);
-  if (options.dryRun) {
-    return;
-  }
+  if (phase === "create-update") {
+    // Services
+    for (const create of changeSet.service.creates) {
+      await client.createPipelineService(create.request);
+    }
+    for (const update of changeSet.service.updates) {
+      await client.updatePipelineService(update.request);
+    }
 
-  // Services
-  for (const create of changeSet.service.creates) {
-    await client.createPipelineService(create.request);
-  }
-  for (const update of changeSet.service.updates) {
-    await client.updatePipelineService(update.request);
-  }
-  for (const del of changeSet.service.deletes) {
-    await client.deletePipelineService(del.request);
-  }
+    // Resolvers
+    for (const create of changeSet.resolver.creates) {
+      await client.createPipelineResolver(create.request);
+    }
+    for (const update of changeSet.resolver.updates) {
+      await client.updatePipelineResolver(update.request);
+    }
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // Resolvers
+    for (const del of changeSet.resolver.deletes) {
+      if (del.tag === "resolver-deleted") {
+        await client.deletePipelineResolver(del.request);
+      }
+    }
 
-  // Resolvers
-  for (const create of changeSet.resolver.creates) {
-    await client.createPipelineResolver(create.request);
-  }
-  for (const update of changeSet.resolver.updates) {
-    await client.updatePipelineResolver(update.request);
-  }
-  for (const del of changeSet.resolver.deletes) {
-    if (del.tag === "resolver-deleted") {
-      await client.deletePipelineResolver(del.request);
+    // Services
+    for (const del of changeSet.service.deletes) {
+      await client.deletePipelineService(del.request);
     }
   }
 }
-
-async function planPipeline(
+export async function planPipeline(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,

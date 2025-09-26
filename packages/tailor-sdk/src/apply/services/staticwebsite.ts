@@ -8,28 +8,28 @@ import {
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
-import { type ApplyOptions } from "..";
+import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
 
 export async function applyStaticWebsite(
   client: OperatorClient,
-  workspaceId: string,
-  workspace: Readonly<Workspace>,
-  options: ApplyOptions,
+  changeSet: Awaited<ReturnType<typeof planStaticWebsite>>,
+  phase: ApplyPhase = "create-update",
 ) {
-  const changeSet = await planStaticWebsite(client, workspaceId, workspace);
-  if (options.dryRun) {
-    return;
-  }
-
-  for (const create of changeSet.creates) {
-    await client.createStaticWebsite(create.request);
-  }
-  for (const update of changeSet.updates) {
-    await client.updateStaticWebsite(update.request);
-  }
-  for (const del of changeSet.deletes) {
-    await client.deleteStaticWebsite(del.request);
+  if (phase === "create-update") {
+    // StaticWebsites
+    for (const create of changeSet.creates) {
+      await client.createStaticWebsite(create.request);
+    }
+    for (const update of changeSet.updates) {
+      await client.updateStaticWebsite(update.request);
+    }
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // StaticWebsites
+    for (const del of changeSet.deletes) {
+      await client.deleteStaticWebsite(del.request);
+    }
   }
 }
 
@@ -48,7 +48,7 @@ type DeleteStaticWebsite = {
   request: MessageInitShape<typeof DeleteStaticWebsiteRequestSchema>;
 };
 
-async function planStaticWebsite(
+export async function planStaticWebsite(
   client: OperatorClient,
   workspaceId: string,
   workspace: Readonly<Workspace>,
