@@ -13,7 +13,7 @@ const getDB = () => {
 async function kyselyWrapper(context, callback) {
 	const db = getDB();
 	const clientWrapper = { exec: async (query) => {
-		return await context.client.exec(query.sql);
+		return await context.client.exec(query.sql, query.parameters);
 	} };
 	return await callback({
 		...context,
