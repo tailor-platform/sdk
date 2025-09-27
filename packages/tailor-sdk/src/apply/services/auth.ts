@@ -503,7 +503,9 @@ function protoIdPConfig(
           config: {
             case: "saml",
             value: {
-              metadataUrl: idpConfig.Config.MetadataURL,
+              ...("MetadataURL" in idpConfig.Config
+                ? { metadataUrl: idpConfig.Config.MetadataURL }
+                : { rawMetadata: idpConfig.Config.RawMetadata }),
               spCertBase64: {
                 vaultName: idpConfig.Config.SpCertBase64.VaultName,
                 secretKey: idpConfig.Config.SpCertBase64.SecretKey,

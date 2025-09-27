@@ -10,12 +10,18 @@ export interface OIDC {
   UsernameClaim?: string;
 }
 
-export interface SAML {
+export type SAML = {
   Kind: "SAML";
-  MetadataURL: string;
   SpCertBase64: SecretValue;
   SpKeyBase64: SecretValue;
-}
+} & (
+  | {
+      MetadataURL: string;
+    }
+  | {
+      RawMetadata: string;
+    }
+);
 
 export interface IDToken {
   Kind: "IDToken";
