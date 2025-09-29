@@ -56,35 +56,11 @@ export interface Invoice {
 export interface NestedProfile {
   id: Generated<string>;
   userInfo: {
-    personal: {
-      name: string;
-      age: number | null;
-      bio: string | null;
-    };
-    contact: {
-      email: string;
-      phone: string | null;
-      address: {
-        street: string;
-        city: string;
-        country: string;
-        coordinates: {
-          latitude: number;
-          longitude: number;
-        } | null;
-      };
-    };
-    preferences: {
-      notifications: {
-        email: boolean;
-        sms: boolean;
-        push: boolean;
-      };
-      privacy: {
-        profileVisible: boolean;
-        dataSharing: boolean;
-      } | null;
-    } | null;
+    name: string;
+    age: number | null;
+    bio: string | null;
+    email: string;
+    phone: string | null;
   };
   metadata: {
     created: Timestamp;

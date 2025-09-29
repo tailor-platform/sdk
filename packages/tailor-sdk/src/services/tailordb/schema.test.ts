@@ -1131,6 +1131,16 @@ describe("db.object テスト", () => {
     }>();
   });
 
+  it("db.objectをネストすると型エラーが発生する", () => {
+    db.object({
+      name: db.string(),
+      // @ts-expect-error Nested db.object() is not allowed
+      profile: db.object({
+        bio: db.string(),
+      }),
+    });
+  });
+
   it("オプショナルフィールドを含むオブジェクト型を正しく推論する", () => {
     const _objectType = db.type("Test", {
       user: db.object({
@@ -1149,39 +1159,12 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("ネストしたオブジェクト型を正しく推論する", () => {
-    const _objectType = db.type("Test", {
-      user: db.object({
-        name: db.string(),
-        address: db.object({
-          street: db.string(),
-          city: db.string(),
-          zipCode: db.string({ optional: true }),
-        }),
-      }),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      user: {
-        name: string;
-        address: {
-          street: string;
-          city: string;
-          zipCode?: string | null;
-        };
-      };
-    }>();
-  });
-
   it("optionalオプションを持つオブジェクト型を正しく推論する", () => {
     const _objectType = db.type("Test", {
       user: db.object(
         {
           name: db.string(),
-          profile: db.object({
-            bio: db.string(),
-            avatar: db.string({ optional: true }),
-          }),
+          avatar: db.string({ optional: true }),
         },
         { optional: true },
       ),
@@ -1190,10 +1173,7 @@ describe("db.object テスト", () => {
       id: string;
       user?: {
         name: string;
-        profile: {
-          bio: string;
-          avatar?: string | null;
-        };
+        avatar?: string | null;
       } | null;
     }>();
   });
@@ -1258,66 +1238,18 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("深くネストしたオブジェクト型を正しく推論する", () => {
-    const _objectType = db.type("Test", {
-      company: db.object({
-        name: db.string(),
-        departments: db.object(
-          {
-            name: db.string(),
-            employees: db.object(
-              {
-                name: db.string(),
-                position: db.string(),
-                contact: db.object({
-                  email: db.string(),
-                  phone: db.string({ optional: true }),
-                }),
-              },
-              { array: true },
-            ),
-          },
-          { array: true },
-        ),
-      }),
-    });
-    expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
-      company: {
-        name: string;
-        departments: {
-          name: string;
-          employees: {
-            name: string;
-            position: string;
-            contact: {
-              email: string;
-              phone?: string | null;
-            };
-          }[];
-        }[];
-      };
-    }>();
-  });
-
   it("bool型を含むオブジェクト型を正しく推論する", () => {
     const _objectType = db.type("Test", {
       settings: db.object({
         enabled: db.bool(),
-        notifications: db.object({
-          email: db.bool(),
-          push: db.bool({ optional: true }),
-        }),
+        push: db.bool({ optional: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       id: string;
       settings: {
         enabled: boolean;
-        notifications: {
-          email: boolean;
-          push?: boolean | null;
-        };
+        push?: boolean | null;
       };
     }>();
   });
@@ -1328,17 +1260,7 @@ describe("db.object テスト", () => {
         name: db.string(),
         price: db.float(),
         category: db.enum("electronics", "books", "clothing"),
-        metadata: db.object({
-          weight: db.float({ optional: true }),
-          dimensions: db.object(
-            {
-              width: db.float(),
-              height: db.float(),
-              depth: db.float(),
-            },
-            { optional: true },
-          ),
-        }),
+        weight: db.float({ optional: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
@@ -1347,14 +1269,7 @@ describe("db.object テスト", () => {
         name: string;
         price: number;
         category: "electronics" | "books" | "clothing";
-        metadata: {
-          weight?: number | null;
-          dimensions?: {
-            width: number;
-            height: number;
-            depth: number;
-          } | null;
-        };
+        weight?: number | null;
       };
     }>();
   });

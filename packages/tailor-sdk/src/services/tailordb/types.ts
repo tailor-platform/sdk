@@ -51,6 +51,18 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   relation?: boolean;
 }
 
+export type ExcludeNestedDBFields<
+  T extends Record<string, TailorDBField<any, any, any>>,
+> = {
+  [K in keyof T]: T[K] extends TailorDBField<
+    { type: "nested"; array: boolean },
+    any,
+    any
+  >
+    ? never
+    : T[K];
+};
+
 type HookFn<TValue, TData, TReturn> = (args: {
   value: TValue;
   data: TData;

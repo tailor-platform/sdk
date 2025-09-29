@@ -32,14 +32,6 @@ const mockNestedType = db.type("ComplexUser", {
   profile: db.object({
     firstName: db.string(),
     lastName: db.string(),
-    address: db.object(
-      {
-        street: db.string(),
-        city: db.string(),
-        zipCode: db.string({ optional: true }),
-      },
-      { optional: true },
-    ),
   }),
   preferences: db.object(
     {
@@ -115,11 +107,7 @@ describe("KyselyGenerator統合テスト", () => {
       expect(result.typeDef).toContain("profile: {");
       expect(result.typeDef).toContain("firstName: string;");
       expect(result.typeDef).toContain("lastName: string;");
-      expect(result.typeDef).toContain("address: {");
-      expect(result.typeDef).toContain("street: string;");
-      expect(result.typeDef).toContain("city: string;");
-      expect(result.typeDef).toContain("zipCode: string | null;");
-      expect(result.typeDef).toContain("} | null;");
+      expect(result.typeDef).toContain("};");
       expect(result.typeDef).toContain("preferences: {");
       expect(result.typeDef).toContain("key: string;");
       expect(result.typeDef).toContain("value: string;");

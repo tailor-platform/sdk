@@ -14,6 +14,7 @@ import {
   type IndexDef,
   type TypeFeatures,
   type FieldInput,
+  type ExcludeNestedDBFields,
 } from "./types";
 import {
   type FieldOptions,
@@ -415,7 +416,8 @@ function _enum(
 }
 
 function object<
-  const F extends Record<string, TailorDBField<any, any, any>>,
+  const F extends Record<string, TailorDBField<any, any, any>> &
+    ExcludeNestedDBFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<
