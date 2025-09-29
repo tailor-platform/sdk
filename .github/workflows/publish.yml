@@ -44,8 +44,8 @@ jobs:
           node-version: "22"
           cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Install deps
+        uses: ./.github/actions/install-deps
 
       - name: Get latest tag and calculate new version
         if: github.event_name == 'workflow_dispatch'
@@ -123,6 +123,7 @@ jobs:
 
       - name: Set version from tag
         run: |
+          # Set version for tailor-sdk
           cd packages/tailor-sdk
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             pnpm version ${{ steps.calculate_version.outputs.new_version }} --no-git-tag-version
@@ -130,10 +131,32 @@ jobs:
             pnpm version from-git --no-git-tag-version
           fi
 
+          # Set version for create-tailor-sdk
+          cd ../create-tailor-sdk
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            pnpm version ${{ steps.calculate_version.outputs.new_version }} --no-git-tag-version
+          else
+            pnpm version from-git --no-git-tag-version
+          fi
+
+      - name: Update SDK version in templates
+        run: |
+          # Get the version that was just set
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ steps.calculate_version.outputs.new_version }}"
+          else
+            # Extract version from tag (remove 'v' prefix)
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+
+          # Run the set-sdk-version script for create-tailor-sdk templates
+          cd packages/create-tailor-sdk
+          node scripts/set-sdk-version.js "$VERSION"
+
       - name: Update npm
         run: npm install -g npm@latest
 
-      - name: Publish npm package
+      - name: Publish npm packages
         run: |
           # Use the publish tag determined during version calculation
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -149,8 +172,9 @@ jobs:
             fi
           fi
 
+          # Publish tailor-sdk / create-tailor-sdk
           if [[ "$TAG" == "latest" ]]; then
-            pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public
+            pnpm --filter @tailor-platform/tailor-sdk --filter @tailor-platform/create-tailor-sdk publish --no-git-checks --access=public
           else
-            pnpm --filter @tailor-platform/tailor-sdk publish --no-git-checks --access=public --tag "$TAG"
+            pnpm --filter @tailor-platform/tailor-sdk --filter @tailor-platform/create-tailor-sdk publish --no-git-checks --access=public --tag "$TAG"
           fi

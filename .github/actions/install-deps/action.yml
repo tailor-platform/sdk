@@ -18,3 +18,13 @@ runs:
     - name: Install dependencies
       run: pnpm install
       shell: bash
+
+    # Build SDK so that the bin entry points to a real dist file
+    - name: Build SDK package
+      run: pnpm exec turbo run build --filter @tailor-platform/tailor-sdk
+      shell: bash
+
+    # Recreate .bin links after build
+    - name: Re-install to create bin links
+      run: pnpm install --frozen-lockfile
+      shell: bash

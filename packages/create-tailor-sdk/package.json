@@ -1,0 +1,33 @@
+{
+  "name": "@tailor-platform/create-tailor-sdk",
+  "version": "0.0.0",
+  "description": "The package to create Tailor SDK projects",
+  "type": "module",
+  "bin": "dist/index.js",
+  "files": [
+    "dist",
+    "templates",
+    "templates/*/.gitignore"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "lint": "eslint --cache .",
+    "lint:fix": "eslint --cache --fix .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "0.11.0",
+    "citty": "0.1.6",
+    "execa": "9.6.0",
+    "picocolors": "1.1.1",
+    "pkg-types": "2.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.36.0",
+    "@types/node": "22.18.6",
+    "eslint": "9.36.0",
+    "tsdown": "0.15.2",
+    "typescript": "5.9.2",
+    "typescript-eslint": "8.44.0"
+  }
+}

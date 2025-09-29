@@ -31,12 +31,6 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Build SDK package
-        run: pnpm exec turbo run build
-
-      - name: Re-install to create bin links
-        run: pnpm install --frozen-lockfile
-
       - name: Create workspace
         run: |
           tailorctl workspace create --name "sdk-ci-${{ github.run_id }}" --region asia-northeast

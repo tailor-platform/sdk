@@ -16,18 +16,13 @@ Development kit for building applications on the Tailor Platform.
 
 ### 1. Create a new Tailor SDK project
 
-The easiest way to create a new SDK project is using the init command:
+The easiest way to create a new SDK project is using `@tailor-platform/create-tailor-sdk`:
 
 ```bash
-npx @tailor-platform/tailor-sdk init my-first-sdk
+pnpm exec create-tailor-sdk my-first-sdk --template hello-world
 ```
 
-For setup, select the following options:
-
-- `Select deployment region`: Choose `Asia Northeast`
-- `Select project template`: Choose `Basic`
-
-Once setup is complete, navigate to the newly created directory as prompted.
+Once setup is complete, navigate to the newly created directory.
 
 ```bash
 cd my-first-sdk
@@ -36,7 +31,6 @@ cd my-first-sdk
 The project includes the following key components:
 
 - `tailor.config.ts`: Tailor SDK configuration file
-- `src/tailordb/`: TailorDB service definitions directory
 - `src/resolvers/`: Pipeline service definitions directory
 
 ### 2. Deploy your project
@@ -51,7 +45,7 @@ tailorctl workspace create --name my-first-sdk --region asia-northeast
 Next, run the apply command to deploy your project:
 
 ```bash
-npm run deploy
+WORKSPACE_ID=<workspace_id> pnpm run deploy
 ```
 
 You can now open the GraphQL Playground and execute the `hello` query:
@@ -94,7 +88,7 @@ export default createQueryResolver(
 Deploy again and you'll see that the `hello` query response has been updated:
 
 ```bash
-npm run deploy
+WORKSPACE_ID=<workspace_id> pnpm run deploy
 ```
 
 ## Configuration
@@ -983,9 +977,6 @@ export default defineConfig({
 SDK provides the following CLI commands:
 
 ```bash
-# Initialize a new project
-npx @tailor-platform/tailor-sdk init [project-name]
-
 # Generate code (to .tailor-sdk/ and your generator outputs)
 npx @tailor-platform/tailor-sdk generate
 
