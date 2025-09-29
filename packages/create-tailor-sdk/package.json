@@ -13,7 +13,8 @@
     "build": "tsdown",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublish": "pnpm run build"
   },
   "dependencies": {
     "@clack/prompts": "0.11.0",
