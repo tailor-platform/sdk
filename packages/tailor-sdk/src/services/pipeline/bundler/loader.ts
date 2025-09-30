@@ -10,7 +10,7 @@ export class ResolverLoader
     resolverFilePath: string,
   ): Promise<Resolver<any, any, any, any, any, any> | null> {
     const resolverModule = await import(
-      `${pathToFileURL(resolverFilePath).toString()}?t=${new Date().getTime()}`
+      `${pathToFileURL(resolverFilePath).href}?t=${Date.now()}`
     );
     const resolver = resolverModule.default;
     if (!isResolver(resolver)) {

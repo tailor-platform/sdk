@@ -6,7 +6,7 @@ import { type ILoader } from "@/bundler";
 export class ExecutorLoader implements ILoader<Executor> {
   async load(executorFilePath: string): Promise<Executor | null> {
     const executorModule = await import(
-      `${pathToFileURL(executorFilePath).toString()}?t=${new Date().getTime()}`
+      `${pathToFileURL(executorFilePath).href}?t=${Date.now()}`
     );
     const executor = executorModule.default;
     if (!isExecutor(executor)) {

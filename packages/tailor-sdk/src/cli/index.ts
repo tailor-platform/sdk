@@ -2,63 +2,46 @@
 
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "citty";
-import { spawn } from "node:child_process";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import * as fs from "node:fs";
+import * as path from "node:path";
+import { pathToFileURL } from "node:url";
+import { register } from "node:module";
+import * as dotenv from "dotenv";
+
+import type { WorkspaceConfig } from "@/config";
+import { apply } from "@/apply";
+import { generate } from "@/generator";
+
 import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+register("tsx", import.meta.url, { data: {} });
 
-async function getTsxPath(): Promise<{
-  type: "bin" | "module" | "npx";
-  path: string;
-} | null> {
-  // First try to find tsx in node_modules/.bin
-  const localTsxPath = path.join(process.cwd(), "node_modules", ".bin", "tsx");
-  // Note: Use namespace import to avoid bundler renaming issues with existsSync.
-  if (fs.existsSync(localTsxPath)) {
-    return { type: "bin", path: localTsxPath };
+async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
+  const resolvedPath = path.resolve(process.cwd(), configPath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Configuration file not found: ${configPath}`);
   }
 
-  // For pnpm, try to find the actual tsx module in .pnpm directory
-  const pnpmDir = path.join(process.cwd(), "node_modules", ".pnpm");
-  if (fs.existsSync(pnpmDir)) {
-    // Look for tsx in .pnpm directory
-    const dirs = fs.readdirSync(pnpmDir);
-    const tsxDir = dirs.find((dir) => dir.startsWith("tsx@"));
-    if (tsxDir) {
-      const tsxPath = path.join(
-        pnpmDir,
-        tsxDir,
-        "node_modules",
-        "tsx",
-        "dist",
-        "cli.mjs",
-      );
-      if (fs.existsSync(tsxPath)) {
-        return { type: "module", path: tsxPath };
-      }
+  try {
+    const configModule = await import(pathToFileURL(resolvedPath).href);
+
+    if (!configModule || !configModule.default) {
+      throw new Error("Invalid Tailor config module: default export not found");
     }
+
+    return configModule.default as WorkspaceConfig;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("Cannot find module")
+    ) {
+      throw new Error(`Configuration file not found: ${configPath}`);
+    }
+
+    throw error;
   }
-
-  // Check if tsx is available via npx
-  return new Promise((resolve) => {
-    const child = spawn("npx", ["tsx", "--version"], {
-      stdio: "ignore",
-    });
-
-    child.on("error", () => resolve(null));
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve({ type: "npx", path: "npx" });
-      } else {
-        resolve(null);
-      }
-    });
-  });
 }
 
 const exec: (...args: CommandArgs) => Promise<void> = async (
@@ -66,73 +49,29 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
   options,
 ) => {
   try {
-    const tsxInfo = await getTsxPath();
-    if (!tsxInfo) {
-      console.error("Error: tsx is not installed or not available in PATH.");
-      process.exit(1);
-    }
-
-    const cliExecTsPath = path.join(__dirname, "exec.ts");
-    const cliExecMjsPath = path.join(__dirname, "exec.mjs");
-    const cliExecPath = fs.existsSync(cliExecTsPath)
-      ? cliExecTsPath
-      : fs.existsSync(cliExecMjsPath)
-        ? cliExecMjsPath
-        : null;
-    if (!cliExecPath) {
-      console.error(`Error: exec.ts or exec.mjs not found in ${__dirname}`);
-      process.exit(1);
-    }
-
-    const argsDef = commandArgs[command];
-    const args = [cliExecPath, command];
-    Object.entries(argsDef).forEach(([key, value]) => {
-      if (key in options) {
-        if (value.type === "boolean") {
-          if ((options as any)[key]) {
-            args.push(`--${key}`);
-          }
-        } else if (value.type === "string") {
-          args.push(`--${key}`, (options as any)[key]);
-        } else {
-          args.push((options as any)[key]);
-        }
+    if (options["env-file"]) {
+      const envPath = path.resolve(process.cwd(), options["env-file"]);
+      if (!fs.existsSync(envPath)) {
+        throw new Error(`Environment file not found: ${envPath}`);
       }
-    });
+      dotenv.config({ path: envPath });
+    }
 
-    let child;
+    const configPath = options.config || "tailor.config.ts";
+    const config = await loadConfig(configPath);
 
-    if (tsxInfo.type === "npx") {
-      // Use npx
-      child = spawn("npx", ["tsx", ...args], {
-        stdio: "inherit",
-        cwd: process.cwd(),
-      });
-    } else if (tsxInfo.type === "module") {
-      // Use node directly with the tsx module
-      child = spawn("node", [tsxInfo.path, ...args], {
-        stdio: "inherit",
-        cwd: process.cwd(),
-      });
+    if (command === "apply") {
+      await apply(config, options);
+    } else if (command === "generate") {
+      await generate(config, options);
     } else {
-      child = spawn(tsxInfo.path, [...args], {
-        stdio: "inherit",
-        cwd: process.cwd(),
-      });
+      throw new Error(`Unknown command: ${command}`);
     }
-
-    child.on("error", (error) => {
-      console.error("Failed to execute tsx:", error);
-      process.exit(1);
-    });
-
-    child.on("exit", (code) => {
-      if (code !== 0) {
-        process.exit(code || 1);
-      }
-    });
   } catch (error) {
     console.error(`Failed to ${command} configuration:`, error);
+    if (error instanceof Error && error.stack) {
+      console.error("Stack trace:", error.stack);
+    }
     process.exit(1);
   }
 };

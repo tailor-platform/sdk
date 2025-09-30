@@ -45,12 +45,13 @@ export class TailorDBService {
   async loadTypesForFile(typeFile: string, timestamp?: Date) {
     this.types[typeFile] = {};
     try {
-      const module = await import(
-        [
-          pathToFileURL(typeFile).toString(),
-          ...(timestamp ? [timestamp.getTime()] : []),
-        ].join("?t=")
-      );
+      const baseUrl = pathToFileURL(typeFile).href;
+      const moduleSpecifier =
+        timestamp === undefined
+          ? baseUrl
+          : `${baseUrl}?t=${timestamp.getTime()}`;
+
+      const module = await import(moduleSpecifier);
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];

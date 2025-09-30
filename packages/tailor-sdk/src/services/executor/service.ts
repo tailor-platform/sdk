@@ -80,12 +80,13 @@ export class ExecutorService {
 
   async loadExecutorForFile(executorFile: string, timestamp?: Date) {
     try {
-      const module = await import(
-        [
-          pathToFileURL(executorFile).toString(),
-          ...(timestamp ? [timestamp.getTime()] : []),
-        ].join("?t=")
-      );
+      const baseUrl = pathToFileURL(executorFile).href;
+      const moduleSpecifier =
+        timestamp === undefined
+          ? baseUrl
+          : `${baseUrl}?t=${timestamp.getTime()}`;
+
+      const module = await import(moduleSpecifier);
 
       const executor = module.default;
       if (this.isValidExecutor(executor)) {
