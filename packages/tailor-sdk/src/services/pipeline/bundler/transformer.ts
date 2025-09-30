@@ -5,16 +5,21 @@ import { type Resolver } from "../resolver";
 import { type ITransformer } from "@/bundler";
 import { trimSDKCode } from "@/bundler/utils";
 import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/bundler/wrapper";
+import { pathToFileURL } from "node:url";
 
-export class CodeTransformer implements ITransformer<Resolver> {
+export class CodeTransformer implements ITransformer {
   constructor() {}
 
-  transform(filePath: string, resolver: Resolver, tempDir: string): string[] {
+  async transform(filePath: string, tempDir: string): Promise<string[]> {
     const trimmedContent = trimSDKCode(filePath);
     const transformedPath = path.join(
       path.dirname(filePath),
       path.basename(filePath, ".js") + ".transformed.js",
     );
+
+    const resolver = (
+      await import(`${pathToFileURL(filePath)}?t=${new Date().getTime()}`)
+    ).default as Resolver;
     fs.writeFileSync(
       transformedPath,
       ml /* js */ `

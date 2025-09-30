@@ -90,8 +90,6 @@ export class ExecutorService {
       const executor = module.default;
       if (this.isValidExecutor(executor)) {
         this.executors[executorFile] = executor;
-      } else {
-        console.warn(`Invalid executor in file ${executorFile}`);
       }
     } catch (error) {
       console.error(`Failed to load type from ${executorFile}:`, error);

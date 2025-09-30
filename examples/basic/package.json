@@ -21,14 +21,12 @@
     "@tailor-platform/tailor-proto": "workspace:^",
     "@tailor-platform/tailor-sdk": "workspace:^",
     "date-fns": "^4.1.0",
-    "kysely": "0.27.6",
-    "sqlstring": "^2.3.3"
+    "kysely": "0.27.6"
   },
   "devDependencies": {
     "@connectrpc/connect": "^2.0.3",
     "@connectrpc/connect-node": "^2.0.3",
     "@types/node": "^22.15.3",
-    "@types/sqlstring": "^2.3.2",
     "dir-compare": "^4.2.0",
     "graphql": "^16.11.0",
     "graphql-request": "^7.2.0",

@@ -1,9 +1,9 @@
-export interface ILoader<T> {
-  load(filePath: string): Promise<T>;
+export interface Loader<T> {
+  load(filePath: string): Promise<T | null>;
 }
 
-export interface ITransformer<T> {
-  transform(filePath: string, item: T, tempDir: string): string[];
+export interface Transformer {
+  transform(filePath: string, tempDir: string): Promise<string[]>;
 }
 
 export interface BundlerConfig<T> {
@@ -11,8 +11,8 @@ export interface BundlerConfig<T> {
   serviceConfig: {
     files?: string[];
   };
-  loader: ILoader<T>;
-  transformer: ITransformer<T>;
+  loader: Loader<T>;
+  transformer: Transformer;
   outputDirs: {
     preBundle: string;
     postBundle: string;

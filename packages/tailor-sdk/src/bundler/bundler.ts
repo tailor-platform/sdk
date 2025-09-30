@@ -3,11 +3,11 @@ import * as fs from "node:fs";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/config";
-import { type BundlerConfig, type ILoader, type ITransformer } from "./types";
+import { type BundlerConfig, type Loader, type Transformer } from "./types";
 
 export class Bundler<T> {
-  private readonly loader: ILoader<T>;
-  private readonly transformer: ITransformer<T>;
+  private readonly loader: Loader<T>;
+  private readonly transformer: Transformer;
 
   constructor(private readonly config: BundlerConfig<T>) {
     this.loader = config.loader;
@@ -74,6 +74,10 @@ export class Bundler<T> {
   private async processFile(file: string): Promise<void> {
     const item = await this.loader.load(file);
 
+    if (!item) {
+      console.log(`Skipping file ${file} as it could not be loaded`);
+      return;
+    }
     // Check if this item should be processed
     if (this.config.shouldProcess && !this.config.shouldProcess(item)) {
       console.log(`Skipping item based on shouldProcess condition`);
@@ -82,7 +86,6 @@ export class Bundler<T> {
 
     // Extract name from item - assume it has a 'name' property
     const itemName = (item as any).name;
-
     const outputFile = path.join(
       getDistDir(),
       this.config.outputDirs.preBundle,
@@ -91,9 +94,8 @@ export class Bundler<T> {
 
     await this.preBundle(file, outputFile);
 
-    const transformedFiles = this.transformer.transform(
+    const transformedFiles = await this.transformer.transform(
       outputFile,
-      item,
       getDistDir(),
     );
 

@@ -6,7 +6,7 @@ import {
   writeFileSync,
   readFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { CodeTransformer } from "./transformer";
 import multiline from "multiline-ts";
 
@@ -33,39 +33,41 @@ describe("CodeTransformer", () => {
   // These tests should be moved to a separate test file for bundler/utils.ts
 
   describe("transform", () => {
-    it("resolverのステップを適切にエクスポートする", () => {
-      const testCode = multiline /* ts */ `
-        import { format } from "date-fns";
+    const writeResolverModule = (fileName: string, source: string) => {
+      const filePath = join(tempDir, fileName);
+      writeFileSync(filePath, source);
+      return filePath;
+    };
 
-        const getDB = () => ({ query: () => {} });
+    it("resolverのステップを適切にエクスポートする", async () => {
+      const resolverName = "testResolver";
+      const moduleSource = multiline /* ts */ `
+        const resolver = {
+          name: "${resolverName}",
+          steps: [
+            ["fn", "step1", () => "step1 result", {}],
+            ["sql", "step2", async () => ({ id: 1 }), { dbNamespace: "test" }],
+            ["gql", "step3", () => {}, {}],
+          ],
+          options: {
+            defaults: {
+              dbNamespace: "test",
+            },
+          },
+        };
+
+        export default resolver;
       `.trim();
 
-      const testFile = join(tempDir, "resolver.js");
-      writeFileSync(testFile, testCode);
+      const testFile = writeResolverModule("resolver.js", moduleSource);
 
-      // モックResolverインスタンスを作成
-      const mockResolver = {
-        name: "testResolver",
-        steps: [
-          ["fn", "step1", () => "step1 result", {}],
-          ["sql", "step2", async () => ({ id: 1 }), { dbNamespace: "test" }],
-          ["gql", "step3", () => {}, {}], // gqlステップは無視される
-        ],
-        options: {
-          defaults: {
-            dbNamespace: "test",
-          },
-        },
-      } as any;
-
-      const resultFiles = transformer.transform(
-        testFile,
-        mockResolver,
-        tempDir,
-      );
+      const resultFiles = await transformer.transform(testFile, tempDir);
 
       // 変換されたファイルが作成されることを確認
-      const transformedFile = join(tempDir, "resolver.transformed.js");
+      const transformedFile = join(
+        tempDir,
+        `${basename(testFile, ".js")}.transformed.js`,
+      );
       expect(existsSync(transformedFile)).toBe(true);
 
       const transformedContent = readFileSync(transformedFile, "utf-8");
@@ -79,33 +81,32 @@ describe("CodeTransformer", () => {
 
       // ステップファイルが作成されることを確認
       expect(resultFiles).toHaveLength(2); // fn + sql の2つ
-      expect(resultFiles[0]).toContain("testResolver__step1.js");
-      expect(resultFiles[1]).toContain("testResolver__step2.js");
+      expect(resultFiles[0]).toContain(`${resolverName}__step1.js`);
+      expect(resultFiles[1]).toContain(`${resolverName}__step2.js`);
     });
 
-    it("SQLステップに適切なラッパーを生成する", () => {
-      const testCode = /* ts */ `const test = "hello";`;
-      const testFile = join(tempDir, "resolver.js");
-      writeFileSync(testFile, testCode);
-
-      const mockResolver = {
-        name: "testResolver",
-        steps: [
-          [
-            "sql",
-            "sqlStep",
-            async () => ({ result: "test" }),
-            { dbNamespace: "mydb" },
+    it("SQLステップに適切なラッパーを生成する", async () => {
+      const resolverName = "testResolver";
+      const moduleSource = multiline /* ts */ `
+        const resolver = {
+          name: "${resolverName}",
+          steps: [
+            [
+              "sql",
+              "sqlStep",
+              async () => ({ result: "test" }),
+              { dbNamespace: "mydb" },
+            ],
           ],
-        ],
-        options: {},
-      } as any;
+          options: {},
+        };
 
-      const resultFiles = transformer.transform(
-        testFile,
-        mockResolver,
-        tempDir,
-      );
+        export default resolver;
+      `.trim();
+
+      const testFile = writeResolverModule("resolver-sql.js", moduleSource);
+
+      const resultFiles = await transformer.transform(testFile, tempDir);
 
       const stepFile = resultFiles[0];
       const stepContent = readFileSync(stepFile, "utf-8");
@@ -115,28 +116,30 @@ describe("CodeTransformer", () => {
       expect(stepContent).toContain("$tailor_resolver_step__sqlStep");
     });
 
-    it("デフォルトのdbNamespaceを使用する", () => {
-      const testCode = /* ts */ `const test = "hello";`;
-      const testFile = join(tempDir, "resolver.js");
-      writeFileSync(testFile, testCode);
-
-      const mockResolver = {
-        name: "testResolver",
-        steps: [
-          ["sql", "sqlStep", async () => ({ result: "test" }), {}], // dbNamespaceなし
-        ],
-        options: {
-          defaults: {
-            dbNamespace: "defaultDb",
+    it("デフォルトのdbNamespaceを使用する", async () => {
+      const resolverName = "testResolver";
+      const moduleSource = multiline /* ts */ `
+        const resolver = {
+          name: "${resolverName}",
+          steps: [
+            ["sql", "sqlStep", async () => ({ result: "test" }), {}],
+          ],
+          options: {
+            defaults: {
+              dbNamespace: "defaultDb",
+            },
           },
-        },
-      } as any;
+        };
 
-      const resultFiles = transformer.transform(
-        testFile,
-        mockResolver,
-        tempDir,
+        export default resolver;
+      `.trim();
+
+      const testFile = writeResolverModule(
+        "resolver-default-db.js",
+        moduleSource,
       );
+
+      const resultFiles = await transformer.transform(testFile, tempDir);
 
       const stepFile = resultFiles[0];
       const stepContent = readFileSync(stepFile, "utf-8");
@@ -144,20 +147,26 @@ describe("CodeTransformer", () => {
       expect(stepContent).toContain('"defaultDb"');
     });
 
-    it("dbNamespaceが設定されていない場合はエラーを投げる", () => {
-      const testCode = /* ts */ `const test = "hello";`;
-      const testFile = join(tempDir, "resolver.js");
-      writeFileSync(testFile, testCode);
+    it("dbNamespaceが設定されていない場合はエラーを投げる", async () => {
+      const resolverName = "testResolver";
+      const moduleSource = multiline /* ts */ `
+        const resolver = {
+          name: "${resolverName}",
+          steps: [["sql", "sqlStep", async () => ({ result: "test" }), {}]],
+          options: {},
+        };
 
-      const mockResolver = {
-        name: "testResolver",
-        steps: [["sql", "sqlStep", async () => ({ result: "test" }), {}]],
-        options: {},
-      } as any;
+        export default resolver;
+      `.trim();
 
-      expect(() => {
-        transformer.transform(testFile, mockResolver, tempDir);
-      }).toThrow("Database namespace is not defined");
+      const testFile = writeResolverModule(
+        "resolver-missing-db.js",
+        moduleSource,
+      );
+
+      await expect(transformer.transform(testFile, tempDir)).rejects.toThrow(
+        `Database namespace is not defined at ${resolverName} > sqlStep`,
+      );
     });
   });
 

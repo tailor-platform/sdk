@@ -46,7 +46,7 @@ function replaceAbsolutePaths(dirPath: string) {
 
     if (stat.isDirectory()) {
       replaceAbsolutePaths(fullPath);
-    } else if (item.endsWith(".js")) {
+    } else if (item.endsWith(".js") || item.endsWith(".js.map")) {
       replaceAbsolutePathsInFile(fullPath);
     }
   }
@@ -55,11 +55,13 @@ function replaceAbsolutePaths(dirPath: string) {
 function replaceAbsolutePathsInFile(filePath: string) {
   const content = fs.readFileSync(filePath, "utf-8");
 
-  const importPattern = /from "\/.*\/node_modules\/(.*)"/g;
-  const modifiedContent = content.replace(importPattern, (_, pkgPath) => {
-    return `from "/dummy/path/${pkgPath}"`;
-  });
-  fs.writeFileSync(filePath, modifiedContent, "utf-8");
+  fs.writeFileSync(
+    filePath,
+    content.replace(/"\/[^"]*\/node_modules\/([^"]*)"/g, (_, pkgPath) => {
+      return `"/dummy/path/node_modules/${pkgPath}"`;
+    }),
+    "utf-8",
+  );
 }
 
 /**

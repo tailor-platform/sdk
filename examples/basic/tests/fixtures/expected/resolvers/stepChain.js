@@ -1,6 +1,6 @@
 import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
-import { format } from "/dummy/path/date-fns/index.js";
-import { DummyDriver, Kysely, PostgresAdapter, PostgresIntrospector, PostgresQueryCompiler } from "/dummy/path/kysely/dist/esm/index.js";
+import { format } from "/dummy/path/node_modules/date-fns/index.js";
+import { DummyDriver, Kysely, PostgresAdapter, PostgresIntrospector, PostgresQueryCompiler } from "/dummy/path/node_modules/kysely/dist/esm/index.js";
 
 //#region generated/tailordb.ts
 const getDB = () => {

@@ -5,17 +5,21 @@ import { type Executor } from "../types";
 import { type ITransformer } from "@/bundler";
 import { trimSDKCode } from "@/bundler/utils";
 import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/bundler/wrapper";
+import { pathToFileURL } from "node:url";
 
-export class ExecutorTransformer implements ITransformer<Executor> {
+export class ExecutorTransformer implements ITransformer {
   constructor() {}
 
-  transform(filePath: string, executor: Executor, tempDir: string): string[] {
+  async transform(filePath: string, tempDir: string): Promise<string[]> {
     const trimmedContent = trimSDKCode(filePath);
     const transformedPath = path.join(
       path.dirname(filePath),
       path.basename(filePath, ".js") + ".transformed.js",
     );
 
+    const executor = (
+      await import(`${pathToFileURL(filePath)}?t=${new Date().getTime()}`)
+    ).default as Executor;
     // Check if this is a function executor
     if (!["function", "job_function"].includes(executor.exec.manifest.Kind)) {
       // For non-function executors (webhook, gql), return empty array

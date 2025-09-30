@@ -822,16 +822,13 @@ Executors support different execution methods depending on your use case:
 Execute JavaScript/TypeScript functions directly. Pass an options object:
 
 ```typescript
-import sqlstring from "sqlstring";
-
 ...
 .executeFunction({
   fn: async ({ newRecord, client }) => {
-    const query = sqlstring.format(
+    const result = await client.exec(
       /* sql */ `SELECT * FROM "Order" WHERE customerId = ?`,
       [newRecord.id],
     );
-    const result = await client.exec(query);
     console.log(`Found ${result.length} orders for customer`);
   },
   dbNamespace: "my-db", // optional

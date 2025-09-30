@@ -4,15 +4,13 @@ import { isExecutor } from "../utils";
 import { type ILoader } from "@/bundler";
 
 export class ExecutorLoader implements ILoader<Executor> {
-  async load(executorFilePath: string): Promise<Executor> {
+  async load(executorFilePath: string): Promise<Executor | null> {
     const executorModule = await import(
-      pathToFileURL(executorFilePath).toString()
+      `${pathToFileURL(executorFilePath).toString()}?t=${new Date().getTime()}`
     );
     const executor = executorModule.default;
     if (!isExecutor(executor)) {
-      throw new Error(
-        `The provided module does not export an Executor instance. path: ${executorFilePath}`,
-      );
+      return null;
     }
 
     return executor;

@@ -1,5 +1,3 @@
-import sql from "/dummy/path/sqlstring/index.js";
-
 //#region constants.ts
 const defaultMachineUserRole = "4293a799-4398-55e6-a19a-fe8427d1a415";
 
@@ -45,9 +43,18 @@ const defaultGqlPermission = [{
 //#region tailordb/user.ts
 
 //#endregion
+//#region executors/userRecordLog.ts
+var userRecordLog_default = async ({ newRecord, client }) => {
+	const record = await client.execOne(`select * from User where id = ?`, [newRecord.id]);
+	console.log(`New user created: ${record.name} (${record.email})`);
+};
+
+//#endregion
 //#region executors/userCreated.ts
 
 //#endregion
 
 // Export the executor function
-export const __executor_function = async({newRecord,client})=>{const record=await client.execOne(sql.format(`select * from User where id = ?`,[newRecord.id]));console.log(`New user created: ${record.name} (${record.email})`)};
+export const __executor_function = async (args) => {
+		await userRecordLog_default(args);
+	};
