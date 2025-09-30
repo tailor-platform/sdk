@@ -24,6 +24,11 @@ const availableTemplates = async () => {
     .map((entry) => entry.name);
 };
 
+const templateHints: Record<string, string | undefined> = {
+  "hello-world": "Initial project to get started with Tailor SDK",
+  "inventory-management": "Simple inventory management system",
+};
+
 const validateName = (name: string) => {
   if (name.length < 3 || name.length > 30) {
     return "Project name must be between 3 and 30 characters long.";
@@ -68,7 +73,7 @@ export const collectContext = async ({
 
   if (!name) {
     const ret = await text({
-      message: "Input your project name",
+      message: "📝 What's your project name?",
       validate: validateName,
     });
     if (isCancel(ret)) {
@@ -77,15 +82,16 @@ export const collectContext = async ({
     }
     name = ret;
   } else {
-    log.info(`Using project name: ${name}`);
+    log.info(`📦 Project: ${name}`);
   }
 
   if (!template) {
     const options = (await availableTemplates()).map((value) => ({
       value,
+      hint: templateHints[value],
     }));
     const ret = await select({
-      message: "Select a template",
+      message: "🎨 Choose your template",
       options,
     });
     if (isCancel(ret)) {
@@ -94,7 +100,7 @@ export const collectContext = async ({
     }
     template = ret;
   } else {
-    log.info(`Using template: ${template}`);
+    log.info(`🎯 Template: ${template}`);
   }
 
   return {

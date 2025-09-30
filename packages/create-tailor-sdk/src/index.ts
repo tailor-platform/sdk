@@ -30,7 +30,7 @@ const main = async () => {
       },
     },
     async run({ args }) {
-      intro(pc.bold("create-tailor-sdk"));
+      intro(pc.bold(pc.cyan("✨ Welcome to Tailor SDK")));
 
       const ctx = await collectContext({
         name: args.name,
@@ -43,7 +43,17 @@ const main = async () => {
 
       await initProject();
 
-      outro("Project created successfully!");
+      outro(
+        pc.green("🎉 Project created successfully!") +
+          "\n\n" +
+          pc.dim("Next steps:") +
+          "\n" +
+          `  ${pc.cyan(`cd ${ctx.projectName}`)}` +
+          "\n" +
+          `  ${pc.dim("Check README.md and deploy your project")}` +
+          "\n\n" +
+          pc.dim("Learn more: https://docs.tailor.tech"),
+      );
     },
   });
 

@@ -4,10 +4,10 @@ import { Context } from "./context";
 
 export const copyProject = async (ctx: Context) => {
   const s = spinner();
-  s.start("Copying template files");
+  s.start("📋 Copying template files...");
   await cp(ctx.templateDir, ctx.projectDir, {
     recursive: true,
     force: true,
   });
-  s.stop("Template files copied");
+  s.stop("✅ Template copied");
 };

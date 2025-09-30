@@ -23,18 +23,18 @@ export const initProject = async () => {
   const packageManager = detectPackageManager();
   if (packageManager) {
     const s = spinner();
-    s.start(`Installing dependencies with ${packageManager}`);
+    s.start(`📦 Installing dependencies with ${packageManager}...`);
     await execa(packageManager, ["install"]);
-    s.stop("Dependencies installed");
+    s.stop("✅ Dependencies installed");
   } else {
     log.warn(
-      "Could not detect package manager, skipping dependency installation.",
+      "⚠️  Could not detect package manager, skipping dependency installation",
     );
   }
 
   if (!(await isGitRepository())) {
     const s = spinner();
-    s.start("Initializing git repository");
+    s.start("🔧 Initializing git repository...");
     await execa("git", ["init"]);
     await execa("git", ["add", "."]);
     await execa("git", [
@@ -42,8 +42,10 @@ export const initProject = async () => {
       "-m",
       "Initial commit (by create-tailor-sdk)",
     ]);
-    s.stop("Git repository initialized");
+    s.stop("✅ Git initialized");
   } else {
-    log.warn("Project is already inside a git repository, skipping git init.");
+    log.warn(
+      "⚠️  Already inside a git repository, skipping git initialization",
+    );
   }
 };
