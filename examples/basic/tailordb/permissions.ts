@@ -5,7 +5,9 @@ import type {
 } from "@tailor-platform/tailor-sdk";
 import { defaultMachineUserRole } from "../constants";
 
-export type PermissionUser = { roleId: string };
+export interface PermissionUser {
+  roleId: string;
+}
 const defaultMachineUser = [
   { user: "roleId" },
   "=",

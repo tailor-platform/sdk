@@ -104,7 +104,7 @@ function buildTreeStructureWithContentComparison(
     );
   }
 
-  if (comparison && comparison.diffSet) {
+  if (comparison?.diffSet) {
     for (const diff of comparison.diffSet) {
       if (
         diff.state === "distinct" &&
@@ -112,8 +112,8 @@ function buildTreeStructureWithContentComparison(
         diff.type2 === "file"
       ) {
         // 相対パスを取得
-        const relativePath = diff.relativePath || "";
-        const fileName = diff.name1 || diff.name2 || "";
+        const relativePath = diff.relativePath;
+        const fileName = diff.name1 ?? diff.name2 ?? "";
 
         // ツリー構造内の対応するノードを見つけて更新
         updateNodeStatus(root, relativePath, fileName, "content-differs");
@@ -197,7 +197,7 @@ function scanDirectoryWithContentComparison(
 /**
  * ツリー構造をレンダリングする
  */
-function renderTree(node: TreeNode, prefix: string = ""): string {
+function renderTree(node: TreeNode, prefix = ""): string {
   const lines: string[] = [];
 
   // ルートノードの場合は特別な処理

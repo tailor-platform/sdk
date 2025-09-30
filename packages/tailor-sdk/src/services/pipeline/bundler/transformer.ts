@@ -65,7 +65,7 @@ export class CodeTransformer implements ITransformer {
                 globalThis.main = ${stepFunctionVariable};
               `;
             break;
-          case "sql":
+          case "sql": {
             const dbNamespace =
               options?.dbNamespace || resolver.options?.defaults?.dbNamespace;
             if (!dbNamespace) {
@@ -83,6 +83,7 @@ export class CodeTransformer implements ITransformer {
                 )};
               `;
             break;
+          }
           default:
             return [];
         }

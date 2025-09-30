@@ -1,24 +1,21 @@
-import * as tseslint from "typescript-eslint";
-import { defineConfig } from "eslint/config";
+import eslint from "@eslint/js";
+import { defineConfig, globalIgnores } from "eslint/config";
+import tseslint from "typescript-eslint";
 
 export default defineConfig([
+  globalIgnores(["dist/"]),
+  eslint.configs.recommended,
+  tseslint.configs.recommended,
   {
-    ignores: [
-      "dist/**",
-      "node_modules/**",
-      ".tailor-sdk/**",
-      "eslint.config.js",
-    ],
-  },
-  ...tseslint.configs.recommended,
-  {
-    files: ["src/**/*.{ts,tsx,cts}", "tsdown.config.ts", "vitest.config.ts"],
     languageOptions: {
       parserOptions: {
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
-        project: "./tsconfig.json",
       },
     },
+  },
+  {
+    files: ["src/**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
     rules: {
       "@typescript-eslint/consistent-type-imports": [
         "error",
@@ -30,5 +27,9 @@ export default defineConfig([
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
     },
+  },
+  {
+    files: ["**/*.js"],
+    extends: [tseslint.configs.disableTypeChecked],
   },
 ]);

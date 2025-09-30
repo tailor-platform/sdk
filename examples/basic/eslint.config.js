@@ -1,50 +1,24 @@
-import js from "@eslint/js";
-import globals from "globals";
+import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
-import eslintConfigPrettier from "eslint-config-prettier/flat";
+import { defineConfig, globalIgnores } from "eslint/config";
 
-export default [
+export default defineConfig([
+  globalIgnores([".tailor-sdk/", "generated/", "tests/fixtures/"]),
+  eslint.configs.recommended,
+  tseslint.configs.recommended,
+  tseslint.configs.stylisticTypeChecked,
   {
-    ignores: [
-      "node_modules/**",
-      ".tailor-sdk/**",
-      "generated/**",
-      "tests/fixtures/**",
-    ],
-  },
-  {
-    files: ["**/*.{js,mjs,cjs}"],
-    ...js.configs.recommended,
-    languageOptions: { globals: globals.browser },
-  },
-  {
-    files: ["**/*.{ts,mts,cts}"],
-    ...tseslint.configs.base,
     languageOptions: {
-      ...tseslint.configs.base.languageOptions,
-      globals: globals.browser,
       parserOptions: {
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
-        project: "./tsconfig.json",
       },
     },
   },
-  ...tseslint.configs.recommended.map((config) => ({
-    ...config,
-    files: ["**/*.{ts,mts,cts}"],
-  })),
-  eslintConfigPrettier,
+  // Disable type-checked linting for root config files.
+  // https://typescript-eslint.io/troubleshooting/typed-linting/#how-do-i-disable-type-checked-linting-for-a-file
   {
-    files: ["**/*.{ts,mts,cts}"],
-    rules: {
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        {
-          varsIgnorePattern: "^_",
-          argsIgnorePattern: "^_",
-        },
-      ],
-      "@typescript-eslint/no-explicit-any": "warn",
-    },
+    files: ["eslint.config.js"],
+    extends: [tseslint.configs.disableTypeChecked],
   },
-];
+]);

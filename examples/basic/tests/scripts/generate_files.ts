@@ -99,8 +99,8 @@ export async function generateExpectedFiles(): Promise<void> {
  */
 async function listGeneratedFiles(
   dirPath: string,
-  depth: number = 0,
-  maxDepth: number = 3,
+  depth = 0,
+  maxDepth = 3,
 ): Promise<void> {
   if (depth > maxDepth) return;
 
