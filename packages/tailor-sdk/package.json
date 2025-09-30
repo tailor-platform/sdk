@@ -37,7 +37,6 @@
     "dotenv": "^17.2.1",
     "es-toolkit": "^1.38.0",
     "inflection": "^3.0.2",
-    "inquirer": "^12.7.0",
     "madge": "^8.0.0",
     "multiline-ts": "^4.0.1",
     "oxc-parser": "^0.90.0",

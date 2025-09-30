@@ -28,7 +28,7 @@ export const initProject = async () => {
     s.stop("✅ Dependencies installed");
   } else {
     log.warn(
-      "⚠️  Could not detect package manager, skipping dependency installation",
+      "⚠️ Could not detect package manager, skipping dependency installation",
     );
   }
 
@@ -44,8 +44,6 @@ export const initProject = async () => {
     ]);
     s.stop("✅ Git initialized");
   } else {
-    log.warn(
-      "⚠️  Already inside a git repository, skipping git initialization",
-    );
+    log.warn("⚠️ Already inside a git repository, skipping git initialization");
   }
 };

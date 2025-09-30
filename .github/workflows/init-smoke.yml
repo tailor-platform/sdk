@@ -35,7 +35,7 @@ jobs:
       - name: Run init non-interactively
         run: |
           # Create into a temp folder under repo root so local bin is used
-          npx tailor-sdk init tmp-init-app -y --skip-install --template basic --region asia-northeast
+          npx tailor-sdk init tmp-init-app --template hello-world
           ls -la tmp-init-app
 
       - name: Verify generated files
@@ -43,5 +43,4 @@ jobs:
           test -f tmp-init-app/tailor.config.ts
           test -f tmp-init-app/package.json
           test -f tmp-init-app/tsconfig.json
-          test -f tmp-init-app/src/tailordb/index.ts
-          test -f tmp-init-app/src/resolvers/hello/resolver.ts
+          test -f tmp-init-app/src/resolvers/hello.ts

@@ -974,6 +974,9 @@ export default defineConfig({
 SDK provides the following CLI commands:
 
 ```bash
+# Initialize a new project using create-tailor-sdk
+npx @tailor-platform/tailor-sdk init
+
 # Generate code (to .tailor-sdk/ and your generator outputs)
 npx @tailor-platform/tailor-sdk generate
 
