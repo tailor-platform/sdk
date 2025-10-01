@@ -3,7 +3,6 @@ import * as path from "node:path";
 import ml from "multiline-ts";
 import { type Executor } from "../types";
 import { type ITransformer } from "@/bundler";
-import { trimSDKCode } from "@/bundler/utils";
 import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/bundler/wrapper";
 import { pathToFileURL } from "node:url";
 
@@ -11,7 +10,7 @@ export class ExecutorTransformer implements ITransformer {
   constructor() {}
 
   async transform(filePath: string, tempDir: string): Promise<string[]> {
-    const trimmedContent = trimSDKCode(filePath);
+    const sourceText = fs.readFileSync(filePath).toString();
     const transformedPath = path.join(
       path.dirname(filePath),
       path.basename(filePath, ".js") + ".transformed.js",
@@ -43,7 +42,7 @@ export class ExecutorTransformer implements ITransformer {
     fs.writeFileSync(
       transformedPath,
       ml /* js */ `
-      ${trimmedContent}
+      ${sourceText}
 
       // Export the executor function
       export const __executor_function = ${functionRef.toString()};

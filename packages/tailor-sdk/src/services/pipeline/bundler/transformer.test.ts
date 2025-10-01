@@ -29,9 +29,6 @@ describe("CodeTransformer", () => {
     }
   });
 
-  // Note: trimSDKCode tests have been removed as this method has been moved to bundler/utils.ts
-  // These tests should be moved to a separate test file for bundler/utils.ts
-
   describe("transform", () => {
     const writeResolverModule = (fileName: string, source: string) => {
       const filePath = join(tempDir, fileName);

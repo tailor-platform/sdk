@@ -1,3 +1,5 @@
+import { createExecutor, db, recordCreatedTrigger } from "@tailor-platform/tailor-sdk";
+
 //#region constants.ts
 const defaultMachineUserRole = "4293a799-4398-55e6-a19a-fe8427d1a415";
 
@@ -38,9 +40,28 @@ const defaultGqlPermission = [{
 
 //#endregion
 //#region tailordb/role.ts
+const role = db.type("Role", { name: db.string() }).permission(defaultPermission).gqlPermission(defaultGqlPermission);
 
 //#endregion
 //#region tailordb/user.ts
+const user = db.type("User", {
+	name: db.string(),
+	email: db.string().unique(),
+	status: db.string({ optional: true }),
+	department: db.string({ optional: true }),
+	roleId: db.uuid().relation({
+		type: "n-1",
+		toward: { type: role }
+	}),
+	...db.fields.timestamps()
+}).files({ avatar: "profile image" }).indexes({
+	fields: ["name", "department"],
+	unique: false
+}, {
+	fields: ["status", "createdAt"],
+	unique: false,
+	name: "user_status_created_idx"
+}).permission(defaultPermission).gqlPermission(defaultGqlPermission);
 
 //#endregion
 //#region executors/userRecordLog.ts
@@ -51,8 +72,15 @@ var userRecordLog_default = async ({ newRecord, client }) => {
 
 //#endregion
 //#region executors/userCreated.ts
+var userCreated_default = createExecutor("user-created", "Triggered when a new user is created").on(recordCreatedTrigger(user, ({ newRecord }) => newRecord.email.endsWith("@tailor.tech"))).executeFunction({
+	fn: async (args) => {
+		await userRecordLog_default(args);
+	},
+	dbNamespace: "tailordb"
+});
 
 //#endregion
+export { userCreated_default as default };
 
 // Export the executor function
 export const __executor_function = async (args) => {
