@@ -1,9 +1,9 @@
 /**
- * オブジェクトがResolverインスタンスかどうかを判定する
- * ESモジュール環境でのinstanceofチェック問題を回避するため、プロパティベースチェックを使用
+ * Determines whether an object is a Resolver instance
+ * Uses property-based checking to avoid instanceof issues in ES module environments
  *
- * @param obj 判定対象のオブジェクト
- * @returns Resolverオブジェクトの場合true、そうでなければfalse
+ * @param obj The object to check
+ * @returns true if the object is a Resolver, false otherwise
  */
 export function isResolver(value: unknown): boolean {
   if (value == null || typeof value !== "object") {

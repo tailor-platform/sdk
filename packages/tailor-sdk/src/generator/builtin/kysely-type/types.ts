@@ -1,5 +1,5 @@
 /**
- * Kysely型生成専用の型定義
+ * Type definitions dedicated to Kysely type generation.
  */
 
 export interface KyselyTypeMetadata {

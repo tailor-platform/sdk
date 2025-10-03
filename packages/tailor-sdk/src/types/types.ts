@@ -9,7 +9,6 @@ import { type TailorField } from "./type";
 
 export type Region = "asia-northeast" | "us-west";
 
-// Secret manager types
 export interface SecretValue {
   VaultName: string;
   SecretKey: string;
@@ -41,7 +40,6 @@ export type TailorToTs = {
   nested: Record<string, unknown>;
 } & Record<TailorFieldType, unknown>;
 
-// Manifest用の型マッピング（mapTypeToScalarの代替）
 export const tailorToManifestScalar = {
   string: "string",
   integer: "integer",
@@ -55,7 +53,6 @@ export const tailorToManifestScalar = {
   nested: "nested",
 } as const;
 
-// Common types for operator and SDK
 export interface Script {
   expr: string;
 }

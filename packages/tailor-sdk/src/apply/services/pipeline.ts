@@ -312,7 +312,7 @@ interface ResolverManifestMetadata {
   outputType: string;
   queryType: "query" | "mutation";
   pipelines: PipelineInfo[];
-  outputMapper?: string; // 関数の文字列表現
+  outputMapper?: string; // String representation of the function
   inputFields?: Record<
     string,
     { type: string; required: boolean; array: boolean }
@@ -321,7 +321,7 @@ interface ResolverManifestMetadata {
     string,
     { type: string; required: boolean; array: boolean }
   >;
-  resolverManifest?: any; // 生成されたResolverManifest
+  resolverManifest?: any; // Generated ResolverManifest
 }
 
 interface PipelineInfo {
@@ -372,10 +372,10 @@ function processResolver(
     },
   );
 
-  // Input型のフィールド情報を抽出
+  // Extract field information for Input type
   const inputFields = extractTypeFields(resolver.input);
 
-  // Output型のフィールド情報を抽出
+  // Extract field information for Output type
   const outputFields = resolver.output
     ? extractTypeFields(resolver.output)
     : undefined;
@@ -446,7 +446,7 @@ function generateResolverManifest(
       },
     ];
 
-  // Input構造を生成（Fields配列を含む）
+  // Generate Input structure (including Fields array)
   const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] = [
     {
       name: "input",
@@ -466,7 +466,7 @@ function generateResolverManifest(
     },
   ];
 
-  // Response構造を生成（Fields配列を含む）
+  // Generate Response structure (including Fields array)
   const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = {
     type: {
       kind: "UserDefined",
@@ -484,7 +484,7 @@ function generateResolverManifest(
   };
 
   return {
-    authorization: "true==true", // デフォルト値
+    authorization: "true==true", // Default value
     description: `${name} resolver`,
     inputs: inputs,
     name: name,
@@ -688,7 +688,7 @@ function extractTypeFields(
         array: metadata.array === true,
       };
 
-      // nested objectの場合、fieldsプロパティも含める
+      // For nested objects, include the fields property as well
       if (metadata.type === "nested" && fieldObj.fields) {
         fields[fieldName].fields = fieldObj.fields;
       }

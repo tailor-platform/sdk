@@ -60,7 +60,7 @@ describe("CodeTransformer", () => {
 
       const resultFiles = await transformer.transform(testFile, tempDir);
 
-      // 変換されたファイルが作成されることを確認
+      // Verify that the transformed file is created
       const transformedFile = join(
         tempDir,
         `${basename(testFile, ".js")}.transformed.js`,
@@ -74,10 +74,10 @@ describe("CodeTransformer", () => {
       expect(transformedContent).toContain(
         "export const $tailor_resolver_step__step2",
       );
-      expect(transformedContent).not.toContain("$tailor_resolver_step__step3"); // gqlは除外
+      expect(transformedContent).not.toContain("$tailor_resolver_step__step3"); // gql is excluded
 
-      // ステップファイルが作成されることを確認
-      expect(resultFiles).toHaveLength(2); // fn + sql の2つ
+      // Verify that step files are created
+      expect(resultFiles).toHaveLength(2); // Two files: fn + sql
       expect(resultFiles[0]).toContain(`${resolverName}__step1.js`);
       expect(resultFiles[1]).toContain(`${resolverName}__step2.js`);
     });
@@ -173,8 +173,8 @@ describe("CodeTransformer", () => {
 
   describe("helper functions", () => {
     it("stepVariableName: 正しい変数名を生成する", () => {
-      // stepVariableNameは現在モジュール内の関数なのでテストできない
-      // 将来的にクラスメソッドにする場合のためのプレースホルダー
+      // stepVariableName is currently a module-level function and cannot be tested
+      // Placeholder for when it becomes a class method in the future
     });
   });
 });

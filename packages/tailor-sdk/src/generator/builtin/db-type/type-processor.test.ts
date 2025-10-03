@@ -45,7 +45,7 @@ describe("TypeProcessor", () => {
 
     const result = await TypeProcessor.processType(userSetting);
 
-    // 外部キー自体と参照先オブジェクトの両方が生成されることを確認
+    // Verify that both the foreign key itself and the referenced object are generated
     console.log("Generated typeDef:", result.typeDef);
     expect(result.typeDef).toContain("userID: string;");
     expect(result.typeDef).toContain("user: User;");
@@ -97,13 +97,13 @@ describe("TypeProcessor", () => {
     };
     const result = await TypeProcessor.processTypes(processedTypes);
 
-    // Userに逆参照フィールド"setting"が追加されていることを確認
+    // Verify that back-reference field "setting" is added to User
     expect(result).toContain("export type User = {");
     expect(result).toContain("id: string;");
     expect(result).toContain("name?: string | null;");
     expect(result).toContain("setting?: UserSetting | null;");
 
-    // UserSettingにも正しいフィールドが含まれていることを確認
+    // Verify that UserSetting also contains the correct fields
     expect(result).toContain("export type UserSetting = {");
     expect(result).toContain('language: "jp" | "en";');
   });
@@ -125,7 +125,7 @@ describe("TypeProcessor", () => {
     };
     const result = await TypeProcessor.processTypes(processedTypes);
 
-    // Userに逆参照フィールド"orders"が配列として追加されていることを確認
+    // Verify that back-reference field "orders" is added to User as an array
     expect(result).toContain("export type User = {");
     expect(result).toContain("orders?: Order[] | null;");
   });

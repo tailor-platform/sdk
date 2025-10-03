@@ -171,9 +171,9 @@ describe("GenerationManager", () => {
     it("完全な生成プロセスを実行", async () => {
       await manager.generate({ watch: false });
 
-      // ジェネレーターは設定されているが、実際のタイプファイルが存在しないため0になる可能性がある
+      // Generators are configured but may be 0 if actual type files do not exist
       expect(manager.generators.length).toBeGreaterThan(0);
-      // applicationsは実際のファイルが存在しない場合は空になる
+      // applications will be empty if actual files do not exist
       expect(manager.applications).toBeDefined();
     });
 
@@ -242,10 +242,10 @@ describe("GenerationManager", () => {
 
       manager.generators.push(errorGenerator);
 
-      // エラーが発生しても全体の処理は続行されることを確認
+      // Verify that processing continues even if an error occurs
       await manager.processGenerators();
 
-      // 正常なジェネレーターは処理され、エラージェネレーターのメソッドも呼ばれることを確認
+      // Verify that normal generators are processed and error generator methods are also called
       expect(errorGenerator.processType).toHaveBeenCalled();
       expect(errorGenerator.processResolver).toHaveBeenCalled();
     });
@@ -277,7 +277,7 @@ describe("GenerationManager", () => {
     });
 
     it("単一ジェネレーターの完全処理", async () => {
-      // generatorResultsを初期化
+      // Initialize generatorResults
       manager.generatorResults = {};
 
       const processTailorDBNamespaceSpy = vi.spyOn(
@@ -298,7 +298,7 @@ describe("GenerationManager", () => {
     });
 
     it("typesとresolversが並列処理される", async () => {
-      // generatorResultsを初期化
+      // Initialize generatorResults
       manager.generatorResults = {};
 
       const start = Date.now();
@@ -483,7 +483,7 @@ describe("GenerationManager", () => {
     });
 
     it("複数ファイルの並列書き込み", async () => {
-      // 以前の呼び出しをクリア
+      // Clear previous calls
       vi.mocked(fs.writeFile).mockClear();
 
       const multiFileGenerator = {
@@ -590,14 +590,14 @@ describe("GenerationManager", () => {
 
     it("ファイル変更時のコールバック処理", async () => {
       manager.initGenerators();
-      // TestGeneratorにprocessTailorDBNamespaceメソッドがあることを確認
+      // Verify that TestGenerator has processTailorDBNamespace method
       const testGen = manager.generators.find(
         (g: any) => g.id === "test-generator",
       );
       expect(testGen).toBeDefined();
       expect(typeof testGen.processTailorDBNamespace).toBe("function");
 
-      // applicationsの初期化
+      // Initialize applications
       manager.applications = {
         testApp: {
           tailordbNamespaces: {
@@ -616,7 +616,7 @@ describe("GenerationManager", () => {
         },
       };
 
-      // generatorResults を初期化
+      // Initialize generatorResults
       manager.generatorResults = {
         "test-generator": {
           application: {
@@ -641,7 +641,7 @@ describe("GenerationManager", () => {
       const callback = callArgs[2];
       expect(typeof callback).toBe("function");
 
-      // コールバック実行時に有効なファイルタイプデータが存在することを確認
+      // Verify that valid file type data exists when callback is executed
       await callback({ timestamp: new Date() }, { affectedFiles: ["test.ts"] });
     });
   });
@@ -731,7 +731,7 @@ describe("Integration Tests", () => {
     const GenerationManager = (indexModule as any).GenerationManager;
     const manager = new GenerationManager(fullConfig);
 
-    // initGeneratorsを明示的に呼び出し
+    // Explicitly call initGenerators
     manager.initGenerators();
 
     await expect(manager.generate({ watch: false })).resolves.not.toThrow();

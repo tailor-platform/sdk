@@ -11,7 +11,7 @@ import { TypeProcessor } from "./type-processor";
 export const KyselyGeneratorID = "@tailor/kysely-type";
 
 /**
- * Kysely型生成システムのメインエントリーポイント
+ * Main entry point for the Kysely type generation system.
  */
 export class KyselyGenerator
   implements

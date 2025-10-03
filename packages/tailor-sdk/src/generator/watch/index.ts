@@ -4,60 +4,60 @@ import { glob } from "node:fs/promises";
 import * as path from "node:path";
 
 /**
- * ファイル変更イベントの種類
+ * Types of file change events.
  */
 type FileChangeEvent = "add" | "change" | "unlink";
 
 /**
- * ファイル変更情報
+ * File change information.
  */
 interface FileChangeInfo {
-  /** 変更されたファイルのパス */
+  /** Path of the changed file. */
   filePath: string;
-  /** 変更イベントの種類 */
+  /** Type of change event. */
   event: FileChangeEvent;
-  /** 変更時刻 */
+  /** Timestamp of the change. */
   timestamp: Date;
 }
 
 /**
- * 監視対象グループの定義
+ * Definition of a watch group.
  */
 interface WatchGroup {
-  /** グループの一意識別子 */
+  /** Unique identifier of the group. */
   id: string;
-  /** 監視対象のファイルパターン（glob形式） */
+  /** File patterns to watch (glob format). */
   patterns: string[];
-  /** グループに含まれるファイルの絶対パス一覧 */
+  /** List of absolute file paths in the group. */
   files: Set<string>;
 }
 
 /**
- * 依存関係グラフのノード
+ * Node in the dependency graph.
  */
 interface DependencyNode {
-  /** ファイルの絶対パス */
+  /** Absolute path of the file. */
   filePath: string;
-  /** このファイルが依存しているファイル一覧 */
+  /** List of files this file depends on. */
   dependencies: Set<string>;
-  /** このファイルに依存しているファイル一覧 */
+  /** List of files that depend on this file. */
   dependents: Set<string>;
 }
 
 /**
- * 影響範囲計算結果
+ * Impact analysis result.
  */
 interface ImpactAnalysisResult {
-  /** 変更されたファイル */
+  /** Changed file. */
   changedFile: string;
-  /** 影響を受けるファイル一覧（変更されたファイルに依存している全てのファイル） */
+  /** List of affected files (all files depending on the changed file). */
   affectedFiles: string[];
-  /** 影響を受ける監視グループ一覧 */
+  /** List of affected watch groups. */
   affectedGroups: string[];
 }
 
 /**
- * 変更通知コールバック関数の型
+ * Type of the change notification callback.
  */
 type ChangeCallback = (
   changeInfo: FileChangeInfo,
@@ -65,54 +65,54 @@ type ChangeCallback = (
 ) => void | Promise<void>;
 
 /**
- * エラーハンドリングコールバック関数の型
+ * Type of the error handling callback.
  */
 type ErrorCallback = (error: WatcherError) => void;
 
 /**
- * 監視システムのオプション
+ * Options for the watcher system.
  */
 interface WatcherOptions {
-  /** chokidarのオプション */
+  /** Options for chokidar. */
   chokidarOptions?: any;
-  /** madgeのオプション */
+  /** Options for madge. */
   madgeOptions?: any;
-  /** 依存関係グラフの更新間隔（ミリ秒） */
+  /** Update interval for the dependency graph (milliseconds). */
   dependencyUpdateInterval?: number;
-  /** デバウンス時間（ミリ秒） */
+  /** Debounce duration (milliseconds). */
   debounceTime?: number;
-  /** 循環依存の検出を有効にするか */
+  /** Whether to enable circular dependency detection. */
   detectCircularDependencies?: boolean;
 }
 
 /**
- * 監視状態
+ * Watcher status.
  */
 interface WatchStatus {
-  /** 監視中かどうか */
+  /** Whether watching is active. */
   isWatching: boolean;
-  /** 監視対象グループ数 */
+  /** Number of watch groups. */
   groupCount: number;
-  /** 監視対象ファイル数 */
+  /** Number of watched files. */
   fileCount: number;
-  /** 依存関係グラフのノード数 */
+  /** Number of nodes in the dependency graph. */
   dependencyNodeCount: number;
 }
 
 /**
- * グラフ統計情報
+ * Graph statistics.
  */
 interface GraphStats {
-  /** ノード数 */
+  /** Number of nodes. */
   nodeCount: number;
-  /** エッジ数 */
+  /** Number of edges. */
   edgeCount: number;
-  /** 循環依存数 */
+  /** Number of circular dependencies. */
   circularDependencyCount: number;
 }
 
 /**
- * エラーコード
+ * Error codes.
  */
 const WatcherErrorCode = {
   DEPENDENCY_ANALYSIS_FAILED: "DEPENDENCY_ANALYSIS_FAILED",
@@ -125,7 +125,7 @@ type WatcherErrorCode =
   (typeof WatcherErrorCode)[keyof typeof WatcherErrorCode];
 
 /**
- * 監視システム固有のエラー
+ * Watcher-specific error.
  */
 export class WatcherError extends Error {
   constructor(
@@ -140,7 +140,7 @@ export class WatcherError extends Error {
 }
 
 /**
- * 依存関係グラフの管理を専門に行うクラス
+ * Class dedicated to managing the dependency graph.
  */
 export class DependencyGraphManager {
   private graph: Map<string, DependencyNode> = new Map();
@@ -149,7 +149,7 @@ export class DependencyGraphManager {
   constructor(private readonly options: any = {}) {}
 
   /**
-   * 指定されたファイル群から依存関係グラフを構築
+   * Build the dependency graph from the given files.
    */
   async buildGraph(filePaths: string[]): Promise<void> {
     try {
@@ -198,7 +198,7 @@ export class DependencyGraphManager {
   }
 
   /**
-   * 特定のファイルに依存している全てのファイルを取得（全階層）
+   * Get every file that depends on the specified file (all levels).
    */
   getDependents(filePath: string): string[] {
     const visited = new Set<string>();
@@ -206,7 +206,7 @@ export class DependencyGraphManager {
   }
 
   /**
-   * 特定のファイルが依存している全てのファイルを取得（全階層）
+   * Get every file the specified file depends on (all levels).
    */
   getDependencies(filePath: string): string[] {
     const visited = new Set<string>();
@@ -214,7 +214,7 @@ export class DependencyGraphManager {
   }
 
   /**
-   * 循環依存を検出
+   * Detect circular dependencies.
    */
   findCircularDependencies(): string[][] {
     if (!this.madgeInstance) return [];
@@ -227,7 +227,7 @@ export class DependencyGraphManager {
   }
 
   /**
-   * グラフにノードを追加
+   * Add a node to the graph.
    */
   addNode(filePath: string): void {
     const absolutePath = path.resolve(filePath);
@@ -241,7 +241,7 @@ export class DependencyGraphManager {
   }
 
   /**
-   * グラフからノードを削除
+   * Remove a node from the graph.
    */
   removeNode(filePath: string): void {
     const absolutePath = path.resolve(filePath);
@@ -266,7 +266,7 @@ export class DependencyGraphManager {
   }
 
   /**
-   * グラフの統計情報を取得
+   * Get graph statistics.
    */
   getGraphStats(): GraphStats {
     let edgeCount = 0;
@@ -318,7 +318,7 @@ export class DependencyGraphManager {
 }
 
 /**
- * chokidarとmadgeを使った依存関係監視システム
+ * Dependency watching system backed by chokidar and madge.
  */
 class DependencyWatcher {
   private chokidarWatcher: any | null = null;
@@ -339,7 +339,7 @@ class DependencyWatcher {
   }
 
   /**
-   * 監視システムを初期化
+   * Initialize the watcher system.
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -402,7 +402,7 @@ class DependencyWatcher {
   }
 
   /**
-   * 監視対象グループを追加
+   * Add a watch group.
    */
   async addWatchGroup(
     groupId: string,
@@ -443,7 +443,7 @@ class DependencyWatcher {
   }
 
   /**
-   * 監視対象グループを削除
+   * Remove a watch group.
    */
   async removeWatchGroup(groupId: string): Promise<void> {
     const watchGroup = this.watchGroups.get(groupId);
@@ -463,7 +463,7 @@ class DependencyWatcher {
   }
 
   /**
-   * 監視を開始
+   * Start watching.
    */
   async start(): Promise<void> {
     if (!this.isInitialized) {
@@ -473,7 +473,7 @@ class DependencyWatcher {
   }
 
   /**
-   * 監視を停止
+   * Stop watching.
    */
   async stop(): Promise<void> {
     if (this.chokidarWatcher) {
@@ -491,14 +491,14 @@ class DependencyWatcher {
   }
 
   /**
-   * エラーハンドリングコールバックを設定
+   * Set the error handling callback.
    */
   onError(callback: ErrorCallback): void {
     this.errorCallback = callback;
   }
 
   /**
-   * 依存関係グラフを手動で更新
+   * Manually refresh the dependency graph.
    */
   async updateDependencyGraph(): Promise<void> {
     const allFiles: string[] = [];
@@ -519,7 +519,7 @@ class DependencyWatcher {
   }
 
   /**
-   * 特定のファイルの影響範囲を計算
+   * Compute the impact scope of a specific file.
    */
   calculateImpact(filePath: string): ImpactAnalysisResult {
     const cacheKey = `impact:${filePath}`;
@@ -530,7 +530,7 @@ class DependencyWatcher {
       this.setCacheValue(cacheKey, affectedFiles);
     }
 
-    // 変更されたファイル自体も影響を受けるファイルに含める
+    // Include the changed file itself in the affected files
     const allAffectedFiles = [filePath, ...affectedFiles];
     const affectedGroups = this.findAffectedGroups(allAffectedFiles);
 
@@ -542,14 +542,14 @@ class DependencyWatcher {
   }
 
   /**
-   * 循環依存を検出
+   * Detect circular dependencies.
    */
   detectCircularDependencies(): string[][] {
     return this.dependencyGraphManager.findCircularDependencies();
   }
 
   /**
-   * 現在の監視状態を取得
+   * Retrieve the current watcher status.
    */
   getWatchStatus(): WatchStatus {
     let fileCount = 0;
@@ -711,7 +711,7 @@ class DependencyWatcher {
   }
 
   /**
-   * SIGINTシグナルハンドラーを設定
+   * Register signal handlers.
    */
   private setupSignalHandlers(): void {
     if (this.signalHandlersRegistered) return;
@@ -733,7 +733,7 @@ class DependencyWatcher {
   }
 
   /**
-   * シグナルハンドラーを削除
+   * Remove signal handlers.
    */
   private removeSignalHandlers(): void {
     if (!this.signalHandlersRegistered) return;

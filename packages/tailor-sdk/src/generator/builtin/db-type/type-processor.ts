@@ -23,7 +23,7 @@ export class TypeProcessor {
   static async processTypes(
     types: Record<string, DbTypeMetadata>,
   ): Promise<string> {
-    // 型定義を結合
+    // Combine type definitions
     const typeDefs = Object.values(types)
       .map((type) => type.typeDef)
       .join("\n\n");
@@ -102,13 +102,13 @@ export class TypeProcessor {
 
     const fields: string[] = [];
 
-    // 1. 外部キー自体（元の型で保持）
+    // 1. The foreign key itself (retained with original type)
     const originalFieldType = this.getOriginalFieldType(fieldDef);
     fields.push(
       this.generateFieldDefinition(fieldName, originalFieldType, fieldDef),
     );
 
-    // 2. 参照先オブジェクト（nameMapの前方名を利用）
+    // 2. Referenced object (using forward name from nameMap)
     const relationFieldName = refCfg?.nameMap?.[0];
     if (relationFieldName && relationFieldName !== fieldName) {
       fields.push(
@@ -170,13 +170,13 @@ export class TypeProcessor {
     const fieldType = metadata?.type;
     const isArray = metadata?.array === true;
 
-    // リレーションフィールドの検出（field.referenceを使用）
+    // Detect relation fields (using field.reference)
     if (fieldDef.reference) {
       const targetType = fieldDef.reference.type?.name;
       if (targetType) {
-        // 循環参照の検出と対処
+        // Detect and handle circular references
         if (processing.has(targetType)) {
-          return targetType; // 循環参照の場合は型名のみ返す
+          return targetType; // Return only type name for circular references
         }
         return targetType;
       }

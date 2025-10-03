@@ -178,7 +178,7 @@ describe("KyselyGenerator統合テスト", () => {
         types: typeMetadata,
       });
 
-      // 共通のimportが含まれている
+      // Common imports are included
       expect(result).toContain(
         'import { SqlClient } from "@tailor-platform/tailor-sdk";',
       );
@@ -187,19 +187,19 @@ describe("KyselyGenerator統合テスト", () => {
       expect(result).toContain("DummyDriver,");
       expect(result).toContain("Kysely,");
 
-      // 型定義が含まれている
+      // Type definitions are included
       expect(result).toContain("export interface User {");
       expect(result).toContain("export interface Post {");
 
-      // DBインターフェースが生成されている
+      // DB interface is generated
       expect(result).toContain("interface DB {");
       expect(result).toContain("User: User;");
       expect(result).toContain("Post: Post;");
 
-      // kyselyWrapperが含まれている
+      // kyselyWrapper is included
       expect(result).toContain("export async function kyselyWrapper");
 
-      // ファイル末尾に改行がある
+      // File ends with newline
       expect(result.endsWith("\n")).toBe(true);
     });
 
@@ -313,7 +313,7 @@ export async function kyselyWrapper() {}
     it("無効な型定義でエラーが発生しても適切に処理する", async () => {
       const invalidType = {
         name: "Invalid",
-        fields: null, // 無効なフィールド
+        fields: null, // Invalid field
         options: {},
         referenced: [],
         metadata: {} as any,

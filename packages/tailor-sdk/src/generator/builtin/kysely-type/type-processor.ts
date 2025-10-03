@@ -3,11 +3,11 @@ import { type KyselyTypeMetadata } from "./types";
 import multiline from "multiline-ts";
 
 /**
- * TailorDBTypeをKysely型メタデータに変換するプロセッサー
+ * Processor that converts a TailorDBType into Kysely type metadata.
  */
 export class TypeProcessor {
   /**
-   * TailorDBTypeをKyselyTypeMetadataに変換
+   * Convert a TailorDBType into KyselyTypeMetadata.
    */
   static async processType(type: TailorDBType): Promise<KyselyTypeMetadata> {
     const typeDef = this.generateTableInterface(type);
@@ -19,7 +19,7 @@ export class TypeProcessor {
   }
 
   /**
-   * テーブルインターフェースを生成
+   * Generate the table interface.
    */
   private static generateTableInterface(type: TailorDBType): string {
     const fields: string[] = ["id: Generated<string>;"];
@@ -67,7 +67,7 @@ export class TypeProcessor {
   }
 
   /**
-   * DBインターフェースを生成
+   * Generate the DB interface.
    */
   private static generateDBInterface(types: KyselyTypeMetadata[]): string {
     return multiline /* ts */ `
@@ -78,10 +78,10 @@ export class TypeProcessor {
   }
 
   /**
-   * TailorDBの型をKysely型にマッピング
+   * Map TailorDB types to Kysely types.
    */
   private static mapTailorDBTypeToKysely(fieldDef: any): string {
-    // メタデータから型情報を取得
+    // Get type information from metadata
     const metadata = fieldDef.metadata;
     const fieldType = metadata?.type;
 
@@ -114,7 +114,7 @@ export class TypeProcessor {
         return "string";
       }
       case "nested": {
-        // nestedの場合、fieldsプロパティからネストした型を生成
+        // For nested types, generate nested type from fields property
         const fields = fieldDef.fields || fieldDef.fields;
         if (fields && typeof fields === "object") {
           return this.processNestedObjectType(fields, 1);
@@ -122,12 +122,12 @@ export class TypeProcessor {
         return "string";
       }
       default:
-        return "string"; // デフォルトはstring
+        return "string"; // Default to string
     }
   }
 
   /**
-   * フィールドがオプショナルかどうかを判定
+   * Determine whether a field is optional.
    */
   private static isOptional(fieldDef: any): boolean {
     const metadata = fieldDef.metadata;
@@ -135,7 +135,7 @@ export class TypeProcessor {
   }
 
   /**
-   * フィールドが配列かどうかを判定
+   * Determine whether a field is an array.
    */
   private static isArray(fieldDef: any): boolean {
     const metadata = fieldDef.metadata;
@@ -143,7 +143,7 @@ export class TypeProcessor {
   }
 
   /**
-   * ネストしたオブジェクト型を再帰的に処理
+   * Recursively process nested object types.
    */
   private static processNestedObjectType(
     fields: any,

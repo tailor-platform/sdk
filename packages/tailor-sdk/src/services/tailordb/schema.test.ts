@@ -719,19 +719,19 @@ describe("TailorDBType self relation テスト", () => {
       }),
     });
 
-    // parentID: forward 名は parent（ID suffix を除去したデフォルト）
+    // parentID: forward name is parent (default with ID suffix removed)
     const parentRef = (TestType as any).fields.parentID.reference!;
     expect(parentRef.type.name).toBe("TestType");
     expect(parentRef.nameMap[0]).toBe("parent");
     expect(parentRef.key).toBe("id");
 
-    // dependId: forward 名は as 指定の dependsOn、1-1 のため unique が付与される
+    // dependId: forward name is dependsOn as specified by 'as', unique is set because it's 1-1
     const dependsRef = (TestType as any).fields.dependId.reference!;
     expect(dependsRef.type.name).toBe("TestType");
     expect(dependsRef.nameMap[0]).toBe("dependsOn");
     expect((TestType as any).fields.dependId.metadata.unique).toBe(true);
 
-    // referenced マップに backward が登録される
+    // backward is registered in the referenced map
     expect((TestType as any).referenced.children).toEqual([
       TestType,
       "parentID",
@@ -741,7 +741,7 @@ describe("TailorDBType self relation テスト", () => {
       "dependId",
     ]);
 
-    // 外部キーのメタ情報が自身の型名で設定される
+    // Foreign key metadata is set with its own type name
     expect((TestType as any).fields.parentID.metadata.foreignKeyType).toBe(
       "TestType",
     );
@@ -752,20 +752,20 @@ describe("TailorDBType self relation テスト", () => {
 
   it("backward未指定時は型名に基づくデフォルト（単数/複数）が設定される", () => {
     const A = db.type("Node", {
-      // 多対1（unique でない）: 後方は複数形（nodes）
+      // Many-to-one (non-unique): backward is plural (nodes)
       parentID: db.uuid().relation({ type: "n-1", toward: { type: "self" } }),
-      // 1対1（unique）: 後方は単数形（node）
+      // One-to-one (unique): backward is singular (node)
       pairId: db.uuid().relation({ type: "1-1", toward: { type: "self" } }),
     });
 
-    // forward はフィールド名由来
+    // forward is derived from field name
     expect((A as any).fields.parentID.reference!.nameMap[0]).toBe("parent");
     expect((A as any).fields.pairId.reference!.nameMap[0]).toBe("pair");
 
-    // backward のデフォルト: Node -> camelize("Node") = "node"
-    // parentID は non-unique のため pluralize("node"): "nodes"
+    // backward default: Node -> camelize("Node") = "node"
+    // parentID is non-unique, so pluralize("node"): "nodes"
     expect((A as any).referenced.nodes).toEqual([A, "parentID"]);
-    // pairId は unique のため singularize("node"): "node"
+    // pairId is unique, so singularize("node"): "node"
     expect((A as any).referenced.node).toEqual([A, "pairId"]);
   });
 });

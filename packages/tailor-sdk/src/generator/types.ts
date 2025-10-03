@@ -13,19 +13,19 @@ export interface GeneratorResult {
   errors?: string[];
 }
 
-// TailorDB用のnamespace結果
+// Namespace results for TailorDB
 export interface TailorDBNamespaceResult<T> {
   namespace: string;
   types: T;
 }
 
-// Pipeline用のnamespace結果
+// Namespace results for Pipeline
 export interface PipelineNamespaceResult<R> {
   namespace: string;
   resolvers: R;
 }
 
-// application毎のgenerator入力
+// Generator input for each application
 export interface GeneratorInput<T, R> {
   applicationNamespace: string;
   tailordb: TailorDBNamespaceResult<T>[];
@@ -36,7 +36,7 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any> {
   readonly id: string;
   readonly description: string;
 
-  // 個別処理（application、service種別、namespace情報を受け取る）
+  // Individual processing (receives application, service type, and namespace information)
   processType(args: {
     type: TailorDBType;
     applicationNamespace: string;
@@ -51,7 +51,7 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any> {
 
   processExecutor(executor: Executor): E | Promise<E>;
 
-  // namespace毎のまとめ処理（オプション、service種別毎）
+  // Aggregation processing per namespace (optional, per service type)
   processTailorDBNamespace?(args: {
     applicationNamespace: string;
     namespace: string;
@@ -64,7 +64,7 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any> {
     resolvers: Record<string, R>;
   }): Rs | Promise<Rs>;
 
-  // 最終統合処理 - application毎の結果配列を受け取る
+  // Final aggregation processing - receives result array for each application
   aggregate(args: {
     inputs: GeneratorInput<Ts, Rs>[];
     executorInputs: E[];

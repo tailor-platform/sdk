@@ -23,7 +23,7 @@ type Workspace = ReturnType<typeof defineWorkspace>;
 export class GenerationManager {
   public readonly workspace: Workspace;
   private generators: CodeGenerator<any, any, any, any>[] = [];
-  // application毎、service種別毎、namespace毎に整理
+  // Organized by application, service type, and namespace
   private applications: Record<
     string,
     {
@@ -76,7 +76,7 @@ export class GenerationManager {
       this.workspace.config.id || this.workspace.config.name,
     );
 
-    // application毎のデータ構造を初期化
+    // Initialize data structure for each application
     for (const app of this.workspace.applications) {
       const appNamespace = app.name;
       this.applications[appNamespace] = {
@@ -151,7 +151,7 @@ export class GenerationManager {
     await this.processGenerators();
   }
 
-  // generator毎、application毎、service種別毎、namespace毎の結果を格納
+  // Store results for each generator, application, service type, and namespace
   private generatorResults: Record<
     /* generator */ string,
     {
