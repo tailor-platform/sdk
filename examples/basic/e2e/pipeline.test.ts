@@ -132,31 +132,12 @@ describe("dataplane", () => {
 
   describe("stepChain", async () => {
     test("prepare data", async () => {
-      const createRole = gql`
-        mutation {
-          createRole(input: { name: "admin" }) {
-            id
-            name
-          }
-        }
-      `;
-      interface CreateRole {
-        createRole: {
-          id: string;
-          name: string;
-        };
-      }
-      const createRoleResult =
-        await graphQLClient.rawRequest<CreateRole>(createRole);
-      expect(createRoleResult.errors).toBeUndefined();
-      const roleId = createRoleResult.data.createRole.id;
-
       const createUser = gql`
         mutation {
           createUser(input: {
             name: "alice"
             email: "alice-${randomUUID()}@example.com"
-            roleId: "${roleId}"
+            role: ADMIN
           }) {
             id
             name

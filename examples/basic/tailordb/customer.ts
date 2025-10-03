@@ -34,5 +34,4 @@ export const customer = db
     ],
   })
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type customer = typeof customer;
+  .gqlPermission(defaultGqlPermission);

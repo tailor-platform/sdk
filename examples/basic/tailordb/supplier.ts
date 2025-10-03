@@ -18,5 +18,4 @@ export const supplier = db
     ...db.fields.timestamps(),
   })
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type supplier = typeof supplier;
+  .gqlPermission(defaultGqlPermission);

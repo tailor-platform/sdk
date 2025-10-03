@@ -86,11 +86,6 @@ export interface PurchaseOrder {
   updatedAt: Timestamp | null;
 }
 
-export interface Role {
-  id: Generated<string>;
-  name: string;
-}
-
 export interface SalesOrder {
   id: Generated<string>;
   customerID: string;
@@ -139,7 +134,7 @@ export interface User {
   email: string;
   status: string | null;
   department: string | null;
-  roleId: string;
+  role: "ADMIN" | "USER";
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -157,7 +152,6 @@ export interface DB {
   Invoice: Invoice;
   NestedProfile: NestedProfile;
   PurchaseOrder: PurchaseOrder;
-  Role: Role;
   SalesOrder: SalesOrder;
   SalesOrderCreated: SalesOrderCreated;
   Selfie: Selfie;

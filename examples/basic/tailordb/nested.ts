@@ -22,4 +22,4 @@ export const nestedProfile = db
     archived: db.bool({ optional: true }),
   })
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
+  .gqlPermission(defaultGqlPermission);

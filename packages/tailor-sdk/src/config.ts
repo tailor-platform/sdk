@@ -1,6 +1,6 @@
 import type { TailorDBServiceInput } from "@/services/tailordb/types";
 import type { PipelineResolverServiceInput } from "@/services/pipeline/types";
-import type { AuthServiceInput } from "@/services/auth/types";
+import type { AuthConfig } from "@/services/auth/types";
 import type { ExecutorServiceInput } from "@/services/executor/types";
 import { type IdPServiceInput } from "./services/idp/types";
 import type { StaticWebsiteServiceInput } from "@/services/staticwebsite/types";
@@ -22,7 +22,7 @@ export interface AppConfig {
   db?: TailorDBServiceInput;
   pipeline?: PipelineResolverServiceInput;
   idp?: IdPServiceInput;
-  auth?: AuthServiceInput;
+  auth?: AuthConfig;
 }
 
 export type WorkspaceConfig = (

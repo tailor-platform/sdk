@@ -2,64 +2,62 @@ import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 
-import {
-  type CreateAuthIDPConfigRequestSchema,
-  type CreateAuthMachineUserRequestSchema,
-  type CreateAuthOAuth2ClientRequestSchema,
-  type CreateAuthSCIMConfigRequestSchema,
-  type CreateAuthSCIMResourceRequestSchema,
-  type CreateAuthServiceRequestSchema,
-  type CreateTenantConfigRequestSchema,
-  type CreateUserProfileConfigRequestSchema,
-  type DeleteAuthIDPConfigRequestSchema,
-  type DeleteAuthMachineUserRequestSchema,
-  type DeleteAuthOAuth2ClientRequestSchema,
-  type DeleteAuthSCIMConfigRequestSchema,
-  type DeleteAuthSCIMResourceRequestSchema,
-  type DeleteAuthServiceRequestSchema,
-  type DeleteTenantConfigRequestSchema,
-  type DeleteUserProfileConfigRequestSchema,
-  type UpdateAuthIDPConfigRequestSchema,
-  type UpdateAuthMachineUserRequestSchema,
-  type UpdateAuthOAuth2ClientRequestSchema,
-  type UpdateAuthSCIMConfigRequestSchema,
-  type UpdateAuthSCIMResourceRequestSchema,
-  type UpdateTenantConfigRequestSchema,
-  type UpdateUserProfileConfigRequestSchema,
+import type {
+  CreateAuthIDPConfigRequestSchema,
+  CreateAuthMachineUserRequestSchema,
+  CreateAuthOAuth2ClientRequestSchema,
+  CreateAuthSCIMConfigRequestSchema,
+  CreateAuthSCIMResourceRequestSchema,
+  CreateAuthServiceRequestSchema,
+  CreateTenantConfigRequestSchema,
+  CreateUserProfileConfigRequestSchema,
+  DeleteAuthIDPConfigRequestSchema,
+  DeleteAuthMachineUserRequestSchema,
+  DeleteAuthOAuth2ClientRequestSchema,
+  DeleteAuthSCIMConfigRequestSchema,
+  DeleteAuthSCIMResourceRequestSchema,
+  DeleteAuthServiceRequestSchema,
+  DeleteTenantConfigRequestSchema,
+  DeleteUserProfileConfigRequestSchema,
+  UpdateAuthIDPConfigRequestSchema,
+  UpdateAuthMachineUserRequestSchema,
+  UpdateAuthOAuth2ClientRequestSchema,
+  UpdateAuthSCIMConfigRequestSchema,
+  UpdateAuthSCIMResourceRequestSchema,
+  UpdateTenantConfigRequestSchema,
+  UpdateUserProfileConfigRequestSchema,
 } from "@tailor-proto/tailor/v1/auth_pb";
 import {
   AuthIDPConfig_AuthType,
-  type AuthIDPConfig_ConfigSchema,
-  type AuthIDPConfigSchema,
-  AuthOAuth2Client_GrantType,
   AuthOAuth2Client_ClientType,
-  type AuthOAuth2ClientSchema,
+  AuthOAuth2Client_GrantType,
   AuthSCIMAttribute_Mutability,
   AuthSCIMAttribute_Type,
   AuthSCIMAttribute_Uniqueness,
-  type AuthSCIMAttributeSchema,
   AuthSCIMConfig_AuthorizationType,
-  type AuthSCIMConfigSchema,
-  type AuthSCIMResourceSchema,
   TenantProviderConfig_TenantProviderType,
-  type TenantProviderConfigSchema,
   UserProfileProviderConfig_UserProfileProviderType,
-  type UserProfileProviderConfigSchema,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import {
-  type AuthService,
-  type BuiltinIdP,
-  type IdProviderConfig,
-  type OAuth2Client,
-  type SCIMAttribute,
-  type SCIMConfig,
-  type SCIMResource,
-  type TenantProvider,
-  type TenantProviderConfig,
-  type UserProfileProvider,
-  type UserProfileProviderConfig,
+import type {
+  AuthIDPConfig_ConfigSchema,
+  AuthIDPConfigSchema,
+  AuthOAuth2ClientSchema,
+  AuthSCIMAttributeSchema,
+  AuthSCIMConfigSchema,
+  AuthSCIMResourceSchema,
+  TenantProviderConfigSchema,
+  UserProfileProviderConfigSchema,
+} from "@tailor-proto/tailor/v1/auth_resource_pb";
+import type {
+  AuthService,
+  BuiltinIdP,
+  IdProviderConfig,
+  OAuth2Client,
+  SCIMAttribute,
+  SCIMConfig,
+  SCIMResource,
+  ValueOperand,
 } from "@/services";
-import { type ValueOperand } from "@/services/tailordb/permission";
 import { type Workspace } from "@/workspace";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
@@ -82,21 +80,21 @@ export async function applyAuth(
 
     // IdPConfigs
     for (const create of changeSet.idpConfig.creates) {
-      if (create.idpConfig.Config.Kind === "BuiltInIdP") {
+      if (create.idpConfig.config.kind === "BuiltInIdP") {
         create.request.idpConfig!.config = await protoBuiltinIdPConfig(
           client,
           create.request.workspaceId!,
-          create.idpConfig.Config,
+          create.idpConfig.config,
         );
       }
       await client.createAuthIDPConfig(create.request);
     }
     for (const update of changeSet.idpConfig.updates) {
-      if (update.idpConfig.Config.Kind === "BuiltInIdP") {
+      if (update.idpConfig.config.kind === "BuiltInIdP") {
         update.request.idpConfig!.config = await protoBuiltinIdPConfig(
           client,
           update.request.workspaceId!,
-          update.idpConfig.Config,
+          update.idpConfig.config,
         );
       }
       await client.updateAuthIDPConfig(update.request);
@@ -231,6 +229,7 @@ export async function planAuth(
   const auths: Readonly<AuthService>[] = [];
   for (const app of workspace.applications) {
     if (app.authService) {
+      await app.authService.resolveNamespaces();
       auths.push(app.authService);
     }
   }
@@ -344,17 +343,17 @@ async function planServices(
     }
   });
   for (const { config } of auths) {
-    if (existingNameSet.has(config.namespace)) {
+    if (existingNameSet.has(config.name)) {
       changeSet.updates.push({
-        name: config.namespace,
+        name: config.name,
       });
-      existingNameSet.delete(config.namespace);
+      existingNameSet.delete(config.name);
     } else {
       changeSet.creates.push({
-        name: config.namespace,
+        name: config.name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: config.name,
         },
       });
     }
@@ -421,30 +420,30 @@ async function planIdPConfigs(
   };
 
   for (const { config } of auths) {
-    const existingIdPConfigs = await fetchIdPConfigs(config.namespace);
+    const existingIdPConfigs = await fetchIdPConfigs(config.name);
     const existingNameSet = new Set<string>();
     existingIdPConfigs.forEach((idpConfig) => {
       existingNameSet.add(idpConfig.name);
     });
     for (const idpConfig of config.idProviderConfigs ?? []) {
-      if (existingNameSet.has(idpConfig.Name)) {
+      if (existingNameSet.has(idpConfig.name)) {
         changeSet.updates.push({
-          name: idpConfig.Name,
+          name: idpConfig.name,
           idpConfig,
           request: {
             workspaceId,
-            namespaceName: config.namespace,
+            namespaceName: config.name,
             idpConfig: protoIdPConfig(idpConfig),
           },
         });
-        existingNameSet.delete(idpConfig.Name);
+        existingNameSet.delete(idpConfig.name);
       } else {
         changeSet.creates.push({
-          name: idpConfig.Name,
+          name: idpConfig.name,
           idpConfig,
           request: {
             workspaceId,
-            namespaceName: config.namespace,
+            namespaceName: config.name,
             idpConfig: protoIdPConfig(idpConfig),
           },
         });
@@ -456,7 +455,7 @@ async function planIdPConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: config.name,
           name,
         },
       });
@@ -478,41 +477,41 @@ async function planIdPConfigs(
 function protoIdPConfig(
   idpConfig: IdProviderConfig,
 ): MessageInitShape<typeof AuthIDPConfigSchema> {
-  switch (idpConfig.Config.Kind) {
+  switch (idpConfig.config.kind) {
     case "IDToken":
       return {
-        name: idpConfig.Name,
+        name: idpConfig.name,
         authType: AuthIDPConfig_AuthType.ID_TOKEN,
         config: {
           config: {
             case: "idToken",
             value: {
-              providerUrl: idpConfig.Config.ProviderURL,
-              clientId: idpConfig.Config.ClientID,
-              issuerUrl: idpConfig.Config.IssuerURL,
-              usernameClaim: idpConfig.Config.UsernameClaim,
+              providerUrl: idpConfig.config.providerURL,
+              clientId: idpConfig.config.clientID,
+              issuerUrl: idpConfig.config.issuerURL,
+              usernameClaim: idpConfig.config.usernameClaim,
             },
           },
         },
       };
     case "SAML":
       return {
-        name: idpConfig.Name,
+        name: idpConfig.name,
         authType: AuthIDPConfig_AuthType.SAML,
         config: {
           config: {
             case: "saml",
             value: {
-              ...("MetadataURL" in idpConfig.Config
-                ? { metadataUrl: idpConfig.Config.MetadataURL }
-                : { rawMetadata: idpConfig.Config.RawMetadata }),
+              ...("metadataURL" in idpConfig.config
+                ? { metadataUrl: idpConfig.config.metadataURL }
+                : { rawMetadata: idpConfig.config.rawMetadata }),
               spCertBase64: {
-                vaultName: idpConfig.Config.SpCertBase64.VaultName,
-                secretKey: idpConfig.Config.SpCertBase64.SecretKey,
+                vaultName: idpConfig.config.spCertBase64.VaultName,
+                secretKey: idpConfig.config.spCertBase64.SecretKey,
               },
               spKeyBase64: {
-                vaultName: idpConfig.Config.SpKeyBase64.VaultName,
-                secretKey: idpConfig.Config.SpKeyBase64.SecretKey,
+                vaultName: idpConfig.config.spKeyBase64.VaultName,
+                secretKey: idpConfig.config.spKeyBase64.SecretKey,
               },
             },
           },
@@ -520,34 +519,34 @@ function protoIdPConfig(
       };
     case "OIDC":
       return {
-        name: idpConfig.Name,
+        name: idpConfig.name,
         authType: AuthIDPConfig_AuthType.OIDC,
         config: {
           config: {
             case: "oidc",
             value: {
-              clientIdKey: idpConfig.Config.ClientID,
+              clientIdKey: idpConfig.config.clientID,
               clientSecretKey: {
-                vaultName: idpConfig.Config.ClientSecret.VaultName,
-                secretKey: idpConfig.Config.ClientSecret.SecretKey,
+                vaultName: idpConfig.config.clientSecret.VaultName,
+                secretKey: idpConfig.config.clientSecret.SecretKey,
               },
-              providerUrl: idpConfig.Config.ProviderURL,
-              issuerUrl: idpConfig.Config.IssuerURL,
-              usernameClaim: idpConfig.Config.UsernameClaim,
+              providerUrl: idpConfig.config.providerURL,
+              issuerUrl: idpConfig.config.issuerURL,
+              usernameClaim: idpConfig.config.usernameClaim,
             },
           },
         },
       };
     case "BuiltInIdP":
       return {
-        name: idpConfig.Name,
+        name: idpConfig.name,
         authType: AuthIDPConfig_AuthType.OIDC,
         // config is set at apply time
         config: {},
       };
     default:
       throw new Error(
-        `Unknown IdP config: ${idpConfig.Config satisfies never}`,
+        `Unknown IdP config: ${idpConfig.config satisfies never}`,
       );
   }
 }
@@ -559,15 +558,15 @@ async function protoBuiltinIdPConfig(
 ): Promise<MessageInitShape<typeof AuthIDPConfig_ConfigSchema>> {
   const idpService = await client.getIdPService({
     workspaceId,
-    namespaceName: builtinIdPConfig.Namespace,
+    namespaceName: builtinIdPConfig.namespace,
   });
   const idpClient = await client.getIdPClient({
     workspaceId,
-    namespaceName: builtinIdPConfig.Namespace,
-    name: builtinIdPConfig.ClientName,
+    namespaceName: builtinIdPConfig.namespace,
+    name: builtinIdPConfig.clientName,
   });
-  const vaultName = `idp-${builtinIdPConfig.Namespace}-${builtinIdPConfig.ClientName}`;
-  const secretKey = `client-secret-${builtinIdPConfig.Namespace}-${builtinIdPConfig.ClientName}`;
+  const vaultName = `idp-${builtinIdPConfig.namespace}-${builtinIdPConfig.clientName}`;
+  const secretKey = `client-secret-${builtinIdPConfig.namespace}-${builtinIdPConfig.clientName}`;
   return {
     config: {
       case: "oidc",
@@ -613,24 +612,23 @@ async function planUserProfileConfigs(
     DeleteUserProfileConfig | ServiceDeleted
   > = new ChangeSet("Auth userProfileConfigs");
 
-  for (const { config } of auths) {
-    const name = `${config.namespace}-user-profile-config`;
+  for (const auth of auths) {
+    const name = `${auth.config.name}-user-profile-config`;
     try {
       await client.getUserProfileConfig({
         workspaceId,
-        namespaceName: config.namespace,
+        namespaceName: auth.config.name,
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (config.userProfileProvider && config.userProfileProviderConfig) {
+        if (auth.userProfile) {
           changeSet.creates.push({
             name,
             request: {
               workspaceId,
-              namespaceName: config.namespace,
+              namespaceName: auth.config.name,
               userProfileProviderConfig: protoUserProfileConfig(
-                config.userProfileProvider,
-                config.userProfileProviderConfig,
+                auth.userProfile,
               ),
             },
           });
@@ -639,16 +637,13 @@ async function planUserProfileConfigs(
       }
       throw error;
     }
-    if (config.userProfileProvider && config.userProfileProviderConfig) {
+    if (auth.userProfile) {
       changeSet.updates.push({
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
-          userProfileProviderConfig: protoUserProfileConfig(
-            config.userProfileProvider,
-            config.userProfileProviderConfig,
-          ),
+          namespaceName: auth.config.name,
+          userProfileProviderConfig: protoUserProfileConfig(auth.userProfile),
         },
       });
     } else {
@@ -657,7 +652,7 @@ async function planUserProfileConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: auth.config.name,
         },
       });
     }
@@ -684,22 +679,28 @@ async function planUserProfileConfigs(
 }
 
 function protoUserProfileConfig(
-  userProfileProvider: UserProfileProvider,
-  userProfileConfig: UserProfileProviderConfig,
+  userProfile: NonNullable<AuthService["userProfile"]>,
 ): MessageInitShape<typeof UserProfileProviderConfigSchema> {
+  // Convert attributes from { key: true } to { key: "key" }
+  const attributeMap = userProfile.attributes
+    ? Object.fromEntries(
+        Object.keys(userProfile.attributes).map((key) => [key, key]),
+      )
+    : undefined;
+
   return {
-    provider: userProfileProvider,
+    provider: "TAILORDB",
     providerType: UserProfileProviderConfig_UserProfileProviderType.TAILORDB,
     config: {
       config: {
         case: "tailordb",
         value: {
-          namespace: userProfileConfig.Namespace,
-          type: userProfileConfig.Type,
-          usernameField: userProfileConfig.UsernameField,
-          tenantIdField: userProfileConfig.TenantIdField,
-          attributesFields: userProfileConfig.AttributesFields,
-          attributeMap: userProfileConfig.AttributeMap,
+          namespace: userProfile.namespace,
+          type: userProfile.type.name,
+          usernameField: userProfile.usernameField,
+          tenantIdField: undefined,
+          attributesFields: userProfile.attributeList,
+          attributeMap,
         },
       },
     },
@@ -735,24 +736,23 @@ async function planTenantConfigs(
     DeleteTenantConfig | ServiceDeleted
   > = new ChangeSet("Auth tenantConfigs");
 
-  for (const { config } of auths) {
-    const name = `${config.namespace}-tenant-config`;
+  for (const auth of auths) {
+    const name = `${auth.config.name}-tenant-config`;
     try {
       await client.getTenantConfig({
         workspaceId,
-        namespaceName: config.namespace,
+        namespaceName: auth.config.name,
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (config.tenantProvider && config.tenantProviderConfig) {
+        if (auth.tenantProviderConfig) {
           changeSet.creates.push({
             name,
             request: {
               workspaceId,
-              namespaceName: config.namespace,
+              namespaceName: auth.config.name,
               tenantProviderConfig: protoTenantConfig(
-                config.tenantProvider,
-                config.tenantProviderConfig,
+                auth.tenantProviderConfig,
               ),
             },
           });
@@ -761,16 +761,13 @@ async function planTenantConfigs(
       }
       throw error;
     }
-    if (config.tenantProvider && config.tenantProviderConfig) {
+    if (auth.tenantProviderConfig) {
       changeSet.updates.push({
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
-          tenantProviderConfig: protoTenantConfig(
-            config.tenantProvider,
-            config.tenantProviderConfig,
-          ),
+          namespaceName: auth.config.name,
+          tenantProviderConfig: protoTenantConfig(auth.tenantProviderConfig),
         },
       });
     } else {
@@ -779,7 +776,7 @@ async function planTenantConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: auth.config.name,
         },
       });
     }
@@ -806,19 +803,17 @@ async function planTenantConfigs(
 }
 
 function protoTenantConfig(
-  tenantProvider: TenantProvider,
-  tenantConfig: TenantProviderConfig,
+  tenantConfig: NonNullable<AuthService["tenantProviderConfig"]>,
 ): MessageInitShape<typeof TenantProviderConfigSchema> {
   return {
-    provider: tenantProvider,
     providerType: TenantProviderConfig_TenantProviderType.TAILORDB,
     config: {
       config: {
         case: "tailordb",
         value: {
-          namespace: tenantConfig.Namespace,
-          type: tenantConfig.Type,
-          signatureField: tenantConfig.SignatureField,
+          namespace: tenantConfig.namespace,
+          type: tenantConfig.type,
+          signatureField: tenantConfig.signatureField,
         },
       },
     },
@@ -873,36 +868,40 @@ async function planMachineUsers(
   };
 
   for (const { config } of auths) {
-    const existingMachineUsers = await fetchMachineUsers(config.namespace);
+    const existingMachineUsers = await fetchMachineUsers(config.name);
     const existingNameSet = new Set<string>();
     existingMachineUsers.forEach((machineUser) => {
       existingNameSet.add(machineUser.name);
     });
-    for (const machineUser of config.machineUsers ?? []) {
-      if (existingNameSet.has(machineUser.Name)) {
+    for (const machineUsername of Object.keys(config.machineUsers ?? {})) {
+      const machineUser = config.machineUsers?.[machineUsername];
+      if (!machineUser) {
+        continue;
+      }
+      if (existingNameSet.has(machineUsername)) {
         changeSet.updates.push({
-          name: machineUser.Name,
+          name: machineUsername,
           request: {
             workspaceId,
-            authNamespace: config.namespace,
-            name: machineUser.Name,
-            attributes: machineUser.Attributes,
-            attributeMap: machineUser.AttributeMap
-              ? protoMachineUserAttributeMap(machineUser.AttributeMap)
+            authNamespace: config.name,
+            name: machineUsername,
+            attributes: machineUser.attributeList,
+            attributeMap: machineUser.attributes
+              ? protoMachineUserAttributeMap(machineUser.attributes)
               : undefined,
           },
         });
-        existingNameSet.delete(machineUser.Name);
+        existingNameSet.delete(machineUsername);
       } else {
         changeSet.creates.push({
-          name: machineUser.Name,
+          name: machineUsername,
           request: {
             workspaceId,
-            authNamespace: config.namespace,
-            name: machineUser.Name,
-            attributes: machineUser.Attributes,
-            attributeMap: machineUser.AttributeMap
-              ? protoMachineUserAttributeMap(machineUser.AttributeMap)
+            authNamespace: config.name,
+            name: machineUsername,
+            attributes: machineUser.attributeList,
+            attributeMap: machineUser.attributes
+              ? protoMachineUserAttributeMap(machineUser.attributes)
               : undefined,
           },
         });
@@ -914,7 +913,7 @@ async function planMachineUsers(
         name,
         request: {
           workspaceId,
-          authNamespace: config.namespace,
+          authNamespace: config.name,
           name,
         },
       });
@@ -938,7 +937,7 @@ function protoMachineUserAttributeMap(
 ): Record<string, MessageInitShape<typeof ValueSchema>> {
   const ret: Record<string, MessageInitShape<typeof ValueSchema>> = {};
   for (const [key, value] of Object.entries(attributeMap)) {
-    ret[key] = fromJson(ValueSchema, value);
+    ret[key] = fromJson(ValueSchema, value ?? null);
   }
   return ret;
 }
@@ -991,29 +990,33 @@ async function planOAuth2Clients(
   };
 
   for (const { config } of auths) {
-    const existingOAuth2Clients = await fetchOAuth2Clients(config.namespace);
+    const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
     const existingNameSet = new Set<string>();
     existingOAuth2Clients.forEach((oauth2Client) => {
       existingNameSet.add(oauth2Client.name);
     });
-    for (const oauth2Client of config.oauth2Clients ?? []) {
-      if (existingNameSet.has(oauth2Client.Name)) {
+    for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
+      const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
+      if (!oauth2Client) {
+        continue;
+      }
+      if (existingNameSet.has(oauth2ClientName)) {
         changeSet.updates.push({
-          name: oauth2Client.Name,
+          name: oauth2ClientName,
           request: {
             workspaceId,
-            namespaceName: config.namespace,
-            oauth2Client: protoOAuth2Client(oauth2Client),
+            namespaceName: config.name,
+            oauth2Client: protoOAuth2Client(oauth2ClientName, oauth2Client),
           },
         });
-        existingNameSet.delete(oauth2Client.Name);
+        existingNameSet.delete(oauth2ClientName);
       } else {
         changeSet.creates.push({
-          name: oauth2Client.Name,
+          name: oauth2ClientName,
           request: {
             workspaceId,
-            namespaceName: config.namespace,
-            oauth2Client: protoOAuth2Client(oauth2Client),
+            namespaceName: config.name,
+            oauth2Client: protoOAuth2Client(oauth2ClientName, oauth2Client),
           },
         });
       }
@@ -1024,7 +1027,7 @@ async function planOAuth2Clients(
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: config.name,
           name,
         },
       });
@@ -1044,12 +1047,13 @@ async function planOAuth2Clients(
 }
 
 function protoOAuth2Client(
+  oauth2ClientName: string,
   oauth2Client: OAuth2Client,
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
   return {
-    name: oauth2Client.Name,
-    description: oauth2Client.Description,
-    grantTypes: oauth2Client.GrantTypes?.map((grantType) => {
+    name: oauth2ClientName,
+    description: oauth2Client.description,
+    grantTypes: oauth2Client.grantTypes?.map((grantType) => {
       switch (grantType) {
         case "authorization_code":
           return AuthOAuth2Client_GrantType.AUTHORIZATION_CODE;
@@ -1061,17 +1065,17 @@ function protoOAuth2Client(
           );
       }
     }),
-    redirectUris: oauth2Client.RedirectURIs,
+    redirectUris: oauth2Client.redirectURIs,
     clientType: (
       {
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
         public: AuthOAuth2Client_ClientType.PUBLIC,
         browser: AuthOAuth2Client_ClientType.BROWSER,
       } satisfies Record<
-        NonNullable<OAuth2Client["ClientType"]>,
+        NonNullable<OAuth2Client["clientType"]>,
         AuthOAuth2Client_ClientType
       >
-    )[oauth2Client.ClientType ?? "confidential"],
+    )[oauth2Client.clientType ?? "confidential"],
   };
 }
 
@@ -1105,11 +1109,11 @@ async function planSCIMConfigs(
   > = new ChangeSet("Auth scimConfigs");
 
   for (const { config } of auths) {
-    const name = `${config.namespace}-scim-config`;
+    const name = `${config.name}-scim-config`;
     try {
       await client.getAuthSCIMConfig({
         workspaceId,
-        namespaceName: config.namespace,
+        namespaceName: config.name,
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -1118,7 +1122,7 @@ async function planSCIMConfigs(
             name,
             request: {
               workspaceId,
-              namespaceName: config.namespace,
+              namespaceName: config.name,
               scimConfig: protoSCIMConfig(config.scimConfig),
             },
           });
@@ -1132,7 +1136,7 @@ async function planSCIMConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: config.name,
           scimConfig: protoSCIMConfig(config.scimConfig),
         },
       });
@@ -1142,7 +1146,7 @@ async function planSCIMConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: config.name,
         },
       });
     }
@@ -1172,7 +1176,7 @@ function protoSCIMConfig(
   scimConfig: SCIMConfig,
 ): MessageInitShape<typeof AuthSCIMConfigSchema> {
   let authorizationType;
-  switch (scimConfig.Authorization.Type) {
+  switch (scimConfig.authorization.type) {
     case "bearer":
       authorizationType = AuthSCIMConfig_AuthorizationType.BEARER;
       break;
@@ -1181,18 +1185,18 @@ function protoSCIMConfig(
       break;
     default:
       throw new Error(
-        `Unknown SCIM authorization type: ${scimConfig.Authorization.Type satisfies never}`,
+        `Unknown SCIM authorization type: ${scimConfig.authorization.type satisfies never}`,
       );
   }
 
   return {
-    machineUserName: scimConfig.MachineUserName,
+    machineUserName: scimConfig.machineUserName,
     authorizationType,
     authorizationConfig: {
       case: "bearerSecret",
       value: {
-        vaultName: scimConfig.Authorization.BearerSecret?.VaultName,
-        secretKey: scimConfig.Authorization.BearerSecret?.SecretKey,
+        vaultName: scimConfig.authorization.bearerSecret?.VaultName,
+        secretKey: scimConfig.authorization.bearerSecret?.SecretKey,
       },
     },
   };
@@ -1242,28 +1246,28 @@ async function planSCIMResources(
   };
 
   for (const { config } of auths) {
-    const existingSCIMResources = await fetchSCIMResources(config.namespace);
+    const existingSCIMResources = await fetchSCIMResources(config.name);
     const existingNameSet = new Set<string>();
     existingSCIMResources.forEach((scimResource) => {
       existingNameSet.add(scimResource.name);
     });
-    for (const scimResource of config.scimConfig?.Resources ?? []) {
-      if (existingNameSet.has(scimResource.Name)) {
+    for (const scimResource of config.scimConfig?.resources ?? []) {
+      if (existingNameSet.has(scimResource.name)) {
         changeSet.updates.push({
-          name: scimResource.Name,
+          name: scimResource.name,
           request: {
             workspaceId,
-            namespaceName: config.namespace,
+            namespaceName: config.name,
             scimResource: protoSCIMResource(scimResource),
           },
         });
-        existingNameSet.delete(scimResource.Name);
+        existingNameSet.delete(scimResource.name);
       } else {
         changeSet.creates.push({
-          name: scimResource.Name,
+          name: scimResource.name,
           request: {
             workspaceId,
-            namespaceName: config.namespace,
+            namespaceName: config.name,
             scimResource: protoSCIMResource(scimResource),
           },
         });
@@ -1275,7 +1279,7 @@ async function planSCIMResources(
         name,
         request: {
           workspaceId,
-          namespaceName: config.namespace,
+          namespaceName: config.name,
           name,
         },
       });
@@ -1298,18 +1302,18 @@ function protoSCIMResource(
   scimResource: SCIMResource,
 ): MessageInitShape<typeof AuthSCIMResourceSchema> {
   return {
-    name: scimResource.Name,
-    tailorDbNamespace: scimResource.TailorDBNamespace,
-    tailorDbType: scimResource.TailorDBType,
+    name: scimResource.name,
+    tailorDbNamespace: scimResource.tailorDBNamespace,
+    tailorDbType: scimResource.tailorDBType,
     coreSchema: {
-      name: scimResource.CoreSchema.Name,
-      attributes: scimResource.CoreSchema.Attributes.map((attr) =>
+      name: scimResource.coreSchema.name,
+      attributes: scimResource.coreSchema.attributes.map((attr) =>
         protoSCIMAttribute(attr),
       ),
     },
-    attributeMapping: scimResource.AttributeMapping.map((attr) => ({
-      tailorDbField: attr.TailorDBField,
-      scimPath: attr.SCIMPath,
+    attributeMapping: scimResource.attributeMapping.map((attr) => ({
+      tailorDbField: attr.tailorDBField,
+      scimPath: attr.scimPath,
     })),
   };
 }
@@ -1318,7 +1322,7 @@ function protoSCIMAttribute(
   attr: SCIMAttribute,
 ): MessageInitShape<typeof AuthSCIMAttributeSchema> {
   let typ;
-  switch (attr.Type) {
+  switch (attr.type) {
     case "string":
       typ = AuthSCIMAttribute_Type.STRING;
       break;
@@ -1336,12 +1340,12 @@ function protoSCIMAttribute(
       break;
     default:
       throw new Error(
-        `Unknown SCIM attribute type: ${attr.Type satisfies never}`,
+        `Unknown SCIM attribute type: ${attr.type satisfies never}`,
       );
   }
   let mutability;
-  if (attr.Mutability) {
-    switch (attr.Mutability) {
+  if (attr.mutability) {
+    switch (attr.mutability) {
       case "readOnly":
         mutability = AuthSCIMAttribute_Mutability.READ_ONLY;
         break;
@@ -1353,13 +1357,13 @@ function protoSCIMAttribute(
         break;
       default:
         throw new Error(
-          `Unknown SCIM attribute mutability: ${attr.Mutability satisfies never}`,
+          `Unknown SCIM attribute mutability: ${attr.mutability satisfies never}`,
         );
     }
   }
   let uniqueness;
-  if (attr.Uniqueness) {
-    switch (attr.Uniqueness) {
+  if (attr.uniqueness) {
+    switch (attr.uniqueness) {
       case "none":
         uniqueness = AuthSCIMAttribute_Uniqueness.NONE;
         break;
@@ -1371,19 +1375,19 @@ function protoSCIMAttribute(
         break;
       default:
         throw new Error(
-          `Unknown SCIM attribute uniqueness: ${attr.Uniqueness satisfies never}`,
+          `Unknown SCIM attribute uniqueness: ${attr.uniqueness satisfies never}`,
         );
     }
   }
   return {
     type: typ,
-    name: attr.Name,
-    description: attr.Description,
+    name: attr.name,
+    description: attr.description,
     mutability,
-    required: attr.Required,
-    multiValued: attr.MultiValued,
+    required: attr.required,
+    multiValued: attr.multiValued,
     uniqueness,
-    canonicalValues: attr.CanonicalValues ?? undefined,
-    subAttributes: attr.SubAttributes?.map((attr) => protoSCIMAttribute(attr)),
+    canonicalValues: attr.canonicalValues ?? undefined,
+    subAttributes: attr.subAttributes?.map((attr) => protoSCIMAttribute(attr)),
   };
 }

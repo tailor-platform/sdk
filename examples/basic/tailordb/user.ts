@@ -1,5 +1,4 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import { role } from "./role";
 import {
   defaultGqlPermission,
   defaultPermission,
@@ -12,10 +11,7 @@ export const user = db
     email: db.string().unique(),
     status: db.string({ optional: true }),
     department: db.string({ optional: true }),
-    roleId: db.uuid().relation({
-      type: "n-1",
-      toward: { type: role },
-    }),
+    role: db.enum("ADMIN", "USER"),
     ...db.fields.timestamps(),
   })
   .files({
@@ -30,5 +26,4 @@ export const user = db
     },
   )
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type user = typeof user;
+  .gqlPermission(defaultGqlPermission);

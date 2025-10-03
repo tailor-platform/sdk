@@ -1,5 +1,5 @@
 import { defineConfig } from "@tailor-platform/tailor-sdk";
-import { defaultMachineUserRole } from "./constants";
+import { auth } from "./auth";
 
 export default defineConfig({
   id: process.env.WORKSPACE_ID!,
@@ -22,50 +22,7 @@ export default defineConfig({
           clients: ["default-idp-client"],
         },
       },
-      auth: {
-        namespace: "my-auth",
-        idProviderConfigs: [
-          {
-            Name: "sample",
-            Config: {
-              Kind: "BuiltInIdP",
-              Namespace: "my-idp",
-              ClientName: "default-idp-client",
-            },
-          },
-        ],
-        userProfileProvider: "TAILORDB",
-        userProfileProviderConfig: {
-          Kind: "TAILORDB",
-          Namespace: "tailordb",
-          Type: "User",
-          UsernameField: "email",
-          AttributesFields: ["roleId"],
-          AttributeMap: {
-            roleId: "roleId",
-          },
-        },
-        machineUsers: [
-          {
-            Name: "admin-machine-user",
-            Attributes: [defaultMachineUserRole],
-            AttributeMap: {
-              roleId: defaultMachineUserRole,
-            },
-          },
-        ],
-        oauth2Clients: [
-          {
-            Name: "sample",
-            Description: "Sample OAuth2 client",
-            GrantTypes: ["authorization_code", "refresh_token"],
-            RedirectURIs: [
-              "https://example.com/callback",
-              "my-frontend:url/callback",
-            ],
-          },
-        ],
-      },
+      auth,
     },
   },
   executor: { files: ["./executors/*.ts"] },

@@ -20,5 +20,4 @@ export const purchaseOrder = db
     ...db.fields.timestamps(),
   })
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type purchaseOrder = typeof purchaseOrder;
+  .gqlPermission(defaultGqlPermission);

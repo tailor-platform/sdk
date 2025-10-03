@@ -3,15 +3,14 @@ import type {
   TailorTypePermission,
   TailorTypeGqlPermission,
 } from "@tailor-platform/tailor-sdk";
-import { defaultMachineUserRole } from "../constants";
 
 export interface PermissionUser {
-  roleId: string;
+  role: string;
 }
 const defaultMachineUser = [
-  { user: "roleId" },
+  { user: "role" },
   "=",
-  defaultMachineUserRole,
+  "ADMIN",
 ] as const satisfies PermissionCondition<"record" | "gql", PermissionUser>;
 const loggedIn = [
   { user: "_loggedIn" },

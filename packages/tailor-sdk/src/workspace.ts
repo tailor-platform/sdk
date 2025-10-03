@@ -32,7 +32,7 @@ export class Workspace {
     app.defineTailorDB(appConfig.db);
     app.definePipeline(appConfig.pipeline);
     app.defineIdp(appConfig.idp);
-    app.defineAuth(appConfig.auth);
+    app.defineAuth(appConfig.auth); // Define auth after idp/tailordb
 
     this._applications.push(app);
     return app;

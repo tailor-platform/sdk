@@ -60,12 +60,6 @@ export type PurchaseOrder = {
   updatedAt?: Date | null;
 };
 
-export type Role = {
-  id: string;
-  name: string;
-  users?: User[] | null;
-};
-
 export type SalesOrder = {
   id: string;
   customerID: string;
@@ -121,8 +115,7 @@ export type User = {
   email: string;
   status?: string | null;
   department?: string | null;
-  roleId: string;
-  role: Role;
+  role: "ADMIN" | "USER";
   createdAt: Date;
   updatedAt?: Date | null;
   setting?: UserSetting | null;

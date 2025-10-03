@@ -6,7 +6,6 @@ import {
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { createOperatorClient } from "./utils";
-import { defaultMachineUserRole } from "../constants";
 
 describe("controlplane", async () => {
   const [client, workspaceId] = createOperatorClient();
@@ -52,9 +51,9 @@ describe("controlplane", async () => {
             namespace: "tailordb",
             type: "User",
             usernameField: "email",
-            attributesFields: ["roleId"],
+            attributesFields: [],
             attributeMap: {
-              roleId: "roleId",
+              role: "role",
             },
           },
         },
@@ -70,7 +69,7 @@ describe("controlplane", async () => {
     expect(machineUsers.length).toBe(1);
     expect(machineUsers[0]).toMatchObject({
       name: "admin-machine-user",
-      attributes: [defaultMachineUserRole],
+      attributes: [],
       // TODO(remiposo): fix platform
       // attributeMap: {
       //   roleId: defaultMachineUserRole,
@@ -95,7 +94,10 @@ describe("controlplane", async () => {
 
     // Check that redirect URIs include both direct URL and resolved static website URL
     const redirectUris = oauth2Clients[0].redirectUris;
-    expect(redirectUris).toContain("https://example.com/callback");
     expect(redirectUris.length).toBe(2);
+    expect(redirectUris[0]).toEqual("https://example.com/callback");
+    expect(redirectUris[1]).toMatch(
+      /^https:\/\/my-frontend-[\w]+\.web\.erp\.dev\/callback$/,
+    );
   });
 });

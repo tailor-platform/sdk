@@ -3,7 +3,7 @@ import { type PipelineResolverServiceInput } from "@/services/pipeline/types";
 import { TailorDBService } from "@/services/tailordb/service";
 import { type TailorDBServiceInput } from "@/services/tailordb/types";
 import { AuthService } from "@/services/auth/service";
-import { type AuthServiceInput } from "@/services/auth/types";
+import { type AuthConfig } from "@/services/auth/types";
 import { type IdPServiceInput } from "./services/idp/types";
 import { type AppConfig } from "./config";
 
@@ -85,13 +85,13 @@ export class Application {
     );
   }
 
-  defineAuth(config?: AuthServiceInput) {
+  defineAuth(config?: AuthConfig) {
     if (!config) {
       return;
     }
 
-    const authService = new AuthService(config);
+    const authService = new AuthService(config, this.tailorDBServices);
     this._authService = authService;
-    this.addSubgraph("auth", authService.config.namespace);
+    this.addSubgraph("auth", authService.config.name);
   }
 }

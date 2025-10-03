@@ -1,76 +1,179 @@
-import { type SecretValue } from "@/types/types";
-import { type ValueOperand } from "../tailordb/permission";
+import type { output } from "@/types/helpers";
+import type { SecretValue } from "@/types/types";
+import { type TailorDBType } from "../tailordb/schema";
+
+export type ValueOperand =
+  | string
+  | string[]
+  | boolean
+  | boolean[]
+  | null
+  | undefined;
+
+type UserFieldKeys<User extends TailorDBType> = keyof output<User> & string;
+
+type FieldDefined<
+  User extends TailorDBType,
+  Key extends UserFieldKeys<User>,
+> = User["fields"][Key] extends { _defined: infer Defined } ? Defined : never;
+
+type FieldOutput<
+  User extends TailorDBType,
+  Key extends UserFieldKeys<User>,
+> = output<User>[Key];
+
+type FieldIsRequired<
+  User extends TailorDBType,
+  Key extends UserFieldKeys<User>,
+> = undefined extends FieldOutput<User, Key> ? false : true;
+
+type FieldIsOfType<
+  User extends TailorDBType,
+  Key extends UserFieldKeys<User>,
+  Type extends string,
+> = FieldDefined<User, Key> extends { type: Type } ? true : false;
+
+type FieldIsArray<User extends TailorDBType, Key extends UserFieldKeys<User>> =
+  FieldDefined<User, Key> extends { array: true } ? true : false;
+
+type FieldIsUnique<User extends TailorDBType, Key extends UserFieldKeys<User>> =
+  FieldDefined<User, Key> extends { unique: true } ? true : false;
+
+type FieldSupportsValueOperand<
+  User extends TailorDBType,
+  Key extends UserFieldKeys<User>,
+> = FieldOutput<User, Key> extends ValueOperand ? true : false;
+
+export type UsernameFieldKey<User extends TailorDBType> = {
+  [K in UserFieldKeys<User>]: FieldIsRequired<User, K> extends true
+    ? FieldIsOfType<User, K, "string"> extends true
+      ? FieldIsArray<User, K> extends true
+        ? never
+        : FieldIsUnique<User, K> extends true
+          ? K
+          : never
+      : never
+    : never;
+}[UserFieldKeys<User>];
+
+export type UserAttributeKey<User extends TailorDBType> = {
+  [K in UserFieldKeys<User>]: K extends "id"
+    ? never
+    : FieldSupportsValueOperand<User, K> extends true
+      ? FieldIsOfType<User, K, "datetime" | "date" | "time"> extends true
+        ? never
+        : K
+      : never;
+}[UserFieldKeys<User>];
+
+export type UserAttributeListKey<User extends TailorDBType> = {
+  [K in UserFieldKeys<User>]: K extends "id"
+    ? never
+    : FieldIsOfType<User, K, "uuid"> extends true
+      ? FieldIsArray<User, K> extends true
+        ? never
+        : K
+      : never;
+}[UserFieldKeys<User>];
 
 export interface OIDC {
-  Kind: "OIDC";
-  ClientID: string;
-  ClientSecret: SecretValue;
-  ProviderURL: string;
-  IssuerURL?: string;
-  UsernameClaim?: string;
+  kind: "OIDC";
+  clientID: string;
+  clientSecret: SecretValue;
+  providerURL: string;
+  issuerURL?: string;
+  usernameClaim?: string;
 }
 
 export type SAML = {
-  Kind: "SAML";
-  SpCertBase64: SecretValue;
-  SpKeyBase64: SecretValue;
+  kind: "SAML";
+  spCertBase64: SecretValue;
+  spKeyBase64: SecretValue;
 } & (
   | {
-      MetadataURL: string;
+      metadataURL: string;
     }
   | {
-      RawMetadata: string;
+      rawMetadata: string;
     }
 );
 
 export interface IDToken {
-  Kind: "IDToken";
-  ProviderURL: string;
-  IssuerURL?: string;
-  ClientID: string;
-  UsernameClaim?: string;
+  kind: "IDToken";
+  providerURL: string;
+  issuerURL?: string;
+  clientID: string;
+  usernameClaim?: string;
 }
 
 export interface BuiltinIdP {
-  Kind: "BuiltInIdP";
-  Namespace: string;
-  ClientName: string;
-}
-
-export interface IdProviderConfig {
-  Name: string;
-  Config: OIDC | SAML | IDToken | BuiltinIdP;
+  kind: "BuiltInIdP";
+  namespace: string;
+  clientName: string;
 }
 
 export interface UserProfileProviderConfig {
-  Kind: "TAILORDB";
-  Namespace: string;
-  Type: string;
-  UsernameField: string;
-  TenantIdField?: string;
-  AttributesFields: string[];
-  AttributeMap?: Record<string, string>;
+  type: string;
+  usernameField: string;
+  tenantIdField?: string;
+  attributesFields: string[];
+  attributeMap?: Record<string, string>;
 }
 
-export interface MachineUser {
-  Name: string;
-  Attributes: string[];
-  AttributeMap?: Record<string, ValueOperand>;
+export interface IdProviderConfig {
+  name: string;
+  config: OIDC | SAML | IDToken | BuiltinIdP;
 }
+
+export type UserAttributeMap<User extends TailorDBType> = {
+  [K in UserAttributeKey<User>]?: true;
+};
+
+type DisallowExtraKeys<T, Allowed extends PropertyKey> = T & {
+  [K in Exclude<keyof T, Allowed>]: never;
+};
+
+type AttributeListValue<
+  User extends TailorDBType,
+  Key extends UserAttributeListKey<User>,
+> = Key extends keyof output<User> ? output<User>[Key] : never;
+
+type AttributeListToTuple<
+  User extends TailorDBType,
+  AttributeList extends readonly UserAttributeListKey<User>[],
+> = {
+  [Index in keyof AttributeList]: AttributeList[Index] extends UserAttributeListKey<User>
+    ? AttributeListValue<User, AttributeList[Index]>
+    : never;
+};
+
+type MachineUser<
+  User extends TailorDBType,
+  AttributeMap extends UserAttributeMap<User> = object,
+  AttributeList extends UserAttributeListKey<User>[] = [],
+> = {
+  attributes: object extends AttributeMap
+    ? never
+    : {
+        [K in keyof AttributeMap]: K extends keyof output<User>
+          ? output<User>[K]
+          : never;
+      } & { [K in Exclude<keyof output<User>, keyof AttributeMap>]?: never };
+} & ([] extends AttributeList
+  ? { attributeList?: never }
+  : { attributeList: AttributeListToTuple<User, AttributeList> });
 
 export type OAuth2ClientGrantType = "authorization_code" | "refresh_token";
-
 export interface OAuth2Client {
-  Name: string;
-  Description?: string;
-  GrantTypes?: OAuth2ClientGrantType[];
-  RedirectURIs: string[];
-  ClientType?: "confidential" | "public" | "browser";
+  description?: string;
+  grantTypes?: OAuth2ClientGrantType[];
+  redirectURIs: string[];
+  clientType?: "confidential" | "public" | "browser";
 }
 
 export interface SCIMAuthorization {
-  Type: "oauth2" | "bearer";
-  BearerSecret?: SecretValue;
+  type: "oauth2" | "bearer";
+  bearerSecret?: SecretValue;
 }
 
 export type SCIMAttributeType =
@@ -81,65 +184,80 @@ export type SCIMAttributeType =
   | "complex";
 
 export interface SCIMAttribute {
-  Type: SCIMAttributeType;
-  Name: string;
-  Description?: string;
-  Mutability?: "readOnly" | "readWrite" | "writeOnly";
-  Required?: boolean;
-  MultiValued?: boolean;
-  Uniqueness?: "none" | "server" | "global";
-  CanonicalValues?: string[] | null;
-  SubAttributes?: SCIMAttribute[] | null;
+  type: SCIMAttributeType;
+  name: string;
+  description?: string;
+  mutability?: "readOnly" | "readWrite" | "writeOnly";
+  required?: boolean;
+  multiValued?: boolean;
+  uniqueness?: "none" | "server" | "global";
+  canonicalValues?: string[] | null;
+  subAttributes?: SCIMAttribute[] | null;
 }
 
 export interface SCIMSchema {
-  Name: string;
-  Attributes: SCIMAttribute[];
+  name: string;
+  attributes: SCIMAttribute[];
 }
 
 export interface SCIMAttributeMapping {
-  TailorDBField: string;
-  SCIMPath: string;
+  tailorDBField: string;
+  scimPath: string;
 }
 
 export interface SCIMResource {
-  Name: string;
-  TailorDBNamespace: string;
-  TailorDBType: string;
-  CoreSchema: SCIMSchema;
-  AttributeMapping: SCIMAttributeMapping[];
+  name: string;
+  tailorDBNamespace: string;
+  tailorDBType: string;
+  coreSchema: SCIMSchema;
+  attributeMapping: SCIMAttributeMapping[];
 }
 
 export interface SCIMConfig {
-  MachineUserName: string;
-  Authorization: SCIMAuthorization;
-  Resources: SCIMResource[];
+  machineUserName: string;
+  authorization: SCIMAuthorization;
+  resources: SCIMResource[];
 }
 
 export interface TenantProviderConfig {
-  Kind: "TAILORDB";
-  Namespace: string;
-  Type: string;
-  SignatureField: string;
-}
-
-export type UserProfileProvider = "TAILORDB" | string;
-export type TenantProvider = "" | string;
-
-export interface AuthServiceInput {
-  version?: string;
   namespace: string;
-  idProviderConfigs?: IdProviderConfig[];
-  userProfileProvider?: UserProfileProvider;
-  userProfileProviderConfig?: UserProfileProviderConfig | null;
-  scimConfig?: SCIMConfig | null;
-  tenantProvider?: TenantProvider;
-  tenantProviderConfig?: TenantProviderConfig | null;
-  machineUsers?: MachineUser[];
-  oauth2Clients?: OAuth2Client[];
+  type: string;
+  signatureField: string;
 }
 
-export interface AuthReference {
-  Namespace: string;
-  IdProviderConfigName?: string;
-}
+export type AuthServiceInput<
+  User extends TailorDBType,
+  AttributeMap extends UserAttributeMap<User>,
+  AttributeList extends UserAttributeListKey<User>[],
+> = {
+  userProfile?: {
+    type: User;
+    usernameField: UsernameFieldKey<User>;
+    attributes?: DisallowExtraKeys<AttributeMap, UserAttributeKey<User>>;
+    attributeList?: AttributeList;
+  };
+  machineUsers?: Record<string, MachineUser<User, AttributeMap, AttributeList>>;
+  oauth2Clients?: Record<string, OAuth2Client>;
+  idProviderConfigs?: IdProviderConfig[];
+  scimConfig?: SCIMConfig;
+  tenantProviderConfig?: TenantProviderConfig;
+};
+
+export type AuthConfig = { name: string } & Omit<
+  AuthServiceInput<TailorDBType, object, []>,
+  "userProfile" | "machineUsers"
+> & {
+    userProfile?: {
+      type: TailorDBType;
+      usernameField: string;
+      attributes?: Record<string, true>;
+      attributeList?: string[];
+    };
+    machineUsers?: Record<
+      string,
+      {
+        attributes?: Record<string, string | boolean | string[] | boolean[]>;
+        attributeList?: string[];
+      }
+    >;
+  };

@@ -23,79 +23,6 @@ describe("controlplane", () => {
       namespaceName,
     });
 
-    const role = tailordbTypes.find((e) => e.name === "Role");
-    expect(role).toMatchObject({
-      name: "Role",
-      schema: {
-        fields: {
-          name: { type: "string", required: true, array: false },
-        },
-        relationships: {
-          users: {
-            refType: "User",
-            refField: "roleId",
-            srcField: "id",
-            array: true,
-          },
-        },
-        permission: {
-          create: [
-            {
-              conditions: [
-                {
-                  left: { kind: { case: "userField", value: "roleId" } },
-                  operator: TailorDBType_Permission_Operator.EQ,
-                  right: { kind: { case: "value", value: expect.any(Object) } },
-                },
-              ],
-            },
-          ],
-          read: [
-            {
-              conditions: [
-                {
-                  left: { kind: { case: "userField", value: "roleId" } },
-                  operator: TailorDBType_Permission_Operator.EQ,
-                  right: { kind: { case: "value", value: expect.any(Object) } },
-                },
-              ],
-            },
-            {
-              conditions: [
-                {
-                  left: { kind: { case: "userField", value: "_loggedIn" } },
-                  operator: TailorDBType_Permission_Operator.EQ,
-                  right: { kind: { case: "value", value: expect.any(Object) } },
-                },
-              ],
-            },
-          ],
-          update: [
-            {
-              conditions: [
-                {
-                  left: { kind: { case: "userField", value: "roleId" } },
-                  operator: TailorDBType_Permission_Operator.EQ,
-                  right: { kind: { case: "value", value: expect.any(Object) } },
-                },
-              ],
-            },
-          ],
-          delete: [
-            {
-              conditions: [
-                {
-                  left: { kind: { case: "userField", value: "roleId" } },
-                  operator: TailorDBType_Permission_Operator.EQ,
-                  right: { kind: { case: "value", value: expect.any(Object) } },
-                },
-              ],
-            },
-          ],
-        },
-      },
-    });
-
     const user = tailordbTypes.find((e) => e.name === "User");
     expect(user).toMatchObject({
       name: "User",
@@ -111,7 +38,7 @@ describe("controlplane", () => {
           },
           status: { type: "string", required: false, array: false },
           department: { type: "string", required: false, array: false },
-          roleId: { type: "uuid", required: true, array: false },
+          role: { type: "enum", required: true, array: false },
           createdAt: {
             type: "datetime",
             required: false,
@@ -123,14 +50,6 @@ describe("controlplane", () => {
             required: false,
             array: false,
             hooks: expect.any(Object),
-          },
-        },
-        relationships: {
-          role: {
-            refType: "Role",
-            refField: "id",
-            srcField: "roleId",
-            array: false,
           },
         },
         indexes: {
@@ -146,24 +65,87 @@ describe("controlplane", () => {
       },
     });
   });
+
+  test("permission schema structure", async () => {
+    const { tailordbTypes } = await client.listTailorDBTypes({
+      workspaceId,
+      namespaceName,
+    });
+
+    const salesOrder = tailordbTypes.find((e) => e.name === "SalesOrder");
+    expect(salesOrder?.schema?.permission).toBeDefined();
+
+    // Verify create permission structure
+    expect(salesOrder?.schema?.permission?.create).toHaveLength(1);
+    expect(salesOrder?.schema?.permission?.create?.[0]).toMatchObject({
+      conditions: [
+        {
+          left: { kind: { case: "userField", value: "role" } },
+          operator: TailorDBType_Permission_Operator.EQ,
+          right: { kind: { case: "value", value: expect.any(Object) } },
+        },
+      ],
+    });
+
+    // Verify read permission structure (contains role-based condition)
+    expect(salesOrder?.schema?.permission?.read).toBeDefined();
+    const readPermissions = salesOrder?.schema?.permission?.read;
+    expect(
+      readPermissions?.some((policy) =>
+        policy.conditions?.some(
+          (cond) =>
+            cond.left?.kind?.case === "userField" &&
+            cond.left?.kind?.value === "role" &&
+            cond.operator === TailorDBType_Permission_Operator.EQ,
+        ),
+      ),
+    ).toBe(true);
+
+    // Verify update permission structure
+    expect(salesOrder?.schema?.permission?.update).toHaveLength(1);
+    expect(salesOrder?.schema?.permission?.update?.[0]).toMatchObject({
+      conditions: [
+        {
+          left: { kind: { case: "userField", value: "role" } },
+          operator: TailorDBType_Permission_Operator.EQ,
+          right: { kind: { case: "value", value: expect.any(Object) } },
+        },
+      ],
+    });
+
+    // Verify delete permission structure
+    expect(salesOrder?.schema?.permission?.delete).toHaveLength(1);
+    expect(salesOrder?.schema?.permission?.delete?.[0]).toMatchObject({
+      conditions: [
+        {
+          left: { kind: { case: "userField", value: "role" } },
+          operator: TailorDBType_Permission_Operator.EQ,
+          right: { kind: { case: "value", value: expect.any(Object) } },
+        },
+      ],
+    });
+  });
 });
 
 describe("dataplane", () => {
   const graphQLClient = createGraphQLClient(inject("token"));
-  let roleId: string;
 
   describe("required field", async () => {
     test("providing required field succeeds", async () => {
       const query = gql`
         mutation {
-          createRole(input: { name: "admin" }) {
+          createUser(input: {
+            name: "admin"
+            email: "admin-${randomUUID()}@example.com"
+            role: ADMIN
+          }) {
             id
             name
           }
         }
       `;
       interface Data {
-        createRole: {
+        createUser: {
           id: string;
           name: string;
         };
@@ -171,18 +153,20 @@ describe("dataplane", () => {
       const result = await graphQLClient.rawRequest<Data>(query);
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
-        createRole: {
+        createUser: {
           id: expect.any(String),
           name: "admin",
         },
       });
-      roleId = result.data.createRole.id;
     });
 
     test("omitting required field fails", async () => {
       const query = gql`
         mutation {
-          createRole(input: {}) {
+          createUser(input: {
+            name: "alice"
+            email: "alice-${randomUUID()}@example.com"
+          }) {
             id
           }
         }
@@ -201,7 +185,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${value}@example.com"
-            roleId: "${roleId}"
+            role: USER
           }) {
             id
             name
@@ -225,7 +209,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${value}@example.com"
-            roleId: "${roleId}"
+            role: USER
           }) {
             id
           }
@@ -237,32 +221,56 @@ describe("dataplane", () => {
   });
 
   describe("relation field", async () => {
+    let customerId: string;
+
     test("providing valid id succeeds", async () => {
-      const query = gql`
+      const createCustomer = gql`
         mutation {
-          createUser(input: {
-            name: "alice"
-            email: "alice-${randomUUID()}@example.com"
-            roleId: "${roleId}"
+          createCustomer(
+            input: {
+              name: "customer"
+              email: "customer-${randomUUID()}@example.com"
+              country: "USA"
+              postalCode: "12345"
+              state: "California"
+            }
+          ) {
+            id
+          }
+        }
+      `;
+      const customerResult = await graphQLClient.rawRequest<{
+        createCustomer: { id: string };
+      }>(createCustomer);
+      expect(customerResult.errors).toBeUndefined();
+      customerId = customerResult.data.createCustomer.id;
+
+      const createSalesOrder = gql`
+        mutation {
+          createSalesOrder(input: {
+            customerID: "${customerId}"
           }) {
             id
-            name
-            role {
+            customer {
               id
               name
             }
           }
         }
       `;
-      const result = await graphQLClient.rawRequest(query);
+      const result = await graphQLClient.rawRequest<{
+        createSalesOrder: {
+          id: string;
+          customer: { id: string; name: string };
+        };
+      }>(createSalesOrder);
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
-        createUser: {
+        createSalesOrder: {
           id: expect.any(String),
-          name: "alice",
-          role: {
-            id: roleId,
-            name: "admin",
+          customer: {
+            id: customerId,
+            name: "customer",
           },
         },
       });
@@ -271,10 +279,8 @@ describe("dataplane", () => {
     test("providing invalid id fails", async () => {
       const query = gql`
         mutation {
-          createUser(input: {
-            name: "alice"
-            email: "alice-${randomUUID()}@example.com"
-            roleId: "${randomUUID()}"
+          createSalesOrder(input: {
+            customerID: "${randomUUID()}"
           }) {
             id
           }
@@ -475,7 +481,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${randomUUID()}@example.com"
-            roleId: "${roleId}"
+            role: USER
           }) {
             id
             name
@@ -585,7 +591,7 @@ describe("dataplane", () => {
     test("query without token fails", async () => {
       const query = gql`
         query {
-          role(id: "${roleId}") {
+          user(id: "${randomUUID()}") {
             id
             name
           }
@@ -609,7 +615,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "bob"
             email: "bob-${randomUUID()}@example.com"
-            roleId: "${roleId}"
+            role: USER
           }) {
             id
             name

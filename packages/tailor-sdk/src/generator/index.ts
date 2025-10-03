@@ -134,6 +134,11 @@ export class GenerationManager {
           }
         }
       }
+
+      // Auth service
+      if (app.authService) {
+        await app.authService.resolveNamespaces();
+      }
     }
 
     // Executor services

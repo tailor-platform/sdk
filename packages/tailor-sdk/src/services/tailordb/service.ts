@@ -17,6 +17,10 @@ export class TailorDBService {
   }
 
   async loadTypes() {
+    if (Object.keys(this.types).length > 0) {
+      return this.types;
+    }
+
     if (!this.config.files || this.config.files.length === 0) {
       return;
     }

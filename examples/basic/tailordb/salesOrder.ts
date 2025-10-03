@@ -2,8 +2,8 @@ import { db } from "@tailor-platform/tailor-sdk";
 import { customer } from "./customer";
 import { user } from "./user";
 import {
-  defaultGqlPermission,
   defaultPermission,
+  defaultGqlPermission,
   PermissionUser,
 } from "./permissions";
 
@@ -29,8 +29,7 @@ export const salesOrder = db
     { fields: ["customerID", "status"], unique: false },
   )
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type salesOrder = typeof salesOrder;
+  .gqlPermission(defaultGqlPermission);
 
 export const salesOrderCreated = db
   .type(["SalesOrderCreated", "SalesOrderCreatedList"], {
@@ -40,5 +39,4 @@ export const salesOrderCreated = db
     status: db.string({ optional: true }),
   })
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type salesOrderCreated = typeof salesOrderCreated;
+  .gqlPermission(defaultGqlPermission);

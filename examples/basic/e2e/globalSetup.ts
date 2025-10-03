@@ -9,7 +9,7 @@ declare module "vitest" {
 
 export function setup(project: TestProject) {
   const result = execSync(
-    "tailorctl workspace machineuser token -a my-app -m admin-machine-user -f json",
+    `tailorctl workspace machineuser token -a my-app -m admin-machine-user -f json ${process.env.WORKSPACE_ID ? `-w ${process.env.WORKSPACE_ID}` : ""}`.trim(),
   );
   const resultJson = JSON.parse(result.toString("utf-8")) as {
     access_token: string;

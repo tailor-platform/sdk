@@ -1,14 +1,10 @@
 import { createExecutor, db, recordCreatedTrigger } from "@tailor-platform/tailor-sdk";
 
-//#region constants.ts
-const defaultMachineUserRole = "4293a799-4398-55e6-a19a-fe8427d1a415";
-
-//#endregion
 //#region tailordb/permissions.ts
 const defaultMachineUser = [
-	{ user: "roleId" },
+	{ user: "role" },
 	"=",
-	defaultMachineUserRole
+	"ADMIN"
 ];
 const loggedIn = [
 	{ user: "_loggedIn" },
@@ -39,20 +35,13 @@ const defaultGqlPermission = [{
 }];
 
 //#endregion
-//#region tailordb/role.ts
-const role = db.type("Role", { name: db.string() }).permission(defaultPermission).gqlPermission(defaultGqlPermission);
-
-//#endregion
 //#region tailordb/user.ts
 const user = db.type("User", {
 	name: db.string(),
 	email: db.string().unique(),
 	status: db.string({ optional: true }),
 	department: db.string({ optional: true }),
-	roleId: db.uuid().relation({
-		type: "n-1",
-		toward: { type: role }
-	}),
+	role: db.enum("ADMIN", "USER"),
 	...db.fields.timestamps()
 }).files({ avatar: "profile image" }).indexes({
 	fields: ["name", "department"],

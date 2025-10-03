@@ -17,5 +17,4 @@ export const userSetting = db
     ...db.fields.timestamps(),
   })
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type userSetting = typeof userSetting;
+  .gqlPermission(defaultGqlPermission);

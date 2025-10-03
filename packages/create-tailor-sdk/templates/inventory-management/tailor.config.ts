@@ -1,4 +1,5 @@
-import { defineConfig } from "@tailor-platform/tailor-sdk";
+import { defineAuth, defineConfig } from "@tailor-platform/tailor-sdk";
+import { user } from "./src/db/user";
 
 export default defineConfig({
   id: process.env.WORKSPACE_ID!,
@@ -14,25 +15,23 @@ export default defineConfig({
           files: [`./src/pipeline/*.ts`],
         },
       },
-      auth: {
-        namespace: "main-auth",
-        machineUsers: [
-          {
-            Name: "manager",
-            Attributes: [],
-            AttributeMap: {
-              role: "MANAGER",
-            },
+      auth: defineAuth("main-auth", {
+        userProfile: {
+          type: user,
+          usernameField: "email",
+          attributes: {
+            role: true,
           },
-          {
-            Name: "staff",
-            Attributes: [],
-            AttributeMap: {
-              role: "STAFF",
-            },
+        },
+        machineUsers: {
+          manager: {
+            attributes: { role: "MANAGER" },
           },
-        ],
-      },
+          staff: {
+            attributes: { role: "STAFF" },
+          },
+        },
+      }),
     },
   },
   executor: {

@@ -25,5 +25,4 @@ export const invoice = db
     ...db.fields.timestamps(),
   })
   .permission<PermissionUser>(defaultPermission)
-  .gqlPermission<PermissionUser>(defaultGqlPermission);
-export type invoice = typeof invoice;
+  .gqlPermission(defaultGqlPermission);
