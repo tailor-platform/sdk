@@ -23,7 +23,7 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(2);
+    expect(pipelineResolvers.length).toBe(3);
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
@@ -196,19 +196,42 @@ describe("dataplane", () => {
         },
       });
     });
-  });
 
-  test("ommiting required fields fails", async () => {
-    const query = gql`
-      query {
-        stepChain(input: { user: { name: { first: "Alice" } } }) {
-          result {
-            summary
+    test("ommiting required fields fails", async () => {
+      const query = gql`
+        query {
+          stepChain(input: { user: { name: { first: "Alice" } } }) {
+            result {
+              summary
+            }
           }
         }
-      }
-    `;
-    const result = await graphQLClient.rawRequest(query);
-    expect(result.errors).toBeDefined();
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeDefined();
+    });
+  });
+
+  describe("userInfo", async () => {
+    test("query user info", async () => {
+      const query = gql`
+        query {
+          showUserInfo(input: { message: "Hello" }) {
+            message
+            userId
+            userType
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeUndefined();
+      expect(result.data).toEqual({
+        showUserInfo: {
+          message: "Hello",
+          userId: expect.any(String),
+          userType: "machine_user",
+        },
+      });
+    });
   });
 });

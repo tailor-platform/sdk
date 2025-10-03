@@ -98,10 +98,8 @@ const updateInventory = async (db: Kysely<DB>, input: Input) => {
   }
 };
 
-export default createMutationResolver("registerOrder", input, {
-  defaults: { dbNamespace: "main-db" },
-})
-  .sqlStep("exec", async (context) => {
+export default createMutationResolver("registerOrder", input)
+  .fnStep("exec", async (context) => {
     const client = new tailordb.Client({
       namespace: "main-db",
     });

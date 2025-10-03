@@ -8,11 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `pnpm exec turbo run gen` - Run code generation for Tailor SDK components
 - `pnpm exec turbo run gen:watch` - Run code generation in watch mode
-- `pnpm exec turbo run apply` - Deploy to Tailor Platform (requires TAILOR_TOKEN or tailorctl authentication)
+- `pnpm exec turbo run apply` - Deploy to Tailor Platform
 - `pnpm exec turbo run dev` - Start development server
 - `pnpm exec turbo run build` - Build all packages
 - `pnpm exec turbo run test` - Run all tests using Turbo
-- `pnpm exec turbo run test:root` - Run tests in root directory only
 - `pnpm exec turbo run check` - Run format, lint:fix, and typecheck in sequence
 - `pnpm exec turbo run lint` - Run ESLint
 - `pnpm exec turbo run lint:fix` - Run ESLint with auto-fix
@@ -29,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### CLI Commands
 
-- `pnpm exec @tailor-platform/tailor-sdk init <project-name>` - Initialize new project
+- `pnpm exec tailor-sdk init <project-name>` - Initialize new project
 - `pnpm exec tailor-sdk generate` - Generate code (types, SDL, bundled functions)
 - `pnpm exec tailor-sdk generate --watch` - Watch mode for regeneration
 - `pnpm exec tailor-sdk apply` - Deploy to Tailor Platform
@@ -68,7 +67,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 
 2. **Pipeline Resolvers** (`src/services/pipeline/`)
    - Create GraphQL resolvers using `createQueryResolver` or `createMutationResolver`
-   - Use step-based flow: `.fnStep()`, `.sqlStep()`, etc.
+   - Use step-based flow: `.fnStep()`
    - Each step's result is available in subsequent steps via context
    - Define return type with `.returns()`
 
@@ -96,13 +95,13 @@ export const modelName = db.type("ModelName", {
     .relation({ type: "n-1", toward: { type: relatedModel } }),
   ...db.fields.timestamps(),
 });
-export type ModelName = typeof modelName;
+export type modelName = typeof modelName;
 ```
 
 **Resolver Pattern:**
 
 ```typescript
-export default createQueryResolver("name", inputType, options)
+export default createQueryResolver("name", inputType)
   .fnStep("stepName", (context) => {
     /* logic */
   })
@@ -114,24 +113,22 @@ export default createQueryResolver("name", inputType, options)
 ```typescript
 export default createExecutor("name", "description")
   .on(recordCreatedTrigger(model))
-  .executeFunction(handler);
+  .executeFunction({ fn: handler, dbNamespace: "tailordb" });
 ```
 
 ### Important Notes
 
 - This project uses ESM modules and requires Node.js 22.14.0+
-- Package manager: pnpm 10.14.0 (configured in packageManager field)
+- Package manager: pnpm 10.17.1 (configured in packageManager field)
 - TypeScript is configured in strict mode
 - Lefthook runs pre-commit checks automatically (lint, format, typecheck)
-- Always use parameterized queries to prevent SQL injection
 - The SDK uses Rolldown for bundling and Turbo for task orchestration
-- Kysely is integrated for type-safe SQL query building
-- Test framework: Vitest with SWC for TypeScript transformation
+- Test framework: Vitest
 - Build tool: tsdown for creating ESM bundles
 
 ### Testing
 
 - Run tests: `pnpm exec turbo run test` or `pnpm test` in specific packages
-- Tests use Vitest with vitest-mock-extended for mocking
+- Tests use Vitest
 - Test files: `**/__tests__/**/*.ts` or `**/?(*.)+(spec|test).ts`
-- Example tests are in `examples/basic/tests/`
+- Example tests are in `examples/basic/tests/` and `examples/basic/e2e/`

@@ -1,31 +1,22 @@
 import { type DeepWidening } from "@/types/helpers";
-import { type gqlFactory } from "./gql";
 import { type sqlFactory } from "./sql";
+import type { JsonValue } from "type-fest";
 
-export type StepType = "fn" | "sql" | "gql";
-export type Step<R, Context extends Record<string, unknown>> =
-  | (({ input, context }: Context) => R)
-  | sqlFactory<Context>
-  | gqlFactory<Context>;
-export type StepDef<
-  S extends string,
-  A,
-  B,
-  Context extends Record<string, unknown> = { input: A },
-> =
-  | ["fn", S, Step<B, Context>, FnStepOptions | undefined]
-  | ["sql", S, Step<B, Context>, SqlStepOptions | undefined]
-  | ["gql", S, Step<B, Context>, GqlStepOptions | undefined];
+export type QueryType = "query" | "mutation";
 
-export type FnStepOptions = object;
-export type SqlStepOptions = {
+export type Step = [
+  "fn",
+  string,
+  sqlFactory<never, ResolverOptions, StepOptions>,
+  StepOptions | undefined,
+];
+
+export type StepOptions = {
   dbNamespace?: string;
 };
-export type GqlStepOptions = object;
-export type StepOptions = FnStepOptions | SqlStepOptions;
 export type ResolverOptions = {
   description?: string;
-  defaults?: FnStepOptions & SqlStepOptions;
+  defaults?: StepOptions;
 };
 
 export type PipelineResolverServiceConfig = { files: string[] };
@@ -33,4 +24,10 @@ export type PipelineResolverServiceInput = {
   [namespace: string]: PipelineResolverServiceConfig;
 };
 
-export type StepReturn<T> = DeepWidening<Awaited<T>>;
+// Following Platform behavior, pass undefined and void as null to the next step.
+export type StepReturn<T> = DeepWidening<
+  Awaited<T extends undefined | void ? null : T>
+>;
+
+// Following Platform behavior, restrict to return only JSON-serializable values.
+export type StepReturnable = JsonValue | undefined | void;

@@ -61,8 +61,8 @@ createQueryResolver("stepChain", inputType)
   .fnStep("step1", (context) => {
     // First step logic
   })
-  .sqlStep("step2", {
-    query: "SELECT * FROM users WHERE ...",
+  .fnStep("step2", (context) => {
+    // Second step logic
   })
   .returns((context) => context.step2);
 ```

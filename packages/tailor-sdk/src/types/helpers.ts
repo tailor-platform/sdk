@@ -21,13 +21,6 @@ export type output<T> = T extends { _output: infer U }
   ? DeepWritable<U>
   : never;
 
-export type StrictOutput<O, R extends Record<string, unknown>> =
-  Required<R> extends output<O>
-    ? keyof R extends keyof output<O>
-      ? R
-      : ["unnecessary fields", Exclude<keyof R, keyof output<O>>]
-    : output<O>;
-
 export type NullableToOptional<T> = {
   [K in keyof T as null extends T[K] ? never : K]: T[K];
 } & {

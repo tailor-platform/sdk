@@ -3,12 +3,8 @@ import { type Resolver } from "../resolver";
 import { isResolver } from "../utils";
 import { type ILoader } from "@/bundler";
 
-export class ResolverLoader
-  implements ILoader<Resolver<any, any, any, any, any, any>>
-{
-  async load(
-    resolverFilePath: string,
-  ): Promise<Resolver<any, any, any, any, any, any> | null> {
+export class ResolverLoader implements ILoader<Resolver> {
+  async load(resolverFilePath: string): Promise<Resolver | null> {
     const resolverModule = await import(
       `${pathToFileURL(resolverFilePath).href}?t=${Date.now()}`
     );

@@ -23,14 +23,14 @@ const resolver = createQueryResolver(
     )} on step2!`;
   })
 
-  .sqlStep("sqlStep", async (context) => {
+  .fnStep("sqlStep", async (context) => {
     const result = await context.client.execOne<{ name: string } | null>(
       /* sql */ `SELECT name FROM User ORDER BY createdAt DESC`,
     );
     return result ? result.name : "no user found";
   })
 
-  .sqlStep("kyselyStep", (context) =>
+  .fnStep("kyselyStep", (context) =>
     kyselyWrapper(context, async (context) => {
       const query = context.db
         .selectFrom("Supplier")

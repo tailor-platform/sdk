@@ -9,24 +9,23 @@ import { isResolver } from "./utils";
 import { pathToFileURL } from "node:url";
 
 export class PipelineResolverService {
-  private bundler: Bundler<Resolver<any, any, any, any, any, any>>;
+  private bundler: Bundler<Resolver>;
   private resolvers: Record<string, Resolver> = {};
 
   constructor(
     public readonly namespace: string,
     private readonly config: PipelineResolverServiceConfig,
   ) {
-    const bundlerConfig: BundlerConfig<Resolver<any, any, any, any, any, any>> =
-      {
-        namespace,
-        serviceConfig: config,
-        loader: new ResolverLoader(),
-        transformer: new CodeTransformer(),
-        outputDirs: {
-          preBundle: "resolvers",
-          postBundle: "functions",
-        },
-      };
+    const bundlerConfig: BundlerConfig<Resolver> = {
+      namespace,
+      serviceConfig: config,
+      loader: new ResolverLoader(),
+      transformer: new CodeTransformer(),
+      outputDirs: {
+        preBundle: "resolvers",
+        postBundle: "functions",
+      },
+    };
     this.bundler = new Bundler(bundlerConfig);
   }
 

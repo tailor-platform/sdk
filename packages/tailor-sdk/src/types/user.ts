@@ -1,7 +1,8 @@
 export type TailorUser = {
+  // Nil UUID means unauthenticated user
   id: string;
-  attributes: unknown[];
-  tenant_id: string;
-  type: "machine_user" | "user";
+  // Empty string means unauthenticated user
+  type: "user" | "machine_user" | "";
   workspace_id: string;
+  attributes: string[];
 };

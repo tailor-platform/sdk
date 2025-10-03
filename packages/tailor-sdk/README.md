@@ -657,11 +657,6 @@ createQueryResolver(
 
 #### fnStep
 
-Add a step without database access.
-
-#### sqlStep
-
-Add a step with database access.
 Context includes a `client` property that can be used to execute SQL queries.
 You need to specify which TailorDB service to use with the `dbNamespace` option when creating resolver or step:
 
@@ -673,7 +668,7 @@ createQueryResolver(
   }),
   { defaults: { dbNamespace: "tailordb" } },
 )
-  .sqlStep("step1", async (context) => {
+  .fnStep("step1", async (context) => {
     const result = await context.client.execOne<{ id: string } | null>(
       `SELECT id FROM User WHERE name = ? LIMIT 1`,
       [context.input.name],
@@ -700,7 +695,7 @@ createQueryResolver(
   }),
   { defaults: { dbNamespace: "tailordb" } },
 )
-  .sqlStep("step1", async (context) =>
+  .fnStep("step1", async (context) =>
     kyselyWrapper(context, async (context) => {
       const query = context.db
         .selectFrom("User")
@@ -721,10 +716,6 @@ createQueryResolver(
     }),
   );
 ```
-
-#### gqlStep
-
-TODO
 
 #### returns
 

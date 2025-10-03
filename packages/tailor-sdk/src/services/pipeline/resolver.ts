@@ -1,176 +1,95 @@
-import { type gqlFactory } from "./gql";
 import { type sqlFactory } from "./sql";
 import {
-  type FnStepOptions,
-  type GqlStepOptions,
   type ResolverOptions,
-  type SqlStepOptions,
+  type StepOptions,
   type Step,
-  type StepDef,
   type StepReturn,
+  type QueryType,
 } from "./types";
 import { type TailorType } from "@/types/type";
-import { type output, type StrictOutput } from "@/types/helpers";
+import { type output } from "@/types/helpers";
+import type { TailorUser } from "@/types";
+import type { Exact } from "type-fest";
 
 export class Resolver<
-  QueryType extends "query" | "mutation" = any,
-  Input extends TailorType<any, any> = any,
-  _CurrentOutput = any,
   Context extends Record<string, unknown> = any,
-  Steps extends StepDef<string, any, any, any>[] = StepDef<
-    string,
-    any,
-    any,
-    any
-  >[],
   Output extends TailorType<any, any> = any,
+  Options extends ResolverOptions = ResolverOptions,
 > {
-  readonly _input = null as output<Input>;
-  readonly _output = null as output<Output>;
+  readonly _output = null as unknown as Output;
   readonly _context = null as unknown as Context;
 
-  #steps = [] as unknown as Steps;
-  private set steps(value: Steps) {
-    this.#steps = value;
-  }
+  #steps: Step[];
   get steps() {
-    return Array.from(this.#steps) as Steps;
+    return this.#steps as ReadonlyArray<Step>;
   }
 
-  #options = {} as ResolverOptions;
-  private set options(value: ResolverOptions) {
-    this.#options = value;
-  }
+  #options: ResolverOptions;
   get options() {
     return this.#options as Readonly<ResolverOptions>;
   }
 
   #output = null as unknown as Output;
-  private set output(value: Output) {
-    this.#output = value;
-  }
   get output() {
-    return this.#output;
+    return this.#output as Readonly<Output>;
   }
 
-  #outputMapper = null as unknown as (c: Context) => Output;
-  private set outputMapper(value: (c: Context) => Output) {
-    this.#outputMapper = value;
-  }
+  #outputMapper = null as unknown as (c: Context) => output<Output>;
   get outputMapper() {
-    return this.#outputMapper as (c: Context) => Output;
+    return this.#outputMapper as Readonly<(c: Context) => output<Output>>;
   }
 
   constructor(
     public readonly queryType: QueryType,
     public readonly name: string,
-    public readonly input: TailorType<any, Input>,
+    public readonly input: TailorType<any, any>,
     options: ResolverOptions = { defaults: {} },
   ) {
-    this.steps = [] as unknown as Steps;
-    this.options = options;
+    this.#steps = [];
+    this.#options = options;
   }
 
-  fnStep<const S extends string, const R>(
-    name: S,
-    fn: (context: Context) => R | Promise<R>,
-    _options?: FnStepOptions,
-  ) {
-    this.#steps.push(["fn", name, fn, _options]);
+  fnStep<
+    const S extends string,
+    const Q extends sqlFactory<Context, Options, SO>,
+    SO extends StepOptions,
+  >(name: S, fn: Q, options?: SO) {
+    this.#steps.push(["fn", name, fn, options]);
     return this as unknown as Resolver<
-      QueryType,
-      Input,
-      Awaited<R>,
-      Context & Record<S, StepReturn<R>>,
-      [...Steps, ["fn", S, Step<R, Context>, FnStepOptions]],
-      Output
-    >;
-  }
-
-  sqlStep<const S extends string, const Q extends sqlFactory<Context>>(
-    name: S,
-    fn: Q,
-    options?: SqlStepOptions,
-  ) {
-    this.#steps.push(["sql", name, fn, options]);
-    return this as unknown as Resolver<
-      QueryType,
-      Input,
-      Awaited<ReturnType<Q>>,
       Context & Record<S, StepReturn<ReturnType<Q>>>,
-      [...Steps, ["sql", S, Step<ReturnType<Q>, Context>, SqlStepOptions]],
-      Output
+      Output,
+      Options
     >;
   }
 
-  gqlStep<const S extends string, const Q extends gqlFactory<Context>>(
-    name: S,
-    fn: Q,
-    _options?: GqlStepOptions,
-  ) {
-    this.#steps.push(["gql", name, fn, _options]);
-    return this as unknown as Resolver<
-      QueryType,
-      Input,
-      Awaited<ReturnType<Q>>["data"],
-      Context & Record<S, StepReturn<ReturnType<Q>>>,
-      [
-        ...Steps,
-        [
-          "gql",
-          S,
-          Step<Awaited<ReturnType<Q>>["data"], Context>,
-          GqlStepOptions,
-        ],
-      ],
-      Output
-    >;
-  }
-
-  returns<
-    R extends Record<string, unknown>,
-    const O extends TailorType<any, any>,
-  >(
-    map: (context: Context) => StrictOutput<O, R>,
+  returns<R extends Exact<output<O>, R>, O extends TailorType<any, any>>(
+    map: (context: Context) => R,
     output: O,
-  ): Resolver<QueryType, Input, output<O>, Context, Steps, O> {
-    this.outputMapper = map as any;
-    this.output = output as any;
-    return this as unknown as Resolver<
-      QueryType,
-      Input,
-      output<O>,
-      Context,
-      Steps,
-      O
-    >;
+  ) {
+    this.#outputMapper = map as any;
+    this.#output = output as any;
+    return this as unknown as Resolver<Context, O, Options>;
   }
 }
 
-export function createQueryResolver<const Input extends TailorType<any, any>>(
-  name: string,
-  input: Input,
-  options?: ResolverOptions,
-) {
+export function createQueryResolver<
+  const Input extends TailorType<any, any>,
+  Options extends ResolverOptions,
+>(name: string, input: Input, options?: Options) {
   return new Resolver<
-    "query",
-    Input,
-    output<Input>,
-    { input: output<Input> },
-    [],
-    never
+    { input: output<Input>; user: TailorUser },
+    never,
+    Options
   >("query", name, input, options);
 }
 
 export function createMutationResolver<
   const Input extends TailorType<any, any>,
->(name: string, input: Input, options?: ResolverOptions) {
+  Options extends ResolverOptions,
+>(name: string, input: Input, options?: Options) {
   return new Resolver<
-    "mutation",
-    Input,
-    output<Input>,
-    { input: output<Input> },
-    [],
-    never
+    { input: output<Input>; user: TailorUser },
+    never,
+    Options
   >("mutation", name, input, options);
 }

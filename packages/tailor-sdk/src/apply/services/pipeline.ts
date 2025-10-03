@@ -19,11 +19,7 @@ import {
   type PipelineResolver_PipelineSchema,
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
-import {
-  type Executor,
-  type PipelineResolverService,
-  type StepDef,
-} from "@/services";
+import { type Executor, type PipelineResolverService } from "@/services";
 import { type Resolver } from "@/services/pipeline/resolver";
 import { type Workspace } from "@/workspace";
 import { ChangeSet } from ".";
@@ -335,42 +331,32 @@ function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
 ): MessageInitShape<typeof PipelineResolverSchema> {
-  const pipelines: PipelineInfo[] = resolver.steps.map(
-    (step: StepDef<string, any, any, any>) => {
-      const [type, name] = step;
-      switch (type) {
-        case "fn":
-        case "sql": {
-          const functionPath = path.join(
-            getDistDir(),
-            "functions",
-            `${resolver.name}__${name}.js`,
-          );
-          let functionCode = "";
-          try {
-            functionCode = fs.readFileSync(functionPath, "utf-8");
-          } catch {
-            console.warn(`Function file not found: ${functionPath}`);
-          }
-          return {
-            name,
-            description: name,
-            operationType: OperationType.FUNCTION,
-            operationSource: functionCode,
-          };
+  const pipelines: PipelineInfo[] = resolver.steps.map((step) => {
+    const [type, name] = step;
+    switch (type) {
+      case "fn": {
+        const functionPath = path.join(
+          getDistDir(),
+          "functions",
+          `${resolver.name}__${name}.js`,
+        );
+        let functionCode = "";
+        try {
+          functionCode = fs.readFileSync(functionPath, "utf-8");
+        } catch {
+          console.warn(`Function file not found: ${functionPath}`);
         }
-        case "gql":
-          return {
-            name,
-            description: name,
-            operationType: OperationType.GRAPHQL,
-            operationSource: "",
-          };
-        default:
-          throw new Error(`Unsupported step kind: ${step[0]}`);
+        return {
+          name,
+          description: name,
+          operationType: OperationType.FUNCTION,
+          operationSource: functionCode,
+        };
       }
-    },
-  );
+      default:
+        throw new Error(`Unsupported step kind: ${step[0]}`);
+    }
+  });
 
   // Extract field information for Input type
   const inputFields = extractTypeFields(resolver.input);
@@ -428,7 +414,7 @@ function generateResolverManifest(
           operationType,
           operationSource: pipeline.operationSource,
           operationHook: {
-            expr: "({ ...context.pipeline, ...context.args });",
+            expr: "({ ...context.pipeline, ...context.args, user });",
           },
           postScript: `args.${pipeline.name}`,
         };
@@ -440,7 +426,7 @@ function generateResolverManifest(
         operationType: PipelineResolver_OperationType.FUNCTION,
         operationSource: `globalThis.main = ${resolverMetadata.outputMapper || "() => ({})"}`,
         operationHook: {
-          expr: "({ ...context.pipeline, ...context.args });",
+          expr: "({ ...context.pipeline, ...context.args, user });",
         },
         postScript: `args.__construct_output`,
       },

@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, it } from "vitest";
 import { createMutationResolver, createQueryResolver } from "./resolver";
 import { t } from "@/types/type";
+import type { TailorUser } from "@/types";
 
 const UserInput = t.type({
   id: t.string(),
@@ -15,24 +16,15 @@ const UserOutput = t.type({
 describe("createQueryResolver type tests", () => {
   it("初期状態の型が正しいこと", () => {
     const resolver = createQueryResolver("getUser", UserInput);
-    expectTypeOf(resolver.queryType).toEqualTypeOf<"query">();
     expectTypeOf(resolver.name).toEqualTypeOf<string>();
 
-    type InputType = typeof resolver._input;
-    expectTypeOf<InputType>().toEqualTypeOf<{
-      id: string;
-      name?: string | null;
-    }>();
-
     type ContextType = typeof resolver._context;
-    expectTypeOf<ContextType>().toEqualTypeOf<{
+    expectTypeOf<ContextType>().toExtend<{
       input: {
         id: string;
         name?: string | null;
       };
     }>();
-
-    expectTypeOf(resolver._output).toEqualTypeOf<never>();
   });
 
   it("fnStep追加後の型が正しいこと", () => {
@@ -40,7 +32,7 @@ describe("createQueryResolver type tests", () => {
       "fetchUser",
       async (context) => {
         type CtxType = typeof context;
-        expectTypeOf<CtxType>().toEqualTypeOf<{
+        expectTypeOf<CtxType>().toExtend<{
           input: {
             id: string;
             name?: string | null;
@@ -69,44 +61,84 @@ describe("createQueryResolver type tests", () => {
     }>();
   });
 
-  it("sqlStep追加後の型が正しいこと", () => {
-    const _resolver = createQueryResolver("getUser", UserInput).sqlStep(
-      "queryUser",
-      ({ client, input }) => {
-        return client.execOne<{ id: string; name: string; email: string }>(
-          `SELECT * FROM users WHERE id = ${input.id}`,
-        );
-      },
+  it("fnStepでJsonValueを返した場合にエラーにならないこと", () => {
+    const a = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => ({ key: "value" }),
     );
-
-    // Result is added to context
-    type ResolverContext = typeof _resolver._context;
-    expectTypeOf<ResolverContext>().toExtend<{
-      input: {
-        id: string;
-        name?: string | null;
+    expectTypeOf(a._context).toExtend<{
+      validStep: {
+        key: string;
       };
-      queryUser: { id: string; name: string; email: string };
+    }>();
+
+    const b = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => "value",
+    );
+    expectTypeOf(b._context).toExtend<{
+      validStep: string;
+    }>();
+
+    const c = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => 10,
+    );
+    expectTypeOf(c._context).toExtend<{
+      validStep: number;
+    }>();
+
+    const d = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => true,
+    );
+    expectTypeOf(d._context).toExtend<{
+      validStep: boolean;
+    }>();
+
+    const e = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => [1, 2, 3],
+    );
+    expectTypeOf(e._context).toExtend<{
+      validStep: number[];
+    }>();
+
+    const f = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => null,
+    );
+    expectTypeOf(f._context).toExtend<{
+      validStep: null;
+    }>();
+
+    const g = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => undefined,
+    );
+    expectTypeOf(g._context).toExtend<{
+      validStep: null;
+    }>();
+
+    const h = createQueryResolver("getUser", UserInput).fnStep(
+      "validStep",
+      () => {},
+    );
+    expectTypeOf(h._context).toExtend<{
+      validStep: null;
     }>();
   });
 
-  it("gqlStep追加後の型が正しいこと", () => {
-    const _resolver = createQueryResolver("getUser", UserInput).gqlStep(
-      "fetchUserGql",
-      ({ client, gql }) =>
-        client.query(gql(`query { fetchUser { id name } }`), {}),
-    );
+  it("fnStepでJsonValueでない型を返した場合にエラーになること", () => {
+    // @ts-expect-error Date cannot be used as return type
+    createQueryResolver("getUser", UserInput).fnStep("invalidStep", () => {
+      return new Date();
+    });
 
-    // The entire gql result is added to context
-    type ResolverContext = typeof _resolver._context;
-    type _t = ResolverContext["fetchUserGql"];
-    expectTypeOf<ResolverContext>().toExtend<{
-      input: {
-        id: string;
-        name?: string | null;
-      };
-      fetchUserGql: any; // Type of gql result
-    }>();
+    // @ts-expect-error Function cannot be used as return type
+    createQueryResolver("getUser", UserInput).fnStep("invalidStep", () => {
+      return () => {};
+    });
   });
 
   it("returns()メソッドの型制約が正しいこと", () => {
@@ -127,12 +159,6 @@ describe("createQueryResolver type tests", () => {
       }),
       UserOutput,
     );
-    type OutputType = typeof _withReturns._output;
-    expectTypeOf<OutputType>().toExtend<{
-      id: string;
-      name: string;
-      email: string;
-    }>();
   });
 
   it("複数のステップをチェーンした場合の型の累積が正しいこと", () => {
@@ -147,19 +173,18 @@ describe("createQueryResolver type tests", () => {
         }>();
         return { userId: context.input.id };
       })
-      .sqlStep("step2", ({ client, step1 }) => {
-        expectTypeOf<typeof step1>().toExtend<{ userId: string }>();
+      .fnStep(
+        "step2",
+        ({ client, step1 }) => {
+          expectTypeOf<typeof step1>().toExtend<{ userId: string }>();
 
-        return client.exec<{ posts: string[] }>(
-          `SELECT posts FROM user_posts WHERE user_id = ${step1.userId}`,
-        );
-      })
-      .gqlStep("step3", ({ gql: _gql, client, step2: _step2 }) => {
-        expectTypeOf<typeof _step2>().toEqualTypeOf<{ posts: string[] }>();
-
-        return client.query("" as any, {} as any);
-      })
-      .fnStep("step4", async (_context) => {
+          return client.exec<{ posts: string[] }>(
+            `SELECT posts FROM user_posts WHERE user_id = ${step1.userId}`,
+          );
+        },
+        { dbNamespace: "main-db" },
+      )
+      .fnStep("step3", async (_context) => {
         type CtxType = typeof _context;
         expectTypeOf<CtxType>().toExtend<{
           input: {
@@ -168,7 +193,6 @@ describe("createQueryResolver type tests", () => {
           };
           step1: { userId: string };
           step2: { posts: string[] };
-          step3: any; // gql result
         }>();
         return {
           finalResult: "processed",
@@ -184,24 +208,16 @@ describe("createQueryResolver type tests", () => {
       };
       step1: { userId: string };
       step2: { posts: string[] };
-      step3: any; // gql result
-      step4: { finalResult: string };
+      step3: { finalResult: string };
     }>();
   });
 
   it("createMutationResolverの型が正しいこと", () => {
     const resolver = createMutationResolver("updateUser", UserInput);
-    expectTypeOf(resolver.queryType).toEqualTypeOf<"mutation">();
     expectTypeOf(resolver.name).toEqualTypeOf<string>();
 
-    type InputType = typeof resolver._input;
-    expectTypeOf<InputType>().toEqualTypeOf<{
-      id: string;
-      name?: string | null;
-    }>();
-
     type ContextType = typeof resolver._context;
-    expectTypeOf<ContextType>().toEqualTypeOf<{
+    expectTypeOf<ContextType>().toExtend<{
       input: {
         id: string;
         name?: string | null;
@@ -221,13 +237,9 @@ describe("createQueryResolver type tests", () => {
         }>();
         return { value: "string" };
       })
-      .sqlStep("step3", ({ step2: _step2 }) => {
+      .fnStep("step3", ({ step2: _step2 }) => {
         expectTypeOf<typeof _step2>().toExtend<{ value: string }>();
         return {} as Promise<{ sqlResult: boolean }>;
-      })
-      .gqlStep("step4", ({ step3: _step3 }) => {
-        expectTypeOf<typeof _step3>().toEqualTypeOf<{ sqlResult: boolean }>();
-        return {} as any;
       });
 
     // Verify that CurrentOutput is correctly typed for each step
@@ -236,7 +248,6 @@ describe("createQueryResolver type tests", () => {
       step1: { value: number };
       step2: { value: string };
       step3: { sqlResult: boolean };
-      step4: any;
     }>();
   });
 
@@ -259,12 +270,6 @@ describe("createQueryResolver type tests", () => {
         return { processed: true };
       },
     );
-
-    type InputType = typeof _resolver._input;
-    expectTypeOf<InputType>().toEqualTypeOf<{
-      required: string;
-      optional?: string | null;
-    }>();
   });
 
   it("配列型を含む型が正しく処理されること", () => {
@@ -301,13 +306,8 @@ describe("createQueryResolver type tests", () => {
       },
     );
 
-    // Type verification
-    type InputType = typeof _resolver._input;
+    // 型の確認
     type ContextType = typeof _resolver._context;
-
-    expectTypeOf<InputType>().toHaveProperty("ids");
-    expectTypeOf<InputType>().toHaveProperty("tags");
-
     expectTypeOf<ContextType>().toHaveProperty("input");
     expectTypeOf<ContextType>().toHaveProperty("processArray");
   });
@@ -332,7 +332,7 @@ describe("createQueryResolver type tests", () => {
 
         return { result: 123 };
       })
-      .sqlStep("step3", ({ step2: _step2 }) => {
+      .fnStep("step3", ({ step2: _step2 }) => {
         expectTypeOf<typeof _step2>().toExtend<{ result: number }>();
         return {} as Promise<{ data: boolean[] }>;
       });
@@ -374,7 +374,7 @@ describe("createQueryResolver type tests", () => {
         >();
 
         type ContextType = typeof context;
-        expectTypeOf<ContextType>().toEqualTypeOf<{
+        expectTypeOf<ContextType>().toExtend<{
           input: {
             id: string;
             count: number;
@@ -392,16 +392,7 @@ describe("createQueryResolver type tests", () => {
       },
     );
 
-    type InputType = typeof _resolver._input;
     type ContextType = typeof _resolver._context;
-
-    expectTypeOf<InputType>().toHaveProperty("id");
-    expectTypeOf<InputType>().toHaveProperty("count");
-    expectTypeOf<InputType>().toHaveProperty("price");
-    expectTypeOf<InputType>().toHaveProperty("active");
-    expectTypeOf<InputType>().toHaveProperty("tags");
-    expectTypeOf<InputType>().toHaveProperty("data");
-
     expectTypeOf<ContextType>().toHaveProperty("input");
     expectTypeOf<ContextType>().toHaveProperty("processComplex");
   });
@@ -412,7 +403,7 @@ describe("createQueryResolver type tests", () => {
       priority: t.enum("low", "medium", "high", { optional: true }),
     });
 
-    const _resolver = createQueryResolver("enumTest", EnumInput).fnStep(
+    createQueryResolver("enumTest", EnumInput).fnStep(
       "processEnum",
       (_context) => {
         // Type check for enum values
@@ -425,7 +416,7 @@ describe("createQueryResolver type tests", () => {
 
         // Verify the type of the entire context
         type ContextType = typeof _context;
-        expectTypeOf<ContextType>().toEqualTypeOf<{
+        expectTypeOf<ContextType>().toExtend<{
           input: {
             status: "active" | "inactive" | "pending";
             priority?: "low" | "medium" | "high" | null;
@@ -435,26 +426,6 @@ describe("createQueryResolver type tests", () => {
         return { processed: true };
       },
     );
-
-    type InputType = typeof _resolver._input;
-
-    // Verify that the input type is correct
-    expectTypeOf<InputType>().toEqualTypeOf<{
-      status: "active" | "inactive" | "pending";
-      priority?: "low" | "medium" | "high" | null;
-    }>();
-
-    // Verify the type with actual values
-    const testInput: InputType = {
-      status: "active",
-      priority: "medium",
-    };
-    const testInputWithoutPriority: InputType = {
-      status: "inactive",
-    };
-
-    expectTypeOf(testInput).toEqualTypeOf<InputType>();
-    expectTypeOf(testInputWithoutPriority).toEqualTypeOf<InputType>();
   });
 
   it("ネストした型構造の処理が正しいこと", () => {
@@ -483,19 +454,35 @@ describe("createQueryResolver type tests", () => {
       },
     );
 
-    // Type verification
-    type InputType = typeof _resolver._input;
+    // 型の確認
     type ContextType = typeof _resolver._context;
-
-    // Verify complete type definition
-    // Verify property existence
-    expectTypeOf<InputType>().toHaveProperty("userId");
-    expectTypeOf<InputType>().toHaveProperty("userName");
-    expectTypeOf<InputType>().toHaveProperty("profileName");
-    expectTypeOf<InputType>().toHaveProperty("profileAge");
-    expectTypeOf<InputType>().toHaveProperty("tags");
-
     expectTypeOf<ContextType>().toHaveProperty("input");
     expectTypeOf<ContextType>().toHaveProperty("processNested");
+  });
+
+  it("context に user が含まれること", () => {
+    const r1 = createQueryResolver(
+      "withUser",
+      t.type({
+        message: t.string(),
+      }),
+    ).fnStep("step1", (context) => {
+      return "Hello, " + context.user.id;
+    });
+    expectTypeOf(r1._context).toExtend<{
+      user: TailorUser;
+    }>();
+
+    const r2 = createMutationResolver(
+      "withUser",
+      t.type({
+        message: t.string(),
+      }),
+    ).fnStep("step1", (context) => {
+      return "Hello, " + context.user.id;
+    });
+    expectTypeOf(r2._context).toExtend<{
+      user: TailorUser;
+    }>();
   });
 });

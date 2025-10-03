@@ -43,8 +43,7 @@ describe("CodeTransformer", () => {
           name: "${resolverName}",
           steps: [
             ["fn", "step1", () => "step1 result", {}],
-            ["sql", "step2", async () => ({ id: 1 }), { dbNamespace: "test" }],
-            ["gql", "step3", () => {}, {}],
+            ["fn", "step2", async () => ({ id: 1 }), {}],
           ],
           options: {
             defaults: {
@@ -74,10 +73,9 @@ describe("CodeTransformer", () => {
       expect(transformedContent).toContain(
         "export const $tailor_resolver_step__step2",
       );
-      expect(transformedContent).not.toContain("$tailor_resolver_step__step3"); // gql is excluded
 
-      // Verify that step files are created
-      expect(resultFiles).toHaveLength(2); // Two files: fn + sql
+      // ステップファイルが作成されることを確認
+      expect(resultFiles).toHaveLength(2);
       expect(resultFiles[0]).toContain(`${resolverName}__step1.js`);
       expect(resultFiles[1]).toContain(`${resolverName}__step2.js`);
     });
@@ -89,7 +87,7 @@ describe("CodeTransformer", () => {
           name: "${resolverName}",
           steps: [
             [
-              "sql",
+              "fn",
               "sqlStep",
               async () => ({ result: "test" }),
               { dbNamespace: "mydb" },
@@ -119,7 +117,7 @@ describe("CodeTransformer", () => {
         const resolver = {
           name: "${resolverName}",
           steps: [
-            ["sql", "sqlStep", async () => ({ result: "test" }), {}],
+            ["fn", "sqlStep", async () => ({ result: "test" }), {}],
           ],
           options: {
             defaults: {
@@ -142,39 +140,6 @@ describe("CodeTransformer", () => {
       const stepContent = readFileSync(stepFile, "utf-8");
 
       expect(stepContent).toContain('"defaultDb"');
-    });
-
-    it("dbNamespaceが設定されていない場合はエラーを投げる", async () => {
-      const resolverName = "testResolver";
-      const moduleSource = multiline /* ts */ `
-        const resolver = {
-          name: "${resolverName}",
-          steps: [["sql", "sqlStep", async () => ({ result: "test" }), {}]],
-          options: {},
-        };
-
-        export default resolver;
-      `.trim();
-
-      const testFile = writeResolverModule(
-        "resolver-missing-db.js",
-        moduleSource,
-      );
-
-      await expect(transformer.transform(testFile, tempDir)).rejects.toThrow(
-        `Database namespace is not defined at ${resolverName} > sqlStep`,
-      );
-    });
-  });
-
-  // Note: private methods tests have been removed as these methods have been moved to bundler/utils.ts
-  // These include: isNodeInRemovedRange, getDefinedIdentifiersFromNode, removeRangesFromSource
-  // These tests should be moved to a separate test file for bundler/utils.ts
-
-  describe("helper functions", () => {
-    it("stepVariableName: 正しい変数名を生成する", () => {
-      // stepVariableName is currently a module-level function and cannot be tested
-      // Placeholder for when it becomes a class method in the future
     });
   });
 });

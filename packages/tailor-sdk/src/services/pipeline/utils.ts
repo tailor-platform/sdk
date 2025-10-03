@@ -16,8 +16,6 @@ export function isResolver(value: unknown): boolean {
     typeof obj.name === "string" &&
     typeof obj.input === "object" &&
     typeof obj.fnStep === "function" &&
-    typeof obj.sqlStep === "function" &&
-    typeof obj.gqlStep === "function" &&
     typeof obj.returns === "function"
   );
 }

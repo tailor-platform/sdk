@@ -28,14 +28,11 @@ export class CodeTransformer implements ITransformer {
         .flatMap(([type, name, fn]) => {
           switch (type) {
             case "fn":
-            case "sql":
               return [
                 /* js */ `export const ${stepVariableName(
                   name,
                 )} = ${fn.toString()};`,
               ];
-            case "gql":
-              return [];
             default:
               throw new Error(`Unsupported step type: ${type}`);
           }
@@ -48,30 +45,18 @@ export class CodeTransformer implements ITransformer {
     const stepDir = path.join(tempDir, "steps");
     fs.mkdirSync(stepDir, { recursive: true });
 
-    return resolver.steps
-      .filter(([type]) => type !== "gql")
-      .flatMap(([type, name, _, options]) => {
-        const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
-        const stepFunctionVariable = stepVariableName(name);
-        const relativePath = path
-          .relative(stepDir, transformedPath)
-          .replace(/\\/g, "/");
-        let stepContent;
-        switch (type) {
-          case "fn":
-            stepContent = ml /* js */ `
-                import { ${stepFunctionVariable} } from "${relativePath}";
-                globalThis.main = ${stepFunctionVariable};
-              `;
-            break;
-          case "sql": {
-            const dbNamespace =
-              options?.dbNamespace || resolver.options?.defaults?.dbNamespace;
-            if (!dbNamespace) {
-              throw new Error(
-                `Database namespace is not defined at ${resolver.name} > ${name}`,
-              );
-            }
+    return resolver.steps.flatMap(([type, name, _, options]) => {
+      const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
+      const stepFunctionVariable = stepVariableName(name);
+      const relativePath = path
+        .relative(stepDir, transformedPath)
+        .replace(/\\/g, "/");
+      let stepContent;
+      switch (type) {
+        case "fn": {
+          const dbNamespace =
+            options?.dbNamespace || resolver.options?.defaults?.dbNamespace;
+          if (dbNamespace) {
             stepContent = ml /* js */ `
                 import { ${stepFunctionVariable} } from "${relativePath}";
 
@@ -81,15 +66,21 @@ export class CodeTransformer implements ITransformer {
                   stepFunctionVariable,
                 )};
               `;
-            break;
+          } else {
+            stepContent = ml /* js */ `
+                import { ${stepFunctionVariable} } from "${relativePath}";
+                globalThis.main = ${stepFunctionVariable};
+              `;
           }
-          default:
-            return [];
+          break;
         }
+        default:
+          return [];
+      }
 
-        fs.writeFileSync(stepFilePath, stepContent);
-        return [stepFilePath];
-      });
+      fs.writeFileSync(stepFilePath, stepContent);
+      return [stepFilePath];
+    });
   }
 }
 
