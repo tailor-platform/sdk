@@ -8,6 +8,7 @@ Development kit for building applications on the Tailor Platform.
 - [Configuration](#configuration)
 - [TailorDB](#tailordb)
 - [Pipeline](#pipeline-1)
+- [Auth](#auth)
 - [Executor](#executor)
 - [Generators](#generators)
 - [CLI Commands](#cli-commands)
@@ -152,11 +153,7 @@ Key becomes IDP service name, and value is configuration object.
 
 #### auth
 
-Specify Auth service settings as a map.
-
-> [!WARNING]
-> Auth configuration interface is expected to undergo significant changes in future releases.
-> For current configuration examples, please refer to examples directory.
+Specify Auth service definition. Compose them with `defineAuth` and attach the result under each app.
 
 ## TailorDB
 
@@ -733,6 +730,69 @@ TODO
 
 Define final output.
 Similar to fnStep, except you specify output schema as second argument.
+
+## Auth
+
+Define Auth services with `defineAuth` to connect identity management with TailorDB. Each entry becomes an Auth namespace in the Tailor Platform.
+
+```typescript
+import { defineAuth, defineConfig } from "@tailor-platform/tailor-sdk";
+import { user } from "./tailordb/user";
+
+const auth = defineAuth("main-auth", {
+  userProfile: {
+    type: user,
+    usernameField: "email",
+    attributes: { role: true, isActive: true },
+    attributeList: ["externalId"],
+  },
+  machineUsers: {
+    "admin-service": {
+      attributes: { role: "ADMIN", isActive: true },
+      attributeList: ["admin-external-id"],
+    },
+  },
+  oauth2Clients: {
+    dashboard: {
+      redirectURIs: ["https://example.com/callback"],
+      grantTypes: ["authorization_code", "refresh_token"],
+      clientType: "browser",
+    },
+  },
+});
+
+export default defineConfig({
+  app: {
+    inventory: {
+      db: { "main-db": { files: ["./tailordb/*.ts"] } },
+      auth,
+    },
+  },
+});
+```
+
+Auth service options:
+
+- **name**: Unique namespace for the Auth service. Matches the identifier used when deploying.
+- **userProfile**: Maps identities to a TailorDB type.
+  - `type`: TailorDB user type. The SDK resolves the namespace automatically across all configured TailorDB services.
+  - `usernameField`: Required unique string field used for sign-in (for example `email`).
+  - `attributes`: Optional map of additional TailorDB fields (`true` flag) to expose to identity providers and issued tokens.
+  - `attributeList`: Optional list of attribute keys whose values should be propagated as arrays (used by machine users and downstream integrations).
+- **machineUsers**: Service accounts provisioned by the platform. Attribute values must correspond to keys enabled in `userProfile.attributes`, and `attributeList` values must follow the order declared in `userProfile.attributeList`.
+- **oauth2Clients**: OAuth 2.0 clients issued by the Auth service. `redirectURIs` is required. `grantTypes` accepts `authorization_code` and/or `refresh_token`. `clientType` defaults to `confidential` and also supports `public` and `browser`.
+- **idProviderConfigs**: Configure external identity providers.
+  - `OIDC`: Provide `clientID`, a secret reference for `clientSecret`, and the provider `providerURL`. Optional `issuerURL` and `usernameClaim` override defaults.
+  - `SAML`: Supply Tailor Vault references for `spCertBase64`/`spKeyBase64` and either `metadataURL` or inline `rawMetadata`.
+  - `IDToken`: Integrate providers that issue signed ID tokens directly with `providerURL`, `clientID`, and optional issuer/claim overrides.
+  - `BuiltInIdP`: Reuse a Tailor-hosted IdP by referencing an existing IdP namespace (`namespace`) and client (`clientName`). Secrets are resolved automatically during deployment.
+- **scimConfig**: Provision SCIM resources for directory synchronization.
+  - `machineUserName`: Machine user used for SCIM operations.
+  - `authorization`: `bearer` (requires `bearerSecret`) or `oauth2`.
+  - `resources`: Describe each SCIM resource, including the target `tailorDBNamespace`, `tailorDBType`, schema, and attribute mappings.
+- **tenantProviderConfig**: Enable tenant resolution by specifying the TailorDB `type` that stores tenant records and the `signatureField` used to match incoming tenant signatures.
+
+All secrets referenced in Auth configuration use the Tailor Vault structure `{ VaultName, SecretKey }`. Ensure the secrets exist (via console or `tailorctl`) before running `pnpm run deploy` / `pnpm apply`.
 
 ## Executor
 
