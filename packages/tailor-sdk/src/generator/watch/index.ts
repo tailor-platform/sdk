@@ -1,7 +1,9 @@
 import chokidar from "chokidar";
-import * as madge from "madge";
+import * as madgeModule from "madge";
 import { glob } from "node:fs/promises";
 import * as path from "node:path";
+
+type MadgeLoader = typeof madgeModule;
 
 /**
  * Types of file change events.
@@ -74,9 +76,9 @@ type ErrorCallback = (error: WatcherError) => void;
  */
 interface WatcherOptions {
   /** Options for chokidar. */
-  chokidarOptions?: any;
+  chokidarOptions?: Parameters<typeof chokidar.watch>[1];
   /** Options for madge. */
-  madgeOptions?: any;
+  madgeOptions?: Parameters<MadgeLoader>[1];
   /** Update interval for the dependency graph (milliseconds). */
   dependencyUpdateInterval?: number;
   /** Debounce duration (milliseconds). */
@@ -144,9 +146,10 @@ export class WatcherError extends Error {
  */
 export class DependencyGraphManager {
   private graph: Map<string, DependencyNode> = new Map();
-  private madgeInstance: any | null = null;
+  private madgeInstance: Awaited<ReturnType<MadgeLoader>> | null = null;
+  private madgeLoader: MadgeLoader | null = null;
 
-  constructor(private readonly options: any = {}) {}
+  constructor(private readonly options: Parameters<MadgeLoader>[1] = {}) {}
 
   /**
    * Build the dependency graph from the given files.
@@ -154,6 +157,8 @@ export class DependencyGraphManager {
   async buildGraph(filePaths: string[]): Promise<void> {
     try {
       if (filePaths.length === 0) return;
+
+      const madge = this.getMadgeLoader();
 
       this.madgeInstance = await madge(filePaths, {
         fileExtensions: ["ts", "js"],
@@ -188,6 +193,9 @@ export class DependencyGraphManager {
         }
       }
     } catch (error) {
+      if (error instanceof WatcherError) {
+        throw error;
+      }
       throw new WatcherError(
         `Failed to build dependency graph: ${error instanceof Error ? error.message : String(error)}`,
         WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED,
@@ -195,6 +203,28 @@ export class DependencyGraphManager {
         error instanceof Error ? error : undefined,
       );
     }
+  }
+
+  private getMadgeLoader(): MadgeLoader {
+    if (this.madgeLoader) {
+      return this.madgeLoader;
+    }
+
+    const defaultExport = (madgeModule as { default?: unknown }).default;
+    if (typeof defaultExport === "function") {
+      this.madgeLoader = defaultExport as MadgeLoader;
+      return this.madgeLoader;
+    }
+
+    if (typeof (madgeModule as unknown) === "function") {
+      this.madgeLoader = madgeModule as unknown as MadgeLoader;
+      return this.madgeLoader;
+    }
+
+    throw new WatcherError(
+      "Failed to initialize madge analyzer: module did not export a callable function.",
+      WatcherErrorCode.MADGE_INITIALIZATION_FAILED,
+    );
   }
 
   /**
@@ -321,7 +351,7 @@ export class DependencyGraphManager {
  * Dependency watching system backed by chokidar and madge.
  */
 class DependencyWatcher {
-  private chokidarWatcher: any | null = null;
+  private chokidarWatcher: ReturnType<typeof chokidar.watch> | null = null;
   private watchGroups: Map<string, WatchGroup> = new Map();
   private dependencyGraphManager: DependencyGraphManager;
   private changeCallbacks: Map<string, ChangeCallback> = new Map();
@@ -377,14 +407,16 @@ class DependencyWatcher {
         this.debounceFileChange("unlink", filePath);
       });
 
-      this.chokidarWatcher.on("error", (error: Error) => {
-        console.error(`❌ Watcher error: ${error.message}`);
+      this.chokidarWatcher.on("error", (error: unknown) => {
+        console.error(
+          `❌ Watcher error: ${error instanceof Error ? error.message : String(error)}`,
+        );
         this.handleError(
           new WatcherError(
-            `File watcher error: ${error.message}`,
+            `File watcher error: ${error instanceof Error ? error.message : String(error)}`,
             WatcherErrorCode.FILE_WATCH_FAILED,
             undefined,
-            error,
+            error instanceof Error ? error : undefined,
           ),
         );
       });

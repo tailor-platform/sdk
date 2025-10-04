@@ -1,12 +1,15 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  beforeAll,
-  vi,
-} from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+const madgeMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    obj: () => ({}),
+    circular: () => [],
+  })),
+);
+
+vi.mock("madge", () => ({
+  default: madgeMock,
+}));
 import {
   DependencyWatcher,
   WatcherError,
@@ -17,12 +20,15 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 
-const manager = new DependencyGraphManager();
+let manager: DependencyGraphManager;
 
-beforeAll(() => {
-  vi.spyOn(DependencyGraphManager.prototype, "buildGraph").mockImplementation(
-    async () => {},
-  );
+beforeEach(() => {
+  madgeMock.mockReset();
+  madgeMock.mockImplementation(async () => ({
+    obj: () => ({}),
+    circular: () => [],
+  }));
+  manager = new DependencyGraphManager();
 });
 
 /**
@@ -217,6 +223,38 @@ describe("DependencyGraphManager", () => {
 
   it("空のファイル配列でグラフを構築できる", async () => {
     await expect(manager.buildGraph([])).resolves.not.toThrow();
+  });
+
+  it("madge を呼び出して依存関係グラフを構築する", async () => {
+    const testFile = path.join(tempDir, "sample.ts");
+    await createTestFile(testFile, "export const value = 1;");
+
+    await manager.buildGraph([testFile]);
+
+    expect(madgeMock).toHaveBeenCalledWith(
+      [testFile],
+      expect.objectContaining({
+        fileExtensions: expect.arrayContaining(["ts", "js"]),
+      }),
+    );
+  });
+
+  it("madge が関数を提供しない場合にエラーを検出する", async () => {
+    const mockedMadge = await import("madge");
+    const originalDefault = (mockedMadge as { default?: unknown }).default;
+    (mockedMadge as { default?: unknown }).default = undefined;
+
+    const localManager = new DependencyGraphManager();
+
+    try {
+      await expect(
+        localManager.buildGraph([path.join(tempDir, "broken.ts")]),
+      ).rejects.toMatchObject({
+        code: WatcherErrorCode.MADGE_INITIALIZATION_FAILED,
+      });
+    } finally {
+      (mockedMadge as { default?: unknown }).default = originalDefault;
+    }
   });
 });
 
