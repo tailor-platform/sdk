@@ -216,8 +216,7 @@ describe("dataplane", () => {
     test("query user info", async () => {
       const query = gql`
         query {
-          showUserInfo(input: { message: "Hello" }) {
-            message
+          showUserInfo {
             userId
             userType
           }
@@ -227,7 +226,6 @@ describe("dataplane", () => {
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
         showUserInfo: {
-          message: "Hello",
           userId: expect.any(String),
           userType: "machine_user",
         },

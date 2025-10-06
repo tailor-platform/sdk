@@ -1,4 +1,4 @@
-import { describe, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createMutationResolver, createQueryResolver } from "./resolver";
 import { t } from "@/types/type";
 import type { TailorUser } from "@/types";
@@ -24,6 +24,15 @@ describe("createQueryResolver type tests", () => {
         id: string;
         name?: string | null;
       };
+    }>();
+  });
+
+  it("inputを省略した場合", () => {
+    const resolver = createQueryResolver("listUsers");
+    expect(resolver.name).toBe("listUsers");
+    expect(resolver.input).toBeUndefined();
+    expectTypeOf(resolver._context).toEqualTypeOf<{
+      user: TailorUser;
     }>();
   });
 

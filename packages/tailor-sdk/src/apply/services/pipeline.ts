@@ -304,7 +304,7 @@ async function planResolvers(
 
 interface ResolverManifestMetadata {
   name: string;
-  inputType: string;
+  inputType?: string;
   outputType: string;
   queryType: "query" | "mutation";
   pipelines: PipelineInfo[];
@@ -359,7 +359,9 @@ function processResolver(
   });
 
   // Extract field information for Input type
-  const inputFields = extractTypeFields(resolver.input);
+  const inputFields = resolver.input
+    ? extractTypeFields(resolver.input)
+    : undefined;
 
   // Extract field information for Output type
   const outputFields = resolver.output
@@ -369,7 +371,7 @@ function processResolver(
   const typeBaseName = inflection.camelize(resolver.name);
   const metadata: ResolverManifestMetadata = {
     name: resolver.name,
-    inputType: `${typeBaseName}Input`,
+    inputType: resolver.input ? `${typeBaseName}Input` : undefined,
     outputType: `${typeBaseName}Output`,
     queryType: resolver.queryType,
     pipelines,
@@ -433,24 +435,27 @@ function generateResolverManifest(
     ];
 
   // Generate Input structure (including Fields array)
-  const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] = [
-    {
-      name: "input",
-      description: "",
-      array: false,
-      required: true,
-      type: {
-        kind: "UserDefined",
-        name: resolverMetadata.inputType,
-        description: "",
-        required: false,
-        fields: generateTypeFields(
-          resolverMetadata.inputType,
-          resolverMetadata.inputFields,
-        ),
-      },
-    },
-  ];
+  const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] =
+    resolverMetadata.inputType
+      ? [
+          {
+            name: "input",
+            description: "",
+            array: false,
+            required: true,
+            type: {
+              kind: "UserDefined",
+              name: resolverMetadata.inputType,
+              description: "",
+              required: false,
+              fields: generateTypeFields(
+                resolverMetadata.inputType,
+                resolverMetadata.inputFields,
+              ),
+            },
+          },
+        ]
+      : [];
 
   // Generate Response structure (including Fields array)
   const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = {

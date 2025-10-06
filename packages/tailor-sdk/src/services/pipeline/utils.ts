@@ -14,7 +14,7 @@ export function isResolver(value: unknown): boolean {
   return (
     typeof obj.queryType === "string" &&
     typeof obj.name === "string" &&
-    typeof obj.input === "object" &&
+    (typeof obj.input === "object" || typeof obj.input === "undefined") &&
     typeof obj.fnStep === "function" &&
     typeof obj.returns === "function"
   );

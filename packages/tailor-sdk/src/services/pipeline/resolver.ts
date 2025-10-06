@@ -42,7 +42,7 @@ export class Resolver<
   constructor(
     public readonly queryType: QueryType,
     public readonly name: string,
-    public readonly input: TailorType<any, any>,
+    public readonly input: TailorType<any, any> | undefined,
     options: ResolverOptions = { defaults: {} },
   ) {
     this.#steps = [];
@@ -75,21 +75,45 @@ export class Resolver<
 export function createQueryResolver<
   const Input extends TailorType<any, any>,
   Options extends ResolverOptions,
->(name: string, input: Input, options?: Options) {
-  return new Resolver<
-    { input: output<Input>; user: TailorUser },
-    never,
-    Options
-  >("query", name, input, options);
+>(
+  name: string,
+  input: Input,
+  options?: Options,
+): Resolver<{ input: output<Input>; user: TailorUser }, never, Options>;
+export function createQueryResolver<Options extends ResolverOptions>(
+  name: string,
+  options?: Options,
+): Resolver<{ user: TailorUser }, never, Options>;
+export function createQueryResolver(
+  name: string,
+  input?: TailorType<any, any> | ResolverOptions,
+  options?: ResolverOptions,
+) {
+  if (input && "_output" in input) {
+    return new Resolver("query", name, input, options);
+  }
+  return new Resolver("query", name, undefined, input);
 }
 
 export function createMutationResolver<
   const Input extends TailorType<any, any>,
   Options extends ResolverOptions,
->(name: string, input: Input, options?: Options) {
-  return new Resolver<
-    { input: output<Input>; user: TailorUser },
-    never,
-    Options
-  >("mutation", name, input, options);
+>(
+  name: string,
+  input: Input,
+  options?: Options,
+): Resolver<{ input: output<Input>; user: TailorUser }, never, Options>;
+export function createMutationResolver<Options extends ResolverOptions>(
+  name: string,
+  options?: Options,
+): Resolver<{ user: TailorUser }, never, Options>;
+export function createMutationResolver(
+  name: string,
+  input?: TailorType<any, any> | ResolverOptions,
+  options?: ResolverOptions,
+) {
+  if (input && "_output" in input) {
+    return new Resolver("mutation", name, input, options);
+  }
+  return new Resolver("mutation", name, undefined, input);
 }
