@@ -1,9 +1,9 @@
 import { type TailorDBType } from "../tailordb/schema";
-import type {
-  AuthConfig,
-  AuthServiceInput,
-  UserAttributeListKey,
-  UserAttributeMap,
+import {
+  AuthConfigSchema,
+  type AuthServiceInput,
+  type UserAttributeListKey,
+  type UserAttributeMap,
 } from "./types";
 export * from "./types";
 export { AuthService } from "./service";
@@ -13,5 +13,5 @@ export function defineAuth<
   const AttributeMap extends UserAttributeMap<User>,
   const AttributeList extends UserAttributeListKey<User>[],
 >(name: string, config: AuthServiceInput<User, AttributeMap, AttributeList>) {
-  return { name, ...config } as AuthConfig;
+  return AuthConfigSchema.parse({ name, ...config });
 }

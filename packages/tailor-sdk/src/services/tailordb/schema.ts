@@ -597,12 +597,16 @@ export class TailorDBType<
     return ret;
   }
 }
+export type TailorDBInstance<
+  Fields extends Record<string, TailorDBField<any, any, any>> = any,
+  User extends object = object,
+> = InstanceType<typeof TailorDBType<Fields, User>>;
 
 const idField = uuid();
 type idField = typeof idField;
 type DBType<
   F extends { id?: never } & Record<string, TailorDBField<any, any, any>>,
-> = TailorDBType<{ id: idField } & F>;
+> = TailorDBInstance<{ id: idField } & F>;
 
 /**
  * Creates a new database type with the specified fields

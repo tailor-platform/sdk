@@ -1,3 +1,5 @@
+import type { ValueOperand } from "../auth";
+
 export interface Permissions {
   record?: StandardTailorTypePermission;
   gql?: StandardTailorTypeGqlPermission;
@@ -137,8 +139,6 @@ type RecordOperand<
       | { oldRecord: (keyof Type & string) | "id" }
       | { newRecord: (keyof Type & string) | "id" }
   : { record: (keyof Type & string) | "id" };
-
-export type ValueOperand = string | string[] | boolean | boolean[];
 
 export type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
