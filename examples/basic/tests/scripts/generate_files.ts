@@ -80,7 +80,6 @@ export async function generateExpectedFiles(): Promise<void> {
     process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
     const config = getConfig("expected");
     await generate(config);
-    await apply(config, { buildOnly: true });
     replaceAbsolutePaths(expectedDir);
 
     console.log("\nGenerated files:");
