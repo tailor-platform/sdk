@@ -5,7 +5,7 @@ export class AuthService {
   private _userProfile?: AuthConfig["userProfile"] & {
     namespace: string;
   };
-  private _tenantProviderConfig?: AuthConfig["tenantProviderConfig"] & {
+  private _tenantProvider?: AuthConfig["tenantProvider"] & {
     namespace: string;
   };
 
@@ -18,8 +18,8 @@ export class AuthService {
     return this._userProfile;
   }
 
-  get tenantProviderConfig() {
-    return this._tenantProviderConfig;
+  get tenantProvider() {
+    return this._tenantProvider;
   }
 
   async resolveNamespaces(): Promise<void> {
@@ -37,9 +37,9 @@ export class AuthService {
             namespace: singleNamespace,
           }
         : undefined;
-      this._tenantProviderConfig = this.config.tenantProviderConfig
+      this._tenantProvider = this.config.tenantProvider
         ? {
-            ...this.config.tenantProviderConfig,
+            ...this.config.tenantProvider,
             namespace: singleNamespace,
           }
         : undefined;
@@ -55,8 +55,8 @@ export class AuthService {
         : undefined;
 
     const tenantProviderTypeName =
-      typeof this.config.tenantProviderConfig?.type === "string"
-        ? this.config.tenantProviderConfig.type
+      typeof this.config.tenantProvider?.type === "string"
+        ? this.config.tenantProvider.type
         : undefined;
 
     // Find namespaces in a single loop
@@ -99,9 +99,9 @@ export class AuthService {
       );
     }
 
-    if (this.config.tenantProviderConfig && !tenantProviderNamespace) {
+    if (this.config.tenantProvider && !tenantProviderNamespace) {
       throw new Error(
-        `tenantProviderConfig type "${this.config.tenantProviderConfig.type}" not found in any TailorDB namespace`,
+        `tenantProvider type "${this.config.tenantProvider.type}" not found in any TailorDB namespace`,
       );
     }
 
@@ -111,9 +111,9 @@ export class AuthService {
           namespace: userProfileNamespace!,
         }
       : undefined;
-    this._tenantProviderConfig = this.config.tenantProviderConfig
+    this._tenantProvider = this.config.tenantProvider
       ? {
-          ...this.config.tenantProviderConfig,
+          ...this.config.tenantProvider,
           namespace: tenantProviderNamespace!,
         }
       : undefined;

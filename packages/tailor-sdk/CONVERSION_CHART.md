@@ -628,30 +628,28 @@ EOF
 **Tailor SDK**
 
 ```typescript
+const user = db.type("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.enum("ADMIN", "USER"),
+  ...db.fields.timestamps(),
+});
 export default defineConfig({
   app: {
     "my-app": {
-      auth: {
-        namespace: "my-auth",
-        idProviderConfigs: [
-          {
-            Name: "sample",
-            Config: {
-              Kind: "IDToken",
-              ClientID: "exampleco",
-              ProviderURL: "https://exampleco-enterprises.auth0.com/",
-            },
-          },
-        ],
-        userProfileProvider: "TAILORDB",
-        userProfileProviderConfig: {
-          Kind: "TAILORDB",
-          Namespace: "tailordb",
-          Type: "User",
-          UsernameField: "email",
-          AttributesFields: ["roles"],
+      auth: defineAuth("my-auth", {
+        idProvider: {
+          name: "sample",
+          kind: "IDToken",
+          clientID: "exampleco",
+          providerURL: "https://exampleco-enterprises.auth0.com/",
         },
-      },
+        userProfile: {
+          type: user,
+          usernameField: "email",
+          attributes: { role: true },
+        },
+      }),
     },
   },
 });

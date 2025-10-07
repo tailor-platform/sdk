@@ -26,14 +26,10 @@ export const auth = defineAuth("my-auth", {
       grantTypes: ["authorization_code", "refresh_token"],
     },
   },
-  idProviderConfigs: [
-    {
-      name: "sample",
-      config: {
-        kind: "BuiltInIdP",
-        namespace: "my-idp",
-        clientName: "default-idp-client",
-      },
-    },
-  ],
+  idProvider: {
+    name: "sample",
+    kind: "BuiltInIdP",
+    namespace: "my-idp",
+    clientName: "default-idp-client",
+  },
 });

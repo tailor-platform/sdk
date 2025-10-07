@@ -80,21 +80,21 @@ export async function applyAuth(
 
     // IdPConfigs
     for (const create of changeSet.idpConfig.creates) {
-      if (create.idpConfig.config.kind === "BuiltInIdP") {
+      if (create.idpConfig.kind === "BuiltInIdP") {
         create.request.idpConfig!.config = await protoBuiltinIdPConfig(
           client,
           create.request.workspaceId!,
-          create.idpConfig.config,
+          create.idpConfig,
         );
       }
       await client.createAuthIDPConfig(create.request);
     }
     for (const update of changeSet.idpConfig.updates) {
-      if (update.idpConfig.config.kind === "BuiltInIdP") {
+      if (update.idpConfig.kind === "BuiltInIdP") {
         update.request.idpConfig!.config = await protoBuiltinIdPConfig(
           client,
           update.request.workspaceId!,
-          update.idpConfig.config,
+          update.idpConfig,
         );
       }
       await client.updateAuthIDPConfig(update.request);
@@ -149,10 +149,10 @@ export async function applyAuth(
     }
 
     // SCIMConfigs
-    for (const create of changeSet.scimConfig.creates) {
+    for (const create of changeSet.scim.creates) {
       await client.createAuthSCIMConfig(create.request);
     }
-    for (const update of changeSet.scimConfig.updates) {
+    for (const update of changeSet.scim.updates) {
       await client.updateAuthSCIMConfig(update.request);
     }
 
@@ -173,7 +173,7 @@ export async function applyAuth(
     }
 
     // SCIMConfigs
-    for (const del of changeSet.scimConfig.deletes) {
+    for (const del of changeSet.scim.deletes) {
       if (del.tag === "scim-config-deleted") {
         await client.deleteAuthSCIMConfig(del.request);
       }
@@ -265,7 +265,7 @@ export async function planAuth(
     auths,
     deletedServices,
   );
-  const scimConfigChangeSet = await planSCIMConfigs(
+  const scimChangeSet = await planSCIMConfigs(
     client,
     workspaceId,
     auths,
@@ -284,7 +284,7 @@ export async function planAuth(
   tenantConfigChangeSet.print();
   machineUserChangeSet.print();
   oauth2ClientChangeSet.print();
-  scimConfigChangeSet.print();
+  scimChangeSet.print();
   scimResourceChangeSet.print();
   return {
     service: serviceChangeSet,
@@ -293,7 +293,7 @@ export async function planAuth(
     tenantConfig: tenantConfigChangeSet,
     machineUser: machineUserChangeSet,
     oauth2Client: oauth2ClientChangeSet,
-    scimConfig: scimConfigChangeSet,
+    scim: scimChangeSet,
     scimResource: scimResourceChangeSet,
   };
 }
@@ -425,7 +425,8 @@ async function planIdPConfigs(
     existingIdPConfigs.forEach((idpConfig) => {
       existingNameSet.add(idpConfig.name);
     });
-    for (const idpConfig of config.idProviderConfigs ?? []) {
+    const idpConfig = config.idProvider;
+    if (idpConfig) {
       if (existingNameSet.has(idpConfig.name)) {
         changeSet.updates.push({
           name: idpConfig.name,
@@ -477,7 +478,7 @@ async function planIdPConfigs(
 function protoIdPConfig(
   idpConfig: IdProviderConfig,
 ): MessageInitShape<typeof AuthIDPConfigSchema> {
-  switch (idpConfig.config.kind) {
+  switch (idpConfig.kind) {
     case "IDToken":
       return {
         name: idpConfig.name,
@@ -486,10 +487,10 @@ function protoIdPConfig(
           config: {
             case: "idToken",
             value: {
-              providerUrl: idpConfig.config.providerURL,
-              clientId: idpConfig.config.clientID,
-              issuerUrl: idpConfig.config.issuerURL,
-              usernameClaim: idpConfig.config.usernameClaim,
+              providerUrl: idpConfig.providerURL,
+              clientId: idpConfig.clientID,
+              issuerUrl: idpConfig.issuerURL,
+              usernameClaim: idpConfig.usernameClaim,
             },
           },
         },
@@ -502,16 +503,16 @@ function protoIdPConfig(
           config: {
             case: "saml",
             value: {
-              ...("metadataURL" in idpConfig.config
-                ? { metadataUrl: idpConfig.config.metadataURL }
-                : { rawMetadata: idpConfig.config.rawMetadata }),
+              ...(idpConfig.metadataURL !== undefined
+                ? { metadataUrl: idpConfig.metadataURL }
+                : { rawMetadata: idpConfig.rawMetadata! }),
               spCertBase64: {
-                vaultName: idpConfig.config.spCertBase64.VaultName,
-                secretKey: idpConfig.config.spCertBase64.SecretKey,
+                vaultName: idpConfig.spCertBase64.VaultName,
+                secretKey: idpConfig.spCertBase64.SecretKey,
               },
               spKeyBase64: {
-                vaultName: idpConfig.config.spKeyBase64.VaultName,
-                secretKey: idpConfig.config.spKeyBase64.SecretKey,
+                vaultName: idpConfig.spKeyBase64.VaultName,
+                secretKey: idpConfig.spKeyBase64.SecretKey,
               },
             },
           },
@@ -525,14 +526,14 @@ function protoIdPConfig(
           config: {
             case: "oidc",
             value: {
-              clientIdKey: idpConfig.config.clientID,
+              clientIdKey: idpConfig.clientID,
               clientSecretKey: {
-                vaultName: idpConfig.config.clientSecret.VaultName,
-                secretKey: idpConfig.config.clientSecret.SecretKey,
+                vaultName: idpConfig.clientSecret.VaultName,
+                secretKey: idpConfig.clientSecret.SecretKey,
               },
-              providerUrl: idpConfig.config.providerURL,
-              issuerUrl: idpConfig.config.issuerURL,
-              usernameClaim: idpConfig.config.usernameClaim,
+              providerUrl: idpConfig.providerURL,
+              issuerUrl: idpConfig.issuerURL,
+              usernameClaim: idpConfig.usernameClaim,
             },
           },
         },
@@ -545,9 +546,7 @@ function protoIdPConfig(
         config: {},
       };
     default:
-      throw new Error(
-        `Unknown IdP config: ${idpConfig.config satisfies never}`,
-      );
+      throw new Error(`Unexpected idp kind: ${idpConfig satisfies never}`);
   }
 }
 
@@ -745,15 +744,13 @@ async function planTenantConfigs(
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (auth.tenantProviderConfig) {
+        if (auth.tenantProvider) {
           changeSet.creates.push({
             name,
             request: {
               workspaceId,
               namespaceName: auth.config.name,
-              tenantProviderConfig: protoTenantConfig(
-                auth.tenantProviderConfig,
-              ),
+              tenantProviderConfig: protoTenantConfig(auth.tenantProvider),
             },
           });
         }
@@ -761,13 +758,13 @@ async function planTenantConfigs(
       }
       throw error;
     }
-    if (auth.tenantProviderConfig) {
+    if (auth.tenantProvider) {
       changeSet.updates.push({
         name,
         request: {
           workspaceId,
           namespaceName: auth.config.name,
-          tenantProviderConfig: protoTenantConfig(auth.tenantProviderConfig),
+          tenantProviderConfig: protoTenantConfig(auth.tenantProvider),
         },
       });
     } else {
@@ -803,7 +800,7 @@ async function planTenantConfigs(
 }
 
 function protoTenantConfig(
-  tenantConfig: NonNullable<AuthService["tenantProviderConfig"]>,
+  tenantConfig: NonNullable<AuthService["tenantProvider"]>,
 ): MessageInitShape<typeof TenantProviderConfigSchema> {
   return {
     providerType: TenantProviderConfig_TenantProviderType.TAILORDB,
@@ -1117,13 +1114,13 @@ async function planSCIMConfigs(
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (config.scimConfig) {
+        if (config.scim) {
           changeSet.creates.push({
             name,
             request: {
               workspaceId,
               namespaceName: config.name,
-              scimConfig: protoSCIMConfig(config.scimConfig),
+              scimConfig: protoSCIMConfig(config.scim),
             },
           });
         }
@@ -1131,13 +1128,13 @@ async function planSCIMConfigs(
       }
       throw error;
     }
-    if (config.scimConfig) {
+    if (config.scim) {
       changeSet.updates.push({
         name,
         request: {
           workspaceId,
           namespaceName: config.name,
-          scimConfig: protoSCIMConfig(config.scimConfig),
+          scimConfig: protoSCIMConfig(config.scim),
         },
       });
     } else {
@@ -1251,7 +1248,7 @@ async function planSCIMResources(
     existingSCIMResources.forEach((scimResource) => {
       existingNameSet.add(scimResource.name);
     });
-    for (const scimResource of config.scimConfig?.resources ?? []) {
+    for (const scimResource of config.scim?.resources ?? []) {
       if (existingNameSet.has(scimResource.name)) {
         changeSet.updates.push({
           name: scimResource.name,

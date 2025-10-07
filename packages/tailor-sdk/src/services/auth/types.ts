@@ -10,12 +10,14 @@ const secretValueSchema = z.object({
 }) satisfies ZodType<SecretValue>;
 
 const samlBaseSchema = z.object({
+  name: z.string(),
   kind: z.literal("SAML"),
   spCertBase64: secretValueSchema,
   spKeyBase64: secretValueSchema,
 });
 
 export const OIDCSchema = z.object({
+  name: z.string(),
   kind: z.literal("OIDC"),
   clientID: z.string(),
   clientSecret: secretValueSchema,
@@ -25,13 +27,20 @@ export const OIDCSchema = z.object({
 });
 export type OIDC = z.infer<typeof OIDCSchema>;
 
-export const SAMLSchema = z.union([
-  samlBaseSchema.extend({ metadataURL: z.string() }),
-  samlBaseSchema.extend({ rawMetadata: z.string() }),
-]);
+export const SAMLSchema = samlBaseSchema
+  .extend({
+    metadataURL: z.string().optional(),
+    rawMetadata: z.string().optional(),
+  })
+  .refine((value) => {
+    const hasMetadata = value.metadataURL !== undefined;
+    const hasRaw = value.rawMetadata !== undefined;
+    return hasMetadata !== hasRaw;
+  }, "Provide either metadataURL or rawMetadata");
 export type SAML = z.infer<typeof SAMLSchema>;
 
 export const IDTokenSchema = z.object({
+  name: z.string(),
   kind: z.literal("IDToken"),
   providerURL: z.string(),
   issuerURL: z.string().optional(),
@@ -41,17 +50,20 @@ export const IDTokenSchema = z.object({
 export type IDToken = z.infer<typeof IDTokenSchema>;
 
 export const BuiltinIdPSchema = z.object({
+  name: z.string(),
   kind: z.literal("BuiltInIdP"),
   namespace: z.string(),
   clientName: z.string(),
 });
 export type BuiltinIdP = z.infer<typeof BuiltinIdPSchema>;
 
-export const IdProviderConfigSchema = z.object({
-  name: z.string(),
-  config: z.union([OIDCSchema, SAMLSchema, IDTokenSchema, BuiltinIdPSchema]),
-});
-export type IdProviderConfig = z.infer<typeof IdProviderConfigSchema>;
+export const IdProviderSchema = z.discriminatedUnion("kind", [
+  OIDCSchema,
+  SAMLSchema,
+  IDTokenSchema,
+  BuiltinIdPSchema,
+]);
+export type IdProviderConfig = z.infer<typeof IdProviderSchema>;
 
 export const OAuth2ClientGrantTypeSchema = z.union([
   z.literal("authorization_code"),
@@ -134,19 +146,19 @@ export const SCIMResourceSchema = z.object({
 });
 export type SCIMResource = z.infer<typeof SCIMResourceSchema>;
 
-export const SCIMConfigSchema = z.object({
+export const SCIMSchema = z.object({
   machineUserName: z.string(),
   authorization: SCIMAuthorizationSchema,
   resources: z.array(SCIMResourceSchema),
 });
-export type SCIMConfig = z.infer<typeof SCIMConfigSchema>;
+export type SCIMConfig = z.infer<typeof SCIMSchema>;
 
-export const TenantProviderConfigSchema = z.object({
+export const TenantProviderSchema = z.object({
   namespace: z.string(),
   type: z.string(),
   signatureField: z.string(),
 });
-export type TenantProviderConfig = z.infer<typeof TenantProviderConfigSchema>;
+export type TenantProviderConfig = z.infer<typeof TenantProviderSchema>;
 
 const UserProfileSchema = z.object({
   // FIXME: improve TailorDBInstance schema validation
@@ -316,9 +328,9 @@ export type AuthServiceInput<
     MachineUser<User, AttributeMap, AttributeList>
   >;
   oauth2Clients?: Record<string, OAuth2Client>;
-  idProviderConfigs?: IdProviderConfig[];
-  scimConfig?: SCIMConfig;
-  tenantProviderConfig?: TenantProviderConfig;
+  idProvider?: IdProviderConfig;
+  scim?: SCIMConfig;
+  tenantProvider?: TenantProviderConfig;
 };
 
 export const AuthConfigSchema = z
@@ -327,9 +339,9 @@ export const AuthConfigSchema = z
     userProfile: UserProfileSchema.optional(),
     machineUsers: z.record(z.string(), MachineUserSchema).optional(),
     oauth2Clients: z.record(z.string(), OAuth2ClientSchema).optional(),
-    idProviderConfigs: z.array(IdProviderConfigSchema).optional(),
-    scimConfig: SCIMConfigSchema.optional(),
-    tenantProviderConfig: TenantProviderConfigSchema.optional(),
+    idProvider: IdProviderSchema.optional(),
+    scim: SCIMSchema.optional(),
+    tenantProvider: TenantProviderSchema.optional(),
   })
   .brand("AuthConfig");
 export type AuthConfig = z.infer<typeof AuthConfigSchema>;

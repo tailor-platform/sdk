@@ -105,10 +105,9 @@ export async function planApplication(
     if (application.authService && application.authService.config) {
       authNamespace = application.authService.config.name;
 
-      const idProviderConfigs =
-        application.authService.config.idProviderConfigs;
-      if (idProviderConfigs && idProviderConfigs.length > 0) {
-        authIdpConfigName = idProviderConfigs[0].name;
+      const idProvider = application.authService.config.idProvider;
+      if (idProvider) {
+        authIdpConfigName = idProvider.name;
       }
     }
 
