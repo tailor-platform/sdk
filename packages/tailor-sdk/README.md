@@ -1,6 +1,6 @@
 # Tailor SDK
 
-Development kit for building applications on the Tailor Platform.
+Tailor SDK is a library for building applications on the Tailor Platform using TypeScript.
 
 ## Table of Contents
 
@@ -10,150 +10,270 @@ Development kit for building applications on the Tailor Platform.
 - [Pipeline](#pipeline-1)
 - [Auth](#auth)
 - [Executor](#executor)
-- [Generators](#generators)
 - [CLI Commands](#cli-commands)
 
 ## Getting Started
 
-### 1. Create a new Tailor SDK project
-
-The easiest way to create a new SDK project is using `@tailor-platform/create-tailor-sdk`:
+You can easily start a new project using [`@tailor-platform/create-tailor-sdk`](https://www.npmjs.com/package/@tailor-platform/create-tailor-sdk).
 
 ```bash
-pnpm exec create-tailor-sdk my-first-sdk --template hello-world
+npm create @tailor-platform/tailor-sdk my-first-sdk --template hello-world
+# or
+yarn create @tailor-platform/tailor-sdk my-first-sdk --template hello-world
+# or
+pnpm create @tailor-platform/tailor-sdk my-first-sdk --template hello-world
 ```
 
-Once setup is complete, navigate to the newly created directory.
-
-```bash
-cd my-first-sdk
-```
-
-The project includes the following key components:
-
-- `tailor.config.ts`: Tailor SDK configuration file
-- `src/resolvers/`: Pipeline service definitions directory
-
-### 2. Deploy your project
-
-Before deploying your project, you need to create a corresponding workspace using either tailorctl or the console.
-
-```bash
-tailorctl auth login
-tailorctl workspace create --name my-first-sdk --region asia-northeast
-```
-
-Next, run the apply command to deploy your project:
-
-```bash
-WORKSPACE_ID=<workspace_id> pnpm run deploy
-```
-
-You can now open the GraphQL Playground and execute the `hello` query:
-
-```graphql
-query {
-  hello(input: { name: "sdk" }) {
-    message
-  }
-}
-```
-
-### 3. Edit your project
-
-Let's try editing `src/resolvers/hello/resolver.ts`:
-
-```typescript
-import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
-
-export default createQueryResolver(
-  "hello",
-  t.type({
-    name: t.string(),
-  }),
-)
-  .fnStep("greet", async (context) => {
-    // return `Hello, ${context.input.name}!`;
-    return `Goodbye, ${context.input.name}!`;
-  })
-  .returns(
-    (context) => ({
-      message: context.greet,
-    }),
-    t.type({
-      message: t.string(),
-    }),
-  );
-```
-
-Deploy again and you'll see that the `hello` query response has been updated:
-
-```bash
-WORKSPACE_ID=<workspace_id> pnpm run deploy
-```
+Once your project is set up, follow the generated README to perform your first deployment.
 
 ## Configuration
 
-Tailor SDK uses TypeScript for configuration files.
-By default, it uses `tailor.config.ts` in the project root.
-You can specify a different path using the `--config` option.
+Tailor SDK reads `tailor.config.ts` from the project root by default.
+If you want to use a different configuration file, you can specify it with the `--config` option.
+In `tailor.config.ts`, export an object defined using the `defineConfig` function as the default export.
 
-### name, region
+```typescript
+import { defineConfig } from "@tailor-platform/tailor-sdk";
 
-Specify target workspace for deployment.
-Deployment will fail if name and region don't match the current tailorctl context.
-To specify a workspace without using tailorctl information, use the id field instead.
+export default defineConfig({
+  // ...
+});
+```
 
-### id
+### id, name, region
 
-Specify workspace ID in UUID format.
+The workspace ID where the project will be deployed.
 
-### app
+```typescript
+export default defineConfig({
+  id: "08a05d91-5176-4d26-a04d-439cc7910d5a",
+});
+```
 
-Specify application settings as a map.
-Key becomes application name, and value is configuration object.
+To resolve the workspace ID based on tailorctl configuration, specify `name` and `region` instead of `id`.
+Note that an error will occur if the resolved workspace ID does not match the combination of `name` and `region`.
 
-#### cors
+```typescript
+export default defineConfig({
+  name: "my-workspace",
+  region: "asia-northeast",
+});
+```
 
-Specify CORS settings as an array.
-You can also specify Static Website URLs in the format `<staticWebsiteName>:url`.
+### cors
 
-#### allowedIPAddresses
+A list of origins to configure as CORS for the application.
+You can also specify sites hosted on the Static Web Hosting service using the format `<staticWebsiteName>:url`.
 
-Specify IP addresses allowed to access the application.
+```typescript
+export default defineConfig({
+  app: {
+    "my-app": {
+      cors: ["https://example.com", "my-website:url"],
+    },
+  },
+  staticWebsite: {
+    "my-website": {
+      // ...
+    },
+  },
+});
+```
 
-#### disableIntrospection
+### allowedIPAddresses
+
+A list of IP addresses allowed to access the application.
+Can be specified in CIDR format.
+
+```typescript
+export default defineConfig({
+  app: {
+    "my-app": {
+      allowedIPAddresses: ["192.168.0.0/24"],
+    },
+  },
+});
+```
+
+### disableIntrospection
 
 Disable GraphQL introspection. Default is `false`.
 
-#### db
+```typescript
+export default defineConfig({
+  app: {
+    "my-app": {
+      disableIntrospection: true,
+    },
+  },
+});
+```
 
-Specify TailorDB service settings as a map.
-Key becomes TailorDB service name, and value is configuration object.
+### db
 
-- files: Specify an array of glob patterns for definition files.
+Glob patterns to load as TailorDB service configuration.
+In the following example, all `.ts` files under the `db` directory will be included.
 
-#### pipeline
+```typescript
+export default defineConfig({
+  app: {
+    "my-app": {
+      db: {
+        files: ["db/**/*.ts"],
+      },
+    },
+  },
+});
+```
 
-Specify Pipeline service settings as a map.
-Key becomes Pipeline service name, and value is configuration object.
+### pipeline
 
-- files: Specify an array of glob patterns for definition files.
+Glob patterns to load as Pipeline service configuration.
+In the following example, all `.ts` files under the `pipeline` directory will be included.
 
-#### idp
+```typescript
+export default defineConfig({
+  app: {
+    "my-app": {
+      pipeline: {
+        files: ["pipeline/**/*.ts"],
+      },
+    },
+  },
+});
+```
 
-Specify IDP service settings as a map.
-Key becomes IDP service name, and value is configuration object.
+### idp
 
-- authorization: Specify conditions for executing user management queries.
-  - insecure: Allow all users.
-  - loggedIn: Allow logged-in users.
-  - cel: Specify a custom CEL expression.
-- clients: Specify an array of OAuth client names.
+Configuration for the Built-in IdP service.
 
-#### auth
+#### authorization
 
-Specify Auth service definition. Compose them with `defineAuth` and attach the result under each app.
+User management permission settings.
+Only authorized users can execute user management operations such as `_createUser`.
+
+- `insecure`: Allow all users
+- `loggedIn`: Allow logged-in users
+- `cel`: Allow with custom CEL expression
+
+For example, to allow only users with a specific ID, configure as follows:
+
+```typescript
+export default defineConfig({
+  idp: {
+    "my-idp": {
+      authorization: {
+        cel: `user.id == "141d7ef6-f5a5-4b8e-8b2e-cdd08d0b7d5b"`,
+      },
+    },
+  },
+});
+```
+
+#### clients
+
+A list of OAuth clients to create in the Built-in IdP service.
+By specifying the clients created here in the Auth service's idProviderConfigs, you can use the Built-in IdP service for application authentication.
+
+```typescript
+export default defineConfig({
+  idp: {
+    "my-idp": {
+      clients: ["my-client"],
+    },
+  },
+});
+```
+
+### auth
+
+Configuration for the Auth service.
+Specify an object defined using the `defineAuth` function.
+
+```typescript
+export default defineConfig({
+  app: {
+    "my-app": {
+      auth: defineAuth({
+        // ...
+      }),
+    },
+  },
+});
+```
+
+### executor
+
+Glob patterns to load as Executor service configuration.
+In the following example, all `.ts` files under the `executors` directory will be included.
+
+```typescript
+export default defineConfig({
+  executor: { files: ["executors/**/*.ts"] },
+});
+```
+
+### staticWebsites
+
+Configuration for the Static Web Hosting service.
+
+#### description
+
+Description of the site.
+
+```typescript
+export default defineConfig({
+  staticWebsite: {
+    "my-website": {
+      description: "My Static Website",
+    },
+  },
+});
+```
+
+#### allowedIPAddresses
+
+A list of IP addresses allowed to access the site.
+Can be specified in CIDR format.
+
+```typescript
+export default defineConfig({
+  staticWebsite: {
+    "my-website": {
+      allowedIPAddresses: ["192.168.0.0/24"],
+    },
+  },
+});
+```
+
+### generators
+
+Configuration for code generators executed by the `generate` command.
+The following generators are currently provided officially:
+
+#### @tailor/kysely-type
+
+Generates Kysely type definitions corresponding to TailorDB service configuration.
+You can specify the path for the generated file with the distPath option.
+
+```typescript
+export default defineConfig({
+  generators: [
+    ["@tailor/kysely-type", { distPath: ({ db }) => `./generated/${db}.ts` }],
+  ],
+});
+```
+
+#### @tailor/db-type
+
+Generates TypeScript type definitions corresponding to TailorDB service configuration.
+You can specify the path for the generated file with the distPath option.
+
+```typescript
+export default defineConfig({
+  generators: [["@tailor/db-type", { distPath: () => `./generated/types.ts` }]],
+});
+```
 
 ## TailorDB
 
@@ -161,7 +281,7 @@ Define TailorDB Types in files matching glob patterns specified in `tailor.confi
 
 ### Field
 
-Define TailorDB Fields using methods like db.string(), db.int(), etc.
+Define TailorDB Fields using methods like `db.string()`, `db.int()`, etc.
 
 All TailorDB Field types are supported.
 
@@ -993,31 +1113,6 @@ Use filters to control when executors run:
     return newRecord.price < oldRecord.price * 0.9;
   })
 )
-```
-
-## Generators
-
-SDK includes built-in code generators:
-
-- `@tailor/kysely-type`: Generate Kysely table types from TailorDB
-- `@tailor/db-type`: Generate TypeScript types for TailorDB models
-
-Configure generators in your `tailor.config.ts`:
-
-```typescript
-export default defineConfig({
-  // ...
-  generators: [
-    [
-      "@tailor/kysely-type",
-      { distPath: ({ tailorDB }) => `./src/generated/${tailorDB}.ts` },
-    ],
-    [
-      "@tailor/db-type",
-      { distPath: ({ tailorDB }) => `./src/tailordb/${tailorDB}.types.ts` },
-    ],
-  ],
-});
 ```
 
 ## CLI Commands
