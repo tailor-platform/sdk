@@ -217,8 +217,10 @@ describe("dataplane", () => {
       const query = gql`
         query {
           showUserInfo {
-            userId
-            userType
+            id
+            type
+            workspaceId
+            role
           }
         }
       `;
@@ -226,8 +228,10 @@ describe("dataplane", () => {
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
         showUserInfo: {
-          userId: expect.any(String),
-          userType: "machine_user",
+          id: expect.any(String),
+          type: "machine_user",
+          workspaceId: expect.any(String),
+          role: "ADMIN",
         },
       });
     });

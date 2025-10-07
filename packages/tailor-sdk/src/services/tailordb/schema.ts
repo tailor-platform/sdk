@@ -34,6 +34,7 @@ import {
   normalizePermission,
   normalizeGqlPermission,
 } from "./permission";
+import { tailorUserMap } from "@/types";
 
 type RelationType =
   | "oneToOne"
@@ -96,7 +97,7 @@ export class TailorDBField<
 
         return {
           script: {
-            expr: `(${fn.toString().trim()})({ value: _value, user })`,
+            expr: `(${fn.toString().trim()})({ value: _value, user: ${tailorUserMap} })`,
           },
           errorMessage: message,
         };
@@ -107,14 +108,14 @@ export class TailorDBField<
               ? {
                   expr: `(${this._metadata.hooks.create
                     .toString()
-                    .trim()})({ value: _value, data: _data, user })`,
+                    .trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
                 }
               : undefined,
             update: this._metadata.hooks.update
               ? {
                   expr: `(${this._metadata.hooks.update
                     .toString()
-                    .trim()})({ value: _value, data: _data, user })`,
+                    .trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
                 }
               : undefined,
           }

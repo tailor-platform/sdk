@@ -197,13 +197,19 @@ describe("pnpm apply command integration tests", () => {
       test("functions/showUserInfo__step1.js returns user information", async () => {
         const main = await importActualMain("functions/showUserInfo__step1.js");
         const payload = {
-          input: { message: "hello" },
-          user: { id: "user-1", type: "ADMIN" },
+          user: {
+            id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
+            type: "machine_user",
+            workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
+            attributes: { role: "ADMIN" },
+          },
         };
         const result = await main(payload);
         expect(result).toEqual({
-          userId: "user-1",
-          userType: "ADMIN",
+          id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
+          type: "machine_user",
+          workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
+          role: "ADMIN",
         });
       });
 

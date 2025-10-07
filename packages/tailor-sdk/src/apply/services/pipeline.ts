@@ -27,6 +27,7 @@ import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
 import { OperationType } from "@/types/operator";
 import * as inflection from "inflection";
+import { tailorUserMap } from "@/types";
 
 export async function applyPipeline(
   client: OperatorClient,
@@ -416,7 +417,7 @@ function generateResolverManifest(
           operationType,
           operationSource: pipeline.operationSource,
           operationHook: {
-            expr: "({ ...context.pipeline, ...context.args, user });",
+            expr: `({ ...context.pipeline, ...context.args, user: ${tailorUserMap} });`,
           },
           postScript: `args.${pipeline.name}`,
         };
@@ -428,7 +429,7 @@ function generateResolverManifest(
         operationType: PipelineResolver_OperationType.FUNCTION,
         operationSource: `globalThis.main = ${resolverMetadata.outputMapper || "() => ({})"}`,
         operationHook: {
-          expr: "({ ...context.pipeline, ...context.args, user });",
+          expr: `({ ...context.pipeline, ...context.args, user: ${tailorUserMap} });`,
         },
         postScript: `args.__construct_output`,
       },
