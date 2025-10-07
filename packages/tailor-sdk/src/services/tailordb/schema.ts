@@ -97,7 +97,7 @@ export class TailorDBField<
 
         return {
           script: {
-            expr: `(${fn.toString().trim()})({ value: _value, user: ${tailorUserMap} })`,
+            expr: `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
           },
           errorMessage: message,
         };
