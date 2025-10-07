@@ -61,7 +61,9 @@ export type OAuth2ClientGrantType = z.infer<typeof OAuth2ClientGrantTypeSchema>;
 
 export const OAuth2ClientSchema = z.object({
   description: z.string().optional(),
-  grantTypes: z.array(OAuth2ClientGrantTypeSchema).optional(),
+  grantTypes: z
+    .array(OAuth2ClientGrantTypeSchema)
+    .default(["authorization_code", "refresh_token"]),
   redirectURIs: z.array(z.string()),
   clientType: z
     .union([
@@ -187,7 +189,7 @@ export type ValueOperand = z.infer<typeof ValueOperandSchema>;
 
 const MachineUserSchema = z.object({
   attributes: z.record(z.string(), ValueOperandSchema).optional(),
-  attributeList: z.array(z.any()).optional(),
+  attributeList: z.array(z.uuid()).optional(),
 });
 
 type AttributeListValue<
@@ -208,17 +210,20 @@ type MachineUser<
   User extends TailorDBInstance,
   AttributeMap extends UserAttributeMap<User> = object,
   AttributeList extends UserAttributeListKey<User>[] = [],
-> = {
-  attributes: object extends AttributeMap
-    ? never
-    : {
+> = (object extends AttributeMap
+  ? { attributes?: never }
+  : {
+      attributes: {
         [K in keyof AttributeMap]: K extends keyof output<User>
           ? output<User>[K]
           : never;
-      } & { [K in Exclude<keyof output<User>, keyof AttributeMap>]?: never };
-} & ([] extends AttributeList
-  ? { attributeList?: never }
-  : { attributeList: AttributeListToTuple<User, AttributeList> });
+      } & {
+        [K in Exclude<keyof output<User>, keyof AttributeMap>]?: never;
+      };
+    }) &
+  ([] extends AttributeList
+    ? { attributeList?: never }
+    : { attributeList: AttributeListToTuple<User, AttributeList> });
 
 type UserFieldKeys<User extends TailorDBInstance> = keyof output<User> & string;
 
@@ -303,9 +308,13 @@ export type AuthServiceInput<
   User extends TailorDBInstance,
   AttributeMap extends UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[],
+  MachineUserNames extends string,
 > = {
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
-  machineUsers?: Record<string, MachineUser<User, AttributeMap, AttributeList>>;
+  machineUsers?: Record<
+    MachineUserNames,
+    MachineUser<User, AttributeMap, AttributeList>
+  >;
   oauth2Clients?: Record<string, OAuth2Client>;
   idProviderConfigs?: IdProviderConfig[];
   scimConfig?: SCIMConfig;

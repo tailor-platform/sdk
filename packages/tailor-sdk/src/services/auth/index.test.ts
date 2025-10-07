@@ -1,4 +1,5 @@
 import { describe, it, expectTypeOf } from "vitest";
+import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 
 import { defineAuth } from "./index";
@@ -32,11 +33,16 @@ const attributeMapConfig: AttributeMap = {
 };
 
 const attributeListConfig: AttributeList = ["externalId"];
-const machineUserAttributeList: [string] = ["admin-external-id"];
+const machineUserAttributeList: [string] = [randomUUID()];
 
-type AuthInput = AuthServiceInput<typeof userType, AttributeMap, AttributeList>;
+type AuthInput = AuthServiceInput<
+  typeof userType,
+  AttributeMap,
+  AttributeList,
+  "admin"
+>;
 
-type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>[string];
+type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
 
 describe("defineAuth", () => {
@@ -60,7 +66,7 @@ describe("defineAuth", () => {
     type FunctionInput = Omit<AuthInput, "userProfile" | "machineUsers">;
     type SchemaInput = Omit<AuthSchemaInput, "userProfile" | "machineUsers">;
 
-    expectTypeOf<FunctionInput>().toEqualTypeOf<SchemaInput>();
+    expectTypeOf<FunctionInput>().toExtend<SchemaInput>();
   });
 
   it("aligns particular userProfile with the schema", () => {

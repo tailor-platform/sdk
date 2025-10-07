@@ -6,6 +6,7 @@ import { inventory } from "../db/inventory";
 import { Kysely } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 import { DB } from "../generated/main-db";
+import { auth } from "../auth";
 
 export default createExecutor(
   "check-inventory",
@@ -34,8 +35,5 @@ export default createExecutor(
         })
         .execute();
     },
-    invoker: {
-      authName: "main-auth",
-      machineUser: "manager",
-    },
+    invoker: auth.invoker("manager"),
   });
