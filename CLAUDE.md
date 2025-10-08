@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `pnpm exec turbo run gen` - Run code generation for Tailor SDK components
 - `pnpm exec turbo run gen:watch` - Run code generation in watch mode
-- `pnpm exec turbo run apply` - Deploy to Tailor Platform
+- `pnpm exec turbo run apply` - Deploy to the Tailor Platform
 - `pnpm exec turbo run dev` - Start development server
 - `pnpm exec turbo run build` - Build all packages
 - `pnpm exec turbo run test` - Run all tests using Turbo
