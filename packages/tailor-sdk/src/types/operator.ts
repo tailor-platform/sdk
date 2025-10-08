@@ -29,6 +29,7 @@ export interface OperatorFieldConfig {
   vector?: boolean;
   foreignKey?: boolean;
   foreignKeyType?: string;
+  foreignKeyField?: string;
   validate?: OperatorValidateConfig[];
   hooks?: OperatorFieldHook;
   assertNonNull?: boolean;

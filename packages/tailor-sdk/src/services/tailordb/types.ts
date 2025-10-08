@@ -33,6 +33,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   vector?: boolean;
   foreignKey?: boolean;
   foreignKeyType?: string;
+  foreignKeyField?: string;
   validate?: FieldValidateInput<any>[];
   hooks?: Hook<any, any, any>;
   serial?: SerialConfig;

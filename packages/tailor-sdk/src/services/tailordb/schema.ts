@@ -220,20 +220,21 @@ export class TailorDBField<
     result._metadata.foreignKey = true;
     result._metadata.unique = ["oneToOne", "1-1"].includes(config.type);
 
+    const key: string = (config as any)?.toward?.key ?? "id";
+    const backward: string = (config as any)?.backward ?? "";
+
     // Set foreignKeyType for non-self relation as early as possible
     if (!isSelf) {
       const targetTable: TailorDBType = (
         config as RelationConfig<RelationType, TailorDBType>
       )["toward"].type;
       result._metadata.foreignKeyType = targetTable.name;
+      result._metadata.foreignKeyField = key;
     }
 
     if ((config as any).type === "keyOnly") {
       return result as any;
     }
-
-    const key: string = (config as any)?.toward?.key ?? "id";
-    const backward: string = (config as any)?.backward ?? "";
 
     if (isSelf) {
       const selfConfig = config as RelationSelfConfig;
@@ -470,6 +471,7 @@ export class TailorDBType<
           key: pending.key,
         };
         (field as any)._metadata.foreignKeyType = this.name;
+        (field as any)._metadata.foreignKeyField = pending.key;
       }
     });
 

@@ -383,6 +383,7 @@ function generateTailorDBTypeManifest(
           unique: (fieldConfig.unique && !fieldConfig.array) || false,
           foreignKey: fieldConfig.foreignKey || false,
           foreignKeyType: fieldConfig.foreignKeyType,
+          foreignKeyField: fieldConfig.foreignKeyField,
           required: fieldConfig.required !== false,
           vector: fieldConfig.vector || false,
           ...(fieldConfig.hooks && {

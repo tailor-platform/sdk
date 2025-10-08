@@ -244,6 +244,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
 
     expect(userField.reference!.nameMap[0]).toEqual("user");
     expect(userField.reference!.nameMap[1]).toEqual("");
+    expect(userField.metadata.foreignKeyType).toEqual("User");
+    expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
   it('toward.keyが省略された場合、"id"がデフォルトで使用される', () => {
@@ -256,6 +258,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     });
 
     expect(userField.reference!.key).toEqual("id");
+    expect(userField.metadata.foreignKeyType).toEqual("User");
+    expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
   it("toward.as、toward.key、backwardが全て明示的に指定された場合の動作", () => {
@@ -272,6 +276,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(managerField.reference!.nameMap[0]).toEqual("manager");
     expect(managerField.reference!.key).toEqual("email");
     expect(managerField.reference!.nameMap[1]).toEqual("subordinates");
+    expect(managerField.metadata.foreignKeyType).toEqual("User");
+    expect(managerField.metadata.foreignKeyField).toEqual("email");
   });
 
   it("toward.asのみ明示的に指定した場合の動作", () => {
@@ -286,6 +292,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.reference!.nameMap[0]).toEqual("owner");
     expect(userField.reference!.key).toEqual("id");
     expect(userField.reference!.nameMap[1]).toEqual("");
+    expect(userField.metadata.foreignKeyType).toEqual("User");
+    expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
   it("toward.keyのみ明示的に指定した場合の動作", () => {
@@ -300,6 +308,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(customerField.reference!.nameMap[0]).toEqual("customer");
     expect(customerField.reference!.key).toEqual("customerId");
     expect(customerField.reference!.nameMap[1]).toEqual("");
+    expect(customerField.metadata.foreignKeyType).toEqual("Customer");
+    expect(customerField.metadata.foreignKeyField).toEqual("customerId");
   });
 
   it("toward.keyに存在しないフィールド名を指定した場合、型エラーが発生する", () => {
@@ -325,6 +335,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.reference!.nameMap[0]).toEqual("user");
     expect(userField.reference!.key).toEqual("id");
     expect(userField.reference!.nameMap[1]).toEqual("relatedItems");
+    expect(userField.metadata.foreignKeyType).toEqual("User");
+    expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
   it("manyToOneリレーションでの型推論確認", () => {
@@ -341,6 +353,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.reference!.nameMap[0]).toEqual("author");
     expect(userField.reference!.key).toEqual("email");
     expect(userField.reference!.nameMap[1]).toEqual("posts");
+    expect(userField.metadata.foreignKeyType).toEqual("User");
+    expect(userField.metadata.foreignKeyField).toEqual("email");
   });
 });
 
@@ -745,9 +759,11 @@ describe("TailorDBType self relation テスト", () => {
     expect((TestType as any).fields.parentID.metadata.foreignKeyType).toBe(
       "TestType",
     );
+    expect(TestType.fields.parentID.metadata.foreignKeyField).toBe("id");
     expect((TestType as any).fields.dependId.metadata.foreignKeyType).toBe(
       "TestType",
     );
+    expect(TestType.fields.dependId.metadata.foreignKeyField).toBe("id");
   });
 
   it("backward未指定時は型名に基づくデフォルト（単数/複数）が設定される", () => {
@@ -760,7 +776,11 @@ describe("TailorDBType self relation テスト", () => {
 
     // forward is derived from field name
     expect((A as any).fields.parentID.reference!.nameMap[0]).toBe("parent");
+    expect(A.fields.parentID.metadata.foreignKeyType).toBe("Node");
+    expect(A.fields.parentID.metadata.foreignKeyField).toBe("id");
     expect((A as any).fields.pairId.reference!.nameMap[0]).toBe("pair");
+    expect(A.fields.pairId.metadata.foreignKeyType).toBe("Node");
+    expect(A.fields.pairId.metadata.foreignKeyField).toBe("id");
 
     // backward default: Node -> camelize("Node") = "node"
     // parentID is non-unique, so pluralize("node"): "nodes"
