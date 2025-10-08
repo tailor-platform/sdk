@@ -36,27 +36,31 @@ In `tailor.config.ts`, export an object defined using the `defineConfig` functio
 import { defineConfig } from "@tailor-platform/tailor-sdk";
 
 export default defineConfig({
-  // ...
+  workspaceId: "08a05d91-5176-4d26-a04d-439cc7910d5a",
+  name: "my-app",
+  // ... other configuration
 });
 ```
 
-### id, name, region
+### workspaceId
 
-The workspace ID where the project will be deployed.
+The workspace ID where the project will be deployed. This field is required.
 
 ```typescript
 export default defineConfig({
-  id: "08a05d91-5176-4d26-a04d-439cc7910d5a",
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
 });
 ```
 
-To resolve the workspace ID based on tailorctl configuration, specify `name` and `region` instead of `id`.
-Note that an error will occur if the resolved workspace ID does not match the combination of `name` and `region`.
+### name
+
+The application name. This field is required and should be unique within the workspace.
 
 ```typescript
 export default defineConfig({
-  name: "my-workspace",
-  region: "asia-northeast",
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
 });
 ```
 
@@ -67,12 +71,10 @@ You can also specify sites hosted on the Static Web Hosting service using the fo
 
 ```typescript
 export default defineConfig({
-  app: {
-    "my-app": {
-      cors: ["https://example.com", "my-website:url"],
-    },
-  },
-  staticWebsite: {
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  cors: ["https://example.com", "my-website:url"],
+  staticWebsites: {
     "my-website": {
       // ...
     },
@@ -87,11 +89,9 @@ Can be specified in CIDR format.
 
 ```typescript
 export default defineConfig({
-  app: {
-    "my-app": {
-      allowedIPAddresses: ["192.168.0.0/24"],
-    },
-  },
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  allowedIPAddresses: ["192.168.0.0/24"],
 });
 ```
 
@@ -101,11 +101,9 @@ Disable GraphQL introspection. Default is `false`.
 
 ```typescript
 export default defineConfig({
-  app: {
-    "my-app": {
-      disableIntrospection: true,
-    },
-  },
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  disableIntrospection: true,
 });
 ```
 
@@ -116,12 +114,10 @@ In the following example, all `.ts` files under the `db` directory will be inclu
 
 ```typescript
 export default defineConfig({
-  app: {
-    "my-app": {
-      db: {
-        files: ["db/**/*.ts"],
-      },
-    },
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  db: {
+    tailordb: { files: ["db/**/*.ts"] },
   },
 });
 ```
@@ -133,12 +129,10 @@ In the following example, all `.ts` files under the `pipeline` directory will be
 
 ```typescript
 export default defineConfig({
-  app: {
-    "my-app": {
-      pipeline: {
-        files: ["pipeline/**/*.ts"],
-      },
-    },
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  pipeline: {
+    "my-pipeline": { files: ["pipeline/**/*.ts"] },
   },
 });
 ```
@@ -160,6 +154,8 @@ For example, to allow only users with a specific ID, configure as follows:
 
 ```typescript
 export default defineConfig({
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
   idp: {
     "my-idp": {
       authorization: {
@@ -177,6 +173,8 @@ By specifying the clients created here in the Auth service's idProviderConfigs, 
 
 ```typescript
 export default defineConfig({
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
   idp: {
     "my-idp": {
       clients: ["my-client"],
@@ -192,13 +190,11 @@ Specify an object defined using the `defineAuth` function.
 
 ```typescript
 export default defineConfig({
-  app: {
-    "my-app": {
-      auth: defineAuth({
-        // ...
-      }),
-    },
-  },
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  auth: defineAuth({
+    // ...
+  }),
 });
 ```
 
@@ -209,6 +205,8 @@ In the following example, all `.ts` files under the `executors` directory will b
 
 ```typescript
 export default defineConfig({
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
   executor: { files: ["executors/**/*.ts"] },
 });
 ```
@@ -223,7 +221,9 @@ Description of the site.
 
 ```typescript
 export default defineConfig({
-  staticWebsite: {
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  staticWebsites: {
     "my-website": {
       description: "My Static Website",
     },
@@ -238,7 +238,9 @@ Can be specified in CIDR format.
 
 ```typescript
 export default defineConfig({
-  staticWebsite: {
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  staticWebsites: {
     "my-website": {
       allowedIPAddresses: ["192.168.0.0/24"],
     },
@@ -258,6 +260,8 @@ You can specify the path for the generated file with the distPath option.
 
 ```typescript
 export default defineConfig({
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
   generators: [
     ["@tailor/kysely-type", { distPath: ({ db }) => `./generated/${db}.ts` }],
   ],
@@ -271,6 +275,8 @@ You can specify the path for the generated file with the distPath option.
 
 ```typescript
 export default defineConfig({
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
   generators: [["@tailor/db-type", { distPath: () => `./generated/types.ts` }]],
 });
 ```
@@ -873,12 +879,10 @@ const auth = defineAuth("main-auth", {
 });
 
 export default defineConfig({
-  app: {
-    inventory: {
-      db: { "main-db": { files: ["./tailordb/*.ts"] } },
-      auth,
-    },
-  },
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  db: { tailordb: { files: ["./tailordb/*.ts"] } },
+  auth,
 });
 ```
 

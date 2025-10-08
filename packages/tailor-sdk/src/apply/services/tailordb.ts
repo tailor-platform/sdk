@@ -46,7 +46,7 @@ import { type TailorDBType } from "@/services/tailordb/schema";
 import { type TailorDBService } from "@/services/tailordb/service";
 import { type DBFieldMetadata } from "@/services/tailordb/types";
 import { tailorToManifestScalar } from "@/types/types";
-import { type Workspace } from "@/workspace";
+import { type Application } from "@/application";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
@@ -99,17 +99,17 @@ export async function applyTailorDB(
 export async function planTailorDB(
   client: OperatorClient,
   workspaceId: string,
-  workspace: Readonly<Workspace>,
+  application: Readonly<Application>,
 ) {
   const tailordbs: TailorDBService[] = [];
-  for (const app of workspace.applications) {
+  for (const app of application.applications) {
     for (const tailordb of app.tailorDBServices) {
       await tailordb.loadTypes();
       tailordbs.push(tailordb);
     }
   }
   const executors = Object.values(
-    (await workspace.executorService?.loadExecutors()) ?? {},
+    (await application.executorService?.loadExecutors()) ?? {},
   );
 
   const serviceChangeSet = await planServices(client, workspaceId, tailordbs);

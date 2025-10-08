@@ -6,7 +6,7 @@ import {
   type DeleteStaticWebsiteRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { type Workspace } from "@/workspace";
+import { type Application } from "@/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
@@ -51,7 +51,7 @@ type DeleteStaticWebsite = {
 export async function planStaticWebsite(
   client: OperatorClient,
   workspaceId: string,
-  workspace: Readonly<Workspace>,
+  application: Readonly<Application>,
 ) {
   const changeSet: ChangeSet<
     CreateStaticWebsite,
@@ -82,7 +82,7 @@ export async function planStaticWebsite(
     existingNameSet.add(website.name);
   });
 
-  for (const websiteService of workspace.staticWebsiteServices) {
+  for (const websiteService of application.staticWebsiteServices) {
     const name = websiteService.name;
     const config = websiteService.config;
 

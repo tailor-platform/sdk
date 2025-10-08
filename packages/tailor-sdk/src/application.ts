@@ -6,6 +6,10 @@ import { AuthService } from "@/services/auth/service";
 import { type AuthConfig } from "@/services/auth/types";
 import { type IdPServiceInput } from "./services/idp/types";
 import { type AppConfig } from "./config";
+import { ExecutorService } from "./services/executor/service";
+import { type ExecutorServiceInput } from "./services/executor/types";
+import { StaticWebsiteService } from "./services/staticwebsite/service";
+import { type StaticWebsiteServiceInput } from "./services/staticwebsite/types";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
@@ -13,13 +17,12 @@ export class Application {
   private _idpService?: IdPServiceInput = {};
   private _authService?: AuthService = undefined;
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
+  private _executorService?: ExecutorService = undefined;
+  private _staticWebsiteServices: Array<StaticWebsiteService> = [];
 
   constructor(
     public readonly name: string,
-    public readonly config: Pick<
-      AppConfig,
-      "cors" | "allowedIPAddresses" | "disableIntrospection"
-    >,
+    public readonly config: AppConfig,
   ) {}
 
   private addSubgraph(type: string, name: string) {
@@ -45,6 +48,18 @@ export class Application {
 
   get authService() {
     return this._authService as Readonly<AuthService> | undefined;
+  }
+
+  get executorService() {
+    return this._executorService as Readonly<ExecutorService> | undefined;
+  }
+
+  get staticWebsiteServices() {
+    return this._staticWebsiteServices as ReadonlyArray<StaticWebsiteService>;
+  }
+
+  get applications() {
+    return [this] as ReadonlyArray<Application>;
   }
 
   defineTailorDB(config?: TailorDBServiceInput) {
@@ -94,4 +109,32 @@ export class Application {
     this._authService = authService;
     this.addSubgraph("auth", authService.config.name);
   }
+
+  defineExecutor(config?: ExecutorServiceInput) {
+    if (!config) {
+      return;
+    }
+    this._executorService = new ExecutorService(config);
+  }
+
+  defineStaticWebsites(websites?: Record<string, StaticWebsiteServiceInput>) {
+    if (!websites) {
+      return;
+    }
+    Object.entries(websites).forEach(([name, config]) => {
+      const website = new StaticWebsiteService(name, config);
+      this._staticWebsiteServices.push(website);
+    });
+  }
+}
+
+export function defineApplication(config: AppConfig) {
+  const app = new Application(config.name, config);
+  app.defineTailorDB(config.db);
+  app.definePipeline(config.pipeline);
+  app.defineIdp(config.idp);
+  app.defineAuth(config.auth);
+  app.defineExecutor(config.executor);
+  app.defineStaticWebsites(config.staticWebsites);
+  return app;
 }

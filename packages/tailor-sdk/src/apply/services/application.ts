@@ -10,7 +10,7 @@ import {
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { type Workspace } from "@/workspace";
+import { type Application } from "@/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import {
@@ -73,7 +73,7 @@ type DeleteApplication = {
 export async function planApplication(
   client: OperatorClient,
   workspaceId: string,
-  workspace: Readonly<Workspace>,
+  application: Readonly<Application>,
 ) {
   const changeSet: ChangeSet<
     CreateApplication,
@@ -99,49 +99,45 @@ export async function planApplication(
   existingApplications.forEach((application) => {
     existingNameSet.add(application.name);
   });
-  for (const application of workspace.applications) {
+  for (const app of application.applications) {
     let authNamespace: string | undefined;
     let authIdpConfigName: string | undefined;
-    if (application.authService && application.authService.config) {
-      authNamespace = application.authService.config.name;
+    if (app.authService && app.authService.config) {
+      authNamespace = app.authService.config.name;
 
-      const idProvider = application.authService.config.idProvider;
+      const idProvider = app.authService.config.idProvider;
       if (idProvider) {
         authIdpConfigName = idProvider.name;
       }
     }
 
-    if (existingNameSet.has(application.name)) {
+    if (existingNameSet.has(app.name)) {
       changeSet.updates.push({
-        name: application.name,
+        name: app.name,
         request: {
           workspaceId,
-          applicationName: application.name,
+          applicationName: app.name,
           authNamespace,
           authIdpConfigName,
-          cors: application.config.cors,
-          subgraphs: application.subgraphs.map((subgraph) =>
-            protoSubgraph(subgraph),
-          ),
-          allowedIpAddresses: application.config.allowedIPAddresses,
-          disableIntrospection: application.config.disableIntrospection,
+          cors: app.config.cors,
+          subgraphs: app.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
+          allowedIpAddresses: app.config.allowedIPAddresses,
+          disableIntrospection: app.config.disableIntrospection,
         },
       });
-      existingNameSet.delete(application.name);
+      existingNameSet.delete(app.name);
     } else {
       changeSet.creates.push({
-        name: application.name,
+        name: app.name,
         request: {
           workspaceId,
-          applicationName: application.name,
+          applicationName: app.name,
           authNamespace,
           authIdpConfigName,
-          cors: application.config.cors,
-          subgraphs: application.subgraphs.map((subgraph) =>
-            protoSubgraph(subgraph),
-          ),
-          allowedIpAddresses: application.config.allowedIPAddresses,
-          disableIntrospection: application.config.disableIntrospection,
+          cors: app.config.cors,
+          subgraphs: app.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
+          allowedIpAddresses: app.config.allowedIPAddresses,
+          disableIntrospection: app.config.disableIntrospection,
         },
       });
     }

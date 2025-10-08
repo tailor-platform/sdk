@@ -12,7 +12,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { generate, GenerationManager } from "./index";
-import type { WorkspaceConfig } from "@/config";
+import type { AppConfig } from "@/config";
 import { db, type TailorDBType } from "@/services/tailordb/schema";
 import {
   createQueryResolver,
@@ -90,7 +90,7 @@ class TestGenerator {
 describe("GenerationManager", () => {
   let tempDir: string;
   let manager: any;
-  let mockConfig: Extract<WorkspaceConfig, { id?: undefined }>;
+  let mockConfig: AppConfig;
 
   afterAll(() => {
     vi.clearAllMocks();
@@ -102,15 +102,11 @@ describe("GenerationManager", () => {
     );
 
     mockConfig = {
-      name: "test-workspace",
-      region: "us-west-2",
-      app: {
-        testApp: {
-          db: { main: { files: ["src/types/*.ts"] } },
-          pipeline: { main: { files: ["src/resolvers/*.ts"] } },
-          auth: { namespace: "test-auth" },
-        },
-      },
+      workspaceId: "test-workspace-id",
+      name: "testApp",
+      db: { main: { files: ["src/types/*.ts"] } },
+      pipeline: { main: { files: ["src/resolvers/*.ts"] } },
+      auth: { namespace: "test-auth" },
       generators: [new TestGenerator()],
     } as any;
 
@@ -125,7 +121,7 @@ describe("GenerationManager", () => {
 
   describe("コンストラクター", () => {
     it("正常に初期化される", () => {
-      expect(manager.workspace).toBeDefined();
+      expect(manager.application).toBeDefined();
       expect(manager.baseDir).toContain("generated");
     });
 
@@ -180,12 +176,14 @@ describe("GenerationManager", () => {
     it("複数のアプリケーションを処理", async () => {
       const multiAppConfig = {
         ...mockConfig,
-        name: "multi-app-workspace",
+        name: "multi-app",
       };
       const multiAppManager = new GenerationManager(multiAppConfig);
 
       await multiAppManager.generate({ watch: false });
-      expect(multiAppManager.workspace.applications.length).toBeGreaterThan(0);
+      expect(multiAppManager.application.applications.length).toBeGreaterThan(
+        0,
+      );
     });
   });
 
@@ -648,13 +646,12 @@ describe("GenerationManager", () => {
 });
 
 describe("generate function", () => {
-  let mockConfig: WorkspaceConfig;
+  let mockConfig: AppConfig;
 
   beforeEach(() => {
     mockConfig = {
+      workspaceId: "test-workspace-id",
       name: "test-workspace",
-      region: "us-west-2",
-      app: {},
       generators: [],
     } as any;
   });
@@ -688,30 +685,26 @@ describe("generate function", () => {
 
 describe("Integration Tests", () => {
   let tempDir: string;
-  let fullConfig: WorkspaceConfig;
+  let fullConfig: AppConfig;
 
   beforeEach(async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "integration-test-"));
 
     fullConfig = {
-      name: "integration-test-workspace",
-      region: "us-west-2",
-      app: {
-        testApp: {
-          db: {
-            main: {
-              files: [path.join(tempDir, "types/*.ts")],
-            },
-          },
-          pipeline: {
-            main: {
-              files: [path.join(tempDir, "resolvers/*.ts")],
-            },
-          },
-          auth: {
-            namespace: "test-auth",
-          },
+      workspaceId: "integration-test-workspace-id",
+      name: "testApp",
+      db: {
+        main: {
+          files: [path.join(tempDir, "types/*.ts")],
         },
+      },
+      pipeline: {
+        main: {
+          files: [path.join(tempDir, "resolvers/*.ts")],
+        },
+      },
+      auth: {
+        namespace: "test-auth",
       },
       generators: [
         new TestGenerator(),

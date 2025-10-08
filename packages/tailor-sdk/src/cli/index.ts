@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { register } from "node:module";
 import * as dotenv from "dotenv";
 
-import type { WorkspaceConfig } from "@/config";
+import type { AppConfig } from "@/config";
 import { apply } from "@/apply";
 import { generate } from "@/generator";
 
@@ -17,7 +17,7 @@ import { initCommand } from "./init.js";
 
 register("tsx", import.meta.url, { data: {} });
 
-async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
+async function loadConfig(configPath: string): Promise<AppConfig> {
   const resolvedPath = path.resolve(process.cwd(), configPath);
 
   if (!fs.existsSync(resolvedPath)) {
@@ -31,7 +31,7 @@ async function loadConfig(configPath: string): Promise<WorkspaceConfig> {
       throw new Error("Invalid Tailor config module: default export not found");
     }
 
-    return configModule.default as WorkspaceConfig;
+    return configModule.default as AppConfig;
   } catch (error) {
     if (
       error instanceof Error &&

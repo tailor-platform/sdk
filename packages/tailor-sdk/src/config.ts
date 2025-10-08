@@ -4,7 +4,6 @@ import type { AuthConfig } from "@/services/auth/types";
 import type { ExecutorServiceInput } from "@/services/executor/types";
 import { type IdPServiceInput } from "./services/idp/types";
 import type { StaticWebsiteServiceInput } from "@/services/staticwebsite/types";
-import { type Region } from "@/types/types";
 import {
   type KyselyGenerator,
   type KyselyGeneratorID,
@@ -16,6 +15,8 @@ import {
 import { type CodeGenerator } from "@/generator/types";
 
 export interface AppConfig {
+  workspaceId: string;
+  name: string;
   cors?: string[];
   allowedIPAddresses?: string[];
   disableIntrospection?: boolean;
@@ -23,15 +24,9 @@ export interface AppConfig {
   pipeline?: PipelineResolverServiceInput;
   idp?: IdPServiceInput;
   auth?: AuthConfig;
-}
-
-export type WorkspaceConfig = (
-  | { id: string; name?: undefined; region?: undefined }
-  | { id?: undefined; name: string; region: Region }
-) & {
-  app: Record<string, AppConfig>;
   executor?: ExecutorServiceInput;
   staticWebsites?: Record<string, StaticWebsiteServiceInput>;
+  // FIXME: separate generator config;
   generators?: Array<
     | [
         typeof KyselyGeneratorID,
@@ -43,8 +38,7 @@ export type WorkspaceConfig = (
       ]
     | CodeGenerator<any, any, any, any>
   >;
-  tsConfig?: string;
-};
+}
 
 let distPath: string | null = null;
 
@@ -55,9 +49,11 @@ export const getDistDir = (): string => {
   return distPath;
 };
 
-export function defineConfig(configs: WorkspaceConfig): WorkspaceConfig {
-  if (!configs || !("id" in configs || "name" in configs)) {
-    throw new Error("Invalid Tailor config structure");
+export function defineConfig(config: AppConfig): AppConfig {
+  if (!config?.workspaceId || !config?.name) {
+    throw new Error(
+      "Invalid Tailor config structure: workspaceId and name are required",
+    );
   }
-  return configs;
+  return config;
 }

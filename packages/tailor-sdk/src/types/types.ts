@@ -7,8 +7,6 @@ import {
 } from "./helpers";
 import { type TailorField } from "./type";
 
-export type Region = "asia-northeast" | "us-west";
-
 export interface SecretValue {
   VaultName: string;
   SecretKey: string;

@@ -77,11 +77,45 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Execute functions, webhooks, or GraphQL operations
 
 4. **Configuration** (`tailor.config.ts`)
-   - Central configuration using `defineConfig()`
+   - Central configuration using `defineConfig()` for a single application
+   - Required fields: `workspaceId` and `name`
    - Specify component locations with glob patterns
    - Configure generators for code generation
+   - Application-level settings: `cors`, `allowedIPAddresses`, `disableIntrospection`
 
 ### Code Patterns
+
+**Configuration Pattern:**
+
+```typescript
+import { defineConfig } from "@tailor-platform/tailor-sdk";
+import { auth } from "./auth";
+
+export default defineConfig({
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  cors: ["my-frontend:url"],
+  db: {
+    tailordb: { files: ["./tailordb/*.ts"] },
+  },
+  pipeline: {
+    "my-pipeline": { files: ["./resolvers/**/resolver.ts"] },
+  },
+  idp: {
+    "my-idp": {
+      authorization: "loggedIn",
+      clients: ["default-idp-client"],
+    },
+  },
+  auth,
+  executor: { files: ["./executors/*.ts"] },
+  staticWebsites: {
+    "my-frontend": {
+      dist: "./dist",
+    },
+  },
+});
+```
 
 **Model Definition Pattern:**
 

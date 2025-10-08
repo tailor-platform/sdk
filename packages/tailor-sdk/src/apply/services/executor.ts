@@ -19,7 +19,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { type Executor } from "@/services";
-import { type Workspace } from "@/workspace";
+import { type Application } from "@/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
@@ -64,7 +64,7 @@ type DeleteExecutor = {
 export async function planExecutor(
   client: OperatorClient,
   workspaceId: string,
-  workspace: Readonly<Workspace>,
+  application: Readonly<Application>,
 ) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
     new ChangeSet("Executors");
@@ -88,7 +88,7 @@ export async function planExecutor(
     existingNameSet.add(executor.name);
   });
 
-  const executors = (await workspace.executorService?.loadExecutors()) ?? {};
+  const executors = (await application.executorService?.loadExecutors()) ?? {};
   for (const executor of Object.values(executors)) {
     if (existingNameSet.has(executor.name)) {
       changeSet.updates.push({

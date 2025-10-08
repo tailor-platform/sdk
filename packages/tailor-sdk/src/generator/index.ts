@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { GenerateOptions } from "./options";
-import { getDistDir, type WorkspaceConfig } from "@/config";
-import { defineWorkspace } from "@/workspace";
+import { getDistDir, type AppConfig } from "@/config";
+import { defineApplication, type Application } from "@/application";
 import { type Resolver } from "@/services/pipeline/resolver";
 import { type TailorDBType } from "@/services/tailordb/schema";
 import { type Executor } from "@/services/executor/types";
@@ -18,10 +18,8 @@ import { DependencyWatcher } from "./watch";
 
 export type { CodeGenerator } from "./types";
 
-type Workspace = ReturnType<typeof defineWorkspace>;
-
 export class GenerationManager {
-  public readonly workspace: Workspace;
+  public readonly application: Application;
   private generators: CodeGenerator<any, any, any, any>[] = [];
   // Organized by application, service type, and namespace
   private applications: Record<
@@ -34,8 +32,8 @@ export class GenerationManager {
   private executors: Record<string, Executor> = {};
   private readonly baseDir;
 
-  constructor(private readonly config: WorkspaceConfig) {
-    this.workspace = defineWorkspace(config);
+  constructor(private readonly config: AppConfig) {
+    this.application = defineApplication(config);
     this.baseDir = path.join(getDistDir(), "generated");
     fs.mkdirSync(this.baseDir, { recursive: true });
   }
@@ -72,12 +70,14 @@ export class GenerationManager {
 
   async generate(options: GenerateOptions) {
     console.log(
-      "Generation for workspace:",
-      this.workspace.config.id || this.workspace.config.name,
+      "Generation for application:",
+      this.application.config.name,
+      "workspace ID:",
+      this.application.config.workspaceId,
     );
 
     // Initialize data structure for each application
-    for (const app of this.workspace.applications) {
+    for (const app of this.application.applications) {
       const appNamespace = app.name;
       this.applications[appNamespace] = {
         tailordbNamespaces: {},
@@ -93,11 +93,13 @@ export class GenerationManager {
             this.applications[appNamespace].tailordbNamespaces[namespace] = {};
             // flatten the nested structure
             Object.values(types).forEach((nsTypes) => {
-              Object.entries(nsTypes).forEach(([typeName, type]) => {
-                this.applications[appNamespace].tailordbNamespaces[namespace][
-                  typeName
-                ] = type;
-              });
+              Object.entries(nsTypes as Record<string, TailorDBType>).forEach(
+                ([typeName, type]) => {
+                  this.applications[appNamespace].tailordbNamespaces[namespace][
+                    typeName
+                  ] = type;
+                },
+              );
             });
           }
         } catch (error) {
@@ -119,9 +121,10 @@ export class GenerationManager {
           this.applications[appNamespace].pipelineNamespaces[namespace] = {};
           Object.entries(pipelineService.getResolvers()).forEach(
             ([_, resolver]) => {
+              const typedResolver = resolver as Resolver;
               this.applications[appNamespace].pipelineNamespaces[namespace][
-                resolver.name
-              ] = resolver;
+                typedResolver.name
+              ] = typedResolver;
             },
           );
         } catch (error) {
@@ -142,9 +145,9 @@ export class GenerationManager {
     }
 
     // Executor services
-    const executors = await this.workspace.executorService?.loadExecutors();
+    const executors = await this.application.executorService?.loadExecutors();
     Object.entries(executors ?? {}).forEach(([filePath, executor]) => {
-      this.executors[filePath] = executor;
+      this.executors[filePath] = executor as Executor;
     });
 
     this.initGenerators();
@@ -423,7 +426,7 @@ export class GenerationManager {
     this.watcher = new DependencyWatcher();
 
     // Watch for each application
-    for (const app of this.workspace.applications) {
+    for (const app of this.application.applications) {
       const appNamespace = app.name;
 
       // Watch TailorDB services
@@ -438,11 +441,13 @@ export class GenerationManager {
               for (const file of affectedFiles) {
                 try {
                   const types = await db.loadTypesForFile(file, timestamp);
-                  Object.entries(types).forEach(([typeName, type]) => {
-                    this.applications[appNamespace].tailordbNamespaces[
-                      dbNamespace
-                    ][typeName] = type;
-                  });
+                  Object.entries(types as Record<string, TailorDBType>).forEach(
+                    ([typeName, type]) => {
+                      this.applications[appNamespace].tailordbNamespaces[
+                        dbNamespace
+                      ][typeName] = type;
+                    },
+                  );
                 } catch (error) {
                   console.error(
                     `Error loading types from file ${file}:`,
@@ -528,7 +533,7 @@ export class GenerationManager {
 }
 
 export async function generate(
-  config: WorkspaceConfig,
+  config: AppConfig,
   options: GenerateOptions = { watch: false },
 ) {
   const manager = new GenerationManager(config);

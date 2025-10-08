@@ -21,7 +21,7 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import { type Executor, type PipelineResolverService } from "@/services";
 import { type Resolver } from "@/services/pipeline/resolver";
-import { type Workspace } from "@/workspace";
+import { type Application } from "@/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
@@ -68,17 +68,17 @@ export async function applyPipeline(
 export async function planPipeline(
   client: OperatorClient,
   workspaceId: string,
-  workspace: Readonly<Workspace>,
+  application: Readonly<Application>,
 ) {
   const pipelines: Readonly<PipelineResolverService>[] = [];
-  for (const app of workspace.applications) {
+  for (const app of application.applications) {
     for (const pipeline of app.pipelineResolverServices) {
       await pipeline.loadResolvers();
       pipelines.push(pipeline);
     }
   }
   const executors = Object.values(
-    (await workspace.executorService?.loadExecutors()) ?? {},
+    (await application.executorService?.loadExecutors()) ?? {},
   );
 
   const serviceChangeSet = await planServices(client, workspaceId, pipelines);

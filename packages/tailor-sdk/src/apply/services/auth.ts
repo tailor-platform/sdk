@@ -58,7 +58,7 @@ import type {
   SCIMResource,
   ValueOperand,
 } from "@/services";
-import { type Workspace } from "@/workspace";
+import { type Application } from "@/application";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
 import {
@@ -224,10 +224,10 @@ export async function applyAuth(
 export async function planAuth(
   client: OperatorClient,
   workspaceId: string,
-  workspace: Readonly<Workspace>,
+  application: Readonly<Application>,
 ) {
   const auths: Readonly<AuthService>[] = [];
-  for (const app of workspace.applications) {
+  for (const app of application.applications) {
     if (app.authService) {
       await app.authService.resolveNamespaces();
       auths.push(app.authService);

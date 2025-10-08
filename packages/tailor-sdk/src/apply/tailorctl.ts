@@ -16,7 +16,6 @@ export type TailorctlConfig = {
   controlplaneaccesstoken: string;
   controlplanerefreshtoken: string;
   controlplanetokenexpiresat: string;
-  workspaceid: string;
 };
 
 export function readTailorctlConfig() {

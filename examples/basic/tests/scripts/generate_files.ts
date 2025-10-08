@@ -1,15 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
-import config from "../../tailor.config";
+import { randomUUID } from "node:crypto";
 import { apply, generate } from "@tailor-platform/tailor-sdk";
 
 const __filename = url.fileURLToPath(import.meta.url);
+
+process.env.WORKSPACE_ID ??= randomUUID();
+const { default: baseConfig } = await import("../../tailor.config.js");
 
 const expectedDir = "tests/fixtures/expected";
 const actualDir = "tests/fixtures/actual";
 
 function getConfig(dist: "expected" | "actual") {
+  const config = { ...baseConfig };
   config.generators = config.generators?.map((gen) => {
     if (Array.isArray(gen) && gen[0] === "@tailor/kysely-type") {
       return [

@@ -9,7 +9,7 @@ import {
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
 import { type IdPServiceInput } from "@/services/idp/types";
-import { type Workspace } from "@/workspace";
+import { type Application } from "@/application";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
@@ -73,10 +73,10 @@ export async function applyIdP(
 export async function planIdP(
   client: OperatorClient,
   workspaceId: string,
-  workspace: Readonly<Workspace>,
+  application: Readonly<Application>,
 ) {
   const idps: IdPServiceInput = {};
-  for (const app of workspace.applications) {
+  for (const app of application.applications) {
     for (const [namespaceName, idp] of Object.entries(app.idpServices)) {
       idps[namespaceName] = idp;
     }
