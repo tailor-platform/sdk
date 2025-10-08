@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - name: Install Deps
+        uses: ./.github/actions/install-deps
+
+      - name: Create Release PR
+        id: changesets
+        uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba # v1.5.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update SDK version in templates
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          VERSION=$(jq -r '.version' ./packages/tailor-sdk/package.json)
+          node ./packages/create-tailor-sdk/scripts/set-sdk-version.js "$VERSION"
+
+      - name: Publish
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          pnpm publish -r --no-git-checks --access=public

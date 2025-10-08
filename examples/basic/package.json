@@ -1,6 +1,6 @@
 {
   "name": "@examples/basic",
-  "version": "1.0.0",
+  "private": true,
   "description": "Basic example for Tailor SDK usage",
   "type": "module",
   "scripts": {
