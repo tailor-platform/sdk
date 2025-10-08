@@ -7,7 +7,9 @@
   "files": [
     "dist",
     "templates",
-    "templates/*/.gitignore"
+    "templates/*/.gitignore",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsdown",
