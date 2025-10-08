@@ -1,5 +1,12 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.73
+
+### Patch Changes
+
+- 9be7344: Change defineConfig to be tailored specifically for a single app
+- 6d5b956: Fixed deps so that the cron type for schedule triggers works properly
+
 ## 0.0.72
 
 ### Patch Changes
