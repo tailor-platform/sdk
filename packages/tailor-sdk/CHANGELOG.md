@@ -1,5 +1,13 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.72
+
+### Patch Changes
+
+- ea06320: Fixed the issue where relations couldn't be set to fields other than `id`
+
+  Fixed deployment errors caused by always trying to set foreign keys to `id`, and now foreign keys are set to the correct fields.
+
 ## 0.0.71
 
 ### Patch Changes
