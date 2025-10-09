@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.75
+
+### Patch Changes
+
+- dca9f5b: Separate generator config from defineConfig
+
 ## 0.0.74
 
 ### Patch Changes
