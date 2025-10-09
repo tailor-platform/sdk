@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
-  "changelog": "@changesets/cli/changelog",
+  "changelog": [
+    "@changesets/changelog-github",
+    { "repo": "tailor-platform/tailor-sdk" }
+  ],
   "commit": false,
   "fixed": [
     ["@tailor-platform/tailor-sdk", "@tailor-platform/create-tailor-sdk"]

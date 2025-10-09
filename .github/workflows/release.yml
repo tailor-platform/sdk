@@ -24,23 +24,13 @@ jobs:
       - name: Install Deps
         uses: ./.github/actions/install-deps
 
+      - name: Update npm
+        run: npm install -g npm@latest
+
       - name: Create Release PR
         id: changesets
         uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba # v1.5.3
+        with:
+          publish: pnpm publish -r --no-git-checks --access=public
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update SDK version in templates
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        run: |
-          VERSION=$(jq -r '.version' ./packages/tailor-sdk/package.json)
-          node ./packages/create-tailor-sdk/scripts/set-sdk-version.js "$VERSION"
-
-      - name: Update npm
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        run: npm install -g npm@latest
-
-      - name: Publish
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        run: |
-          pnpm publish -r --no-git-checks --access=public
