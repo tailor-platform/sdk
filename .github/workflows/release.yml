@@ -37,6 +37,7 @@ jobs:
           node ./packages/create-tailor-sdk/scripts/set-sdk-version.js "$VERSION"
 
       - name: Update npm
+        if: steps.changesets.outputs.hasChangesets == 'false'
         run: npm install -g npm@latest
 
       - name: Publish
