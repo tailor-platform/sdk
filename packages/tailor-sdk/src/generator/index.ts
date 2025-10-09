@@ -1,7 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { GenerateOptions } from "./options";
-import { getDistDir, type AppConfig } from "@/config";
+import {
+  getDistDir,
+  loadConfig,
+  type AppConfig,
+  type Generator,
+} from "@/config";
 import { defineApplication, type Application } from "@/application";
 import { type Resolver } from "@/services/pipeline/resolver";
 import { type TailorDBType } from "@/services/tailordb/schema";
@@ -12,15 +17,12 @@ import {
   type TailorDBNamespaceResult,
   type PipelineNamespaceResult,
 } from "./types";
-import { KyselyGenerator } from "./builtin/kysely-type";
-import { DbTypeGenerator } from "./builtin/db-type";
 import { DependencyWatcher } from "./watch";
 
 export type { CodeGenerator } from "./types";
 
 export class GenerationManager {
   public readonly application: Application;
-  private generators: CodeGenerator<any, any, any, any>[] = [];
   // Organized by application, service type, and namespace
   private applications: Record<
     string,
@@ -32,40 +34,13 @@ export class GenerationManager {
   private executors: Record<string, Executor> = {};
   private readonly baseDir;
 
-  constructor(private readonly config: AppConfig) {
+  constructor(
+    config: AppConfig,
+    private generators: Generator[] = [],
+  ) {
     this.application = defineApplication(config);
     this.baseDir = path.join(getDistDir(), "generated");
     fs.mkdirSync(this.baseDir, { recursive: true });
-  }
-
-  private initGenerators() {
-    if (this.generators.length > 0) {
-      console.log(
-        "[initGenerators] Generators already initialized, count:",
-        this.generators.length,
-      );
-      return;
-    }
-
-    console.log(
-      "[initGenerators] Initializing generators, config has:",
-      this.config.generators?.length || 0,
-    );
-
-    this.generators =
-      this.config.generators?.map((gen) => {
-        if (Array.isArray(gen)) {
-          if (gen[0] === "@tailor/kysely-type") {
-            return new KyselyGenerator(gen[1]);
-          }
-          if (gen[0] === "@tailor/db-type") {
-            return new DbTypeGenerator(gen[1]);
-          }
-          throw new Error(`Unknown generator ID: ${gen[0]}`);
-        }
-
-        return gen;
-      }) || [];
   }
 
   async generate(options: GenerateOptions) {
@@ -150,7 +125,6 @@ export class GenerationManager {
       this.executors[filePath] = executor as Executor;
     });
 
-    this.initGenerators();
     await this.processGenerators();
   }
 
@@ -533,10 +507,11 @@ export class GenerationManager {
 }
 
 export async function generate(
-  config: AppConfig,
+  configPath: string,
   options: GenerateOptions = { watch: false },
 ) {
-  const manager = new GenerationManager(config);
+  const { config, generators } = await loadConfig(configPath);
+  const manager = new GenerationManager(config, generators);
   await manager.generate(options);
   if (options.watch) {
     await manager.watch();

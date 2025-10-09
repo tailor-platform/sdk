@@ -22,7 +22,7 @@ export class KyselyGenerator
 
   constructor(
     private readonly options: {
-      distPath: (context: { app: string; tailorDB: string }) => string;
+      distPath: string | ((context: { tailorDB: string }) => string);
     },
   ) {}
 
@@ -61,10 +61,10 @@ export class KyselyGenerator
       for (const nsResult of input.tailordb) {
         if (nsResult.types) {
           files.push({
-            path: this.options.distPath({
-              app: input.applicationNamespace,
-              tailorDB: nsResult.namespace,
-            }),
+            path:
+              typeof this.options.distPath === "string"
+                ? this.options.distPath
+                : this.options.distPath({ tailorDB: nsResult.namespace }),
             content: nsResult.types,
           });
         }

@@ -1,4 +1,4 @@
-import { defineConfig } from "@tailor-platform/tailor-sdk";
+import { defineConfig, defineGenerators } from "@tailor-platform/tailor-sdk";
 import { auth } from "./src/auth";
 
 export default defineConfig({
@@ -8,10 +8,9 @@ export default defineConfig({
   pipeline: { "main-pipeline": { files: [`./src/pipeline/*.ts`] } },
   auth,
   executor: { files: ["./src/executor/*.ts"] },
-  generators: [
-    [
-      "@tailor/kysely-type",
-      { distPath: ({ tailorDB }) => `./src/generated/${tailorDB}.ts` },
-    ],
-  ],
 });
+
+export const generators = defineGenerators([
+  "@tailor/kysely-type",
+  { distPath: ({ tailorDB }) => `./src/generated/${tailorDB}.ts` },
+]);

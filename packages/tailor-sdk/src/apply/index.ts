@@ -1,7 +1,7 @@
 import ml from "multiline-ts";
 import { type Client } from "@connectrpc/connect";
 
-import { type AppConfig } from "@/config";
+import { loadConfig, type AppConfig } from "@/config";
 import { type OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { defineApplication } from "@/application";
 import { fetchAll, initOperatorClient } from "./client";
@@ -26,10 +26,8 @@ export type ApplyOptions = {
 
 export type ApplyPhase = "create-update" | "delete";
 
-export async function apply(
-  config: Readonly<AppConfig>,
-  options: ApplyOptions,
-) {
+export async function apply(configPath: string, options: ApplyOptions = {}) {
+  const { config } = await loadConfig(configPath);
   const application = defineApplication(config);
 
   // Build functions

@@ -13,7 +13,8 @@ export const t = { ..._t };
 
 export * from "@/services";
 
-export { defineConfig } from "@/config";
+export { defineConfig, defineGenerators } from "@/config";
+export type { Generator as GeneratorConfig } from "@/config";
 export { apply } from "@/apply";
 export { generate } from "@/generator";
 export type { CodeGenerator } from "@/generator";

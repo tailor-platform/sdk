@@ -11,8 +11,9 @@ import {
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { generate, GenerationManager } from "./index";
+import { GenerationManager } from "./index";
 import type { AppConfig } from "@/config";
+import { GeneratorConfigSchema } from "@/config";
 import { db, type TailorDBType } from "@/services/tailordb/schema";
 import {
   createQueryResolver,
@@ -107,10 +108,9 @@ describe("GenerationManager", () => {
       db: { main: { files: ["src/types/*.ts"] } },
       pipeline: { main: { files: ["src/resolvers/*.ts"] } },
       auth: { namespace: "test-auth" },
-      generators: [new TestGenerator()],
     } as any;
 
-    manager = new GenerationManager(mockConfig);
+    manager = new GenerationManager(mockConfig, [new TestGenerator()] as any);
   });
 
   afterEach(() => {
@@ -133,28 +133,20 @@ describe("GenerationManager", () => {
     });
   });
 
-  describe("initGenerators", () => {
-    it("ジェネレーターが初期化される", () => {
-      manager.initGenerators();
+  describe("generators", () => {
+    it("ジェネレーターが正しく渡される", () => {
       expect(manager.generators.length).toBeGreaterThan(0);
     });
 
-    it("重複初期化を防ぐ", () => {
-      manager.initGenerators();
-      const firstCount = manager.generators.length;
-      manager.initGenerators();
-      expect(manager.generators.length).toBe(firstCount);
-    });
-
-    it("Kysely ジェネレーターを正しく初期化", () => {
-      const configWithKysely = {
-        ...mockConfig,
-        generators: [
-          ["@tailor/kysely-type", { distPath: "types/db.ts" }] as const,
-        ],
-      };
-      const managerWithKysely = new GenerationManager(configWithKysely as any);
-      (managerWithKysely as any).initGenerators();
+    it("Kysely ジェネレーターを受け取る", () => {
+      const kyselyGen = GeneratorConfigSchema.parse([
+        "@tailor/kysely-type",
+        { distPath: "types/db.ts" },
+      ]);
+      const managerWithKysely = new GenerationManager(
+        mockConfig as any,
+        [kyselyGen] as any,
+      );
       expect(
         (managerWithKysely as any).generators.some(
           (gen: any) => gen instanceof KyselyGenerator,
@@ -178,7 +170,7 @@ describe("GenerationManager", () => {
         ...mockConfig,
         name: "multi-app",
       };
-      const multiAppManager = new GenerationManager(multiAppConfig);
+      const multiAppManager = new GenerationManager(multiAppConfig, []);
 
       await multiAppManager.generate({ watch: false });
       expect(multiAppManager.application.applications.length).toBeGreaterThan(
@@ -189,7 +181,6 @@ describe("GenerationManager", () => {
 
   describe("processGenerators", () => {
     beforeEach(async () => {
-      manager.initGenerators();
       manager.applications = {
         "test-app": {
           tailordbNamespaces: {
@@ -587,7 +578,6 @@ describe("GenerationManager", () => {
     });
 
     it("ファイル変更時のコールバック処理", async () => {
-      manager.initGenerators();
       // Verify that TestGenerator has processTailorDBNamespace method
       const testGen = manager.generators.find(
         (g: any) => g.id === "test-generator",
@@ -652,32 +642,31 @@ describe("generate function", () => {
     mockConfig = {
       workspaceId: "test-workspace-id",
       name: "test-workspace",
-      generators: [],
     } as any;
   });
 
   it("GenerationManagerを作成して実行", async () => {
-    await expect(generate(mockConfig, { watch: false })).resolves.not.toThrow();
+    const manager = new GenerationManager(mockConfig, []);
+    await expect(manager.generate({ watch: false })).resolves.not.toThrow();
   });
 
   it("watch オプションが true の場合 watch を開始", async () => {
-    const indexModule = await import("./index");
-    const GenerationManager = (indexModule as any).GenerationManager;
     const watchSpy = vi.fn();
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
-    await generate(mockConfig, { watch: true });
+    const manager = new GenerationManager(mockConfig, []);
+    await manager.generate({ watch: false });
+    await manager.watch();
 
     expect(watchSpy).toHaveBeenCalled();
   });
 
   it("watch オプションが false の場合 watch を開始しない", async () => {
-    const indexModule = await import("./index");
-    const GenerationManager = (indexModule as any).GenerationManager;
     const watchSpy = vi.fn();
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
-    await generate(mockConfig, { watch: false });
+    const manager = new GenerationManager(mockConfig, []);
+    await manager.generate({ watch: false });
 
     expect(watchSpy).not.toHaveBeenCalled();
   });
@@ -706,10 +695,6 @@ describe("Integration Tests", () => {
       auth: {
         namespace: "test-auth",
       },
-      generators: [
-        new TestGenerator(),
-        ["@tailor/kysely-type", { outputPath: "db.ts" }],
-      ],
     } as any;
   });
 
@@ -722,10 +707,12 @@ describe("Integration Tests", () => {
   it("複数ジェネレーターでの完全統合テスト", async () => {
     const indexModule = await import("./index");
     const GenerationManager = (indexModule as any).GenerationManager;
-    const manager = new GenerationManager(fullConfig);
-
-    // Explicitly call initGenerators
-    manager.initGenerators();
+    const kyselyGen = GeneratorConfigSchema.parse([
+      "@tailor/kysely-type",
+      { distPath: "db.ts" },
+    ]);
+    const generators = [new TestGenerator(), kyselyGen] as any;
+    const manager = new GenerationManager(fullConfig, generators);
 
     await expect(manager.generate({ watch: false })).resolves.not.toThrow();
 
@@ -741,7 +728,7 @@ describe("Integration Tests", () => {
   it("エラー回復とパフォーマンスの統合テスト", async () => {
     const indexModule = await import("./index");
     const GenerationManager = (indexModule as any).GenerationManager;
-    const manager = new GenerationManager(fullConfig);
+    const manager = new GenerationManager(fullConfig, []);
 
     const start = Date.now();
     await manager.generate({ watch: false });
@@ -752,16 +739,13 @@ describe("Integration Tests", () => {
 
   describe("Memory Management", () => {
     it("大量データ処理でメモリリークなし", async () => {
-      const largeDataConfig = {
-        ...fullConfig,
-        generators: Array(10)
-          .fill(0)
-          .map(() => new TestGenerator()),
-      };
+      const largeGenerators = Array(10)
+        .fill(0)
+        .map(() => new TestGenerator());
 
       const indexModule = await import("./index");
       const GenerationManager = (indexModule as any).GenerationManager;
-      const manager = new GenerationManager(largeDataConfig);
+      const manager = new GenerationManager(fullConfig, largeGenerators);
 
       // Create large applications structure
       manager.applications = {};

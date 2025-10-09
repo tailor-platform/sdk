@@ -4,11 +4,9 @@ import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "citty";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { pathToFileURL } from "node:url";
 import { register } from "node:module";
 import * as dotenv from "dotenv";
 
-import type { AppConfig } from "@/config";
 import { apply } from "@/apply";
 import { generate } from "@/generator";
 
@@ -16,33 +14,6 @@ import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
 
 register("tsx", import.meta.url, { data: {} });
-
-async function loadConfig(configPath: string): Promise<AppConfig> {
-  const resolvedPath = path.resolve(process.cwd(), configPath);
-
-  if (!fs.existsSync(resolvedPath)) {
-    throw new Error(`Configuration file not found: ${configPath}`);
-  }
-
-  try {
-    const configModule = await import(pathToFileURL(resolvedPath).href);
-
-    if (!configModule || !configModule.default) {
-      throw new Error("Invalid Tailor config module: default export not found");
-    }
-
-    return configModule.default as AppConfig;
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes("Cannot find module")
-    ) {
-      throw new Error(`Configuration file not found: ${configPath}`);
-    }
-
-    throw error;
-  }
-}
 
 const exec: (...args: CommandArgs) => Promise<void> = async (
   command,
@@ -58,12 +29,11 @@ const exec: (...args: CommandArgs) => Promise<void> = async (
     }
 
     const configPath = options.config || "tailor.config.ts";
-    const config = await loadConfig(configPath);
 
     if (command === "apply") {
-      await apply(config, options);
+      await apply(configPath, options);
     } else if (command === "generate") {
-      await generate(config, options);
+      await generate(configPath, options);
     } else {
       throw new Error(`Unknown command: ${command}`);
     }

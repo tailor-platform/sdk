@@ -1,4 +1,4 @@
-import { defineConfig } from "@tailor-platform/tailor-sdk";
+import { defineConfig, defineGenerators } from "@tailor-platform/tailor-sdk";
 import { auth } from "./auth";
 
 export default defineConfig({
@@ -26,11 +26,9 @@ export default defineConfig({
       description: "my frontend application",
     },
   },
-  generators: [
-    [
-      "@tailor/kysely-type",
-      { distPath: ({ tailorDB }) => `./generated/${tailorDB}.ts` },
-    ],
-    ["@tailor/db-type", { distPath: () => `./generated/types.ts` }],
-  ],
 });
+
+export const generators = defineGenerators(
+  ["@tailor/kysely-type", { distPath: "./generated/tailordb.ts" }],
+  ["@tailor/db-type", { distPath: "./generated/types.ts" }],
+);

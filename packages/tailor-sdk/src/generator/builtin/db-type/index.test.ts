@@ -3,7 +3,7 @@ import { DbTypeGenerator, DbTypeGeneratorID } from "./index";
 import { db } from "@/services/tailordb/schema";
 
 describe("DbTypeGenerator", () => {
-  const mockDistPath = ({ tailorDB }: { app: string; tailorDB: string }) =>
+  const mockDistPath = ({ tailorDB }: { tailorDB: string }) =>
     `db/${tailorDB}.ts`;
 
   test("ジェネレータの基本プロパティ", () => {

@@ -1,45 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
+import { generate, apply } from "@tailor-platform/tailor-sdk";
 import { randomUUID } from "node:crypto";
-import { apply, generate } from "@tailor-platform/tailor-sdk";
 
 const __filename = url.fileURLToPath(import.meta.url);
 
-process.env.WORKSPACE_ID ??= randomUUID();
-const { default: baseConfig } = await import("../../tailor.config.js");
-
 const expectedDir = "tests/fixtures/expected";
 const actualDir = "tests/fixtures/actual";
-
-function getConfig(dist: "expected" | "actual") {
-  const config = { ...baseConfig };
-  config.generators = config.generators?.map((gen) => {
-    if (Array.isArray(gen) && gen[0] === "@tailor/kysely-type") {
-      return [
-        gen[0],
-        {
-          distPath: () =>
-            path.join(dist === "expected" ? expectedDir : actualDir, "db.ts"),
-        },
-      ];
-    }
-    if (Array.isArray(gen) && gen[0] === "@tailor/db-type") {
-      return [
-        gen[0],
-        {
-          distPath: () =>
-            path.join(
-              dist === "expected" ? expectedDir : actualDir,
-              "types.ts",
-            ),
-        },
-      ];
-    }
-    return gen;
-  });
-  return config;
-}
 
 function replaceAbsolutePaths(dirPath: string) {
   const items = fs.readdirSync(dirPath);
@@ -77,13 +45,12 @@ export async function generateExpectedFiles(): Promise<void> {
     console.log(`Expected directory: ${expectedDir}`);
 
     if (fs.existsSync(expectedDir)) {
-      await fs.rmdirSync(expectedDir, { recursive: true });
+      fs.rmSync(expectedDir, { recursive: true });
       console.log("Removed existing expected directory");
     }
 
     process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
-    const config = getConfig("expected");
-    await generate(config);
+    await generate("./tests/tailor.config.expected.ts");
     replaceAbsolutePaths(expectedDir);
 
     console.log("\nGenerated files:");
@@ -126,19 +93,19 @@ async function listGeneratedFiles(
 
 export async function generateActualFiles(): Promise<void> {
   if (fs.existsSync(actualDir)) {
-    fs.rmdirSync(actualDir, { recursive: true });
+    fs.rmSync(actualDir, { recursive: true });
     console.log("Removed existing actual directory");
   }
 
   process.env.TAILOR_SDK_OUTPUT_DIR = actualDir;
-  const config = getConfig("actual");
-  await generate(config);
-  await apply(config, { buildOnly: true });
+  await generate("./tests/tailor.config.actual.ts");
+  await apply("./tests/tailor.config.actual.ts", { buildOnly: true });
   replaceAbsolutePaths(actualDir);
 }
 
 if (process.argv[1] === __filename) {
   try {
+    process.env.WORKSPACE_ID ??= randomUUID();
     if (process.argv[2] === "actual") {
       console.log("Generating actual files...");
       await generateActualFiles();
