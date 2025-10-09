@@ -1,5 +1,12 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.74
+
+### Patch Changes
+
+- e41001c: refactor: Remove any related to relation
+- c1a972a: fix: Fixed the issue where fn arguments became never for scheduleTrigger
+
 ## 0.0.73
 
 ### Patch Changes
