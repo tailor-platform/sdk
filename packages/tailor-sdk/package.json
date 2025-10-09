@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/tailor-sdk",
-  "version": "0.0.75",
+  "version": "0.0.76",
   "description": "Tailor SDK - The SDK to work with Tailor Platform",
   "main": "dist/index.mjs",
   "type": "module",
