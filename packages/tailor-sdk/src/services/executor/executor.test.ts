@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { createExecutor } from "./executor";
-import { scheduleTrigger } from "./trigger";
+import { incomingWebhookTrigger, scheduleTrigger } from "./trigger";
 import type { SqlClient } from "../pipeline";
 
 describe("scheduleTrigger", () => {
@@ -36,6 +36,45 @@ describe("scheduleTrigger", () => {
         fn: (args) => {
           expectTypeOf(args).toExtend<{
             client: SqlClient;
+          }>();
+        },
+      });
+  });
+});
+
+describe("webhookTrigger", () => {
+  test("function args include client and webhook args", () => {
+    createExecutor("test")
+      .on(incomingWebhookTrigger())
+      .executeFunction({
+        fn: (args) => {
+          expectTypeOf(args).toExtend<{
+            client: SqlClient;
+            body: Record<string, unknown>;
+            headers: Record<string, string>;
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+        },
+      });
+  });
+
+  test("can narrow webhook args", () => {
+    createExecutor("test")
+      .on(
+        incomingWebhookTrigger<{
+          body: { id: string };
+          headers: { "x-custom-header": string };
+        }>(),
+      )
+      .executeFunction({
+        fn: (args) => {
+          expectTypeOf(args).toExtend<{
+            client: SqlClient;
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
           }>();
         },
       });
