@@ -1,9 +1,10 @@
 import type { StandardCRON } from "ts-cron-validator";
 import { type ScheduleTrigger, type ManifestAndContext } from "../types";
+import type { EmptyObject } from "type-fest";
 
 export type ScheduleTriggerWithManifestAndContext = ManifestAndContext<
   ScheduleTrigger,
-  object
+  { args: EmptyObject }
 >;
 
 export function scheduleTrigger<T extends string>(
@@ -16,7 +17,7 @@ export function scheduleTrigger<T extends string>(
       Timezone: timezone,
       Frequency: cron,
     },
-    context: {},
+    context: { args: {} },
   };
 }
 
