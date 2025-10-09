@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.77
+
+### Patch Changes
+
+- [#524](https://github.com/tailor-platform/tailor-sdk/pull/524) [`5f0272a`](https://github.com/tailor-platform/tailor-sdk/commit/5f0272a35b6ab24b69f781123477bc42e50e02cd) Thanks [@remiposo](https://github.com/remiposo)! - test: add incomingWebhookTrigger test cases
+
 ## 0.0.76
 
 ### Patch Changes
