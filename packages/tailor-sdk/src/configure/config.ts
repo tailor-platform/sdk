@@ -1,0 +1,46 @@
+import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
+import type { PipelineResolverServiceInput } from "@/configure/services/pipeline/types";
+import type { AuthConfig } from "@/configure/services/auth/types";
+import type { ExecutorServiceInput } from "@/configure/services/executor/types";
+import { type IdPServiceInput } from "@/configure/services/idp/types";
+import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";
+import type { z } from "zod";
+import { type GeneratorConfigSchema } from "@/cli/config-loader";
+
+export interface AppConfig {
+  workspaceId: string;
+  name: string;
+  cors?: string[];
+  allowedIPAddresses?: string[];
+  disableIntrospection?: boolean;
+  db?: TailorDBServiceInput;
+  pipeline?: PipelineResolverServiceInput;
+  idp?: IdPServiceInput;
+  auth?: AuthConfig;
+  executor?: ExecutorServiceInput;
+  staticWebsites?: Record<string, StaticWebsiteServiceInput>;
+}
+
+let distPath: string | null = null;
+
+export const getDistDir = (): string => {
+  if (distPath === null) {
+    distPath = process.env.TAILOR_SDK_OUTPUT_DIR || ".tailor-sdk";
+  }
+  return distPath;
+};
+
+export function defineConfig(config: AppConfig): AppConfig {
+  if (!config?.workspaceId || !config?.name) {
+    throw new Error(
+      "Invalid Tailor config structure: workspaceId and name are required",
+    );
+  }
+  return config;
+}
+
+export function defineGenerators(
+  ...configs: z.input<typeof GeneratorConfigSchema>[]
+) {
+  return configs;
+}

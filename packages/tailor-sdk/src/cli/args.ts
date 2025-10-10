@@ -1,7 +1,7 @@
 import type { ArgsDef, ParsedArgs } from "citty";
 import type { CliOption } from "./types";
-import type { ApplyOptions } from "@/apply";
-import type { GenerateOptions } from "@/generator/options";
+import type { ApplyOptions } from "@/cli/apply";
+import type { GenerateOptions } from "@/cli/generator/options";
 
 type StrictParse<T extends ArgsDef> = {
   [K in keyof ParsedArgs<T> as string extends K

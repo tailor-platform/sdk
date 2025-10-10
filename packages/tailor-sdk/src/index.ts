@@ -1,5 +1,5 @@
-import type { output as _output } from "@/types/helpers";
-import { t as _t } from "@/types";
+import type { output as _output } from "@/configure/types/helpers";
+import { t as _t } from "@/configure/types";
 
 export type infer<T> = _output<T>;
 export type output<T> = _output<T>;
@@ -11,10 +11,6 @@ export namespace t {
 }
 export const t = { ..._t };
 
-export * from "@/services";
+export * from "@/configure/services";
 
-export { defineConfig, defineGenerators } from "@/config";
-export type { Generator as GeneratorConfig } from "@/config";
-export { apply } from "@/apply";
-export { generate } from "@/generator";
-export type { CodeGenerator } from "@/generator";
+export { defineConfig, defineGenerators } from "@/configure/config";

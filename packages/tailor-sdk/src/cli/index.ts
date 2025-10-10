@@ -7,8 +7,7 @@ import * as path from "node:path";
 import { register } from "node:module";
 import * as dotenv from "dotenv";
 
-import { apply } from "@/apply";
-import { generate } from "@/generator";
+import { apply, generate } from "./api.js";
 
 import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
