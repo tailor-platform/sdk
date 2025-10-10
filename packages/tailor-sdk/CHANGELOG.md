@@ -1,5 +1,13 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.78
+
+### Patch Changes
+
+- [#535](https://github.com/tailor-platform/tailor-sdk/pull/535) [`fd011ba`](https://github.com/tailor-platform/tailor-sdk/commit/fd011ba2a0c3719d87a3e5434f86aacc11a52ba8) Thanks [@remiposo](https://github.com/remiposo)! - fix: remove unusable variables from executeFunction/executeJobFunction
+
+- [#527](https://github.com/tailor-platform/tailor-sdk/pull/527) [`f9eae29`](https://github.com/tailor-platform/tailor-sdk/commit/f9eae29e80238e9783e831a7ec02c5a3583d03b6) Thanks [@remiposo](https://github.com/remiposo)! - refactor: Executor service
+
 ## 0.0.77
 
 ### Patch Changes
