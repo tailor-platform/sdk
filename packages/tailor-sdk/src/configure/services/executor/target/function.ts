@@ -1,17 +1,15 @@
 import { type SqlClient } from "@/configure/services/pipeline";
 import { type FunctionTarget } from "../types";
 
-export function executorFunction<A, V = A>({
+export function executorFunction<A>({
   name,
   fn,
-  variables,
   dbNamespace,
   jobFunction,
   invoker,
 }: {
   name: string;
-  fn: (args: V & { client: SqlClient }) => void | Promise<void>;
-  variables?: (args: A) => V;
+  fn: (args: A & { client: SqlClient }) => void | Promise<void>;
   dbNamespace?: string;
   jobFunction?: boolean;
   invoker?: { authName: string; machineUser: string };
@@ -20,7 +18,7 @@ export function executorFunction<A, V = A>({
   return {
     Kind: jobFunction ? "job_function" : "function",
     Name: name,
-    Variables: variables ? `(${variables.toString()})${argStr}` : argStr,
+    Variables: argStr,
     Invoker: invoker
       ? {
           AuthNamespace: invoker.authName,

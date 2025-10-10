@@ -7,21 +7,18 @@ import { type Executor, type TriggerWithArgs } from "./types";
 export function createExecutor(name: string, description?: string) {
   return {
     on: <Args>(trigger: TriggerWithArgs<Args>) => ({
-      executeFunction: <V = Args>({
+      executeFunction: ({
         fn,
-        variables,
         dbNamespace,
         invoker,
       }: {
-        fn: (args: V & { client: SqlClient }) => void | Promise<void>;
-        variables?: (args: Args) => V;
+        fn: (args: Args & { client: SqlClient }) => void | Promise<void>;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
       }): Executor => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
-          variables,
           dbNamespace,
           invoker,
         });
@@ -33,21 +30,18 @@ export function createExecutor(name: string, description?: string) {
         };
       },
 
-      executeJobFunction: <V = Args>({
+      executeJobFunction: ({
         fn,
-        variables,
         dbNamespace,
         invoker,
       }: {
-        fn: (args: V & { client: SqlClient }) => void | Promise<void>;
-        variables?: (args: Args) => V;
+        fn: (args: Args & { client: SqlClient }) => void | Promise<void>;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
       }): Executor => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
-          variables,
           dbNamespace,
           invoker,
           jobFunction: true,
