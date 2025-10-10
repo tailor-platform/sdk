@@ -59,7 +59,7 @@
     "@types/node": "22.18.8",
     "eslint": "9.36.0",
     "tsdown": "0.15.6",
-    "typescript": "5.9.2",
+    "typescript": "5.9.3",
     "typescript-eslint": "8.45.0",
     "vitest": "3.2.4"
   }
