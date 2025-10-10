@@ -159,10 +159,10 @@ importers:
     dependencies:
       '@tailor-platform/function-kysely-tailordb':
         specifier: 0.1.2
-        version: 0.1.2(kysely@0.27.6)
+        version: 0.1.2(kysely@0.28.7)
       kysely:
-        specifier: 0.27.6
-        version: 0.27.6
+        specifier: 0.28.7
+        version: 0.28.7
     devDependencies:
       '@eslint/js':
         specifier: 9.36.0
@@ -1916,6 +1916,10 @@ packages:
     resolution: {integrity: sha512-FIyV/64EkKhJmjgC0g2hygpBv5RNWVPyNCqSAD7eTCv6eFWNIi4PN1UvdSJGicN/o35bnevgis4Y0UDC0qi8jQ==}
     engines: {node: '>=14.0.0'}
 
+  kysely@0.28.7:
+    resolution: {integrity: sha512-u/cAuTL4DRIiO2/g4vNGRgklEKNIj5Q3CG7RoUB5DV5SfEC2hMvPxKi0GWPmnzwL2ryIeud2VTcEEmqzTzEPNw==}
+    engines: {node: '>=20.0.0'}
+
   lefthook-darwin-arm64@1.13.6:
     resolution: {integrity: sha512-m6Lb77VGc84/Qo21Lhq576pEvcgFCnvloEiP02HbAHcIXD0RTLy9u2yAInrixqZeaz13HYtdDaI7OBYAAdVt8A==}
     cpu: [arm64]
@@ -3494,9 +3498,9 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
-  '@tailor-platform/function-kysely-tailordb@0.1.2(kysely@0.27.6)':
+  '@tailor-platform/function-kysely-tailordb@0.1.2(kysely@0.28.7)':
     dependencies:
-      kysely: 0.27.6
+      kysely: 0.28.7
 
   '@tailor-platform/function-types@0.6.0': {}
 
@@ -4380,6 +4384,8 @@ snapshots:
       json-buffer: 3.0.1
 
   kysely@0.27.6: {}
+
+  kysely@0.28.7: {}
 
   lefthook-darwin-arm64@1.13.6:
     optional: true
