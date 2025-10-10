@@ -1,66 +1,42 @@
 import { type SecretValue } from "@/configure/types/types";
 
-// Common types
-export type WithArgs<T = unknown> = {
-  _args: T;
-};
-export type Args<T> = T extends WithArgs<infer U> ? U : never;
-
-// New types for manifest/context separation
-export type WithManifest<TManifest> = {
-  manifest: TManifest;
-};
-
-export type WithContext<TContext> = {
-  context: TContext;
-};
-
-export type ManifestAndContext<TManifest, TContext> = WithManifest<TManifest> &
-  WithContext<TContext>;
-
 // Auth types
 export interface Invoker {
   AuthNamespace: string;
   MachineUserName: string;
 }
 
-// Operation types
-export type OperationKind = "graphql" | "function" | "job_function" | "webhook";
-
-export interface GraphqlOperation {
+// Target types
+export interface GraphqlTarget {
   Kind: "graphql";
-  AppName?: string;
-  Url?: string | null;
+  AppName: string;
   Query: string;
-  Variables?: { Expr: string };
+  Variables?: string;
   Invoker?: Invoker;
 }
 
-export interface FunctionOperation {
+export interface FunctionTarget {
   Kind: "function" | "job_function";
   Name: string;
-  Script?: string | null;
-  ScriptPath?: string | null;
-  Variables?: { Expr: string };
+  Variables: string;
   Invoker?: Invoker;
+  fn: (args: never) => void | Promise<void>;
+  dbNamespace?: string;
 }
 
 export interface WebhookHeader {
   Key: string;
-  Value?: string | SecretValue;
-  RawValue?: string;
-  SecretValue?: SecretValue;
+  Value: string | SecretValue;
 }
 
-export interface WebhookOperation {
+export interface WebhookTarget {
   Kind: "webhook";
-  URL: { Expr: string };
+  URL: string;
   Headers?: WebhookHeader[];
-  Body?: { Expr: string };
-  Secret?: SecretValue;
+  Body?: string;
 }
 
-export type Operation = GraphqlOperation | FunctionOperation | WebhookOperation;
+export type Target = WebhookTarget | GraphqlTarget | FunctionTarget;
 
 // Trigger types
 export interface ScheduleTrigger {
@@ -69,89 +45,38 @@ export interface ScheduleTrigger {
   Frequency: string;
 }
 
-export interface EventTrigger {
-  Kind: "Event";
-  EventType:
-    | `tailordb.type_record.${"created" | "updated" | "deleted"}`
-    | "pipeline.resolver.executed";
-  Condition?: { Expr: string };
-}
+type EventType =
+  | {
+      kind: `tailordb.type_record.${"created" | "updated" | "deleted"}`;
+      typeName: string;
+    }
+  | {
+      kind: "pipeline.resolver.executed";
+      resolverName: string;
+    };
 
+export type EventTrigger = {
+  Kind: "Event";
+  EventType: EventType;
+  Condition: string;
+};
 export interface IncomingWebhookTrigger {
   Kind: "IncomingWebhook";
 }
 
 export type Trigger = ScheduleTrigger | EventTrigger | IncomingWebhookTrigger;
 
-// Target types (using operation types)
-export type Target = WebhookOperation | GraphqlOperation | FunctionOperation;
-
-// Context types for triggers
-export type TriggerContext = { args?: unknown; type?: string };
-
-// Context types for targets
-export type TargetContext =
-  | FunctionOperationContext<unknown>
-  | GraphqlOperationContext
-  | WebhookOperationContext;
-export type FunctionOperationContext<TArgs = unknown> = {
-  args: TArgs;
-  fn: (args: TArgs & { client: unknown }) => void;
-  dbNamespace?: string;
+export type WithArgs<T> = {
+  _args: T;
 };
-export type GraphqlOperationContext = { args: unknown };
-export type WebhookOperationContext = { args: unknown };
 
-export interface Executor<
-  TTrigger extends ManifestAndContext<
-    Trigger,
-    TriggerContext
-  > = ManifestAndContext<Trigger, TriggerContext>,
-  V = ExtractTriggerArgs<TTrigger>,
-> {
+export type TriggerWithArgs<Args> = Trigger & WithArgs<Args>;
+
+export interface Executor {
   name: string;
   description?: string;
-  trigger: TTrigger;
-  exec: ManifestAndContext<
-    Target,
-    Omit<TargetWithArgs<TTrigger>, "args"> & { args: V }
-  >;
-}
-
-// Helper type to extract args from trigger context
-type ExtractTriggerArgs<T> =
-  T extends ManifestAndContext<Trigger, infer C>
-    ? C extends { args: infer A }
-      ? A
-      : never
-    : never;
-
-// Target with args from trigger
-type TargetWithArgs<TTrigger> = {
-  args: ExtractTriggerArgs<TTrigger>;
-  fn?: (args: ExtractTriggerArgs<TTrigger> & { client: unknown }) => void;
-  dbNamespace?: string;
-};
-
-// Manifest types
-export interface ExecutorManifest {
-  Name: string;
-  Description?: string;
-  Trigger: Trigger;
-  TriggerSchedule?: ScheduleTrigger;
-  TriggerEvent?: EventTrigger;
-  TriggerIncomingWebhook?: IncomingWebhookTrigger;
-  Target: Target;
-  TargetWebhook?: WebhookOperation;
-  TargetTailorGraphql?: GraphqlOperation;
-  TargetFunction?: FunctionOperation;
-}
-
-// Spec types
-export interface Spec {
-  Kind: "executor";
-  Executors: ExecutorManifest[];
-  Version: "v2";
+  trigger: Trigger;
+  exec: Target;
 }
 
 export type ExecutorServiceConfig = { files: string[] };

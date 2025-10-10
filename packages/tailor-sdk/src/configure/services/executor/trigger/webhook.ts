@@ -1,4 +1,4 @@
-import { type IncomingWebhookTrigger, type ManifestAndContext } from "../types";
+import { type IncomingWebhookTrigger, type WithArgs } from "../types";
 
 interface WebhookArgs<
   T extends {
@@ -14,25 +14,6 @@ interface WebhookArgs<
   rawBody: string;
 }
 
-export type IncomingWebhookTriggerContext<
-  T extends {
-    body?: Record<string, unknown>;
-    headers?: Record<string, string>;
-  },
-> = {
-  args: WebhookArgs<T>;
-};
-
-export type IncomingWebhookTriggerWithManifestAndContext<
-  T extends {
-    body?: Record<string, unknown>;
-    headers?: Record<string, string>;
-  },
-> = ManifestAndContext<
-  IncomingWebhookTrigger,
-  IncomingWebhookTriggerContext<T>
->;
-
 export function incomingWebhookTrigger<
   T extends {
     body?: Record<string, unknown>;
@@ -41,9 +22,9 @@ export function incomingWebhookTrigger<
     body: Record<string, unknown>;
     headers: Record<string, string>;
   },
->(): IncomingWebhookTriggerWithManifestAndContext<T> {
+>(): IncomingWebhookTrigger & WithArgs<WebhookArgs<T>> {
   return {
-    manifest: { Kind: "IncomingWebhook" },
-    context: { args: {} as WebhookArgs<T> },
+    Kind: "IncomingWebhook",
+    _args: {} as WebhookArgs<T>,
   };
 }

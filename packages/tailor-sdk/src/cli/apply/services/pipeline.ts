@@ -234,19 +234,11 @@ async function planResolvers(
 
   const executorUsedResolvers = new Set<string>();
   for (const executor of executors) {
-    const triggerManifest = executor.trigger.manifest;
     if (
-      triggerManifest &&
-      "EventType" in triggerManifest &&
-      triggerManifest.EventType === "pipeline.resolver.executed"
+      executor.trigger.Kind === "Event" &&
+      executor.trigger.EventType.kind === "pipeline.resolver.executed"
     ) {
-      const condition = triggerManifest.Condition?.Expr;
-      if (condition && typeof condition === "string") {
-        const match = condition.match(/args\.resolverName === "([^"]+)"/);
-        if (match) {
-          executorUsedResolvers.add(match[1]);
-        }
-      }
+      executorUsedResolvers.add(executor.trigger.EventType.resolverName);
     }
   }
 

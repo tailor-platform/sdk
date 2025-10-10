@@ -20,19 +20,12 @@ export class ExecutorTransformer implements ITransformer {
       await import(`${pathToFileURL(filePath)}?t=${new Date().getTime()}`)
     ).default as Executor;
     // Check if this is a function executor
-    if (!["function", "job_function"].includes(executor.exec.manifest.Kind)) {
+    const exec = executor.exec;
+    if (exec.Kind !== "function" && exec.Kind !== "job_function") {
       // For non-function executors (webhook, gql), return empty array
       return [];
     }
-
-    // Extract the function reference and namespace from the context
-    const execContext = executor.exec.context as unknown as {
-      fn: (...args: unknown[]) => unknown;
-      dbNamespace?: string;
-    };
-    const functionRef = execContext.fn;
-    const dbNamespace = execContext.dbNamespace;
-    if (!functionRef) {
+    if (!exec.fn) {
       throw new Error(
         `Function reference not found in executor ${executor.name}`,
       );
@@ -45,7 +38,7 @@ export class ExecutorTransformer implements ITransformer {
       ${sourceText}
 
       // Export the executor function
-      export const __executor_function = ${functionRef.toString()};
+      export const __executor_function = ${exec.fn.toString()};
       `,
     );
 
@@ -62,7 +55,7 @@ export class ExecutorTransformer implements ITransformer {
       import { __executor_function } from "${relativePath}";
 
       ${DB_WRAPPER_DEFINITION}
-      globalThis.main = ${wrapDbFn(dbNamespace ?? "", "__executor_function")};
+      globalThis.main = ${wrapDbFn(exec.dbNamespace ?? "", "__executor_function")};
     `;
 
     fs.writeFileSync(executorFilePath, executorContent);

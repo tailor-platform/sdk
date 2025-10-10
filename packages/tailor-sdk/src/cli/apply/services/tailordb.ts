@@ -264,9 +264,13 @@ async function planTypes(
 
   const executorUsedTypes = new Set<string>();
   for (const executor of executors) {
-    const triggerContext = executor.trigger.context;
-    if ("type" in triggerContext && triggerContext.type) {
-      executorUsedTypes.add(triggerContext.type);
+    if (
+      executor.trigger.Kind === "Event" &&
+      (executor.trigger.EventType.kind === `tailordb.type_record.created` ||
+        executor.trigger.EventType.kind === `tailordb.type_record.updated` ||
+        executor.trigger.EventType.kind === `tailordb.type_record.deleted`)
+    ) {
+      executorUsedTypes.add(executor.trigger.EventType.typeName);
     }
   }
 

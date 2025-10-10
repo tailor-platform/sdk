@@ -1,13 +1,10 @@
 import { type Resolver } from "@/configure/services/pipeline/resolver";
-import {
-  type ConditionArgs,
-  type EventTriggerWithManifestAndContext,
-  type RecordTriggerCondition,
-} from "./types";
+import { type ConditionArgs, type RecordTriggerCondition } from "./types";
 import { type output } from "@/configure/types/helpers";
+import type { EventTrigger, WithArgs } from "../../types";
 
 type ResolverTriggerConditionArgs<R extends Resolver> = ConditionArgs & {
-  resolverName: R["name"];
+  resolverName: string;
 } & (
     | {
         result: output<R["output"]>;
@@ -23,24 +20,18 @@ export function resolverExecutedTrigger<R extends Resolver>(
   resolver: R,
   condition: RecordTriggerCondition<ResolverTriggerConditionArgs<R>> = () =>
     true,
-) {
+): EventTrigger & WithArgs<ResolverTriggerConditionArgs<R>> {
   const argsMap = /* js */ `{ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error }`;
   return {
-    manifest: {
-      Kind: "Event",
-      EventType: "pipeline.resolver.executed",
-      Condition: {
-        Expr: [
-          /* js */ `args.resolverName === "${resolver.name}"`,
-          /* js */ `(${condition.toString()})(${argsMap})`,
-        ].join(" && "),
-      },
+    Kind: "Event",
+    EventType: {
+      kind: "pipeline.resolver.executed",
+      resolverName: resolver.name,
     },
-    context: {
-      args: {} as ResolverTriggerConditionArgs<R>,
-      variables: { expr: `(${argsMap})` },
-    },
-  } satisfies EventTriggerWithManifestAndContext<
-    ResolverTriggerConditionArgs<R>
-  >;
+    Condition: [
+      /* js */ `args.resolverName === "${resolver.name}"`,
+      /* js */ `(${condition.toString()})(${argsMap})`,
+    ].join(" && "),
+    _args: {} as ResolverTriggerConditionArgs<R>,
+  };
 }

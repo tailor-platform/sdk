@@ -1,10 +1,7 @@
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type output } from "@/configure/types/helpers";
-import {
-  type ConditionArgs,
-  type EventTriggerWithManifestAndContext,
-  type RecordTriggerCondition,
-} from "./types";
+import { type ConditionArgs, type RecordTriggerCondition } from "./types";
+import type { EventTrigger, WithArgs } from "../../types";
 
 interface withNewRecord<T extends TailorDBType> {
   newRecord: output<T>;
@@ -12,101 +9,72 @@ interface withNewRecord<T extends TailorDBType> {
 interface withOldRecord<T extends TailorDBType> {
   oldRecord: output<T>;
 }
-interface RecordTriggerConditionArgs<T extends TailorDBType>
-  extends ConditionArgs {
-  typeName: T["name"];
+interface RecordTriggerConditionArgs extends ConditionArgs {
+  typeName: string;
 }
 
 export function recordCreatedTrigger<T extends TailorDBType>(
   type: T,
   condition?: RecordTriggerCondition<
-    RecordTriggerConditionArgs<T> & withNewRecord<T>
+    RecordTriggerConditionArgs & withNewRecord<T>
   >,
-) {
+): EventTrigger & WithArgs<RecordTriggerConditionArgs & withNewRecord<T>> {
   const argsMap = /* js */ `{ ...args, appNamespace: args.namespaceName }`;
   return {
-    manifest: {
-      Kind: "Event",
-      EventType: "tailordb.type_record.created",
-      Condition: {
-        Expr: [
-          /* js */ `args.typeName === "${type.name}"`,
-          ...(condition
-            ? [/* js */ `(${condition.toString()})(${argsMap})`]
-            : []),
-        ].join(" && "),
-      },
+    Kind: "Event",
+    EventType: {
+      kind: "tailordb.type_record.created",
+      typeName: type.name,
     },
-    context: {
-      args: {} as RecordTriggerConditionArgs<T> & withNewRecord<T>,
-      type: type.name,
-      variables: {
-        expr: `(${argsMap})`,
-      },
-    },
-  } satisfies EventTriggerWithManifestAndContext<
-    RecordTriggerConditionArgs<T> & withNewRecord<T>
-  >;
+    Condition: [
+      /* js */ `args.typeName === "${type.name}"`,
+      ...(condition ? [/* js */ `(${condition.toString()})(${argsMap})`] : []),
+    ].join(" && "),
+    _args: {} as RecordTriggerConditionArgs & withNewRecord<T>,
+  };
 }
 
 export function recordUpdatedTrigger<T extends TailorDBType>(
   type: T,
   condition: RecordTriggerCondition<
-    RecordTriggerConditionArgs<T> & withNewRecord<T> & withOldRecord<T>
+    RecordTriggerConditionArgs & withNewRecord<T> & withOldRecord<T>
   > = () => true,
-) {
+): EventTrigger &
+  WithArgs<RecordTriggerConditionArgs & withNewRecord<T> & withOldRecord<T>> {
   const argsMap = /* js */ `{ ...args, appNamespace: args.namespaceName }`;
   return {
-    manifest: {
-      Kind: "Event",
-      EventType: "tailordb.type_record.updated",
-      Condition: {
-        Expr: [
-          /* js */ `args.typeName === "${type.name}"`,
-          /* js */ `(${condition.toString()})(${argsMap})`,
-        ].join(" && "),
-      },
+    Kind: "Event",
+    EventType: {
+      kind: "tailordb.type_record.updated",
+      typeName: type.name,
     },
-    context: {
-      args: {} as RecordTriggerConditionArgs<T> &
-        withNewRecord<T> &
-        withOldRecord<T>,
-      type: type.name,
-      variables: {
-        expr: `(${argsMap})`,
-      },
-    },
-  } satisfies EventTriggerWithManifestAndContext<
-    RecordTriggerConditionArgs<T> & withNewRecord<T> & withOldRecord<T>
-  >;
+    Condition: [
+      /* js */ `args.typeName === "${type.name}"`,
+      /* js */ `(${condition.toString()})(${argsMap})`,
+    ].join(" && "),
+    _args: {} as RecordTriggerConditionArgs &
+      withNewRecord<T> &
+      withOldRecord<T>,
+  };
 }
 
 export function recordDeletedTrigger<T extends TailorDBType>(
   type: T,
   condition: RecordTriggerCondition<
-    RecordTriggerConditionArgs<T> & withOldRecord<T>
+    RecordTriggerConditionArgs & withOldRecord<T>
   > = () => true,
-) {
+): EventTrigger & WithArgs<RecordTriggerConditionArgs & withOldRecord<T>> {
   const argsMap = /* js */ `{ ...args, appNamespace: args.namespaceName }`;
   return {
-    manifest: {
-      Kind: "Event",
-      EventType: "tailordb.type_record.deleted",
-      Condition: {
-        Expr: [
-          /* js */ `args.typeName === "${type.name}"`,
-          /* js */ `(${condition.toString()})(${argsMap})`,
-        ].join(" && "),
-      },
+    Kind: "Event",
+    EventType: {
+      kind: "tailordb.type_record.deleted",
+      typeName: type.name,
     },
-    context: {
-      args: {} as RecordTriggerConditionArgs<T> & withOldRecord<T>,
-      type: type.name,
-      variables: {
-        expr: `(${argsMap})`,
-      },
-    },
-  } satisfies EventTriggerWithManifestAndContext<
-    RecordTriggerConditionArgs<T> & withOldRecord<T>
-  >;
+    Condition: [
+      /* js */ `args.typeName === "${type.name}"`,
+      /* js */ `(${condition.toString()})(${argsMap})`,
+    ].join(" && "),
+    _args: {} as RecordTriggerConditionArgs & withOldRecord<T>,
+  };
 }

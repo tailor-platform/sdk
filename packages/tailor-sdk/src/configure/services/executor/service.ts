@@ -17,16 +17,8 @@ export class ExecutorService {
         typeof executor.description === "string") &&
       executor.trigger &&
       typeof executor.trigger === "object" &&
-      executor.trigger.manifest &&
-      typeof executor.trigger.manifest === "object" &&
-      executor.trigger.context &&
-      typeof executor.trigger.context === "object" &&
       executor.exec &&
-      typeof executor.exec === "object" &&
-      executor.exec.manifest &&
-      typeof executor.exec.manifest === "object" &&
-      executor.exec.context &&
-      typeof executor.exec.context === "object"
+      typeof executor.exec === "object"
     );
   }
   private executors: Record<string, Executor> = {};
@@ -43,7 +35,7 @@ export class ExecutorService {
         postBundle: "executors",
       },
       shouldProcess: (executor) =>
-        ["function", "job_function"].includes(executor.exec.manifest.Kind),
+        ["function", "job_function"].includes(executor.exec.Kind),
     };
     this.bundler = new Bundler(bundlerConfig);
   }

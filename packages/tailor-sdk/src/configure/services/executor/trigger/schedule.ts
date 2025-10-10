@@ -1,23 +1,16 @@
 import type { StandardCRON } from "ts-cron-validator";
-import { type ScheduleTrigger, type ManifestAndContext } from "../types";
+import { type ScheduleTrigger, type WithArgs } from "../types";
 import type { EmptyObject } from "type-fest";
-
-export type ScheduleTriggerWithManifestAndContext = ManifestAndContext<
-  ScheduleTrigger,
-  { args: EmptyObject }
->;
 
 export function scheduleTrigger<T extends string>(
   cron: StandardCRON<T> extends never ? never : T,
   timezone: Timezone = "UTC",
-): ScheduleTriggerWithManifestAndContext {
+): ScheduleTrigger & WithArgs<EmptyObject> {
   return {
-    manifest: {
-      Kind: "Schedule",
-      Timezone: timezone,
-      Frequency: cron,
-    },
-    context: { args: {} },
+    Kind: "Schedule",
+    Timezone: timezone,
+    Frequency: cron,
+    _args: {},
   };
 }
 

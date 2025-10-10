@@ -2,37 +2,22 @@ import { type SqlClient } from "../pipeline";
 import { executorFunction } from "./target/function";
 import { executorGql } from "./target/gql";
 import { executorWebhook } from "./target/webhook";
-import {
-  type Executor,
-  type Trigger,
-  type ManifestAndContext,
-  type TriggerContext,
-} from "./types";
-
-// Helper type to extract args from trigger context
-type ExtractTriggerArgs<T> =
-  T extends ManifestAndContext<Trigger, infer C>
-    ? C extends { args: infer A }
-      ? A
-      : never
-    : never;
+import { type Executor, type TriggerWithArgs } from "./types";
 
 export function createExecutor(name: string, description?: string) {
   return {
-    on: <TTrigger extends ManifestAndContext<Trigger, TriggerContext>>(
-      trigger: TTrigger,
-    ) => ({
-      executeFunction: <V = ExtractTriggerArgs<TTrigger>>({
+    on: <Args>(trigger: TriggerWithArgs<Args>) => ({
+      executeFunction: <V = Args>({
         fn,
         variables,
         dbNamespace,
         invoker,
       }: {
         fn: (args: V & { client: SqlClient }) => void | Promise<void>;
-        variables?: (args: ExtractTriggerArgs<TTrigger>) => V;
+        variables?: (args: Args) => V;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
-      }) => {
+      }): Executor => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
@@ -45,20 +30,20 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger,
           exec,
-        } as const satisfies Executor<TTrigger, V>;
+        };
       },
 
-      executeJobFunction: <V = ExtractTriggerArgs<TTrigger>>({
+      executeJobFunction: <V = Args>({
         fn,
         variables,
         dbNamespace,
         invoker,
       }: {
         fn: (args: V & { client: SqlClient }) => void | Promise<void>;
-        variables?: (args: ExtractTriggerArgs<TTrigger>) => V;
+        variables?: (args: Args) => V;
         dbNamespace?: string;
         invoker?: { authName: string; machineUser: string };
-      }) => {
+      }): Executor => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
@@ -72,33 +57,29 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger,
           exec,
-        } as const satisfies Executor<TTrigger, V>;
+        };
       },
 
-      executeGql: (
-        args: Parameters<typeof executorGql<ExtractTriggerArgs<TTrigger>>>[0],
-      ) => {
+      executeGql: (args: Parameters<typeof executorGql<Args>>[0]): Executor => {
         const exec = executorGql(args);
         return {
           name,
           description,
           trigger,
           exec,
-        } as const satisfies Executor<TTrigger>;
+        };
       },
 
       executeWebhook: (
-        args: Parameters<
-          typeof executorWebhook<ExtractTriggerArgs<TTrigger>>
-        >[0],
-      ) => {
+        args: Parameters<typeof executorWebhook<Args>>[0],
+      ): Executor => {
         const exec = executorWebhook(args);
         return {
           name,
           description,
           trigger,
           exec,
-        } as const satisfies Executor<TTrigger>;
+        };
       },
     }),
   };

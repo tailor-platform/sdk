@@ -1,16 +1,5 @@
 import { type SqlClient } from "@/configure/services/pipeline";
-import { type FunctionOperation, type ManifestAndContext } from "../types";
-
-type FunctionOperationContext<A> = {
-  args: A;
-  fn: (args: A & { client: SqlClient }) => void | Promise<void>;
-  dbNamespace?: string;
-};
-
-type FunctionOperationWithManifestAndContext<A> = ManifestAndContext<
-  FunctionOperation,
-  FunctionOperationContext<A>
->;
+import { type FunctionTarget } from "../types";
 
 export function executorFunction<A, V = A>({
   name,
@@ -26,26 +15,19 @@ export function executorFunction<A, V = A>({
   dbNamespace?: string;
   jobFunction?: boolean;
   invoker?: { authName: string; machineUser: string };
-}): FunctionOperationWithManifestAndContext<V> {
+}): FunctionTarget {
   const argStr = "({ ...args, appNamespace: args.namespaceName })";
   return {
-    manifest: {
-      Kind: jobFunction ? "job_function" : "function",
-      Name: name,
-      Variables: {
-        Expr: variables ? `(${variables.toString()})${argStr}` : argStr,
-      },
-      Invoker: invoker
-        ? {
-            AuthNamespace: invoker.authName,
-            MachineUserName: invoker.machineUser,
-          }
-        : undefined,
-    },
-    context: {
-      args: {} as V,
-      fn,
-      dbNamespace,
-    },
+    Kind: jobFunction ? "job_function" : "function",
+    Name: name,
+    Variables: variables ? `(${variables.toString()})${argStr}` : argStr,
+    Invoker: invoker
+      ? {
+          AuthNamespace: invoker.authName,
+          MachineUserName: invoker.machineUser,
+        }
+      : undefined,
+    fn,
+    dbNamespace,
   };
 }

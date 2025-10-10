@@ -1,19 +1,10 @@
-import { type WebhookOperation, type ManifestAndContext } from "../types";
+import { type WebhookTarget } from "../types";
 
 type URLFn<A> = (args: A) => string;
 type BodyFn<A> = (args: A) => Record<string, unknown>;
 type Headers = {
   [key in RequestHeader]?: string | { vault: string; key: string };
 };
-
-type WebhookOperationContext<A> = {
-  args: A;
-};
-
-type WebhookOperationWithManifestAndContext<A> = ManifestAndContext<
-  WebhookOperation,
-  WebhookOperationContext<A>
->;
 
 export function executorWebhook<A>({
   url,
@@ -23,27 +14,22 @@ export function executorWebhook<A>({
   url: URLFn<A>;
   headers?: Headers;
   body?: BodyFn<A>;
-}): WebhookOperationWithManifestAndContext<A> {
+}): WebhookTarget {
   return {
-    manifest: {
-      Kind: "webhook",
-      URL: { Expr: `(${url.toString()})(args)` },
-      Headers: headers
-        ? Object.entries(headers)
-            .filter(([_, value]) => value != null)
-            .map(([key, value]) => ({
-              Key: key,
-              Value:
-                typeof value === "string"
-                  ? value
-                  : { VaultName: value!.vault, SecretKey: value!.key },
-            }))
-        : undefined,
-      Body: body ? { Expr: `(${body.toString()})(args)` } : undefined,
-    },
-    context: {
-      args: undefined as A,
-    },
+    Kind: "webhook",
+    URL: `(${url.toString()})(args)`,
+    Headers: headers
+      ? Object.entries(headers)
+          .filter(([_, value]) => value != null)
+          .map(([key, value]) => ({
+            Key: key,
+            Value:
+              typeof value === "string"
+                ? value
+                : { VaultName: value!.vault, SecretKey: value!.key },
+          }))
+      : undefined,
+    Body: body ? `(${body.toString()})(args)` : undefined,
   };
 }
 

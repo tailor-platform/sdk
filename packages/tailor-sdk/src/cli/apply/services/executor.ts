@@ -126,7 +126,7 @@ export async function planExecutor(
 function protoExecutor(
   executor: Executor,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
-  const trigger = executor.trigger.manifest;
+  const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
   switch (trigger.Kind) {
@@ -148,12 +148,10 @@ function protoExecutor(
         config: {
           case: "event",
           value: {
-            eventType: trigger.EventType,
-            condition: trigger.Condition
-              ? {
-                  expr: trigger.Condition.Expr,
-                }
-              : undefined,
+            eventType: trigger.EventType.kind,
+            condition: {
+              expr: trigger.Condition,
+            },
           },
         },
       };
@@ -169,7 +167,7 @@ function protoExecutor(
       break;
   }
 
-  const target = executor.exec.manifest;
+  const target = executor.exec;
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
   switch (target.Kind) {
@@ -180,14 +178,8 @@ function protoExecutor(
           case: "webhook",
           value: {
             url: {
-              expr: target.URL.Expr,
+              expr: target.URL,
             },
-            secret: target.Secret
-              ? {
-                  vaultName: target.Secret.VaultName,
-                  secretKey: target.Secret.SecretKey,
-                }
-              : undefined,
             headers: target.Headers?.map((header) => {
               let value: MessageInitShape<
                 typeof ExecutorTargetWebhookHeaderSchema
@@ -201,8 +193,8 @@ function protoExecutor(
                 value = {
                   case: "secretValue",
                   value: {
-                    vaultName: header.Value?.VaultName,
-                    secretKey: header.Value?.SecretKey,
+                    vaultName: header.Value.VaultName,
+                    secretKey: header.Value.SecretKey,
                   },
                 };
               }
@@ -213,7 +205,7 @@ function protoExecutor(
             }),
             body: target.Body
               ? {
-                  expr: target.Body.Expr,
+                  expr: target.Body,
                 }
               : undefined,
           },
@@ -231,7 +223,7 @@ function protoExecutor(
             query: target.Query,
             variables: target.Variables
               ? {
-                  expr: target.Variables.Expr,
+                  expr: target.Variables,
                 }
               : undefined,
             invoker: target.Invoker
@@ -260,7 +252,7 @@ function protoExecutor(
             script,
             variables: target.Variables
               ? {
-                  expr: target.Variables.Expr,
+                  expr: target.Variables,
                 }
               : undefined,
             invoker: target.Invoker
@@ -290,7 +282,7 @@ function protoExecutor(
             script,
             variables: target.Variables
               ? {
-                  expr: target.Variables.Expr,
+                  expr: target.Variables,
                 }
               : undefined,
             invoker: target.Invoker
