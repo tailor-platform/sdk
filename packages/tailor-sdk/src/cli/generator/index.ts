@@ -12,10 +12,10 @@ import {
   type GeneratorInput,
   type TailorDBNamespaceResult,
   type PipelineNamespaceResult,
-} from "@/configure/generator/types";
+} from "@/cli/generator/types";
 import { DependencyWatcher } from "./watch";
 
-export type { CodeGenerator } from "@/configure/generator/types";
+export type { CodeGenerator } from "@/cli/generator/types";
 
 export class GenerationManager {
   public readonly application: Application;

@@ -2,7 +2,7 @@ import {
   type CodeGenerator,
   type GeneratorResult,
   type GeneratorInput,
-} from "@/configure/generator/types";
+} from "@/cli/generator/types";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type Executor } from "@/configure/services/executor/types";
 import { type KyselyTypeMetadata } from "./types";

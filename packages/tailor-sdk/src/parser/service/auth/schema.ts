@@ -1,7 +1,7 @@
+import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
 import type { output } from "@/configure/types/helpers";
 import type { SecretValue } from "@/configure/types/types";
 import { z, type ZodType } from "zod";
-import { type TailorDBInstance } from "../tailordb/schema";
 
 // FIXME: SecretValue should be defined by zod schema
 const secretValueSchema = z.object({

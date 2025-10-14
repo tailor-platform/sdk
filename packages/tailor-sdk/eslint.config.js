@@ -29,6 +29,69 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/configure/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            // {
+            //   group: ["**/cli/**", "@/cli/**"],
+            //   message: "Configure module should not import from cli module.",
+            // },
+            // {
+            //   group: ["**/parser/**", "@/parser/**"],
+            //   allowTypeImports: true,
+            //   message: "Configure module should not import from parser module.",
+            // },
+            {
+              group: ["zod"],
+              allowTypeImports: true,
+              message:
+                "Configure module can import only types from zod module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // {
+  //   files: ["src/parser/**/*.ts"],
+  //   rules: {
+  //     "@typescript-eslint/no-restricted-imports": [
+  //       "error",
+  //       {
+  //         patterns: [
+  //           {
+  //             group: ["**/cli/**", "@/cli/**"],
+  //             message: "Parser module should not import from cli module.",
+  //           },
+  //           {
+  //             group: ["**/configure/**", "@/configure/**"],
+  //             message: "Parser module should not import from configure module.",
+  //           },
+  //         ],
+  //       },
+  //     ],
+  //   },
+  // },
+  // {
+  //   files: ["src/cli/**/*.ts"],
+  //   rules: {
+  //     "@typescript-eslint/no-restricted-imports": [
+  //       "error",
+  //       {
+  //         patterns: [
+  //           {
+  //             group: ["**/configure/**", "@/configure/**"],
+  //             message: "Cli module should not import from configure module. Please use parser module as an intermediary.",
+  //           },
+  //         ],
+  //       },
+  //     ],
+  //   },
+  // },
+  {
     files: ["**/*.js"],
     extends: [tseslint.configs.disableTypeChecked],
   },

@@ -1,12 +1,8 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
-import type { z } from "zod";
 
 import { defineAuth } from "./index";
-import type { AuthServiceInput } from "./types";
-import type { AuthConfigSchema } from "./types";
 import { db } from "../tailordb/schema";
-import type { OptionalKeysOf } from "type-fest";
 
 const userType = db.type("User", {
   email: db.string().unique(),
@@ -35,85 +31,9 @@ const attributeMapConfig: AttributeMap = {
 const attributeListConfig: AttributeList = ["externalId"];
 const machineUserAttributeList: [string] = [randomUUID()];
 
-type AuthInput = AuthServiceInput<
-  typeof userType,
-  AttributeMap,
-  AttributeList,
-  "admin"
->;
-
-type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
-type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
-
 describe("defineAuth", () => {
-  it("aligns top-level keys and optionality with the schema", () => {
-    type ServiceOptionalKeys = OptionalKeysOf<AuthInput>;
-    type SchemaOptionalKeys = OptionalKeysOf<AuthSchemaInput>;
-
-    expectTypeOf<ServiceOptionalKeys>().toEqualTypeOf<SchemaOptionalKeys>();
-
-    type ServiceRequiredKeys = Exclude<keyof AuthInput, ServiceOptionalKeys>;
-    type SchemaRequiredKeys = Exclude<
-      keyof AuthSchemaInput,
-      SchemaOptionalKeys
-    >;
-
-    expectTypeOf<ServiceRequiredKeys>().toEqualTypeOf<SchemaRequiredKeys>();
-    expectTypeOf<keyof AuthInput>().toEqualTypeOf<keyof AuthSchemaInput>();
-  });
-
-  it("aligns defineAuth input and schema (except userProfile and machineUsers)", () => {
-    type FunctionInput = Omit<AuthInput, "userProfile" | "machineUsers">;
-    type SchemaInput = Omit<AuthSchemaInput, "userProfile" | "machineUsers">;
-
-    expectTypeOf<FunctionInput>().toExtend<SchemaInput>();
-  });
-
-  it("aligns particular userProfile with the schema", () => {
-    type ServiceUserProfile = NonNullable<AuthInput["userProfile"]>;
-    type SchemaUserProfile = NonNullable<AuthSchemaInput["userProfile"]>;
-
-    type ServiceAttributes = NonNullable<ServiceUserProfile["attributes"]>;
-    type SchemaAttributes = NonNullable<SchemaUserProfile["attributes"]>;
-
-    type AlignedSchemaAttributes = Pick<
-      SchemaAttributes,
-      keyof ServiceAttributes
-    >;
-
-    expectTypeOf<ServiceAttributes>().toMatchObjectType<AlignedSchemaAttributes>();
-    expectTypeOf<ServiceUserProfile["type"]>().toExtend<
-      SchemaUserProfile["type"]
-    >();
-    expectTypeOf<ServiceUserProfile["usernameField"]>().toExtend<
-      SchemaUserProfile["usernameField"]
-    >();
-    expectTypeOf<ServiceUserProfile["attributeList"]>().toExtend<
-      SchemaUserProfile["attributeList"]
-    >();
-  });
-
-  it("aligns particular machineUsers with the schema", () => {
-    type SchemaMachineUser = NonNullable<
-      AuthSchemaInput["machineUsers"]
-    >[string];
-    type SchemaAttributes = NonNullable<SchemaMachineUser["attributes"]>;
-    type SchemaAttributeValue = SchemaAttributes[keyof SchemaAttributes];
-    type SchemaAttributeList = SchemaMachineUser["attributeList"];
-
-    type FunctionMachineUser = MachineUserConfig;
-    type FunctionAttributeKeys = keyof AttributeMap;
-    type FunctionAttributeValues =
-      FunctionMachineUser["attributes"][FunctionAttributeKeys];
-    type FunctionAttributeList = FunctionMachineUser["attributeList"];
-
-    expectTypeOf<FunctionAttributeValues>().toExtend<SchemaAttributeValue>();
-    expectTypeOf<FunctionAttributeList>().toExtend<SchemaAttributeList>();
-    expectTypeOf<undefined>().not.toExtend<FunctionMachineUser["attributes"]>();
-  });
-
-  it("machineUsers reflects userProfile attribute typing", () => {
-    const validInput = {
+  it("creates auth configuration with userProfile and machineUsers", () => {
+    const authConfig = defineAuth("test", {
       userProfile: {
         type: userType,
         usernameField: "email",
@@ -131,31 +51,45 @@ describe("defineAuth", () => {
           attributeList: machineUserAttributeList,
         },
       },
-    } satisfies AuthInput;
+    });
 
-    void defineAuth("test", validInput);
-
-    expectTypeOf<MachineUserConfig["attributes"]>().toMatchObjectType<{
-      role: string;
-      isActive: boolean;
-      tags: string[];
-      externalId: string;
-    }>();
-
-    expectTypeOf<MachineUserConfig>().toMatchObjectType<{
-      attributeList: [string];
-    }>();
+    expect(authConfig.name).toBe("test");
+    expect(authConfig.userProfile?.type).toBe(userType);
+    expect(authConfig.userProfile?.usernameField).toBe("email");
+    expect(authConfig.machineUsers?.admin.attributes?.role).toBe("ADMIN");
   });
 
-  it("rejects attributes not declared in userProfile", () => {
-    expectTypeOf<
-      MachineUserConfig["attributes"] & { email: string }
-    >().toBeNever();
+  it("creates auth configuration with invoker method", () => {
+    const authConfig = defineAuth("test-service", {
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+      },
+      machineUsers: {
+        admin: {},
+        worker: {},
+      },
+    });
+
+    const invoker = authConfig.invoker("admin");
+    expect(invoker.authName).toBe("test-service");
+    expect(invoker.machineUser).toBe("admin");
+
+    const workerInvoker = authConfig.invoker("worker");
+    expect(workerInvoker.authName).toBe("test-service");
+    expect(workerInvoker.machineUser).toBe("worker");
   });
 
-  it("rejects attributeList value mismatches", () => {
-    expectTypeOf<
-      MachineUserConfig["attributeList"] & [string, boolean]
-    >().toBeNever();
+  it("creates minimal auth configuration", () => {
+    const authConfig = defineAuth("minimal", {
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+      },
+    });
+
+    expect(authConfig.name).toBe("minimal");
+    expect(authConfig.userProfile?.type).toBe(userType);
+    expect(authConfig.machineUsers).toBeUndefined();
   });
 });

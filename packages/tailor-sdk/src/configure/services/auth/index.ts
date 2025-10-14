@@ -1,12 +1,11 @@
-import z from "zod";
 import { type TailorDBType } from "../tailordb/schema";
+import type { parseAuthConfig } from "@/parser/service/auth";
 import {
-  AuthConfigSchema,
   type AuthServiceInput,
   type UserAttributeListKey,
   type UserAttributeMap,
-} from "./types";
-export * from "./types";
+} from "@/parser/service/auth/schema";
+export type * from "@/parser/service/auth";
 export { AuthService } from "./service";
 
 export function defineAuth<
@@ -18,28 +17,15 @@ export function defineAuth<
   name: string,
   config: AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames>,
 ) {
-  return AuthConfigSchema.and(
-    getInvokerFnSchema(
-      Object.keys(config.machineUsers ?? {}) as MachineUserNames[],
-    ),
-  ).parse({
+  return {
     ...config,
     name,
     invoker(machineUser: MachineUserNames) {
       return { authName: name, machineUser } as const;
     },
-  });
+  } as const satisfies Parameters<
+    typeof parseAuthConfig<User, AttributeMap, AttributeList, MachineUserNames>
+  >[0];
 }
 
-export const getInvokerFnSchema = <const MachineUserNames extends string[]>(
-  machineUserName: MachineUserNames,
-) =>
-  z.object({
-    invoker: z.function({
-      input: [z.enum(machineUserName)],
-      output: z.object({
-        authName: z.string(),
-        machineUser: z.string(),
-      }),
-    }),
-  });
+export type AuthConfig = ReturnType<typeof defineAuth>;

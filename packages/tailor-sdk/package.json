@@ -11,9 +11,9 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.mjs"
+      "types": "./dist/configure/index.d.mts",
+      "import": "./dist/configure/index.mjs",
+      "default": "./dist/configurそindex.mjs"
     },
     "./cli": {
       "types": "./dist/cli/api.d.mts",

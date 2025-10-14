@@ -1,6 +1,6 @@
 import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import type { PipelineResolverServiceInput } from "@/configure/services/pipeline/types";
-import type { AuthConfig } from "@/configure/services/auth/types";
+import type { AuthConfig } from "@/configure/services/auth";
 import type { ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type IdPServiceInput } from "@/configure/services/idp/types";
 import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";

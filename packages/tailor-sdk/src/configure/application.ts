@@ -3,7 +3,7 @@ import { type PipelineResolverServiceInput } from "@/configure/services/pipeline
 import { TailorDBService } from "@/configure/services/tailordb/service";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { AuthService } from "@/configure/services/auth/service";
-import { type AuthConfig } from "@/configure/services/auth/types";
+import { type AuthConfig } from "@/configure/services/auth";
 import { type IdPServiceInput } from "@/configure/services/idp/types";
 import { type AppConfig } from "@/configure/config";
 import { ExecutorService } from "@/configure/services/executor/service";

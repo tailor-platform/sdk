@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import type { AppConfig } from "@/configure/config";
-import type { CodeGenerator } from "@/configure/generator/types";
+import type { CodeGenerator } from "@/cli/generator/types";
 import {
   KyselyGenerator,
   KyselyGeneratorID,
