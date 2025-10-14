@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.79
+
+### Patch Changes
+
+- [#545](https://github.com/tailor-platform/tailor-sdk/pull/545) [`e82a038`](https://github.com/tailor-platform/tailor-sdk/commit/e82a038b022ebf58dd377a247b7bdf1fa608701c) Thanks [@remiposo](https://github.com/remiposo)! - chore: Add LICENSE
+
 ## 0.0.78
 
 ### Patch Changes
