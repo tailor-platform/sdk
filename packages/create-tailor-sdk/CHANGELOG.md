@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.80
+
+### Patch Changes
+
+- [#548](https://github.com/tailor-platform/tailor-sdk/pull/548) [`ce834be`](https://github.com/tailor-platform/tailor-sdk/commit/ce834bec7c7d80a3f56a520339a569fef9225888) Thanks [@toiroakr](https://github.com/toiroakr)! - kysely-type generator: support assertNonNull
+
 ## 0.0.79
 
 ### Patch Changes
