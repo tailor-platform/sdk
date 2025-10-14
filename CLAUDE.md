@@ -44,12 +44,20 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 ├── packages/
 │   ├── tailor-sdk/          # Core SDK package
 │   │   ├── src/
-│   │   │   ├── cli/         # CLI implementation
-│   │   │   ├── services/    # Core services (tailordb, pipeline, executor, auth, idp)
-│   │   │   ├── generator/   # Code generation system
-│   │   │   ├── bundler/     # Rolldown bundler integration
-│   │   │   ├── apply/       # Deployment API client and services
-│   │   │   └── types/       # Core type definitions
+│   │   │   ├── configure/   # SDK user-facing APIs (minimal implementation)
+│   │   │   │   ├── services/    # tailordb, pipeline, executor, auth, idp, staticwebsite
+│   │   │   │   ├── types/       # Type system and helpers
+│   │   │   │   ├── config.ts
+│   │   │   │   └── application.ts
+│   │   │   ├── parser/      # Validation and parsing layer
+│   │   │   │   ├── service/
+│   │   │   │   │   └── auth/
+│   │   │   │   └── generator-config.ts
+│   │   │   └── cli/         # CLI implementation
+│   │   │       ├── generator/   # Code generation system
+│   │   │       ├── bundler/     # Rolldown bundler integration
+│   │   │       ├── apply/       # Deployment API client and services
+│   │   │       └── utils/
 │   │   └── dist/            # Built output
 │   └── tailor-proto/        # Generated protobuf definitions
 ├── examples/
@@ -59,19 +67,19 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 
 ### Key Components
 
-1. **TailorDB** (`src/services/tailordb/`)
+1. **TailorDB** (`src/configure/services/tailordb/`)
    - Define type-safe database models using `db.type()`
    - Always export both the value and type: `export const model = db.type(...); export type model = typeof model;`
    - Use `db.fields.timestamps()` for automatic timestamp fields
    - Relations are defined with `.relation()` method
 
-2. **Pipeline Resolvers** (`src/services/pipeline/`)
+2. **Pipeline Resolvers** (`src/configure/services/pipeline/`)
    - Create GraphQL resolvers using `createQueryResolver` or `createMutationResolver`
    - Use step-based flow: `.fnStep()`
    - Each step's result is available in subsequent steps via context
    - Define return type with `.returns()`
 
-3. **Executors** (`src/services/executor/`)
+3. **Executors** (`src/configure/services/executor/`)
    - Event-driven handlers using `createExecutor()`
    - Trigger on record changes: `recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`
    - Execute functions, webhooks, or GraphQL operations
@@ -159,6 +167,49 @@ export default createExecutor("name", "description")
 - The SDK uses Rolldown for bundling and Turbo for task orchestration
 - Test framework: Vitest
 - Build tool: tsdown for creating ESM bundles
+
+### Module Architecture and Import Rules
+
+The SDK enforces strict module boundaries to maintain a clean architecture:
+
+**Module Responsibilities:**
+
+1. **Configure Module** (`src/configure/**/*.ts`):
+   - Library interface directly used by SDK users
+   - Must be kept minimal in implementation size
+   - Provides type-safe configuration APIs
+
+2. **Parser Module** (`src/parser/**/*.ts`):
+   - Validates and parses definitions created in configure module
+   - Acts as intermediary between configure and cli modules
+
+3. **CLI Module** (`src/cli/**/*.ts`):
+   - Implements CLI commands
+   - Performs transform, bundle, apply operations
+   - Uses parser module to process user configurations
+
+**Import Restrictions:**
+
+1. **Configure Module** (`src/configure/**/*.ts`):
+   - ❌ Cannot import from `cli` module
+   - ❌ Cannot import from `parser` module (type imports are allowed)
+   - ⚠️ Can only import types from `zod` (runtime imports are forbidden)
+
+2. **Parser Module** (`src/parser/**/*.ts`):
+   - ❌ Cannot import from `cli` module
+   - ❌ Cannot import from `configure` module
+
+3. **CLI Module** (`src/cli/**/*.ts`):
+   - ❌ Cannot import from `configure` module (use parser module as intermediary)
+
+**Note on ESLint Rules:**
+Some import restriction rules in `eslint.config.js` are currently commented out due to existing violations in the codebase. These rules represent the target architecture and should be followed when writing new code or refactoring existing code. When editing files, actively work to reduce violations and move towards enabling these rules.
+
+**Type Import Rules:**
+
+- Always use type-only imports for consistency: `import type { Foo } from "..."` or `import { type Foo } from "..."`
+- Prefer inline type imports: `import { type Foo } from "..."`
+- **Special case for `export type`**: Even when `allowTypeImports: true` is configured, `export type` statements will still trigger ESLint errors. In such cases, you may use `eslint-disable` comments for the export line
 
 ### Testing
 
