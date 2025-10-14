@@ -1,37 +1,17 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { Bundler, type BundlerConfig } from "@/cli/bundler";
-import { ResolverLoader } from "./bundler/loader";
-import { CodeTransformer } from "./bundler/transformer";
 import { type PipelineResolverServiceConfig } from "./types";
 import { type Resolver } from "./resolver";
 import { isResolver } from "./utils";
 import { pathToFileURL } from "node:url";
 
 export class PipelineResolverService {
-  private bundler: Bundler<Resolver>;
   private resolvers: Record<string, Resolver> = {};
 
   constructor(
     public readonly namespace: string,
-    private readonly config: PipelineResolverServiceConfig,
-  ) {
-    const bundlerConfig: BundlerConfig<Resolver> = {
-      namespace,
-      serviceConfig: config,
-      loader: new ResolverLoader(),
-      transformer: new CodeTransformer(),
-      outputDirs: {
-        preBundle: "resolvers",
-        postBundle: "functions",
-      },
-    };
-    this.bundler = new Bundler(bundlerConfig);
-  }
-
-  async build() {
-    await this.bundler.bundle();
-  }
+    public readonly config: PipelineResolverServiceConfig,
+  ) {}
 
   async loadResolvers(): Promise<void> {
     if (!this.config.files || this.config.files.length === 0) {

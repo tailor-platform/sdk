@@ -4,8 +4,7 @@ import type { AuthConfig } from "@/configure/services/auth";
 import type { ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type IdPServiceInput } from "@/configure/services/idp/types";
 import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";
-import type { z } from "zod";
-import { type GeneratorConfigSchema } from "@/cli/config-loader";
+import type { GeneratorConfig } from "@/parser/generator-config";
 
 export interface AppConfig {
   workspaceId: string;
@@ -39,8 +38,6 @@ export function defineConfig(config: AppConfig): AppConfig {
   return config;
 }
 
-export function defineGenerators(
-  ...configs: z.input<typeof GeneratorConfigSchema>[]
-) {
+export function defineGenerators(...configs: GeneratorConfig[]) {
   return configs;
 }

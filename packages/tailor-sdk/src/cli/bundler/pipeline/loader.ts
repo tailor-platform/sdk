@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { type Resolver } from "../resolver";
-import { isResolver } from "../utils";
+import { type Resolver } from "@/configure/services/pipeline/resolver";
+import { isResolver } from "@/configure/services/pipeline/utils";
 import { type ILoader } from "@/cli/bundler";
 
 export class ResolverLoader implements ILoader<Resolver> {

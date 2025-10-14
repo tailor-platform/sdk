@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { type Executor } from "../types";
-import { isExecutor } from "../utils";
+import { type Executor } from "@/configure/services/executor/types";
+import { isExecutor } from "@/configure/services/executor/utils";
 import { type ILoader } from "@/cli/bundler";
 
 export class ExecutorLoader implements ILoader<Executor> {

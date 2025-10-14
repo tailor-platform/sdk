@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import ml from "multiline-ts";
-import { type Resolver } from "../resolver";
+import { type Resolver } from "@/configure/services/pipeline/resolver";
 import { type ITransformer } from "@/cli/bundler";
 import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/cli/bundler/wrapper";
 import { pathToFileURL } from "node:url";

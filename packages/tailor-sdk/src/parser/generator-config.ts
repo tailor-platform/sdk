@@ -1,0 +1,70 @@
+import { z } from "zod";
+
+export const DistPathOptionSchema = z.object({
+  distPath: z.union([
+    z.string(),
+    z.function({
+      input: [
+        z.object({
+          tailorDB: z.string(),
+        }),
+      ],
+      output: z.string(),
+    }),
+  ]),
+});
+export type DistPathOption = z.infer<typeof DistPathOptionSchema>;
+
+// FIXME: more strict schema validation
+export const CodeGeneratorSchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  processType: z.function(),
+  processResolver: z.function(),
+  processExecutor: z.function(),
+  processTailorDBNamespace: z.function().optional(),
+  processPipelineNamespace: z.function().optional(),
+  aggregate: z.function({ output: z.any() }),
+});
+
+// Base schema for generator config (before transformation to actual Generator instances)
+export const BaseGeneratorConfigSchema = z.union([
+  z.tuple([z.string(), DistPathOptionSchema]),
+  CodeGeneratorSchema,
+]);
+
+export type GeneratorConfig = z.input<typeof BaseGeneratorConfigSchema>;
+
+// Base CodeGenerator type from schema (without brand)
+export type CodeGeneratorBase = z.infer<typeof CodeGeneratorSchema>;
+
+/**
+ * Creates a GeneratorConfigSchema with built-in generator support
+ * @param builtinGenerators - Map of generator IDs to their constructor functions
+ */
+export function createGeneratorConfigSchema(
+  builtinGenerators: Map<
+    string,
+    (options: z.infer<typeof DistPathOptionSchema>) => CodeGeneratorBase
+  >,
+) {
+  return z
+    .union([z.tuple([z.string(), DistPathOptionSchema]), CodeGeneratorSchema])
+    .transform((gen) => {
+      if (Array.isArray(gen)) {
+        const [id, options] = gen;
+        const constructor = builtinGenerators.get(id);
+        if (constructor) {
+          return constructor(options);
+        }
+        throw new Error(`Unknown generator ID: ${id}`);
+      }
+      return gen as CodeGeneratorBase;
+    })
+    .brand("CodeGenerator");
+}
+
+export type GeneratorConfigSchemaType = ReturnType<
+  typeof createGeneratorConfigSchema
+>;
+export type Generator = z.infer<GeneratorConfigSchemaType>;

@@ -1,9 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { z } from "zod";
 import type { AppConfig } from "@/configure/config";
-import type { CodeGenerator } from "@/cli/generator/types";
 import {
   KyselyGenerator,
   KyselyGeneratorID,
@@ -12,53 +10,24 @@ import {
   DbTypeGenerator,
   DbTypeGeneratorID,
 } from "./generator/builtin/db-type";
+import {
+  createGeneratorConfigSchema,
+  type CodeGeneratorBase,
+  type DistPathOption,
+  type Generator,
+} from "@/parser/generator-config";
 
-const DistPathOptionSchema = z.object({
-  distPath: z.union([
-    z.string(),
-    z.function({
-      input: [
-        z.object({
-          tailorDB: z.string(),
-        }),
-      ],
-      output: z.string(),
-    }),
-  ]),
-});
+// Register built-in generators
+const builtinGenerators = new Map<
+  string,
+  (options: DistPathOption) => CodeGeneratorBase
+>([
+  [KyselyGeneratorID, (options) => new KyselyGenerator(options)],
+  [DbTypeGeneratorID, (options) => new DbTypeGenerator(options)],
+]);
 
-// FIXME: more strict schema validation
-const CodeGeneratorSchema = z.object({
-  id: z.string(),
-  description: z.string(),
-  processType: z.function(),
-  processResolver: z.function(),
-  processExecutor: z.function(),
-  processTailorDBNamespace: z.function(),
-  processPipelineNamespace: z.function(),
-  aggregate: z.function({ output: z.any() }),
-}) satisfies z.ZodType<CodeGenerator>;
-
-export const GeneratorConfigSchema = z
-  .union([
-    z.tuple([z.literal(KyselyGeneratorID), DistPathOptionSchema]),
-    z.tuple([z.literal(DbTypeGeneratorID), DistPathOptionSchema]),
-    CodeGeneratorSchema,
-  ])
-  .transform((gen) => {
-    if (Array.isArray(gen)) {
-      if (gen[0] === KyselyGeneratorID) {
-        return new KyselyGenerator(gen[1]);
-      }
-      if (gen[0] === DbTypeGeneratorID) {
-        return new DbTypeGenerator(gen[1]);
-      }
-      throw new Error(`Unknown generator ID: ${gen[0]}`);
-    }
-    return gen;
-  })
-  .brand("CodeGenerator");
-export type Generator = z.infer<typeof GeneratorConfigSchema>;
+export const GeneratorConfigSchema =
+  createGeneratorConfigSchema(builtinGenerators);
 
 export async function loadConfig(
   configPath: string,

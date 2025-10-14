@@ -35,10 +35,10 @@ export default defineConfig([
         "error",
         {
           patterns: [
-            // {
-            //   group: ["**/cli/**", "@/cli/**"],
-            //   message: "Configure module should not import from cli module.",
-            // },
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Configure module should not import from cli module.",
+            },
             // {
             //   group: ["**/parser/**", "@/parser/**"],
             //   allowTypeImports: true,
@@ -55,26 +55,26 @@ export default defineConfig([
       ],
     },
   },
-  // {
-  //   files: ["src/parser/**/*.ts"],
-  //   rules: {
-  //     "@typescript-eslint/no-restricted-imports": [
-  //       "error",
-  //       {
-  //         patterns: [
-  //           {
-  //             group: ["**/cli/**", "@/cli/**"],
-  //             message: "Parser module should not import from cli module.",
-  //           },
-  //           {
-  //             group: ["**/configure/**", "@/configure/**"],
-  //             message: "Parser module should not import from configure module.",
-  //           },
-  //         ],
-  //       },
-  //     ],
-  //   },
-  // },
+  {
+    files: ["src/parser/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Parser module should not import from cli module.",
+            },
+            // {
+            //   group: ["**/configure/**", "@/configure/**"],
+            //   message: "Parser module should not import from configure module.",
+            // },
+          ],
+        },
+      ],
+    },
+  },
   // {
   //   files: ["src/cli/**/*.ts"],
   //   rules: {

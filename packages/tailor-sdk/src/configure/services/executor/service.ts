@@ -1,9 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { type Executor, type ExecutorServiceConfig } from "./types";
-import { Bundler, type BundlerConfig } from "@/cli/bundler";
-import { ExecutorLoader } from "./bundler/loader";
-import { ExecutorTransformer } from "./bundler/transformer";
 import { pathToFileURL } from "node:url";
 
 export class ExecutorService {
@@ -22,27 +19,8 @@ export class ExecutorService {
     );
   }
   private executors: Record<string, Executor> = {};
-  private bundler: Bundler<Executor>;
 
-  constructor(public readonly config: ExecutorServiceConfig) {
-    const bundlerConfig: BundlerConfig<Executor> = {
-      namespace: "executor",
-      serviceConfig: config,
-      loader: new ExecutorLoader(),
-      transformer: new ExecutorTransformer(),
-      outputDirs: {
-        preBundle: "executors",
-        postBundle: "executors",
-      },
-      shouldProcess: (executor) =>
-        ["function", "job_function"].includes(executor.exec.Kind),
-    };
-    this.bundler = new Bundler(bundlerConfig);
-  }
-
-  async build() {
-    await this.bundler.bundle();
-  }
+  constructor(public readonly config: ExecutorServiceConfig) {}
 
   getExecutors() {
     return this.executors;

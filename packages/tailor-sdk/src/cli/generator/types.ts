@@ -1,3 +1,4 @@
+import type { CodeGeneratorBase } from "@/parser/generator-config";
 import { type Executor } from "@/configure/services/executor/types";
 import { type Resolver } from "@/configure/services/pipeline/resolver";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
@@ -32,10 +33,12 @@ export interface GeneratorInput<T, R> {
   pipeline: PipelineNamespaceResult<R>[];
 }
 
-export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any> {
-  readonly id: string;
-  readonly description: string;
-
+// CodeGenerator interface implements the base type from parser
+export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
+  extends Omit<
+    CodeGeneratorBase,
+    "processType" | "processResolver" | "processExecutor" | "aggregate"
+  > {
   // Individual processing (receives application, service type, and namespace information)
   processType(args: {
     type: TailorDBType;

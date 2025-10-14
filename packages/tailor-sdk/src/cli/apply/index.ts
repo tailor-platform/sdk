@@ -17,6 +17,13 @@ import {
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { readTailorctlConfig } from "./tailorctl";
+import { Bundler, type BundlerConfig } from "@/cli/bundler";
+import { ExecutorLoader } from "@/cli/bundler/executor/loader";
+import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";
+import { ResolverLoader } from "@/cli/bundler/pipeline/loader";
+import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
+import type { Executor } from "@/configure/services/executor/types";
+import type { Resolver } from "@/configure/services/pipeline/resolver";
 
 export type ApplyOptions = {
   dryRun?: boolean;
@@ -34,10 +41,12 @@ export async function apply(configPath: string, options: ApplyOptions = {}) {
   // Build functions
   for (const app of application.applications) {
     for (const pipeline of app.pipelineResolverServices) {
-      await pipeline.build();
+      await buildPipeline(pipeline.namespace, pipeline.config);
     }
   }
-  await application.executorService?.build();
+  if (application.executorService) {
+    await buildExecutor(application.executorService.config);
+  }
   if (options.buildOnly) {
     return;
   }
@@ -105,4 +114,36 @@ async function fetchWorkspaceId(
     );
   }
   return workspace.id;
+}
+
+async function buildPipeline(namespace: string, config: { files?: string[] }) {
+  const bundlerConfig: BundlerConfig<Resolver> = {
+    namespace,
+    serviceConfig: config,
+    loader: new ResolverLoader(),
+    transformer: new CodeTransformer(),
+    outputDirs: {
+      preBundle: "resolvers",
+      postBundle: "functions",
+    },
+  };
+  const bundler = new Bundler(bundlerConfig);
+  await bundler.bundle();
+}
+
+async function buildExecutor(config: { files?: string[] }) {
+  const bundlerConfig: BundlerConfig<Executor> = {
+    namespace: "executor",
+    serviceConfig: config,
+    loader: new ExecutorLoader(),
+    transformer: new ExecutorTransformer(),
+    outputDirs: {
+      preBundle: "executors",
+      postBundle: "executors",
+    },
+    shouldProcess: (executor) =>
+      ["function", "job_function"].includes(executor.exec.Kind),
+  };
+  const bundler = new Bundler(bundlerConfig);
+  await bundler.bundle();
 }

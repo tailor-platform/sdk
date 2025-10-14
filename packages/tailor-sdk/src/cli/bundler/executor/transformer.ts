@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import ml from "multiline-ts";
-import { type Executor } from "../types";
+import { type Executor } from "@/configure/services/executor/types";
 import { type ITransformer } from "@/cli/bundler";
 import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/cli/bundler/wrapper";
 import { pathToFileURL } from "node:url";
