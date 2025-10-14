@@ -70,7 +70,7 @@ describe("KyselyGenerator統合テスト", () => {
       expect(result.typeDef).toContain("birthDate: Timestamp | null;");
       expect(result.typeDef).toContain("lastLogin: Timestamp | null;");
       expect(result.typeDef).toContain("tags: string[];");
-      expect(result.typeDef).toContain("createdAt: Timestamp | null;");
+      expect(result.typeDef).toContain("createdAt: AssertNonNull<Timestamp>;");
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
@@ -358,7 +358,7 @@ export async function kyselyWrapper() {}
         namespace: "test-namespace",
       });
 
-      expect(result.typeDef).toContain("createdAt: Timestamp | null;");
+      expect(result.typeDef).toContain("createdAt: AssertNonNull<Timestamp>;");
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 

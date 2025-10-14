@@ -28,19 +28,8 @@ export class TypeProcessor {
         continue;
       }
 
-      const kyselyType = this.mapTailorDBTypeToKysely(fieldDef);
-      const nullable = this.isOptional(fieldDef);
-      const isArray = this.isArray(fieldDef);
-
-      let finalType = kyselyType;
-      if (isArray) {
-        finalType = `${kyselyType}[]`;
-      }
-      if (nullable) {
-        finalType = `${finalType} | null`;
-      }
-
-      fields.push(`${fieldName}: ${finalType};`);
+      const fieldType = this.generateFieldType(fieldDef);
+      fields.push(`${fieldName}: ${fieldType};`);
     }
 
     return multiline /* ts */ `
@@ -48,6 +37,96 @@ export class TypeProcessor {
         ${fields.join("\n")}
       }
     `;
+  }
+
+  /**
+   * Generate the complete field type including array and null modifiers.
+   */
+  private static generateFieldType(fieldDef: any): string {
+    const metadata = fieldDef.metadata;
+    const baseType = this.getBaseType(fieldDef);
+    const isArray = metadata?.array === true;
+    const isNullable = metadata?.required !== true;
+    const isAssertNonNull = metadata?.assertNonNull === true;
+
+    let finalType = baseType;
+    if (isArray) {
+      finalType = `${baseType}[]`;
+    }
+    if (isNullable) {
+      if (isAssertNonNull) {
+        finalType = `AssertNonNull<${finalType}>`;
+      } else {
+        finalType = `${finalType} | null`;
+      }
+    }
+
+    return finalType;
+  }
+
+  /**
+   * Get the base Kysely type for a field (without array/null modifiers).
+   */
+  private static getBaseType(fieldDef: any): string {
+    const metadata = fieldDef.metadata;
+    const fieldType = metadata?.type;
+
+    switch (fieldType) {
+      case "uuid":
+      case "string":
+        return "string";
+      case "integer":
+      case "float":
+        return "number";
+      case "date":
+      case "datetime":
+        return "Timestamp";
+      case "bool":
+      case "boolean":
+        return "boolean";
+      case "enum":
+        return this.getEnumType(metadata, fieldDef);
+      case "nested":
+        return this.getNestedType(fieldDef);
+      default:
+        return "string";
+    }
+  }
+
+  /**
+   * Get the enum type definition.
+   */
+  private static getEnumType(metadata: any, fieldDef: any): string {
+    const allowedValues =
+      metadata?.allowedValues ||
+      metadata?.values ||
+      metadata?.enum ||
+      fieldDef?.allowedValues ||
+      fieldDef?.values ||
+      fieldDef?.enum;
+
+    if (allowedValues && Array.isArray(allowedValues)) {
+      return allowedValues.map((v) => `"${v.value}"`).join(" | ");
+    }
+    return "string";
+  }
+
+  /**
+   * Get the nested object type definition.
+   */
+  private static getNestedType(fieldDef: any): string {
+    const fields = fieldDef.fields;
+    if (!fields || typeof fields !== "object") {
+      return "string";
+    }
+
+    const fieldTypes: string[] = [];
+    for (const [fieldName, nestedFieldDef] of Object.entries(fields)) {
+      const fieldType = this.generateFieldType(nestedFieldDef);
+      fieldTypes.push(`${fieldName}: ${fieldType}`);
+    }
+
+    return `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
   }
 
   static async processTypes(
@@ -76,109 +155,6 @@ export class TypeProcessor {
       }
     `;
   }
-
-  /**
-   * Map TailorDB types to Kysely types.
-   */
-  private static mapTailorDBTypeToKysely(fieldDef: any): string {
-    // Get type information from metadata
-    const metadata = fieldDef.metadata;
-    const fieldType = metadata?.type;
-
-    switch (fieldType) {
-      case "uuid":
-        return "string";
-      case "string":
-        return "string";
-      case "integer":
-      case "float":
-        return "number";
-      case "date":
-      case "datetime":
-        return "Timestamp";
-      case "bool":
-      case "boolean":
-        return "boolean";
-      case "enum": {
-        const allowedValues =
-          metadata?.allowedValues ||
-          metadata?.values ||
-          metadata?.enum ||
-          fieldDef?.allowedValues ||
-          fieldDef?.values ||
-          fieldDef?.enum;
-
-        if (allowedValues && Array.isArray(allowedValues)) {
-          return allowedValues.map((v) => `"${v.value}"`).join(" | ");
-        }
-        return "string";
-      }
-      case "nested": {
-        // For nested types, generate nested type from fields property
-        const fields = fieldDef.fields || fieldDef.fields;
-        if (fields && typeof fields === "object") {
-          return this.processNestedObjectType(fields, 1);
-        }
-        return "string";
-      }
-      default:
-        return "string"; // Default to string
-    }
-  }
-
-  /**
-   * Determine whether a field is optional.
-   */
-  private static isOptional(fieldDef: any): boolean {
-    const metadata = fieldDef.metadata;
-    return metadata?.required !== true;
-  }
-
-  /**
-   * Determine whether a field is an array.
-   */
-  private static isArray(fieldDef: any): boolean {
-    const metadata = fieldDef.metadata;
-    return metadata?.array === true;
-  }
-
-  /**
-   * Recursively process nested object types.
-   */
-  private static processNestedObjectType(
-    fields: any,
-    indentLevel: number,
-  ): string {
-    const indent = "  ".repeat(indentLevel);
-    const objectFields: string[] = [];
-
-    for (const [fieldName, nestedFieldDef] of Object.entries(fields)) {
-      const nestedMetadata = (nestedFieldDef as any).metadata;
-
-      if (nestedMetadata.type === "nested" && (nestedFieldDef as any).fields) {
-        const nestedObjectType = this.processNestedObjectType(
-          (nestedFieldDef as any).fields,
-          indentLevel + 1,
-        );
-        const nestedNullable = this.isOptional(nestedFieldDef as any);
-        const finalNestedType = nestedNullable
-          ? `${nestedObjectType} | null`
-          : nestedObjectType;
-        objectFields.push(`${fieldName}: ${finalNestedType};`);
-      } else {
-        const nestedType = this.mapTailorDBTypeToKysely(nestedFieldDef as any);
-        const nestedNullable = this.isOptional(nestedFieldDef as any);
-        const finalNestedType = nestedNullable
-          ? `${nestedType} | null`
-          : nestedType;
-        objectFields.push(`${fieldName}: ${finalNestedType};`);
-      }
-    }
-
-    return `{\n${indent}${objectFields.join(`\n${indent}`)}\n${"  ".repeat(
-      indentLevel - 1,
-    )}}`;
-  }
 }
 
 const COMMON_PREFIX = multiline /* ts */ `
@@ -193,23 +169,13 @@ const COMMON_PREFIX = multiline /* ts */ `
     type CompiledQuery,
   } from "kysely";
 
-  type ArrayType<T> = ArrayTypeImpl<T> extends (infer U)[]
-    ? U[]
-    : ArrayTypeImpl<T>;
-  type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S[], I[], U[]>
-    : T[];
   type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>;
-  type Json = JsonValue;
-  type JsonArray = JsonValue[];
-  type JsonObject = {
-    [x: string]: JsonValue | undefined;
-  };
-  type JsonPrimitive = boolean | number | string | null;
-  type JsonValue = JsonArray | JsonObject | JsonPrimitive;
   type Timestamp = ColumnType<Date, Date | string, Date | string>;
+  type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<NonNullable<S>, I | null, U | null>
+    : ColumnType<NonNullable<T>, T | null, T | null>
 `;
 
 const COMMON_SUFFIX = multiline /* ts */ `
