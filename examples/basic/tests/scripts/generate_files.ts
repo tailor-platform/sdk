@@ -30,40 +30,10 @@ function replaceAbsolutePathsInFile(filePath: string) {
   fs.writeFileSync(
     filePath,
     content.replace(/"\/[^"]*\/node_modules\/([^"]*)"/g, (_, pkgPath) => {
-      return `"${normalizeModuleSpecifier(pkgPath)}"`;
+      return `"/dummy/path/node_modules/${pkgPath}"`;
     }),
     "utf-8",
   );
-}
-
-function normalizeModuleSpecifier(pkgPath: string): string {
-  let normalized = pkgPath.replace(/^\/+/, "").replace(/\\/g, "/");
-
-  if (normalized.endsWith("/index.js")) {
-    const withoutIndex = normalized.slice(0, -"/index.js".length);
-    // Avoid collapsing scoped package paths incorrectly
-    if (!withoutIndex.endsWith(".js")) {
-      normalized = withoutIndex;
-    }
-  }
-
-  if (normalized.endsWith("/dist/esm")) {
-    normalized = normalized.slice(0, -"/dist/esm".length);
-  } else if (normalized.endsWith("/dist/esm/index")) {
-    normalized = normalized.slice(0, -"/dist/esm/index".length);
-  } else if (normalized.endsWith("/dist/esm/index.js")) {
-    normalized = normalized.slice(0, -"/dist/esm/index.js".length);
-  }
-
-  if (normalized.endsWith("/dist")) {
-    normalized = normalized.slice(0, -"/dist".length);
-  } else if (normalized.endsWith("/dist/index")) {
-    normalized = normalized.slice(0, -"/dist/index".length);
-  } else if (normalized.endsWith("/dist/index.js")) {
-    normalized = normalized.slice(0, -"/dist/index.js".length);
-  }
-
-  return normalized;
 }
 
 /**
@@ -122,13 +92,6 @@ async function listGeneratedFiles(
 }
 
 export async function generateActualFiles(): Promise<void> {
-  if (!fs.existsSync(expectedDir) || fs.readdirSync(expectedDir).length === 0) {
-    console.log(
-      "Expected fixtures not found. Generating expected files first...",
-    );
-    await generateExpectedFiles();
-  }
-
   if (fs.existsSync(actualDir)) {
     fs.rmSync(actualDir, { recursive: true });
     console.log("Removed existing actual directory");
