@@ -6,7 +6,7 @@ import { type IdPServiceInput } from "@/configure/services/idp/types";
 import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";
 import type { GeneratorConfig } from "@/parser/generator-config";
 
-export interface AppConfig {
+export interface AppConfig<Auth = AuthConfig> {
   workspaceId: string;
   name: string;
   cors?: string[];
@@ -15,7 +15,7 @@ export interface AppConfig {
   db?: TailorDBServiceInput;
   pipeline?: PipelineResolverServiceInput;
   idp?: IdPServiceInput;
-  auth?: AuthConfig;
+  auth?: Auth;
   executor?: ExecutorServiceInput;
   staticWebsites?: Record<string, StaticWebsiteServiceInput>;
 }
@@ -29,7 +29,9 @@ export const getDistDir = (): string => {
   return distPath;
 };
 
-export function defineConfig(config: AppConfig): AppConfig {
+export function defineConfig<Auth = AuthConfig>(
+  config: AppConfig<Auth>,
+): AppConfig<Auth> {
   if (!config?.workspaceId || !config?.name) {
     throw new Error(
       "Invalid Tailor config structure: workspaceId and name are required",

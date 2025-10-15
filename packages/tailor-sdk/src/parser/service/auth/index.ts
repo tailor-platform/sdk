@@ -1,12 +1,12 @@
 import z from "zod";
-import {
-  AuthConfigSchema,
-  type AuthServiceInput,
-  type UserAttributeListKey,
-  type UserAttributeMap,
-} from "./schema";
+import { AuthConfigSchema } from "./schema";
+import type {
+  AuthServiceInput,
+  UserAttributeListKey,
+  UserAttributeMap,
+} from "./types";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
-export type * from "./schema";
+export type * from "./types";
 
 export function parseAuthConfig<
   const User extends TailorDBType,

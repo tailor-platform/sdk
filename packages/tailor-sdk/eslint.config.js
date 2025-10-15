@@ -39,11 +39,11 @@ export default defineConfig([
               group: ["**/cli/**", "@/cli/**"],
               message: "Configure module should not import from cli module.",
             },
-            // {
-            //   group: ["**/parser/**", "@/parser/**"],
-            //   allowTypeImports: true,
-            //   message: "Configure module should not import from parser module.",
-            // },
+            {
+              group: ["**/parser/**", "@/parser/**"],
+              allowTypeImports: true,
+              message: "Configure module should not import from parser module.",
+            },
             {
               group: ["zod"],
               allowTypeImports: true,

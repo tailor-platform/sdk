@@ -1,10 +1,12 @@
 import { type TailorDBType } from "../tailordb/schema";
 import type { parseAuthConfig } from "@/parser/service/auth";
-import {
-  type AuthServiceInput,
-  type UserAttributeListKey,
-  type UserAttributeMap,
-} from "@/parser/service/auth/schema";
+import type {
+  AuthServiceInput,
+  UserAttributeListKey,
+  UserAttributeMap,
+} from "@/parser/service/auth";
+
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports
 export type * from "@/parser/service/auth";
 export { AuthService } from "./service";
 

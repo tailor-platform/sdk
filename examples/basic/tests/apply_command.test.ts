@@ -186,6 +186,30 @@ describe("pnpm apply command integration tests", () => {
     }
   });
 
+  test("bundled JS files should not be excessively large", () => {
+    // Define maximum acceptable sizes (2x current sizes as threshold)
+    const maxSizes: Record<string, number> = {
+      "executors/user-created.js": 18373 * 2, // ~36KB
+      "functions/add__step1.js": 10168 * 2, // ~20KB
+      "functions/showUserInfo__step1.js": 10435 * 2, // ~21KB
+      "functions/stepChain__kyselyStep.js": 173573 * 2, // ~347KB
+      "functions/stepChain__sqlStep.js": 173551 * 2, // ~347KB
+      "functions/stepChain__step1.js": 173509 * 2, // ~347KB
+      "functions/stepChain__step2.js": 173503 * 2, // ~347KB
+    };
+
+    for (const [file, maxSize] of Object.entries(maxSizes)) {
+      const filePath = path.join(actualDir, file);
+      const stats = fs.statSync(filePath);
+      const actualSize = stats.size;
+
+      expect(
+        actualSize,
+        `File ${file} is too large: ${actualSize} bytes (max: ${maxSize} bytes). This may indicate unwanted dependencies (e.g., zod) are being bundled.`,
+      ).toBeLessThanOrEqual(maxSize);
+    }
+  });
+
   describe("globalThis.main test", () => {
     describe("resolvers", () => {
       test("functions/add__step1.js returns the sum of inputs", async () => {

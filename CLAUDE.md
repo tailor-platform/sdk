@@ -137,7 +137,43 @@ export const modelName = db.type("ModelName", {
     .relation({ type: "n-1", toward: { type: relatedModel } }),
   ...db.fields.timestamps(),
 });
-export type modelName = typeof modelName;
+```
+
+**Auth Configuration Pattern:**
+
+```typescript
+import { defineAuth } from "@tailor-platform/tailor-sdk";
+import { user } from "./tailordb/user";
+
+export const auth = defineAuth("my-auth", {
+  userProfile: {
+    type: user,
+    usernameField: "email",
+    attributes: {
+      role: true,
+    },
+  },
+  machineUsers: {
+    "admin-machine-user": {
+      attributes: {
+        role: "ADMIN",
+      },
+    },
+  },
+  oauth2Clients: {
+    sample: {
+      redirectURIs: ["https://example.com/callback"],
+      description: "Sample OAuth2 client",
+      grantTypes: ["authorization_code", "refresh_token"],
+    },
+  },
+  idProvider: {
+    name: "sample",
+    kind: "BuiltInIdP",
+    namespace: "my-idp",
+    clientName: "default-idp-client",
+  },
+});
 ```
 
 **Resolver Pattern:**
@@ -210,6 +246,76 @@ Some import restriction rules in `eslint.config.js` are currently commented out 
 - Always use type-only imports for consistency: `import type { Foo } from "..."` or `import { type Foo } from "..."`
 - Prefer inline type imports: `import { type Foo } from "..."`
 - **Special case for `export type`**: Even when `allowTypeImports: true` is configured, `export type` statements will still trigger ESLint errors. In such cases, you may use `eslint-disable` comments for the export line
+
+### Preventing Bundling Issues with Zod and Type-Only Dependencies
+
+**Problem:** Even with `export type *` syntax, bundlers resolve the entire module graph including runtime dependencies. This can cause unnecessary libraries like zod to be bundled into output files.
+
+**Root Cause:**
+
+- `export type * from "./module"` is TypeScript syntax for the type system, not a bundler instruction
+- Bundlers follow the module chain and include all runtime imports, even when only types are needed
+- Example: `configure/auth` → `parser/auth` → `parser/auth/schema` → `zod` (runtime import)
+
+**Solution Pattern: Separate Type Definitions from Runtime Code**
+
+When working with validation libraries like zod:
+
+1. **Create separate files for schemas and types:**
+
+```typescript
+// schema.ts - Runtime validation schemas
+import z from "zod";
+
+export const MySchema = z.object({
+  name: z.string(),
+  age: z.number(),
+});
+
+// NO type exports here!
+// BAD: export type MyType = z.infer<typeof MySchema>;
+```
+
+```typescript
+// types.ts - Type definitions only
+import type { z } from "zod"; // Type-only import
+import type { MySchema } from "./schema";
+
+export type MyType = z.infer<typeof MySchema>;
+
+// All other types that depend on schema types
+export type MyOtherType = {
+  /* ... */
+};
+```
+
+```typescript
+// index.ts - Re-export types
+export { MySchema } from "./schema";
+export type * from "./types";
+```
+
+2. **Key principles:**
+   - Use `import type { z } from "zod"` in type-only files (compile-time only, won't be bundled)
+   - Keep `z.infer<typeof Schema>` type extractions in separate `.types.ts` files
+   - Schema files should only export zod schemas, not types
+   - This prevents bundlers from including zod runtime code in configure module outputs
+
+3. **Verification:**
+   - After changes, run `pnpm exec turbo run test` in examples to regenerate bundles
+   - Check bundle sizes and search for library-specific code (e.g., `$ZodType`) to confirm removal
+   - Expected result: Significant bundle size reduction (e.g., 68KB → 18KB in test cases)
+
+**Example Directory Structure:**
+
+```
+parser/service/auth/
+├── schema.ts     # Zod schemas (runtime imports)
+├── types.ts      # Type definitions using import type
+└── index.ts      # Re-exports
+```
+
+This pattern aligns with the module architecture principle that configure modules should not depend on parser modules at runtime, only at the type level.
 
 ### Testing
 

@@ -9,23 +9,13 @@ import {
   type CompiledQuery,
 } from "kysely";
 
-type ArrayType<T> = ArrayTypeImpl<T> extends (infer U)[]
-  ? U[]
-  : ArrayTypeImpl<T>;
-type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S[], I[], U[]>
-  : T[];
 type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
-type Json = JsonValue;
-type JsonArray = JsonValue[];
-type JsonObject = {
-  [x: string]: JsonValue | undefined;
-};
-type JsonPrimitive = boolean | number | string | null;
-type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
+type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<NonNullable<S>, I | null, U | null>
+  : ColumnType<NonNullable<T>, T | null, T | null>
 
 export interface Customer {
   id: Generated<string>;
@@ -38,7 +28,7 @@ export interface Customer {
   city: string | null;
   fullAddress: string | null;
   state: string;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -49,7 +39,7 @@ export interface Invoice {
   amount: number | null;
   sequentialId: number | null;
   status: "draft" | "sent" | "paid" | "cancelled" | null;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -82,7 +72,7 @@ export interface PurchaseOrder {
     size: number;
     type: "text" | "image";
   }[];
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -95,7 +85,7 @@ export interface SalesOrder {
   status: string | null;
   cancelReason: string | null;
   canceledAt: Timestamp | null;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -124,7 +114,7 @@ export interface Supplier {
   country: string;
   state: "Alabama" | "Alaska";
   city: string;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -135,7 +125,7 @@ export interface User {
   status: string | null;
   department: string | null;
   role: "ADMIN" | "USER";
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -143,7 +133,7 @@ export interface UserSetting {
   id: Generated<string>;
   language: "jp" | "en";
   userID: string;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
