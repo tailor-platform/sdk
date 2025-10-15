@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.81
+
+### Patch Changes
+
+- [#552](https://github.com/tailor-platform/tailor-sdk/pull/552) [`c9f10c5`](https://github.com/tailor-platform/tailor-sdk/commit/c9f10c5ca80ebb1e282b3639e2b7a24b4aefba7d) Thanks [@toiroakr](https://github.com/toiroakr)! - Simplified permission definitions with automatic type generation
+
 ## 0.0.80
 
 ### Patch Changes
