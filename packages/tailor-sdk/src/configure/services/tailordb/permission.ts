@@ -1,3 +1,4 @@
+import type { InferredAttributeMap } from "../../types";
 import type { ValueOperand } from "../auth";
 
 export interface Permissions {
@@ -6,7 +7,7 @@ export interface Permissions {
 }
 
 export type TailorTypePermission<
-  User extends object = object,
+  User extends object = InferredAttributeMap,
   Type extends object = object,
 > = {
   create: readonly ActionPermission<"record", User, Type, false>[];
@@ -24,7 +25,7 @@ export type StandardTailorTypePermission = {
 
 type ActionPermission<
   Level extends "record" | "gql" = "record" | "gql",
-  User extends object = object,
+  User extends object = InferredAttributeMap,
   Type extends object = object,
   Update extends boolean = boolean,
 > =
@@ -54,7 +55,7 @@ export type StandardActionPermission<
 };
 
 export type TailorTypeGqlPermission<
-  User extends object = object,
+  User extends object = InferredAttributeMap,
   Type extends object = object,
 > = readonly GqlPermissionPolicy<User, Type>[];
 
@@ -62,7 +63,7 @@ export type StandardTailorTypeGqlPermission =
   readonly StandardGqlPermissionPolicy[];
 
 type GqlPermissionPolicy<
-  User extends object = object,
+  User extends object = InferredAttributeMap,
   Type extends object = object,
 > = {
   conditions: readonly PermissionCondition<"gql", User, boolean, Type>[];
@@ -88,7 +89,7 @@ type GqlPermissionAction =
 
 export type PermissionCondition<
   Level extends "record" | "gql" = "record" | "gql",
-  User extends object = object,
+  User extends object = InferredAttributeMap,
   Update extends boolean = boolean,
   Type extends object = object,
 > = readonly [
@@ -116,7 +117,7 @@ export type StandardPermissionCondition<
   >,
 ];
 
-type UserOperand<User extends object = object> = {
+type UserOperand<User extends object = InferredAttributeMap> = {
   user:
     | {
         [K in keyof User]: User[K] extends
@@ -142,7 +143,7 @@ type RecordOperand<
 
 export type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
-  User extends object = object,
+  User extends object = InferredAttributeMap,
   Type extends object = object,
   Update extends boolean = boolean,
 > =
@@ -187,10 +188,7 @@ function normalizeConditions<
 
 function isObjectFormat(
   p: ActionPermission,
-): p is Extract<
-  ActionPermission<"record" | "gql", object>,
-  { permit?: boolean }
-> {
+): p is Extract<ActionPermission, { permit?: boolean }> {
   return typeof p === "object" && p !== null && "conditions" in p;
 }
 

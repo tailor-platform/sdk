@@ -24,6 +24,7 @@ import { ResolverLoader } from "@/cli/bundler/pipeline/loader";
 import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
 import type { Executor } from "@/configure/services/executor/types";
 import type { Resolver } from "@/configure/services/pipeline/resolver";
+import { generateUserTypes } from "@/cli/type-generator";
 
 export type ApplyOptions = {
   dryRun?: boolean;
@@ -36,6 +37,9 @@ export type ApplyPhase = "create-update" | "delete";
 
 export async function apply(configPath: string, options: ApplyOptions = {}) {
   const { config } = await loadConfig(configPath);
+
+  // Generate user types from loaded config
+  await generateUserTypes(config, configPath);
   const application = defineApplication(config);
 
   // Build functions

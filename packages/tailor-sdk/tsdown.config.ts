@@ -6,7 +6,15 @@ export default defineConfig({
   target: "node18",
   platform: "node",
   clean: true,
-  dts: true,
+  dts: {
+    banner: (chunk) => {
+      // Add triple-slash reference to configure/index.d.mts
+      if (chunk.fileName === "configure/index.d.mts") {
+        return '/// <reference path="../plugin-generated.d.ts" />\n';
+      }
+      return "";
+    },
+  },
   outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,

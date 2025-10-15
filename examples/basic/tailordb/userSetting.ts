@@ -1,10 +1,6 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { user } from "./user";
-import {
-  defaultGqlPermission,
-  defaultPermission,
-  PermissionUser,
-} from "./permissions";
+import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const userSetting = db
   .type("UserSetting", {
@@ -16,5 +12,5 @@ export const userSetting = db
     }),
     ...db.fields.timestamps(),
   })
-  .permission<PermissionUser>(defaultPermission)
+  .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

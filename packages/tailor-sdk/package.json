@@ -3,10 +3,11 @@
   "version": "0.0.80",
   "description": "Tailor SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
-  "main": "dist/index.mjs",
+  "main": "./dist/configure/index.mjs",
   "type": "module",
   "files": [
     "dist",
+    "postinstall.mjs",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -15,7 +16,7 @@
     ".": {
       "types": "./dist/configure/index.d.mts",
       "import": "./dist/configure/index.mjs",
-      "default": "./dist/configurそindex.mjs"
+      "default": "./dist/configure/index.mjs"
     },
     "./cli": {
       "types": "./dist/cli/api.d.mts",
@@ -26,14 +27,15 @@
   "bin": {
     "tailor-sdk": "./dist/cli/index.mjs"
   },
-  "types": "./dist/index.d.mts",
+  "types": "./dist/configure/index.d.mts",
   "scripts": {
     "test": "vitest",
-    "build": "tsdown",
+    "build": "tsdown && FORCE_CREATE=1 node postinstall.mjs",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
-    "prepublish": "pnpm run build"
+    "prepublish": "pnpm run build",
+    "postinstall": "node postinstall.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.6.3",
@@ -60,6 +62,7 @@
     "@types/madge": "5.0.3",
     "@types/node": "22.18.8",
     "eslint": "9.37.0",
+    "globals": "16.4.0",
     "tsdown": "0.15.6",
     "typescript": "5.9.3",
     "typescript-eslint": "8.46.0",

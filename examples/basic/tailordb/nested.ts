@@ -1,9 +1,5 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import {
-  defaultGqlPermission,
-  defaultPermission,
-  PermissionUser,
-} from "./permissions";
+import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const nestedProfile = db
   .type("NestedProfile", {
@@ -21,5 +17,5 @@ export const nestedProfile = db
     }),
     archived: db.bool({ optional: true }),
   })
-  .permission<PermissionUser>(defaultPermission)
+  .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

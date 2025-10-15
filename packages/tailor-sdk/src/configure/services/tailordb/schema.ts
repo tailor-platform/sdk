@@ -37,7 +37,7 @@ import {
   normalizePermission,
   normalizeGqlPermission,
 } from "./permission";
-import { tailorUserMap } from "@/configure/types";
+import { type InferredAttributeMap, tailorUserMap } from "@/configure/types";
 
 type RelationType =
   | "oneToOne"
@@ -428,7 +428,7 @@ function object<
 
 export class TailorDBType<
   const Fields extends Record<string, TailorDBField<any, any, any>> = any,
-  User extends object = object,
+  User extends object = InferredAttributeMap,
 > extends TailorType<Fields> {
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
   private _description: string | undefined;
@@ -602,7 +602,7 @@ export class TailorDBType<
 }
 export type TailorDBInstance<
   Fields extends Record<string, TailorDBField<any, any, any>> = any,
-  User extends object = object,
+  User extends object = InferredAttributeMap,
 > = InstanceType<typeof TailorDBType<Fields, User>>;
 
 const idField = uuid();

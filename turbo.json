@@ -38,21 +38,22 @@
     },
     "format": {
       "dependsOn": ["//#format:root"],
-      "cache": false
+      "cache": true
     },
     "format:check": {
       "dependsOn": ["//#format:check:root"],
-      "cache": false
+      "cache": true
     },
     "//#format:root": {
-      "cache": false
+      "cache": true
     },
     "//#format:check:root": {
-      "cache": false
+      "cache": true
     },
     "typecheck": {
       "dependsOn": ["build"],
-      "cache": false
+      "outputs": [],
+      "cache": true
     }
   }
 }

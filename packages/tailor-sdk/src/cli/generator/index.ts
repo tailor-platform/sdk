@@ -15,6 +15,7 @@ import {
   type PipelineNamespaceResult,
 } from "@/cli/generator/types";
 import { DependencyWatcher } from "./watch";
+import { generateUserTypes } from "@/cli/type-generator";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 
@@ -508,6 +509,9 @@ export async function generate(
   options: GenerateOptions = { watch: false },
 ) {
   const { config, generators } = await loadConfig(configPath);
+
+  // Generate user types from loaded config
+  await generateUserTypes(config, configPath);
   const manager = new GenerationManager(config, generators);
   await manager.generate(options);
   if (options.watch) {

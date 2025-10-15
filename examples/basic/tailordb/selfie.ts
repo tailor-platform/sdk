@@ -1,9 +1,5 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import {
-  defaultGqlPermission,
-  defaultPermission,
-  PermissionUser,
-} from "./permissions";
+import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const selfie = db
   .type("Selfie", {
@@ -19,5 +15,5 @@ export const selfie = db
       backward: "dependedBy",
     }),
   })
-  .permission<PermissionUser>(defaultPermission)
+  .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

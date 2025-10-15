@@ -1,10 +1,6 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { salesOrder } from "./salesOrder";
-import {
-  defaultGqlPermission,
-  defaultPermission,
-  PermissionUser,
-} from "./permissions";
+import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const invoice = db
   .type("Invoice", {
@@ -24,5 +20,5 @@ export const invoice = db
     status: db.enum("draft", "sent", "paid", "cancelled", { optional: true }),
     ...db.fields.timestamps(),
   })
-  .permission<PermissionUser>(defaultPermission)
+  .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

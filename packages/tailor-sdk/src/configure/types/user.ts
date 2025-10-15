@@ -1,3 +1,20 @@
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace TailorSDK {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+    interface AttributeMap {}
+    type AttributeList = [];
+  }
+}
+
+export type InferredAttributeMap = keyof TailorSDK.AttributeMap extends never
+  ? Record<string, string | string[] | boolean | boolean[] | undefined>
+  : TailorSDK.AttributeMap;
+
+export type InferredAttributeList = TailorSDK.AttributeList extends never[]
+  ? string[]
+  : TailorSDK.AttributeList;
+
 /** Represents a user in the Tailor platform. */
 export type TailorUser = {
   /**
@@ -16,14 +33,11 @@ export type TailorUser = {
    * A map of the user's attributes.
    * For unauthenticated users, this will be null.
    */
-  attributes: Record<
-    string,
-    string | string[] | boolean | boolean[] | undefined
-  > | null;
+  attributes: InferredAttributeMap | null;
   /** A list of the user's attributes.
    * For unauthenticated users, this will be an empty array.
    */
-  attributeList: string[];
+  attributeList: InferredAttributeList;
 };
 
 // Since there's naming difference between platform and sdk,

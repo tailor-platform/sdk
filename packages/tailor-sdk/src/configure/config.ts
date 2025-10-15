@@ -23,8 +23,11 @@ export interface AppConfig<Auth = AuthConfig> {
 let distPath: string | null = null;
 
 export const getDistDir = (): string => {
-  if (distPath === null) {
-    distPath = process.env.TAILOR_SDK_OUTPUT_DIR || ".tailor-sdk";
+  const configured = process.env.TAILOR_SDK_OUTPUT_DIR;
+  if (configured && configured !== distPath) {
+    distPath = configured;
+  } else if (distPath === null) {
+    distPath = configured || ".tailor-sdk";
   }
   return distPath;
 };
@@ -32,11 +35,6 @@ export const getDistDir = (): string => {
 export function defineConfig<Auth = AuthConfig>(
   config: AppConfig<Auth>,
 ): AppConfig<Auth> {
-  if (!config?.workspaceId || !config?.name) {
-    throw new Error(
-      "Invalid Tailor config structure: workspaceId and name are required",
-    );
-  }
   return config;
 }
 

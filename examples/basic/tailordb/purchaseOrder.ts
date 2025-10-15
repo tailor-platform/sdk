@@ -1,11 +1,7 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { supplier } from "./supplier";
 import { attachedFiles } from "./file";
-import {
-  defaultGqlPermission,
-  defaultPermission,
-  PermissionUser,
-} from "./permissions";
+import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const purchaseOrder = db
   .type(["PurchaseOrder", "PurchaseOrderList"], {
@@ -19,5 +15,5 @@ export const purchaseOrder = db
     attachedFiles,
     ...db.fields.timestamps(),
   })
-  .permission<PermissionUser>(defaultPermission)
+  .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

@@ -6,8 +6,29 @@ import type {
   UserAttributeMap,
 } from "@/parser/service/auth";
 
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports
-export type * from "@/parser/service/auth";
+export type {
+  OIDC,
+  SAML,
+  IDToken,
+  BuiltinIdP,
+  IdProviderConfig,
+  OAuth2ClientGrantType,
+  OAuth2Client,
+  SCIMAuthorization,
+  SCIMAttributeType,
+  SCIMAttribute,
+  SCIMSchema,
+  SCIMAttributeMapping,
+  SCIMResource,
+  SCIMConfig,
+  TenantProviderConfig,
+  ValueOperand,
+  UsernameFieldKey,
+  UserAttributeKey,
+  UserAttributeListKey,
+  UserAttributeMap,
+  AuthServiceInput,
+} from "@/parser/service/auth";
 export { AuthService } from "./service";
 
 export function defineAuth<

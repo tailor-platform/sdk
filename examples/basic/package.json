@@ -15,7 +15,7 @@
     "test:e2e": "vitest --project e2e",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix --quiet",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm gen && tsc --noEmit"
   },
   "dependencies": {
     "@tailor-platform/tailor-proto": "workspace:^",
