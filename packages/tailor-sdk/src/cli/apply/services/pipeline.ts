@@ -17,6 +17,7 @@ import {
   type PipelineResolver_FieldSchema,
   PipelineResolver_OperationType,
   type PipelineResolver_PipelineSchema,
+  type PipelineResolver_TypeSchema,
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import { type Executor } from "@/configure/services/executor/types";
@@ -28,7 +29,7 @@ import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
 import { OperationType } from "@/configure/types/operator";
 import * as inflection from "inflection";
-import { tailorUserMap } from "@/configure/types";
+import { type TailorField, tailorUserMap } from "@/configure/types";
 
 export async function applyPipeline(
   client: OperatorClient,
@@ -303,14 +304,8 @@ interface ResolverManifestMetadata {
   queryType: "query" | "mutation";
   pipelines: PipelineInfo[];
   outputMapper?: string; // String representation of the function
-  inputFields?: Record<
-    string,
-    { type: string; required: boolean; array: boolean }
-  >;
-  outputFields?: Record<
-    string,
-    { type: string; required: boolean; array: boolean }
-  >;
+  inputFields?: Record<string, TailorField>;
+  outputFields?: Record<string, TailorField>;
   resolverManifest?: any; // Generated ResolverManifest
 }
 
@@ -352,16 +347,6 @@ function processResolver(
     }
   });
 
-  // Extract field information for Input type
-  const inputFields = resolver.input
-    ? extractTypeFields(resolver.input)
-    : undefined;
-
-  // Extract field information for Output type
-  const outputFields = resolver.output
-    ? extractTypeFields(resolver.output)
-    : undefined;
-
   const typeBaseName = inflection.camelize(resolver.name);
   const metadata: ResolverManifestMetadata = {
     name: resolver.name,
@@ -370,8 +355,8 @@ function processResolver(
     queryType: resolver.queryType,
     pipelines,
     outputMapper: resolver.outputMapper?.toString(),
-    inputFields,
-    outputFields,
+    inputFields: resolver.input?.fields,
+    outputFields: resolver.output?.fields,
   };
 
   return generateResolverManifest(
@@ -442,7 +427,7 @@ function generateResolverManifest(
               name: resolverMetadata.inputType,
               description: "",
               required: false,
-              fields: generateTypeFields(
+              fields: protoFields(
                 resolverMetadata.inputType,
                 resolverMetadata.inputFields,
               ),
@@ -458,7 +443,7 @@ function generateResolverManifest(
       name: resolverMetadata.outputType,
       description: "",
       required: true,
-      fields: generateTypeFields(
+      fields: protoFields(
         resolverMetadata.outputType,
         resolverMetadata.outputFields,
       ),
@@ -481,204 +466,108 @@ function generateResolverManifest(
   };
 }
 
-function getTypeDefinition(fieldType: string): {
-  kind: "ScalarType" | "CustomScalarType";
-  name: string;
-} {
-  const tailorToGraphQL: Record<string, string> = {
-    string: "String",
-    number: "Int",
-    integer: "Int",
-    boolean: "Boolean",
-    float: "Float",
-    date: "String",
-    datetime: "String",
-    time: "String",
-    json: "String",
-  };
-
-  const customScalarTypes = ["date", "datetime", "time"];
-  const isCustomScalar = customScalarTypes.includes(fieldType);
-
-  return {
-    kind: isCustomScalar ? "CustomScalarType" : "ScalarType",
-    name: isCustomScalar
-      ? fieldType === "datetime"
-        ? "DateTime"
-        : fieldType === "date"
-          ? "Date"
-          : fieldType === "time"
-            ? "Time"
-            : fieldType
-      : tailorToGraphQL[fieldType] || "String",
-  };
-}
-
-function createFieldDefinition(
-  fieldName: string,
-  fieldType: string,
-  required: boolean,
-  array: boolean,
-  description: string = "",
-): MessageInitShape<typeof PipelineResolver_FieldSchema> {
-  const typeDefinition = getTypeDefinition(fieldType);
-
-  return {
-    name: fieldName,
-    description: description,
-    type: {
-      kind: typeDefinition.kind,
-      name: typeDefinition.name,
-      description: "",
-      required: false, // Note: This is always false in the CUE schema for scalar types
-    },
-    array: array,
-    required: required,
-  };
-}
-
-function generateTypeFields(
-  typeName: string,
-  fields?: Record<
-    string,
-    { type: string; required: boolean; array: boolean; fields?: any }
-  >,
-  allFields?: Record<string, any>,
+function protoFields(
+  baseName: string,
+  fields?: Record<string, TailorField>,
 ): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
-  if (fields && Object.keys(fields).length > 0) {
-    return Object.entries(fields).map(([fieldName, fieldInfo]) => {
-      if (fieldInfo.type === "nested") {
-        const capitalizedTypeName = typeName + inflection.camelize(fieldName);
-
-        let nestedFields: MessageInitShape<
-          typeof PipelineResolver_FieldSchema
-        >[] = [];
-        if (fieldInfo.fields && typeof fieldInfo.fields === "object") {
-          nestedFields = generateNestedFields(
-            fieldInfo.fields,
-            capitalizedTypeName,
-          );
-        } else if (allFields && allFields[capitalizedTypeName]) {
-          nestedFields = generateTypeFields(
-            capitalizedTypeName,
-            allFields[capitalizedTypeName],
-            allFields,
-          );
-        } else {
-          console.warn(
-            `No nested field information found for ${fieldName} in type ${typeName}. Using empty fields.`,
-          );
-        }
-
-        return {
-          name: fieldName,
-          description: "",
-          type: {
-            kind: "UserDefined",
-            name: capitalizedTypeName,
-            description: "",
-            required: fieldInfo.required,
-            fields: nestedFields,
-          },
-          array: fieldInfo.array,
-          required: fieldInfo.required,
-        };
-      }
-
-      return createFieldDefinition(
-        fieldName,
-        fieldInfo.type,
-        fieldInfo.required,
-        fieldInfo.array,
-      );
-    });
-  }
-
-  console.warn(
-    `No field information available for type: ${typeName}. Returning empty fields array.`,
-  );
-  return [];
-}
-
-function generateNestedFields(
-  nestedFields: any,
-  parentTypeName?: string,
-): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
-  if (!nestedFields || typeof nestedFields !== "object") {
+  if (!fields) {
     return [];
   }
 
-  return Object.entries(nestedFields).map(
-    ([fieldName, field]: [string, any]) => {
-      const fieldObj = field;
+  return Object.entries(fields).map(([fieldName, field]) => {
+    let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
+    const required = field.metadata.required ?? true;
 
-      const metadata = fieldObj?.metadata || {};
-      const fieldType = metadata.type || "string";
-      const required = metadata.required !== false;
-      const array = metadata.array === true;
-
-      if (fieldType === "nested" && fieldObj.fields) {
-        const nestedTypeName = `${parentTypeName ?? ""}${inflection.camelize(fieldName)}`;
-
-        return {
-          name: fieldName,
-          description: metadata.description || "",
-          type: {
-            kind: "UserDefined",
-            name: nestedTypeName,
-            description: "",
-            required: required,
-            fields: generateNestedFields(fieldObj.fields, nestedTypeName),
-          },
-          array: array,
-          required: required,
+    switch (field.metadata.type) {
+      case "uuid":
+        type = {
+          kind: "ScalarType",
+          name: "ID",
+          required,
         };
+        break;
+      case "string":
+        type = {
+          kind: "ScalarType",
+          name: "String",
+          required,
+        };
+        break;
+      case "integer":
+        type = {
+          kind: "ScalarType",
+          name: "Int",
+          required,
+        };
+        break;
+      case "float":
+        type = {
+          kind: "ScalarType",
+          name: "Float",
+          required,
+        };
+        break;
+      case "boolean":
+        type = {
+          kind: "ScalarType",
+          name: "Boolean",
+          required,
+        };
+        break;
+      case "date":
+        type = {
+          kind: "CustomScalarType",
+          name: "Date",
+          required,
+        };
+        break;
+      case "datetime":
+        type = {
+          kind: "CustomScalarType",
+          name: "DateTime",
+          required,
+        };
+        break;
+      case "time":
+        type = {
+          kind: "CustomScalarType",
+          name: "Time",
+          required,
+        };
+        break;
+      case "enum": {
+        const typeName = `${baseName}${inflection.camelize(fieldName)}`;
+        type = {
+          kind: "EnumType",
+          name: typeName,
+          required,
+          allowedValues: field.metadata.allowedValues,
+        };
+        break;
       }
+      case "nested": {
+        const typeName = `${baseName}${inflection.camelize(fieldName)}`;
 
-      return createFieldDefinition(
-        fieldName,
-        fieldType,
-        required,
-        array,
-        metadata.description || "",
-      );
-    },
-  );
-}
-
-function extractTypeFields(
-  type: any,
-):
-  | Record<
-      string,
-      { type: string; required: boolean; array: boolean; fields?: any }
-    >
-  | undefined {
-  if (!type || !type.fields) {
-    return undefined;
-  }
-
-  const fields: Record<
-    string,
-    { type: string; required: boolean; array: boolean; fields?: any }
-  > = {};
-
-  for (const [fieldName, field] of Object.entries(type.fields)) {
-    const fieldObj = field as any;
-    if (fieldObj && fieldObj.metadata) {
-      const metadata = fieldObj.metadata;
-      fields[fieldName] = {
-        type: metadata.type || "string",
-        required: metadata.required !== false,
-        array: metadata.array === true,
-      };
-
-      // For nested objects, include the fields property as well
-      if (metadata.type === "nested" && fieldObj.fields) {
-        fields[fieldName].fields = fieldObj.fields;
+        type = {
+          kind: "UserDefined",
+          name: typeName,
+          required,
+          fields: protoFields(typeName, field.fields),
+        };
+        break;
       }
+      default:
+        throw new Error(
+          `Unexpected field type: ${field.metadata.type satisfies never}`,
+        );
     }
-  }
 
-  return Object.keys(fields).length > 0 ? fields : undefined;
+    return {
+      name: fieldName,
+      description: field.metadata.description,
+      array: field.metadata.array ?? false,
+      required,
+      type,
+    };
+  });
 }
