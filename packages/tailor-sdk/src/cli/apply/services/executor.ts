@@ -19,7 +19,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { type Executor } from "@/configure/services";
-import { type Application } from "@/configure/application";
+import { type Application } from "@/cli/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";

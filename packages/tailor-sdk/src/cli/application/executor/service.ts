@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type Executor, type ExecutorServiceConfig } from "./types";
+import {
+  type Executor,
+  type ExecutorServiceConfig,
+} from "@/configure/services/executor/types";
 import { pathToFileURL } from "node:url";
 
 export class ExecutorService {

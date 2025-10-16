@@ -49,7 +49,6 @@ import type {
   UserProfileProviderConfigSchema,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type {
-  AuthService,
   BuiltinIdP,
   IdProviderConfig,
   OAuth2Client,
@@ -57,8 +56,9 @@ import type {
   SCIMConfig,
   SCIMResource,
   ValueOperand,
-} from "@/configure/services";
-import { type Application } from "@/configure/application";
+} from "@/parser/service/auth";
+import { type AuthService } from "@/cli/application/auth/service";
+import { type Application } from "@/cli/application";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
 import {

@@ -1,5 +1,5 @@
-import type { AuthConfig } from ".";
-import type { TailorDBService } from "../tailordb/service";
+import type { AuthConfig } from "@/configure/services/auth";
+import type { TailorDBService } from "@/cli/application/tailordb/service";
 
 export class AuthService {
   private _userProfile?: AuthConfig["userProfile"] & {

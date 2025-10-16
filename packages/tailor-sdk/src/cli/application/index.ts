@@ -1,14 +1,14 @@
-import { PipelineResolverService } from "@/configure/services/pipeline/service";
+import { PipelineResolverService } from "@/cli/application/pipeline/service";
 import { type PipelineResolverServiceInput } from "@/configure/services/pipeline/types";
-import { TailorDBService } from "@/configure/services/tailordb/service";
+import { TailorDBService } from "@/cli/application/tailordb/service";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import { AuthService } from "@/configure/services/auth/service";
+import { AuthService } from "@/cli/application/auth/service";
 import { type AuthConfig } from "@/configure/services/auth";
 import { type IdPServiceInput } from "@/configure/services/idp/types";
 import { type AppConfig } from "@/configure/config";
-import { ExecutorService } from "@/configure/services/executor/service";
+import { ExecutorService } from "@/cli/application/executor/service";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
-import { StaticWebsiteService } from "@/configure/services/staticwebsite/service";
+import { StaticWebsiteService } from "@/cli/application/staticwebsite/service";
 import { type StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";
 
 export class Application {

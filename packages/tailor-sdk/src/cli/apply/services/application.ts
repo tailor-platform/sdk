@@ -10,7 +10,7 @@ import {
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { type Application } from "@/configure/application";
+import { type Application } from "@/cli/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import {

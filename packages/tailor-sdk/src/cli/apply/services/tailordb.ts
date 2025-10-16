@@ -43,10 +43,10 @@ import {
   type StandardTailorTypePermission,
 } from "@/configure/services/tailordb/permission";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
-import { type TailorDBService } from "@/configure/services/tailordb/service";
+import { type TailorDBService } from "@/cli/application/tailordb/service";
 import { type DBFieldMetadata } from "@/configure/services/tailordb/types";
 import { tailorToManifestScalar } from "@/configure/types/types";
-import { type Application } from "@/configure/application";
+import { type Application } from "@/cli/application";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";

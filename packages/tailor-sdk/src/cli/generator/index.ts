@@ -4,7 +4,7 @@ import type { GenerateOptions } from "./options";
 import { getDistDir, type AppConfig } from "@/configure/config";
 import { loadConfig } from "@/cli/config-loader";
 import { type Generator } from "@/parser/generator-config";
-import { defineApplication, type Application } from "@/configure/application";
+import { defineApplication, type Application } from "@/cli/application";
 import { type Resolver } from "@/configure/services/pipeline/resolver";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type Executor } from "@/configure/services/executor/types";

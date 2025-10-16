@@ -19,12 +19,10 @@ import {
   type PipelineResolver_PipelineSchema,
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
-import {
-  type Executor,
-  type PipelineResolverService,
-} from "@/configure/services";
+import { type Executor } from "@/configure/services/executor/types";
+import { type PipelineResolverService } from "@/cli/application/pipeline/service";
 import { type Resolver } from "@/configure/services/pipeline/resolver";
-import { type Application } from "@/configure/application";
+import { type Application } from "@/cli/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";

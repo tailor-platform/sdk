@@ -4,7 +4,7 @@ import { type Client } from "@connectrpc/connect";
 import type { AppConfig } from "@/configure/config";
 import { loadConfig } from "@/cli/config-loader";
 import { type OperatorService } from "@tailor-proto/tailor/v1/service_pb";
-import { defineApplication } from "@/configure/application";
+import { defineApplication } from "@/cli/application";
 import { fetchAll, initOperatorClient } from "./client";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";

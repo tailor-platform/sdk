@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { type TailorDBType } from "./schema";
-import { type TailorDBServiceConfig } from "./types";
+import { type TailorDBType } from "@/configure/services/tailordb/schema";
+import { type TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 
 export class TailorDBService {
   private types: Record<string, Record<string, TailorDBType>> = {};

@@ -29,7 +29,6 @@ export type {
   UserAttributeMap,
   AuthServiceInput,
 } from "@/parser/service/auth";
-export { AuthService } from "./service";
 
 export function defineAuth<
   const User extends TailorDBType,
