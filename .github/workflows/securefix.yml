@@ -39,7 +39,7 @@ jobs:
       - name: Fix aqua-checksums.json
         run: aqua upc -prune
       - name: Commit and push
-        uses: csm-actions/securefix-action@7631c011cad178ac45d0580119ab838c97af6908 # v0.3.2
+        uses: csm-actions/securefix-action@038b1b962c37adef7a6612aa91cbfc4d6644feb1 # v0.3.4
         with:
           app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
           app_private_key: ${{ secrets.SECUREFIX_CLIENT_APP_PRIVATE_KEY }}
@@ -80,7 +80,7 @@ jobs:
       - name: Generate files
         run: pnpm exec turbo run gen --filter=@tailor-platform/tailor-sdk --filter=inventory-management --force
       - name: Commit and push
-        uses: csm-actions/securefix-action@7631c011cad178ac45d0580119ab838c97af6908 # v0.3.2
+        uses: csm-actions/securefix-action@038b1b962c37adef7a6612aa91cbfc4d6644feb1 # v0.3.4
         with:
           app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
           app_private_key: ${{ secrets.SECUREFIX_CLIENT_APP_PRIVATE_KEY }}
