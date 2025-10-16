@@ -51,11 +51,17 @@ export class ExecutorTransformer implements ITransformer {
     const relativePath = path
       .relative(stepsDir, transformedPath)
       .replace(/\\/g, "/");
-    const executorContent = ml /* js */ `
+    const executorContent = exec.dbNamespace
+      ? ml /* js */ `
       import { __executor_function } from "${relativePath}";
 
       ${DB_WRAPPER_DEFINITION}
-      globalThis.main = ${wrapDbFn(exec.dbNamespace ?? "", "__executor_function")};
+      globalThis.main = ${wrapDbFn(exec.dbNamespace, "__executor_function")};
+    `
+      : ml /* js */ `
+      import { __executor_function } from "${relativePath}";
+
+      globalThis.main = __executor_function;
     `;
 
     fs.writeFileSync(executorFilePath, executorContent);

@@ -38,7 +38,19 @@ describe("scheduleTrigger", () => {
     scheduleTrigger("* * * * *", "Invalid/Timezone");
   });
 
-  test("function args include client", () => {
+  test("function args do not include client when dbNamespace is not set", () => {
+    createExecutor("test")
+      .on(scheduleTrigger("* * * * *"))
+      .executeFunction({
+        fn: (args) => {
+          expectTypeOf(args).not.toExtend<{
+            client: SqlClient;
+          }>();
+        },
+      });
+  });
+
+  test("function args include client when dbNamespace is set", () => {
     createExecutor("test")
       .on(scheduleTrigger("* * * * *"))
       .executeFunction({
@@ -47,18 +59,18 @@ describe("scheduleTrigger", () => {
             client: SqlClient;
           }>();
         },
+        dbNamespace: "test-namespace",
       });
   });
 });
 
 describe("webhookTrigger", () => {
-  test("function args include client and webhook args", () => {
+  test("function args include webhook args", () => {
     createExecutor("test")
       .on(incomingWebhookTrigger())
       .executeFunction({
         fn: (args) => {
           expectTypeOf(args).toExtend<{
-            client: SqlClient;
             body: Record<string, unknown>;
             headers: Record<string, string>;
             method: "POST" | "GET" | "PUT" | "DELETE";
@@ -79,7 +91,6 @@ describe("webhookTrigger", () => {
       .executeFunction({
         fn: (args) => {
           expectTypeOf(args).toExtend<{
-            client: SqlClient;
             body: { id: string };
             headers: { "x-custom-header": string };
             method: "POST" | "GET" | "PUT" | "DELETE";
@@ -118,7 +129,7 @@ describe("recordCreatedTrigger", () => {
     });
   });
 
-  test("function args include client and event args", () => {
+  test("function args include event args", () => {
     const user = db.type("User", {
       name: db.string(),
       age: db.int(),
@@ -142,7 +153,6 @@ describe("recordCreatedTrigger", () => {
       .executeFunction({
         fn: (args) => {
           expectTypeOf(args).toExtend<{
-            client: SqlClient;
             workspaceId: string;
             appNamespace: string;
             typeName: string;
@@ -188,7 +198,7 @@ describe("recordUpdatedTrigger", () => {
     });
   });
 
-  test("function args include client and event args", () => {
+  test("function args include and event args", () => {
     const user = db.type("User", {
       name: db.string(),
       age: db.int(),
@@ -217,7 +227,6 @@ describe("recordUpdatedTrigger", () => {
       .executeFunction({
         fn: (args) => {
           expectTypeOf(args).toExtend<{
-            client: SqlClient;
             workspaceId: string;
             appNamespace: string;
             typeName: string;
@@ -265,7 +274,7 @@ describe("recordDeletedTrigger", () => {
     });
   });
 
-  test("function args include client and event args", () => {
+  test("function args include event args", () => {
     const user = db.type("User", {
       name: db.string(),
       age: db.int(),
@@ -289,7 +298,6 @@ describe("recordDeletedTrigger", () => {
       .executeFunction({
         fn: (args) => {
           expectTypeOf(args).toExtend<{
-            client: SqlClient;
             workspaceId: string;
             appNamespace: string;
             typeName: string;
@@ -329,7 +337,7 @@ describe("resolverExecutedTrigger", () => {
     });
   });
 
-  test("function args include client and event args", () => {
+  test("function args include and event args", () => {
     const resolver = createQueryResolver("test")
       .fnStep("step1", () => {})
       .returns(() => ({ result: true }), t.type({ result: t.bool() }));
@@ -349,7 +357,6 @@ describe("resolverExecutedTrigger", () => {
       .executeFunction({
         fn: (args) => {
           expectTypeOf(args).toExtend<{
-            client: SqlClient;
             workspaceId: string;
             appNamespace: string;
             resolverName: string;

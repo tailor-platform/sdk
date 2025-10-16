@@ -1,4 +1,5 @@
 import { type SecretValue } from "@/configure/types/types";
+import type { SqlClient } from "../pipeline";
 
 // Auth types
 export interface Invoker {
@@ -37,6 +38,10 @@ export interface WebhookTarget {
 }
 
 export type Target = WebhookTarget | GraphqlTarget | FunctionTarget;
+
+export type FunctionArgs<Args, DB> = DB extends string
+  ? Args & { client: SqlClient }
+  : Args;
 
 // Trigger types
 export interface ScheduleTrigger {

@@ -300,7 +300,7 @@ describe("pnpm apply command integration tests", () => {
         const main = await importActualMain("executors/user-created.js");
         const { executedQueries, createdClients } = setupTailordbMock(
           (query, params) => {
-            if (query.includes("select * from User where id = ?")) {
+            if (query.includes("select * from User where id = $1")) {
               expect(params).toEqual(["user-1"]);
               return [
                 {
@@ -317,7 +317,7 @@ describe("pnpm apply command integration tests", () => {
 
         expect(result).toBeUndefined();
         expect(executedQueries).toEqual([
-          { query: "select * from User where id = ?", params: ["user-1"] },
+          { query: "select * from User where id = $1", params: ["user-1"] },
         ]);
         expect(createdClients).toEqual([
           { namespace: "tailordb", ended: true },

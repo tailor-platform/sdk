@@ -1,19 +1,22 @@
-import { type SqlClient } from "../pipeline";
 import { executorFunction } from "./target/function";
 import { executorGql } from "./target/gql";
 import { executorWebhook } from "./target/webhook";
-import { type Executor, type TriggerWithArgs } from "./types";
+import {
+  type Executor,
+  type FunctionArgs,
+  type TriggerWithArgs,
+} from "./types";
 
 export function createExecutor(name: string, description?: string) {
   return {
     on: <Args>(trigger: TriggerWithArgs<Args>) => ({
-      executeFunction: ({
+      executeFunction: <DB extends string | undefined>({
         fn,
         dbNamespace,
         invoker,
       }: {
-        fn: (args: Args & { client: SqlClient }) => void | Promise<void>;
-        dbNamespace?: string;
+        fn: (args: FunctionArgs<Args, DB>) => void | Promise<void>;
+        dbNamespace?: DB;
         invoker?: { authName: string; machineUser: string };
       }): Executor => {
         const exec = executorFunction({
@@ -30,13 +33,13 @@ export function createExecutor(name: string, description?: string) {
         };
       },
 
-      executeJobFunction: ({
+      executeJobFunction: <DB extends string | undefined>({
         fn,
         dbNamespace,
         invoker,
       }: {
-        fn: (args: Args & { client: SqlClient }) => void | Promise<void>;
-        dbNamespace?: string;
+        fn: (args: FunctionArgs<Args, DB>) => void | Promise<void>;
+        dbNamespace?: DB;
         invoker?: { authName: string; machineUser: string };
       }): Executor => {
         const exec = executorFunction({

@@ -9,7 +9,7 @@ export default async ({
   client: SqlClient;
 }) => {
   const record = await client.execOne<typeof newRecord>(
-    /* sql */ `select * from User where id = ?`,
+    /* sql */ `select * from User where id = $1`,
     [newRecord.id],
   );
   console.log(`New user created: ${record.name} (${record.email})`);
