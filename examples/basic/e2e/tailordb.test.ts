@@ -135,8 +135,8 @@ describe("dataplane", () => {
       const query = gql`
         mutation {
           createUser(input: {
-            name: "admin"
-            email: "admin-${randomUUID()}@example.com"
+            name: "alice"
+            email: "alice-${randomUUID()}@example.com"
             role: ADMIN
           }) {
             id
@@ -155,7 +155,7 @@ describe("dataplane", () => {
       expect(result.data).toEqual({
         createUser: {
           id: expect.any(String),
-          name: "admin",
+          name: "alice",
         },
       });
     });
@@ -613,8 +613,8 @@ describe("dataplane", () => {
       const query = gql`
         mutation {
           createUser(input: {
-            name: "bob"
-            email: "bob-${randomUUID()}@example.com"
+            name: "alice"
+            email: "alice-${randomUUID()}@example.com"
             role: USER
           }) {
             id

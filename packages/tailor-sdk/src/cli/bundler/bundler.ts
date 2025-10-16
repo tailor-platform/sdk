@@ -80,7 +80,7 @@ export class Bundler<T> {
     }
     // Check if this item should be processed
     if (this.config.shouldProcess && !this.config.shouldProcess(item)) {
-      console.log(`Skipping item based on shouldProcess condition`);
+      console.log(`Skipping item based on shouldProcess condition: ${file}`);
       return;
     }
 
