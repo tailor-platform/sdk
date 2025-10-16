@@ -60,6 +60,7 @@ import type {
 import { type AuthService } from "@/cli/application/auth/service";
 import { type Application } from "@/cli/application";
 import { ChangeSet, type HasName } from ".";
+import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { type ApplyPhase } from "..";
 import {
   fetchAll,
@@ -564,8 +565,14 @@ async function protoBuiltinIdPConfig(
     namespaceName: builtinIdPConfig.namespace,
     name: builtinIdPConfig.clientName,
   });
-  const vaultName = `idp-${builtinIdPConfig.namespace}-${builtinIdPConfig.clientName}`;
-  const secretKey = `client-secret-${builtinIdPConfig.namespace}-${builtinIdPConfig.clientName}`;
+  const vaultName = idpClientVaultName(
+    builtinIdPConfig.namespace,
+    builtinIdPConfig.clientName,
+  );
+  const secretKey = idpClientSecretName(
+    builtinIdPConfig.namespace,
+    builtinIdPConfig.clientName,
+  );
   return {
     config: {
       case: "oidc",

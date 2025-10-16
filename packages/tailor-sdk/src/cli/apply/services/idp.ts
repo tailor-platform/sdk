@@ -10,9 +10,17 @@ import {
 } from "@tailor-proto/tailor/v1/idp_pb";
 import { type IdPServiceInput } from "@/configure/services/idp/types";
 import { type Application } from "@/cli/application";
-import { ChangeSet, type HasName } from ".";
+import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
+
+export function idpClientVaultName(namespaceName: string, clientName: string) {
+  return `idp-${namespaceName}-${clientName}`;
+}
+
+export function idpClientSecretName(namespaceName: string, clientName: string) {
+  return `client-secret-${namespaceName}-${clientName}`;
+}
 
 export async function applyIdP(
   client: OperatorClient,
@@ -33,8 +41,14 @@ export async function applyIdP(
       const resp = await client.createIdPClient(create.request);
 
       // Create the secret manager vault and secret
-      const vaultName = `idp-${create.request.namespaceName}-${create.request.client?.name}`;
-      const secretName = `client-secret-${create.request.namespaceName}-${create.request.client?.name}`;
+      const vaultName = idpClientVaultName(
+        create.request.namespaceName!,
+        create.request.client?.name || "",
+      );
+      const secretName = idpClientSecretName(
+        create.request.namespaceName!,
+        create.request.client?.name || "",
+      );
       await client.createSecretManagerVault({
         workspaceId: create.request.workspaceId,
         secretmanagerVaultName: vaultName,
@@ -44,6 +58,32 @@ export async function applyIdP(
         secretmanagerVaultName: vaultName,
         secretmanagerSecretName: secretName,
         secretmanagerSecretValue: resp.client?.clientSecret,
+      });
+    }
+    for (const update of changeSet.client.updates) {
+      // Ensure the vault and secret exist
+      const vaultName = idpClientVaultName(update.namespaceName, update.name);
+      const secretName = idpClientSecretName(update.namespaceName, update.name);
+      try {
+        await client.getSecretManagerVault({
+          workspaceId: update.workspaceId,
+          secretmanagerVaultName: vaultName,
+        });
+        return;
+      } catch (error) {
+        if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
+          throw error;
+        }
+      }
+      await client.createSecretManagerVault({
+        workspaceId: update.workspaceId,
+        secretmanagerVaultName: vaultName,
+      });
+      await client.createSecretManagerSecret({
+        workspaceId: update.workspaceId,
+        secretmanagerVaultName: vaultName,
+        secretmanagerSecretName: secretName,
+        secretmanagerSecretValue: update.clientSecret,
       });
     }
   } else if (phase === "delete") {
@@ -194,6 +234,13 @@ type CreateClient = {
   request: MessageInitShape<typeof CreateIdPClientRequestSchema>;
 };
 
+type UpdateClient = {
+  name: string;
+  workspaceId: string;
+  namespaceName: string;
+  clientSecret: string;
+};
+
 type DeleteClient = {
   tag: "client-deleted";
   name: string;
@@ -213,7 +260,7 @@ async function planClients(
 ) {
   const changeSet: ChangeSet<
     CreateClient,
-    HasName,
+    UpdateClient,
     DeleteClient | ServiceDeleted
   > = new ChangeSet("IdP clients");
 
@@ -237,14 +284,19 @@ async function planClients(
 
   for (const [namespaceName, idp] of Object.entries(idps)) {
     const existingClients = await fetchClients(namespaceName);
-    const existingNameSet = new Set<string>();
+    const existingNameMap = new Map<string, string>();
     existingClients.forEach((client) => {
-      existingNameSet.add(client.name);
+      existingNameMap.set(client.name, client.clientSecret);
     });
     for (const name of idp.clients) {
-      if (existingNameSet.has(name)) {
-        changeSet.updates.push({ name });
-        existingNameSet.delete(name);
+      if (existingNameMap.has(name)) {
+        changeSet.updates.push({
+          name,
+          workspaceId,
+          namespaceName,
+          clientSecret: existingNameMap.get(name)!,
+        });
+        existingNameMap.delete(name);
       } else {
         changeSet.creates.push({
           name,
@@ -258,7 +310,7 @@ async function planClients(
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingNameMap.forEach((name) => {
       changeSet.deletes.push({
         tag: "client-deleted",
         name,
