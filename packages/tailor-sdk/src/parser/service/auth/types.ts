@@ -183,3 +183,19 @@ export type AuthServiceInput<
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
 };
+
+// Type for parseAuthConfig input (used by both parser and configure modules)
+export type ParseAuthConfigInput<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+  AttributeList extends UserAttributeListKey<User>[],
+  MachineUserNames extends string,
+> = Readonly<
+  AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames> & {
+    invoker: (machineUser: MachineUserNames) => {
+      authName: string;
+      machineUser: string;
+    };
+    name: string;
+  }
+>;

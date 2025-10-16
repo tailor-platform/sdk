@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { CodeGeneratorBase } from "./types";
 
 export const DistPathOptionSchema = z.object({
   distPath: z.union([
@@ -13,7 +14,6 @@ export const DistPathOptionSchema = z.object({
     }),
   ]),
 });
-export type DistPathOption = z.infer<typeof DistPathOptionSchema>;
 
 // FIXME: more strict schema validation
 export const CodeGeneratorSchema = z.object({
@@ -33,10 +33,7 @@ export const BaseGeneratorConfigSchema = z.union([
   CodeGeneratorSchema,
 ]);
 
-export type GeneratorConfig = z.input<typeof BaseGeneratorConfigSchema>;
-
-// Base CodeGenerator type from schema (without brand)
-export type CodeGeneratorBase = z.infer<typeof CodeGeneratorSchema>;
+export type * from "./types";
 
 /**
  * Creates a GeneratorConfigSchema with built-in generator support

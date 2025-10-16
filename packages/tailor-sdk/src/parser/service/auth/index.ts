@@ -1,7 +1,7 @@
 import z from "zod";
 import { AuthConfigSchema } from "./schema";
 import type {
-  AuthServiceInput,
+  ParseAuthConfigInput,
   UserAttributeListKey,
   UserAttributeMap,
 } from "./types";
@@ -14,11 +14,11 @@ export function parseAuthConfig<
   const AttributeList extends UserAttributeListKey<User>[],
   const MachineUserNames extends string,
 >(
-  config: Readonly<
-    AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames> &
-      z.input<ReturnType<typeof getInvokerFnSchema<MachineUserNames>>> & {
-        name: string;
-      }
+  config: ParseAuthConfigInput<
+    User,
+    AttributeMap,
+    AttributeList,
+    MachineUserNames
   >,
 ) {
   return AuthConfigSchema.and(

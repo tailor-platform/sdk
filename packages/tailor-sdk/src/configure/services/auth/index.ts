@@ -1,10 +1,10 @@
 import { type TailorDBType } from "../tailordb/schema";
-import type { parseAuthConfig } from "@/parser/service/auth";
 import type {
   AuthServiceInput,
+  ParseAuthConfigInput,
   UserAttributeListKey,
   UserAttributeMap,
-} from "@/parser/service/auth";
+} from "@/parser/service/auth/types";
 
 export type {
   OIDC,
@@ -28,7 +28,7 @@ export type {
   UserAttributeListKey,
   UserAttributeMap,
   AuthServiceInput,
-} from "@/parser/service/auth";
+} from "@/parser/service/auth/types";
 
 export function defineAuth<
   const User extends TailorDBType,
@@ -45,9 +45,12 @@ export function defineAuth<
     invoker(machineUser: MachineUserNames) {
       return { authName: name, machineUser } as const;
     },
-  } as const satisfies Parameters<
-    typeof parseAuthConfig<User, AttributeMap, AttributeList, MachineUserNames>
-  >[0];
+  } as const satisfies ParseAuthConfigInput<
+    User,
+    AttributeMap,
+    AttributeList,
+    MachineUserNames
+  >;
 }
 
 export type AuthConfig = ReturnType<typeof defineAuth>;

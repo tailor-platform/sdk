@@ -42,6 +42,10 @@ export default defineConfig([
             },
             {
               group: ["**/parser/**", "@/parser/**"],
+              message: "Configure module should not import from parser module.",
+            },
+            {
+              group: ["**/parser/**/types", "@/parser/**/types"],
               allowTypeImports: true,
               message: "Configure module should not import from parser module.",
             },
@@ -71,6 +75,23 @@ export default defineConfig([
             //   group: ["**/configure/**", "@/configure/**"],
             //   message: "Parser module should not import from configure module.",
             // },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/parser/**/types.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**"],
+              allowTypeImports: true,
+              message: "types.ts can import only types.",
+            },
           ],
         },
       ],
