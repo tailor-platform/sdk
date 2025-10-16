@@ -9,29 +9,19 @@ import {
   type CompiledQuery,
 } from "kysely";
 
-type ArrayType<T> = ArrayTypeImpl<T> extends (infer U)[]
-  ? U[]
-  : ArrayTypeImpl<T>;
-type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S[], I[], U[]>
-  : T[];
 type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
-type Json = JsonValue;
-type JsonArray = JsonValue[];
-type JsonObject = {
-  [x: string]: JsonValue | undefined;
-};
-type JsonPrimitive = boolean | number | string | null;
-type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
+type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<NonNullable<S>, I | null, U | null>
+  : ColumnType<NonNullable<T>, T | null, T | null>
 
 export interface Category {
   id: Generated<string>;
   name: string;
   description: string | null;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -41,7 +31,7 @@ export interface Contact {
   email: string;
   phone: string | null;
   address: string | null;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -49,14 +39,14 @@ export interface Inventory {
   id: Generated<string>;
   productId: string;
   quantity: number;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
 export interface Notification {
   id: Generated<string>;
   message: string;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -67,7 +57,7 @@ export interface Order {
   orderDate: Timestamp;
   orderType: "PURCHASE" | "SALES";
   contactId: string;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -77,8 +67,8 @@ export interface OrderItem {
   productId: string;
   quantity: number;
   unitPrice: number;
-  totalPrice: number | null;
-  createdAt: Timestamp | null;
+  totalPrice: AssertNonNull<number>;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -87,7 +77,7 @@ export interface Product {
   name: string;
   description: string | null;
   categoryId: string;
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
@@ -96,7 +86,7 @@ export interface User {
   name: string;
   email: string;
   role: "MANAGER" | "STAFF";
-  createdAt: Timestamp | null;
+  createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }
 
