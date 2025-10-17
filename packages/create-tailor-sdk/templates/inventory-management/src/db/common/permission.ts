@@ -1,4 +1,5 @@
-import {
+import type {
+  PermissionCondition,
   TailorTypeGqlPermission,
   TailorTypePermission,
 } from "@tailor-platform/tailor-sdk";
@@ -7,40 +8,51 @@ export interface User {
   role: string;
 }
 
+export const managerRole = [
+  { user: "role" },
+  "=",
+  "MANAGER",
+] as const satisfies PermissionCondition<"record" | "gql">;
+export const loggedIn = [
+  { user: "_loggedIn" },
+  "=",
+  true,
+] as const satisfies PermissionCondition<"record" | "gql">;
+
 // Manager can do anything, Staff can only read.
-export const permissionManager: TailorTypePermission<User> = {
-  create: [[{ user: "role" }, "=", "MANAGER"]],
-  read: [[{ user: "_loggedIn" }, "=", true]],
-  update: [[{ user: "role" }, "=", "MANAGER"]],
-  delete: [[{ user: "role" }, "=", "MANAGER"]],
+export const permissionManager: TailorTypePermission = {
+  create: [managerRole],
+  read: [loggedIn],
+  update: [managerRole],
+  delete: [managerRole],
 };
 
 // Manager can perform any GraphQL operations, Staff can only read.
-export const gqlPermissionManager: TailorTypeGqlPermission<User> = [
+export const gqlPermissionManager: TailorTypeGqlPermission = [
   {
-    conditions: [[{ user: "role" }, "=", "MANAGER"]],
+    conditions: [managerRole],
     actions: "all",
     permit: true,
   },
   {
-    conditions: [[{ user: "_loggedIn" }, "=", true]],
+    conditions: [loggedIn],
     actions: ["read"],
     permit: true,
   },
 ];
 
 // Any logged-in user can do anything.
-export const permissionLoggedIn: TailorTypePermission<User> = {
-  create: [[{ user: "_loggedIn" }, "=", true]],
-  read: [[{ user: "_loggedIn" }, "=", true]],
-  update: [[{ user: "_loggedIn" }, "=", true]],
-  delete: [[{ user: "_loggedIn" }, "=", true]],
+export const permissionLoggedIn: TailorTypePermission = {
+  create: [loggedIn],
+  read: [loggedIn],
+  update: [loggedIn],
+  delete: [loggedIn],
 };
 
 // Any logged-in user can perform read GraphQL operation.
-export const gqlPermissionLoggedIn: TailorTypeGqlPermission<User> = [
+export const gqlPermissionLoggedIn: TailorTypeGqlPermission = [
   {
-    conditions: [[{ user: "_loggedIn" }, "=", true]],
+    conditions: [loggedIn],
     actions: ["read"],
     permit: true,
   },

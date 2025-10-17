@@ -1,10 +1,6 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { category } from "./category";
-import {
-  gqlPermissionManager,
-  permissionManager,
-  User,
-} from "./common/permission";
+import { gqlPermissionManager, permissionManager } from "./common/permission";
 
 export const product = db
   .type("Product", {
@@ -18,5 +14,5 @@ export const product = db
       .relation({ type: "n-1", toward: { type: category } }),
     ...db.fields.timestamps(),
   })
-  .permission<User>(permissionManager)
+  .permission(permissionManager)
   .gqlPermission(gqlPermissionManager);

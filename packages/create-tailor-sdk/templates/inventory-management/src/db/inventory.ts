@@ -1,9 +1,5 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import {
-  gqlPermissionLoggedIn,
-  permissionLoggedIn,
-  User,
-} from "./common/permission";
+import { gqlPermissionLoggedIn, permissionLoggedIn } from "./common/permission";
 import { product } from "./product";
 
 export const inventory = db
@@ -18,5 +14,5 @@ export const inventory = db
       .validate(({ value }) => value >= 0),
     ...db.fields.timestamps(),
   })
-  .permission<User>(permissionLoggedIn)
+  .permission(permissionLoggedIn)
   .gqlPermission(gqlPermissionLoggedIn);

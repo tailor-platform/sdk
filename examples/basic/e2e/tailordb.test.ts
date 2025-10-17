@@ -137,7 +137,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${randomUUID()}@example.com"
-            role: ADMIN
+            role: MANAGER
           }) {
             id
             name
@@ -185,7 +185,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${value}@example.com"
-            role: USER
+            role: STAFF
           }) {
             id
             name
@@ -209,7 +209,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${value}@example.com"
-            role: USER
+            role: STAFF
           }) {
             id
           }
@@ -481,7 +481,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${randomUUID()}@example.com"
-            role: USER
+            role: STAFF
           }) {
             id
             name
@@ -615,7 +615,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${randomUUID()}@example.com"
-            role: USER
+            role: STAFF
           }) {
             id
             name

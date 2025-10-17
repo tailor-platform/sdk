@@ -115,7 +115,7 @@ export type User = {
   email: string;
   status?: string | null;
   department?: string | null;
-  role: "ADMIN" | "USER";
+  role: "MANAGER" | "STAFF";
   createdAt: Date;
   updatedAt?: Date | null;
   setting?: UserSetting | null;

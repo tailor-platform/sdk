@@ -7,7 +7,7 @@ import type {
 const defaultMachineUser = [
   { user: "role" },
   "=",
-  "ADMIN",
+  "MANAGER",
 ] as const satisfies PermissionCondition<"record" | "gql">;
 const loggedIn = [
   { user: "_loggedIn" },

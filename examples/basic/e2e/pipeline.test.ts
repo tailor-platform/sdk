@@ -131,7 +131,7 @@ describe("dataplane", () => {
           createUser(input: {
             name: "alice"
             email: "alice-${randomUUID()}@example.com"
-            role: ADMIN
+            role: MANAGER
           }) {
             id
             name
@@ -225,7 +225,7 @@ describe("dataplane", () => {
           id: expect.any(String),
           type: "machine_user",
           workspaceId: expect.any(String),
-          role: "ADMIN",
+          role: "MANAGER",
         },
       });
     });

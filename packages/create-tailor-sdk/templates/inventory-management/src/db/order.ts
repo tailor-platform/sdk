@@ -1,10 +1,6 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { contact } from "./contact";
-import {
-  gqlPermissionLoggedIn,
-  permissionLoggedIn,
-  User,
-} from "./common/permission";
+import { gqlPermissionLoggedIn, permissionLoggedIn } from "./common/permission";
 
 export const order = db
   .type("Order", {
@@ -20,5 +16,5 @@ export const order = db
       .relation({ type: "n-1", toward: { type: contact } }),
     ...db.fields.timestamps(),
   })
-  .permission<User>(permissionLoggedIn)
+  .permission(permissionLoggedIn)
   .gqlPermission(gqlPermissionLoggedIn);

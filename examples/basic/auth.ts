@@ -10,9 +10,9 @@ export const auth = defineAuth("my-auth", {
     },
   },
   machineUsers: {
-    "admin-machine-user": {
+    "manager-machine-user": {
       attributes: {
-        role: "ADMIN",
+        role: "MANAGER",
       },
     },
   },

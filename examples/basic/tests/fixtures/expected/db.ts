@@ -124,7 +124,7 @@ export interface User {
   email: string;
   status: string | null;
   department: string | null;
-  role: "ADMIN" | "USER";
+  role: "MANAGER" | "STAFF";
   createdAt: AssertNonNull<Timestamp>;
   updatedAt: Timestamp | null;
 }

@@ -51,7 +51,7 @@
       "cache": true
     },
     "typecheck": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "gen"],
       "outputs": [],
       "cache": true
     }

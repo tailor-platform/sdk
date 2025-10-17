@@ -210,7 +210,7 @@ describe("pnpm apply command integration tests", () => {
             id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
             type: "machine_user",
             workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
-            attributes: { role: "ADMIN" },
+            attributes: { role: "MANAGER" },
           },
         };
         const result = await main(payload);
@@ -218,7 +218,7 @@ describe("pnpm apply command integration tests", () => {
           id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
           type: "machine_user",
           workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
-          role: "ADMIN",
+          role: "MANAGER",
         });
       });
 

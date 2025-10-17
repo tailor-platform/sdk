@@ -68,7 +68,7 @@ describe("controlplane", async () => {
     });
     expect(machineUsers.length).toBe(1);
     expect(machineUsers[0]).toMatchObject({
-      name: "admin-machine-user",
+      name: "manager-machine-user",
       attributes: [],
       // TODO(remiposo): fix platform
       // attributeMap: {

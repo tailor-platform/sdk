@@ -8,9 +8,9 @@ export default defineConfig({
   clean: true,
   dts: {
     banner: (chunk) => {
-      // Add triple-slash reference to configure/index.d.mts
-      if (chunk.fileName === "configure/index.d.mts") {
-        return '/// <reference path="../plugin-generated.d.ts" />\n';
+      const deps = chunk.fileName.split("/").length;
+      if (chunk.fileName.endsWith(".d.mts")) {
+        return `/// <reference path="./${"../".repeat(deps - 1)}plugin-generated.d.ts" />\n`;
       }
       return "";
     },

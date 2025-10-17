@@ -129,18 +129,6 @@ export class Bundler<T> {
           minify: false,
           inlineDynamicImports: true,
         },
-        external: (id) => {
-          if (
-            id.includes("node_modules") ||
-            // Explicitly mark as external to prevent it from being resolved
-            // to packages/tailor-sdk and bundled in examples/basic.
-            id === "@tailor-platform/tailor-sdk"
-          ) {
-            return true;
-          }
-
-          return false;
-        },
         tsconfig,
         treeshake: {
           moduleSideEffects: false,

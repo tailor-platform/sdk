@@ -1,11 +1,7 @@
 import { db } from "@tailor-platform/tailor-sdk";
 import { order } from "./order";
 import { product } from "./product";
-import {
-  gqlPermissionLoggedIn,
-  permissionLoggedIn,
-  User,
-} from "./common/permission";
+import { gqlPermissionLoggedIn, permissionLoggedIn } from "./common/permission";
 
 export const orderItem = db
   .type("OrderItem", {
@@ -36,5 +32,5 @@ export const orderItem = db
       update: ({ data }) => data.quantity * data.unitPrice,
     },
   })
-  .permission<User>(permissionLoggedIn)
+  .permission(permissionLoggedIn)
   .gqlPermission(gqlPermissionLoggedIn);

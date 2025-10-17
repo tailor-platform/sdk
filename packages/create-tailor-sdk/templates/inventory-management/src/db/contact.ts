@@ -1,9 +1,5 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import {
-  gqlPermissionManager,
-  permissionManager,
-  User,
-} from "./common/permission";
+import { gqlPermissionManager, permissionManager } from "./common/permission";
 
 export const contact = db
   .type("Contact", {
@@ -17,5 +13,5 @@ export const contact = db
       .description("Address of the contact"),
     ...db.fields.timestamps(),
   })
-  .permission<User>(permissionManager)
+  .permission(permissionManager)
   .gqlPermission(gqlPermissionManager);

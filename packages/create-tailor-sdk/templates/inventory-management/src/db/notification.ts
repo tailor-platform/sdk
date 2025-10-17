@@ -1,20 +1,20 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import { permissionManager, User } from "./common/permission";
+import { loggedIn, managerRole, permissionManager } from "./common/permission";
 
 export const notification = db
   .type("Notification", {
     message: db.string().description("Notification message"),
     ...db.fields.timestamps(),
   })
-  .permission<User>(permissionManager)
+  .permission(permissionManager)
   .gqlPermission([
     {
-      conditions: [[{ user: "role" }, "=", "MANAGER"]],
+      conditions: [managerRole],
       actions: ["delete"],
       permit: true,
     },
     {
-      conditions: [[{ user: "_loggedIn" }, "=", true]],
+      conditions: [loggedIn],
       actions: ["read"],
       permit: true,
     },
