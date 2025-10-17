@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.85
+
+### Patch Changes
+
+- [#573](https://github.com/tailor-platform/tailor-sdk/pull/573) [`11cae3e`](https://github.com/tailor-platform/tailor-sdk/commit/11cae3e8aa89fc8d71993a0bb9e28c02123f185f) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: generated type reference
+
 ## 0.0.84
 
 ### Patch Changes
