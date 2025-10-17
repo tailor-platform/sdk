@@ -37,14 +37,12 @@ import { db, t } from "@tailor-platform/tailor-sdk";
 export const customer = db.type("Customer", {
   name: db.string(),
   email: db.string(),
-  phone: db.string().optional(),
+  phone: db.string({ optional: true }),
   ...db.fields.timestamps(),
   // or
-  // createdAt: db.datetime()
-  //   .optional({ assertNonNull: true })
+  // createdAt: db.datetime({ optional: true, assertNonNull: true })
   //   .hooks({ create: () => new Date().toISOString() }),
-  // updatedAt: datetime()
-  //   .optional()
+  // updatedAt: db.datetime({ optional: true })
   //   .hooks({ update: () => new Date().toISOString() }),
 });
 
@@ -147,7 +145,7 @@ resource "tailor_tailordb_type" "customer" {
 **Tailor SDK**
 
 ```typescript
-field: db.string().optional();
+field: db.string({ optional: true });
 ```
 
 **Terraform**
@@ -230,7 +228,7 @@ field {
 **Tailor SDK**
 
 ```typescript
-tags: db.string().array();
+tags: db.string({ array: true });
 ```
 
 **Terraform**
@@ -404,18 +402,20 @@ field {
 **Tailor SDK**
 
 ```typescript
-import { createQueryResolver, t } from "@tailor-platform/tailor-sdk";
+import { createResolver, t } from "@tailor-platform/tailor-sdk";
 
-export default createQueryResolver("getCustomer", t.type({ id: t.string() }), {
-  defaults: { dbNamespace: "tailordb" },
-})
-  .fnStep("fetchCustomer", async (context) => {
-    return { id: context.input.id, name: "John Doe" };
-  })
-  .returns(
-    (context) => ({ customer: context.fetchCustomer }),
-    t.type({ customer: t.object({ id: t.string(), name: t.string() }) }),
-  );
+export default createResolver({
+  name: "getCustomer",
+  operation: "query",
+  input: t.type({ id: t.string() }),
+  body: async (context) => {
+    const customer = { id: context.input.id, name: "John Doe" };
+    return { customer };
+  },
+  output: t.type({
+    customer: t.object({ id: t.string(), name: t.string() }),
+  }),
+});
 ```
 
 **Terraform**
@@ -493,12 +493,12 @@ export default createExecutor(
   .on(
     recordCreatedTrigger(customer, ({ newRecord }) => newRecord.email != null),
   )
-  .executeFunction(
-    async ({ newRecord }) => {
+  .executeFunction({
+    fn: async ({ newRecord }) => {
       console.log(`Sending welcome email to ${newRecord.email}`);
     },
-    { dbNamespace: "tailordb" },
-  );
+    dbNamespace: "tailordb",
+  });
 ```
 
 **Terraform**
@@ -565,9 +565,11 @@ import { createExecutor, scheduleTrigger } from "@tailor-platform/tailor-sdk";
 
 export default createExecutor("daily-report", "Generate daily report")
   .on(scheduleTrigger("0 9 * * *")) // Every day at 9 AM
-  .executeFunction(async ({ client }) => {
-    const result = await client.exec("SELECT COUNT(*) FROM Customer");
-    console.log(`Total customers: ${result[0].count}`);
+  .executeFunction({
+    fn: async ({ client }) => {
+      const result = await client.exec("SELECT COUNT(*) FROM Customer");
+      console.log(`Total customers: ${result[0].count}`);
+    },
   });
 ```
 

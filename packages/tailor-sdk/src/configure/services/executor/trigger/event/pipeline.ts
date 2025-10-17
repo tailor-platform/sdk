@@ -1,4 +1,4 @@
-import { type Resolver } from "@/configure/services/pipeline/resolver";
+import { type Resolver } from "@/parser/service/pipeline/types";
 import { type ConditionArgs, type RecordTriggerCondition } from "./types";
 import { type output } from "@/configure/types/helpers";
 import type { EventTrigger, WithArgs } from "../../types";

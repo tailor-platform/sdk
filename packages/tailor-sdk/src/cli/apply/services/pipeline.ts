@@ -22,12 +22,11 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import { type Executor } from "@/configure/services/executor/types";
 import { type PipelineResolverService } from "@/cli/application/pipeline/service";
-import { type Resolver } from "@/configure/services/pipeline/resolver";
+import { type Resolver } from "@/parser/service/pipeline/types";
 import { type Application } from "@/cli/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../client";
-import { OperationType } from "@/configure/types/operator";
 import * as inflection from "inflection";
 import { type TailorField, tailorUserMap } from "@/configure/types";
 
@@ -294,128 +293,46 @@ async function planResolvers(
   return changeSet;
 }
 
-// TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
-// This will need refactoring later.
-
-interface ResolverManifestMetadata {
-  name: string;
-  inputType?: string;
-  outputType: string;
-  queryType: "query" | "mutation";
-  pipelines: PipelineInfo[];
-  outputMapper?: string; // String representation of the function
-  inputFields?: Record<string, TailorField>;
-  outputFields?: Record<string, TailorField>;
-  resolverManifest?: any; // Generated ResolverManifest
-}
-
-interface PipelineInfo {
-  name: string;
-  description: string;
-  operationType: OperationType;
-  operationSource?: string;
-}
-
 function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
 ): MessageInitShape<typeof PipelineResolverSchema> {
-  const pipelines: PipelineInfo[] = resolver.steps.map((step) => {
-    const [type, name] = step;
-    switch (type) {
-      case "fn": {
-        const functionPath = path.join(
-          getDistDir(),
-          "functions",
-          `${resolver.name}__${name}.js`,
-        );
-        let functionCode = "";
-        try {
-          functionCode = fs.readFileSync(functionPath, "utf-8");
-        } catch {
-          console.warn(`Function file not found: ${functionPath}`);
-        }
-        return {
-          name,
-          description: name,
-          operationType: OperationType.FUNCTION,
-          operationSource: functionCode,
-        };
-      }
-      default:
-        throw new Error(`Unsupported step kind: ${step[0]}`);
-    }
-  });
-
-  const typeBaseName = inflection.camelize(resolver.name);
-  const metadata: ResolverManifestMetadata = {
-    name: resolver.name,
-    inputType: resolver.input ? `${typeBaseName}Input` : undefined,
-    outputType: `${typeBaseName}Output`,
-    queryType: resolver.queryType,
-    pipelines,
-    outputMapper: resolver.outputMapper?.toString(),
-    inputFields: resolver.input?.fields,
-    outputFields: resolver.output?.fields,
-  };
-
-  return generateResolverManifest(
-    resolver.name,
-    metadata,
-    executorUsedResolvers,
+  // Read body function code
+  const functionPath = path.join(
+    getDistDir(),
+    "functions",
+    `${resolver.name}__body.js`,
   );
-}
+  let functionCode = "";
+  try {
+    functionCode = fs.readFileSync(functionPath, "utf-8");
+  } catch {
+    console.warn(`Function file not found: ${functionPath}`);
+  }
 
-function generateResolverManifest(
-  name: string,
-  resolverMetadata: ResolverManifestMetadata,
-  executorUsedResolvers: ReadonlySet<string>,
-): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] =
     [
-      ...resolverMetadata.pipelines.map((pipeline) => {
-        let operationType;
-        switch (pipeline.operationType) {
-          case OperationType.FUNCTION:
-            operationType = PipelineResolver_OperationType.FUNCTION;
-            break;
-          case OperationType.GRAPHQL:
-            operationType = PipelineResolver_OperationType.GRAPHQL;
-            break;
-          default:
-            throw new Error(
-              `Unknown operation type: ${pipeline.operationType}`,
-            );
-        }
-
-        return {
-          name: pipeline.name,
-          operationName: pipeline.name,
-          description: pipeline.description,
-          operationType,
-          operationSource: pipeline.operationSource,
-          operationHook: {
-            expr: `({ ...context.pipeline, ...context.args, user: ${tailorUserMap} });`,
-          },
-          postScript: `args.${pipeline.name}`,
-        };
-      }),
       {
-        name: `__construct_output`,
-        operationName: `__construct_output`,
-        description: "Construct output from resolver",
+        name: "body",
+        operationName: "body",
+        description: `${resolver.name} function body`,
         operationType: PipelineResolver_OperationType.FUNCTION,
-        operationSource: `globalThis.main = ${resolverMetadata.outputMapper || "() => ({})"}`,
+        operationSource: functionCode,
         operationHook: {
           expr: `({ ...context.pipeline, ...context.args, user: ${tailorUserMap} });`,
         },
-        postScript: `args.__construct_output`,
+        postScript: `args.body`,
       },
     ];
 
-  // Generate Input structure (including Fields array)
+  // Generate type names
+  const typeBaseName = inflection.camelize(resolver.name);
+  const inputType = resolver.input ? `${typeBaseName}Input` : undefined;
+  const outputType = `${typeBaseName}Output`;
+
+  // Build inputs
   const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] =
-    resolverMetadata.inputType
+    inputType
       ? [
           {
             name: "input",
@@ -424,29 +341,23 @@ function generateResolverManifest(
             required: true,
             type: {
               kind: "UserDefined",
-              name: resolverMetadata.inputType,
+              name: inputType,
               description: "",
               required: false,
-              fields: protoFields(
-                resolverMetadata.inputType,
-                resolverMetadata.inputFields,
-              ),
+              fields: protoFields(inputType, resolver.input?.fields),
             },
           },
         ]
       : [];
 
-  // Generate Response structure (including Fields array)
+  // Build response
   const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = {
     type: {
       kind: "UserDefined",
-      name: resolverMetadata.outputType,
+      name: outputType,
       description: "",
       required: true,
-      fields: protoFields(
-        resolverMetadata.outputType,
-        resolverMetadata.outputFields,
-      ),
+      fields: protoFields(outputType, resolver.output?.fields),
     },
     description: "",
     array: false,
@@ -454,15 +365,15 @@ function generateResolverManifest(
   };
 
   return {
-    authorization: "true==true", // Default value
-    description: `${name} resolver`,
-    inputs: inputs,
-    name: name,
-    operationType: resolverMetadata.queryType,
-    response: response,
-    pipelines: pipelines,
-    postHook: { expr: "({ ...context.pipeline.__construct_output });" },
-    publishExecutionEvents: executorUsedResolvers.has(name) ? true : false,
+    authorization: "true==true",
+    description: resolver.description ?? `${resolver.name} resolver`,
+    inputs,
+    name: resolver.name,
+    operationType: resolver.operation,
+    response,
+    pipelines,
+    postHook: { expr: "({ ...context.pipeline.body });" },
+    publishExecutionEvents: executorUsedResolvers.has(resolver.name),
   };
 }
 

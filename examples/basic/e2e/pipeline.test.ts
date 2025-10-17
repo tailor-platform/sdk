@@ -74,13 +74,7 @@ describe("controlplane", async () => {
           ],
         },
       },
-      pipelines: [
-        { name: "step1" },
-        { name: "step2" },
-        { name: "sqlStep" },
-        { name: "kyselyStep" },
-        { name: "__construct_output" },
-      ],
+      pipelines: [{ name: "body" }],
       publishExecutionEvents: true,
     });
 
@@ -121,7 +115,7 @@ describe("controlplane", async () => {
           ],
         },
       },
-      pipelines: [{ name: "step1" }, { name: "__construct_output" }],
+      pipelines: [{ name: "body" }],
       publishExecutionEvents: false,
     });
   });

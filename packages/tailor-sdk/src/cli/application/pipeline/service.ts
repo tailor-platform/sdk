@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { type PipelineResolverServiceConfig } from "@/configure/services/pipeline/types";
-import { type Resolver } from "@/configure/services/pipeline/resolver";
-import { isResolver } from "@/configure/services/pipeline/utils";
+import { type Resolver } from "@/parser/service/pipeline/types";
+import { ResolverSchema } from "@/parser/service/pipeline/schema";
 import { pathToFileURL } from "node:url";
 
 export class PipelineResolverService {
@@ -43,9 +43,9 @@ export class PipelineResolverService {
           : `${baseUrl}?t=${timestamp.getTime()}`;
 
       const resolverModule = await import(moduleSpecifier);
-      const resolver = resolverModule.default;
-      if (isResolver(resolver)) {
-        this.resolvers[resolverFile] = resolver;
+      const result = ResolverSchema.safeParse(resolverModule.default);
+      if (result.success) {
+        this.resolvers[resolverFile] = result.data;
       }
     } catch (error) {
       console.error(`Failed to load resolver from ${resolverFile}:`, error);

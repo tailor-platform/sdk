@@ -23,7 +23,7 @@ import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";
 import { ResolverLoader } from "@/cli/bundler/pipeline/loader";
 import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
 import type { Executor } from "@/configure/services/executor/types";
-import type { Resolver } from "@/configure/services/pipeline/resolver";
+import type { Resolver } from "@/parser/service/pipeline/types";
 import { generateUserTypes } from "@/cli/type-generator";
 
 export type ApplyOptions = {

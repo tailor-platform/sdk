@@ -1,4 +1,4 @@
-import { createMutationResolver, t } from "@tailor-platform/tailor-sdk";
+import { createResolver, t } from "@tailor-platform/tailor-sdk";
 import { order } from "../db/order";
 import { orderItem } from "../db/orderItem";
 import { DB } from "../generated/main-db";
@@ -98,8 +98,11 @@ const updateInventory = async (db: Kysely<DB>, input: Input) => {
   }
 };
 
-export default createMutationResolver("registerOrder", input)
-  .fnStep("exec", async (context) => {
+export default createResolver({
+  name: "registerOrder",
+  operation: "mutation",
+  input,
+  body: async (context) => {
     const client = new tailordb.Client({
       namespace: "main-db",
     });
@@ -110,5 +113,7 @@ export default createMutationResolver("registerOrder", input)
       await insertOrder(trx, context.input);
       await updateInventory(trx, context.input);
     });
-  })
-  .returns(() => ({ success: true }), t.type({ success: t.bool() }));
+    return { success: true };
+  },
+  output: t.type({ success: t.bool() }),
+});

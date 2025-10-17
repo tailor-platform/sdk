@@ -19,30 +19,18 @@ describe("pnpm apply command integration tests", () => {
     "executors/user-created.js",
     "executors/user-created.js.map",
     "executors/user-created.transformed.js",
-    "functions/add__step1.js",
-    "functions/add__step1.js.map",
-    "functions/showUserInfo__step1.js",
-    "functions/showUserInfo__step1.js.map",
-    "functions/stepChain__kyselyStep.js",
-    "functions/stepChain__kyselyStep.js.map",
-    "functions/stepChain__sqlStep.js",
-    "functions/stepChain__sqlStep.js.map",
-    "functions/stepChain__step1.js",
-    "functions/stepChain__step1.js.map",
-    "functions/stepChain__step2.js",
-    "functions/stepChain__step2.js.map",
+    "functions/add__body.js",
+    "functions/add__body.js.map",
+    "functions/showUserInfo__body.js",
+    "functions/showUserInfo__body.js.map",
+    "functions/stepChain__body.js",
+    "functions/stepChain__body.js.map",
     "resolvers/add.js",
     "resolvers/add.transformed.js",
     "resolvers/showUserInfo.js",
     "resolvers/showUserInfo.transformed.js",
     "resolvers/stepChain.js",
     "resolvers/stepChain.transformed.js",
-    "steps/add__step1.js",
-    "steps/showUserInfo__step1.js",
-    "steps/stepChain__kyselyStep.js",
-    "steps/stepChain__sqlStep.js",
-    "steps/stepChain__step1.js",
-    "steps/stepChain__step2.js",
   ] as const;
 
   const collectGeneratedFiles = (rootDir: string): string[] => {
@@ -190,12 +178,9 @@ describe("pnpm apply command integration tests", () => {
     // Define maximum acceptable sizes (2x current sizes as threshold)
     const maxSizes: Record<string, number> = {
       "executors/user-created.js": 18373 * 2, // ~36KB
-      "functions/add__step1.js": 10168 * 2, // ~20KB
-      "functions/showUserInfo__step1.js": 10435 * 2, // ~21KB
-      "functions/stepChain__kyselyStep.js": 173573 * 2, // ~347KB
-      "functions/stepChain__sqlStep.js": 173551 * 2, // ~347KB
-      "functions/stepChain__step1.js": 173509 * 2, // ~347KB
-      "functions/stepChain__step2.js": 173503 * 2, // ~347KB
+      "functions/add__body.js": 10168 * 2, // ~20KB
+      "functions/showUserInfo__body.js": 10435 * 2, // ~21KB
+      "functions/stepChain__body.js": 173573 * 2, // ~347KB
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {
@@ -212,14 +197,14 @@ describe("pnpm apply command integration tests", () => {
 
   describe("globalThis.main test", () => {
     describe("resolvers", () => {
-      test("functions/add__step1.js returns the sum of inputs", async () => {
-        const main = await importActualMain("functions/add__step1.js");
+      test("functions/add__body.js returns the sum of inputs", async () => {
+        const main = await importActualMain("functions/add__body.js");
         const result = await main({ input: { a: 4, b: 6 } });
-        expect(result).toBe(10);
+        expect(result).toEqual({ result: 10 });
       });
 
-      test("functions/showUserInfo__step1.js returns user information", async () => {
-        const main = await importActualMain("functions/showUserInfo__step1.js");
+      test("functions/showUserInfo__body.js returns user information", async () => {
+        const main = await importActualMain("functions/showUserInfo__body.js");
         const payload = {
           user: {
             id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
@@ -237,29 +222,8 @@ describe("pnpm apply command integration tests", () => {
         });
       });
 
-      test("functions/stepChain__step1.js returns a message containing the user's name", async () => {
-        const main = await importActualMain("functions/stepChain__step1.js");
-        setupTailordbMock();
-        const result = await main({
-          input: {
-            user: {
-              name: { first: "Taro", last: "Yamada" },
-              activatedAt: null,
-            },
-          },
-        });
-        expect(result).toBe("step1: Hello Taro Yamada on step1!");
-      });
-
-      test("functions/stepChain__step2.js returns a formatted date string", async () => {
-        const main = await importActualMain("functions/stepChain__step2.js");
-        setupTailordbMock();
-        const result = await main({});
-        expect(result).toBe(`step2: recorded ${formatExpectation} on step2!`);
-      });
-
-      test("functions/stepChain__sqlStep.js returns the name from the query result", async () => {
-        const main = await importActualMain("functions/stepChain__sqlStep.js");
+      test("functions/stepChain__body.js returns result with summary", async () => {
+        const main = await importActualMain("functions/stepChain__body.js");
         setupTailordbMock((query) => {
           if (typeof query === "string") {
             const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
@@ -270,28 +234,35 @@ describe("pnpm apply command integration tests", () => {
             ) {
               return [{ name: "Alice" }];
             }
-          }
-          return [];
-        });
-        const result = await main({});
-        expect(result).toBe("Alice");
-      });
-
-      test("functions/stepChain__kyselyStep.js returns the combined state from the query result", async () => {
-        const main = await importActualMain(
-          "functions/stepChain__kyselyStep.js",
-        );
-        setupTailordbMock((query) => {
-          if (typeof query === "string") {
-            const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
             if (normalizedQuery.includes("SELECT STATE FROM SUPPLIER")) {
               return [{ state: "CA" }, { state: "NY" }];
             }
           }
           return [];
         });
-        const result = await main({});
-        expect(result).toBe("CA, NY");
+        const result = await main({
+          input: {
+            user: {
+              name: { first: "Taro", last: "Yamada" },
+              activatedAt: null,
+            },
+          },
+          user: {
+            id: "test-user-id",
+            type: "user",
+            workspaceId: "test-workspace-id",
+          },
+        });
+        expect(result).toEqual({
+          result: {
+            summary: [
+              "step1: Hello Taro Yamada on step1!",
+              `step2: recorded ${formatExpectation} on step2!`,
+              "Alice",
+              "CA, NY",
+            ],
+          },
+        });
       });
     });
 

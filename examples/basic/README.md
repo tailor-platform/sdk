@@ -54,17 +54,21 @@ The example shows various relation types:
 
 ### 3. GraphQL Resolvers
 
-Resolvers use a step-based approach for complex operations:
+Resolvers use a configuration-based approach:
 
 ```typescript
-createQueryResolver("stepChain", inputType)
-  .fnStep("step1", (context) => {
-    // First step logic
-  })
-  .fnStep("step2", (context) => {
-    // Second step logic
-  })
-  .returns((context) => context.step2);
+createResolver({
+  name: "stepChain",
+  operation: "query",
+  input: inputType,
+  body: (context) => {
+    // Resolver logic
+    const step1Result = /* first logic */;
+    const step2Result = /* second logic */;
+    return step2Result;
+  },
+  output: outputType,
+});
 ```
 
 ### 4. Event-Driven Executors
@@ -72,10 +76,12 @@ createQueryResolver("stepChain", inputType)
 React to database changes with executors:
 
 ```typescript
-createExecutor("userCreated")
+createExecutor("userCreated", "Handle new user creation")
   .on(recordCreatedTrigger(user))
-  .executeFunction(async (context) => {
-    // Handle new user creation
+  .executeFunction({
+    fn: async (context) => {
+      // Handle new user creation
+    },
   });
 ```
 

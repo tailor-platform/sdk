@@ -36,20 +36,13 @@ describe("CodeTransformer", () => {
       return filePath;
     };
 
-    it("resolverのステップを適切にエクスポートする", async () => {
+    it("resolverのbodyを適切にエクスポートする", async () => {
       const resolverName = "testResolver";
       const moduleSource = multiline /* ts */ `
         const resolver = {
           name: "${resolverName}",
-          steps: [
-            ["fn", "step1", () => "step1 result", {}],
-            ["fn", "step2", async () => ({ id: 1 }), {}],
-          ],
-          options: {
-            defaults: {
-              dbNamespace: "test",
-            },
-          },
+          body: async () => ({ result: "test" }),
+          options: { dbNamespace: "test" },
         };
 
         export default resolver;
@@ -68,32 +61,21 @@ describe("CodeTransformer", () => {
 
       const transformedContent = readFileSync(transformedFile, "utf-8");
       expect(transformedContent).toContain(
-        "export const $tailor_resolver_step__step1",
-      );
-      expect(transformedContent).toContain(
-        "export const $tailor_resolver_step__step2",
+        "export const $tailor_resolver_body",
       );
 
-      // ステップファイルが作成されることを確認
-      expect(resultFiles).toHaveLength(2);
-      expect(resultFiles[0]).toContain(`${resolverName}__step1.js`);
-      expect(resultFiles[1]).toContain(`${resolverName}__step2.js`);
+      // bodyファイルが作成されることを確認
+      expect(resultFiles).toHaveLength(1);
+      expect(resultFiles[0]).toContain(`${resolverName}__body.js`);
     });
 
-    it("SQLステップに適切なラッパーを生成する", async () => {
+    it("SQL bodyに適切なラッパーを生成する", async () => {
       const resolverName = "testResolver";
       const moduleSource = multiline /* ts */ `
         const resolver = {
           name: "${resolverName}",
-          steps: [
-            [
-              "fn",
-              "sqlStep",
-              async () => ({ result: "test" }),
-              { dbNamespace: "mydb" },
-            ],
-          ],
-          options: {},
+          body: async () => ({ result: "test" }),
+          options: { dbNamespace: "mydb" },
         };
 
         export default resolver;
@@ -103,12 +85,12 @@ describe("CodeTransformer", () => {
 
       const resultFiles = await transformer.transform(testFile, tempDir);
 
-      const stepFile = resultFiles[0];
-      const stepContent = readFileSync(stepFile, "utf-8");
+      const bodyFile = resultFiles[0];
+      const bodyContent = readFileSync(bodyFile, "utf-8");
 
-      expect(stepContent).toContain("$tailor_db_wrapper");
-      expect(stepContent).toContain('"mydb"');
-      expect(stepContent).toContain("$tailor_resolver_step__sqlStep");
+      expect(bodyContent).toContain("$tailor_db_wrapper");
+      expect(bodyContent).toContain('"mydb"');
+      expect(bodyContent).toContain("$tailor_resolver_body");
     });
 
     it("デフォルトのdbNamespaceを使用する", async () => {
@@ -116,14 +98,8 @@ describe("CodeTransformer", () => {
       const moduleSource = multiline /* ts */ `
         const resolver = {
           name: "${resolverName}",
-          steps: [
-            ["fn", "sqlStep", async () => ({ result: "test" }), {}],
-          ],
-          options: {
-            defaults: {
-              dbNamespace: "defaultDb",
-            },
-          },
+          body: async () => ({ result: "test" }),
+          options: { dbNamespace: "defaultDb" },
         };
 
         export default resolver;
@@ -136,10 +112,10 @@ describe("CodeTransformer", () => {
 
       const resultFiles = await transformer.transform(testFile, tempDir);
 
-      const stepFile = resultFiles[0];
-      const stepContent = readFileSync(stepFile, "utf-8");
+      const bodyFile = resultFiles[0];
+      const bodyContent = readFileSync(bodyFile, "utf-8");
 
-      expect(stepContent).toContain('"defaultDb"');
+      expect(bodyContent).toContain('"defaultDb"');
     });
   });
 });

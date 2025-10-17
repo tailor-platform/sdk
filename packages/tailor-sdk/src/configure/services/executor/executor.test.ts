@@ -8,7 +8,7 @@ import {
   resolverExecutedTrigger,
   scheduleTrigger,
 } from "./trigger";
-import { createQueryResolver, type SqlClient } from "../pipeline";
+import { createResolver, type SqlClient } from "../pipeline";
 import { db } from "../tailordb";
 import { t } from "@/configure/types";
 
@@ -314,33 +314,45 @@ describe("recordDeletedTrigger", () => {
 
 describe("resolverExecutedTrigger", () => {
   test("can omit condition", () => {
-    const resolver = createQueryResolver("test")
-      .fnStep("step1", () => {})
-      .returns(() => ({ result: true }), t.type({ result: t.bool() }));
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ result: true }),
+      output: t.type({ result: t.bool() }),
+    });
     resolverExecutedTrigger(resolver);
   });
 
   test("can specify condition", () => {
-    const resolver = createQueryResolver("test")
-      .fnStep("step1", () => {})
-      .returns(() => ({ result: true }), t.type({ result: t.bool() }));
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ result: true }),
+      output: t.type({ result: t.bool() }),
+    });
     resolverExecutedTrigger(resolver, (args) => !args.error);
   });
 
   test("can not return invalid type from condition", () => {
-    const resolver = createQueryResolver("test")
-      .fnStep("step1", () => {})
-      .returns(() => ({ result: true }), t.type({ result: t.bool() }));
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ result: true }),
+      output: t.type({ result: t.bool() }),
+    });
     // @ts-expect-error invalid return type
     resolverExecutedTrigger(resolver, () => {
       return "invalid";
     });
   });
 
-  test("function args include and event args", () => {
-    const resolver = createQueryResolver("test")
-      .fnStep("step1", () => {})
-      .returns(() => ({ result: true }), t.type({ result: t.bool() }));
+  test("function args include client and event args", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ result: true }),
+      output: t.type({ result: t.bool() }),
+    });
     createExecutor("test")
       .on(
         resolverExecutedTrigger(resolver, (args) => {

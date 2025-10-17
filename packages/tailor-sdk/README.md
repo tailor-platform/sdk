@@ -704,31 +704,31 @@ Define Pipeline Resolvers in files matching glob patterns specified in `tailor.c
 
 ### Resolver
 
-Define Resolvers using `createQueryResolver` / `createMutationResolver` methods.
-`createQueryResolver` corresponds to GraphQL queries, while `createMutationResolver` corresponds to mutations.
-Specify Resolver name as first argument and input schema as second.
+Define Resolvers using `createResolver` method.
+Specify the resolver configuration including `name`, `operation` (query or mutation), `input`, `body`, and `output`.
 
 ```typescript
-createQueryResolver(
+createResolver({
   // Resolver name
-  "add",
+  name: "add",
+  // Operation type: "query" or "mutation"
+  operation: "query",
   // Input schema
-  t.type({
+  input: t.type({
     left: t.int(),
     right: t.int(),
   }),
-)
-  .fnStep("step1", (context) => {
-    return context.input.left + context.input.right;
-  })
-  .returns(
-    (context) => ({
-      result: context.step1,
-    }),
-    t.type({
-      result: t.int(),
-    }),
-  );
+  // Resolver logic
+  body: (context) => {
+    return {
+      result: context.input.left + context.input.right,
+    };
+  },
+  // Output schema
+  output: t.type({
+    result: t.int(),
+  }),
+});
 ```
 
 ### Input/Output
@@ -744,85 +744,61 @@ const user = db.type("User", {
   age: db.int(),
 });
 
-createQueryResolver(
-  "getUser",
-  t.type({
+createResolver({
+  name: "getUser",
+  operation: "query",
+  input: t.type({
     name: user.fields.name,
   }),
-)...
-```
-
-### Step
-
-Chain multiple steps to define actual resolver logic.
-Each step's context includes input and results from previous steps.
-Call `returns` as final step to define final output:
-
-```typescript
-createQueryResolver(
-  "calc",
-  t.type({
-    value: t.int(),
+  body: (context) => {
+    // resolver logic
+  },
+  output: t.type({
+    // output schema
   }),
-)
-  .fnStep("add1", (context) => {
-    return context.input.value + 1;
-  })
-  .fnStep("subtract1", (context) => {
-    return context.add1 - 1;
-  })
-  .returns(
-    (context) => ({
-      result: context.subtract1,
-    }),
-    t.type({
-      result: t.int(),
-    }),
-  );
+});
 ```
 
-#### fnStep
+### Body Function
 
-Context includes a `client` property that can be used to execute SQL queries.
-You need to specify which TailorDB service to use with the `dbNamespace` option when creating resolver or step:
+The `body` function defines the actual resolver logic.
+The context includes `input`, `user`, and `client` properties.
+
+The `client` property can be used to execute SQL queries:
 
 ```typescript
-createQueryResolver(
-  "getUser",
-  t.type({
+createResolver({
+  name: "getUser",
+  operation: "query",
+  input: t.type({
     name: t.string(),
   }),
-  { defaults: { dbNamespace: "tailordb" } },
-)
-  .fnStep("step1", async (context) => {
+  body: async (context) => {
     const result = await context.client.execOne<{ id: string } | null>(
       `SELECT id FROM User WHERE name = ? LIMIT 1`,
       [context.input.name],
     );
-    return result?.id;
-  })
-  .returns(
-    (context) => ({
-      result: context.step1,
-    }),
-    t.type({
-      result: t.uuid({ optional: true }),
-    }),
-  );
+    return {
+      result: result?.id,
+    };
+  },
+  output: t.type({
+    result: t.uuid({ optional: true }),
+  }),
+});
 ```
 
 If you're generating Kysely types with a generator, you can use `kyselyWrapper` to execute typed queries:
 
 ```typescript
-createQueryResolver(
-  "getUser",
-  t.type({
+createResolver({
+  name: "getUser",
+  operation: "query",
+  input: t.type({
     name: t.string(),
   }),
-  { defaults: { dbNamespace: "tailordb" } },
-)
-  .fnStep("step1", async (context) =>
-    kyselyWrapper(context, async (context) => {
+  body: async (context) => {
+    return kyselyWrapper(context, async (context) => {
       const query = context.db
         .selectFrom("User")
         .select("id")
@@ -830,23 +806,18 @@ createQueryResolver(
         .limit(1)
         .compile();
       const result = await context.client.exec(query);
-      return result[0]?.id;
-    }),
-  )
-  .returns(
-    (context) => ({
-      result: context.step1,
-    }),
-    t.type({
-      result: t.uuid({ optional: true }),
-    }),
-  );
+      return {
+        result: result[0]?.id,
+      };
+    });
+  },
+  output: t.type({
+    result: t.uuid({ optional: true }),
+  }),
+});
 ```
 
-#### returns
-
-Define final output.
-Similar to fnStep, except you specify output schema as second argument.
+The body function can be synchronous or asynchronous and should return data matching the output schema.
 
 ## Auth
 

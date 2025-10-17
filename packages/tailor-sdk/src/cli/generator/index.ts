@@ -5,7 +5,7 @@ import { getDistDir, type AppConfig } from "@/configure/config";
 import { loadConfig } from "@/cli/config-loader";
 import { type Generator } from "@/parser/generator-config";
 import { defineApplication, type Application } from "@/cli/application";
-import { type Resolver } from "@/configure/services/pipeline/resolver";
+import { type Resolver } from "@/parser/service/pipeline/types";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type Executor } from "@/configure/services/executor/types";
 import {
@@ -94,10 +94,9 @@ export class GenerationManager {
           this.applications[appNamespace].pipelineNamespaces[namespace] = {};
           Object.entries(pipelineService.getResolvers()).forEach(
             ([_, resolver]) => {
-              const typedResolver = resolver as Resolver;
               this.applications[appNamespace].pipelineNamespaces[namespace][
-                typedResolver.name
-              ] = typedResolver;
+                resolver.name
+              ] = resolver;
             },
           );
         } catch (error) {

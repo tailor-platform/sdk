@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import ml from "multiline-ts";
-import { type Resolver } from "@/configure/services/pipeline/resolver";
+import { type Resolver } from "@/parser/service/pipeline/types";
 import { type ITransformer } from "@/cli/bundler";
 import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/cli/bundler/wrapper";
 import { pathToFileURL } from "node:url";
@@ -19,71 +19,45 @@ export class CodeTransformer implements ITransformer {
     const resolver = (
       await import(`${pathToFileURL(filePath)}?t=${new Date().getTime()}`)
     ).default as Resolver;
+
+    // Export the body function
+    const bodyVariableName = "$tailor_resolver_body";
     fs.writeFileSync(
       transformedPath,
       ml /* js */ `
       ${sourceText}
 
-      ${resolver.steps
-        .flatMap(([type, name, fn]) => {
-          switch (type) {
-            case "fn":
-              return [
-                /* js */ `export const ${stepVariableName(
-                  name,
-                )} = ${fn.toString()};`,
-              ];
-            default:
-              throw new Error(`Unsupported step type: ${type}`);
-          }
-        })
-        .join("\n")}
-
+      export const ${bodyVariableName} = ${resolver.body?.toString()};
       `,
     );
 
-    const stepDir = path.join(tempDir, "steps");
-    fs.mkdirSync(stepDir, { recursive: true });
+    const functionDir = path.join(tempDir, "functions");
+    fs.mkdirSync(functionDir, { recursive: true });
 
-    return resolver.steps.flatMap(([type, name, _, options]) => {
-      const stepFilePath = path.join(stepDir, `${resolver.name}__${name}.js`);
-      const stepFunctionVariable = stepVariableName(name);
-      const relativePath = path
-        .relative(stepDir, transformedPath)
-        .replace(/\\/g, "/");
-      let stepContent;
-      switch (type) {
-        case "fn": {
-          const dbNamespace =
-            options?.dbNamespace || resolver.options?.defaults?.dbNamespace;
-          if (dbNamespace) {
-            stepContent = ml /* js */ `
-                import { ${stepFunctionVariable} } from "${relativePath}";
+    // Create single body function file
+    const bodyFilePath = path.join(functionDir, `${resolver.name}__body.js`);
+    const relativePath = path
+      .relative(functionDir, transformedPath)
+      .replace(/\\/g, "/");
 
-                ${DB_WRAPPER_DEFINITION}
-                globalThis.main = ${wrapDbFn(
-                  dbNamespace,
-                  stepFunctionVariable,
-                )};
-              `;
-          } else {
-            stepContent = ml /* js */ `
-                import { ${stepFunctionVariable} } from "${relativePath}";
-                globalThis.main = ${stepFunctionVariable};
-              `;
-          }
-          break;
-        }
-        default:
-          return [];
-      }
+    const dbNamespace = resolver.options?.dbNamespace;
 
-      fs.writeFileSync(stepFilePath, stepContent);
-      return [stepFilePath];
-    });
+    let bodyContent;
+    if (dbNamespace) {
+      bodyContent = ml /* js */ `
+        import { ${bodyVariableName} } from "${relativePath}";
+
+        ${DB_WRAPPER_DEFINITION}
+        globalThis.main = ${wrapDbFn(dbNamespace, bodyVariableName)};
+      `;
+    } else {
+      bodyContent = ml /* js */ `
+        import { ${bodyVariableName} } from "${relativePath}";
+        globalThis.main = ${bodyVariableName};
+      `;
+    }
+
+    fs.writeFileSync(bodyFilePath, bodyContent);
+    return [bodyFilePath];
   }
-}
-
-function stepVariableName(stepName: string) {
-  return `$tailor_resolver_step__${stepName}`;
 }

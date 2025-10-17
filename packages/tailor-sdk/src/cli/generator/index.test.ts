@@ -15,10 +15,8 @@ import { GenerationManager } from "./index";
 import type { AppConfig } from "@/configure/config";
 import { GeneratorConfigSchema } from "@/cli/config-loader";
 import { db, type TailorDBType } from "@/configure/services/tailordb/schema";
-import {
-  createQueryResolver,
-  type Resolver,
-} from "@/configure/services/pipeline/resolver";
+import { createResolver } from "@/configure/services/pipeline/resolver";
+import { type Resolver } from "@/parser/service/pipeline/types";
 import { KyselyGenerator } from "@/cli/generator/builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/configure/types";
@@ -190,10 +188,13 @@ describe("GenerationManager", () => {
           },
           pipelineNamespaces: {
             "test-namespace": {
-              testResolver: createQueryResolver(
-                "testResolver",
-                t.type({}),
-              ).returns(() => ({ string: "" }), t.type({ string: t.string() })),
+              testResolver: createResolver({
+                name: "testResolver",
+                operation: "query",
+                input: t.type({}),
+                body: () => ({ string: "" }),
+                output: t.type({ string: t.string() }),
+              }),
             },
           },
         },
@@ -255,10 +256,13 @@ describe("GenerationManager", () => {
           },
           pipelineNamespaces: {
             "test-namespace": {
-              testResolver: createQueryResolver(
-                "testResolver",
-                t.type({}),
-              ).returns(() => ({ string: "" }), t.type({ string: t.string() })),
+              testResolver: createResolver({
+                name: "testResolver",
+                operation: "query",
+                input: t.type({}),
+                body: () => ({ string: "" }),
+                output: t.type({ string: t.string() }),
+              }),
             },
           },
         },
@@ -381,14 +385,20 @@ describe("GenerationManager", () => {
     it("全てのリゾルバーを処理", async () => {
       const processResolverSpy = vi.spyOn(testGenerator, "processResolver");
       const resolvers = {
-        resolver1: createQueryResolver("resolver1", t.type({})).returns(
-          () => ({ string: "" }),
-          t.type({ string: t.string() }),
-        ),
-        resolver2: createQueryResolver("resolver2", t.type({})).returns(
-          () => ({ string: "" }),
-          t.type({ string: t.string() }),
-        ),
+        resolver1: createResolver({
+          name: "resolver1",
+          operation: "query",
+          input: t.type({}),
+          body: () => ({ string: "" }),
+          output: t.type({ string: t.string() }),
+        }),
+        resolver2: createResolver({
+          name: "resolver2",
+          operation: "query",
+          input: t.type({}),
+          body: () => ({ string: "" }),
+          output: t.type({ string: t.string() }),
+        }),
       };
 
       await manager.processPipelineNamespace(
@@ -595,10 +605,13 @@ describe("GenerationManager", () => {
           },
           pipelineNamespaces: {
             main: {
-              testResolver: createQueryResolver(
-                "testResolver",
-                t.type({}),
-              ).returns(() => ({ string: "" }), t.type({ string: t.string() })),
+              testResolver: createResolver({
+                name: "testResolver",
+                operation: "query",
+                input: t.type({}),
+                body: () => ({ string: "" }),
+                output: t.type({ string: t.string() }),
+              }),
             },
           },
         },
@@ -781,13 +794,13 @@ describe("Integration Tests", () => {
                 .forEach((_, resolverIdx) => {
                   manager.applications[appName].pipelineNamespaces[namespace][
                     `resolver${appIdx}_${nsIdx}_${resolverIdx}`
-                  ] = createQueryResolver(
-                    `resolver${appIdx}_${nsIdx}_${resolverIdx}`,
-                    t.type({}),
-                  ).returns(
-                    () => ({ string: "" }),
-                    t.type({ string: t.string() }),
-                  );
+                  ] = createResolver({
+                    name: `resolver${appIdx}_${nsIdx}_${resolverIdx}`,
+                    operation: "query",
+                    input: t.type({}),
+                    body: () => ({ string: "" }),
+                    output: t.type({ string: t.string() }),
+                  });
                 });
             });
         });

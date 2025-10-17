@@ -74,10 +74,10 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Relations are defined with `.relation()` method
 
 2. **Pipeline Resolvers** (`src/configure/services/pipeline/`)
-   - Create GraphQL resolvers using `createQueryResolver` or `createMutationResolver`
-   - Use step-based flow: `.fnStep()`
-   - Each step's result is available in subsequent steps via context
-   - Define return type with `.returns()`
+   - Create GraphQL resolvers using `createResolver`
+   - Define resolver configuration with `name`, `operation` (query/mutation), `input`, `body`, and `output`
+   - The `body` function receives a context object with `input`, `user`, and `client` properties
+   - Return data directly from the body function (supports both sync and async)
 
 3. **Executors** (`src/configure/services/executor/`)
    - Event-driven handlers using `createExecutor()`
@@ -179,11 +179,20 @@ export const auth = defineAuth("my-auth", {
 **Resolver Pattern:**
 
 ```typescript
-export default createQueryResolver("name", inputType)
-  .fnStep("stepName", (context) => {
-    /* logic */
-  })
-  .returns((context) => ({ result: context.stepName }), outputType);
+export default createResolver({
+  name: "resolverName",
+  operation: "query", // or "mutation"
+  input: t.type({
+    field: t.string(),
+  }),
+  body: (context) => {
+    // Access: context.input, context.user, context.client
+    return { result: "value" };
+  },
+  output: t.type({
+    result: t.string(),
+  }),
+});
 ```
 
 **Executor Pattern:**

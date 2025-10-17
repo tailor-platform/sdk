@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { type Resolver } from "@/configure/services/pipeline/resolver";
-import { isResolver } from "@/configure/services/pipeline/utils";
+import { type Resolver } from "@/parser/service/pipeline/types";
+import { ResolverSchema } from "@/parser/service/pipeline/schema";
 import { type ILoader } from "@/cli/bundler";
 
 export class ResolverLoader implements ILoader<Resolver> {
@@ -9,10 +9,12 @@ export class ResolverLoader implements ILoader<Resolver> {
       `${pathToFileURL(resolverFilePath).href}?t=${Date.now()}`
     );
     const resolver = resolverModule.default;
-    if (!isResolver(resolver)) {
+
+    const parseResult = ResolverSchema.safeParse(resolver);
+    if (!parseResult.success) {
       return null;
     }
 
-    return resolver;
+    return parseResult.data;
   }
 }
