@@ -4,8 +4,8 @@
   "description": "Basic example for Tailor SDK usage",
   "type": "module",
   "scripts": {
-    "gen": "tailor-sdk generate -c tailor.config.ts",
-    "gen:watch": "tailor-sdk generate -c tailor.config.ts --watch",
+    "generate": "tailor-sdk generate -c tailor.config.ts",
+    "generate:watch": "tailor-sdk generate -c tailor.config.ts --watch",
     "apply": "tailor-sdk apply -c tailor.config.ts",
     "test": "pnpm test:generator",
     "test:all": "pnpm test:generator:prepare && vitest",
@@ -15,7 +15,7 @@
     "test:e2e": "vitest --project e2e",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix --quiet",
-    "typecheck": "pnpm gen && tsc --noEmit"
+    "typecheck": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
     "@tailor-platform/tailor-proto": "workspace:^",

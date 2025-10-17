@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "deploy": "tailor-sdk apply",
-    "gen": "tailor-sdk generate",
+    "generate": "tailor-sdk generate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --cache .",

@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env"],
-  "globalPassThroughEnv": ["NPM_TOKEN", "TAILOR_TOKEN", "WORKSPACE_ID"],
+  "globalPassThroughEnv": ["TAILOR_TOKEN", "WORKSPACE_ID"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -12,11 +12,11 @@
       "dependsOn": ["build"],
       "cache": false
     },
-    "gen": {
+    "generate": {
       "dependsOn": ["build"],
       "cache": false
     },
-    "gen:watch": {
+    "generate:watch": {
       "dependsOn": ["build"],
       "cache": false
     },
@@ -51,7 +51,7 @@
       "cache": true
     },
     "typecheck": {
-      "dependsOn": ["build", "gen"],
+      "dependsOn": ["build", "generate"],
       "outputs": [],
       "cache": true
     }
