@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.83
+
+### Patch Changes
+
+- [#559](https://github.com/tailor-platform/tailor-sdk/pull/559) [`ebcb667`](https://github.com/tailor-platform/tailor-sdk/commit/ebcb6674bbc1fc3ac819bb0e2930255a660ade1b) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove steps from resolver
+
 ## 0.0.82
 
 ### Patch Changes
