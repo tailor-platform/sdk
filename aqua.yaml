@@ -12,4 +12,4 @@ packages:
   - name: rhysd/actionlint@v1.7.7
   - name: suzuki-shunsuke/ghalint@v1.5.3
   - name: tailor-platform/tailorctl@v2.6.1
-  - name: bufbuild/buf@v1.57.2
+  - name: bufbuild/buf@v1.58.0
