@@ -1,5 +1,15 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.82
+
+### Patch Changes
+
+- [#563](https://github.com/tailor-platform/tailor-sdk/pull/563) [`14333f9`](https://github.com/tailor-platform/tailor-sdk/commit/14333f9eac7eb53f4856388c367b8e00e16e86de) Thanks [@remiposo](https://github.com/remiposo)! - Fixed to set more appropriate GraphQL types in pipeline input / output
+
+- [#565](https://github.com/tailor-platform/tailor-sdk/pull/565) [`dbaa31e`](https://github.com/tailor-platform/tailor-sdk/commit/dbaa31e74522fd34dde3bd3e3b71b4190cfdf514) Thanks [@remiposo](https://github.com/remiposo)! - fix: ensure the vault and secret exist
+
+- [#558](https://github.com/tailor-platform/tailor-sdk/pull/558) [`ce877a1`](https://github.com/tailor-platform/tailor-sdk/commit/ce877a1ff421e8f3f902d3902cfa66b3ea2bae51) Thanks [@remiposo](https://github.com/remiposo)! - feat: Remove client from exectutor args when dbNamespace is not specified
+
 ## 0.0.81
 
 ### Patch Changes
