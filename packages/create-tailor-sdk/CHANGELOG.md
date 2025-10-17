@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.86
+
+### Patch Changes
+
+- [#575](https://github.com/tailor-platform/tailor-sdk/pull/575) [`0d64a86`](https://github.com/tailor-platform/tailor-sdk/commit/0d64a869766049ffb8462dace6222db53e23dbce) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: strict resolver output type
+
 ## 0.0.85
 
 ### Patch Changes
