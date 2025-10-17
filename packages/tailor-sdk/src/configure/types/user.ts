@@ -3,7 +3,9 @@ declare global {
   namespace TailorSDK {
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface AttributeMap {}
-    type AttributeList = [];
+    interface AttributeList {
+      __tuple?: []; // Marker for tuple type
+    }
   }
 }
 
@@ -11,9 +13,10 @@ export type InferredAttributeMap = keyof TailorSDK.AttributeMap extends never
   ? Record<string, string | string[] | boolean | boolean[] | undefined>
   : TailorSDK.AttributeMap;
 
-export type InferredAttributeList = TailorSDK.AttributeList extends never[]
-  ? string[]
-  : TailorSDK.AttributeList;
+export type InferredAttributeList =
+  TailorSDK.AttributeList["__tuple"] extends []
+    ? string[]
+    : TailorSDK.AttributeList["__tuple"];
 
 /** Represents a user in the Tailor platform. */
 export type TailorUser = {
