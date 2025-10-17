@@ -158,9 +158,9 @@ export class TypeProcessor {
 }
 
 const COMMON_PREFIX = multiline /* ts */ `
-  import { SqlClient } from "@tailor-platform/tailor-sdk";
+  import { type SqlClient } from "@tailor-platform/tailor-sdk";
   import {
-    ColumnType,
+    type ColumnType,
     DummyDriver,
     Kysely,
     PostgresAdapter,

@@ -180,7 +180,7 @@ describe("KyselyGenerator統合テスト", () => {
 
       // Common imports are included
       expect(result).toContain(
-        'import { SqlClient } from "@tailor-platform/tailor-sdk";',
+        'import { type SqlClient } from "@tailor-platform/tailor-sdk";',
       );
       expect(result).toContain("import {");
       expect(result).toContain("ColumnType,");
@@ -211,7 +211,7 @@ describe("KyselyGenerator統合テスト", () => {
       });
 
       expect(result).toContain(
-        'import { SqlClient } from "@tailor-platform/tailor-sdk";',
+        'import { type SqlClient } from "@tailor-platform/tailor-sdk";',
       );
       expect(result).toContain("interface DB {");
       expect(result).toContain("export async function kyselyWrapper");
