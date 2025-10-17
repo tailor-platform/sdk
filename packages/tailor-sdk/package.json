@@ -54,7 +54,7 @@
     "smol-toml": "^1.4.2",
     "ts-cron-validator": "1.1.5",
     "tsx": "^4.20.3",
-    "type-fest": "5.0.1",
+    "type-fest": "5.1.0",
     "zod": "^4.1.11"
   },
   "devDependencies": {
