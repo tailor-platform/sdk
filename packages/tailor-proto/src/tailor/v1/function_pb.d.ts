@@ -135,6 +135,11 @@ export declare type ListFunctionExecutionsRequest = Message<"tailor.v1.ListFunct
    * @generated from field: tailor.v1.Filter filter = 5;
    */
   filter?: Filter;
+
+  /**
+   * @generated from field: string sort_by = 6;
+   */
+  sortBy: string;
 };
 
 /**

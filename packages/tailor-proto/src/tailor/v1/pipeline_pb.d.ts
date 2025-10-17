@@ -535,6 +535,11 @@ export declare type ListPipelineResolverExecutionResultsRequest = Message<"tailo
    * @generated from field: tailor.v1.PipelineResolverExecutionResultView view = 8;
    */
   view: PipelineResolverExecutionResultView;
+
+  /**
+   * @generated from field: string sort_by = 9;
+   */
+  sortBy: string;
 };
 
 /**

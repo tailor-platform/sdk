@@ -1601,6 +1601,49 @@ export declare type RegisterAuthConnectionSessionResponse = Message<"tailor.v1.R
 export declare const RegisterAuthConnectionSessionResponseSchema: GenMessage<RegisterAuthConnectionSessionResponse>;
 
 /**
+ * @generated from message tailor.v1.ExchangeAuthConnectionAuthorizationCodeRequest
+ */
+export declare type ExchangeAuthConnectionAuthorizationCodeRequest = Message<"tailor.v1.ExchangeAuthConnectionAuthorizationCodeRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string connection_name = 2;
+   */
+  connectionName: string;
+
+  /**
+   * @generated from field: string authorization_code = 3;
+   */
+  authorizationCode: string;
+
+  /**
+   * @generated from field: string redirect_uri = 4;
+   */
+  redirectUri: string;
+};
+
+/**
+ * Describes the message tailor.v1.ExchangeAuthConnectionAuthorizationCodeRequest.
+ * Use `create(ExchangeAuthConnectionAuthorizationCodeRequestSchema)` to create a new message.
+ */
+export declare const ExchangeAuthConnectionAuthorizationCodeRequestSchema: GenMessage<ExchangeAuthConnectionAuthorizationCodeRequest>;
+
+/**
+ * @generated from message tailor.v1.ExchangeAuthConnectionAuthorizationCodeResponse
+ */
+export declare type ExchangeAuthConnectionAuthorizationCodeResponse = Message<"tailor.v1.ExchangeAuthConnectionAuthorizationCodeResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.ExchangeAuthConnectionAuthorizationCodeResponse.
+ * Use `create(ExchangeAuthConnectionAuthorizationCodeResponseSchema)` to create a new message.
+ */
+export declare const ExchangeAuthConnectionAuthorizationCodeResponseSchema: GenMessage<ExchangeAuthConnectionAuthorizationCodeResponse>;
+
+/**
  * @generated from message tailor.v1.CreateAuthOAuth2ClientRequest
  */
 export declare type CreateAuthOAuth2ClientRequest = Message<"tailor.v1.CreateAuthOAuth2ClientRequest"> & {
