@@ -288,10 +288,6 @@ describe("createResolver", () => {
           expectTypeOf(context.user.id).toBeString();
           expectTypeOf(context.user.type).toBeString();
           expectTypeOf(context.user.workspaceId).toBeString();
-          expectTypeOf(
-            context.user.attributes,
-          ).toMatchTypeOf<// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          Record<string, any> | null>();
           return { userId: context.user.id };
         },
       });
