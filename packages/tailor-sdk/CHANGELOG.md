@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.84
+
+### Patch Changes
+
+- [#570](https://github.com/tailor-platform/tailor-sdk/pull/570) [`20b760e`](https://github.com/tailor-platform/tailor-sdk/commit/20b760e9b3f85e200ed9ec7d1bef73efbc2f1299) Thanks [@remiposo](https://github.com/remiposo)! - Use type import in kysely generator
+
 ## 0.0.83
 
 ### Patch Changes
