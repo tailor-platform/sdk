@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.87
+
+### Patch Changes
+
+- [#585](https://github.com/tailor-platform/tailor-sdk/pull/585) [`3f13d44`](https://github.com/tailor-platform/tailor-sdk/commit/3f13d4463047862cfe438f71d87629e49320c6eb) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: update resolver schema
+
 ## 0.0.86
 
 ### Patch Changes
