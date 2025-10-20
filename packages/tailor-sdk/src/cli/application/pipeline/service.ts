@@ -1,8 +1,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { type PipelineResolverServiceConfig } from "@/configure/services/pipeline/types";
-import { type Resolver } from "@/parser/service/pipeline/types";
-import { ResolverSchema } from "@/parser/service/pipeline/schema";
+import { type Resolver, ResolverSchema } from "@/parser/service/pipeline";
 import { pathToFileURL } from "node:url";
 
 export class PipelineResolverService {

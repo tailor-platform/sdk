@@ -5,6 +5,6 @@ import type {
   DistPathOptionSchema,
 } from "./index";
 
-export type DistPathOption = z.infer<typeof DistPathOptionSchema>;
+export type DistPathOption = z.output<typeof DistPathOptionSchema>;
 export type GeneratorConfig = z.input<typeof BaseGeneratorConfigSchema>;
-export type CodeGeneratorBase = z.infer<typeof CodeGeneratorSchema>;
+export type CodeGeneratorBase = z.output<typeof CodeGeneratorSchema>;

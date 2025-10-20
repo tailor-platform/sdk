@@ -1,9 +1,9 @@
-import { type Resolver } from "@/parser/service/pipeline/types";
+import type { ResolverConfig } from "@/configure/services/pipeline/resolver";
 import { type ConditionArgs, type RecordTriggerCondition } from "./types";
 import { type output } from "@/configure/types/helpers";
 import type { EventTrigger, WithArgs } from "../../types";
 
-type ResolverTriggerConditionArgs<R extends Resolver> = ConditionArgs & {
+type ResolverTriggerConditionArgs<R extends ResolverConfig> = ConditionArgs & {
   resolverName: string;
 } & (
     | {
@@ -16,7 +16,7 @@ type ResolverTriggerConditionArgs<R extends Resolver> = ConditionArgs & {
       }
   );
 
-export function resolverExecutedTrigger<R extends Resolver>(
+export function resolverExecutedTrigger<R extends ResolverConfig>(
   resolver: R,
   condition: RecordTriggerCondition<ResolverTriggerConditionArgs<R>> = () =>
     true,

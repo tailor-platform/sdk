@@ -237,15 +237,19 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 
 1. **Configure Module** (`src/configure/**/*.ts`):
    - ❌ Cannot import from `cli` module
-   - ❌ Cannot import from `parser` module (type imports are allowed)
+   - ❌ Cannot import from `parser` module
+   - ✅ Can import types from `@/parser/**/types` files only
    - ⚠️ Can only import types from `zod` (runtime imports are forbidden)
 
 2. **Parser Module** (`src/parser/**/*.ts`):
    - ❌ Cannot import from `cli` module
-   - ❌ Cannot import from `configure` module
+   - ⚠️ Cannot import from `configure` module (currently commented out in eslint.config.js)
 
 3. **CLI Module** (`src/cli/**/*.ts`):
-   - ❌ Cannot import from `configure` module (use parser module as intermediary)
+   - ⚠️ Cannot import from `configure` module (currently commented out in eslint.config.js - use parser module as intermediary)
+
+4. **Parser Types Files** (`src/parser/**/types.ts`):
+   - ✅ Can only import types (all imports must be type-only)
 
 **Note on ESLint Rules:**
 Some import restriction rules in `eslint.config.js` are currently commented out due to existing violations in the codebase. These rules represent the target architecture and should be followed when writing new code or refactoring existing code. When editing files, actively work to reduce violations and move towards enabling these rules.
@@ -282,7 +286,7 @@ export const MySchema = z.object({
 });
 
 // NO type exports here!
-// BAD: export type MyType = z.infer<typeof MySchema>;
+// BAD: export type MyType = z.output<typeof MySchema>;
 ```
 
 ```typescript
@@ -290,7 +294,7 @@ export const MySchema = z.object({
 import type { z } from "zod"; // Type-only import
 import type { MySchema } from "./schema";
 
-export type MyType = z.infer<typeof MySchema>;
+export type MyType = z.output<typeof MySchema>;
 
 // All other types that depend on schema types
 export type MyOtherType = {
@@ -306,7 +310,7 @@ export type * from "./types";
 
 2. **Key principles:**
    - Use `import type { z } from "zod"` in type-only files (compile-time only, won't be bundled)
-   - Keep `z.infer<typeof Schema>` type extractions in separate `.types.ts` files
+   - Keep `z.output<typeof Schema>` type extractions in separate `.types.ts` files
    - Schema files should only export zod schemas, not types
    - This prevents bundlers from including zod runtime code in configure module outputs
 

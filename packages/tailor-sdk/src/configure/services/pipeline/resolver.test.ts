@@ -4,6 +4,7 @@ import { t } from "@/configure/types";
 import type { output } from "@/configure/types/helpers";
 import type { TailorUser } from "@/configure/types/user";
 import type { SqlClient } from "./sql";
+import type { ResolverInput } from "@/parser/service/pipeline/types";
 
 describe("createResolver", () => {
   describe("type inference", () => {
@@ -17,9 +18,10 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context).toHaveProperty("user");
           expectTypeOf(context).toHaveProperty("client");
-          expectTypeOf(context).not.toHaveProperty("input");
-          expectTypeOf(context.user).toMatchTypeOf<TailorUser>();
-          expectTypeOf(context.client).toMatchTypeOf<SqlClient>();
+          expectTypeOf(context).toHaveProperty("input");
+          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
+          expectTypeOf(context.client).toEqualTypeOf<SqlClient>();
+          expectTypeOf(context.input).toBeNever();
           return { result: "hello" };
         },
       });
@@ -35,9 +37,10 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context).toHaveProperty("user");
           expectTypeOf(context).toHaveProperty("client");
-          expectTypeOf(context).not.toHaveProperty("input");
-          expectTypeOf(context.user).toMatchTypeOf<TailorUser>();
-          expectTypeOf(context.client).toMatchTypeOf<SqlClient>();
+          expectTypeOf(context).toHaveProperty("input");
+          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
+          expectTypeOf(context.client).toEqualTypeOf<SqlClient>();
+          expectTypeOf(context.input).toBeNever();
           return { success: true };
         },
       });
@@ -60,7 +63,7 @@ describe("createResolver", () => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("user");
           expectTypeOf(context).toHaveProperty("client");
-          expectTypeOf(context.input).toMatchTypeOf<{
+          expectTypeOf(context.input).toEqualTypeOf<{
             name: string;
             age: number;
           }>();
@@ -84,7 +87,7 @@ describe("createResolver", () => {
         }),
         body: (context) => {
           expectTypeOf(context.input.required).toBeString();
-          expectTypeOf(context.input.optional).toMatchTypeOf<
+          expectTypeOf(context.input.optional).toEqualTypeOf<
             string | null | undefined
           >();
           return { result: context.input.required };
@@ -127,8 +130,8 @@ describe("createResolver", () => {
           message: t.string(),
         }),
         body: (context) => {
-          expectTypeOf(context.input.role).toMatchTypeOf<"ADMIN" | "USER">();
-          expectTypeOf(context.input.status).toMatchTypeOf<
+          expectTypeOf(context.input.role).toEqualTypeOf<"ADMIN" | "USER">();
+          expectTypeOf(context.input.status).toEqualTypeOf<
             "ACTIVE" | "INACTIVE" | null | undefined
           >();
           return { message: `Role: ${context.input.role}` };
@@ -157,7 +160,7 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context.input.user.name.first).toBeString();
           expectTypeOf(context.input.user.name.last).toBeString();
-          expectTypeOf(context.input.user.age).toMatchTypeOf<
+          expectTypeOf(context.input.user.age).toEqualTypeOf<
             number | null | undefined
           >();
           return {
@@ -195,7 +198,7 @@ describe("createResolver", () => {
           expectTypeOf(context.input.active).toBeBoolean();
           expectTypeOf(context.input.count).toBeNumber();
           expectTypeOf(context.input.score).toBeNumber();
-          expectTypeOf(context.input.createdAt).toMatchTypeOf<Date | string>();
+          expectTypeOf(context.input.createdAt).toExtend<Date | string>();
           expectTypeOf(context.input.tags).toBeArray();
           expectTypeOf(context.input.metadata.key).toBeString();
           return { success: true };
@@ -227,7 +230,7 @@ describe("createResolver", () => {
               { name: "item2", count: 10 },
             ],
           };
-          expectTypeOf(result).toMatchTypeOf<output<typeof outputType>>();
+          expectTypeOf(result).toEqualTypeOf<output<typeof outputType>>();
           return result;
         },
       });
@@ -270,7 +273,7 @@ describe("createResolver", () => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("user");
           expectTypeOf(context).toHaveProperty("client");
-          expectTypeOf(context.client).toMatchTypeOf<SqlClient>();
+          expectTypeOf(context.client).toEqualTypeOf<SqlClient>();
           return { success: true };
         },
       });
@@ -284,7 +287,7 @@ describe("createResolver", () => {
           userId: t.string(),
         }),
         body: (context) => {
-          expectTypeOf(context.user).toMatchTypeOf<TailorUser>();
+          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
           expectTypeOf(context.user.id).toBeString();
           expectTypeOf(context.user.type).toBeString();
           expectTypeOf(context.user.workspaceId).toBeString();
@@ -324,7 +327,7 @@ describe("createResolver", () => {
         }),
         body: (context) => {
           expectTypeOf(context.input.orders).toBeArray();
-          expectTypeOf(context.input.orders[0]?.id).toMatchTypeOf<
+          expectTypeOf(context.input.orders[0]?.id).toExtend<
             string | undefined
           >();
           return { processed: context.input.orders.length };
@@ -357,8 +360,8 @@ describe("createResolver", () => {
           expectTypeOf(context.input.bool).toBeBoolean();
           expectTypeOf(context.input.int).toBeNumber();
           expectTypeOf(context.input.float).toBeNumber();
-          expectTypeOf(context.input.date).toMatchTypeOf<Date | string>();
-          expectTypeOf(context.input.datetime).toMatchTypeOf<Date | string>();
+          expectTypeOf(context.input.date).toExtend<Date | string>();
+          expectTypeOf(context.input.datetime).toExtend<Date | string>();
           expectTypeOf(context.input.time).toBeString();
           return { summary: "ok" };
         },
@@ -577,6 +580,120 @@ describe("createResolver", () => {
       });
 
       expect(resolver.options).toEqual({ dbNamespace: "analytics" });
+    });
+  });
+
+  describe("type compatibility with ResolverInput", () => {
+    test("createResolver output is compatible with ResolverInput", () => {
+      const resolver = createResolver({
+        name: "compatTest",
+        description: "Test compatibility",
+        operation: "query",
+        input: t.type({
+          id: t.string(),
+        }),
+        output: t.type({
+          result: t.string(),
+        }),
+        options: {
+          dbNamespace: "test-db",
+        },
+        body: (context) => ({ result: context.input.id }),
+      });
+
+      // Verify that the resolver object is compatible with ResolverInput
+      expectTypeOf(resolver).toExtend<ResolverInput>();
+    });
+
+    test("all ResolverInput fields (except input/output) are supported in createResolver config", () => {
+      // Test that all fields from ResolverInput (except input/output which have different types)
+      // can be used in createResolver config
+
+      const resolver = createResolver({
+        // Required fields
+        name: "fullConfigTest",
+        operation: "mutation",
+        output: t.type({ success: t.bool() }),
+        body: () => ({ success: true }),
+
+        // Optional fields from ResolverInput
+        description: "Full configuration test",
+        options: {
+          dbNamespace: "test-namespace",
+        },
+      });
+
+      // Verify that all expected fields are present
+      expect(resolver.name).toBe("fullConfigTest");
+      expect(resolver.operation).toBe("mutation");
+      expect(resolver.description).toBe("Full configuration test");
+      expect(resolver.options?.dbNamespace).toBe("test-namespace");
+      expectTypeOf(resolver).toExtend<ResolverInput>();
+    });
+
+    test("createResolver with input/output types is compatible with ResolverInput", () => {
+      const inputType = t.type({
+        userId: t.string(),
+        data: t.object({
+          key: t.string(),
+          value: t.int(),
+        }),
+      });
+
+      const outputType = t.type({
+        processed: t.bool(),
+        result: t.object({
+          count: t.int(),
+          items: t.string({ array: true }),
+        }),
+      });
+
+      const resolver = createResolver({
+        name: "typeCompatTest",
+        description: "Type compatibility test",
+        operation: "query",
+        input: inputType,
+        output: outputType,
+        options: {
+          dbNamespace: "main",
+        },
+        body: (context) => ({
+          processed: true,
+          result: {
+            count: 1,
+            items: [context.input.userId],
+          },
+        }),
+      });
+
+      // The resolver should be assignable to ResolverInput
+      expectTypeOf(resolver).toExtend<ResolverInput>();
+
+      // Verify runtime values
+      expect(resolver.name).toBe("typeCompatTest");
+      expect(resolver.description).toBe("Type compatibility test");
+      expect(resolver.operation).toBe("query");
+      expect(resolver.input).toBe(inputType);
+      expect(resolver.output).toBe(outputType);
+      expect(resolver.options?.dbNamespace).toBe("main");
+    });
+
+    test("minimal createResolver config is compatible with ResolverInput", () => {
+      const resolver = createResolver({
+        name: "minimalCompat",
+        operation: "query",
+        output: t.type({ value: t.string() }),
+        body: () => ({ value: "test" }),
+      });
+
+      // Even minimal configuration should be compatible with ResolverInput
+      expectTypeOf(resolver).toExtend<ResolverInput>();
+
+      expect(resolver.name).toBe("minimalCompat");
+      expect(resolver.operation).toBe("query");
+      expect(resolver.input).toBeUndefined();
+      expect(resolver.description).toBeUndefined();
+      expect(resolver.options).toBeUndefined();
     });
   });
 });

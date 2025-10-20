@@ -13,11 +13,16 @@ import {
   type AllowedValuesOutput,
   mapAllowedValues,
 } from "./field";
+import type {
+  TailorFieldInput,
+  TailorTypeInput,
+} from "@/parser/service/pipeline/types";
 
 export class TailorType<
   const F extends Record<string, TailorField<any>> = any,
   Output = InferFieldsOutput<F>,
-> {
+> implements TailorTypeInput
+{
   public readonly _output = null as unknown as Output;
 
   constructor(public readonly fields: F) {}
@@ -27,7 +32,8 @@ export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   const Output = any,
   M extends FieldMetadata = FieldMetadata,
-> {
+> implements TailorFieldInput
+{
   protected _metadata: M;
   public readonly _defined: Defined = undefined as unknown as Defined;
   public readonly _output = undefined as Output;
@@ -39,7 +45,7 @@ export class TailorField<
   protected constructor(
     type: TailorFieldType,
     options?: FieldOptions,
-    public readonly fields?: Record<string, TailorField<any>>,
+    public fields?: Record<string, TailorField<any>>,
     values?: AllowedValues,
   ) {
     this._metadata = { type, required: true } as M;

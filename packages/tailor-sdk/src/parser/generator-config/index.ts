@@ -42,7 +42,7 @@ export type * from "./types";
 export function createGeneratorConfigSchema(
   builtinGenerators: Map<
     string,
-    (options: z.infer<typeof DistPathOptionSchema>) => CodeGeneratorBase
+    (options: z.output<typeof DistPathOptionSchema>) => CodeGeneratorBase
   >,
 ) {
   return z
@@ -64,4 +64,4 @@ export function createGeneratorConfigSchema(
 export type GeneratorConfigSchemaType = ReturnType<
   typeof createGeneratorConfigSchema
 >;
-export type Generator = z.infer<GeneratorConfigSchemaType>;
+export type Generator = z.output<GeneratorConfigSchemaType>;

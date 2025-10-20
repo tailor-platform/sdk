@@ -16,7 +16,7 @@ import type { AppConfig } from "@/configure/config";
 import { GeneratorConfigSchema } from "@/cli/config-loader";
 import { db, type TailorDBType } from "@/configure/services/tailordb/schema";
 import { createResolver } from "@/configure/services/pipeline/resolver";
-import { type Resolver } from "@/parser/service/pipeline/types";
+import { type Resolver } from "@/parser/service/pipeline";
 import { KyselyGenerator } from "@/cli/generator/builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/configure/types";

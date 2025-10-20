@@ -5,7 +5,7 @@ import { getDistDir, type AppConfig } from "@/configure/config";
 import { loadConfig } from "@/cli/config-loader";
 import { type Generator } from "@/parser/generator-config";
 import { defineApplication, type Application } from "@/cli/application";
-import { type Resolver } from "@/parser/service/pipeline/types";
+import { type Resolver } from "@/parser/service/pipeline";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type Executor } from "@/configure/services/executor/types";
 import {

@@ -21,22 +21,24 @@ import type {
 } from "./schema";
 
 // Types derived from zod schemas
-export type OIDC = z.infer<typeof OIDCSchema>;
-export type SAML = z.infer<typeof SAMLSchema>;
-export type IDToken = z.infer<typeof IDTokenSchema>;
-export type BuiltinIdP = z.infer<typeof BuiltinIdPSchema>;
-export type IdProviderConfig = z.infer<typeof IdProviderSchema>;
-export type OAuth2ClientGrantType = z.infer<typeof OAuth2ClientGrantTypeSchema>;
-export type OAuth2Client = z.infer<typeof OAuth2ClientSchema>;
-export type SCIMAuthorization = z.infer<typeof SCIMAuthorizationSchema>;
-export type SCIMAttributeType = z.infer<typeof SCIMAttributeTypeSchema>;
-export type SCIMAttribute = z.infer<typeof SCIMAttributeSchema>;
-export type SCIMSchema = z.infer<typeof SCIMSchemaSchema>;
-export type SCIMAttributeMapping = z.infer<typeof SCIMAttributeMappingSchema>;
-export type SCIMResource = z.infer<typeof SCIMResourceSchema>;
-export type SCIMConfig = z.infer<typeof SCIMSchemaType>;
-export type TenantProviderConfig = z.infer<typeof TenantProviderSchema>;
-export type AuthConfig = z.infer<typeof AuthConfigSchema>;
+export type OIDC = z.output<typeof OIDCSchema>;
+export type SAML = z.output<typeof SAMLSchema>;
+export type IDToken = z.output<typeof IDTokenSchema>;
+export type BuiltinIdP = z.output<typeof BuiltinIdPSchema>;
+export type IdProviderConfig = z.output<typeof IdProviderSchema>;
+export type OAuth2ClientGrantType = z.output<
+  typeof OAuth2ClientGrantTypeSchema
+>;
+export type OAuth2Client = z.output<typeof OAuth2ClientSchema>;
+export type SCIMAuthorization = z.output<typeof SCIMAuthorizationSchema>;
+export type SCIMAttributeType = z.output<typeof SCIMAttributeTypeSchema>;
+export type SCIMAttribute = z.output<typeof SCIMAttributeSchema>;
+export type SCIMSchema = z.output<typeof SCIMSchemaSchema>;
+export type SCIMAttributeMapping = z.output<typeof SCIMAttributeMappingSchema>;
+export type SCIMResource = z.output<typeof SCIMResourceSchema>;
+export type SCIMConfig = z.output<typeof SCIMSchemaType>;
+export type TenantProviderConfig = z.output<typeof TenantProviderSchema>;
+export type AuthConfig = z.output<typeof AuthConfigSchema>;
 
 // Helper types for ValueOperand
 export type ValueOperand = string | boolean | string[] | boolean[];
