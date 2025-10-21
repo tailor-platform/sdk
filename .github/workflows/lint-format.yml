@@ -36,3 +36,5 @@ jobs:
 
       - name: Check type
         run: pnpm typecheck
+        env:
+          WORKSPACE_ID: dummy
