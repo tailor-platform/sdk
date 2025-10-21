@@ -62,7 +62,6 @@ export interface EnumValue {
 
 export interface FieldMetadata {
   description?: string;
-  type: TailorFieldType;
   required?: boolean;
   array?: boolean;
   allowedValues?: AllowedValue[];

@@ -537,9 +537,10 @@ function processNestedFields(
 
   Object.entries(objectFields).forEach(
     ([nestedFieldName, nestedFieldDef]: [string, any]) => {
+      const nestedType = nestedFieldDef.type;
       const nestedMetadata = nestedFieldDef.metadata as DBFieldMetadata;
 
-      if (nestedMetadata.type === "nested" && nestedFieldDef.fields) {
+      if (nestedType === "nested" && nestedFieldDef.fields) {
         const deepNestedFields = processNestedFields(nestedFieldDef.fields);
         nestedFields[nestedFieldName] = {
           type: "nested",
@@ -558,8 +559,8 @@ function processNestedFields(
         nestedFields[nestedFieldName] = {
           type:
             tailorToManifestScalar[
-              nestedMetadata.type as keyof typeof tailorToManifestScalar
-            ] || nestedMetadata.type,
+              nestedType as keyof typeof tailorToManifestScalar
+            ] || nestedType,
           allowedValues: nestedMetadata.allowedValues || [],
           description: nestedMetadata.description || "",
           validate: [],

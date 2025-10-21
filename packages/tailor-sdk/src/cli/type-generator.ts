@@ -82,8 +82,8 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
             fields?: Record<
               string,
               {
+                type: string;
                 metadata?: {
-                  type?: string;
                   array?: boolean;
                   allowedValues?: Array<{ value: string }>;
                 };
@@ -103,7 +103,7 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     // Convert attributes to AttributeMapConfig by inferring types from field metadata
     const attributeMap: AttributeMapConfig | undefined = attributes
       ? Object.keys(attributes).reduce((acc, key) => {
-          const metadata = fields?.[key]?.metadata;
+          const { type, metadata } = fields?.[key] ?? {};
 
           // Default to string if no metadata
           if (!metadata) {
@@ -113,9 +113,9 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 
           let typeStr = "string";
 
-          if (metadata.type === "boolean") {
+          if (type === "boolean") {
             typeStr = "boolean";
-          } else if (metadata.type === "enum" && metadata.allowedValues) {
+          } else if (type === "enum" && metadata.allowedValues) {
             // Generate union type from enum values
             typeStr = metadata.allowedValues
               .map((v) => `"${v.value}"`)

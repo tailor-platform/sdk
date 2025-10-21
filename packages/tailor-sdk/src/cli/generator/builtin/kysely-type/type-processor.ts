@@ -69,7 +69,7 @@ export class TypeProcessor {
    */
   private static getBaseType(fieldDef: any): string {
     const metadata = fieldDef.metadata;
-    const fieldType = metadata?.type;
+    const fieldType = fieldDef?.type;
 
     switch (fieldType) {
       case "uuid":

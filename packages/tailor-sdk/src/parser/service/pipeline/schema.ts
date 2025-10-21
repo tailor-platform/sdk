@@ -28,7 +28,6 @@ export const AllowedValueSchema = z.object({
 });
 
 export const FieldMetadataSchema = z.object({
-  type: TailorFieldTypeSchema,
   required: z.boolean().optional(),
   array: z.boolean().optional(),
   description: z.string().optional(),
@@ -37,9 +36,10 @@ export const FieldMetadataSchema = z.object({
 });
 
 export const TailorFieldSchema = z.object({
+  type: TailorFieldTypeSchema,
   metadata: FieldMetadataSchema,
   get fields() {
-    return z.record(z.string(), TailorFieldSchema).optional();
+    return z.record(z.string(), TailorFieldSchema);
   },
 });
 

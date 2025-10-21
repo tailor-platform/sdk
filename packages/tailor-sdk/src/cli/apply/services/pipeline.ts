@@ -390,7 +390,7 @@ function protoFields(
     let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
     const required = field.metadata.required ?? true;
 
-    switch (field.metadata.type) {
+    switch (field.type) {
       case "uuid":
         type = {
           kind: "ScalarType",
@@ -459,7 +459,6 @@ function protoFields(
       }
       case "nested": {
         const typeName = `${baseName}${inflection.camelize(fieldName)}`;
-
         type = {
           kind: "UserDefined",
           name: typeName,
@@ -469,9 +468,7 @@ function protoFields(
         break;
       }
       default:
-        throw new Error(
-          `Unexpected field type: ${field.metadata.type satisfies never}`,
-        );
+        throw new Error(`Unexpected field type: ${field.type satisfies never}`);
     }
 
     return {

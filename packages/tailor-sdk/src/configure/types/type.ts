@@ -43,12 +43,12 @@ export class TailorField<
   }
 
   protected constructor(
-    type: TailorFieldType,
+    public readonly type: TailorFieldType,
     options?: FieldOptions,
-    public fields?: Record<string, TailorField<any>>,
+    public readonly fields: Record<string, TailorField<any>> = {},
     values?: AllowedValues,
   ) {
-    this._metadata = { type, required: true } as M;
+    this._metadata = { required: true } as M;
     if (options) {
       if (options.optional === true) {
         this._metadata.required = false;

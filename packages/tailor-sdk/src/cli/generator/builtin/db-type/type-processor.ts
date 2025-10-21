@@ -123,9 +123,7 @@ export class TypeProcessor {
    * フィールドの元の型を取得（リレーション以外の型）
    */
   private static getOriginalFieldType(fieldDef: any): string {
-    const metadata = fieldDef.metadata;
-    const fieldType = metadata?.type;
-
+    const fieldType = fieldDef?.type;
     switch (fieldType) {
       case "uuid":
       case "string":
@@ -167,7 +165,7 @@ export class TypeProcessor {
     processing: Set<string>,
   ): string {
     const metadata = fieldDef.metadata;
-    const fieldType = metadata?.type;
+    const fieldType = fieldDef.type;
     const isArray = metadata?.array === true;
 
     // Detect relation fields (using field.reference)

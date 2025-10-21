@@ -104,6 +104,7 @@ export class TailorDBField<
 
   get config(): OperatorFieldConfig {
     return {
+      type: this.type,
       ...this._metadata,
       validate: this._metadata.validate?.map((v) => {
         const { fn, message } =
