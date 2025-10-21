@@ -128,7 +128,7 @@ describe("controlplane", () => {
 });
 
 describe("dataplane", () => {
-  const graphQLClient = createGraphQLClient(inject("token"));
+  const graphQLClient = createGraphQLClient(inject("url"), inject("token"));
 
   describe("required field", async () => {
     test("providing required field succeeds", async () => {

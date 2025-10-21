@@ -120,7 +120,7 @@ describe("controlplane", async () => {
 });
 
 describe("dataplane", () => {
-  const graphQLClient = createGraphQLClient(inject("token"));
+  const graphQLClient = createGraphQLClient(inject("url"), inject("token"));
 
   describe("sales-order-created", async () => {
     let salesOrderId: string;

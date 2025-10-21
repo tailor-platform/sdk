@@ -82,7 +82,7 @@ describe("controlplane", async () => {
     expect(add).toMatchObject({
       name: "add",
       description: "add resolver",
-      operationType: "mutation",
+      operationType: "query",
       authorization: "true==true",
       inputs: [
         {
@@ -122,7 +122,7 @@ describe("controlplane", async () => {
 });
 
 describe("dataplane", () => {
-  const graphQLClient = createGraphQLClient(inject("token"));
+  const graphQLClient = createGraphQLClient(inject("url"), inject("token"));
 
   describe("stepChain", async () => {
     test("prepare data", async () => {

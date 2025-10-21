@@ -46,11 +46,7 @@ function bearerTokenInterceptor(): Interceptor {
   };
 }
 
-export function createGraphQLClient(token: string) {
-  const appUrl = process.env.APP_URL;
-  if (!appUrl) {
-    throw new Error("APP_URL is not defined");
-  }
+export function createGraphQLClient(appUrl: string, token: string) {
   const endpoint = new URL("/query", appUrl).href;
   return new GraphQLClient(endpoint, {
     headers: {

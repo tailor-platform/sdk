@@ -45,13 +45,6 @@ jobs:
         env:
           TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
-      - name: Get application URL
-        run: |
-          APP_URL=$(tailorctl workspace app list -f json | jq -r '.[] | select(.name == "my-app") | .url')
-          echo "APP_URL=$APP_URL" >> "$GITHUB_ENV"
-        env:
-          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-
       - name: Run e2e tests
         working-directory: examples/basic
         run: pnpm test:e2e
