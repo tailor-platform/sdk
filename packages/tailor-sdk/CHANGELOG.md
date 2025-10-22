@@ -1,5 +1,13 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.89
+
+### Patch Changes
+
+- [#597](https://github.com/tailor-platform/tailor-sdk/pull/597) [`36ea41c`](https://github.com/tailor-platform/tailor-sdk/commit/36ea41c4fea9c4d6ff4b5b1d7fd8582ceae09c89) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: stricter define function types
+
+- [#595](https://github.com/tailor-platform/tailor-sdk/pull/595) [`2d3f019`](https://github.com/tailor-platform/tailor-sdk/commit/2d3f01977bcf271a8874fc5f6d273d6c1c1561f8) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add defineIdp
+
 ## 0.0.88
 
 ### Patch Changes

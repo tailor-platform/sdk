@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/tailor-sdk",
-  "version": "0.0.88",
+  "version": "0.0.89",
   "description": "Tailor SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "main": "./dist/configure/index.mjs",
