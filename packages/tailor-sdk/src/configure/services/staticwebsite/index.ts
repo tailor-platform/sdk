@@ -15,18 +15,12 @@ export function defineStaticWebSite(
     get url() {
       return `${name}:url` as const;
     },
-    get callbackUrl() {
-      return `${name}:url/callback` as const;
-    },
-  } as const satisfies StaticWebsiteInput & {
-    readonly url: string;
-    readonly callbackUrl: string;
-  };
+  } as const satisfies StaticWebsiteInput & { readonly url: string };
 
   return result as typeof result & StaticWebsiteDefinitionBrand;
 }
 
 export type StaticWebsiteConfig = Omit<
   ReturnType<typeof defineStaticWebSite>,
-  "url" | "callbackUrl"
+  "url"
 >;

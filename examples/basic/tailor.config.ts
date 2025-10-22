@@ -33,7 +33,7 @@ const auth = defineAuth("my-auth", {
   },
   oauth2Clients: {
     sample: {
-      redirectURIs: ["https://example.com/callback", website.callbackUrl],
+      redirectURIs: ["https://example.com/callback", `${website.url}/callback`],
       description: "Sample OAuth2 client",
       grantTypes: ["authorization_code", "refresh_token"],
     },

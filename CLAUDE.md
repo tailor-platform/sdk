@@ -88,7 +88,6 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Define static website configurations using `defineStaticWebSite()`
    - Provides type-safe URL references via `.url` and `.callback` properties
    - Use `website.url` in CORS settings for type-safe configuration
-   - Use `website.callbackUrl` in OAuth2 redirect URIs for authentication flows
    - Static website URLs are resolved at deployment time and injected into configuration
 
 5. **Identity Provider (IdP)** (`src/configure/services/idp/`)
@@ -143,7 +142,7 @@ const auth = defineAuth("my-auth", {
   },
   oauth2Clients: {
     sample: {
-      redirectURIs: ["https://example.com/callback", website.callbackUrl],
+      redirectURIs: ["https://example.com/callback", `${website.url}/callback`],
       description: "Sample OAuth2 client",
       grantTypes: ["authorization_code", "refresh_token"],
     },
@@ -242,7 +241,7 @@ const idp = defineIdp("my-idp", {
   clients: ["default-idp-client"],
 });
 
-// Use website.url and website.callbackUrl for type-safe configuration
+// Use website.url for type-safe configuration
 export default defineConfig({
   workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
@@ -257,7 +256,7 @@ export default defineConfig({
       sample: {
         redirectURIs: [
           "https://example.com/callback",
-          website.callbackUrl, // Resolved to actual URL/callback at deployment
+          `${website.url}/callback`, // Resolved to actual URL/callback at deployment
         ],
         description: "Sample OAuth2 client",
         grantTypes: ["authorization_code", "refresh_token"],
