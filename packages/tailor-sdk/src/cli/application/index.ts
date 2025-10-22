@@ -92,7 +92,7 @@ export class Application {
     }
   }
 
-  defineIdp(config?: Readonly<IdPInput>[]) {
+  defineIdp(config?: readonly IdPInput[]) {
     const idpNames = new Set<string>();
     (config ?? []).forEach((idpConfig) => {
       const idp = IdPSchema.parse(idpConfig);
@@ -122,7 +122,7 @@ export class Application {
     this._executorService = new ExecutorService(config);
   }
 
-  defineStaticWebsites(websites?: StaticWebsiteInput[]) {
+  defineStaticWebsites(websites?: readonly StaticWebsiteInput[]) {
     const websiteNames = new Set<string>();
     (websites ?? []).forEach((config) => {
       const website = StaticWebsiteSchema.parse(config);

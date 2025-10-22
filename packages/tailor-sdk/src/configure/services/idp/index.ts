@@ -1,11 +1,14 @@
 import type { IdPInput } from "@/parser/service/idp/types";
 import type { BuiltinIdP } from "@/parser/service/auth/types";
 
-export function defineIdp<const TClients extends readonly string[]>(
+declare const idpDefinitionBrand: unique symbol;
+type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };
+
+export function defineIdp<const TClients extends string[]>(
   name: string,
   config: Omit<IdPInput, "name" | "clients"> & { clients: TClients },
 ) {
-  return {
+  const result = {
     ...config,
     name,
     provider(providerName: string, clientName: TClients[number]) {
@@ -16,13 +19,14 @@ export function defineIdp<const TClients extends readonly string[]>(
         clientName,
       } as const satisfies BuiltinIdP;
     },
-  } as const satisfies Omit<IdPInput, "clients"> & {
-    readonly clients: readonly string[];
-    readonly provider: (
+  } as const satisfies IdPInput & {
+    provider: (
       providerName: string,
       clientName: TClients[number],
     ) => BuiltinIdP;
   };
+
+  return result as typeof result & IdpDefinitionBrand;
 }
 
-export type IdPConfig = ReturnType<typeof defineIdp>;
+export type IdPConfig = Omit<ReturnType<typeof defineIdp>, "provider">;

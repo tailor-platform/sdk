@@ -1,12 +1,15 @@
 import type { StaticWebsiteInput } from "@/parser/service/staticwebsite/types";
 
-export type { StaticWebsiteInput as StaticWebsiteServiceInput } from "@/parser/service/staticwebsite/types";
+declare const staticWebsiteDefinitionBrand: unique symbol;
+type StaticWebsiteDefinitionBrand = {
+  readonly [staticWebsiteDefinitionBrand]: true;
+};
 
 export function defineStaticWebSite(
   name: string,
   config: Omit<StaticWebsiteInput, "name">,
 ) {
-  return {
+  const result = {
     ...config,
     name,
     get url() {
@@ -19,6 +22,11 @@ export function defineStaticWebSite(
     readonly url: string;
     readonly callbackUrl: string;
   };
+
+  return result as typeof result & StaticWebsiteDefinitionBrand;
 }
 
-export type StaticWebsiteConfig = ReturnType<typeof defineStaticWebSite>;
+export type StaticWebsiteConfig = Omit<
+  ReturnType<typeof defineStaticWebSite>,
+  "url" | "callbackUrl"
+>;

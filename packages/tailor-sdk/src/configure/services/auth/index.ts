@@ -1,10 +1,12 @@
-import { type TailorDBType } from "../tailordb/schema";
+import { type TailorDBInstance } from "../tailordb/schema";
 import type {
   AuthServiceInput,
-  ParseAuthConfigInput,
   UserAttributeListKey,
   UserAttributeMap,
 } from "@/parser/service/auth/types";
+
+declare const authDefinitionBrand: unique symbol;
+type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
 export type {
   OIDC,
@@ -17,7 +19,6 @@ export type {
   SCIMAuthorization,
   SCIMAttributeType,
   SCIMAttribute,
-  SCIMSchema,
   SCIMAttributeMapping,
   SCIMResource,
   SCIMConfig,
@@ -32,7 +33,7 @@ export type {
 
 export function defineAuth<
   const Name extends string,
-  const User extends TailorDBType,
+  const User extends TailorDBInstance,
   const AttributeMap extends UserAttributeMap<User>,
   const AttributeList extends UserAttributeListKey<User>[],
   const MachineUserNames extends string,
@@ -40,18 +41,27 @@ export function defineAuth<
   name: Name,
   config: AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames>,
 ) {
-  return {
+  const result = {
     ...config,
     name,
     invoker<M extends MachineUserNames>(machineUser: M) {
       return { authName: name, machineUser } as const;
     },
-  } as const satisfies ParseAuthConfigInput<
+  } as const satisfies AuthServiceInput<
     User,
     AttributeMap,
     AttributeList,
     MachineUserNames
-  >;
+  > & {
+    name: string;
+    invoker<M extends MachineUserNames>(
+      machineUser: M,
+    ): { authName: string; machineUser: M };
+  };
+
+  return result as typeof result & AuthDefinitionBrand;
 }
 
-export type AuthConfig = ReturnType<typeof defineAuth>;
+export type AuthConfig = ReturnType<
+  typeof defineAuth<string, any, any, any, string>
+>;

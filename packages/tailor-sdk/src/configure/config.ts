@@ -2,13 +2,14 @@ import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import type { PipelineResolverServiceInput } from "@/configure/services/pipeline/types";
 import type { AuthConfig } from "@/configure/services/auth";
 import type { ExecutorServiceInput } from "@/configure/services/executor/types";
-import type { IdPInput } from "@/parser/service/idp/types";
-import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite";
+import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
+import type { IdPConfig } from "@/configure/services/idp";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
 
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
-  Idp extends IdPInput[] = IdPInput[],
+  Idp extends IdPConfig[] = IdPConfig[],
+  StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
 > {
   workspaceId: string;
   name: string;
@@ -20,7 +21,7 @@ export interface AppConfig<
   idp?: Idp;
   auth?: Auth;
   executor?: ExecutorServiceInput;
-  staticWebsites?: StaticWebsiteServiceInput[];
+  staticWebsites?: StaticWebsites;
 }
 
 let distPath: string | null = null;
@@ -34,9 +35,7 @@ export const getDistDir = (): string => {
   return distPath;
 };
 
-export function defineConfig<const Config extends AppConfig<any, any>>(
-  config: Config,
-) {
+export function defineConfig<const Config extends AppConfig>(config: Config) {
   return config;
 }
 

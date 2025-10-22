@@ -55,7 +55,7 @@ import type {
   SCIMAttribute,
   SCIMConfig,
   SCIMResource,
-  ValueOperand,
+  AuthAttributeValue,
 } from "@/parser/service/auth";
 import { type AuthService } from "@/cli/application/auth/service";
 import { type Application } from "@/cli/application";
@@ -937,7 +937,7 @@ async function planMachineUsers(
 }
 
 function protoMachineUserAttributeMap(
-  attributeMap: Record<string, ValueOperand>,
+  attributeMap: Record<string, AuthAttributeValue>,
 ): Record<string, MessageInitShape<typeof ValueSchema>> {
   const ret: Record<string, MessageInitShape<typeof ValueSchema>> = {};
   for (const [key, value] of Object.entries(attributeMap)) {

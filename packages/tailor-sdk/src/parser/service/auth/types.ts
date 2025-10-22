@@ -16,9 +16,9 @@ import type {
   SCIMAuthorizationSchema,
   SCIMResourceSchema,
   SCIMSchema as SCIMSchemaType,
-  SCIMSchemaSchema,
   TenantProviderSchema,
 } from "./schema";
+import type { IsAny } from "type-fest";
 
 // Types derived from zod schemas
 export type OIDC = z.output<typeof OIDCSchema>;
@@ -33,7 +33,6 @@ export type OAuth2Client = z.output<typeof OAuth2ClientSchema>;
 export type SCIMAuthorization = z.output<typeof SCIMAuthorizationSchema>;
 export type SCIMAttributeType = z.output<typeof SCIMAttributeTypeSchema>;
 export type SCIMAttribute = z.output<typeof SCIMAttributeSchema>;
-export type SCIMSchema = z.output<typeof SCIMSchemaSchema>;
 export type SCIMAttributeMapping = z.output<typeof SCIMAttributeMappingSchema>;
 export type SCIMResource = z.output<typeof SCIMResourceSchema>;
 export type SCIMConfig = z.output<typeof SCIMSchemaType>;
@@ -42,6 +41,7 @@ export type AuthConfig = z.output<typeof AuthConfigSchema>;
 
 // Helper types for ValueOperand
 export type ValueOperand = string | boolean | string[] | boolean[];
+export type AuthAttributeValue = ValueOperand | null | undefined;
 
 // User field type helpers
 type UserFieldKeys<User extends TailorDBInstance> = keyof output<User> & string;
@@ -84,17 +84,20 @@ type FieldSupportsValueOperand<
   FieldOutput<User, Key> extends ValueOperand | null | undefined ? true : false;
 
 // Exported user field key types
-export type UsernameFieldKey<User extends TailorDBInstance> = {
-  [K in UserFieldKeys<User>]: FieldIsRequired<User, K> extends true
-    ? FieldIsOfType<User, K, "string"> extends true
-      ? FieldIsArray<User, K> extends true
-        ? never
-        : FieldIsUnique<User, K> extends true
-          ? K
-          : never
-      : never
-    : never;
-}[UserFieldKeys<User>];
+export type UsernameFieldKey<User extends TailorDBInstance> =
+  IsAny<User> extends true
+    ? string
+    : {
+        [K in UserFieldKeys<User>]: FieldIsRequired<User, K> extends true
+          ? FieldIsOfType<User, K, "string"> extends true
+            ? FieldIsArray<User, K> extends true
+              ? never
+              : FieldIsUnique<User, K> extends true
+                ? K
+                : never
+            : never
+          : never;
+      }[UserFieldKeys<User>];
 
 export type UserAttributeKey<User extends TailorDBInstance> = {
   [K in UserFieldKeys<User>]: K extends "id"
@@ -139,6 +142,16 @@ type AttributeListToTuple<
     : never;
 };
 
+type AttributeMapSelectedKeys<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+> = Extract<
+  {
+    [K in keyof AttributeMap]-?: undefined extends AttributeMap[K] ? never : K;
+  }[keyof AttributeMap],
+  UserAttributeKey<User>
+>;
+
 type UserProfile<
   User extends TailorDBInstance,
   AttributeMap extends UserAttributeMap<User>,
@@ -152,22 +165,32 @@ type UserProfile<
 
 type MachineUser<
   User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User> = object,
+  AttributeMap extends UserAttributeMap<User> = UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[] = [],
-> = (object extends AttributeMap
-  ? { attributes?: never }
-  : {
-      attributes: {
-        [K in keyof AttributeMap]: K extends keyof output<User>
-          ? output<User>[K]
-          : never;
-      } & {
-        [K in Exclude<keyof output<User>, keyof AttributeMap>]?: never;
-      };
-    }) &
-  ([] extends AttributeList
-    ? { attributeList?: never }
-    : { attributeList: AttributeListToTuple<User, AttributeList> });
+> =
+  IsAny<User> extends true
+    ? {
+        attributes: Record<string, AuthAttributeValue>;
+        attributeList?: string[];
+      }
+    : (AttributeMapSelectedKeys<User, AttributeMap> extends never
+        ? { attributes?: never }
+        : {
+            attributes: {
+              [K in AttributeMapSelectedKeys<
+                User,
+                AttributeMap
+              >]: K extends keyof output<User> ? output<User>[K] : never;
+            } & {
+              [K in Exclude<
+                keyof output<User>,
+                AttributeMapSelectedKeys<User, AttributeMap>
+              >]?: never;
+            };
+          }) &
+        ([] extends AttributeList
+          ? { attributeList?: never }
+          : { attributeList: AttributeListToTuple<User, AttributeList> });
 
 export type AuthServiceInput<
   User extends TailorDBInstance,
@@ -185,19 +208,3 @@ export type AuthServiceInput<
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
 };
-
-// Type for parseAuthConfig input (used by both parser and configure modules)
-export type ParseAuthConfigInput<
-  User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User>,
-  AttributeList extends UserAttributeListKey<User>[],
-  MachineUserNames extends string,
-> = Readonly<
-  AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames> & {
-    invoker: (machineUser: MachineUserNames) => {
-      authName: string;
-      machineUser: string;
-    };
-    name: string;
-  }
->;
