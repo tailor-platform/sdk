@@ -143,45 +143,58 @@ export default defineConfig({
 
 Configuration for the Built-in IdP service.
 
+Define IdP configurations using `defineIdp()` which provides type-safe provider references.
+
+```typescript
+import { defineIdp, defineConfig } from "@tailor-platform/tailor-sdk";
+
+const idp = defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["my-client"],
+});
+
+export default defineConfig({
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
+  idp: [idp],
+});
+```
+
 #### authorization
 
 User management permission settings.
 Only authorized users can execute user management operations such as `_createUser`.
 
-- `insecure`: Allow all users
-- `loggedIn`: Allow logged-in users
-- `cel`: Allow with custom CEL expression
+- `"insecure"`: Allow all users
+- `"loggedIn"`: Allow logged-in users
+- `{ cel: string }`: Allow with custom CEL expression
 
-For example, to allow only users with a specific ID, configure as follows:
+For example, to allow only users with a specific ID:
 
 ```typescript
-export default defineConfig({
-  workspaceId: process.env.WORKSPACE_ID!,
-  name: "my-app",
-  idp: {
-    "my-idp": {
-      authorization: {
-        cel: `user.id == "141d7ef6-f5a5-4b8e-8b2e-cdd08d0b7d5b"`,
-      },
-    },
+const idp = defineIdp("my-idp", {
+  authorization: {
+    cel: `user.id == "141d7ef6-f5a5-4b8e-8b2e-cdd08d0b7d5b"`,
   },
+  clients: ["my-client"],
 });
 ```
 
 #### clients
 
-A list of OAuth clients to create in the Built-in IdP service.
-By specifying the clients created here in the Auth service's idProviderConfigs, you can use the Built-in IdP service for application authentication.
+A list of OAuth client names to create in the Built-in IdP service.
+These clients can be referenced in Auth service configuration using the `idp.provider()` method.
 
 ```typescript
-export default defineConfig({
-  workspaceId: process.env.WORKSPACE_ID!,
-  name: "my-app",
-  idp: {
-    "my-idp": {
-      clients: ["my-client"],
-    },
-  },
+const idp = defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["client-1", "client-2"] as const, // Multiple clients can be configured
+});
+
+// Reference the IdP in Auth configuration
+const auth = defineAuth("my-auth", {
+  // ...
+  idProvider: idp.provider("provider-name", "client-1"), // Specify client name
 });
 ```
 
@@ -904,7 +917,22 @@ Auth service options:
   - `OIDC`: Provide `clientID`, a secret reference for `clientSecret`, and the provider `providerURL`. Optional `issuerURL` and `usernameClaim` override defaults.
   - `SAML`: Supply Tailor Vault references for `spCertBase64`/`spKeyBase64` and either `metadataURL` or inline `rawMetadata`.
   - `IDToken`: Integrate providers that issue signed ID tokens directly with `providerURL`, `clientID`, and optional issuer/claim overrides.
-  - `BuiltInIdP`: Reuse a Tailor-hosted IdP by referencing an existing IdP namespace (`namespace`) and client (`clientName`). Secrets are resolved automatically during deployment.
+  - `BuiltInIdP`: Use a Tailor-hosted IdP by calling the `provider()` method on an IdP configuration created with `defineIdp()`. This provides type-safe references and automatic secret resolution during deployment.
+
+```typescript
+import { defineIdp, defineAuth } from "@tailor-platform/tailor-sdk";
+
+const idp = defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["default-client", "another-client"] as const,
+});
+
+const auth = defineAuth("my-auth", {
+  // ...
+  idProvider: idp.provider("provider-name", "default-client"), // Specify client name
+});
+```
+
 - **scim**: Provision SCIM resources for directory synchronization.
   - `machineUserName`: Machine user used for SCIM operations.
   - `authorization`: `bearer` (requires `bearerSecret`) or `oauth2`.

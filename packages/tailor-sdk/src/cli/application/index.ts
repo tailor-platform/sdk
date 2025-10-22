@@ -4,7 +4,7 @@ import { TailorDBService } from "@/cli/application/tailordb/service";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { AuthService } from "@/cli/application/auth/service";
 import { type AuthConfig } from "@/configure/services/auth";
-import { type IdPServiceInput } from "@/configure/services/idp/types";
+import { IdPSchema, type IdP, type IdPInput } from "@/parser/service/idp";
 import { type AppConfig } from "@/configure/config";
 import { ExecutorService } from "@/cli/application/executor/service";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
@@ -17,7 +17,7 @@ import {
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
   private _pipelineResolverServices: PipelineResolverService[] = [];
-  private _idpService?: IdPServiceInput = {};
+  private _idpServices: IdP[] = [];
   private _authService?: AuthService = undefined;
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
   private _executorService?: ExecutorService = undefined;
@@ -46,7 +46,7 @@ export class Application {
   }
 
   get idpServices() {
-    return this._idpService as Readonly<IdPServiceInput>;
+    return this._idpServices as ReadonlyArray<IdP>;
   }
 
   get authService() {
@@ -92,15 +92,17 @@ export class Application {
     }
   }
 
-  defineIdp(config?: IdPServiceInput) {
-    if (!config) {
-      return;
-    }
-
-    this._idpService = config;
-    Object.keys(config).forEach((namespace) =>
-      this.addSubgraph("idp", namespace),
-    );
+  defineIdp(config?: Readonly<IdPInput>[]) {
+    const idpNames = new Set<string>();
+    (config ?? []).forEach((idpConfig) => {
+      const idp = IdPSchema.parse(idpConfig);
+      if (idpNames.has(idp.name)) {
+        throw new Error(`IdP with name "${idp.name}" already defined.`);
+      }
+      idpNames.add(idp.name);
+      this._idpServices.push(idp);
+      this.addSubgraph("idp", idp.name);
+    });
   }
 
   defineAuth(config?: AuthConfig) {

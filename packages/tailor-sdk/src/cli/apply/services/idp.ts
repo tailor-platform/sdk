@@ -8,7 +8,7 @@ import {
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { type IdPServiceInput } from "@/configure/services/idp/types";
+import { type IdP } from "@/parser/service/idp";
 import { type Application } from "@/cli/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
@@ -115,11 +115,9 @@ export async function planIdP(
   workspaceId: string,
   application: Readonly<Application>,
 ) {
-  const idps: IdPServiceInput = {};
+  const idps: IdP[] = [];
   for (const app of application.applications) {
-    for (const [namespaceName, idp] of Object.entries(app.idpServices)) {
-      idps[namespaceName] = idp;
-    }
+    idps.push(...app.idpServices);
   }
   const serviceChangeSet = await planServices(client, workspaceId, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -156,7 +154,7 @@ type DeleteService = {
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  idps: Readonly<IdPServiceInput>,
+  idps: ReadonlyArray<IdP>,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("IdP services");
@@ -182,7 +180,8 @@ async function planServices(
       existingNameSet.add(name);
     }
   });
-  for (const [namespaceName, idp] of Object.entries(idps)) {
+  for (const idp of idps) {
+    const namespaceName = idp.name;
     let authorization;
     switch (idp.authorization) {
       case "insecure":
@@ -255,7 +254,7 @@ type ServiceDeleted = {
 async function planClients(
   client: OperatorClient,
   workspaceId: string,
-  idps: Readonly<IdPServiceInput>,
+  idps: ReadonlyArray<IdP>,
   deletedServices: string[],
 ) {
   const changeSet: ChangeSet<
@@ -282,7 +281,8 @@ async function planClients(
     });
   };
 
-  for (const [namespaceName, idp] of Object.entries(idps)) {
+  for (const idp of idps) {
+    const namespaceName = idp.name;
     const existingClients = await fetchClients(namespaceName);
     const existingNameMap = new Map<string, string>();
     existingClients.forEach((client) => {

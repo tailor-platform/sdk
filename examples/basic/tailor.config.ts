@@ -2,12 +2,18 @@ import {
   defineAuth,
   defineConfig,
   defineGenerators,
+  defineIdp,
   defineStaticWebSite,
 } from "@tailor-platform/tailor-sdk";
 import { user } from "tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",
+});
+
+const idp = defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["default-idp-client"],
 });
 
 const auth = defineAuth("my-auth", {
@@ -32,12 +38,7 @@ const auth = defineAuth("my-auth", {
       grantTypes: ["authorization_code", "refresh_token"],
     },
   },
-  idProvider: {
-    name: "sample",
-    kind: "BuiltInIdP",
-    namespace: "my-idp",
-    clientName: "default-idp-client",
-  },
+  idProvider: idp.provider("sample", "default-idp-client"),
 });
 
 export default defineConfig({
@@ -52,12 +53,7 @@ export default defineConfig({
   pipeline: {
     "my-pipeline": { files: ["./resolvers/**/resolver.ts"] },
   },
-  idp: {
-    "my-idp": {
-      authorization: "loggedIn",
-      clients: ["default-idp-client"],
-    },
-  },
+  idp: [idp],
   auth,
   executor: { files: ["./executors/*.ts"] },
   staticWebsites: [website],

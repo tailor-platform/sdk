@@ -91,7 +91,13 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Use `website.callbackUrl` in OAuth2 redirect URIs for authentication flows
    - Static website URLs are resolved at deployment time and injected into configuration
 
-5. **Configuration** (`tailor.config.ts`)
+5. **Identity Provider (IdP)** (`src/configure/services/idp/`)
+   - Define Identity Provider configurations using `defineIdp()`
+   - Configure authorization rules and OAuth2 clients
+   - Use `idp.provider()` method to create BuiltInIdP references for auth configuration
+   - Supports multiple clients with automatic client selection
+
+6. **Configuration** (`tailor.config.ts`)
    - Central configuration using `defineConfig()` for a single application
    - Required fields: `workspaceId` and `name`
    - Specify component locations with glob patterns
@@ -106,12 +112,18 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 import {
   defineConfig,
   defineAuth,
+  defineIdp,
   defineStaticWebSite,
 } from "@tailor-platform/tailor-sdk";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",
+});
+
+const idp = defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["default-idp-client"],
 });
 
 const auth = defineAuth("my-auth", {
@@ -136,12 +148,7 @@ const auth = defineAuth("my-auth", {
       grantTypes: ["authorization_code", "refresh_token"],
     },
   },
-  idProvider: {
-    name: "sample",
-    kind: "BuiltInIdP",
-    namespace: "my-idp",
-    clientName: "default-idp-client",
-  },
+  idProvider: idp.provider("sample", "default-idp-client"),
 });
 
 export default defineConfig({
@@ -154,12 +161,7 @@ export default defineConfig({
   pipeline: {
     "my-pipeline": { files: ["./resolvers/**/resolver.ts"] },
   },
-  idp: {
-    "my-idp": {
-      authorization: "loggedIn",
-      clients: ["default-idp-client"],
-    },
-  },
+  idp: [idp],
   auth,
   executor: { files: ["./executors/*.ts"] },
   staticWebsites: [website],
@@ -183,8 +185,14 @@ export const modelName = db.type("ModelName", {
 **Auth Configuration Pattern:**
 
 ```typescript
-import { defineAuth } from "@tailor-platform/tailor-sdk";
+import { defineAuth, defineIdp } from "@tailor-platform/tailor-sdk";
 import { user } from "./tailordb/user";
+
+// Define IdP configuration
+const idp = defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["default-idp-client", "another-client"],
+});
 
 export const auth = defineAuth("my-auth", {
   userProfile: {
@@ -208,41 +216,56 @@ export const auth = defineAuth("my-auth", {
       grantTypes: ["authorization_code", "refresh_token"],
     },
   },
-  idProvider: {
-    name: "sample",
-    kind: "BuiltInIdP",
-    namespace: "my-idp",
-    clientName: "default-idp-client",
-  },
+  // Use idp.provider() to reference the IdP with type safety
+  idProvider: idp.provider("sample", "default-idp-client"),
 });
 ```
 
 **Static Website Configuration Pattern:**
 
 ```typescript
-import { defineStaticWebSite } from "@tailor-platform/tailor-sdk";
+import {
+  defineStaticWebSite,
+  defineIdp,
+  defineAuth,
+  defineConfig,
+} from "@tailor-platform/tailor-sdk";
+import { user } from "./tailordb/user";
 
 // Define a static website with type-safe URL references
 const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",
 });
 
+const idp = defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["default-idp-client"],
+});
+
 // Use website.url and website.callbackUrl for type-safe configuration
 export default defineConfig({
-  // ...
+  workspaceId: process.env.WORKSPACE_ID!,
+  name: "my-app",
   cors: [website.url], // Resolved to actual URL at deployment
   auth: defineAuth("my-auth", {
-    // ...
+    userProfile: {
+      type: user,
+      usernameField: "email",
+      attributes: { role: true },
+    },
     oauth2Clients: {
       sample: {
         redirectURIs: [
           "https://example.com/callback",
           website.callbackUrl, // Resolved to actual URL/callback at deployment
         ],
-        // ...
+        description: "Sample OAuth2 client",
+        grantTypes: ["authorization_code", "refresh_token"],
       },
     },
+    idProvider: idp.provider("sample", "default-idp-client"),
   }),
+  idp: [idp],
   staticWebsites: [website], // Array format
 });
 ```

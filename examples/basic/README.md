@@ -15,7 +15,7 @@ This example implements a simple business application with:
 
 ```
 basic/
-├── tailor.config.ts      # SDK configuration
+├── tailor.config.ts      # SDK configuration (includes auth, IdP, static website)
 ├── tailordb/             # Database models
 │   ├── user.ts          # User model with roles
 │   ├── customer.ts      # Customer model
@@ -84,6 +84,17 @@ createExecutor("userCreated", "Handle new user creation")
     },
   });
 ```
+
+### 5. Authentication & Identity Provider
+
+The example includes authentication configuration with:
+
+- **User Profile**: Maps the User model to authentication system
+- **Machine Users**: Service accounts with predefined roles
+- **OAuth2 Clients**: OAuth2 client configurations with redirect URIs
+- **Identity Provider (IdP)**: Configures built-in IdP with authorization rules
+
+See `tailor.config.ts` for the complete authentication and IdP setup using `defineAuth()` and `defineIdp()`.
 
 ## Running the Example
 

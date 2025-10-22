@@ -131,7 +131,7 @@ function retryInterceptor(): Interceptor {
       try {
         return await next(req);
       } catch (error) {
-        if (isRetryable(error, req.method.idempotency)) {
+        if (isRetirable(error, req.method.idempotency)) {
           lastError = error;
           continue;
         }
@@ -149,7 +149,7 @@ function waitRetryBackoff(attempt: number) {
   return new Promise((resolve) => setTimeout(resolve, backoff));
 }
 
-function isRetryable(
+function isRetirable(
   error: unknown,
   idempotency: MethodOptions_IdempotencyLevel,
 ) {

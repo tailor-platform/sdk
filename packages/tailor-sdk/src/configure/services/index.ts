@@ -8,3 +8,4 @@ export {
 export * from "./pipeline";
 export * from "./executor";
 export * from "./staticwebsite";
+export * from "./idp";
