@@ -1,5 +1,13 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.88
+
+### Patch Changes
+
+- [#594](https://github.com/tailor-platform/tailor-sdk/pull/594) [`ac244cd`](https://github.com/tailor-platform/tailor-sdk/commit/ac244cd7769cfe92a962ea48918559dd403991df) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add defineStaticWebsite
+
+- [#589](https://github.com/tailor-platform/tailor-sdk/pull/589) [`5195548`](https://github.com/tailor-platform/tailor-sdk/commit/5195548158aa61fe7b33a75a4812d5345adde3da) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: type guard for workspaceId
+
 ## 0.0.87
 
 ### Patch Changes
