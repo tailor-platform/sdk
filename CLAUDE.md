@@ -84,7 +84,14 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Trigger on record changes: `recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`
    - Execute functions, webhooks, or GraphQL operations
 
-4. **Configuration** (`tailor.config.ts`)
+4. **Static Websites** (`src/configure/services/staticwebsite/`)
+   - Define static website configurations using `defineStaticWebSite()`
+   - Provides type-safe URL references via `.url` and `.callback` properties
+   - Use `website.url` in CORS settings for type-safe configuration
+   - Use `website.callbackUrl` in OAuth2 redirect URIs for authentication flows
+   - Static website URLs are resolved at deployment time and injected into configuration
+
+5. **Configuration** (`tailor.config.ts`)
    - Central configuration using `defineConfig()` for a single application
    - Required fields: `workspaceId` and `name`
    - Specify component locations with glob patterns
@@ -96,13 +103,51 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 **Configuration Pattern:**
 
 ```typescript
-import { defineConfig } from "@tailor-platform/tailor-sdk";
-import { auth } from "./auth";
+import {
+  defineConfig,
+  defineAuth,
+  defineStaticWebSite,
+} from "@tailor-platform/tailor-sdk";
+import { user } from "./tailordb/user";
+
+const website = defineStaticWebSite("my-frontend", {
+  description: "my frontend application",
+});
+
+const auth = defineAuth("my-auth", {
+  userProfile: {
+    type: user,
+    usernameField: "email",
+    attributes: {
+      role: true,
+    },
+  },
+  machineUsers: {
+    "admin-machine-user": {
+      attributes: {
+        role: "ADMIN",
+      },
+    },
+  },
+  oauth2Clients: {
+    sample: {
+      redirectURIs: ["https://example.com/callback", website.callbackUrl],
+      description: "Sample OAuth2 client",
+      grantTypes: ["authorization_code", "refresh_token"],
+    },
+  },
+  idProvider: {
+    name: "sample",
+    kind: "BuiltInIdP",
+    namespace: "my-idp",
+    clientName: "default-idp-client",
+  },
+});
 
 export default defineConfig({
   workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
-  cors: ["my-frontend:url"],
+  cors: [website.url],
   db: {
     tailordb: { files: ["./tailordb/*.ts"] },
   },
@@ -117,11 +162,7 @@ export default defineConfig({
   },
   auth,
   executor: { files: ["./executors/*.ts"] },
-  staticWebsites: {
-    "my-frontend": {
-      dist: "./dist",
-    },
-  },
+  staticWebsites: [website],
 });
 ```
 
@@ -173,6 +214,36 @@ export const auth = defineAuth("my-auth", {
     namespace: "my-idp",
     clientName: "default-idp-client",
   },
+});
+```
+
+**Static Website Configuration Pattern:**
+
+```typescript
+import { defineStaticWebSite } from "@tailor-platform/tailor-sdk";
+
+// Define a static website with type-safe URL references
+const website = defineStaticWebSite("my-frontend", {
+  description: "my frontend application",
+});
+
+// Use website.url and website.callbackUrl for type-safe configuration
+export default defineConfig({
+  // ...
+  cors: [website.url], // Resolved to actual URL at deployment
+  auth: defineAuth("my-auth", {
+    // ...
+    oauth2Clients: {
+      sample: {
+        redirectURIs: [
+          "https://example.com/callback",
+          website.callbackUrl, // Resolved to actual URL/callback at deployment
+        ],
+        // ...
+      },
+    },
+  }),
+  staticWebsites: [website], // Array format
 });
 ```
 

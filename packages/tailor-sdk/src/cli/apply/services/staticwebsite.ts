@@ -83,8 +83,8 @@ export async function planStaticWebsite(
   });
 
   for (const websiteService of application.staticWebsiteServices) {
+    const config = websiteService;
     const name = websiteService.name;
-    const config = websiteService.config;
 
     if (existingNameSet.has(name)) {
       changeSet.updates.push({

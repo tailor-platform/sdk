@@ -3,7 +3,7 @@ import type { PipelineResolverServiceInput } from "@/configure/services/pipeline
 import type { AuthConfig } from "@/configure/services/auth";
 import type { ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type IdPServiceInput } from "@/configure/services/idp/types";
-import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";
+import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
 
 export interface AppConfig<Auth extends AuthConfig = AuthConfig> {
@@ -17,7 +17,7 @@ export interface AppConfig<Auth extends AuthConfig = AuthConfig> {
   idp?: IdPServiceInput;
   auth?: Auth;
   executor?: ExecutorServiceInput;
-  staticWebsites?: Record<string, StaticWebsiteServiceInput>;
+  staticWebsites?: StaticWebsiteServiceInput[];
 }
 
 let distPath: string | null = null;

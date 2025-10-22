@@ -8,8 +8,11 @@ import { type IdPServiceInput } from "@/configure/services/idp/types";
 import { type AppConfig } from "@/configure/config";
 import { ExecutorService } from "@/cli/application/executor/service";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
-import { StaticWebsiteService } from "@/cli/application/staticwebsite/service";
-import { type StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";
+import {
+  StaticWebsiteSchema,
+  type StaticWebsite,
+  type StaticWebsiteInput,
+} from "@/parser/service/staticwebsite";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
@@ -18,7 +21,7 @@ export class Application {
   private _authService?: AuthService = undefined;
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
   private _executorService?: ExecutorService = undefined;
-  private _staticWebsiteServices: Array<StaticWebsiteService> = [];
+  private _staticWebsiteServices: StaticWebsite[] = [];
 
   constructor(
     public readonly name: string,
@@ -55,7 +58,7 @@ export class Application {
   }
 
   get staticWebsiteServices() {
-    return this._staticWebsiteServices as ReadonlyArray<StaticWebsiteService>;
+    return this._staticWebsiteServices as ReadonlyArray<StaticWebsite>;
   }
 
   get applications() {
@@ -117,12 +120,16 @@ export class Application {
     this._executorService = new ExecutorService(config);
   }
 
-  defineStaticWebsites(websites?: Record<string, StaticWebsiteServiceInput>) {
-    if (!websites) {
-      return;
-    }
-    Object.entries(websites).forEach(([name, config]) => {
-      const website = new StaticWebsiteService(name, config);
+  defineStaticWebsites(websites?: StaticWebsiteInput[]) {
+    const websiteNames = new Set<string>();
+    (websites ?? []).forEach((config) => {
+      const website = StaticWebsiteSchema.parse(config);
+      if (websiteNames.has(website.name)) {
+        throw new Error(
+          `Static website with name "${website.name}" already defined.`,
+        );
+      }
+      websiteNames.add(website.name);
       this._staticWebsiteServices.push(website);
     });
   }

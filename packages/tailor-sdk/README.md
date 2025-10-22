@@ -67,18 +67,20 @@ export default defineConfig({
 ### cors
 
 A list of origins to configure as CORS for the application.
-You can also specify sites hosted on the Static Web Hosting service using the format `<staticWebsiteName>:url`.
+You can reference static website URLs using the `website.url` property returned by `defineStaticWebSite()`.
 
 ```typescript
+import { defineStaticWebSite } from "@tailor-platform/tailor-sdk";
+
+const website = defineStaticWebSite("my-website", {
+  description: "My website",
+});
+
 export default defineConfig({
   workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
-  cors: ["https://example.com", "my-website:url"],
-  staticWebsites: {
-    "my-website": {
-      // ...
-    },
-  },
+  cors: ["https://example.com", website.url], // Type-safe URL reference
+  staticWebsites: [website],
 });
 ```
 
@@ -215,38 +217,69 @@ export default defineConfig({
 
 Configuration for the Static Web Hosting service.
 
-#### description
-
-Description of the site.
+Define static websites using `defineStaticWebSite()` which provides type-safe URL references.
 
 ```typescript
+import { defineStaticWebSite, defineConfig } from "@tailor-platform/tailor-sdk";
+
+const website = defineStaticWebSite("my-website", {
+  description: "My Static Website",
+  allowedIPAddresses: ["192.168.0.0/24"], // Optional
+});
+
 export default defineConfig({
   workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
-  staticWebsites: {
-    "my-website": {
-      description: "My Static Website",
-    },
-  },
+  staticWebsites: [website],
 });
 ```
 
-#### allowedIPAddresses
+#### Type-safe URL References
 
-A list of IP addresses allowed to access the site.
-Can be specified in CIDR format.
+Static websites defined with `defineStaticWebSite()` provide two properties for type-safe URL references:
+
+- **`website.url`**: The base URL of the static website (resolved at deployment time)
+- **`website.callbackUrl`**: The callback URL (`<website-url>/callback`) for OAuth flows
+
+These can be used in CORS settings and OAuth2 redirect URIs:
 
 ```typescript
+import {
+  defineStaticWebSite,
+  defineAuth,
+  defineConfig,
+} from "@tailor-platform/tailor-sdk";
+
+const website = defineStaticWebSite("my-frontend", {
+  description: "Frontend application",
+});
+
+const auth = defineAuth("my-auth", {
+  // ...
+  oauth2Clients: {
+    sample: {
+      redirectURIs: [
+        "https://example.com/callback",
+        website.callbackUrl, // Resolved to actual URL/callback at deployment
+      ],
+      grantTypes: ["authorization_code", "refresh_token"],
+    },
+  },
+});
+
 export default defineConfig({
   workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
-  staticWebsites: {
-    "my-website": {
-      allowedIPAddresses: ["192.168.0.0/24"],
-    },
-  },
+  cors: [website.url], // Resolved to actual URL at deployment
+  auth,
+  staticWebsites: [website],
 });
 ```
+
+#### Options
+
+- **description**: Description of the site (optional)
+- **allowedIPAddresses**: List of IP addresses allowed to access the site in CIDR format (optional)
 
 ### generators
 
@@ -866,7 +899,7 @@ Auth service options:
   - `attributes`: Optional map of additional TailorDB fields (`true` flag) to expose to identity providers and issued tokens.
   - `attributeList`: Optional list of attribute keys whose values should be propagated as arrays (used by machine users and downstream integrations).
 - **machineUsers**: Service accounts provisioned by the platform. Attribute values must correspond to keys enabled in `userProfile.attributes`, and `attributeList` values must follow the order declared in `userProfile.attributeList`.
-- **oauth2Clients**: OAuth 2.0 clients issued by the Auth service. `redirectURIs` is required. `grantTypes` accepts `authorization_code` and/or `refresh_token`. `clientType` defaults to `confidential` and also supports `public` and `browser`.
+- **oauth2Clients**: OAuth 2.0 clients issued by the Auth service. `redirectURIs` is required and can include static website URLs using the `website.callbackUrl` property from `defineStaticWebSite()`. `grantTypes` accepts `authorization_code` and/or `refresh_token`. `clientType` defaults to `confidential` and also supports `public` and `browser`.
 - **idProvider**: Configure an external identity provider.
   - `OIDC`: Provide `clientID`, a secret reference for `clientSecret`, and the provider `providerURL`. Optional `issuerURL` and `usernameClaim` override defaults.
   - `SAML`: Supply Tailor Vault references for `spCertBase64`/`spKeyBase64` and either `metadataURL` or inline `rawMetadata`.
