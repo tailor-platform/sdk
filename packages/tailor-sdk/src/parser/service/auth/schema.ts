@@ -69,7 +69,14 @@ export const OAuth2ClientSchema = z.object({
   grantTypes: z
     .array(OAuth2ClientGrantTypeSchema)
     .default(["authorization_code", "refresh_token"]),
-  redirectURIs: z.array(z.string()),
+  redirectURIs: z.array(
+    z.union([
+      z.templateLiteral(["https://", z.string()]),
+      z.templateLiteral(["http://", z.string()]),
+      z.templateLiteral([z.string(), ":url"]),
+      z.templateLiteral([z.string(), ":url/", z.string()]),
+    ]),
+  ),
   clientType: z
     .union([
       z.literal("confidential"),
