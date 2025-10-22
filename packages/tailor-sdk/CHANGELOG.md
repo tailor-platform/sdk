@@ -1,5 +1,13 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.90
+
+### Patch Changes
+
+- [#598](https://github.com/tailor-platform/tailor-sdk/pull/598) [`7b2ffaf`](https://github.com/tailor-platform/tailor-sdk/commit/7b2ffaf47b8f324bf489c7734f566be320dd69cc) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: improve url schema
+
+- [#600](https://github.com/tailor-platform/tailor-sdk/pull/600) [`ec16341`](https://github.com/tailor-platform/tailor-sdk/commit/ec16341c0d5aaf5c786f03216ab5642ff4fe7683) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: remove callbackUrl from defineStaticWebsite
+
 ## 0.0.89
 
 ### Patch Changes
