@@ -31,18 +31,19 @@ export type {
 } from "@/parser/service/auth/types";
 
 export function defineAuth<
+  const Name extends string,
   const User extends TailorDBType,
   const AttributeMap extends UserAttributeMap<User>,
   const AttributeList extends UserAttributeListKey<User>[],
   const MachineUserNames extends string,
 >(
-  name: string,
+  name: Name,
   config: AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames>,
 ) {
   return {
     ...config,
     name,
-    invoker(machineUser: MachineUserNames) {
+    invoker<M extends MachineUserNames>(machineUser: M) {
       return { authName: name, machineUser } as const;
     },
   } as const satisfies ParseAuthConfigInput<

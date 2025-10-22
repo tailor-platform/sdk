@@ -6,7 +6,7 @@ import { type IdPServiceInput } from "@/configure/services/idp/types";
 import type { StaticWebsiteServiceInput } from "@/configure/services/staticwebsite/types";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
 
-export interface AppConfig<Auth = AuthConfig> {
+export interface AppConfig<Auth extends AuthConfig = AuthConfig> {
   workspaceId: string;
   name: string;
   cors?: string[];
@@ -21,7 +21,6 @@ export interface AppConfig<Auth = AuthConfig> {
 }
 
 let distPath: string | null = null;
-
 export const getDistDir = (): string => {
   const configured = process.env.TAILOR_SDK_OUTPUT_DIR;
   if (configured && configured !== distPath) {
@@ -32,9 +31,9 @@ export const getDistDir = (): string => {
   return distPath;
 };
 
-export function defineConfig<Auth = AuthConfig>(
-  config: AppConfig<Auth>,
-): AppConfig<Auth> {
+export function defineConfig<const Config extends AppConfig<any>>(
+  config: Config,
+) {
   return config;
 }
 

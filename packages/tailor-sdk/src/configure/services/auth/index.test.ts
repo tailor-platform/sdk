@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import { randomUUID } from "node:crypto";
 
 import { defineAuth } from "./index";
@@ -91,5 +91,47 @@ describe("defineAuth", () => {
     expect(authConfig.name).toBe("minimal");
     expect(authConfig.userProfile?.type).toBe(userType);
     expect(authConfig.machineUsers).toBeUndefined();
+  });
+
+  describe("name literal type inference", () => {
+    it("infers name as literal type", () => {
+      const authConfig = defineAuth("my-auth-service", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+        },
+      });
+
+      expectTypeOf(authConfig.name).toEqualTypeOf<"my-auth-service">();
+    });
+
+    it("preserves name literal in readonly object", () => {
+      const authConfig = defineAuth("production-auth", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+        },
+        machineUsers: {
+          admin: {},
+        },
+      });
+
+      // The entire config should be readonly
+      expectTypeOf(authConfig).toMatchTypeOf<{
+        readonly name: "production-auth";
+      }>();
+    });
+
+    it("name type is available for type extraction", () => {
+      const _authConfig = defineAuth("typed-auth", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+        },
+      });
+
+      type ExtractedName = typeof _authConfig.name;
+      expectTypeOf<ExtractedName>().toEqualTypeOf<"typed-auth">();
+    });
   });
 });
