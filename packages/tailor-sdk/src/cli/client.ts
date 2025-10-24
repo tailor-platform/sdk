@@ -42,7 +42,7 @@ async function userAgentInterceptor(): Promise<Interceptor> {
   };
 }
 
-async function userAgent() {
+export async function userAgent() {
   const packageJson = await readPackageJSON(import.meta.url);
   return `tailor-sdk/${packageJson.version ?? "unknown"}`;
 }

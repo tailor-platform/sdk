@@ -12,6 +12,8 @@ import { apply, generate } from "./api.js";
 import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
 import { workspaceCommand } from "./workspace";
+import { loginCommand } from "./login.js";
+import { logoutCommand } from "./logout.js";
 
 register("tsx", import.meta.url, { data: {} });
 
@@ -83,6 +85,8 @@ const mainCommand = defineCommand({
     generate: generateCommand,
     init: initCommand,
     workspace: workspaceCommand,
+    login: loginCommand,
+    logout: logoutCommand,
   },
 });
 

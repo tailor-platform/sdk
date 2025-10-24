@@ -13,6 +13,7 @@ type TailorctlConfigMap = Partial<
 >;
 
 export type TailorctlConfig = {
+  username: string;
   controlplaneaccesstoken: string;
   controlplanerefreshtoken: string;
   controlplanetokenexpiresat: string;
