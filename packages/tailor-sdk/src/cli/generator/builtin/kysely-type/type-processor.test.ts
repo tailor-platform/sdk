@@ -114,7 +114,7 @@ describe("Kysely TypeProcessor", () => {
       const result = await TypeProcessor.processType(simpleNestedType);
 
       expect(result.name).toBe("SimpleUser");
-      expect(result.typeDef).toContain("export interface SimpleUser");
+      expect(result.typeDef).toContain("SimpleUser: ");
       expect(result.typeDef).toContain("profile:");
       expect(result.typeDef).toContain("name: string");
       expect(result.typeDef).toContain("email: string | null");
@@ -178,9 +178,7 @@ describe("Kysely TypeProcessor", () => {
       const result = await TypeProcessor.processType(typeWithAssertNonNull);
 
       expect(result.name).toBe("UserWithAssertNonNull");
-      expect(result.typeDef).toContain(
-        "export interface UserWithAssertNonNull",
-      );
+      expect(result.typeDef).toContain("UserWithAssertNonNull: {");
       expect(result.typeDef).toContain("name: string");
       expect(result.typeDef).toContain("email: AssertNonNull<string>"); // assertNonNull wraps the type
       expect(result.typeDef).toContain("phone: string | null"); // should be nullable
@@ -195,7 +193,7 @@ describe("Kysely TypeProcessor", () => {
       const result = await TypeProcessor.processType(typeWithTimestamps);
 
       expect(result.name).toBe("UserWithTimestamp");
-      expect(result.typeDef).toContain("export interface UserWithTimestamp");
+      expect(result.typeDef).toContain("UserWithTimestamp: {");
       expect(result.typeDef).toContain("name: string");
       // createdAt has assertNonNull, updatedAt doesn't
       expect(result.typeDef).toContain("createdAt: AssertNonNull<Timestamp>;");

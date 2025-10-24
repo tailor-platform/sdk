@@ -3,7 +3,6 @@ import { createResolver } from "./resolver";
 import { t } from "@/configure/types";
 import type { output } from "@/configure/types/helpers";
 import type { TailorUser } from "@/configure/types/user";
-import type { SqlClient } from "./sql";
 import type { ResolverInput } from "@/parser/service/pipeline/types";
 
 describe("createResolver", () => {
@@ -17,10 +16,8 @@ describe("createResolver", () => {
         }),
         body: (context) => {
           expectTypeOf(context).toHaveProperty("user");
-          expectTypeOf(context).toHaveProperty("client");
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
-          expectTypeOf(context.client).toEqualTypeOf<SqlClient>();
           expectTypeOf(context.input).toBeNever();
           return { result: "hello" };
         },
@@ -36,10 +33,8 @@ describe("createResolver", () => {
         }),
         body: (context) => {
           expectTypeOf(context).toHaveProperty("user");
-          expectTypeOf(context).toHaveProperty("client");
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
-          expectTypeOf(context.client).toEqualTypeOf<SqlClient>();
           expectTypeOf(context.input).toBeNever();
           return { success: true };
         },
@@ -62,7 +57,6 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("user");
-          expectTypeOf(context).toHaveProperty("client");
           expectTypeOf(context.input).toEqualTypeOf<{
             name: string;
             age: number;
@@ -249,7 +243,6 @@ describe("createResolver", () => {
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("user");
-          expectTypeOf(context).toHaveProperty("client");
           await new Promise((resolve) => setTimeout(resolve, 0));
           return { data: context.input.id };
         },
@@ -272,8 +265,6 @@ describe("createResolver", () => {
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("user");
-          expectTypeOf(context).toHaveProperty("client");
-          expectTypeOf(context.client).toEqualTypeOf<SqlClient>();
           return { success: true };
         },
       });

@@ -1,19 +1,28 @@
 import { z } from "zod";
 import type { CodeGeneratorBase } from "./types";
 
-export const DistPathOptionSchema = z.object({
-  distPath: z.union([
-    z.string(),
-    z.function({
-      input: [
-        z.object({
-          tailorDB: z.string(),
-        }),
-      ],
-      output: z.string(),
-    }),
-  ]),
-});
+// Literal-based schemas for each generator
+export const KyselyTypeConfigSchema = z.tuple([
+  z.literal("@tailor/kysely-type"),
+  z.object({ distPath: z.string() }),
+]);
+
+export const DbTypeConfigSchema = z.tuple([
+  z.literal("@tailor/db-type"),
+  z.object({
+    distPath: z.union([
+      z.string(),
+      z.function({
+        input: [
+          z.object({
+            tailorDB: z.string(),
+          }),
+        ],
+        output: z.string(),
+      }),
+    ]),
+  }),
+]);
 
 // FIXME: more strict schema validation
 export const CodeGeneratorSchema = z.object({
@@ -29,7 +38,8 @@ export const CodeGeneratorSchema = z.object({
 
 // Base schema for generator config (before transformation to actual Generator instances)
 export const BaseGeneratorConfigSchema = z.union([
-  z.tuple([z.string(), DistPathOptionSchema]),
+  KyselyTypeConfigSchema,
+  DbTypeConfigSchema,
   CodeGeneratorSchema,
 ]);
 
@@ -42,11 +52,12 @@ export type * from "./types";
 export function createGeneratorConfigSchema(
   builtinGenerators: Map<
     string,
-    (options: z.output<typeof DistPathOptionSchema>) => CodeGeneratorBase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (options: any) => CodeGeneratorBase
   >,
 ) {
   return z
-    .union([z.tuple([z.string(), DistPathOptionSchema]), CodeGeneratorSchema])
+    .union([KyselyTypeConfigSchema, DbTypeConfigSchema, CodeGeneratorSchema])
     .transform((gen) => {
       if (Array.isArray(gen)) {
         const [id, options] = gen;

@@ -42,7 +42,6 @@ describe("CodeTransformer", () => {
         const resolver = {
           name: "${resolverName}",
           body: async () => ({ result: "test" }),
-          options: { dbNamespace: "test" },
         };
 
         export default resolver;
@@ -67,55 +66,6 @@ describe("CodeTransformer", () => {
       // bodyファイルが作成されることを確認
       expect(resultFiles).toHaveLength(1);
       expect(resultFiles[0]).toContain(`${resolverName}__body.js`);
-    });
-
-    it("SQL bodyに適切なラッパーを生成する", async () => {
-      const resolverName = "testResolver";
-      const moduleSource = multiline /* ts */ `
-        const resolver = {
-          name: "${resolverName}",
-          body: async () => ({ result: "test" }),
-          options: { dbNamespace: "mydb" },
-        };
-
-        export default resolver;
-      `.trim();
-
-      const testFile = writeResolverModule("resolver-sql.js", moduleSource);
-
-      const resultFiles = await transformer.transform(testFile, tempDir);
-
-      const bodyFile = resultFiles[0];
-      const bodyContent = readFileSync(bodyFile, "utf-8");
-
-      expect(bodyContent).toContain("$tailor_db_wrapper");
-      expect(bodyContent).toContain('"mydb"');
-      expect(bodyContent).toContain("$tailor_resolver_body");
-    });
-
-    it("デフォルトのdbNamespaceを使用する", async () => {
-      const resolverName = "testResolver";
-      const moduleSource = multiline /* ts */ `
-        const resolver = {
-          name: "${resolverName}",
-          body: async () => ({ result: "test" }),
-          options: { dbNamespace: "defaultDb" },
-        };
-
-        export default resolver;
-      `.trim();
-
-      const testFile = writeResolverModule(
-        "resolver-default-db.js",
-        moduleSource,
-      );
-
-      const resultFiles = await transformer.transform(testFile, tempDir);
-
-      const bodyFile = resultFiles[0];
-      const bodyContent = readFileSync(bodyFile, "utf-8");
-
-      expect(bodyContent).toContain('"defaultDb"');
     });
   });
 });

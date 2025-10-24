@@ -183,7 +183,6 @@ describe("dataplane", () => {
             summary: [
               "step1: Hello Alice Smith on step1!",
               expect.stringContaining("step2"),
-              "alice",
               expect.stringContaining("Alabama"),
             ],
           },

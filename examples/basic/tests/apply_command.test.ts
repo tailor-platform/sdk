@@ -177,7 +177,7 @@ describe("pnpm apply command integration tests", () => {
   test("bundled JS files should not be excessively large", () => {
     // Define maximum acceptable sizes (2x current sizes as threshold)
     const maxSizes: Record<string, number> = {
-      "executors/user-created.js": 18373 * 2, // ~36KB
+      "executors/user-created.js": 200000, // ~200KB (includes SDK with inflection)
       "functions/add__body.js": 10168 * 2, // ~20KB
       "functions/showUserInfo__body.js": 10435 * 2, // ~21KB
       "functions/stepChain__body.js": 173573 * 2, // ~347KB
@@ -258,7 +258,6 @@ describe("pnpm apply command integration tests", () => {
             summary: [
               "step1: Hello Taro Yamada on step1!",
               `step2: recorded ${formatExpectation} on step2!`,
-              "Alice",
               "CA, NY",
             ],
           },
@@ -288,11 +287,9 @@ describe("pnpm apply command integration tests", () => {
 
         expect(result).toBeUndefined();
         expect(executedQueries).toEqual([
-          { query: "select * from User where id = $1", params: ["user-1"] },
+          { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
         ]);
-        expect(createdClients).toEqual([
-          { namespace: "tailordb", ended: true },
-        ]);
+        expect(createdClients).toMatchObject([{ namespace: "tailordb" }]);
       });
     });
   });

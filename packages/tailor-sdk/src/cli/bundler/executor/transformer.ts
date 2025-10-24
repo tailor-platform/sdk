@@ -3,7 +3,6 @@ import * as path from "node:path";
 import ml from "multiline-ts";
 import { type Executor } from "@/configure/services/executor/types";
 import { type ITransformer } from "@/cli/bundler";
-import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/cli/bundler/wrapper";
 import { pathToFileURL } from "node:url";
 
 export class ExecutorTransformer implements ITransformer {
@@ -51,14 +50,7 @@ export class ExecutorTransformer implements ITransformer {
     const relativePath = path
       .relative(stepsDir, transformedPath)
       .replace(/\\/g, "/");
-    const executorContent = exec.dbNamespace
-      ? ml /* js */ `
-      import { __executor_function } from "${relativePath}";
-
-      ${DB_WRAPPER_DEFINITION}
-      globalThis.main = ${wrapDbFn(exec.dbNamespace, "__executor_function")};
-    `
-      : ml /* js */ `
+    const executorContent = ml /* js */ `
       import { __executor_function } from "${relativePath}";
 
       globalThis.main = __executor_function;

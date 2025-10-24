@@ -497,7 +497,6 @@ export default createExecutor(
     fn: async ({ newRecord }) => {
       console.log(`Sending welcome email to ${newRecord.email}`);
     },
-    dbNamespace: "tailordb",
   });
 ```
 

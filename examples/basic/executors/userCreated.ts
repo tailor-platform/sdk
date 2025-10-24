@@ -18,5 +18,4 @@ export default createExecutor(
     fn: async (args) => {
       await userRecordLog(args);
     },
-    dbNamespace: "tailordb",
   });

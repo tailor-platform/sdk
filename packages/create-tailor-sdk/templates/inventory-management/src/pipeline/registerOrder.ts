@@ -1,9 +1,7 @@
 import { createResolver, t } from "@tailor-platform/tailor-sdk";
 import { order } from "../db/order";
 import { orderItem } from "../db/orderItem";
-import { DB } from "../generated/main-db";
-import { Kysely } from "kysely";
-import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+import { type DB, getDB } from "../generated/kysely-tailordb";
 
 const input = t.type({
   order: t.object({
@@ -24,7 +22,7 @@ const input = t.type({
 });
 type Input = t.infer<typeof input>;
 
-const insertOrder = async (db: Kysely<DB>, input: Input) => {
+const insertOrder = async (db: DB<"main-db">, input: Input) => {
   // Insert Order
   const order = await db
     .insertInto("Order")
@@ -52,7 +50,7 @@ const insertOrder = async (db: Kysely<DB>, input: Input) => {
     .execute();
 };
 
-const updateInventory = async (db: Kysely<DB>, input: Input) => {
+const updateInventory = async (db: DB<"main-db">, input: Input) => {
   for (const item of input.items) {
     const inventory = await db
       .selectFrom("Inventory")
@@ -103,12 +101,7 @@ export default createResolver({
   operation: "mutation",
   input,
   body: async (context) => {
-    const client = new tailordb.Client({
-      namespace: "main-db",
-    });
-    const db = new Kysely<DB>({
-      dialect: new TailordbDialect(client),
-    });
+    const db = getDB("main-db");
     await db.transaction().execute(async (trx) => {
       await insertOrder(trx, context.input);
       await updateInventory(trx, context.input);

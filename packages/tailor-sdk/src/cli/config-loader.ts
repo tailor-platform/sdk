@@ -13,17 +13,22 @@ import {
 import {
   createGeneratorConfigSchema,
   type CodeGeneratorBase,
-  type DistPathOption,
   type Generator,
 } from "@/parser/generator-config";
 
-// Register built-in generators
-const builtinGenerators = new Map<
-  string,
-  (options: DistPathOption) => CodeGeneratorBase
->([
-  [KyselyGeneratorID, (options) => new KyselyGenerator(options)],
-  [DbTypeGeneratorID, (options) => new DbTypeGenerator(options)],
+// Register built-in generators with their constructor functions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
+  [
+    KyselyGeneratorID,
+    (options: { distPath: string }) => new KyselyGenerator(options),
+  ],
+  [
+    DbTypeGeneratorID,
+    (options: {
+      distPath: string | ((context: { tailorDB: string }) => string);
+    }) => new DbTypeGenerator(options),
+  ],
 ]);
 
 export const GeneratorConfigSchema =

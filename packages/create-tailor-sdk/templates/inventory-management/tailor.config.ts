@@ -36,5 +36,5 @@ export default defineConfig({
 
 export const generators = defineGenerators([
   "@tailor/kysely-type",
-  { distPath: ({ tailorDB }) => `./src/generated/${tailorDB}.ts` },
+  { distPath: `./src/generated/kysely-tailordb.ts` },
 ]);

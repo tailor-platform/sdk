@@ -1,0 +1,94 @@
+import { type ColumnType, Kysely } from "kysely";
+import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+
+type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
+type Timestamp = ColumnType<Date, Date | string, Date | string>;
+type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<NonNullable<S>, I | null, U | null>
+  : ColumnType<NonNullable<T>, T | null, T | null>
+
+interface Namespace {
+  "main-db": {
+    Category: {
+      id: Generated<string>;
+      name: string;
+      description: string | null;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    Contact: {
+      id: Generated<string>;
+      name: string;
+      email: string;
+      phone: string | null;
+      address: string | null;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    Inventory: {
+      id: Generated<string>;
+      productId: string;
+      quantity: number;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    Notification: {
+      id: Generated<string>;
+      message: string;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    Order: {
+      id: Generated<string>;
+      name: string;
+      description: string | null;
+      orderDate: Timestamp;
+      orderType: "PURCHASE" | "SALES";
+      contactId: string;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    OrderItem: {
+      id: Generated<string>;
+      orderId: string;
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: AssertNonNull<number>;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    Product: {
+      id: Generated<string>;
+      name: string;
+      description: string | null;
+      categoryId: string;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    User: {
+      id: Generated<string>;
+      name: string;
+      email: string;
+      role: "MANAGER" | "STAFF";
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+  }
+}
+
+export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
+  const client = new tailordb.Client({ namespace });
+  return new Kysely<Namespace[N]>({ dialect: new TailordbDialect(client) });
+}
+
+export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;

@@ -1,6 +1,6 @@
 import { createResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
-import { kyselyWrapper } from "generated/tailordb";
+import { getDB } from "generated/tailordb";
 
 export default createResolver({
   name: "stepChain",
@@ -16,7 +16,6 @@ export default createResolver({
       summary: t.string({ array: true }),
     }),
   }),
-  options: { dbNamespace: "tailordb" },
   body: async (context) => {
     const step1 = `step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`;
     const step2 = `step2: recorded ${format(
@@ -24,23 +23,16 @@ export default createResolver({
       "yyyy-MM-dd HH:mm:ss",
     )} on step2!`;
 
-    const result = await context.client.execOne<{ name: string } | null>(
-      /* sql */ `SELECT name FROM User ORDER BY createdAt DESC`,
-    );
-    const sqlStep = result ? result.name : "no user found";
-
-    const kyselyStep = await kyselyWrapper(context, async (context) => {
-      const query = context.db
-        .selectFrom("Supplier")
-        .select(["state"])
-        .compile();
-
-      return (await context.client.exec(query)).map((r) => r.state).join(", ");
-    });
+    const db = getDB("tailordb");
+    const kyselyResult = await db
+      .selectFrom("Supplier")
+      .select(["state"])
+      .execute();
+    const kyselyStep = kyselyResult.map((r) => r.state).join(", ");
 
     return {
       result: {
-        summary: [step1, step2, sqlStep, kyselyStep],
+        summary: [step1, step2, kyselyStep],
       },
     };
   },

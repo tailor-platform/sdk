@@ -15,7 +15,7 @@ This example implements a simple business application with:
 
 ```
 basic/
-├── tailor.config.ts      # SDK configuration (includes auth, IdP, static website)
+├── tailor.config.ts      # SDK configuration (includes auth, IdP, static website, generators)
 ├── tailordb/             # Database models
 │   ├── user.ts          # User model with roles
 │   ├── customer.ts      # Customer model
@@ -27,6 +27,8 @@ basic/
 ├── executors/            # Event handlers
 │   ├── userCreated.ts   # Handler for new user creation
 │   └── salesOrderCreated.ts # Handler for new sales orders
+├── generated/            # Generated files (Kysely types, etc.)
+│   └── tailordb.ts      # Generated Kysely types and getDB() function
 └── tests/               # Test suite with fixtures
 ```
 
@@ -54,18 +56,20 @@ The example shows various relation types:
 
 ### 3. GraphQL Resolvers
 
-Resolvers use a configuration-based approach:
+Resolvers use a configuration-based approach with database access via Kysely:
 
 ```typescript
+import { getDB } from "generated/tailordb";
+
 createResolver({
   name: "stepChain",
   operation: "query",
   input: inputType,
-  body: (context) => {
-    // Resolver logic
-    const step1Result = /* first logic */;
-    const step2Result = /* second logic */;
-    return step2Result;
+  body: async (context) => {
+    // Access database with Kysely query builder
+    const db = getDB("tailordb");
+    const result = await db.selectFrom("TableName").selectAll().execute();
+    return result;
   },
   output: outputType,
 });
@@ -76,16 +80,49 @@ createResolver({
 React to database changes with executors:
 
 ```typescript
+import { getDB } from "generated/tailordb";
+
 createExecutor("userCreated", "Handle new user creation")
   .on(recordCreatedTrigger(user))
   .executeFunction({
-    fn: async (context) => {
-      // Handle new user creation
+    fn: async ({ newRecord }) => {
+      // Access database with Kysely query builder
+      const db = getDB("tailordb");
+      const user = await db
+        .selectFrom("User")
+        .selectAll()
+        .where("id", "=", newRecord.id)
+        .executeTakeFirst();
+      console.log(`New user: ${user?.username}`);
     },
   });
 ```
 
-### 5. Authentication & Identity Provider
+### 5. Code Generators
+
+The example uses the `@tailor/kysely-type` generator to create type-safe database access.
+
+**Prerequisites**:
+
+```bash
+pnpm add -D @tailor-platform/function-kysely-tailordb @tailor-platform/function-types
+```
+
+**Configuration**:
+
+```typescript
+export const generators = defineGenerators([
+  "@tailor/kysely-type",
+  { distPath: "./generated/tailordb.ts" },
+]);
+```
+
+This generator creates:
+
+- Type-safe Kysely table definitions for all TailorDB models
+- `getDB(namespace)` function to create Kysely instances for database queries
+
+### 6. Authentication & Identity Provider
 
 The example includes authentication configuration with:
 

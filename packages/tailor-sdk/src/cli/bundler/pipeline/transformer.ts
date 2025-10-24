@@ -3,7 +3,6 @@ import * as path from "node:path";
 import ml from "multiline-ts";
 import { type Resolver } from "@/parser/service/pipeline";
 import { type ITransformer } from "@/cli/bundler";
-import { DB_WRAPPER_DEFINITION, wrapDbFn } from "@/cli/bundler/wrapper";
 import { pathToFileURL } from "node:url";
 
 export class CodeTransformer implements ITransformer {
@@ -40,23 +39,10 @@ export class CodeTransformer implements ITransformer {
       .relative(functionDir, transformedPath)
       .replace(/\\/g, "/");
 
-    const dbNamespace = resolver.options?.dbNamespace;
-
-    let bodyContent;
-    if (dbNamespace) {
-      bodyContent = ml /* js */ `
-        import { ${bodyVariableName} } from "${relativePath}";
-
-        ${DB_WRAPPER_DEFINITION}
-        globalThis.main = ${wrapDbFn(dbNamespace, bodyVariableName)};
-      `;
-    } else {
-      bodyContent = ml /* js */ `
-        import { ${bodyVariableName} } from "${relativePath}";
-        globalThis.main = ${bodyVariableName};
-      `;
-    }
-
+    const bodyContent = ml /* js */ `
+      import { ${bodyVariableName} } from "${relativePath}";
+      globalThis.main = ${bodyVariableName};
+    `;
     fs.writeFileSync(bodyFilePath, bodyContent);
     return [bodyFilePath];
   }

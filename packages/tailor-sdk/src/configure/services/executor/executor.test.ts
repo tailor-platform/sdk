@@ -8,7 +8,7 @@ import {
   resolverExecutedTrigger,
   scheduleTrigger,
 } from "./trigger";
-import { createResolver, type SqlClient } from "../pipeline";
+import { createResolver } from "../pipeline";
 import { db } from "../tailordb";
 import { t } from "@/configure/types";
 
@@ -36,31 +36,6 @@ describe("scheduleTrigger", () => {
   test("can not specify invalid timezone", () => {
     // @ts-expect-error invalid timezone
     scheduleTrigger("* * * * *", "Invalid/Timezone");
-  });
-
-  test("function args do not include client when dbNamespace is not set", () => {
-    createExecutor("test")
-      .on(scheduleTrigger("* * * * *"))
-      .executeFunction({
-        fn: (args) => {
-          expectTypeOf(args).not.toExtend<{
-            client: SqlClient;
-          }>();
-        },
-      });
-  });
-
-  test("function args include client when dbNamespace is set", () => {
-    createExecutor("test")
-      .on(scheduleTrigger("* * * * *"))
-      .executeFunction({
-        fn: (args) => {
-          expectTypeOf(args).toExtend<{
-            client: SqlClient;
-          }>();
-        },
-        dbNamespace: "test-namespace",
-      });
   });
 });
 

@@ -1,28 +1,21 @@
 import { executorFunction } from "./target/function";
 import { executorGql } from "./target/gql";
 import { executorWebhook } from "./target/webhook";
-import {
-  type Executor,
-  type FunctionArgs,
-  type TriggerWithArgs,
-} from "./types";
+import { type Executor, type TriggerWithArgs } from "./types";
 
 export function createExecutor(name: string, description?: string) {
   return {
     on: <Args>(trigger: TriggerWithArgs<Args>) => ({
-      executeFunction: <DB extends string | undefined>({
+      executeFunction: ({
         fn,
-        dbNamespace,
         invoker,
       }: {
-        fn: (args: FunctionArgs<Args, DB>) => void | Promise<void>;
-        dbNamespace?: DB;
+        fn: (args: Args) => void | Promise<void>;
         invoker?: { authName: string; machineUser: string };
       }): Executor => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
-          dbNamespace,
           invoker,
         });
         return {
@@ -33,19 +26,16 @@ export function createExecutor(name: string, description?: string) {
         };
       },
 
-      executeJobFunction: <DB extends string | undefined>({
+      executeJobFunction: ({
         fn,
-        dbNamespace,
         invoker,
       }: {
-        fn: (args: FunctionArgs<Args, DB>) => void | Promise<void>;
-        dbNamespace?: DB;
+        fn: (args: Args) => void | Promise<void>;
         invoker?: { authName: string; machineUser: string };
       }): Executor => {
         const exec = executorFunction({
           name: `${name}__target`,
           fn,
-          dbNamespace,
           invoker,
           jobFunction: true,
         });

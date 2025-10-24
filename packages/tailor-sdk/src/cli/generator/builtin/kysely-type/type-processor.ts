@@ -33,7 +33,7 @@ export class TypeProcessor {
     }
 
     return multiline /* ts */ `
-      export interface ${type.name} {
+      ${type.name}: {
         ${fields.join("\n")}
       }
     `;
@@ -131,87 +131,55 @@ export class TypeProcessor {
 
   static async processTypes(
     types: Record<string, KyselyTypeMetadata>,
+    namespace: string,
   ): Promise<string> {
-    const joinedTypes = await Promise.all(
-      Object.values(types).map((type) => type.typeDef),
-    ).then((defs) => defs.join("\n\n"));
     return (
       [
-        COMMON_PREFIX,
-        joinedTypes,
-        TypeProcessor.generateDBInterface(Object.values(types)),
-        COMMON_SUFFIX,
+        multiline /* ts */ `
+          import { type ColumnType, Kysely } from "kysely";
+          import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+
+          type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+            ? ColumnType<S, I | undefined, U>
+            : ColumnType<T, T | undefined, T>;
+          type Timestamp = ColumnType<Date, Date | string, Date | string>;
+          type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
+            ? ColumnType<NonNullable<S>, I | null, U | null>
+            : ColumnType<NonNullable<T>, T | null, T | null>
+        `,
+        TypeProcessor.generateNamespaceInterface(
+          Object.values(types),
+          namespace,
+        ),
+        multiline /* ts */ `
+          export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
+            const client = new tailordb.Client({ namespace });
+            return new Kysely<Namespace[N]>({ dialect: new TailordbDialect(client) });
+          }
+
+          export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;
+        `,
       ].join("\n\n") + "\n"
     );
   }
 
   /**
-   * Generate the DB interface.
+   * Generate the Namespace interface.
    */
-  private static generateDBInterface(types: KyselyTypeMetadata[]): string {
-    return multiline /* ts */ `
-      export interface DB {
-        ${types.map((type) => `${type.name}: ${type.name};`).join("\n")}
-      }
-    `;
+  private static generateNamespaceInterface(
+    types: KyselyTypeMetadata[],
+    namespace: string,
+  ): string {
+    const typeDefsWithIndent = types
+      .map((type) => {
+        // Add 4 spaces indent to each line of typeDef
+        return type.typeDef
+          .split("\n")
+          .map((line) => (line.trim() ? `    ${line}` : ""))
+          .join("\n");
+      })
+      .join("\n\n");
+
+    return `interface Namespace {\n  "${namespace}": {\n${typeDefsWithIndent}\n  }\n}`;
   }
 }
-
-const COMMON_PREFIX = multiline /* ts */ `
-  import { type SqlClient } from "@tailor-platform/tailor-sdk";
-  import {
-    type ColumnType,
-    DummyDriver,
-    Kysely,
-    PostgresAdapter,
-    PostgresIntrospector,
-    PostgresQueryCompiler,
-    type CompiledQuery,
-  } from "kysely";
-
-  type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>;
-  type Timestamp = ColumnType<Date, Date | string, Date | string>;
-  type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<NonNullable<S>, I | null, U | null>
-    : ColumnType<NonNullable<T>, T | null, T | null>
-`;
-
-const COMMON_SUFFIX = multiline /* ts */ `
-  const getDB = () => {
-    return new Kysely<DB>({
-      dialect: {
-        createAdapter: () => new PostgresAdapter(),
-        createDriver: () => new DummyDriver(),
-        createIntrospector: (db: Kysely<unknown>) => new PostgresIntrospector(db),
-        createQueryCompiler: () => new PostgresQueryCompiler(),
-      },
-    });
-  };
-
-  type QueryReturnType<T> = T extends CompiledQuery<infer U> ? U : never;
-
-  export async function kyselyWrapper<const C extends { client: SqlClient }, R>(
-    context: C,
-    callback: (
-      context: Omit<C, "client"> & {
-        db: ReturnType<typeof getDB>;
-        client: {
-          exec: <Q extends CompiledQuery>(
-            query: Q,
-          ) => Promise<QueryReturnType<Q>[]>;
-        };
-      },
-    ) => Promise<R>,
-  ) {
-    const db = getDB();
-    const clientWrapper = {
-      exec: async <Q extends CompiledQuery>(query: Q) => {
-        return await context.client.exec<QueryReturnType<Q>[]>(query.sql, query.parameters);
-      },
-    };
-
-    return await callback({ ...context, db, client: clientWrapper });
-  }
-`;

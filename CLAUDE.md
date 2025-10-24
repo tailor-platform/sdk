@@ -76,13 +76,15 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 2. **Pipeline Resolvers** (`src/configure/services/pipeline/`)
    - Create GraphQL resolvers using `createResolver`
    - Define resolver configuration with `name`, `operation` (query/mutation), `input`, `body`, and `output`
-   - The `body` function receives a context object with `input`, `user`, and `client` properties
+   - The `body` function receives a context object with `input` and `user` properties
+   - Use `getDB()` from generated files to access database with Kysely query builder
    - Return data directly from the body function (supports both sync and async)
 
 3. **Executors** (`src/configure/services/executor/`)
    - Event-driven handlers using `createExecutor()`
    - Trigger on record changes: `recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`
    - Execute functions, webhooks, or GraphQL operations
+   - Use `getDB()` from generated files to access database with Kysely query builder
 
 4. **Static Websites** (`src/configure/services/staticwebsite/`)
    - Define static website configurations using `defineStaticWebSite()`
@@ -100,8 +102,12 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Central configuration using `defineConfig()` for a single application
    - Required fields: `workspaceId` and `name`
    - Specify component locations with glob patterns
-   - Configure generators for code generation
+   - Configure generators using `defineGenerators()` - must include `@tailor/kysely-type` for database access
    - Application-level settings: `cors`, `allowedIPAddresses`, `disableIntrospection`
+
+7. **Code Generators**
+   - `@tailor/kysely-type`: Generates Kysely type definitions and `getDB()` function (required for database access)
+   - Configure generators with `defineGenerators()` and specify `distPath` for output files
 
 ### Code Patterns
 
@@ -269,18 +275,55 @@ export default defineConfig({
 });
 ```
 
+**Generator Configuration Pattern:**
+
+```typescript
+import { defineGenerators } from "@tailor-platform/tailor-sdk";
+
+export const generators = defineGenerators([
+  "@tailor/kysely-type",
+  { distPath: "./generated/tailordb.ts" },
+]);
+```
+
+**Important**: The `@tailor/kysely-type` generator is required to use Kysely query builder in resolvers and executors.
+
+**Prerequisites**:
+
+1. Install required dependencies:
+   ```bash
+   pnpm add -D @tailor-platform/function-kysely-tailordb @tailor-platform/function-types
+   ```
+
+This generator creates:
+
+- Type-safe Kysely table definitions for all TailorDB types
+- `getDB(namespace)` function to create Kysely instances
+- Type definitions for database operations
+
 **Resolver Pattern:**
 
 ```typescript
+import { createResolver, t } from "@tailor-platform/tailor-sdk";
+import { getDB } from "generated/tailordb";
+
 export default createResolver({
   name: "resolverName",
   operation: "query", // or "mutation"
   input: t.type({
     field: t.string(),
   }),
-  body: (context) => {
-    // Access: context.input, context.user, context.client
-    return { result: "value" };
+  body: async (context) => {
+    // Access: context.input, context.user
+    // Use getDB() to access database with Kysely
+    const db = getDB("tailordb");
+    const result = await db
+      .selectFrom("TableName")
+      .selectAll()
+      .where("field", "=", context.input.field)
+      .execute();
+
+    return { result };
   },
   output: t.type({
     result: t.string(),
@@ -291,9 +334,29 @@ export default createResolver({
 **Executor Pattern:**
 
 ```typescript
-export default createExecutor("name", "description")
-  .on(recordCreatedTrigger(model))
-  .executeFunction({ fn: handler, dbNamespace: "tailordb" });
+import {
+  createExecutor,
+  recordCreatedTrigger,
+  t,
+} from "@tailor-platform/tailor-sdk";
+import { getDB } from "generated/tailordb";
+import { user } from "tailordb/user";
+
+const handler = async ({ newRecord }: { newRecord: t.infer<typeof user> }) => {
+  // Use getDB() to access database with Kysely
+  const db = getDB("tailordb");
+  const record = await db
+    .selectFrom("User")
+    .selectAll()
+    .where("id", "=", newRecord.id)
+    .executeTakeFirst();
+
+  console.log(`New user: ${record?.name}`);
+};
+
+export default createExecutor("userLogger", "Log user creation")
+  .on(recordCreatedTrigger(user))
+  .executeFunction({ fn: handler });
 ```
 
 ### Important Notes

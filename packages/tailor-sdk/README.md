@@ -307,22 +307,7 @@ You can specify the path for the generated file with the distPath option.
 export default defineConfig({
   workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
-  generators: [
-    ["@tailor/kysely-type", { distPath: ({ db }) => `./generated/${db}.ts` }],
-  ],
-});
-```
-
-#### @tailor/db-type
-
-Generates TypeScript type definitions corresponding to TailorDB service configuration.
-You can specify the path for the generated file with the distPath option.
-
-```typescript
-export default defineConfig({
-  workspaceId: process.env.WORKSPACE_ID!,
-  name: "my-app",
-  generators: [["@tailor/db-type", { distPath: () => `./generated/types.ts` }]],
+  generators: [["@tailor/kysely-type", { distPath: "./generated/db.ts" }]],
 });
 ```
 
@@ -807,11 +792,13 @@ createResolver({
 ### Body Function
 
 The `body` function defines the actual resolver logic.
-The context includes `input`, `user`, and `client` properties.
+The context includes `input` and `user` properties.
 
-The `client` property can be used to execute SQL queries:
+To access the database, use `getDB()` from generated files with Kysely query builder:
 
 ```typescript
+import { getDB } from "generated/tailordb";
+
 createResolver({
   name: "getUser",
   operation: "query",
@@ -819,10 +806,12 @@ createResolver({
     name: t.string(),
   }),
   body: async (context) => {
-    const result = await context.client.execOne<{ id: string } | null>(
-      `SELECT id FROM User WHERE name = ? LIMIT 1`,
-      [context.input.name],
-    );
+    const db = getDB("tailordb");
+    const result = await db
+      .selectFrom("User")
+      .select("id")
+      .where("name", "=", context.input.name)
+      .executeTakeFirst();
     return {
       result: result?.id,
     };
@@ -833,34 +822,20 @@ createResolver({
 });
 ```
 
-If you're generating Kysely types with a generator, you can use `kyselyWrapper` to execute typed queries:
-
-```typescript
-createResolver({
-  name: "getUser",
-  operation: "query",
-  input: t.type({
-    name: t.string(),
-  }),
-  body: async (context) => {
-    return kyselyWrapper(context, async (context) => {
-      const query = context.db
-        .selectFrom("User")
-        .select("id")
-        .where("name", "=", context.input.name)
-        .limit(1)
-        .compile();
-      const result = await context.client.exec(query);
-      return {
-        result: result[0]?.id,
-      };
-    });
-  },
-  output: t.type({
-    result: t.uuid({ optional: true }),
-  }),
-});
-```
+> [!IMPORTANT]
+> To use `getDB()`, you must:
+>
+> 1. Install required dependencies:
+>    ```bash
+>    pnpm add -D @tailor-platform/function-kysely-tailordb @tailor-platform/function-types
+>    ```
+> 2. Configure the `@tailor/kysely-type` generator in your `tailor.config.ts`:
+>    ```typescript
+>    export const generators = defineGenerators([
+>      "@tailor/kysely-type",
+>      { distPath: "./generated/tailordb.ts" },
+>    ]);
+>    ```
 
 The body function can be synchronous or asynchronous and should return data matching the output schema.
 
@@ -1025,20 +1000,22 @@ Executors support different execution methods depending on your use case:
 
 #### executeFunction / executeJobFunction
 
-Execute JavaScript/TypeScript functions directly. Pass an options object:
+Execute JavaScript/TypeScript functions directly. Use `getDB()` from generated files to access the database:
 
 ```typescript
+import { getDB } from "generated/tailordb";
+
 ...
 .executeFunction({
-  fn: async ({ newRecord, client }) => {
-    const result = await client.exec(
-      /* sql */ `SELECT * FROM "Order" WHERE customerId = ?`,
-      [newRecord.id],
-    );
+  fn: async ({ newRecord }) => {
+    const db = getDB("tailordb");
+    const result = await db
+      .selectFrom("Order")
+      .selectAll()
+      .where("customerId", "=", newRecord.id)
+      .execute();
     console.log(`Found ${result.length} orders for customer`);
   },
-  dbNamespace: "my-db", // optional
-  // invoker: { authName: "auth-namespace", machineUser: "mu-name" },
 })
 ```
 
@@ -1108,15 +1085,10 @@ For `recordCreatedTrigger`, `recordUpdatedTrigger`, and `recordDeletedTrigger`:
 
 - `newRecord`: New record state (not available for delete triggers)
 - `oldRecord`: Previous record state (only for update triggers)
-- `client`: Database client with methods:
-  - `exec<T>(sql: string, params?: readonly unknown[])` → `T[]`
-  - `execOne<T>(sql: string, params?: readonly unknown[])` → `T`
 
 #### Schedule trigger context
 
-For `scheduleTrigger`:
-
-- `client`: Same database client as above
+For `scheduleTrigger`: no context
 
 #### Incoming webhook trigger context
 
@@ -1124,7 +1096,6 @@ For `incomingWebhookTrigger`:
 
 - `payload`: Webhook request body (typed)
 - `headers`: Webhook request headers
-- `client`: Same `SqlClient` as above
 
 #### Resolver executed trigger context
 
@@ -1133,7 +1104,6 @@ For `resolverExecutedTrigger`:
 - `result`: Resolver's return value (when execution succeeds)
 - `error`: Error object (when execution fails)
 - `input`: Input that was passed to resolver
-- `client`: Same `SqlClient` as above
 
 ### Advanced Features
 

@@ -48,7 +48,7 @@ describe("KyselyGenerator統合テスト", () => {
   const testDistPath = "/test/dist/kysely-types.ts";
 
   beforeEach(() => {
-    kyselyGenerator = new KyselyGenerator({ distPath: () => testDistPath });
+    kyselyGenerator = new KyselyGenerator({ distPath: testDistPath });
   });
 
   describe("基本的な動作テスト", () => {
@@ -60,7 +60,7 @@ describe("KyselyGenerator統合テスト", () => {
       });
 
       expect(result.name).toBe("User");
-      expect(result.typeDef).toContain("export interface User {");
+      expect(result.typeDef).toContain("User: {");
       expect(result.typeDef).toContain("id: Generated<string>;");
       expect(result.typeDef).toContain("name: string;");
       expect(result.typeDef).toContain("email: string;");
@@ -103,7 +103,7 @@ describe("KyselyGenerator統合テスト", () => {
         namespace: "test-namespace",
       });
 
-      expect(result.typeDef).toContain("export interface ComplexUser {");
+      expect(result.typeDef).toContain("ComplexUser: {");
       expect(result.typeDef).toContain("profile: {");
       expect(result.typeDef).toContain("firstName: string;");
       expect(result.typeDef).toContain("lastName: string;");
@@ -156,7 +156,7 @@ describe("KyselyGenerator統合テスト", () => {
       const typeMetadata = {
         User: {
           name: "User",
-          typeDef: `export interface User {
+          typeDef: `User: {
   id: Generated<string>;
   name: string;
   email: string;
@@ -164,7 +164,7 @@ describe("KyselyGenerator統合テスト", () => {
         },
         Post: {
           name: "Post",
-          typeDef: `export interface Post {
+          typeDef: `Post: {
   id: Generated<string>;
   title: string;
   content: string;
@@ -180,24 +180,22 @@ describe("KyselyGenerator統合テスト", () => {
 
       // Common imports are included
       expect(result).toContain(
-        'import { type SqlClient } from "@tailor-platform/tailor-sdk";',
+        'import { type ColumnType, Kysely } from "kysely";',
       );
-      expect(result).toContain("import {");
-      expect(result).toContain("ColumnType,");
-      expect(result).toContain("DummyDriver,");
-      expect(result).toContain("Kysely,");
+      expect(result).toContain(
+        'import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";',
+      );
 
-      // Type definitions are included
-      expect(result).toContain("export interface User {");
-      expect(result).toContain("export interface Post {");
+      // Type definitions are included in Namespace interface
+      expect(result).toContain("interface Namespace {");
+      expect(result).toContain('"test-namespace": {');
+      expect(result).toContain("User: {");
+      expect(result).toContain("Post: {");
 
-      // DB interface is generated
-      expect(result).toContain("interface DB {");
-      expect(result).toContain("User: User;");
-      expect(result).toContain("Post: Post;");
-
-      // kyselyWrapper is included
-      expect(result).toContain("export async function kyselyWrapper");
+      // getDB function is included
+      expect(result).toContain(
+        "export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]>",
+      );
 
       // File ends with newline
       expect(result.endsWith("\n")).toBe(true);
@@ -211,29 +209,38 @@ describe("KyselyGenerator統合テスト", () => {
       });
 
       expect(result).toContain(
-        'import { type SqlClient } from "@tailor-platform/tailor-sdk";',
+        'import { type ColumnType, Kysely } from "kysely";',
       );
-      expect(result).toContain("interface DB {");
-      expect(result).toContain("export async function kyselyWrapper");
+      expect(result).toContain(
+        'import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";',
+      );
+      expect(result).toContain("interface Namespace {");
+      expect(result).toContain('"test-namespace": {');
+      expect(result).toContain("export function getDB");
       expect(result.endsWith("\n")).toBe(true);
     });
   });
 
   describe("aggregate関数のテスト", () => {
     it("型定義を統合してファイル生成結果を返す", () => {
-      const processedTypes = `import { SqlClient } from "@tailor-platform/tailor-sdk";
+      const processedTypes = `import { type ColumnType, Kysely } from "kysely";
+import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-export interface User {
-  id: Generated<string>;
-  name: string;
-  email: string;
+interface Namespace {
+  "test-namespace": {
+    User: {
+      id: Generated<string>;
+      name: string;
+      email: string;
+    }
+  }
 }
 
-interface DB {
-  User: User;
+export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
+  return new Kysely<Namespace[N]>({
+    dialect: new TailordbDialect(new tailordb.Client({ namespace }))
+  });
 }
-
-export async function kyselyWrapper() {}
 `;
 
       const inputs = [
@@ -301,11 +308,10 @@ export async function kyselyWrapper() {}
       expect(result.files[0].path).toBe(testDistPath);
 
       const content = result.files[0].content;
-      expect(content).toContain("export interface User {");
-      expect(content).toContain("export interface Status {");
-      expect(content).toContain("interface DB {");
-      expect(content).toContain("User: User;");
-      expect(content).toContain("Status: Status;");
+      expect(content).toContain("User: {");
+      expect(content).toContain("Status: {");
+      expect(content).toContain("interface Namespace {");
+      expect(content).toContain('"test-namespace": {');
     });
   });
 

@@ -1,16 +1,13 @@
-import { type SqlClient } from "@/configure/services/pipeline";
 import { type FunctionTarget } from "../types";
 
 export function executorFunction<A>({
   name,
   fn,
-  dbNamespace,
   jobFunction,
   invoker,
 }: {
   name: string;
-  fn: (args: A & { client: SqlClient }) => void | Promise<void>;
-  dbNamespace?: string;
+  fn: (args: A) => void | Promise<void>;
   jobFunction?: boolean;
   invoker?: { authName: string; machineUser: string };
 }): FunctionTarget {
@@ -26,6 +23,5 @@ export function executorFunction<A>({
         }
       : undefined,
     fn,
-    dbNamespace,
   };
 }

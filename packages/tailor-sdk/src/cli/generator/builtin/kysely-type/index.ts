@@ -22,7 +22,7 @@ export class KyselyGenerator
 
   constructor(
     private readonly options: {
-      distPath: string | ((context: { tailorDB: string }) => string);
+      distPath: string;
     },
   ) {}
 
@@ -47,7 +47,7 @@ export class KyselyGenerator
     namespace: string;
     types: Record<string, KyselyTypeMetadata>;
   }): Promise<string> {
-    return await TypeProcessor.processTypes(args.types);
+    return await TypeProcessor.processTypes(args.types, args.namespace);
   }
 
   aggregate(args: {
@@ -61,10 +61,7 @@ export class KyselyGenerator
       for (const nsResult of input.tailordb) {
         if (nsResult.types) {
           files.push({
-            path:
-              typeof this.options.distPath === "string"
-                ? this.options.distPath
-                : this.options.distPath({ tailorDB: nsResult.namespace }),
+            path: this.options.distPath,
             content: nsResult.types,
           });
         }
