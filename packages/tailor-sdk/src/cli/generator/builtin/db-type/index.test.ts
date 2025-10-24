@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { DbTypeGenerator, DbTypeGeneratorID } from "./index";
 import { db } from "@/configure/services/tailordb/schema";
+import { TailorDBService } from "@/cli/application/tailordb/service";
 
 describe("DbTypeGenerator", () => {
   const mockDistPath = ({ tailorDB }: { tailorDB: string }) =>
@@ -19,8 +20,12 @@ describe("DbTypeGenerator", () => {
     const mockType = db.type("User", {
       name: db.string({ optional: true }),
     });
+    const service = new TailorDBService("test", { files: [] });
+    service["rawTypes"]["test.ts"] = { User: mockType };
+    service["parseTypes"]();
+    const types = service.getTypes();
     const result = await generator.processType({
-      type: mockType,
+      type: types.User,
       applicationNamespace: "test-app",
       namespace: "test-namespace",
     });

@@ -1,15 +1,20 @@
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 import { type KyselyTypeMetadata } from "./types";
 import multiline from "multiline-ts";
+import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+
+type FieldConfig = TailorDBTypeConfig["schema"]["fields"][string];
 
 /**
- * Processor that converts a TailorDBType into Kysely type metadata.
+ * Processor that converts a ParsedTailorDBType into Kysely type metadata.
  */
 export class TypeProcessor {
   /**
-   * Convert a TailorDBType into KyselyTypeMetadata.
+   * Convert a ParsedTailorDBType into KyselyTypeMetadata.
    */
-  static async processType(type: TailorDBType): Promise<KyselyTypeMetadata> {
+  static async processType(
+    type: ParsedTailorDBType,
+  ): Promise<KyselyTypeMetadata> {
     const typeDef = this.generateTableInterface(type);
 
     return {
@@ -21,14 +26,14 @@ export class TypeProcessor {
   /**
    * Generate the table interface.
    */
-  private static generateTableInterface(type: TailorDBType): string {
+  private static generateTableInterface(type: ParsedTailorDBType): string {
     const fields: string[] = ["id: Generated<string>;"];
-    for (const [fieldName, fieldDef] of Object.entries(type.fields)) {
+    for (const [fieldName, parsedField] of Object.entries(type.fields)) {
       if (fieldName === "id") {
         continue;
       }
 
-      const fieldType = this.generateFieldType(fieldDef);
+      const fieldType = this.generateFieldType(parsedField.config);
       fields.push(`${fieldName}: ${fieldType};`);
     }
 
@@ -42,12 +47,11 @@ export class TypeProcessor {
   /**
    * Generate the complete field type including array and null modifiers.
    */
-  private static generateFieldType(fieldDef: any): string {
-    const metadata = fieldDef.metadata;
-    const baseType = this.getBaseType(fieldDef);
-    const isArray = metadata?.array === true;
-    const isNullable = metadata?.required !== true;
-    const isAssertNonNull = metadata?.assertNonNull === true;
+  private static generateFieldType(fieldConfig: FieldConfig): string {
+    const baseType = this.getBaseType(fieldConfig);
+    const isArray = fieldConfig.array === true;
+    const isNullable = fieldConfig.required !== true;
+    const isAssertNonNull = fieldConfig.assertNonNull === true;
 
     let finalType = baseType;
     if (isArray) {
@@ -67,9 +71,8 @@ export class TypeProcessor {
   /**
    * Get the base Kysely type for a field (without array/null modifiers).
    */
-  private static getBaseType(fieldDef: any): string {
-    const metadata = fieldDef.metadata;
-    const fieldType = fieldDef?.type;
+  private static getBaseType(fieldConfig: FieldConfig): string {
+    const fieldType = fieldConfig.type;
 
     switch (fieldType) {
       case "uuid":
@@ -85,9 +88,9 @@ export class TypeProcessor {
       case "boolean":
         return "boolean";
       case "enum":
-        return this.getEnumType(metadata, fieldDef);
+        return this.getEnumType(fieldConfig);
       case "nested":
-        return this.getNestedType(fieldDef);
+        return this.getNestedType(fieldConfig);
       default:
         return "string";
     }
@@ -96,17 +99,16 @@ export class TypeProcessor {
   /**
    * Get the enum type definition.
    */
-  private static getEnumType(metadata: any, fieldDef: any): string {
-    const allowedValues =
-      metadata?.allowedValues ||
-      metadata?.values ||
-      metadata?.enum ||
-      fieldDef?.allowedValues ||
-      fieldDef?.values ||
-      fieldDef?.enum;
+  private static getEnumType(fieldConfig: FieldConfig): string {
+    const allowedValues = fieldConfig.allowedValues;
 
     if (allowedValues && Array.isArray(allowedValues)) {
-      return allowedValues.map((v) => `"${v.value}"`).join(" | ");
+      return allowedValues
+        .map((v: any) => {
+          const value = typeof v === "string" ? v : v.value;
+          return `"${value}"`;
+        })
+        .join(" | ");
     }
     return "string";
   }
@@ -114,15 +116,15 @@ export class TypeProcessor {
   /**
    * Get the nested object type definition.
    */
-  private static getNestedType(fieldDef: any): string {
-    const fields = fieldDef.fields;
+  private static getNestedType(fieldConfig: FieldConfig): string {
+    const fields = fieldConfig.fields;
     if (!fields || typeof fields !== "object") {
       return "string";
     }
 
     const fieldTypes: string[] = [];
-    for (const [fieldName, nestedFieldDef] of Object.entries(fields)) {
-      const fieldType = this.generateFieldType(nestedFieldDef);
+    for (const [fieldName, nestedFieldConfig] of Object.entries(fields)) {
+      const fieldType = this.generateFieldType(nestedFieldConfig);
       fieldTypes.push(`${fieldName}: ${fieldType}`);
     }
 

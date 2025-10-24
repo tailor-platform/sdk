@@ -1,12 +1,11 @@
-import type { SecretValue } from "@/configure/types/types";
-import { z, type ZodType } from "zod";
+import { z } from "zod";
 import type { ValueOperand } from "./types";
 
 // FIXME: SecretValue should be defined by zod schema
 const secretValueSchema = z.object({
   VaultName: z.string(),
   SecretKey: z.string(),
-}) satisfies ZodType<SecretValue>;
+});
 
 const samlBaseSchema = z.object({
   name: z.string(),

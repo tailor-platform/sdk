@@ -20,6 +20,7 @@ import { type Resolver } from "@/parser/service/pipeline";
 import { KyselyGenerator } from "@/cli/generator/builtin/kysely-type";
 import { DependencyWatcher } from "./watch";
 import { t } from "@/configure/types";
+import { TailorDBService } from "@/cli/application/tailordb/service";
 
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {
@@ -52,6 +53,10 @@ class TestGenerator {
     namespace: string;
   }) {
     return { name: args.resolver.name, processed: true };
+  }
+
+  async processExecutor(executor: any) {
+    return { name: executor.name, processed: true };
   }
 
   async processTailorDBNamespace(args: {
@@ -179,12 +184,17 @@ describe("GenerationManager", () => {
 
   describe("processGenerators", () => {
     beforeEach(async () => {
+      const types = {
+        testType: db.type("TestType", {}),
+      };
+      const service = new TailorDBService("test-namespace", { files: [] });
+      service["rawTypes"]["test.ts"] = types;
+      service["parseTypes"]();
+
       manager.applications = {
         "test-app": {
           tailordbNamespaces: {
-            "test-namespace": {
-              testType: db.type("TestType", {}),
-            },
+            "test-namespace": service.getTypes(),
           },
           pipelineNamespaces: {
             "test-namespace": {
@@ -225,6 +235,11 @@ describe("GenerationManager", () => {
           .mockImplementation(() =>
             Promise.reject(new Error("Resolver processing error")),
           ),
+        processExecutor: vi
+          .fn()
+          .mockImplementation(() =>
+            Promise.reject(new Error("Executor processing error")),
+          ),
         aggregate: vi
           .fn()
           .mockImplementation(() => Promise.resolve({ files: [] })),
@@ -247,12 +262,18 @@ describe("GenerationManager", () => {
     beforeEach(() => {
       testGenerator = new TestGenerator();
       manager.generators = [testGenerator];
+
+      const types = {
+        testType: db.type("TestType", {}),
+      };
+      const service = new TailorDBService("test-namespace", { files: [] });
+      service["rawTypes"]["test.ts"] = types;
+      service["parseTypes"]();
+
       manager.applications = {
         "test-app": {
           tailordbNamespaces: {
-            "test-namespace": {
-              testType: db.type("TestType", {}),
-            },
+            "test-namespace": service.getTypes(),
           },
           pipelineNamespaces: {
             "test-namespace": {
@@ -330,11 +351,15 @@ describe("GenerationManager", () => {
         type3: db.type("Type3", {}),
       };
 
+      const service = new TailorDBService("test-namespace", { files: [] });
+      service["rawTypes"]["test.ts"] = types;
+      service["parseTypes"]();
+
       await manager.processTailorDBNamespace(
         testGenerator,
         "test-app",
         "test-namespace",
-        types,
+        service.getTypes(),
       );
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
@@ -596,12 +621,17 @@ describe("GenerationManager", () => {
       expect(typeof testGen.processTailorDBNamespace).toBe("function");
 
       // Initialize applications
+      const types = {
+        testType: db.type("TestType", {}),
+      };
+      const service = new TailorDBService("main", { files: [] });
+      service["rawTypes"]["test.ts"] = types;
+      service["parseTypes"]();
+
       manager.applications = {
         testApp: {
           tailordbNamespaces: {
-            main: {
-              testType: db.type("TestType", {}),
-            },
+            main: service.getTypes(),
           },
           pipelineNamespaces: {
             main: {
@@ -778,14 +808,22 @@ describe("Integration Tests", () => {
               const namespace = `namespace-${nsIdx}`;
 
               // Add types to namespace
-              manager.applications[appName].tailordbNamespaces[namespace] = {};
+              const types: Record<string, TailorDBType> = {};
               Array(50)
                 .fill(0)
                 .forEach((_, typeIdx) => {
-                  manager.applications[appName].tailordbNamespaces[namespace][
-                    `Type${appIdx}_${nsIdx}_${typeIdx}`
-                  ] = db.type(`Type${appIdx}_${nsIdx}_${typeIdx}`, {});
+                  types[`Type${appIdx}_${nsIdx}_${typeIdx}`] = db.type(
+                    `Type${appIdx}_${nsIdx}_${typeIdx}`,
+                    {},
+                  );
                 });
+
+              const service = new TailorDBService(namespace, { files: [] });
+              service["rawTypes"]["test.ts"] = types;
+              service["parseTypes"]();
+
+              manager.applications[appName].tailordbNamespaces[namespace] =
+                service.getTypes();
 
               // Add resolvers to namespace
               manager.applications[appName].pipelineNamespaces[namespace] = {};

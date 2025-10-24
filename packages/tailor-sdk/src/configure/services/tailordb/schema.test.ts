@@ -3,7 +3,6 @@ import { db } from "./schema";
 import type { FieldValidateInput, Hook, ValidateConfig } from "./types";
 import { t, type TailorType } from "@/configure/types";
 import type { output } from "@/configure/types/helpers";
-import * as inflection from "inflection";
 
 describe("TailorDBField 基本フィールド型テスト", () => {
   it("string型フィールドが正しくstring型を出力する", () => {
@@ -233,7 +232,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     customerId: db.string(),
   });
 
-  it("toward.asが省略された場合、toward.type.nameがデフォルトで使用される", () => {
+  it("toward.asが省略された場合、undefinedが保存される（inflectionはparser層で実行される）", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -242,7 +241,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
       },
     });
 
-    expect(userField.reference!.nameMap[0]).toEqual("user");
+    expect(userField.reference!.nameMap[0]).toBeUndefined();
     expect(userField.reference!.nameMap[1]).toEqual("");
     expect(userField.metadata.foreignKeyType).toEqual("User");
     expect(userField.metadata.foreignKeyField).toEqual("id");
@@ -305,7 +304,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
       },
     });
 
-    expect(customerField.reference!.nameMap[0]).toEqual("customer");
+    expect(customerField.reference!.nameMap[0]).toBeUndefined();
     expect(customerField.reference!.key).toEqual("customerId");
     expect(customerField.reference!.nameMap[1]).toEqual("");
     expect(customerField.metadata.foreignKeyType).toEqual("Customer");
@@ -332,7 +331,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
       backward: "relatedItems",
     });
 
-    expect(userField.reference!.nameMap[0]).toEqual("user");
+    expect(userField.reference!.nameMap[0]).toBeUndefined();
     expect(userField.reference!.key).toEqual("id");
     expect(userField.reference!.nameMap[1]).toEqual("relatedItems");
     expect(userField.metadata.foreignKeyType).toEqual("User");
@@ -766,7 +765,7 @@ describe("TailorDBType self relation テスト", () => {
     expect(TestType.fields.dependId.metadata.foreignKeyField).toBe("id");
   });
 
-  it("backward未指定時は型名に基づくデフォルト（単数/複数）が設定される", () => {
+  it("backward未指定時はconfigureでは空文字列が設定される（self relationのforwardはID接尾辞除去で生成される）", () => {
     const A = db.type("Node", {
       // Many-to-one (non-unique): backward is plural (nodes)
       parentID: db.uuid().relation({ type: "n-1", toward: { type: "self" } }),
@@ -774,7 +773,7 @@ describe("TailorDBType self relation テスト", () => {
       pairId: db.uuid().relation({ type: "1-1", toward: { type: "self" } }),
     });
 
-    // forward is derived from field name
+    // forward name for self-relations is derived from field name by stripping ID suffix
     expect((A as any).fields.parentID.reference!.nameMap[0]).toBe("parent");
     expect(A.fields.parentID.metadata.foreignKeyType).toBe("Node");
     expect(A.fields.parentID.metadata.foreignKeyField).toBe("id");
@@ -782,24 +781,19 @@ describe("TailorDBType self relation テスト", () => {
     expect(A.fields.pairId.metadata.foreignKeyType).toBe("Node");
     expect(A.fields.pairId.metadata.foreignKeyField).toBe("id");
 
-    // backward default: Node -> camelize("Node") = "node"
-    // parentID is non-unique, so pluralize("node"): "nodes"
-    expect((A as any).referenced.nodes).toEqual([A, "parentID"]);
-    // pairId is unique, so singularize("node"): "node"
-    expect((A as any).referenced.node).toEqual([A, "pairId"]);
+    // backward is empty string when not specified (inflection for backward happens in parser)
+    expect((A as any).fields.parentID.reference!.nameMap[1]).toBe("");
+    expect((A as any).fields.pairId.reference!.nameMap[1]).toBe("");
   });
 });
 
 describe("TailorDBType plural form テスト", () => {
-  it("単一の名前でtype定義した場合でも、pluralFormがinflectionで設定される", () => {
+  it("単一の名前でtype定義した場合、configureではpluralFormは設定されない（inflectionはparser層で実行される）", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
 
-    expect(_userType.metadata.schema?.settings?.pluralForm).toBe("Users");
-    expect(_userType.metadata.schema?.settings?.pluralForm).toBe(
-      inflection.pluralize("User"),
-    );
+    expect(_userType.metadata.schema?.settings?.pluralForm).toBeUndefined();
   });
 
   it("タプルで名前とplural formを指定した場合、pluralFormが設定される", () => {
@@ -819,21 +813,16 @@ describe("TailorDBType plural form テスト", () => {
     expect(_childType.metadata.schema?.settings?.pluralForm).toBe("Children");
   });
 
-  it("空文字列のplural formの場合、inflectionで設定される", () => {
+  it("空文字列のplural formの場合、configureでは設定されない（inflectionはparser層で実行される）", () => {
     const _dataType = db.type(["Datum", ""], {
       value: db.string(),
     });
 
-    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe(
-      inflection.pluralize("Data"),
-    );
-    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe(
-      inflection.pluralize("Datum"),
-    );
+    expect(_dataType.metadata.schema?.settings?.pluralForm).toBeUndefined();
   });
 
-  it("plural formがnameと同じ場合エラー", () => {
-    expect(() => db.type("Data", {})).toThrowError(
+  it("plural formがnameと同じ場合エラー（タプル形式で明示的に指定した場合）", () => {
+    expect(() => db.type(["Data", "Data"], {})).toThrowError(
       "The name and the plural form must be different. name=Data",
     );
   });

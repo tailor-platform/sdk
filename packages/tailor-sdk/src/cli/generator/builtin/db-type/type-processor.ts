@@ -1,14 +1,20 @@
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type DbTypeMetadata } from "./types";
+import type {
+  ParsedTailorDBType,
+  ParsedField,
+} from "@/parser/service/tailordb/types";
+import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+
+type FieldConfig = TailorDBTypeConfig["schema"]["fields"][string];
 
 /**
  * TailorDBTypeをTypeScript型定義に変換するプロセッサー
  */
 export class TypeProcessor {
   /**
-   * TailorDBTypeをDbTypeMetadataに変換
+   * ParsedTailorDBTypeをDbTypeMetadataに変換
    */
-  static async processType(type: TailorDBType): Promise<DbTypeMetadata> {
+  static async processType(type: ParsedTailorDBType): Promise<DbTypeMetadata> {
     const typeDef = this.generateTypeDefinition(type, new Set());
 
     return {
@@ -35,42 +41,48 @@ export class TypeProcessor {
    * 型定義を生成（循環参照対応）
    */
   private static generateTypeDefinition(
-    type: TailorDBType,
+    type: ParsedTailorDBType,
     processing: Set<string>,
   ): string {
     const fields: string[] = ["id: string;"];
 
-    for (const [fieldName, fieldDef] of Object.entries(type.fields)) {
+    // Process regular fields
+    for (const [fieldName, parsedField] of Object.entries(type.fields)) {
       if (fieldName === "id") {
         continue;
       }
 
-      if ((fieldDef as any).reference) {
-        const relationFields = this.generateRelationFields(
+      if (parsedField.relation) {
+        // This field is a relation field
+        const relationFields = this.generateRelationFieldsFromParsed(
           fieldName,
-          fieldDef,
+          parsedField,
           processing,
         );
         fields.push(...relationFields);
       } else {
-        const fieldType = this.mapFieldToTypeScript(fieldDef, processing);
-        const fieldDefinition = this.generateFieldDefinition(
+        // Regular field
+        const fieldType = this.mapFieldConfigToTypeScript(
+          parsedField.config,
+          processing,
+        );
+        const fieldDefinition = this.generateFieldDefinitionFromConfig(
           fieldName,
           fieldType,
-          fieldDef,
+          parsedField.config,
         );
         fields.push(fieldDefinition);
       }
     }
-    Object.entries(type.referenced).forEach(
-      ([backwardFieldName, [referencedType, fieldName]]) => {
-        const refField = referencedType.fields[fieldName];
-        const isArray = !(refField.metadata?.unique ?? false);
-        fields.push(
-          `${backwardFieldName}?: ${referencedType.name}${isArray ? "[]" : ""} | null;`,
-        );
-      },
-    );
+
+    // Add backward relationships (already parsed with inflection)
+    for (const [relationName, rel] of Object.entries(
+      type.backwardRelationships,
+    )) {
+      fields.push(
+        `${relationName}?: ${rel.targetType}${rel.isArray ? "[]" : ""} | null;`,
+      );
+    }
 
     const fieldLines = fields.join("\n  ");
     const result = `export type ${type.name} = {
@@ -81,38 +93,50 @@ export class TypeProcessor {
   }
 
   /**
-   * リレーションフィールドから2つのフィールドを生成
+   * ParsedFieldからリレーションフィールドを生成
    */
-  private static generateRelationFields(
+  private static generateRelationFieldsFromParsed(
     fieldName: string,
-    fieldDef: any,
+    parsedField: ParsedField,
     processing: Set<string>,
   ): string[] {
-    const refCfg = fieldDef.reference;
-    const targetType = refCfg?.type?.name;
-    if (!targetType) {
-      const fieldType = this.mapFieldToTypeScript(fieldDef, processing);
-      const fieldDefinition = this.generateFieldDefinition(
-        fieldName,
-        fieldType,
-        fieldDef,
+    const fields: string[] = [];
+    const relation = parsedField.relation;
+
+    if (!relation) {
+      // Not a relation, treat as regular field
+      const fieldType = this.mapFieldConfigToTypeScript(
+        parsedField.config,
+        processing,
       );
-      return [fieldDefinition];
+      return [
+        this.generateFieldDefinitionFromConfig(
+          fieldName,
+          fieldType,
+          parsedField.config,
+        ),
+      ];
     }
 
-    const fields: string[] = [];
-
-    // 1. The foreign key itself (retained with original type)
-    const originalFieldType = this.getOriginalFieldType(fieldDef);
+    // 1. The foreign key itself
+    const originalFieldType = this.getFieldTypeFromConfig(parsedField.config);
     fields.push(
-      this.generateFieldDefinition(fieldName, originalFieldType, fieldDef),
+      this.generateFieldDefinitionFromConfig(
+        fieldName,
+        originalFieldType,
+        parsedField.config,
+      ),
     );
 
-    // 2. Referenced object (using forward name from nameMap)
-    const relationFieldName = refCfg?.nameMap?.[0];
+    // 2. Referenced object (using forward name already generated via inflection in parser)
+    const relationFieldName = relation.forwardName;
     if (relationFieldName && relationFieldName !== fieldName) {
       fields.push(
-        this.generateFieldDefinition(relationFieldName, targetType, fieldDef),
+        this.generateFieldDefinitionFromConfig(
+          relationFieldName,
+          relation.targetType,
+          parsedField.config,
+        ),
       );
     }
 
@@ -120,10 +144,10 @@ export class TypeProcessor {
   }
 
   /**
-   * フィールドの元の型を取得（リレーション以外の型）
+   * field configから型を取得
    */
-  private static getOriginalFieldType(fieldDef: any): string {
-    const fieldType = fieldDef?.type;
+  private static getFieldTypeFromConfig(fieldConfig: FieldConfig): string {
+    const fieldType = fieldConfig?.type;
     switch (fieldType) {
       case "uuid":
       case "string":
@@ -142,133 +166,91 @@ export class TypeProcessor {
   }
 
   /**
-   * フィールド定義を生成（共通処理）
+   * field configからTypeScript型へマッピング
    */
-  private static generateFieldDefinition(
-    fieldName: string,
-    fieldType: string,
-    fieldDef: any,
-  ): string {
-    const metadata = fieldDef.metadata;
-    const isRequired = metadata?.required === true;
-    const assertNonNull = metadata?.assertNonNull === true;
-
-    const optional = isRequired || assertNonNull;
-    return `${fieldName}${optional ? "" : "?"}: ${fieldType}${optional ? "" : " | null"};`;
-  }
-
-  /**
-   * フィールドをTypeScript型にマッピング
-   */
-  private static mapFieldToTypeScript(
-    fieldDef: any,
+  private static mapFieldConfigToTypeScript(
+    fieldConfig: FieldConfig,
     processing: Set<string>,
   ): string {
-    const metadata = fieldDef.metadata;
-    const fieldType = fieldDef.type;
-    const isArray = metadata?.array === true;
-
-    // Detect relation fields (using field.reference)
-    if (fieldDef.reference) {
-      const targetType = fieldDef.reference.type?.name;
-      if (targetType) {
-        // Detect and handle circular references
-        if (processing.has(targetType)) {
-          return targetType; // Return only type name for circular references
-        }
-        return targetType;
-      }
+    // Handle enum type
+    if (
+      fieldConfig.type === "enum" &&
+      fieldConfig.allowedValues &&
+      fieldConfig.allowedValues.length > 0
+    ) {
+      return fieldConfig.allowedValues
+        .map((v: any) => {
+          const value = typeof v === "string" ? v : v.value;
+          return `"${value}"`;
+        })
+        .join(" | ");
     }
 
-    let baseType: string;
-    switch (fieldType) {
-      case "uuid":
-      case "string":
-        baseType = "string";
-        break;
-      case "integer":
-      case "float":
-        baseType = "number";
-        break;
-      case "bool":
-      case "boolean":
-        baseType = "boolean";
-        break;
-      case "date":
-      case "datetime":
-        baseType = "Date";
-        break;
-      case "enum": {
-        const allowedValues =
-          metadata?.allowedValues ||
-          metadata?.values ||
-          metadata?.enum ||
-          fieldDef?.allowedValues ||
-          fieldDef?.values ||
-          fieldDef?.enum;
-
-        if (allowedValues && Array.isArray(allowedValues)) {
-          baseType = allowedValues.map((v) => `"${v.value}"`).join(" | ");
-        } else {
-          baseType = "string";
-        }
-        break;
-      }
-      case "nested": {
-        const fields = fieldDef.fields || fieldDef.fields;
-        if (fields && typeof fields === "object") {
-          baseType = this.processNestedObjectType(fields, 1, processing);
-        } else {
-          baseType = "object";
-        }
-        break;
-      }
-      default:
-        baseType = "string";
+    // Handle nested object type
+    if (fieldConfig.type === "nested" && fieldConfig.fields) {
+      return this.processNestedObjectType(fieldConfig.fields, 1, processing);
     }
 
-    return isArray ? `${baseType}[]` : baseType;
+    return this.getFieldTypeFromConfig(fieldConfig);
   }
 
   /**
-   * ネストしたオブジェクト型を再帰的に処理
+   * field configからフィールド定義を生成
+   */
+  private static generateFieldDefinitionFromConfig(
+    fieldName: string,
+    fieldType: string,
+    fieldConfig: FieldConfig,
+  ): string {
+    const isRequired = fieldConfig.required === true;
+    const assertNonNull = fieldConfig.assertNonNull === true;
+    const isArray = fieldConfig.array || false;
+
+    let typeDef = fieldType;
+    if (isArray) {
+      typeDef = `${fieldType}[]`;
+    }
+
+    // If required or assertNonNull, field is not optional
+    const optional = isRequired || assertNonNull;
+    const optionalMarker = optional ? "" : "?";
+    const nullability = optional ? "" : " | null";
+
+    return `${fieldName}${optionalMarker}: ${typeDef}${nullability};`;
+  }
+
+  /**
+   * ネストしたオブジェクト型を再帰的に処理（fieldConfig形式）
    */
   private static processNestedObjectType(
-    fields: any,
+    fields: Record<string, FieldConfig>,
     indentLevel: number,
     processing: Set<string>,
   ): string {
     const objectFields: string[] = [];
 
-    for (const [fieldName, nestedFieldDef] of Object.entries(fields)) {
-      const nestedMetadata = (nestedFieldDef as any).metadata;
-      const isArray = nestedMetadata?.array === true;
+    for (const [fieldName, fieldConfig] of Object.entries(fields)) {
+      let fieldType: string;
 
-      if (nestedMetadata.type === "nested" && (nestedFieldDef as any).fields) {
-        let nestedObjectType = this.processNestedObjectType(
-          (nestedFieldDef as any).fields,
+      // Handle nested type recursively
+      if (fieldConfig.type === "nested" && fieldConfig.fields) {
+        fieldType = this.processNestedObjectType(
+          fieldConfig.fields,
           indentLevel + 1,
           processing,
         );
-        if (isArray) {
-          nestedObjectType = `${nestedObjectType}[]`;
-        }
-        objectFields.push(
-          this.generateFieldDefinition(
-            fieldName,
-            nestedObjectType,
-            nestedFieldDef,
-          ),
-        );
       } else {
-        const fieldType = this.mapFieldToTypeScript(nestedFieldDef, processing);
-        const fieldDefinition = this.generateFieldDefinition(
-          fieldName,
-          fieldType,
-          nestedFieldDef as any,
-        );
-        objectFields.push(fieldDefinition);
+        // Handle other types
+        fieldType = this.mapFieldConfigToTypeScript(fieldConfig, processing);
       }
+
+      // Generate field definition
+      const fieldDefinition = this.generateFieldDefinitionFromConfig(
+        fieldName,
+        fieldType,
+        fieldConfig,
+      );
+      objectFields.push(fieldDefinition);
     }
 
     const innerIndent = "  ".repeat(indentLevel + 1);

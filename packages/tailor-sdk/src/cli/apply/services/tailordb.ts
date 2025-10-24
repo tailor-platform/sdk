@@ -1,6 +1,9 @@
+import * as inflection from "inflection";
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
@@ -42,10 +45,7 @@ import {
   type StandardTailorTypeGqlPermission,
   type StandardTailorTypePermission,
 } from "@/configure/services/tailordb/permission";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type TailorDBService } from "@/cli/application/tailordb/service";
-import { type DBFieldMetadata } from "@/configure/services/tailordb/types";
-import { tailorToManifestScalar } from "@/configure/types/types";
 import { type Application } from "@/cli/application";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
@@ -277,35 +277,33 @@ async function planTypes(
   for (const tailordb of tailordbs) {
     const existingTypes = await fetchTypes(tailordb.namespace);
     const existingNameSet = new Set<string>();
-    existingTypes.forEach((typ) => {
-      existingNameSet.add(typ.name);
-    });
-    for (const fileTypes of Object.values(tailordb.getTypes())) {
-      for (const typ of Object.values(fileTypes)) {
-        const tailordbType = generateTailorDBTypeManifest(
-          typ,
-          executorUsedTypes,
-        );
-        if (existingNameSet.has(typ.name)) {
-          changeSet.updates.push({
-            name: typ.name,
-            request: {
-              workspaceId,
-              namespaceName: tailordb.namespace,
-              tailordbType,
-            },
-          });
-          existingNameSet.delete(typ.name);
-        } else {
-          changeSet.creates.push({
-            name: typ.name,
-            request: {
-              workspaceId,
-              namespaceName: tailordb.namespace,
-              tailordbType,
-            },
-          });
-        }
+    existingTypes.forEach((type) => existingNameSet.add(type.name));
+
+    const types = tailordb.getTypes();
+    for (const typeName of Object.keys(types)) {
+      const tailordbType = generateTailorDBTypeManifest(
+        types[typeName],
+        executorUsedTypes,
+      );
+      if (existingNameSet.has(typeName)) {
+        changeSet.updates.push({
+          name: typeName,
+          request: {
+            workspaceId,
+            namespaceName: tailordb.namespace,
+            tailordbType,
+          },
+        });
+        existingNameSet.delete(typeName);
+      } else {
+        changeSet.creates.push({
+          name: typeName,
+          request: {
+            workspaceId,
+            namespaceName: tailordb.namespace,
+            tailordbType,
+          },
+        });
       }
     }
     existingNameSet.forEach((name) => {
@@ -335,22 +333,19 @@ async function planTypes(
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
 // This will need refactoring later.
 function generateTailorDBTypeManifest(
-  type: TailorDBType,
+  type: ParsedTailorDBType,
   executorUsedTypes: ReadonlySet<string>,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
-  const metadata = type.metadata;
-  const schema = metadata.schema;
+  // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
+  const pluralForm = inflection.camelize(type.pluralForm, true);
 
   const defaultSettings = {
-    aggregation: schema?.settings?.aggregation || false,
-    bulkUpsert: schema?.settings?.bulkUpsert || false,
+    aggregation: type.settings?.aggregation || false,
+    bulkUpsert: type.settings?.bulkUpsert || false,
     draft: false,
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
-    pluralForm: schema?.settings?.pluralForm
-      ? schema.settings.pluralForm.charAt(0).toLowerCase() +
-        schema.settings.pluralForm.slice(1)
-      : "",
+    pluralForm,
     publishRecordEvents: false,
   };
   if (executorUsedTypes.has(type.name)) {
@@ -361,115 +356,96 @@ function generateTailorDBTypeManifest(
     string,
     MessageInitShape<typeof TailorDBType_FieldConfigSchema>
   > = {};
-  if (schema.fields) {
-    Object.entries(schema.fields)
-      .filter(([fieldName]) => fieldName !== "id")
-      .forEach(([fieldName, fieldConfig]) => {
-        const fieldType = fieldConfig.type || "string";
-        const fieldEntry: MessageInitShape<
-          typeof TailorDBType_FieldConfigSchema
-        > = {
-          type: fieldType,
-          allowedValues:
-            fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
-          description: fieldConfig.description || "",
-          validate: (fieldConfig.validate || []).map((val) => ({
-            action: TailorDBType_PermitAction.DENY,
-            errorMessage: val.errorMessage || "",
-            ...(val.script && {
-              script: {
-                expr: val.script.expr ? `!${val.script.expr}` : "",
-              },
+
+  Object.keys(type.fields)
+    .filter((fieldName) => fieldName !== "id")
+    .forEach((fieldName) => {
+      const fieldConfig = type.fields[fieldName].config;
+      const fieldType = fieldConfig.type;
+      const fieldEntry: MessageInitShape<
+        typeof TailorDBType_FieldConfigSchema
+      > = {
+        type: fieldType,
+        allowedValues:
+          fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
+        description: fieldConfig.description || "",
+        validate: (fieldConfig.validate || []).map((val) => ({
+          action: TailorDBType_PermitAction.DENY,
+          errorMessage: val.errorMessage || "",
+          ...(val.script && {
+            script: {
+              expr: val.script.expr ? `!${val.script.expr}` : "",
+            },
+          }),
+        })),
+        array: fieldConfig.array || false,
+        index: (fieldConfig.index && !fieldConfig.array) || false,
+        unique: (fieldConfig.unique && !fieldConfig.array) || false,
+        foreignKey: fieldConfig.foreignKey || false,
+        foreignKeyType: fieldConfig.foreignKeyType,
+        foreignKeyField: fieldConfig.foreignKeyField,
+        required: fieldConfig.required !== false,
+        vector: fieldConfig.vector || false,
+        ...(fieldConfig.hooks && {
+          hooks: {
+            create: fieldConfig.hooks?.create
+              ? {
+                  expr: fieldConfig.hooks.create.expr || "",
+                }
+              : undefined,
+            update: fieldConfig.hooks?.update
+              ? {
+                  expr: fieldConfig.hooks.update.expr || "",
+                }
+              : undefined,
+          },
+        }),
+        ...(fieldConfig.serial && {
+          serial: {
+            start: fieldConfig.serial.start as unknown as bigint,
+            ...(fieldConfig.serial.maxValue && {
+              maxValue: fieldConfig.serial.maxValue as unknown as bigint,
             }),
-          })),
-          array: fieldConfig.array || false,
-          index: (fieldConfig.index && !fieldConfig.array) || false,
-          unique: (fieldConfig.unique && !fieldConfig.array) || false,
-          foreignKey: fieldConfig.foreignKey || false,
-          foreignKeyType: fieldConfig.foreignKeyType,
-          foreignKeyField: fieldConfig.foreignKeyField,
-          required: fieldConfig.required !== false,
-          vector: fieldConfig.vector || false,
-          ...(fieldConfig.hooks && {
-            hooks: {
-              create: fieldConfig.hooks?.create
-                ? {
-                    expr: fieldConfig.hooks.create.expr || "",
-                  }
-                : undefined,
-              update: fieldConfig.hooks?.update
-                ? {
-                    expr: fieldConfig.hooks.update.expr || "",
-                  }
-                : undefined,
-            },
-          }),
-          ...(fieldConfig.serial && {
-            serial: {
-              start: fieldConfig.serial.start as unknown as bigint,
-              ...(fieldConfig.serial.maxValue && {
-                maxValue: fieldConfig.serial.maxValue as unknown as bigint,
-              }),
-              ...(fieldConfig.serial.format && {
-                format: fieldConfig.serial.format,
-              }),
-            },
-          }),
-        };
+            ...(fieldConfig.serial.format && {
+              format: fieldConfig.serial.format,
+            }),
+          },
+        }),
+      };
 
-        if (fieldConfig.type === "nested") {
-          fieldEntry.type = "nested";
-          delete fieldEntry.vector;
+      // Handle nested fields
+      if (fieldConfig.type === "nested" && fieldConfig.fields) {
+        fieldEntry.fields = processNestedFields(fieldConfig.fields);
+      }
 
-          const objectField = type.fields[fieldName];
-          if (objectField && objectField.fields) {
-            fieldEntry.fields = processNestedFields(objectField.fields);
-          }
-        }
-
-        fields[fieldName] = fieldEntry;
-      });
-  }
+      fields[fieldName] = fieldEntry;
+    });
 
   const relationships: Record<
     string,
     MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>
   > = {};
-  Object.entries(type.fields)
-    .filter(([_, fieldConfig]: [string, any]) => fieldConfig.reference)
-    .forEach(([fieldName, fieldConfig]: [string, any]) => {
-      if (fieldConfig.reference) {
-        const ref = fieldConfig.reference;
-        const nameMap = ref.nameMap || [];
-        if (nameMap.length > 0) {
-          relationships[nameMap[0]] = {
-            refType: ref.type.name,
-            refField: ref.key || "id",
-            srcField: fieldName,
-            array: fieldConfig._metadata?.array || false,
-            description: ref.type.metadata.description || "",
-          };
-        }
-      }
-    });
 
-  if (type.referenced && Object.keys(type.referenced).length > 0) {
-    Object.entries(type.referenced).forEach(
-      ([backwardFieldName, [referencedType, fieldName]]) => {
-        const field = referencedType.fields[fieldName];
-        const nameMap = field.reference?.nameMap;
-        const array = !(field.metadata?.unique ?? false);
-        const key = nameMap[1] || backwardFieldName;
-        const srcField = field.reference?.key;
-        relationships[key] = {
-          refType: referencedType.name,
-          refField: fieldName,
-          srcField: srcField || "id",
-          array: array,
-          description: referencedType.metadata.schema?.description || "",
-        };
-      },
-    );
+  for (const [relationName, rel] of Object.entries(type.forwardRelationships)) {
+    relationships[relationName] = {
+      refType: rel.targetType,
+      refField: rel.sourceField,
+      srcField: rel.targetField,
+      array: rel.isArray,
+      description: rel.description,
+    };
+  }
+
+  for (const [relationName, rel] of Object.entries(
+    type.backwardRelationships,
+  )) {
+    relationships[relationName] = {
+      refType: rel.targetType,
+      refField: rel.targetField,
+      srcField: rel.sourceField,
+      array: rel.isArray,
+      description: rel.description,
+    };
   }
 
   // Process indexes from metadata
@@ -477,8 +453,8 @@ function generateTailorDBTypeManifest(
     string,
     MessageInitShape<typeof TailorDBType_IndexSchema>
   > = {};
-  if (schema.indexes) {
-    Object.entries(schema.indexes).forEach(([key, index]) => {
+  if (type.indexes) {
+    Object.entries(type.indexes).forEach(([key, index]) => {
       indexes[key] = {
         fieldNames: index.fields,
         unique: index.unique || false,
@@ -491,8 +467,8 @@ function generateTailorDBTypeManifest(
     string,
     MessageInitShape<typeof TailorDBType_FileConfigSchema>
   > = {};
-  if (schema.files) {
-    Object.entries(schema.files).forEach(([key, description]) => {
+  if (type.files) {
+    Object.entries(type.files).forEach(([key, description]) => {
       files[key] = { description: description || "" };
     });
   }
@@ -507,18 +483,18 @@ function generateTailorDBTypeManifest(
     update: [],
     delete: [],
   };
-  const permission = schema.permissions.record
-    ? protoPermission(schema.permissions.record)
+  const permission = type.permissions.record
+    ? protoPermission(type.permissions.record)
     : defaultPermission;
 
   return {
-    name: metadata.name || type.name,
+    name: type.name,
     schema: {
-      description: schema?.description || "",
+      description: type.description || "",
       fields,
       relationships: relationships,
       settings: defaultSettings,
-      extends: schema?.extends || false,
+      extends: false,
       directives: [],
       indexes,
       files,
@@ -528,64 +504,58 @@ function generateTailorDBTypeManifest(
 }
 
 function processNestedFields(
-  objectFields: any,
+  fields: Record<string, TailorDBTypeConfig["schema"]["fields"][string]>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
   const nestedFields: Record<
     string,
     MessageInitShape<typeof TailorDBType_FieldConfigSchema>
   > = {};
 
-  Object.entries(objectFields).forEach(
-    ([nestedFieldName, nestedFieldDef]: [string, any]) => {
-      const nestedType = nestedFieldDef.type;
-      const nestedMetadata = nestedFieldDef.metadata as DBFieldMetadata;
+  Object.entries(fields).forEach(([nestedFieldName, nestedFieldConfig]) => {
+    const nestedType = nestedFieldConfig.type;
 
-      if (nestedType === "nested" && nestedFieldDef.fields) {
-        const deepNestedFields = processNestedFields(nestedFieldDef.fields);
-        nestedFields[nestedFieldName] = {
-          type: "nested",
-          allowedValues: nestedMetadata.allowedValues || [],
-          description: nestedMetadata.description || "",
-          validate: [],
-          required: nestedMetadata.required ?? true,
-          array: nestedMetadata.array ?? false,
-          index: false,
-          unique: false,
-          foreignKey: false,
-          vector: false,
-          fields: deepNestedFields,
-        };
-      } else {
-        nestedFields[nestedFieldName] = {
-          type:
-            tailorToManifestScalar[
-              nestedType as keyof typeof tailorToManifestScalar
-            ] || nestedType,
-          allowedValues: nestedMetadata.allowedValues || [],
-          description: nestedMetadata.description || "",
-          validate: [],
-          required: nestedMetadata.required ?? true,
-          array: nestedMetadata.array ?? false,
-          index: false,
-          unique: false,
-          foreignKey: false,
-          vector: false,
-          ...(nestedMetadata.serial && {
-            serial: {
-              start: nestedMetadata.serial.start as unknown as bigint,
-              ...(nestedMetadata.serial.maxValue && {
-                maxValue: nestedMetadata.serial.maxValue as unknown as bigint,
-              }),
-              format:
-                "format" in nestedMetadata.serial
-                  ? nestedMetadata.serial.format
-                  : undefined,
-            },
-          }),
-        };
-      }
-    },
-  );
+    if (nestedType === "nested" && nestedFieldConfig.fields) {
+      const deepNestedFields = processNestedFields(nestedFieldConfig.fields);
+      nestedFields[nestedFieldName] = {
+        type: "nested",
+        allowedValues: nestedFieldConfig.allowedValues || [],
+        description: nestedFieldConfig.description || "",
+        validate: [],
+        required: nestedFieldConfig.required ?? true,
+        array: nestedFieldConfig.array ?? false,
+        index: false,
+        unique: false,
+        foreignKey: false,
+        vector: false,
+        fields: deepNestedFields,
+      };
+    } else {
+      nestedFields[nestedFieldName] = {
+        type: nestedType,
+        allowedValues:
+          nestedType === "enum" ? nestedFieldConfig.allowedValues || [] : [],
+        description: nestedFieldConfig.description || "",
+        validate: [],
+        required: nestedFieldConfig.required ?? true,
+        array: nestedFieldConfig.array ?? false,
+        index: false,
+        unique: false,
+        foreignKey: false,
+        vector: false,
+        ...(nestedFieldConfig.serial && {
+          serial: {
+            start: nestedFieldConfig.serial.start as unknown as bigint,
+            ...(nestedFieldConfig.serial.maxValue && {
+              maxValue: nestedFieldConfig.serial.maxValue as unknown as bigint,
+            }),
+            ...(nestedFieldConfig.serial.format && {
+              format: nestedFieldConfig.serial.format,
+            }),
+          },
+        }),
+      };
+    }
+  });
 
   return nestedFields;
 }
@@ -758,34 +728,34 @@ async function planGqlPermissions(
     existingGqlPermissions.forEach((gqlPermission) => {
       existingNameSet.add(gqlPermission.typeName);
     });
-    for (const fileTypes of Object.values(tailordb.getTypes())) {
-      for (const typ of Object.values(fileTypes)) {
-        const gqlPermission = typ.metadata.schema.permissions.gql;
-        if (!gqlPermission) {
-          continue;
-        }
-        if (existingNameSet.has(typ.name)) {
-          changeSet.updates.push({
-            name: typ.name,
-            request: {
-              workspaceId,
-              namespaceName: tailordb.namespace,
-              typeName: typ.name,
-              permission: protoGqlPermission(gqlPermission),
-            },
-          });
-          existingNameSet.delete(typ.name);
-        } else {
-          changeSet.creates.push({
-            name: typ.name,
-            request: {
-              workspaceId,
-              namespaceName: tailordb.namespace,
-              typeName: typ.name,
-              permission: protoGqlPermission(gqlPermission),
-            },
-          });
-        }
+
+    const types = tailordb.getTypes();
+    for (const typeName of Object.keys(types)) {
+      const gqlPermission = types[typeName].permissions.gql;
+      if (!gqlPermission) {
+        continue;
+      }
+      if (existingNameSet.has(typeName)) {
+        changeSet.updates.push({
+          name: typeName,
+          request: {
+            workspaceId,
+            namespaceName: tailordb.namespace,
+            typeName: typeName,
+            permission: protoGqlPermission(gqlPermission),
+          },
+        });
+        existingNameSet.delete(typeName);
+      } else {
+        changeSet.creates.push({
+          name: typeName,
+          request: {
+            workspaceId,
+            namespaceName: tailordb.namespace,
+            typeName: typeName,
+            permission: protoGqlPermission(gqlPermission),
+          },
+        });
       }
     }
     existingNameSet.forEach((name) => {

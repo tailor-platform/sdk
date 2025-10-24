@@ -175,12 +175,13 @@ describe("pnpm apply command integration tests", () => {
   });
 
   test("bundled JS files should not be excessively large", () => {
-    // Define maximum acceptable sizes (2x current sizes as threshold)
+    // Define maximum acceptable sizes (current size + 10KB)
+    const sizeBuffer = 1024 * 10; // 10KB
     const maxSizes: Record<string, number> = {
-      "executors/user-created.js": 200000, // ~200KB (includes SDK with inflection)
-      "functions/add__body.js": 10168 * 2, // ~20KB
-      "functions/showUserInfo__body.js": 10435 * 2, // ~21KB
-      "functions/stepChain__body.js": 173573 * 2, // ~347KB
+      "executors/user-created.js": 162223 + sizeBuffer,
+      "functions/add__body.js": 4504 + sizeBuffer,
+      "functions/showUserInfo__body.js": 4588 + sizeBuffer,
+      "functions/stepChain__body.js": 176907 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {

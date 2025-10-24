@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { TypeProcessor } from "./type-processor";
 import { db } from "@/configure/services/tailordb/schema";
+import { TailorDBService } from "@/cli/application/tailordb/service";
+import type { TailorDBType } from "@/configure/services/tailordb/schema";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+
+function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
+  const service = new TailorDBService("test", { files: [] });
+  service["rawTypes"]["test.ts"] = { [type.name]: type };
+  service["parseTypes"]();
+  return service.getTypes()[type.name];
+}
 
 describe("Kysely TypeProcessor", () => {
   describe("basic types", () => {
@@ -10,7 +20,7 @@ describe("Kysely TypeProcessor", () => {
         nickname: db.string({ optional: true }),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.name).toBe("User");
       expect(result.typeDef).toContain("name: string;");
@@ -24,7 +34,7 @@ describe("Kysely TypeProcessor", () => {
         discount: db.float({ optional: true }),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("quantity: number;");
       expect(result.typeDef).toContain("price: number;");
@@ -37,7 +47,7 @@ describe("Kysely TypeProcessor", () => {
         beta: db.bool({ optional: true }),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("enabled: boolean;");
       expect(result.typeDef).toContain("beta: boolean | null;");
@@ -50,7 +60,7 @@ describe("Kysely TypeProcessor", () => {
         cancelledAt: db.datetime({ optional: true }),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("startDate: Timestamp;");
       expect(result.typeDef).toContain("endDate: Timestamp;");
@@ -63,7 +73,7 @@ describe("Kysely TypeProcessor", () => {
         deviceId: db.uuid({ optional: true }),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("userId: string;");
       expect(result.typeDef).toContain("deviceId: string | null;");
@@ -77,7 +87,7 @@ describe("Kysely TypeProcessor", () => {
         scores: db.int({ array: true, optional: true }),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("tags: string[];");
       expect(result.typeDef).toContain("scores: number[] | null;");
@@ -95,7 +105,7 @@ describe("Kysely TypeProcessor", () => {
         ),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain('role: "admin" | "user";');
       expect(result.typeDef).toContain('status: "active" | "inactive" | null;');
@@ -111,7 +121,9 @@ describe("Kysely TypeProcessor", () => {
         }),
       });
 
-      const result = await TypeProcessor.processType(simpleNestedType);
+      const result = await TypeProcessor.processType(
+        parseTailorDBType(simpleNestedType),
+      );
 
       expect(result.name).toBe("SimpleUser");
       expect(result.typeDef).toContain("SimpleUser: ");
@@ -137,7 +149,9 @@ describe("Kysely TypeProcessor", () => {
         }),
       });
 
-      const result = await TypeProcessor.processType(deepNestedType);
+      const result = await TypeProcessor.processType(
+        parseTailorDBType(deepNestedType),
+      );
 
       expect(result.typeDef).toContain("details:");
       expect(result.typeDef).toContain("address:");
@@ -160,7 +174,7 @@ describe("Kysely TypeProcessor", () => {
         ),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("settings:");
       expect(result.typeDef).toContain("| null");
@@ -175,7 +189,9 @@ describe("Kysely TypeProcessor", () => {
         phone: db.string({ optional: true }), // optional and nullable
       });
 
-      const result = await TypeProcessor.processType(typeWithAssertNonNull);
+      const result = await TypeProcessor.processType(
+        parseTailorDBType(typeWithAssertNonNull),
+      );
 
       expect(result.name).toBe("UserWithAssertNonNull");
       expect(result.typeDef).toContain("UserWithAssertNonNull: {");
@@ -190,7 +206,9 @@ describe("Kysely TypeProcessor", () => {
         ...db.fields.timestamps(),
       });
 
-      const result = await TypeProcessor.processType(typeWithTimestamps);
+      const result = await TypeProcessor.processType(
+        parseTailorDBType(typeWithTimestamps),
+      );
 
       expect(result.name).toBe("UserWithTimestamp");
       expect(result.typeDef).toContain("UserWithTimestamp: {");
@@ -206,7 +224,7 @@ describe("Kysely TypeProcessor", () => {
         categories: db.string({ array: true, optional: true }),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("tags: AssertNonNull<string[]>;");
       expect(result.typeDef).toContain("categories: string[] | null;");
@@ -223,7 +241,7 @@ describe("Kysely TypeProcessor", () => {
         ),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("profile: AssertNonNull<{");
       expect(result.typeDef).toContain("name: string");
@@ -244,7 +262,7 @@ describe("Kysely TypeProcessor", () => {
         ),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain(
         'role: AssertNonNull<"admin" | "user">;',
@@ -257,7 +275,7 @@ describe("Kysely TypeProcessor", () => {
         name: db.string(),
       });
 
-      const result = await TypeProcessor.processType(type);
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
 
       expect(result.typeDef).toContain("id: Generated<string>;");
     });

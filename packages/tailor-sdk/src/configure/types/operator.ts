@@ -38,4 +38,5 @@ export interface OperatorFieldConfig {
     maxValue?: number;
     format?: string;
   };
+  fields?: Record<string, OperatorFieldConfig>;
 }

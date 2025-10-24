@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+[!IMPORTANT] Read CLAUDE.local.md if exists.
+
 ## Commands
 
 ### Development
@@ -368,6 +370,7 @@ export default createExecutor("userLogger", "Log user creation")
 - The SDK uses Rolldown for bundling and Turbo for task orchestration
 - Test framework: Vitest
 - Build tool: tsdown for creating ESM bundles
+- **DO NOT use dynamic imports** (`await import()` or `require()`). Always use static imports at the top of files
 
 ### Module Architecture and Import Rules
 
@@ -383,6 +386,7 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 2. **Parser Module** (`src/parser/**/*.ts`):
    - Validates and parses definitions created in configure module
    - Acts as intermediary between configure and cli modules
+   - **Note**: Parse operations for TailorDB (inflection, relationship building) are performed automatically in `TailorDBService.loadTypes()` (located in `src/cli/application/tailordb/service.ts`)
 
 3. **CLI Module** (`src/cli/**/*.ts`):
    - Implements CLI commands

@@ -65,29 +65,23 @@ export class AuthService {
 
     for (const service of this.tailorDBServices) {
       const types = service.getTypes();
-      for (const fileTypes of Object.values(types)) {
-        if (
-          userProfileTypeName &&
-          !userProfileNamespace &&
-          Object.prototype.hasOwnProperty.call(fileTypes, userProfileTypeName)
-        ) {
-          userProfileNamespace = service.namespace;
-        }
-        if (
-          tenantProviderTypeName &&
-          !tenantProviderNamespace &&
-          Object.prototype.hasOwnProperty.call(
-            fileTypes,
-            tenantProviderTypeName,
-          )
-        ) {
-          tenantProviderNamespace = service.namespace;
-        }
-        // Early exit if both are found
-        if (userProfileNamespace && tenantProviderNamespace) {
-          break;
-        }
+
+      if (
+        userProfileTypeName &&
+        !userProfileNamespace &&
+        Object.prototype.hasOwnProperty.call(types, userProfileTypeName)
+      ) {
+        userProfileNamespace = service.namespace;
       }
+      if (
+        tenantProviderTypeName &&
+        !tenantProviderNamespace &&
+        Object.prototype.hasOwnProperty.call(types, tenantProviderTypeName)
+      ) {
+        tenantProviderNamespace = service.namespace;
+      }
+
+      // Early exit if both are found
       if (userProfileNamespace && tenantProviderNamespace) {
         break;
       }

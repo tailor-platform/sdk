@@ -1,6 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { KyselyGenerator } from "./index";
 import { db } from "@/configure/services/tailordb/schema";
+import { TailorDBService } from "@/cli/application/tailordb/service";
+import type { TailorDBType } from "@/configure/services/tailordb/schema";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+
+function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
+  const service = new TailorDBService("test", { files: [] });
+  service["rawTypes"]["test.ts"] = { [type.name]: type };
+  service["parseTypes"]();
+  return service.getTypes()[type.name];
+}
 
 const mockBasicType = db.type("User", {
   name: db.string().description("User name"),
@@ -54,7 +64,7 @@ describe("KyselyGenerator統合テスト", () => {
   describe("基本的な動作テスト", () => {
     it("processType メソッドが基本的な TailorDBType を正しく処理する", async () => {
       const result = await kyselyGenerator.processType({
-        type: mockBasicType,
+        type: parseTailorDBType(mockBasicType),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
@@ -83,7 +93,7 @@ describe("KyselyGenerator統合テスト", () => {
   describe("型マッピングのテスト", () => {
     it("enum型を正しくKysely型にマッピングする", async () => {
       const result = await kyselyGenerator.processType({
-        type: mockEnumType,
+        type: parseTailorDBType(mockEnumType),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
@@ -98,7 +108,7 @@ describe("KyselyGenerator統合テスト", () => {
 
     it("ネストしたオブジェクト型を正しく処理する", async () => {
       const result = await kyselyGenerator.processType({
-        type: mockNestedType,
+        type: parseTailorDBType(mockNestedType),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
@@ -122,7 +132,7 @@ describe("KyselyGenerator統合テスト", () => {
       });
 
       const result = await kyselyGenerator.processType({
-        type: testType,
+        type: parseTailorDBType(testType),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
@@ -141,7 +151,7 @@ describe("KyselyGenerator統合テスト", () => {
       });
 
       const result = await kyselyGenerator.processType({
-        type: arrayType,
+        type: parseTailorDBType(arrayType),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
@@ -270,12 +280,12 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
     it("複数の型を持つ完全な統合テスト", async () => {
       const types = {
         User: await kyselyGenerator.processType({
-          type: mockBasicType,
+          type: parseTailorDBType(mockBasicType),
           applicationNamespace: "test-app",
           namespace: "test-namespace",
         }),
         Status: await kyselyGenerator.processType({
-          type: mockEnumType,
+          type: parseTailorDBType(mockEnumType),
           applicationNamespace: "test-app",
           namespace: "test-namespace",
         }),
@@ -342,7 +352,7 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
       });
 
       const result = await kyselyGenerator.processType({
-        type: unknownType,
+        type: parseTailorDBType(unknownType),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
@@ -359,7 +369,7 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
       });
 
       const result = await kyselyGenerator.processType({
-        type: typeWithTimestamps,
+        type: parseTailorDBType(typeWithTimestamps),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
@@ -374,7 +384,7 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
       });
 
       const result = await kyselyGenerator.processType({
-        type: typeWithoutTimestamps,
+        type: parseTailorDBType(typeWithoutTimestamps),
         applicationNamespace: "test-app",
         namespace: "test-namespace",
       });

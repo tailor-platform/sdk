@@ -62,6 +62,7 @@ export default defineConfig([
   },
   {
     files: ["src/parser/**/*.ts"],
+    ignores: ["src/parser/**/*.test.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
         "error",
@@ -71,10 +72,10 @@ export default defineConfig([
               group: ["**/cli/**", "@/cli/**"],
               message: "Parser module should not import from cli module.",
             },
-            // {
-            //   group: ["**/configure/**", "@/configure/**"],
-            //   message: "Parser module should not import from configure module.",
-            // },
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message: "Parser module should not import from configure module.",
+            },
           ],
         },
       ],

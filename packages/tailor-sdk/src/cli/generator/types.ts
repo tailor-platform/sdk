@@ -1,7 +1,7 @@
 import type { CodeGeneratorBase } from "@/parser/generator-config";
 import { type Executor } from "@/configure/services/executor/types";
 import { type Resolver } from "@/parser/service/pipeline";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 interface GeneratedFile {
   path: string;
@@ -41,7 +41,7 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
   > {
   // Individual processing (receives application, service type, and namespace information)
   processType(args: {
-    type: TailorDBType;
+    type: ParsedTailorDBType;
     applicationNamespace: string;
     namespace: string;
   }): T | Promise<T>;

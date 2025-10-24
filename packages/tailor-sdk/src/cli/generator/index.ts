@@ -6,7 +6,6 @@ import { loadConfig } from "@/cli/config-loader";
 import { type Generator } from "@/parser/generator-config";
 import { defineApplication, type Application } from "@/cli/application";
 import { type Resolver } from "@/parser/service/pipeline";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type Executor } from "@/configure/services/executor/types";
 import {
   type CodeGenerator,
@@ -16,16 +15,16 @@ import {
 } from "@/cli/generator/types";
 import { DependencyWatcher } from "./watch";
 import { generateUserTypes } from "@/cli/type-generator";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 
 export class GenerationManager {
   public readonly application: Application;
-  // Organized by application, service type, and namespace
   private applications: Record<
     string,
     {
-      tailordbNamespaces: Record<string, Record<string, TailorDBType>>;
+      tailordbNamespaces: Record<string, Record<string, ParsedTailorDBType>>;
       pipelineNamespaces: Record<string, Record<string, Resolver>>;
     }
   > = {};
@@ -57,24 +56,12 @@ export class GenerationManager {
         pipelineNamespaces: {},
       };
 
-      // TailorDB services
       for (const db of app.tailorDBServices) {
         const namespace = db.namespace;
         try {
-          const types = await db.loadTypes();
-          if (types) {
-            this.applications[appNamespace].tailordbNamespaces[namespace] = {};
-            // flatten the nested structure
-            Object.values(types).forEach((nsTypes) => {
-              Object.entries(nsTypes as Record<string, TailorDBType>).forEach(
-                ([typeName, type]) => {
-                  this.applications[appNamespace].tailordbNamespaces[namespace][
-                    typeName
-                  ] = type;
-                },
-              );
-            });
-          }
+          await db.loadTypes();
+          this.applications[appNamespace].tailordbNamespaces[namespace] =
+            db.getTypes();
         } catch (error) {
           console.error(
             `Error loading types for TailorDB service ${namespace}:`,
@@ -170,7 +157,6 @@ export class GenerationManager {
           pipelineNamespaceResults: {},
         };
 
-        // Process TailorDB namespaces
         for (const [namespace, types] of Object.entries(
           appData.tailordbNamespaces,
         )) {
@@ -209,12 +195,11 @@ export class GenerationManager {
     gen: CodeGenerator,
     appNamespace: string,
     namespace: string,
-    types: Record<string, TailorDBType>,
+    types: Record<string, ParsedTailorDBType>,
   ) {
     const results = this.generatorResults[gen.id].application[appNamespace];
     results.tailordbResults[namespace] = {};
 
-    // Process individual types
     await Promise.allSettled(
       Object.entries(types).map(async ([typeName, type]) => {
         try {
@@ -411,14 +396,7 @@ export class GenerationManager {
               // Reload affected types
               for (const file of affectedFiles) {
                 try {
-                  const types = await db.loadTypesForFile(file, timestamp);
-                  Object.entries(types as Record<string, TailorDBType>).forEach(
-                    ([typeName, type]) => {
-                      this.applications[appNamespace].tailordbNamespaces[
-                        dbNamespace
-                      ][typeName] = type;
-                    },
-                  );
+                  await db.loadTypesForFile(file, timestamp);
                 } catch (error) {
                   console.error(
                     `Error loading types from file ${file}:`,
@@ -428,15 +406,18 @@ export class GenerationManager {
                 }
               }
 
+              // Update types
+              const types = db.getTypes();
+              this.applications[appNamespace].tailordbNamespaces[dbNamespace] =
+                types;
+
               // Process with all generators
               for (const gen of this.generators) {
                 await this.processTailorDBNamespace(
                   gen,
                   appNamespace,
                   dbNamespace,
-                  this.applications[appNamespace].tailordbNamespaces[
-                    dbNamespace
-                  ],
+                  types,
                 );
                 await this.aggregate(gen);
               }

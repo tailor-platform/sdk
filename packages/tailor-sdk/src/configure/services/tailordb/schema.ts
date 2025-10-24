@@ -29,7 +29,6 @@ import {
   type AllowedValuesOutput,
 } from "@/configure/types/field";
 import { TailorField, TailorType } from "@/configure/types/type";
-import * as inflection from "inflection";
 import {
   type Permissions,
   type TailorTypeGqlPermission,
@@ -83,7 +82,7 @@ function isRelationSelfConfig(
 interface ReferenceConfig<T extends TailorDBType> {
   type: TailorDBType;
   key: keyof T["fields"] & string;
-  nameMap: [string, string];
+  nameMap: [string | undefined, string];
 }
 
 export class TailorDBField<
@@ -106,6 +105,17 @@ export class TailorDBField<
     return {
       type: this.type,
       ...this._metadata,
+      ...(this.type === "nested" && Object.keys(this.fields).length > 0
+        ? {
+            fields: Object.entries(this.fields).reduce(
+              (acc, [key, field]) => {
+                acc[key] = (field as TailorDBField<any, any, any>).config;
+                return acc;
+              },
+              {} as Record<string, OperatorFieldConfig>,
+            ),
+          }
+        : {}),
       validate: this._metadata.validate?.map((v) => {
         const { fn, message } =
           typeof v === "function"
@@ -249,8 +259,7 @@ export class TailorDBField<
         backward,
       };
     } else {
-      const forward =
-        config.toward.as ?? inflection.camelize(config.toward.type.name, true);
+      const forward = config.toward.as;
 
       this._ref = {
         type: config.toward.type,
@@ -447,13 +456,14 @@ export class TailorDBType<
 
     this._description = options.description;
 
-    const pluralForm = options.pluralForm || inflection.pluralize(name);
-    if (name === pluralForm) {
-      throw new Error(
-        `The name and the plural form must be different. name=${name}`,
-      );
+    if (options.pluralForm) {
+      if (name === options.pluralForm) {
+        throw new Error(
+          `The name and the plural form must be different. name=${name}`,
+        );
+      }
+      this._settings.pluralForm = options.pluralForm;
     }
-    this._settings.pluralForm = pluralForm;
 
     // Resolve any pending self-references now that the type is constructed
     Object.entries(this.fields).forEach(([fieldName, field]) => {
@@ -480,16 +490,13 @@ export class TailorDBType<
       if (field.reference && field.reference !== undefined) {
         const ref = field.reference;
         if (ref.type) {
-          let backwardFieldName = ref.nameMap?.[1]; // Get backward field name from nameMap
+          const backwardFieldName = ref.nameMap?.[1]; // Get backward field name from nameMap
 
-          if (!backwardFieldName || backwardFieldName === "") {
-            const lowerName = inflection.camelize(this.name, true);
-            backwardFieldName = field.metadata?.unique
-              ? inflection.singularize(lowerName)
-              : inflection.pluralize(lowerName);
+          // Store backward reference with the field name (can be undefined)
+          // The actual backward field name will be generated in the CLI layer
+          if (backwardFieldName !== undefined) {
+            ref.type.referenced[backwardFieldName] = [this, fieldName];
           }
-
-          ref.type.referenced[backwardFieldName] = [this, fieldName];
         }
       }
     });

@@ -3,10 +3,10 @@ import {
   type GeneratorResult,
   type GeneratorInput,
 } from "@/cli/generator/types";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type Executor } from "@/configure/services/executor/types";
 import { type DbTypeMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const DbTypeGeneratorID = "@tailor/db-type";
 
@@ -28,7 +28,7 @@ export class DbTypeGenerator
   ) {}
 
   async processType(args: {
-    type: TailorDBType;
+    type: ParsedTailorDBType;
     applicationNamespace: string;
     namespace: string;
   }): Promise<DbTypeMetadata> {
