@@ -17,7 +17,7 @@ import {
   fetchAll,
   resolveStaticWebsiteUrls,
   type OperatorClient,
-} from "../client";
+} from "../../client";
 
 export async function applyApplication(
   client: OperatorClient,

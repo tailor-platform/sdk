@@ -5,7 +5,7 @@ import type { AppConfig } from "@/configure/config";
 import { loadConfig } from "@/cli/config-loader";
 import { type OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { defineApplication } from "@/cli/application";
-import { fetchAll, initOperatorClient } from "./client";
+import { fetchAll, initOperatorClient } from "../client";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import { applyExecutor, planExecutor } from "./services/executor";
@@ -16,7 +16,7 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
-import { readTailorctlConfig } from "./tailorctl";
+import { readTailorctlConfig } from "../tailorctl";
 import { Bundler, type BundlerConfig } from "@/cli/bundler";
 import { ExecutorLoader } from "@/cli/bundler/executor/loader";
 import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";

@@ -44,6 +44,7 @@
     "@urql/core": "^5.1.1",
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",
+    "consola": "3.4.2",
     "dotenv": "^17.2.1",
     "es-toolkit": "^1.38.0",
     "inflection": "^3.0.2",
@@ -52,9 +53,11 @@
     "pkg-types": "^2.1.0",
     "rolldown": "catalog:",
     "smol-toml": "^1.4.2",
+    "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "^4.20.3",
     "type-fest": "5.1.0",
+    "uuid": "13.0.0",
     "zod": "^4.1.11"
   },
   "devDependencies": {

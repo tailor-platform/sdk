@@ -26,7 +26,7 @@ import { type Resolver } from "@/parser/service/pipeline";
 import { type Application } from "@/cli/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
-import { fetchAll, type OperatorClient } from "../client";
+import { fetchAll, type OperatorClient } from "../../client";
 import * as inflection from "inflection";
 import { tailorUserMap } from "@/configure/types";
 import { type TailorField } from "@/parser/service/pipeline";

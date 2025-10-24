@@ -49,7 +49,7 @@ import { tailorToManifestScalar } from "@/configure/types/types";
 import { type Application } from "@/cli/application";
 import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
-import { fetchAll, type OperatorClient } from "../client";
+import { fetchAll, type OperatorClient } from "../../client";
 
 export async function applyTailorDB(
   client: OperatorClient,

@@ -11,6 +11,7 @@ import { apply, generate } from "./api.js";
 
 import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
+import { workspaceCommand } from "./workspace";
 
 register("tsx", import.meta.url, { data: {} });
 
@@ -81,6 +82,7 @@ const mainCommand = defineCommand({
     apply: applyCommand,
     generate: generateCommand,
     init: initCommand,
+    workspace: workspaceCommand,
   },
 });
 

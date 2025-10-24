@@ -66,7 +66,7 @@ import {
   fetchAll,
   resolveStaticWebsiteUrls,
   type OperatorClient,
-} from "../client";
+} from "../../client";
 
 export async function applyAuth(
   client: OperatorClient,
