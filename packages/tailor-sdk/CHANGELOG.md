@@ -1,5 +1,15 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.91
+
+### Patch Changes
+
+- [#601](https://github.com/tailor-platform/tailor-sdk/pull/601) [`4f2803a`](https://github.com/tailor-platform/tailor-sdk/commit/4f2803a1ab00a28d466f86764955656e8ea23829) Thanks [@remiposo](https://github.com/remiposo)! - Add workspace management comand
+
+- [#606](https://github.com/tailor-platform/tailor-sdk/pull/606) [`f1be4bf`](https://github.com/tailor-platform/tailor-sdk/commit/f1be4bf0f324e5ea1896fa4c1a9415b48eb0b134) Thanks [@toiroakr](https://github.com/toiroakr)! - feat!: kysely-db generator renewal
+
+- [#604](https://github.com/tailor-platform/tailor-sdk/pull/604) [`491626b`](https://github.com/tailor-platform/tailor-sdk/commit/491626b65bbde4bfebe45b542ef3bcea7b13fde1) Thanks [@remiposo](https://github.com/remiposo)! - Add login/logout command
+
 ## 0.0.90
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.91
+
+### Patch Changes
+
+- [#606](https://github.com/tailor-platform/tailor-sdk/pull/606) [`f1be4bf`](https://github.com/tailor-platform/tailor-sdk/commit/f1be4bf0f324e5ea1896fa4c1a9415b48eb0b134) Thanks [@toiroakr](https://github.com/toiroakr)! - feat!: kysely-db generator renewal
+
 ## 0.0.90
 
 ### Patch Changes
