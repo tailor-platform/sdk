@@ -15,6 +15,7 @@ import {
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
+import "./mock";
 
 // Register built-in generators with their constructor functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

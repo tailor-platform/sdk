@@ -1,6 +1,6 @@
 import { createResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
-import { getDB } from "generated/tailordb";
+import { db } from "tailordb";
 
 export default createResolver({
   name: "stepChain",
@@ -23,7 +23,6 @@ export default createResolver({
       "yyyy-MM-dd HH:mm:ss",
     )} on step2!`;
 
-    const db = getDB("tailordb");
     const kyselyResult = await db
       .selectFrom("Supplier")
       .select(["state"])

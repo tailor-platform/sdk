@@ -5,7 +5,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const tempDistDir = "tests/fixtures/actual";
-console.info(`This test is running in directory: ${tempDistDir}`);
 
 describe("pnpm apply command integration tests", () => {
   const expectedDir = path.join(__dirname, "fixtures/expected");
@@ -69,6 +68,7 @@ describe("pnpm apply command integration tests", () => {
   beforeAll(() => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
+    setupTailordbMock();
   });
 
   afterAll(() => {
@@ -96,7 +96,6 @@ describe("pnpm apply command integration tests", () => {
 
   const resetGlobals = () => {
     delete GlobalThis.main;
-    delete GlobalThis.tailordb;
   };
 
   const setupTailordbMock = (
@@ -224,7 +223,6 @@ describe("pnpm apply command integration tests", () => {
       });
 
       test("functions/stepChain__body.js returns result with summary", async () => {
-        const main = await importActualMain("functions/stepChain__body.js");
         setupTailordbMock((query) => {
           if (typeof query === "string") {
             const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
@@ -241,6 +239,8 @@ describe("pnpm apply command integration tests", () => {
           }
           return [];
         });
+
+        const main = await importActualMain("functions/stepChain__body.js");
         const result = await main({
           input: {
             user: {
@@ -268,7 +268,6 @@ describe("pnpm apply command integration tests", () => {
 
     describe("executors", () => {
       test("executors/user-created.js uses the tailordb client", async () => {
-        const main = await importActualMain("executors/user-created.js");
         const { executedQueries, createdClients } = setupTailordbMock(
           (query, params) => {
             if (query.includes("select * from User where id = $1")) {
@@ -283,6 +282,8 @@ describe("pnpm apply command integration tests", () => {
             return [];
           },
         );
+
+        const main = await importActualMain("executors/user-created.js");
         const payload = { newRecord: { id: "user-1" } };
         const result = await main(payload);
 

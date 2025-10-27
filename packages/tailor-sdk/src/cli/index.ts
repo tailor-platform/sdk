@@ -8,7 +8,6 @@ import { register } from "node:module";
 import * as dotenv from "dotenv";
 
 import { apply, generate } from "./api.js";
-
 import { commandArgs, type CommandArgs } from "./args.js";
 import { initCommand } from "./init.js";
 import { workspaceCommand } from "./workspace";

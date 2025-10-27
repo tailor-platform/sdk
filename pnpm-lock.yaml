@@ -273,6 +273,9 @@ importers:
       '@eslint/js':
         specifier: 9.38.0
         version: 9.38.0
+      '@tailor-platform/function-types':
+        specifier: 0.6.1
+        version: 0.6.1
       '@types/madge':
         specifier: 5.0.3
         version: 5.0.3
