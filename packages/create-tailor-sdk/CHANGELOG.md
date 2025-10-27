@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.93
+
+### Patch Changes
+
+- [#617](https://github.com/tailor-platform/tailor-sdk/pull/617) [`d45fe83`](https://github.com/tailor-platform/tailor-sdk/commit/d45fe834398426c94e5239e9bc94a5736df87016) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add tailordb.Client mock for apply
+
 ## 0.0.92
 
 ### Patch Changes
