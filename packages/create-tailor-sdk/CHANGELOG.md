@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.92
+
+### Patch Changes
+
+- [#607](https://github.com/tailor-platform/tailor-sdk/pull/607) [`ab2cadd`](https://github.com/tailor-platform/tailor-sdk/commit/ab2cadd9f92ac488ae1963d0768e2ca96ec66e0f) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor: move inflection to out of configuration
+
 ## 0.0.91
 
 ### Patch Changes
