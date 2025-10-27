@@ -9,10 +9,11 @@ This project was bootstrapped with [Create Tailor SDK](https://www.npmjs.com/pac
 1. Create a new workspace:
 
 ```bash
-# Create a new workspace using tailorctl
-tailorctl auth login
-tailorctl workspace create --name <workspace-name> --region <workspace-region>
-tailorctl config describe
+npx tailor-sdk login
+npx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
+npx tailor-sdk workspace list
+# For yarn: yarn tailor-sdk <command>
+# For pnpm: pnpm tailor-sdk <command>
 
 # OR
 # Create a new workspace using Tailor Platform Console
@@ -23,10 +24,8 @@ tailorctl config describe
 
 ```bash
 WORKSPACE_ID=<your-workspace-id> npm run deploy
-# OR
-WORKSPACE_ID=<your-workspace-id> yarn run deploy
-# OR
-WORKSPACE_ID=<your-workspace-id> pnpm run deploy
+# For yarn: WORKSPACE_ID=<your-workspace-id> yarn run deploy
+# For pnpm: WORKSPACE_ID=<your-workspace-id> pnpm run deploy
 ```
 
 3. Open [Tailor Platform Console](https://console.tailor.tech/) and open GraphQL Playground.

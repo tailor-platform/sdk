@@ -1,203 +1,58 @@
-# Tailor SDK Basic Example
+# Basic Example
 
-This example demonstrates the core features of the Tailor SDK, including database models, GraphQL resolvers, and event-driven executors.
+Development and testing example for Tailor SDK.
 
-## Overview
+## Purpose
 
-This example implements a simple business application with:
+This example is used for:
 
-- **Users and Roles**: User management with role-based access
-- **Sales Orders**: Order management system
-- **Customers and Suppliers**: Contact management
-- **File Management**: File upload and storage capabilities
+- SDK development and local testing
+- CI validation (lint, format, typecheck, integration tests)
+- Code generation output verification
 
-## Project Structure
-
-```
-basic/
-├── tailor.config.ts      # SDK configuration (includes auth, IdP, static website, generators)
-├── tailordb/             # Database models
-│   ├── user.ts          # User model with roles
-│   ├── customer.ts      # Customer model
-│   ├── salesOrder.ts    # Sales order model
-│   ├── supplier.ts      # Supplier model
-│   └── file.ts          # File storage model
-├── resolvers/            # GraphQL resolvers
-│   └── stepChain/       # Example resolver with multiple steps
-├── executors/            # Event handlers
-│   ├── userCreated.ts   # Handler for new user creation
-│   └── salesOrderCreated.ts # Handler for new sales orders
-├── generated/            # Generated files (Kysely types, etc.)
-│   └── tailordb.ts      # Generated Kysely types and getDB() function
-└── tests/               # Test suite with fixtures
-```
-
-## Key Concepts Demonstrated
-
-### 1. Database Models
-
-Models are defined using the `db.type()` API with full TypeScript support:
-
-```typescript
-export const user = db.type("User", {
-  username: db.string().unique(),
-  email: db.string(),
-  role: db.uuid().relation({ type: "n-1", toward: { type: role } }),
-  ...db.fields.timestamps(),
-});
-```
-
-### 2. Relations
-
-The example shows various relation types:
-
-- **1-1 relations**: One user can have one setting
-- **n-1 relations**: Many users belong to one role
-
-### 3. GraphQL Resolvers
-
-Resolvers use a configuration-based approach with database access via Kysely:
-
-```typescript
-import { getDB } from "generated/tailordb";
-
-createResolver({
-  name: "stepChain",
-  operation: "query",
-  input: inputType,
-  body: async (context) => {
-    // Access database with Kysely query builder
-    const db = getDB("tailordb");
-    const result = await db.selectFrom("TableName").selectAll().execute();
-    return result;
-  },
-  output: outputType,
-});
-```
-
-### 4. Event-Driven Executors
-
-React to database changes with executors:
-
-```typescript
-import { getDB } from "generated/tailordb";
-
-createExecutor("userCreated", "Handle new user creation")
-  .on(recordCreatedTrigger(user))
-  .executeFunction({
-    fn: async ({ newRecord }) => {
-      // Access database with Kysely query builder
-      const db = getDB("tailordb");
-      const user = await db
-        .selectFrom("User")
-        .selectAll()
-        .where("id", "=", newRecord.id)
-        .executeTakeFirst();
-      console.log(`New user: ${user?.username}`);
-    },
-  });
-```
-
-### 5. Code Generators
-
-The example uses the `@tailor/kysely-type` generator to create type-safe database access.
-
-**Prerequisites**:
-
-```bash
-pnpm add -D @tailor-platform/function-kysely-tailordb @tailor-platform/function-types
-```
-
-**Configuration**:
-
-```typescript
-export const generators = defineGenerators([
-  "@tailor/kysely-type",
-  { distPath: "./generated/tailordb.ts" },
-]);
-```
-
-This generator creates:
-
-- Type-safe Kysely table definitions for all TailorDB models
-- `getDB(namespace)` function to create Kysely instances for database queries
-
-### 6. Authentication & Identity Provider
-
-The example includes authentication configuration with:
-
-- **User Profile**: Maps the User model to authentication system
-- **Machine Users**: Service accounts with predefined roles
-- **OAuth2 Clients**: OAuth2 client configurations with redirect URIs
-- **Identity Provider (IdP)**: Configures built-in IdP with authorization rules
-
-See `tailor.config.ts` for the complete authentication and IdP setup using `defineAuth()` and `defineIdp()`.
-
-## Running the Example
-
-### Prerequisites
-
-- Ensure you're in the monorepo root
-- Run `pnpm install` to install dependencies
-
-### Development
+## Development
 
 ```bash
 # Generate code and types
-pnpm gen
+pnpm generate
 
-# Watch mode for development
-pnpm gen:watch
-
-# Run tests
-pnpm test
+# Watch mode
+pnpm generate:watch
 
 # Deploy to Tailor Platform
-export TAILOR_TOKEN=your-token
 pnpm apply
-# Or use tailorctl authentication
+
+# Type checking
+pnpm typecheck
+
+# Linting
+pnpm lint
+pnpm lint:fix
 ```
 
-### Testing
-
-The example includes comprehensive tests:
+## Testing
 
 ```bash
-# Run all tests
+# Run generator tests
 pnpm test
 
+# Run all tests (generator + e2e)
+pnpm test:all
+
+# Run E2E tests only
+pnpm test:e2e
+
 # Update test fixtures
-pnpm test:update-expects
+pnpm test:generator:update-expects
 ```
 
-## Test Structure
+Tests verify code generation output, bundling, and type definitions. Fixtures are in [tests/fixtures/](tests/fixtures/).
 
-Tests verify:
+## Structure
 
-- Code generation output
-- Function bundling
-- Type definitions
-- GraphQL schema generation
-
-Test fixtures are located in `tests/fixtures/` with expected outputs for comparison.
-
-## Integration with SDK
-
-This example uses the local SDK package (`@tailor-platform/tailor-sdk`) through pnpm workspace, making it ideal for:
-
-- Testing SDK changes
-- Developing new features
-- Understanding SDK capabilities
-
-## Environment Variables
-
-- `TAILOR_TOKEN`: Required for deploying to Tailor Platform (or use tailorctl authentication)
-- `PLATFORM_URL`: Optional Tailor Platform API URL (default: https://api.tailor.tech)
-
-## Next Steps
-
-1. Explore the model definitions in `tailordb/`
-2. Review the resolver implementation in `resolvers/`
-3. Check executor patterns in `executors/`
-4. Run tests to see the generated output
-5. Deploy to Tailor Platform to see it in action
+- [tailordb/](tailordb/) - Database models
+- [resolvers/](resolvers/) - GraphQL resolvers
+- [executors/](executors/) - Event handlers
+- [generated/](generated/) - Generated code
+- [tests/](tests/) - Test suite
+- [e2e/](e2e/) - E2E tests

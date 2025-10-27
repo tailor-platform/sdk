@@ -24,12 +24,16 @@ The following command creates a new project with the required configuration file
 npm create @tailor-platform/tailor-sdk example-app --template hello-world
 ```
 
-Before deploying your app, you need to create a workspace using either [tailorctl](https://docs.tailor.tech/tailorctl) or the [Console](https://console.tailor.tech):
+Before deploying your app, you need to create a workspace:
 
 ```bash
-tailorctl auth login
-tailorctl workspace create --name <workspace-name> --region <workspace-region>
-tailorctl config describe
+npx tailor-sdk login
+npx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
+npx tailor-sdk workspace list
+
+# OR
+# Create a new workspace using Tailor Platform Console
+# https://console.tailor.tech/
 ```
 
 ### Deploy Your App

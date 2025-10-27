@@ -1,138 +1,57 @@
-# Tailor SDK Monorepo
+# Tailor SDK
 
-This is the monorepo for the Tailor SDK project, containing the core SDK package and examples.
+Monorepo for Tailor SDK development.
 
-## Repository Structure
+## Prerequisites
 
-```
-tailor-sdk/
-├── packages/
-│   └── tailor-sdk/          # Core SDK package (@tailor-platform/tailor-sdk)
-├── examples/
-│   └── basic/               # Basic usage example
-├── turbo.json               # Turbo configuration
-├── pnpm-workspace.yaml      # pnpm workspace configuration
-└── CLAUDE.md                # AI assistant instructions
-```
+See [package.json](package.json) for required Node.js and pnpm versions.
 
-## Development Setup
-
-### Prerequisites
-
-- Node.js 22.14.0+
-- pnpm 10.14.0+
-
-### Installation
+## Installation
 
 ```bash
-# Install dependencies for all packages
 pnpm install
 ```
 
-### Development Commands
-
-All commands should be run from the repository root using Turbo:
+## Development
 
 ```bash
 # Run all tests
-turbo run test
-
-# Run tests in watch mode
-turbo run test:watch
+pnpm test
 
 # Build all packages
-turbo run build
-
-# Run linting
-turbo run lint
-
-# Auto-fix linting issues
-turbo run lint:fix
-
-# Format code
-turbo run format
+pnpm turbo run build
 
 # Type checking
-turbo run typecheck
+pnpm typecheck
+
+# Linting
+pnpm lint
+pnpm lint:fix
+
+# Format code
+pnpm format
+pnpm format:check
 
 # Run all checks (format, lint:fix, typecheck)
-turbo run check
+pnpm check
 ```
 
-### Package-specific Development
+## Structure
 
-To work on a specific package:
+```
+├── packages/
+│   ├── tailor-sdk/          # Main SDK package
+│   ├── create-tailor-sdk/   # Project scaffolding CLI
+│   └── tailor-proto/        # Protocol buffer definitions
+└── examples/
+    └── basic/               # Development and testing example
+```
+
+## Release
+
+Releases are managed by Changesets and automated through CI/CD.
 
 ```bash
-# Work on the SDK package
-cd packages/tailor-sdk
-pnpm test
-pnpm build
-
-# Work on the basic example
-cd examples/basic
-pnpm gen        # Generate code
-pnpm gen:watch  # Generate in watch mode
-pnpm test       # Run example tests
+# Create a changeset for your changes
+pnpm changeset
 ```
-
-## Architecture
-
-### Core SDK (`packages/tailor-sdk`)
-
-The main SDK package that provides:
-
-- TailorDB ORM for database models
-- Pipeline system for GraphQL resolvers
-- Executor framework for event handling
-- Code generator for types and GraphQL SDL
-- CLI tools for project management
-- Bundler integration using Rolldown
-
-### Examples (`examples/basic`)
-
-A comprehensive example showing:
-
-- Database model definitions
-- GraphQL resolver implementations
-- Event-driven executor patterns
-- Testing strategies
-
-## Testing
-
-- **Framework**: Vitest with SWC for fast TypeScript transformation
-- **Mocking**: vitest-mock-extended for type-safe mocks
-- **Test Structure**: Tests are colocated with source files or in `tests/` directories
-- **Example Tests**: The basic example includes comprehensive tests with fixtures
-
-## Code Quality
-
-- **Linting**: ESLint with TypeScript support
-- **Formatting**: Prettier with consistent code style
-- **Type Safety**: Strict TypeScript configuration
-- **Pre-commit Hooks**: Lefthook runs lint, format, and typecheck before commits
-
-## Contributing
-
-1. Create a feature branch from `main`
-2. Make your changes
-3. Ensure all tests pass: `turbo run test`
-4. Run checks: `turbo run check`
-5. Create a pull request
-
-## Monorepo Management
-
-- **Package Manager**: pnpm with workspace support
-- **Build Orchestration**: Turbo for efficient task running
-- **Module System**: ESM-only (no CommonJS)
-- **Versioning**: Managed at package level
-
-## Release Process
-
-Releases are automated through CI/CD pipelines. Version updates and publishing are handled automatically when changes are merged to the main branch.
-
-## Troubleshooting
-
-- If you encounter module resolution issues, ensure you're using Node.js 22.14.0+
-- For pnpm issues, check that you're using version 10.14.0+
-- Clear Turbo cache if needed: `turbo daemon clean`
