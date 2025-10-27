@@ -13,6 +13,7 @@
     "test:generator:prepare": "tsx tests/scripts/generate_files.ts actual",
     "test:generator:update-expects": "tsx tests/scripts/generate_files.ts",
     "test:e2e": "vitest --project e2e",
+    "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix --quiet",
     "typecheck": "pnpm generate && tsc --noEmit"
