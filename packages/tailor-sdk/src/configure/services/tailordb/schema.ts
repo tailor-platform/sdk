@@ -6,24 +6,29 @@ import {
   type DBFieldMetadata,
   type DefinedDBFieldMetadata,
   type Hooks,
-  type Validators,
-  type FieldValidateInput,
   type Hook,
-  type ValidateConfig,
   type SerialConfig,
   type IndexDef,
   type TypeFeatures,
   type FieldInput,
   type ExcludeNestedDBFields,
 } from "./types";
+import type {
+  FieldValidateInput,
+  ValidateConfig,
+  Validators,
+} from "@/configure/types/validation";
 import {
   type FieldOptions,
   type FieldOutput,
-  type InferFieldsOutput,
   type TailorFieldType,
   type TailorToTs,
 } from "@/configure/types/types";
-import type { Prettify, output } from "@/configure/types/helpers";
+import type {
+  Prettify,
+  output,
+  InferFieldsOutput,
+} from "@/configure/types/helpers";
 import {
   type AllowedValues,
   type AllowedValuesOutput,

@@ -1,11 +1,5 @@
 import { type AllowedValue } from "./field";
-import {
-  type output,
-  type DeepWritable,
-  type Prettify,
-  type NullableToOptional,
-} from "./helpers";
-import { type TailorField } from "./type";
+import type { FieldValidateInput } from "./validation";
 
 export interface SecretValue {
   VaultName: string;
@@ -66,12 +60,14 @@ export interface FieldMetadata {
   array?: boolean;
   allowedValues?: AllowedValue[];
   assertNonNull?: boolean;
+  validate?: FieldValidateInput<any>[];
 }
 
 export interface DefinedFieldMetadata {
   type: TailorFieldType;
   array: boolean;
   description?: boolean;
+  validate?: boolean;
 }
 
 export type FieldOptions = (
@@ -109,13 +105,3 @@ export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
 ]
   ? T[]
   : T;
-
-// Return Output type for TailorFields.
-export type InferFieldsOutput<F extends Record<string, TailorField<any, any>>> =
-  DeepWritable<
-    Prettify<
-      NullableToOptional<{
-        [K in keyof F]: output<F[K]>;
-      }>
-    >
-  >;

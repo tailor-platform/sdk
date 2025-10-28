@@ -26,3 +26,14 @@ export type NullableToOptional<T> = {
 } & {
   [K in keyof T as null extends T[K] ? K : never]?: T[K];
 };
+
+// Return Output type for TailorFields.
+export type InferFieldsOutput<
+  F extends Record<string, { _output: any; [key: string]: any }>,
+> = DeepWritable<
+  Prettify<
+    NullableToOptional<{
+      [K in keyof F]: output<F[K]>;
+    }>
+  >
+>;

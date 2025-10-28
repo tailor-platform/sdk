@@ -3,11 +3,11 @@ import {
   type TailorToTs,
   type FieldMetadata,
   type DefinedFieldMetadata,
-  type InferFieldsOutput,
   type FieldOptions,
   type FieldOutput,
 } from "./types";
-import type { Prettify } from "./helpers";
+import type { FieldValidateInput } from "./validation";
+import type { Prettify, InferFieldsOutput } from "./helpers";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -19,7 +19,7 @@ import type {
 } from "@/parser/service/pipeline/types";
 
 export class TailorType<
-  const F extends Record<string, TailorField<any>> = any,
+  const F extends Record<string, TailorField<any, any, any>> = any,
   Output = InferFieldsOutput<F>,
 > implements TailorTypeInput
 {
@@ -89,6 +89,19 @@ export class TailorField<
     this._metadata.description = description;
     return this as TailorField<
       Prettify<CurrentDefined & { description: true }>,
+      Output
+    >;
+  }
+
+  validate<CurrentDefined extends Defined>(
+    this: CurrentDefined extends { validate: unknown }
+      ? never
+      : TailorField<CurrentDefined, Output>,
+    ...validate: FieldValidateInput<Output>[]
+  ) {
+    this._metadata.validate = validate;
+    return this as TailorField<
+      Prettify<CurrentDefined & { validate: true }>,
       Output
     >;
   }

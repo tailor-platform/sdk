@@ -195,6 +195,188 @@ describe("pnpm apply command integration tests", () => {
     }
   });
 
+  describe("validation", () => {
+    test("functions/add__body.js validates input correctly - valid values", async () => {
+      const main = await importActualMain("functions/add__body.js");
+
+      // Valid values: both a and b are >= 0 and < 10
+      const result = await main({ input: { a: 4, b: 6 } });
+      expect(result).toEqual({ result: 10 });
+    });
+
+    test("functions/add__body.js validates input correctly - negative value throws error with correct message", async () => {
+      const main = await importActualMain("functions/add__body.js");
+
+      // Invalid: a is negative (fails validation: value >= 0)
+      await expect(main({ input: { a: -1, b: 5 } })).rejects.toThrow(
+        "input.a: Value must be non-negative",
+      );
+    });
+
+    test("functions/add__body.js validates input correctly - value >= 10 throws error with correct message", async () => {
+      const main = await importActualMain("functions/add__body.js");
+
+      // Invalid: a is >= 10 (fails validation: value < 10)
+      await expect(main({ input: { a: 10, b: 5 } })).rejects.toThrow(
+        "input.a: Value must be less than 10",
+      );
+    });
+
+    test("functions/add__body.js validates input correctly - b negative throws error with correct message", async () => {
+      const main = await importActualMain("functions/add__body.js");
+
+      // Invalid: b is negative
+      await expect(main({ input: { a: 5, b: -2 } })).rejects.toThrow(
+        "input.b: Value must be non-negative",
+      );
+    });
+
+    test("functions/add__body.js validates input correctly - b >= 10 throws error with correct message", async () => {
+      const main = await importActualMain("functions/add__body.js");
+
+      // Invalid: b is >= 10
+      await expect(main({ input: { a: 5, b: 15 } })).rejects.toThrow(
+        "input.b: Value must be less than 10",
+      );
+    });
+
+    test("functions/add__body.js validates input correctly - multiple fields with errors show all errors", async () => {
+      const main = await importActualMain("functions/add__body.js");
+
+      // Invalid: both a and b are negative
+      await expect(main({ input: { a: -1, b: -2 } })).rejects.toThrow(
+        [
+          "input.a: Value must be non-negative",
+          "input.b: Value must be non-negative",
+        ].join("\n"),
+      );
+    });
+
+    test("functions/add__body.js validates input correctly - multiple validation errors per field", async () => {
+      const main = await importActualMain("functions/add__body.js");
+
+      // Invalid: both a and b are >= 10
+      await expect(main({ input: { a: 10, b: 15 } })).rejects.toThrow(
+        [
+          "input.a: Value must be less than 10",
+          "input.b: Value must be less than 10",
+        ].join("\n"),
+      );
+    });
+
+    test("functions/stepChain__body.js validates nested fields - valid values", async () => {
+      setupTailordbMock((query) => {
+        if (typeof query === "string") {
+          const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
+          if (normalizedQuery.includes("SELECT STATE FROM SUPPLIER")) {
+            return [{ state: "CA" }];
+          }
+        }
+        return [];
+      });
+
+      const main = await importActualMain("functions/stepChain__body.js");
+
+      // Valid nested values: first and last names are both >= 2 characters
+      const result = await main({
+        input: {
+          user: {
+            name: { first: "Taro", last: "Yamada" },
+            activatedAt: null,
+          },
+        },
+        user: {
+          id: "test-user-id",
+          type: "user",
+          workspaceId: "test-workspace-id",
+        },
+      });
+
+      console.log(result);
+      expect(result).toEqual({
+        result: {
+          summary: [
+            "step1: Hello Taro Yamada on step1!",
+            `step2: recorded ${formatExpectation} on step2!`,
+            "CA",
+          ],
+        },
+      });
+    });
+
+    test("functions/stepChain__body.js validates nested fields - invalid first name", async () => {
+      const main = await importActualMain("functions/stepChain__body.js");
+
+      // Invalid: first name is too short (< 2 characters)
+      await expect(
+        main({
+          input: {
+            user: {
+              name: { first: "T", last: "Yamada" },
+              activatedAt: null,
+            },
+          },
+          user: {
+            id: "test-user-id",
+            type: "user",
+            workspaceId: "test-workspace-id",
+          },
+        }),
+      ).rejects.toThrow(
+        "input.user.name.first: First name must be at least 2 characters",
+      );
+    });
+
+    test("functions/stepChain__body.js validates nested fields - invalid last name", async () => {
+      const main = await importActualMain("functions/stepChain__body.js");
+
+      // Invalid: last name is too short (< 2 characters)
+      await expect(
+        main({
+          input: {
+            user: {
+              name: { first: "Taro", last: "Y" },
+              activatedAt: null,
+            },
+          },
+          user: {
+            id: "test-user-id",
+            type: "user",
+            workspaceId: "test-workspace-id",
+          },
+        }),
+      ).rejects.toThrow(
+        "input.user.name.last: Last name must be at least 2 characters",
+      );
+    });
+
+    test("functions/stepChain__body.js validates nested fields - multiple nested fields invalid", async () => {
+      const main = await importActualMain("functions/stepChain__body.js");
+
+      // Invalid: both first and last names are too short
+      await expect(
+        main({
+          input: {
+            user: {
+              name: { first: "T", last: "Y" },
+              activatedAt: null,
+            },
+          },
+          user: {
+            id: "test-user-id",
+            type: "user",
+            workspaceId: "test-workspace-id",
+          },
+        }),
+      ).rejects.toThrow(
+        [
+          "input.user.name.first: First name must be at least 2 characters",
+          "input.user.name.last: Last name must be at least 2 characters",
+        ].join("\n"),
+      );
+    });
+  });
+
   describe("globalThis.main test", () => {
     describe("resolvers", () => {
       test("functions/add__body.js returns the sum of inputs", async () => {

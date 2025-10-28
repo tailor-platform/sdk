@@ -7,7 +7,20 @@ export default createResolver({
   operation: "query",
   input: t.type({
     user: t.object({
-      name: t.object({ first: t.string(), last: t.string() }),
+      name: t.object({
+        first: t
+          .string()
+          .validate([
+            ({ value }) => value.length >= 2,
+            "First name must be at least 2 characters",
+          ]),
+        last: t
+          .string()
+          .validate([
+            ({ value }) => value.length >= 2,
+            "Last name must be at least 2 characters",
+          ]),
+      }),
       activatedAt: t.datetime({ optional: true }),
     }),
   }),

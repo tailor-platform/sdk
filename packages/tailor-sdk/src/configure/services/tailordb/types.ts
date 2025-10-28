@@ -10,9 +10,9 @@ import {
   type DefinedFieldMetadata,
   type FieldMetadata,
   type FieldOptions,
-  type InferFieldsOutput,
 } from "@/configure/types/types";
 import { type TailorDBField } from "./schema";
+import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<
   T extends "string" | "integer" = "string" | "integer",
@@ -34,7 +34,6 @@ export interface DBFieldMetadata extends FieldMetadata {
   foreignKey?: boolean;
   foreignKeyType?: string;
   foreignKeyField?: string;
-  validate?: FieldValidateInput<any>[];
   hooks?: Hook<any, any, any>;
   serial?: SerialConfig;
   relation?: boolean;
@@ -75,11 +74,8 @@ export type Hook<TValue, TData, TReturn> = {
   update?: HookFn<TValue, TData, TReturn>;
 };
 
-// Since empty object type {} would allow any key, return never instead.
-type NoEmptyObject<T extends object> = keyof T extends never ? never : T;
-
 export type Hooks<F extends Record<string, TailorDBField<any, any, any>>> =
-  NoEmptyObject<{
+  NonEmptyObject<{
     [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
       hooks: unknown;
     }
@@ -88,33 +84,6 @@ export type Hooks<F extends Record<string, TailorDBField<any, any, any>>> =
         ? never
         : K]?: Hook<InferFieldInput<F[K]>, InferFieldsInput<F>, output<F[K]>>;
   }>;
-
-export type Validators<F extends Record<string, TailorDBField<any, any, any>>> =
-  NoEmptyObject<{
-    [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
-      validate: unknown;
-    }
-      ? never
-      : K]?:
-      | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-      | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-      | (
-          | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-          | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-        )[];
-  }>;
-
-type ValidateFn<O, D = unknown> = (args: {
-  value: O;
-  data: D;
-  user: TailorUser;
-}) => boolean;
-
-export type ValidateConfig<O, D = unknown> = [ValidateFn<O, D>, string];
-
-type FieldValidateFn<O> = ValidateFn<O>;
-type FieldValidateConfig<O> = ValidateConfig<O>;
-export type FieldValidateInput<O> = FieldValidateFn<O> | FieldValidateConfig<O>;
 
 export type TailorDBServiceConfig = { files: string[] };
 export type TailorDBServiceInput = {
