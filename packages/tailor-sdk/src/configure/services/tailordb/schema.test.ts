@@ -710,8 +710,9 @@ describe("TailorDBType 型の一貫性テスト", () => {
     const _typeWithoutId = db.type("Test", {
       name: db.string(),
     });
-    expectTypeOf<output<typeof _typeWithoutId>>().toMatchTypeOf<{
+    expectTypeOf<output<typeof _typeWithoutId>>().toEqualTypeOf<{
       id: string;
+      name: string;
     }>();
   });
 });

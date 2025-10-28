@@ -106,7 +106,7 @@ describe("defineAuth", () => {
     });
 
     it("preserves name literal in readonly object", () => {
-      const authConfig = defineAuth("production-auth", {
+      const _authConfig = defineAuth("production-auth", {
         userProfile: {
           type: userType,
           usernameField: "email",
@@ -117,7 +117,8 @@ describe("defineAuth", () => {
       });
 
       // The entire config should be readonly
-      expectTypeOf(authConfig).toMatchTypeOf<{
+      type AuthConfigType = typeof _authConfig;
+      expectTypeOf<AuthConfigType>().toMatchObjectType<{
         readonly name: "production-auth";
       }>();
     });

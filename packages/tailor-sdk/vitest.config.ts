@@ -13,5 +13,6 @@ export default defineConfig({
     include: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
     globals: true,
     watch: false,
+    typecheck: { enabled: true },
   },
 });

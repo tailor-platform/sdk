@@ -115,6 +115,19 @@ export default defineConfig([
   //   },
   // },
   {
+    files: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name='toMatchTypeOf']",
+          message:
+            "toMatchTypeOf is deprecated. Use toEqualTypeOf, toMatchObjectType, or toExtend instead.",
+        },
+      ],
+    },
+  },
+  {
     files: ["**/*.js", "**/*.mjs"],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
