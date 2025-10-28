@@ -10,6 +10,12 @@ export const commonArgs = {
     description: "Path to the environment file",
     alias: "e",
   },
+  verbose: {
+    type: "boolean",
+    description: "Enable verbose logging",
+    alias: "v",
+    default: false,
+  },
 } as const;
 
 export const withCommonArgs =
@@ -26,6 +32,9 @@ export const withCommonArgs =
     } catch (error) {
       if (error instanceof Error) {
         consola.error(error.message);
+        if (args.verbose && error.stack) {
+          consola.log(`Stack trace:\n${error.stack}`);
+        }
       } else {
         consola.error(`Unknown error: ${error}`);
       }
