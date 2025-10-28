@@ -1,5 +1,15 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.94
+
+### Patch Changes
+
+- [#623](https://github.com/tailor-platform/tailor-sdk/pull/623) [`452a5d7`](https://github.com/tailor-platform/tailor-sdk/commit/452a5d7904d1b04b26638fce337d865b358f1f5b) Thanks [@remiposo](https://github.com/remiposo)! - Made all commands accept the --env-file flag
+
+- [#621](https://github.com/tailor-platform/tailor-sdk/pull/621) [`6291874`](https://github.com/tailor-platform/tailor-sdk/commit/629187471b0189331445ad179f9cfae91902a0a4) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: validate resolver input
+
+- [#625](https://github.com/tailor-platform/tailor-sdk/pull/625) [`d08ec14`](https://github.com/tailor-platform/tailor-sdk/commit/d08ec14886f91a71c6358d58db7e0f16d3f06ebe) Thanks [@remiposo](https://github.com/remiposo)! - Display stack trace only when the --verbose flag is specified
+
 ## 0.0.93
 
 ### Patch Changes

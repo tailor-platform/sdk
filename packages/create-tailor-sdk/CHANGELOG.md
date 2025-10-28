@@ -1,5 +1,7 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.0.94
+
 ## 0.0.93
 
 ### Patch Changes
