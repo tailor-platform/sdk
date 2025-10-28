@@ -16,6 +16,8 @@ import {
 import { DependencyWatcher } from "./watch";
 import { generateUserTypes } from "@/cli/type-generator";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import { defineCommand } from "citty";
+import { commonArgs, withCommonArgs } from "../args";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 
@@ -498,3 +500,28 @@ export async function generate(
     await manager.watch();
   }
 }
+
+export const generateCommand = defineCommand({
+  meta: {
+    name: "generate",
+    description: "Generate files using Tailor configuration",
+  },
+  args: {
+    ...commonArgs,
+    config: {
+      type: "string",
+      description: "Path to the Tailor config file",
+      alias: "c",
+      default: "tailor.config.ts",
+    },
+    watch: {
+      type: "boolean",
+      description: "Watch for type/resolver changes and regenerate",
+      alias: "w",
+    },
+  },
+  run: withCommonArgs(async (args) => {
+    const configPath = args.config || "tailor.config.ts";
+    await generate(configPath, args);
+  }),
+});

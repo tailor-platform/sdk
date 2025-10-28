@@ -1,6 +1,10 @@
-import { defineCommand } from "citty";
 import { spawnSync } from "node:child_process";
+
+import { defineCommand } from "citty";
+import { consola } from "consola";
 import { readPackageJSON } from "pkg-types";
+
+import { commonArgs, withCommonArgs } from "./args";
 
 const detectPackageManager = () => {
   const availablePMs = ["npm", "yarn", "pnpm"];
@@ -17,6 +21,7 @@ export const initCommand = defineCommand({
     description: "Initialize a new project using create-tailor-sdk",
   },
   args: {
+    ...commonArgs,
     name: {
       type: "positional",
       description: "Project name",
@@ -28,7 +33,7 @@ export const initCommand = defineCommand({
       required: false,
     },
   },
-  async run({ args }) {
+  run: withCommonArgs(async (args) => {
     const packageJson = await readPackageJSON(import.meta.url);
     const version =
       packageJson.version && packageJson.version !== "0.0.0"
@@ -37,7 +42,7 @@ export const initCommand = defineCommand({
 
     let packageManager = detectPackageManager();
     if (!packageManager) {
-      console.log("⚠️ Could not detect package manager, defaulting to npm");
+      consola.warn("⚠️ Could not detect package manager, defaulting to npm");
       packageManager = "npm";
     }
     const initArgs = [
@@ -47,8 +52,8 @@ export const initCommand = defineCommand({
       ...(packageManager === "npm" ? ["--"] : []),
       ...(args.template ? ["--template", args.template] : []),
     ];
-    console.log(`Running: ${packageManager} ${initArgs.join(" ")}`);
+    consola.log(`Running: ${packageManager} ${initArgs.join(" ")}`);
 
     spawnSync(packageManager, initArgs, { stdio: "inherit" });
-  },
+  }),
 });

@@ -2,8 +2,9 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { validate as uuidValidate } from "uuid";
 
-import { readTailorctlConfig } from "../tailorctl";
+import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
+import { readTailorctlConfig } from "../tailorctl";
 
 export const destroyCommand = defineCommand({
   meta: {
@@ -11,6 +12,7 @@ export const destroyCommand = defineCommand({
     description: "Destroy a Tailor Platform workspace",
   },
   args: {
+    ...commonArgs,
     "workspace-id": {
       type: "string",
       description: "ID of the workspace to destroy",
@@ -18,7 +20,7 @@ export const destroyCommand = defineCommand({
       alias: "w",
     },
   },
-  async run({ args }) {
+  run: withCommonArgs(async (args) => {
     const tailorctlConfig = readTailorctlConfig();
     const client = await initOperatorClient(tailorctlConfig);
 
@@ -34,5 +36,5 @@ export const destroyCommand = defineCommand({
     consola.success(
       `Workspace "${args["workspace-id"]}" destroyed successfully.`,
     );
-  },
+  }),
 });

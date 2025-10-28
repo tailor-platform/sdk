@@ -1,9 +1,10 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 
+import { commonArgs, withCommonArgs } from "./args";
 import { userAgent } from "./client";
-import { readTailorctlConfig, writeTailorctlConfig } from "./tailorctl";
 import { PLATFORM_AUTH_URL } from "./login";
+import { readTailorctlConfig, writeTailorctlConfig } from "./tailorctl";
 
 const LOGOUT_URL = PLATFORM_AUTH_URL + "/logout";
 
@@ -12,7 +13,8 @@ export const logoutCommand = defineCommand({
     name: "logout",
     description: "Logout from Tailor Platform",
   },
-  async run() {
+  args: commonArgs,
+  run: withCommonArgs(async () => {
     const tailorctlConfig = readTailorctlConfig();
     const token = tailorctlConfig?.controlplaneaccesstoken;
     if (!token) {
@@ -38,5 +40,5 @@ export const logoutCommand = defineCommand({
       controlplanetokenexpiresat: "",
     });
     consola.success("Successfully logged out from Tailor Platform.");
-  },
+  }),
 });

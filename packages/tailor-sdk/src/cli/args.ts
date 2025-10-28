@@ -1,23 +1,10 @@
-import type { ArgsDef, ParsedArgs } from "citty";
-import type { CliOption } from "./types";
-import type { ApplyOptions } from "@/cli/apply";
-import type { GenerateOptions } from "@/cli/generator/options";
+import * as path from "node:path";
+import { loadEnvFile } from "node:process";
 
-type StrictParse<T extends ArgsDef> = {
-  [K in keyof ParsedArgs<T> as string extends K
-    ? never
-    : K extends "_"
-      ? never
-      : K]: ParsedArgs<T>[K];
-};
+import type { ParsedArgs } from "citty";
+import { consola } from "consola";
 
-const commonCommandArgs = {
-  config: {
-    type: "string",
-    description: "Path to the Tailor config file",
-    alias: "c",
-    default: "tailor.config.ts",
-  },
+export const commonArgs = {
   "env-file": {
     type: "string",
     description: "Path to the environment file",
@@ -25,32 +12,23 @@ const commonCommandArgs = {
   },
 } as const;
 
-const cliGenerateOption = {
-  ...commonCommandArgs,
-  watch: {
-    type: "boolean",
-    description: "Watch for type/resolver changes and regenerate",
-    alias: "w",
-  },
-} as const satisfies CliOption<GenerateOptions>;
-
-const cliApplyOption = {
-  ...commonCommandArgs,
-  dryRun: {
-    type: "boolean",
-    description: "Run the command without making any changes",
-    alias: "d",
-  },
-} as const satisfies CliOption<Omit<ApplyOptions, "buildOnly">>;
-
-export const commandArgs = {
-  apply: cliApplyOption,
-  generate: cliGenerateOption,
-} as const;
-
-type _ApplyOptions = StrictParse<typeof commandArgs.apply>;
-type _GenerateOptions = StrictParse<typeof commandArgs.generate>;
-
-export type CommandArgs =
-  | ["apply", _ApplyOptions]
-  | ["generate", _GenerateOptions];
+export const withCommonArgs =
+  <T extends ParsedArgs<typeof commonArgs>>(
+    handler: (args: T) => Promise<void>,
+  ) =>
+  async ({ args }: { args: T }) => {
+    try {
+      if (args["env-file"] !== undefined) {
+        const envPath = path.resolve(process.cwd(), args["env-file"]);
+        loadEnvFile(envPath);
+      }
+      await handler(args);
+    } catch (error) {
+      if (error instanceof Error) {
+        consola.error(error.message);
+      } else {
+        consola.error(`Unknown error: ${error}`);
+      }
+      process.exit(1);
+    }
+  };

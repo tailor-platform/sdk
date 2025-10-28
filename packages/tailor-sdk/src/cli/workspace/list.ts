@@ -4,8 +4,9 @@ import { table } from "table";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 
 import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
-import { readTailorctlConfig } from "../tailorctl";
+import { commonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
+import { readTailorctlConfig } from "../tailorctl";
 
 interface WorkspaceInfo {
   id: string;
@@ -38,6 +39,7 @@ export const listCommand = defineCommand({
     description: "List all Tailor Platform workspaces",
   },
   args: {
+    ...commonArgs,
     format: {
       type: "string",
       description: "Output format (table, json)",
@@ -45,7 +47,7 @@ export const listCommand = defineCommand({
       default: "table",
     },
   },
-  async run({ args }) {
+  run: withCommonArgs(async (args) => {
     const tailorctlConfig = readTailorctlConfig();
     const client = await initOperatorClient(tailorctlConfig);
 
@@ -79,5 +81,5 @@ export const listCommand = defineCommand({
         console.log(JSON.stringify(workspaceInfos));
         break;
     }
-  },
+  }),
 });

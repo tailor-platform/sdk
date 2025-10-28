@@ -2,8 +2,9 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { validate as uuidValidate } from "uuid";
 
-import { readTailorctlConfig } from "../tailorctl";
+import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
+import { readTailorctlConfig } from "../tailorctl";
 
 const validateName = (name: string) => {
   if (name.length < 3 || name.length > 63) {
@@ -30,6 +31,7 @@ export const createCommand = defineCommand({
     description: "Create a new Tailor Platform workspace",
   },
   args: {
+    ...commonArgs,
     name: {
       type: "string",
       description: "Name of the workspace",
@@ -59,7 +61,7 @@ export const createCommand = defineCommand({
       alias: "f",
     },
   },
-  async run({ args }) {
+  run: withCommonArgs(async (args) => {
     const tailorctlConfig = readTailorctlConfig();
     const client = await initOperatorClient(tailorctlConfig);
 
@@ -91,5 +93,5 @@ export const createCommand = defineCommand({
       folderId: args["folder-id"],
     });
     consola.success(`Workspace "${args.name}" created successfully.`);
-  },
+  }),
 });

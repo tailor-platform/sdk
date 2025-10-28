@@ -46,7 +46,6 @@
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",
     "consola": "3.4.2",
-    "dotenv": "^17.2.1",
     "es-toolkit": "^1.38.0",
     "inflection": "^3.0.2",
     "madge": "^8.0.0",

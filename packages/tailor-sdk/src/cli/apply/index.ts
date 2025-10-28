@@ -25,6 +25,8 @@ import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
 import type { Executor } from "@/configure/services/executor/types";
 import type { Resolver } from "@/parser/service/pipeline";
 import { generateUserTypes } from "@/cli/type-generator";
+import { defineCommand } from "citty";
+import { commonArgs, withCommonArgs } from "../args";
 
 export type ApplyOptions = {
   dryRun?: boolean;
@@ -151,3 +153,28 @@ async function buildExecutor(config: { files?: string[] }) {
   const bundler = new Bundler(bundlerConfig);
   await bundler.bundle();
 }
+
+export const applyCommand = defineCommand({
+  meta: {
+    name: "apply",
+    description: "Apply Tailor configuration to generate files",
+  },
+  args: {
+    ...commonArgs,
+    config: {
+      type: "string",
+      description: "Path to the Tailor config file",
+      alias: "c",
+      default: "tailor.config.ts",
+    },
+    dryRun: {
+      type: "boolean",
+      description: "Run the command without making any changes",
+      alias: "d",
+    },
+  },
+  run: withCommonArgs(async (args) => {
+    const configPath = args.config || "tailor.config.ts";
+    await apply(configPath, args);
+  }),
+});

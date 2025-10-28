@@ -5,6 +5,7 @@ import open from "open";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 
+import { commonArgs, withCommonArgs } from "./args";
 import { userAgent } from "./client";
 import { writeTailorctlConfig } from "./tailorctl";
 
@@ -165,17 +166,9 @@ export const loginCommand = defineCommand({
     name: "login",
     description: "Login to Tailor Platform",
   },
-  async run() {
-    try {
-      await startAuthServer();
-      consola.success("Successfully logged in to Tailor Platform.");
-    } catch (error) {
-      if (error instanceof Error) {
-        consola.error(`Login failed: ${error.message}`);
-      } else {
-        consola.error("Login failed with unknown error");
-      }
-      process.exit(1);
-    }
-  },
+  args: commonArgs,
+  run: withCommonArgs(async () => {
+    await startAuthServer();
+    consola.success("Successfully logged in to Tailor Platform.");
+  }),
 });
