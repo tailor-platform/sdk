@@ -420,6 +420,66 @@ Some import restriction rules in `eslint.config.js` are currently commented out 
 - Prefer inline type imports: `import { type Foo } from "..."`
 - **Special case for `export type`**: Even when `allowTypeImports: true` is configured, `export type` statements will still trigger ESLint errors. In such cases, you may use `eslint-disable` comments for the export line
 
+**CRITICAL: No Backward Compatibility**
+
+This project is in **PoC stage**. Simplicity and correctness are prioritized over backward compatibility.
+
+**Core Principle:**
+
+- **ALWAYS refactor to the ideal structure** without maintaining backward compatibility
+- **DO NOT** write compatibility layers, deprecated exports, or migration helpers
+- Update all affected code directly to use the new structure
+- The ONLY exception is when the user explicitly requests backward compatibility
+
+**This applies to ALL aspects of the codebase:**
+
+1. **API Changes**: When changing function signatures, type definitions, or exported interfaces, update all call sites directly
+2. **File Restructuring**: When moving or renaming files, update all import statements
+3. **Type Consolidation**: When merging or splitting types, update all usage sites
+4. **Refactoring**: When improving code structure, apply changes consistently across the codebase
+
+**Specific Rule: No Re-exports for Compatibility**
+
+When consolidating or moving types:
+
+1. **NEVER write re-exports** like:
+
+   ```typescript
+   // ❌ FORBIDDEN - Do not write this
+   export { type Foo, type Bar } from "./new-location";
+   ```
+
+2. **ALWAYS update all import sites directly**:
+   - Use `Grep` to find all usage sites
+   - Update each import to use the new direct location
+   - Verify with build and tests
+
+3. **Why this matters**:
+   - Compatibility code accumulates technical debt
+   - It obscures the actual source of truth
+   - This is a PoC - simplicity > backward compatibility
+   - AI in future sessions MUST follow this rule
+
+**Example of correct refactoring:**
+
+```typescript
+// Before: types defined in both A and B
+// A.ts: export type Foo = ...
+// B.ts: export type Foo = ...
+// usage.ts: import { type Foo } from "./A"
+
+// ❌ WRONG - Do not add re-export
+// A.ts: export { type Foo } from "./common"
+// B.ts: (remove duplicate)
+// common.ts: export type Foo = ...
+
+// ✅ CORRECT - Update all imports
+// A.ts: (remove export)
+// B.ts: (remove duplicate)
+// common.ts: export type Foo = ...
+// usage.ts: import { type Foo } from "./common"  // ← Updated directly
+```
+
 ### Preventing Bundling Issues with Zod and Type-Only Dependencies
 
 **Problem:** Even with `export type *` syntax, bundlers resolve the entire module graph including runtime dependencies. This can cause unnecessary libraries like zod to be bundled into output files.
