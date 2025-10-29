@@ -11,6 +11,11 @@ codeToTestRatio:
 testExecutionTime:
   if: false
 
+report:
+  if: is_default_branch
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}
+
 diff:
   datastores:
     - artifact://${GITHUB_REPOSITORY}
