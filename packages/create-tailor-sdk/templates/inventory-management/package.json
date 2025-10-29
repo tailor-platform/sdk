@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.38.0",
-    "@tailor-platform/function-types": "0.6.1",
+    "@tailor-platform/function-types": "0.7.2",
     "@tailor-platform/tailor-sdk": "workspace:^",
     "@types/node": "22.18.12",
     "eslint": "9.38.0",

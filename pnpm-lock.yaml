@@ -171,8 +171,8 @@ importers:
         specifier: 9.38.0
         version: 9.38.0
       '@tailor-platform/function-types':
-        specifier: 0.6.1
-        version: 0.6.1
+        specifier: 0.7.2
+        version: 0.7.2
       '@tailor-platform/tailor-sdk':
         specifier: workspace:^
         version: link:../../../tailor-sdk
@@ -271,8 +271,8 @@ importers:
         specifier: 9.38.0
         version: 9.38.0
       '@tailor-platform/function-types':
-        specifier: 0.6.1
-        version: 0.6.1
+        specifier: 0.7.2
+        version: 0.7.2
       '@types/madge':
         specifier: 5.0.3
         version: 5.0.3
@@ -1091,6 +1091,9 @@ packages:
 
   '@tailor-platform/function-types@0.6.1':
     resolution: {integrity: sha512-eb9purcH26adc7yfViPmOjZQhc3lwEj+nR3AzBbWXgJtpetvsRnYk41ltyPqW8sRfbCaS5FJQSMpBv211osJBg==}
+
+  '@tailor-platform/function-types@0.7.2':
+    resolution: {integrity: sha512-Eg8Bk5QmDeQq8LMXjqlai1d1dDF4krXoeujOCUv3hpoVObwVPTiPIf/hHSemsG1jmp/9tythHA6xInKOgVGLMQ==}
 
   '@ts-graphviz/adapter@2.0.6':
     resolution: {integrity: sha512-kJ10lIMSWMJkLkkCG5gt927SnGZcBuG0s0HHswGzcHTgvtUe7yk5/3zTEr0bafzsodsOq5Gi6FhQeV775nC35Q==}
@@ -3600,6 +3603,8 @@ snapshots:
       kysely: 0.28.7
 
   '@tailor-platform/function-types@0.6.1': {}
+
+  '@tailor-platform/function-types@0.7.2': {}
 
   '@ts-graphviz/adapter@2.0.6':
     dependencies:
