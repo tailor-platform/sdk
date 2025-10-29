@@ -1,0 +1,76 @@
+name: Type Check Performance
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  type-check-performance:
+    name: Measure Type Check Performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Run type check performance (full project)
+        run: pnpm --filter @examples/basic perf:typecheck:full
+
+      - name: Run type check performance (inference)
+        run: pnpm --filter @examples/basic perf:typecheck:inference
+
+      - name: Upload results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: type-check-performance-results
+          path: examples/basic/diagnostics-*.json
+
+      - name: Display results
+        run: |
+          {
+            echo "## Type Check Performance Results"
+            echo ""
+            echo "### Full Project Check"
+            echo "\`\`\`json"
+            jq '.metrics[] | select(.key == "total-time")' examples/basic/diagnostics-full.json
+            echo "\`\`\`"
+            echo ""
+            echo "### Type Inference Checks"
+            echo ""
+            echo "#### TailorDB Types"
+            echo "\`\`\`json"
+            jq '.metrics[] | select(.key == "total-time")' examples/basic/diagnostics-types.json
+            echo "\`\`\`"
+            echo ""
+            echo "#### Pipeline Resolvers"
+            echo "\`\`\`json"
+            jq '.metrics[] | select(.key == "total-time")' examples/basic/diagnostics-resolvers.json
+            echo "\`\`\`"
+            echo ""
+            echo "#### Executors"
+            echo "\`\`\`json"
+            jq '.metrics[] | select(.key == "total-time")' examples/basic/diagnostics-executors.json
+            echo "\`\`\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Run octocov
+        uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
+        with:
+          config: examples/basic/.octocov.perf.yml
+        env:
+          OCTOCOV_CUSTOM_METRICS_1_DIAGNOSTICS_FULL: examples/basic/diagnostics-full.json
+          OCTOCOV_CUSTOM_METRICS_2_DIAGNOSTICS_TYPES: examples/basic/diagnostics-types.json
+          OCTOCOV_CUSTOM_METRICS_3_DIAGNOSTICS_RESOLVERS: examples/basic/diagnostics-resolvers.json
+          OCTOCOV_CUSTOM_METRICS_4_DIAGNOSTICS_EXECUTORS: examples/basic/diagnostics-executors.json

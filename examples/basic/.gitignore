@@ -22,3 +22,7 @@ tests/fixtures/actual/
 
 # Logs
 *.log
+
+# Performance measurement results
+diagnostics-*.json
+generated-perf/

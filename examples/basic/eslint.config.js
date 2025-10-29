@@ -3,7 +3,13 @@ import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores([".tailor-sdk/", "generated/", "tests/fixtures/"]),
+  globalIgnores([
+    ".tailor-sdk/",
+    "generated/",
+    "tests/fixtures/",
+    "generated-perf",
+    "scripts/perf",
+  ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   tseslint.configs.stylisticTypeChecked,
