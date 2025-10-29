@@ -33,24 +33,13 @@ describe("controlplane", async () => {
       authorization: "true==true",
       inputs: [
         {
-          name: "input",
+          name: "user",
           array: false,
           required: true,
           type: {
             kind: "UserDefined",
-            name: "StepChainInput",
-            fields: [
-              {
-                name: "user",
-                array: false,
-                required: true,
-                type: {
-                  kind: "UserDefined",
-                  name: "StepChainInputUser",
-                  fields: expect.any(Array),
-                },
-              },
-            ],
+            name: "StepChainInputUser",
+            fields: expect.any(Array),
           },
         },
       ],
@@ -86,13 +75,23 @@ describe("controlplane", async () => {
       authorization: "true==true",
       inputs: [
         {
-          name: "input",
+          name: "a",
           array: false,
           required: true,
           type: {
-            kind: "UserDefined",
-            name: "AddInput",
-            fields: expect.any(Array),
+            kind: "ScalarType",
+            name: "Int",
+            required: true,
+          },
+        },
+        {
+          name: "b",
+          array: false,
+          required: true,
+          type: {
+            kind: "ScalarType",
+            name: "Int",
+            required: true,
           },
         },
       ],
@@ -166,9 +165,7 @@ describe("dataplane", () => {
     test("providing required fields succeeds", async () => {
       const query = gql`
         query {
-          stepChain(
-            input: { user: { name: { first: "Alice", last: "Smith" } } }
-          ) {
+          stepChain(user: { name: { first: "Alice", last: "Smith" } }) {
             result {
               summary
             }
@@ -193,7 +190,7 @@ describe("dataplane", () => {
     test("ommiting required fields fails", async () => {
       const query = gql`
         query {
-          stepChain(input: { user: { name: { first: "Alice" } } }) {
+          stepChain(user: { name: { first: "Alice" } }) {
             result {
               summary
             }

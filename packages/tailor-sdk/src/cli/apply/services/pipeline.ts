@@ -320,7 +320,7 @@ function processResolver(
         operationType: PipelineResolver_OperationType.FUNCTION,
         operationSource: functionCode,
         operationHook: {
-          expr: `({ ...context.pipeline, ...context.args, user: ${tailorUserMap} });`,
+          expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap} });`,
         },
         postScript: `args.body`,
       },
@@ -328,27 +328,12 @@ function processResolver(
 
   // Generate type names
   const typeBaseName = inflection.camelize(resolver.name);
-  const inputType = resolver.input ? `${typeBaseName}Input` : undefined;
   const outputType = `${typeBaseName}Output`;
 
   // Build inputs
   const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] =
-    inputType && resolver.input?.fields
-      ? [
-          {
-            name: "input",
-            description: "",
-            array: false,
-            required: true,
-            type: {
-              kind: "UserDefined",
-              name: inputType,
-              description: "",
-              required: false,
-              fields: protoFields(inputType, resolver.input.fields),
-            },
-          },
-        ]
+    resolver.input?.fields
+      ? protoFields(`${typeBaseName}Input`, resolver.input.fields)
       : [];
 
   // Build response
