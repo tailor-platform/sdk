@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+/* eslint-disable import/order */
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const madgeMock = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -10,15 +14,13 @@ const madgeMock = vi.hoisted(() =>
 vi.mock("madge", () => ({
   default: madgeMock,
 }));
+
 import {
+  DependencyGraphManager,
   DependencyWatcher,
   WatcherError,
   WatcherErrorCode,
-  DependencyGraphManager,
 } from "./index";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import * as os from "node:os";
 
 let manager: DependencyGraphManager;
 

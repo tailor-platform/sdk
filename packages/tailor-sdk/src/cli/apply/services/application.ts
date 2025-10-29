@@ -1,6 +1,5 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-
 import {
   type CreateApplicationRequestSchema,
   type DeleteApplicationRequestSchema,
@@ -11,13 +10,13 @@ import {
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { type Application } from "@/cli/application";
-import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import {
   fetchAll,
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
+import { ChangeSet } from ".";
 
 export async function applyApplication(
   client: OperatorClient,

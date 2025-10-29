@@ -1,6 +1,5 @@
 import { gql } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
-
 import {
   ExecutorTargetType,
   ExecutorTriggerType,

@@ -1,12 +1,12 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
+import { t, type TailorType } from "@/configure/types";
 import { db } from "./schema";
 import type { Hook } from "./types";
+import type { output } from "@/configure/types/helpers";
 import type {
   FieldValidateInput,
   ValidateConfig,
 } from "@/configure/types/validation";
-import { t, type TailorType } from "@/configure/types";
-import type { output } from "@/configure/types/helpers";
 
 describe("TailorDBField 基本フィールド型テスト", () => {
   it("string型フィールドが正しくstring型を出力する", () => {

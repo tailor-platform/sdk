@@ -1,5 +1,5 @@
-import type { output as _output } from "@/configure/types/helpers";
 import { t as _t } from "@/configure/types";
+import type { output as _output } from "@/configure/types/helpers";
 
 export type infer<T> = _output<T>;
 export type output<T> = _output<T>;

@@ -1,6 +1,6 @@
-import { createResolver, t } from "@tailor-platform/tailor-sdk";
 import { format } from "date-fns";
 import { db } from "tailordb";
+import { createResolver, t } from "@tailor-platform/tailor-sdk";
 
 export default createResolver({
   name: "stepChain",

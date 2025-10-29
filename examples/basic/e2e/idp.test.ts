@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-
 import { createOperatorClient } from "./utils";
 
 describe("control plane", async () => {

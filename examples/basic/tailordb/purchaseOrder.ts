@@ -1,7 +1,7 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import { supplier } from "./supplier";
 import { attachedFiles } from "./file";
 import { defaultGqlPermission, defaultPermission } from "./permissions";
+import { supplier } from "./supplier";
 
 export const purchaseOrder = db
   .type(["PurchaseOrder", "PurchaseOrderList"], {

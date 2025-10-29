@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   type Executor,
   type ExecutorServiceConfig,
 } from "@/configure/services/executor/types";
-import { pathToFileURL } from "node:url";
 
 export class ExecutorService {
   private isValidExecutor(executor: any): executor is Executor {

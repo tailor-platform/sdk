@@ -1,8 +1,8 @@
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import { format as formatDate } from "date-fns";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { format as formatDate } from "date-fns";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 const tempDistDir = "tests/fixtures/actual";
 

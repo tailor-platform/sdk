@@ -33,6 +33,39 @@ export default defineConfig([
       ],
       "import/no-cycle": ["error", { maxDepth: Infinity }],
       "import/no-unresolved": "off",
+      "import/order": [
+        "error",
+        {
+          groups: [
+            "builtin",
+            "external",
+            "internal",
+            "parent",
+            "sibling",
+            "index",
+            "type",
+          ],
+          pathGroups: [
+            {
+              pattern: "@tailor-platform/**",
+              group: "external",
+              position: "after",
+            },
+            {
+              pattern: "generated/**",
+              group: "internal",
+              position: "after",
+            },
+          ],
+          pathGroupsExcludedImportTypes: ["type"],
+          "newlines-between": "never",
+          alphabetize: {
+            order: "asc",
+            caseInsensitive: true,
+          },
+          distinctGroup: false,
+        },
+      ],
     },
   },
   // Disable type-checked linting for root config files.

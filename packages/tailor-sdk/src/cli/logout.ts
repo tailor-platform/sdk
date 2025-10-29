@@ -1,6 +1,5 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-
 import { commonArgs, withCommonArgs } from "./args";
 import { userAgent } from "./client";
 import { PLATFORM_AUTH_URL } from "./login";

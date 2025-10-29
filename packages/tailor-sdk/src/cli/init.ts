@@ -1,9 +1,7 @@
 import { spawnSync } from "node:child_process";
-
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { readPackageJSON } from "pkg-types";
-
 import { commonArgs, withCommonArgs } from "./args";
 
 const detectPackageManager = () => {

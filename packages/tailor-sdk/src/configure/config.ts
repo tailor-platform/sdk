@@ -1,9 +1,9 @@
-import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import type { PipelineResolverServiceInput } from "@/configure/services/pipeline/types";
 import type { AuthConfig } from "@/configure/services/auth";
 import type { ExecutorServiceInput } from "@/configure/services/executor/types";
-import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
 import type { IdPConfig } from "@/configure/services/idp";
+import type { PipelineResolverServiceInput } from "@/configure/services/pipeline/types";
+import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
+import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
 
 export interface AppConfig<

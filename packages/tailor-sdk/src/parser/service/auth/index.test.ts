@@ -1,10 +1,9 @@
 import { describe, it, expectTypeOf } from "vitest";
-import type { z } from "zod";
-import type { OptionalKeysOf } from "type-fest";
-
-import type { AuthServiceInput } from "./types";
-import type { AuthConfigSchema } from "./schema";
 import { db } from "@/configure/services/tailordb/schema";
+import type { AuthConfigSchema } from "./schema";
+import type { AuthServiceInput } from "./types";
+import type { OptionalKeysOf } from "type-fest";
+import type { z } from "zod";
 
 // Define userType for type inference
 const _userType = db.type("User", {

@@ -3,10 +3,10 @@ import {
   type GeneratorResult,
   type GeneratorInput,
 } from "@/cli/generator/types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 import { type Executor } from "@/configure/services/executor/types";
-import { type KyselyTypeMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
+import { type KyselyTypeMetadata } from "./types";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const KyselyGeneratorID = "@tailor/kysely-type";
 

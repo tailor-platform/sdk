@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { KyselyGenerator } from "./index";
-import { db } from "@/configure/services/tailordb/schema";
 import { TailorDBService } from "@/cli/application/tailordb/service";
+import { db } from "@/configure/services/tailordb/schema";
+import { KyselyGenerator } from "./index";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 

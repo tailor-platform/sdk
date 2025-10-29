@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, test, expect } from "vitest";
-import { createResolver } from "./resolver";
 import { t } from "@/configure/types";
+import { createResolver } from "./resolver";
 import type { output } from "@/configure/types/helpers";
 import type { TailorUser } from "@/configure/types/user";
 import type { ResolverInput } from "@/parser/service/pipeline/types";

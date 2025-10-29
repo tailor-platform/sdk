@@ -1,4 +1,3 @@
-import type { z } from "zod";
 import type {
   AllowedValueSchema,
   FieldMetadataSchema,
@@ -9,6 +8,7 @@ import type {
   TailorFieldTypeSchema,
   TailorTypeSchema,
 } from "./schema";
+import type { z } from "zod";
 
 export type TailorFieldType = z.output<typeof TailorFieldTypeSchema>;
 export type AllowedValue = z.output<typeof AllowedValueSchema>;

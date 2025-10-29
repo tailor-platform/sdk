@@ -4,8 +4,8 @@ import {
   type GeneratorInput,
 } from "@/cli/generator/types";
 import { type Executor } from "@/configure/services/executor/types";
-import { type DbTypeMetadata } from "./types";
 import { TypeProcessor } from "./type-processor";
+import { type DbTypeMetadata } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const DbTypeGeneratorID = "@tailor/db-type";

@@ -1,4 +1,9 @@
 import {
+  type AllowedValues,
+  type AllowedValuesOutput,
+  mapAllowedValues,
+} from "./field";
+import {
   type TailorFieldType,
   type TailorToTs,
   type FieldMetadata,
@@ -6,13 +11,8 @@ import {
   type FieldOptions,
   type FieldOutput,
 } from "./types";
-import type { FieldValidateInput } from "./validation";
 import type { Prettify, InferFieldsOutput } from "./helpers";
-import {
-  type AllowedValues,
-  type AllowedValuesOutput,
-  mapAllowedValues,
-} from "./field";
+import type { FieldValidateInput } from "./validation";
 import type {
   TailorFieldInput,
   TailorTypeInput,

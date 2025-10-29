@@ -1,8 +1,7 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
 import { randomUUID } from "node:crypto";
-
-import { defineAuth } from "./index";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import { db } from "../tailordb/schema";
+import { defineAuth } from "./index";
 
 const userType = db.type("User", {
   email: db.string().unique(),

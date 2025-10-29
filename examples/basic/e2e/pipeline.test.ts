@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { gql } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
-
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 

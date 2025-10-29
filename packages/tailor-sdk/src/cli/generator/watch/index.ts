@@ -1,7 +1,7 @@
-import chokidar from "chokidar";
-import * as madgeModule from "madge";
 import { glob } from "node:fs/promises";
 import * as path from "node:path";
+import chokidar from "chokidar";
+import * as madgeModule from "madge";
 
 type MadgeLoader = typeof madgeModule;
 

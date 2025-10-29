@@ -1,10 +1,6 @@
-import * as inflection from "inflection";
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
-import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
-
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
   type CreateTailorDBServiceRequestSchema,
@@ -36,6 +32,9 @@ import {
   type TailorDBType_RelationshipConfigSchema,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import * as inflection from "inflection";
+import { type Application } from "@/cli/application";
+import { type TailorDBService } from "@/cli/application/tailordb/service";
 import { type Executor } from "@/configure/services";
 import {
   type PermissionOperand,
@@ -45,11 +44,11 @@ import {
   type StandardTailorTypeGqlPermission,
   type StandardTailorTypePermission,
 } from "@/configure/services/tailordb/permission";
-import { type TailorDBService } from "@/cli/application/tailordb/service";
-import { type Application } from "@/cli/application";
-import { ChangeSet, type HasName } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { ChangeSet, type HasName } from ".";
+import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export async function applyTailorDB(
   client: OperatorClient,

@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   existsSync,
   mkdirSync,
@@ -7,8 +6,9 @@ import {
   readFileSync,
 } from "node:fs";
 import { join, basename } from "node:path";
-import { CodeTransformer } from "./transformer";
 import multiline from "multiline-ts";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { CodeTransformer } from "./transformer";
 
 describe("CodeTransformer", () => {
   let transformer: CodeTransformer;

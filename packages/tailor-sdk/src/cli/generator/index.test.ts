@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import {
   describe,
   it,
@@ -7,20 +10,16 @@ import {
   vi,
   afterAll,
 } from "vitest";
-
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as os from "node:os";
+import { TailorDBService } from "@/cli/application/tailordb/service";
+import { GeneratorConfigSchema } from "@/cli/config-loader";
+import { KyselyGenerator } from "@/cli/generator/builtin/kysely-type";
+import { createResolver } from "@/configure/services/pipeline/resolver";
+import { db, type TailorDBType } from "@/configure/services/tailordb/schema";
+import { t } from "@/configure/types";
+import { type Resolver } from "@/parser/service/pipeline";
+import { DependencyWatcher } from "./watch";
 import { GenerationManager } from "./index";
 import type { AppConfig } from "@/configure/config";
-import { GeneratorConfigSchema } from "@/cli/config-loader";
-import { db, type TailorDBType } from "@/configure/services/tailordb/schema";
-import { createResolver } from "@/configure/services/pipeline/resolver";
-import { type Resolver } from "@/parser/service/pipeline";
-import { KyselyGenerator } from "@/cli/generator/builtin/kysely-type";
-import { DependencyWatcher } from "./watch";
-import { t } from "@/configure/types";
-import { TailorDBService } from "@/cli/application/tailordb/service";
 
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {

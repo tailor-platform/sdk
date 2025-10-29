@@ -1,8 +1,8 @@
-import type { Exact } from "type-fest";
-import type { TailorType } from "@/configure/types/type";
-import type { output } from "@/configure/types/helpers";
 import type { TailorUser } from "@/configure/types";
+import type { output } from "@/configure/types/helpers";
+import type { TailorType } from "@/configure/types/type";
 import type { ResolverInput } from "@/parser/service/pipeline/types";
+import type { Exact } from "type-fest";
 
 type Context<Input extends TailorType<any, any> | undefined> = {
   input: Input extends TailorType<any, any> ? output<Input> : never;

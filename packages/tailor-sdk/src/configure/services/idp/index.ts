@@ -1,5 +1,5 @@
-import type { IdPInput } from "@/parser/service/idp/types";
 import type { BuiltinIdP } from "@/parser/service/auth/types";
+import type { IdPInput } from "@/parser/service/idp/types";
 
 declare const idpDefinitionBrand: unique symbol;
 type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };

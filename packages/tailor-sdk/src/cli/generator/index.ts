@@ -1,23 +1,23 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { GenerateOptions } from "./options";
-import { getDistDir, type AppConfig } from "@/configure/config";
-import { loadConfig } from "@/cli/config-loader";
-import { type Generator } from "@/parser/generator-config";
+import { defineCommand } from "citty";
 import { defineApplication, type Application } from "@/cli/application";
-import { type Resolver } from "@/parser/service/pipeline";
-import { type Executor } from "@/configure/services/executor/types";
+import { loadConfig } from "@/cli/config-loader";
 import {
   type CodeGenerator,
   type GeneratorInput,
   type TailorDBNamespaceResult,
   type PipelineNamespaceResult,
 } from "@/cli/generator/types";
-import { DependencyWatcher } from "./watch";
 import { generateUserTypes } from "@/cli/type-generator";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
-import { defineCommand } from "citty";
+import { getDistDir, type AppConfig } from "@/configure/config";
+import { type Executor } from "@/configure/services/executor/types";
+import { type Generator } from "@/parser/generator-config";
+import { type Resolver } from "@/parser/service/pipeline";
 import { commonArgs, withCommonArgs } from "../args";
+import { DependencyWatcher } from "./watch";
+import type { GenerateOptions } from "./options";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 

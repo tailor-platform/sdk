@@ -1,10 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-
-import { getDistDir } from "@/configure/config";
 import {
   type CreatePipelineResolverRequestSchema,
   type CreatePipelineServiceRequestSchema,
@@ -20,15 +17,16 @@ import {
   type PipelineResolver_TypeSchema,
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
-import { type Executor } from "@/configure/services/executor/types";
-import { type PipelineResolverService } from "@/cli/application/pipeline/service";
-import { type Resolver, type TailorField } from "@/parser/service/pipeline";
+import * as inflection from "inflection";
 import { type Application } from "@/cli/application";
-import { ChangeSet } from ".";
+import { type PipelineResolverService } from "@/cli/application/pipeline/service";
+import { getDistDir } from "@/configure/config";
+import { type Executor } from "@/configure/services/executor/types";
+import { tailorUserMap } from "@/configure/types";
+import { type Resolver, type TailorField } from "@/parser/service/pipeline";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import * as inflection from "inflection";
-import { tailorUserMap } from "@/configure/types";
+import { ChangeSet } from ".";
 
 export async function applyPipeline(
   client: OperatorClient,

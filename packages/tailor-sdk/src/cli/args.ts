@@ -1,8 +1,7 @@
 import * as path from "node:path";
 import { loadEnvFile } from "node:process";
-
-import type { ParsedArgs } from "citty";
 import { consola } from "consola";
+import type { ParsedArgs } from "citty";
 
 export const commonArgs = {
   "env-file": {

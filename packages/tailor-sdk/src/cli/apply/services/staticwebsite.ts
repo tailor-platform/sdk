@@ -1,15 +1,14 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-
 import {
   type CreateStaticWebsiteRequestSchema,
   type DeleteStaticWebsiteRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 import { type Application } from "@/cli/application";
-import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { ChangeSet } from ".";
 
 export async function applyStaticWebsite(
   client: OperatorClient,

@@ -5,7 +5,7 @@ import {
   defineIdp,
   defineStaticWebSite,
 } from "@tailor-platform/tailor-sdk";
-import { user } from "tailordb/user";
+import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",

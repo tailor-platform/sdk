@@ -1,7 +1,36 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-
+import {
+  AuthIDPConfig_AuthType,
+  AuthOAuth2Client_ClientType,
+  AuthOAuth2Client_GrantType,
+  AuthSCIMAttribute_Mutability,
+  AuthSCIMAttribute_Type,
+  AuthSCIMAttribute_Uniqueness,
+  AuthSCIMConfig_AuthorizationType,
+  TenantProviderConfig_TenantProviderType,
+  UserProfileProviderConfig_UserProfileProviderType,
+} from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { type Application } from "@/cli/application";
+import { type AuthService } from "@/cli/application/auth/service";
+import { type ApplyPhase } from "..";
+import {
+  fetchAll,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
+} from "../../client";
+import { idpClientSecretName, idpClientVaultName } from "./idp";
+import { ChangeSet, type HasName } from ".";
+import type {
+  BuiltinIdP,
+  IdProviderConfig,
+  OAuth2Client,
+  SCIMAttribute,
+  SCIMConfig,
+  SCIMResource,
+  AuthAttributeValue,
+} from "@/parser/service/auth";
 import type {
   CreateAuthIDPConfigRequestSchema,
   CreateAuthMachineUserRequestSchema,
@@ -27,17 +56,6 @@ import type {
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
 } from "@tailor-proto/tailor/v1/auth_pb";
-import {
-  AuthIDPConfig_AuthType,
-  AuthOAuth2Client_ClientType,
-  AuthOAuth2Client_GrantType,
-  AuthSCIMAttribute_Mutability,
-  AuthSCIMAttribute_Type,
-  AuthSCIMAttribute_Uniqueness,
-  AuthSCIMConfig_AuthorizationType,
-  TenantProviderConfig_TenantProviderType,
-  UserProfileProviderConfig_UserProfileProviderType,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type {
   AuthIDPConfig_ConfigSchema,
   AuthIDPConfigSchema,
@@ -48,25 +66,6 @@ import type {
   TenantProviderConfigSchema,
   UserProfileProviderConfigSchema,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import type {
-  BuiltinIdP,
-  IdProviderConfig,
-  OAuth2Client,
-  SCIMAttribute,
-  SCIMConfig,
-  SCIMResource,
-  AuthAttributeValue,
-} from "@/parser/service/auth";
-import { type AuthService } from "@/cli/application/auth/service";
-import { type Application } from "@/cli/application";
-import { ChangeSet, type HasName } from ".";
-import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { type ApplyPhase } from "..";
-import {
-  fetchAll,
-  resolveStaticWebsiteUrls,
-  type OperatorClient,
-} from "../../client";
 
 export async function applyAuth(
   client: OperatorClient,

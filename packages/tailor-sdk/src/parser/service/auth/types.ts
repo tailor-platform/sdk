@@ -1,6 +1,3 @@
-import type { z } from "zod";
-import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
-import type { output } from "@/configure/types/helpers";
 import type {
   AuthConfigSchema,
   BuiltinIdPSchema,
@@ -18,7 +15,10 @@ import type {
   SCIMSchema as SCIMSchemaType,
   TenantProviderSchema,
 } from "./schema";
+import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
+import type { output } from "@/configure/types/helpers";
 import type { IsAny } from "type-fest";
+import type { z } from "zod";
 
 // Types derived from zod schemas
 export type OIDC = z.output<typeof OIDCSchema>;

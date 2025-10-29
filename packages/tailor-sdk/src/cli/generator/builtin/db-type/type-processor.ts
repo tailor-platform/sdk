@@ -1,9 +1,9 @@
 import { type DbTypeMetadata } from "./types";
+import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 import type {
   ParsedTailorDBType,
   ParsedField,
 } from "@/parser/service/tailordb/types";
-import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 
 type FieldConfig = TailorDBTypeConfig["schema"]["fields"][string];
 

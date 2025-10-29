@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { type Resolver, ResolverSchema } from "@/parser/service/pipeline";
 import { type ILoader } from "@/cli/bundler";
+import { type Resolver, ResolverSchema } from "@/parser/service/pipeline";
 
 export class ResolverLoader implements ILoader<Resolver> {
   async load(resolverFilePath: string): Promise<Resolver | null> {

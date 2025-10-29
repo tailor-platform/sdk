@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
-import { TypeProcessor } from "./type-processor";
-import { db } from "@/configure/services/tailordb/schema";
 import { TailorDBService } from "@/cli/application/tailordb/service";
+import { db } from "@/configure/services/tailordb/schema";
+import { TypeProcessor } from "./type-processor";
 
 describe("TypeProcessor", () => {
   test("基本型の変換", async () => {

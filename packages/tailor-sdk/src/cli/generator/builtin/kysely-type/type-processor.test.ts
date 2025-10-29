@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { TypeProcessor } from "./type-processor";
-import { db } from "@/configure/services/tailordb/schema";
 import { TailorDBService } from "@/cli/application/tailordb/service";
+import { db } from "@/configure/services/tailordb/schema";
+import { TypeProcessor } from "./type-processor";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 

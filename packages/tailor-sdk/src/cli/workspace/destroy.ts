@@ -1,7 +1,6 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { validate as uuidValidate } from "uuid";
-
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { readTailorctlConfig } from "../tailorctl";

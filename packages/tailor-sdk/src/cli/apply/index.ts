@@ -1,11 +1,18 @@
-import ml from "multiline-ts";
 import { type Client } from "@connectrpc/connect";
-
-import type { AppConfig } from "@/configure/config";
-import { loadConfig } from "@/cli/config-loader";
 import { type OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { defineCommand } from "citty";
+import ml from "multiline-ts";
 import { defineApplication } from "@/cli/application";
+import { Bundler, type BundlerConfig } from "@/cli/bundler";
+import { ExecutorLoader } from "@/cli/bundler/executor/loader";
+import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";
+import { ResolverLoader } from "@/cli/bundler/pipeline/loader";
+import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
+import { loadConfig } from "@/cli/config-loader";
+import { generateUserTypes } from "@/cli/type-generator";
+import { commonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
+import { readTailorctlConfig } from "../tailorctl";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import { applyExecutor, planExecutor } from "./services/executor";
@@ -16,17 +23,9 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
-import { readTailorctlConfig } from "../tailorctl";
-import { Bundler, type BundlerConfig } from "@/cli/bundler";
-import { ExecutorLoader } from "@/cli/bundler/executor/loader";
-import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";
-import { ResolverLoader } from "@/cli/bundler/pipeline/loader";
-import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
+import type { AppConfig } from "@/configure/config";
 import type { Executor } from "@/configure/services/executor/types";
 import type { Resolver } from "@/parser/service/pipeline";
-import { generateUserTypes } from "@/cli/type-generator";
-import { defineCommand } from "citty";
-import { commonArgs, withCommonArgs } from "../args";
 
 export type ApplyOptions = {
   dryRun?: boolean;

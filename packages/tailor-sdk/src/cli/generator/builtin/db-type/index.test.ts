@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
-import { DbTypeGenerator, DbTypeGeneratorID } from "./index";
-import { db } from "@/configure/services/tailordb/schema";
 import { TailorDBService } from "@/cli/application/tailordb/service";
+import { db } from "@/configure/services/tailordb/schema";
+import { DbTypeGenerator, DbTypeGeneratorID } from "./index";
 
 describe("DbTypeGenerator", () => {
   const mockDistPath = ({ tailorDB }: { tailorDB: string }) =>

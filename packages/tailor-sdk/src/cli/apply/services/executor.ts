@@ -1,10 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
-
-import { getDistDir } from "@/configure/config";
 import {
   type CreateExecutorExecutorRequestSchema,
   type DeleteExecutorExecutorRequestSchema,
@@ -18,11 +15,12 @@ import {
   type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { type Executor } from "@/configure/services";
 import { type Application } from "@/cli/application";
-import { ChangeSet } from ".";
+import { getDistDir } from "@/configure/config";
+import { type Executor } from "@/configure/services";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { ChangeSet } from ".";
 
 export async function applyExecutor(
   client: OperatorClient,

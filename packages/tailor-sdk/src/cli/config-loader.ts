@@ -1,20 +1,20 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { AppConfig } from "@/configure/config";
-import {
-  KyselyGenerator,
-  KyselyGeneratorID,
-} from "./generator/builtin/kysely-type";
-import {
-  DbTypeGenerator,
-  DbTypeGeneratorID,
-} from "./generator/builtin/db-type";
 import {
   createGeneratorConfigSchema,
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
+import {
+  DbTypeGenerator,
+  DbTypeGeneratorID,
+} from "./generator/builtin/db-type";
+import {
+  KyselyGenerator,
+  KyselyGeneratorID,
+} from "./generator/builtin/kysely-type";
+import type { AppConfig } from "@/configure/config";
 import "./mock";
 
 // Register built-in generators with their constructor functions

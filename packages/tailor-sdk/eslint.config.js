@@ -32,6 +32,34 @@ export default defineConfig([
       ],
       "import/no-cycle": ["error", { maxDepth: Infinity }],
       "import/no-unresolved": "off",
+      "import/order": [
+        "error",
+        {
+          groups: [
+            "builtin",
+            "external",
+            "internal",
+            "parent",
+            "sibling",
+            "index",
+            "type",
+          ],
+          pathGroups: [
+            {
+              pattern: "@/**",
+              group: "internal",
+              position: "before",
+            },
+          ],
+          pathGroupsExcludedImportTypes: ["type"],
+          "newlines-between": "never",
+          alphabetize: {
+            order: "asc",
+            caseInsensitive: true,
+          },
+          distinctGroup: false,
+        },
+      ],
     },
   },
   {

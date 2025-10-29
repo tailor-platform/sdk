@@ -1,5 +1,5 @@
-import type { StandardCRON } from "ts-cron-validator";
 import { type ScheduleTrigger, type WithArgs } from "../types";
+import type { StandardCRON } from "ts-cron-validator";
 import type { EmptyObject } from "type-fest";
 
 export function scheduleTrigger<T extends string>(

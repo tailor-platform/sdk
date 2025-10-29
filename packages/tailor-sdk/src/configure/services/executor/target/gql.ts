@@ -1,5 +1,5 @@
-import type { Client } from "@urql/core";
 import { type GraphqlTarget } from "../types";
+import type { Client } from "@urql/core";
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
 

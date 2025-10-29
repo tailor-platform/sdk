@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-
 import {
   AuthIDPConfig_AuthType,
   AuthOAuth2Client_GrantType,

@@ -1,10 +1,8 @@
-import * as http from "node:http";
 import * as crypto from "node:crypto";
-import open from "open";
-
+import * as http from "node:http";
 import { defineCommand } from "citty";
 import { consola } from "consola";
-
+import open from "open";
 import { commonArgs, withCommonArgs } from "./args";
 import { userAgent } from "./client";
 import { writeTailorctlConfig } from "./tailorctl";

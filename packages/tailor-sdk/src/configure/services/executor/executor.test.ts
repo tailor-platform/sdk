@@ -1,4 +1,7 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
+import { t } from "@/configure/types";
+import { createResolver } from "../pipeline";
+import { db } from "../tailordb";
 import { createExecutor } from "./executor";
 import {
   incomingWebhookTrigger,
@@ -8,9 +11,6 @@ import {
   resolverExecutedTrigger,
   scheduleTrigger,
 } from "./trigger";
-import { createResolver } from "../pipeline";
-import { db } from "../tailordb";
-import { t } from "@/configure/types";
 
 describe("scheduleTrigger", () => {
   test("can specify valid cron", () => {

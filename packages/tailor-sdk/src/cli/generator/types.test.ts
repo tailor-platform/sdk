@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf } from "vitest";
-import type { CodeGeneratorBase } from "@/parser/generator-config";
 import type { CodeGenerator } from "@/cli/generator/types";
+import type { CodeGeneratorBase } from "@/parser/generator-config";
 
 describe("Generator type compatibility", () => {
   it("CodeGenerator should be assignable to CodeGeneratorBase", () => {

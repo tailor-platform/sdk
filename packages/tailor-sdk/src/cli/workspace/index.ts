@@ -1,5 +1,4 @@
 import { defineCommand } from "citty";
-
 import { createCommand } from "./create";
 import { destroyCommand } from "./destroy";
 import { listCommand } from "./list";

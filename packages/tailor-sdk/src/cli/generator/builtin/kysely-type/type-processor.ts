@@ -1,7 +1,7 @@
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
-import { type KyselyTypeMetadata } from "./types";
 import multiline from "multiline-ts";
+import { type KyselyTypeMetadata } from "./types";
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 type FieldConfig = TailorDBTypeConfig["schema"]["fields"][string];
 

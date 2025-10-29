@@ -1,12 +1,11 @@
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { table } from "table";
-import { timestampDate } from "@bufbuild/protobuf/wkt";
-
-import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
 import { commonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { readTailorctlConfig } from "../tailorctl";
+import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
 
 interface WorkspaceInfo {
   id: string;

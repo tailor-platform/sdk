@@ -1,5 +1,3 @@
-import ml from "multiline-ts";
-import { readPackageJSON } from "pkg-types";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import {
   type Client,
@@ -9,8 +7,9 @@ import {
   type Interceptor,
 } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
-
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import ml from "multiline-ts";
+import { readPackageJSON } from "pkg-types";
 import { type TailorctlConfig, writeTailorctlConfig } from "./tailorctl";
 
 export type OperatorClient = Client<typeof OperatorService>;

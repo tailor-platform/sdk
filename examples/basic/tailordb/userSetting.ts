@@ -1,6 +1,6 @@
 import { db } from "@tailor-platform/tailor-sdk";
-import { user } from "./user";
 import { defaultGqlPermission, defaultPermission } from "./permissions";
+import { user } from "./user";
 
 export const userSetting = db
   .type("UserSetting", {

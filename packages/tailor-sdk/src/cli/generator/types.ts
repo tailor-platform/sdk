@@ -1,6 +1,6 @@
-import type { CodeGeneratorBase } from "@/parser/generator-config";
 import { type Executor } from "@/configure/services/executor/types";
 import { type Resolver } from "@/parser/service/pipeline";
+import type { CodeGeneratorBase } from "@/parser/generator-config";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 interface GeneratedFile {

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { gql } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
-
 import { TailorDBType_Permission_Operator } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 

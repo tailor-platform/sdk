@@ -1,7 +1,6 @@
-import { GraphQLClient } from "graphql-request";
 import { createClient, Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
-
+import { GraphQLClient } from "graphql-request";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
 export function createOperatorClient() {
