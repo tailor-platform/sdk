@@ -1,6 +1,7 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
+import importPlugin from "eslint-plugin-import";
 
 export default defineConfig([
   globalIgnores([
@@ -13,6 +14,8 @@ export default defineConfig([
   eslint.configs.recommended,
   tseslint.configs.recommended,
   tseslint.configs.stylisticTypeChecked,
+  importPlugin.flatConfigs.recommended,
+  importPlugin.flatConfigs.typescript,
   {
     languageOptions: {
       parserOptions: {
@@ -28,6 +31,8 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "import/no-cycle": ["error", { maxDepth: Infinity }],
+      "import/no-unresolved": "off",
     },
   },
   // Disable type-checked linting for root config files.
@@ -35,5 +40,8 @@ export default defineConfig([
   {
     files: ["eslint.config.js"],
     extends: [tseslint.configs.disableTypeChecked],
+    rules: {
+      "import/no-unresolved": "off",
+    },
   },
 ]);

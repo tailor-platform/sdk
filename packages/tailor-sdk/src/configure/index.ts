@@ -4,12 +4,13 @@ import { t as _t } from "@/configure/types";
 export type infer<T> = _output<T>;
 export type output<T> = _output<T>;
 
-// eslint-disable-next-line @typescript-eslint/no-namespace
+// eslint-disable-next-line import/export
+export const t = { ..._t };
+// eslint-disable-next-line @typescript-eslint/no-namespace, import/export
 export namespace t {
   export type output<T> = _output<T>;
   export type infer<T> = _output<T>;
 }
-export const t = { ..._t };
 
 export * from "@/configure/services";
 

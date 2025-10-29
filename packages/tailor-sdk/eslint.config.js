@@ -2,11 +2,14 @@ import eslint from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import importPlugin from "eslint-plugin-import";
 
 export default defineConfig([
   globalIgnores(["dist/"]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
+  importPlugin.flatConfigs.recommended,
+  importPlugin.flatConfigs.typescript,
   {
     languageOptions: {
       parserOptions: {
@@ -27,6 +30,8 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "import/no-cycle": ["error", { maxDepth: Infinity }],
+      "import/no-unresolved": "off",
     },
   },
   {
@@ -134,6 +139,9 @@ export default defineConfig([
       globals: {
         ...globals.node,
       },
+    },
+    rules: {
+      "import/no-unresolved": "off",
     },
   },
 ]);

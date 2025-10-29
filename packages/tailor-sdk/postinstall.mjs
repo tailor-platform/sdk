@@ -39,22 +39,15 @@ async function install() {
 
   if (existsSync(configPath)) {
     try {
-      // Register tsx to handle TypeScript imports
+      const configDir = dirname(configPath);
+      process.chdir(configDir);
       register("tsx", import.meta.url, { data: {} });
 
-      // Import the generateUserTypes function from the built CLI
-      const { generateUserTypes } = await import(
-        pathToFileURL(resolve(__dirname, "dist", "cli", "api.mjs")).href
-      );
-
-      // Load the config and generate types
-      const { loadConfig } = await import(
+      const { generateUserTypes, loadConfig } = await import(
         pathToFileURL(resolve(__dirname, "dist", "cli", "api.mjs")).href
       );
       const { config } = await loadConfig(configPath);
-
       await generateUserTypes(config, configPath);
-      return;
     } catch (error) {
       console.warn("⚠️  Failed to generate types from config:", error.message);
       // Fall through to create empty type definition

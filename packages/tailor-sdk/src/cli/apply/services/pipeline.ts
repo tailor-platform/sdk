@@ -22,14 +22,13 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import { type Executor } from "@/configure/services/executor/types";
 import { type PipelineResolverService } from "@/cli/application/pipeline/service";
-import { type Resolver } from "@/parser/service/pipeline";
+import { type Resolver, type TailorField } from "@/parser/service/pipeline";
 import { type Application } from "@/cli/application";
 import { ChangeSet } from ".";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import * as inflection from "inflection";
 import { tailorUserMap } from "@/configure/types";
-import { type TailorField } from "@/parser/service/pipeline";
 
 export async function applyPipeline(
   client: OperatorClient,
