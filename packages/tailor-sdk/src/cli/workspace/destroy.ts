@@ -3,7 +3,7 @@ import { consola } from "consola";
 import { validate as uuidValidate } from "uuid";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { readTailorctlConfig } from "../tailorctl";
+import { loadAccessToken } from "../context";
 
 export const destroyCommand = defineCommand({
   meta: {
@@ -20,8 +20,8 @@ export const destroyCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const tailorctlConfig = readTailorctlConfig();
-    const client = await initOperatorClient(tailorctlConfig);
+    const accessToken = await loadAccessToken();
+    const client = await initOperatorClient(accessToken);
 
     // Validate inputs
     if (!uuidValidate(args["workspace-id"])) {

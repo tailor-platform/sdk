@@ -1,7 +1,4 @@
-import { type Client } from "@connectrpc/connect";
-import { type OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { defineCommand } from "citty";
-import ml from "multiline-ts";
 import { defineApplication } from "@/cli/application";
 import { Bundler, type BundlerConfig } from "@/cli/bundler";
 import { ExecutorLoader } from "@/cli/bundler/executor/loader";
@@ -11,8 +8,8 @@ import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
-import { fetchAll, initOperatorClient } from "../client";
-import { readTailorctlConfig } from "../tailorctl";
+import { initOperatorClient } from "../client";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import { applyExecutor, planExecutor } from "./services/executor";
@@ -23,11 +20,12 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
-import type { AppConfig } from "@/configure/config";
 import type { Executor } from "@/configure/services/executor/types";
 import type { Resolver } from "@/parser/service/pipeline";
 
 export type ApplyOptions = {
+  workspaceId?: string;
+  profile?: string;
   dryRun?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
@@ -56,9 +54,15 @@ export async function apply(configPath: string, options: ApplyOptions = {}) {
     return;
   }
 
-  const tailorctlConfig = readTailorctlConfig();
-  const client = await initOperatorClient(tailorctlConfig);
-  const workspaceId = await fetchWorkspaceId(client, config);
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
 
   // Phase 1: Plan
   const tailorDB = await planTailorDB(client, workspaceId, application);
@@ -96,29 +100,6 @@ export async function apply(configPath: string, options: ApplyOptions = {}) {
   await applyTailorDB(client, tailorDB, "delete");
 
   console.log("Successfully applied changes.");
-}
-
-async function fetchWorkspaceId(
-  client: Client<typeof OperatorService>,
-  config: Readonly<AppConfig>,
-) {
-  const workspaces = await fetchAll(async (pageToken) => {
-    const { workspaces, nextPageToken } = await client.listWorkspaces({
-      pageToken,
-    });
-    return [workspaces, nextPageToken];
-  });
-
-  const workspace = workspaces.find((w) => w.id === config.workspaceId);
-  if (!workspace) {
-    throw new Error(
-      ml`
-        Workspace with ID ${config.workspaceId} not found.
-        Please set the correct workspaceId in the sdk config.
-        `,
-    );
-  }
-  return workspace.id;
 }
 
 async function buildPipeline(namespace: string, config: { files?: string[] }) {
@@ -160,6 +141,16 @@ export const applyCommand = defineCommand({
   },
   args: {
     ...commonArgs,
+    "workspace-id": {
+      type: "string",
+      description: "ID of the workspace to apply the configuration to",
+      alias: "w",
+    },
+    profile: {
+      type: "string",
+      description: "Configuration profile to use",
+      alias: "p",
+    },
     config: {
       type: "string",
       description: "Path to the Tailor config file",
@@ -174,6 +165,10 @@ export const applyCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     const configPath = args.config || "tailor.config.ts";
-    await apply(configPath, args);
+    await apply(configPath, {
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      dryRun: args.dryRun,
+    });
   }),
 });

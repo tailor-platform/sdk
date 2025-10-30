@@ -105,7 +105,6 @@ describe("GenerationManager", () => {
     );
 
     mockConfig = {
-      workspaceId: "test-workspace-id",
       name: "testApp",
       db: { main: { files: ["src/types/*.ts"] } },
       pipeline: { main: { files: ["src/resolvers/*.ts"] } },
@@ -682,7 +681,6 @@ describe("generate function", () => {
 
   beforeEach(() => {
     mockConfig = {
-      workspaceId: "test-workspace-id",
       name: "test-workspace",
     } as any;
   });
@@ -722,7 +720,6 @@ describe("Integration Tests", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "integration-test-"));
 
     fullConfig = {
-      workspaceId: "integration-test-workspace-id",
       name: "testApp",
       db: {
         main: {

@@ -9,3 +9,4 @@ You can also view the documentation on [our website](https://docs.tailor.tech/re
 - [Quickstart](./docs/quickstart.md)
 - [App Configuration](./docs/configuration.md)
 - [Core Concepts](./docs/core-concepts.md)
+- [CLI Reference](./docs/cli-reference.md)

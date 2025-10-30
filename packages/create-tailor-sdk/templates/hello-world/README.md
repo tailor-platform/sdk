@@ -23,9 +23,9 @@ npx tailor-sdk workspace list
 2. Deploy the project:
 
 ```bash
-WORKSPACE_ID=<your-workspace-id> npm run deploy
-# For yarn: WORKSPACE_ID=<your-workspace-id> yarn run deploy
-# For pnpm: WORKSPACE_ID=<your-workspace-id> pnpm run deploy
+npm run deploy -- --workspace-id <your-workspace-id>
+# For yarn: yarn run deploy --workspace-id <your-workspace-id>
+# For pnpm: pnpm run deploy --workspace-id <your-workspace-id>
 ```
 
 3. Open [Tailor Platform Console](https://console.tailor.tech/) and open GraphQL Playground.

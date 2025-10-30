@@ -105,7 +105,7 @@ export async function generateActualFiles(): Promise<void> {
 
 if (process.argv[1] === __filename) {
   try {
-    process.env.WORKSPACE_ID ??= randomUUID();
+    process.env.TAILOR_PLATFORM_WORKSPACE_ID ??= randomUUID();
     if (process.argv[2] === "actual") {
       console.log("Generating actual files...");
       await generateActualFiles();

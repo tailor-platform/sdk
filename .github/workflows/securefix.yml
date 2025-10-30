@@ -79,8 +79,6 @@ jobs:
         uses: ./.github/actions/install-deps
       - name: Generate files
         run: pnpm exec turbo run generate --filter=@examples/basic --filter=inventory-management --force
-        env:
-          WORKSPACE_ID: dummy
       - name: Commit and push
         uses: csm-actions/securefix-action@038b1b962c37adef7a6612aa91cbfc4d6644feb1 # v0.3.4
         with:

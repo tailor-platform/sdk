@@ -3,7 +3,7 @@ import { consola } from "consola";
 import { validate as uuidValidate } from "uuid";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
-import { readTailorctlConfig } from "../tailorctl";
+import { loadAccessToken } from "../context";
 
 const validateName = (name: string) => {
   if (name.length < 3 || name.length > 63) {
@@ -61,8 +61,8 @@ export const createCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const tailorctlConfig = readTailorctlConfig();
-    const client = await initOperatorClient(tailorctlConfig);
+    const accessToken = await loadAccessToken();
+    const client = await initOperatorClient(accessToken);
 
     // Validate inputs
     const nameErr = validateName(args.name);

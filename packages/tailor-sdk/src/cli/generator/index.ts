@@ -43,12 +43,7 @@ export class GenerationManager {
   }
 
   async generate(options: GenerateOptions) {
-    console.log(
-      "Generation for application:",
-      this.application.config.name,
-      "workspace ID:",
-      this.application.config.workspaceId,
-    );
+    console.log("Generation for application:", this.application.config.name);
 
     // Initialize data structure for each application
     for (const app of this.application.applications) {

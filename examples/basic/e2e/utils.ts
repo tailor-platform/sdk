@@ -5,9 +5,9 @@ import { GraphQLClient } from "graphql-request";
 
 export function createOperatorClient() {
   const baseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
-  const workspaceId = process.env.WORKSPACE_ID;
+  const workspaceId = process.env.TAILOR_PLATFORM_WORKSPACE_ID;
   if (!workspaceId) {
-    throw new Error("WORKSPACE_ID is not defined");
+    throw new Error("TAILOR_PLATFORM_WORKSPACE_ID is not defined");
   }
 
   const transport = createConnectTransport({

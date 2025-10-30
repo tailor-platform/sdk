@@ -102,7 +102,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 
 6. **Configuration** (`tailor.config.ts`)
    - Central configuration using `defineConfig()` for a single application
-   - Required fields: `workspaceId` and `name`
+   - Required fields: `name`
    - Specify component locations with glob patterns
    - Configure generators using `defineGenerators()` - must include `@tailor/kysely-type` for database access
    - Application-level settings: `cors`, `allowedIPAddresses`, `disableIntrospection`
@@ -159,7 +159,6 @@ const auth = defineAuth("my-auth", {
 });
 
 export default defineConfig({
-  workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
   cors: [website.url],
   db: {
@@ -251,7 +250,6 @@ const idp = defineIdp("my-idp", {
 
 // Use website.url for type-safe configuration
 export default defineConfig({
-  workspaceId: process.env.WORKSPACE_ID!,
   name: "my-app",
   cors: [website.url], // Resolved to actual URL at deployment
   auth: defineAuth("my-auth", {

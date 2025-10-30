@@ -1,7 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env"],
-  "globalPassThroughEnv": ["TAILOR_TOKEN", "WORKSPACE_ID"],
+  "globalPassThroughEnv": [
+    "TAILOR_PLATFORM_TOKEN",
+    "TAILOR_PLATFORM_WORKSPACE_ID"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

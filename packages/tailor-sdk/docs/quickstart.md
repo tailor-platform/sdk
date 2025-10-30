@@ -42,7 +42,7 @@ Run the apply command to deploy your project:
 
 ```bash
 cd example-app
-WORKSPACE_ID=<workspace_id> npm run deploy
+npm run deploy -- --workspace-id <your-workspace-id>
 ```
 
 You can now open the GraphQL Playground and execute the `hello` query:

@@ -3,9 +3,10 @@ import * as http from "node:http";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import open from "open";
+import { z } from "zod";
 import { commonArgs, withCommonArgs } from "./args";
 import { userAgent } from "./client";
-import { writeTailorctlConfig } from "./tailorctl";
+import { readPlatformConfig, writePlatformConfig } from "./context";
 
 // Since we need to specify an allowed callback, use the same value as tailorctl for now.
 const CALLBACK_PORT = 8085;
@@ -19,13 +20,6 @@ const USER_INFO_URL = PLATFORM_AUTH_URL + "/userinfo";
 const randomState = () => {
   return crypto.randomBytes(32).toString("base64url");
 };
-
-interface TokenResponse {
-  email: string;
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}
 
 const exchangeCode = async (code: string) => {
   const body = new URLSearchParams();
@@ -44,12 +38,14 @@ const exchangeCode = async (code: string) => {
     throw new Error(`Failed to exchange code: ${resp.statusText}`);
   }
 
-  return (await resp.json()) as TokenResponse;
+  const rawData = await resp.json();
+  const schema = z.object({
+    access_token: z.string(),
+    refresh_token: z.string(),
+    expires_in: z.number(),
+  });
+  return schema.parse(rawData);
 };
-
-interface UserInfoResponse {
-  email: string;
-}
 
 const fetchUserInfo = async (accessToken: string) => {
   const resp = await fetch(USER_INFO_URL, {
@@ -62,7 +58,11 @@ const fetchUserInfo = async (accessToken: string) => {
     throw new Error(`Failed to fetch user info: ${resp.statusText}`);
   }
 
-  return (await resp.json()) as UserInfoResponse;
+  const rawData = await resp.json();
+  const schema = z.object({
+    email: z.string(),
+  });
+  return schema.parse(rawData);
 };
 
 const startAuthServer = async () => {
@@ -101,12 +101,17 @@ const startAuthServer = async () => {
 
         const expiresAt = new Date();
         expiresAt.setSeconds(expiresAt.getSeconds() + tokens.expires_in);
-        writeTailorctlConfig({
-          username: userInfo.email,
-          controlplaneaccesstoken: tokens.access_token,
-          controlplanerefreshtoken: tokens.refresh_token,
-          controlplanetokenexpiresat: expiresAt.toISOString(),
-        });
+        const pfConfig = readPlatformConfig();
+        pfConfig.users = {
+          ...pfConfig.users,
+          [userInfo.email]: {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            token_expires_at: expiresAt.toISOString(),
+          },
+        };
+        pfConfig.current_user = userInfo.email;
+        writePlatformConfig(pfConfig);
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(

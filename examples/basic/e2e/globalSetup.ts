@@ -10,7 +10,7 @@ declare module "vitest" {
 
 function getUrl(): string {
   const result = execSync(
-    `tailorctl workspace app list -f json ${process.env.WORKSPACE_ID ? `-w ${process.env.WORKSPACE_ID}` : ""}`.trim(),
+    `tailorctl workspace app list -f json ${process.env.TAILOR_PLATFORM_WORKSPACE_ID ? `-w ${process.env.TAILOR_PLATFORM_WORKSPACE_ID}` : ""}`.trim(),
   );
   const resultJson = JSON.parse(result.toString("utf-8")) as { url: string }[];
   if (resultJson.length === 0) {
@@ -21,7 +21,7 @@ function getUrl(): string {
 
 function getToken(): string {
   const result = execSync(
-    `tailorctl workspace machineuser token -a my-app -m manager-machine-user -f json ${process.env.WORKSPACE_ID ? `-w ${process.env.WORKSPACE_ID}` : ""}`.trim(),
+    `tailorctl workspace machineuser token -a my-app -m manager-machine-user -f json ${process.env.TAILOR_PLATFORM_WORKSPACE_ID ? `-w ${process.env.TAILOR_PLATFORM_WORKSPACE_ID}` : ""}`.trim(),
   );
   const resultJson = JSON.parse(result.toString("utf-8")) as {
     access_token: string;

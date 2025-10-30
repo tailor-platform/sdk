@@ -8,6 +8,8 @@ import { generateCommand } from "./generator";
 import { initCommand } from "./init";
 import { loginCommand } from "./login";
 import { logoutCommand } from "./logout";
+import { profileCommand } from "./profile";
+import { userCommand } from "./user";
 import { workspaceCommand } from "./workspace";
 
 register("tsx", import.meta.url, { data: {} });
@@ -26,9 +28,11 @@ const mainCommand = defineCommand({
     apply: applyCommand,
     generate: generateCommand,
     init: initCommand,
-    workspace: workspaceCommand,
     login: loginCommand,
     logout: logoutCommand,
+    profile: profileCommand,
+    user: userCommand,
+    workspace: workspaceCommand,
   },
 });
 

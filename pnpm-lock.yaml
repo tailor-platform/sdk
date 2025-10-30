@@ -224,6 +224,9 @@ importers:
       citty:
         specifier: ^0.1.6
         version: 0.1.6
+      confbox:
+        specifier: 0.2.2
+        version: 0.2.2
       consola:
         specifier: 3.4.2
         version: 3.4.2
@@ -266,6 +269,9 @@ importers:
       uuid:
         specifier: 13.0.0
         version: 13.0.0
+      xdg-basedir:
+        specifier: 5.1.0
+        version: 5.1.0
       zod:
         specifier: ^4.1.11
         version: 4.1.12
@@ -3327,6 +3333,10 @@ packages:
   wsl-utils@0.1.0:
     resolution: {integrity: sha512-h3Fbisa2nKGPxCpm89Hk33lBLsnaGBvctQopaBSOW/uIs6FTe1ATyAnKFJrzVs9vpGdsTe73WF3V4lIsk4Gacw==}
     engines: {node: '>=18'}
+
+  xdg-basedir@5.1.0:
+    resolution: {integrity: sha512-GCPAHLvrIH13+c0SuacwvRYj2SxJXQ4kaVTT5xgL3kPrz56XxkF21IGhjSE1+W0aw7gpBWRGXLCPnPby6lSpmQ==}
+    engines: {node: '>=12'}
 
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
@@ -6532,6 +6542,8 @@ snapshots:
   wsl-utils@0.1.0:
     dependencies:
       is-wsl: 3.1.0
+
+  xdg-basedir@5.1.0: {}
 
   yocto-queue@0.1.0: {}
 

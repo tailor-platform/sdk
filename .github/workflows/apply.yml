@@ -34,14 +34,14 @@ jobs:
       - name: Create workspace
         run: |
           tailorctl workspace create --name "sdk-ci-${{ github.run_id }}" --region asia-northeast
-          WORKSPACE_ID=$(tailorctl config describe -f json | jq -r '.workspaceId')
-          echo "WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
+          TAILOR_PLATFORM_WORKSPACE_ID=$(tailorctl config describe -f json | jq -r '.workspaceId')
+          echo "TAILOR_PLATFORM_WORKSPACE_ID=$TAILOR_PLATFORM_WORKSPACE_ID" >> "$GITHUB_ENV"
         env:
           TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Apply workspace
-        run: |
-          pnpm exec turbo run apply
+        working-directory: examples/basic
+        run: pnpm run apply
         env:
           TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
@@ -53,6 +53,6 @@ jobs:
 
       - name: Destroy workspace
         if: ${{ always() }}
-        run: tailorctl workspace destroy -w "${{ env.WORKSPACE_ID }}" --auto-approve
+        run: tailorctl workspace destroy -w "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --auto-approve
         env:
           TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}

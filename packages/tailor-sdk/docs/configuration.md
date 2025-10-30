@@ -2,18 +2,6 @@
 
 Tailor SDK uses TypeScript for configuration files. By default, it uses `tailor.config.ts` in the project root. You can specify a different path using the `--config` option.
 
-### Workspace Identification
-
-Specify target workspace for deployment using `workspaceId`:
-
-```typescript
-import { defineConfig } from "@tailor-platform/tailor-sdk";
-
-export default defineConfig({
-  workspaceId: process.env.WORKSPACE_ID!,
-});
-```
-
 ### Application Settings
 
 ```typescript

@@ -11,7 +11,6 @@ export interface AppConfig<
   Idp extends IdPConfig[] = IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
 > {
-  workspaceId: string;
   name: string;
   cors?: string[];
   allowedIPAddresses?: string[];

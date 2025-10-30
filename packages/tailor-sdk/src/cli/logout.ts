@@ -2,8 +2,8 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "./args";
 import { userAgent } from "./client";
+import { readPlatformConfig, writePlatformConfig } from "./context";
 import { PLATFORM_AUTH_URL } from "./login";
-import { readTailorctlConfig, writeTailorctlConfig } from "./tailorctl";
 
 const LOGOUT_URL = PLATFORM_AUTH_URL + "/logout";
 
@@ -14,8 +14,12 @@ export const logoutCommand = defineCommand({
   },
   args: commonArgs,
   run: withCommonArgs(async () => {
-    const tailorctlConfig = readTailorctlConfig();
-    const token = tailorctlConfig?.controlplaneaccesstoken;
+    const pfConfig = readPlatformConfig();
+    if (!pfConfig.current_user) {
+      consola.warn("You are not logged in.");
+      return;
+    }
+    const token = pfConfig.users[pfConfig.current_user]?.access_token;
     if (!token) {
       consola.warn("You are not logged in.");
       return;
@@ -28,16 +32,12 @@ export const logoutCommand = defineCommand({
       },
     });
     if (!resp.ok) {
-      consola.error(`Failed to logout: ${resp.statusText}`);
-      process.exit(1);
+      throw new Error(`Failed to logout: ${resp.statusText}`);
     }
 
-    writeTailorctlConfig({
-      username: "",
-      controlplaneaccesstoken: "",
-      controlplanerefreshtoken: "",
-      controlplanetokenexpiresat: "",
-    });
+    delete pfConfig.users[pfConfig.current_user];
+    pfConfig.current_user = null;
+    writePlatformConfig(pfConfig);
     consola.success("Successfully logged out from Tailor Platform.");
   }),
 });
