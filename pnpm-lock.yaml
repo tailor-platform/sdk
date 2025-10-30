@@ -164,8 +164,8 @@ importers:
   packages/create-tailor-sdk/templates/inventory-management:
     dependencies:
       '@tailor-platform/function-kysely-tailordb':
-        specifier: 0.1.2
-        version: 0.1.2(kysely@0.28.7)
+        specifier: 0.1.3
+        version: 0.1.3(kysely@0.28.7)
       kysely:
         specifier: 0.28.7
         version: 0.28.7
@@ -1092,6 +1092,11 @@ packages:
   '@tailor-platform/function-kysely-tailordb@0.1.2':
     resolution: {integrity: sha512-JI5y4hH1eNBxrkrORKlWTT6SO2+mt28vQpDE6SmjuGz2RUAVvbOMuoLf/mpHmgwExnV0vzAoeddrrZHrma+ykQ==}
     engines: {node: 22.x}
+    peerDependencies:
+      kysely: '>= 0.24.0 < 1'
+
+  '@tailor-platform/function-kysely-tailordb@0.1.3':
+    resolution: {integrity: sha512-02Qb3zfhRQSYCiZ7LmSQj3V+b7bzrGCqbRzRqzinszZh/Nwi+hfGNGCpwbeLlGs3g17udAHmmPMBzeORy8Ajtw==}
     peerDependencies:
       kysely: '>= 0.24.0 < 1'
 
@@ -4044,6 +4049,10 @@ snapshots:
   '@sindresorhus/merge-streams@4.0.0': {}
 
   '@tailor-platform/function-kysely-tailordb@0.1.2(kysely@0.28.7)':
+    dependencies:
+      kysely: 0.28.7
+
+  '@tailor-platform/function-kysely-tailordb@0.1.3(kysely@0.28.7)':
     dependencies:
       kysely: 0.28.7
 
