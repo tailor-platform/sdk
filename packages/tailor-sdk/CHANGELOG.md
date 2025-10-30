@@ -1,5 +1,37 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.96
+
+### Patch Changes
+
+- [#626](https://github.com/tailor-platform/tailor-sdk/pull/626) [`b176af1`](https://github.com/tailor-platform/tailor-sdk/commit/b176af18c0ab23a4832517921b233d7206a2e6e6) Thanks [@remiposo](https://github.com/remiposo)! - Changed how workspaceID and authentication credentials are specified
+
+  Previously, authentication credentials were stored in the tailorctl config file (`~/.tailorctl/config`), but we've changed to store them in a new format file (`~/.config/tailor-platform/config.yaml`). When you run SDK commands, migration happens automatically, so generally no user action is required.
+  We've also changed how workspaceID is specified during apply. Previously, you specified workspaceID in the configuration file (`tailor.config.ts`), but we've removed this. Instead, please specify `--workspace-id` flag or `TAILOR_PLATFORM_WORKSPACE_ID` environment variable when running the apply command.
+
+  ```bash
+  tailor-sdk apply --workspace-id <your-workspace-id>
+  # or
+  TAILOR_PLATFORM_WORKSPACE_ID=<your-workspace-id> tailor-sdk apply
+  ```
+
+- [#634](https://github.com/tailor-platform/tailor-sdk/pull/634) [`9b86782`](https://github.com/tailor-platform/tailor-sdk/commit/9b8678220375725f0f872deb37ed60a12a1ba124) Thanks [@remiposo](https://github.com/remiposo)! - Added user and profile management commands
+
+  These commands are primarily for making it easier to manage multiple Tailor Platform accounts. The configured content is saved in `.config/tailor-platform/config.yaml` along with authentication credentials.
+
+  ```bash
+  # Login to Tailor Platform (add a new user)
+  tailor-sdk login
+
+  # Create a new profile
+  tailor-sdk profile create <profile-name> --user <user-email> --workspace-id <workspace-id>
+
+  # Apply using a specific profile (no need to specify workspace ID or user credentials)
+  tailor-sdk apply --profile <profile-name>
+  # or
+  TAILOR_PLATFORM_PROFILE=<profile-name> tailor-sdk apply
+  ```
+
 ## 0.0.95
 
 ### Patch Changes
