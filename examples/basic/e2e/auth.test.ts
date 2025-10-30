@@ -1,9 +1,9 @@
-import { describe, expect, test } from "vitest";
 import {
   AuthIDPConfig_AuthType,
   AuthOAuth2Client_GrantType,
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { describe, expect, test } from "vitest";
 import { createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {

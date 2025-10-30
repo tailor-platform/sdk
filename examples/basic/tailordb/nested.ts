@@ -16,6 +16,7 @@ export const nestedProfile = db
       version: db.int(),
     }),
     archived: db.bool({ optional: true }),
+    ...db.fields.timestamps(),
   })
   .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

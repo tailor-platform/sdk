@@ -78,7 +78,7 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
       - name: Generate files
-        run: pnpm exec turbo run generate --filter=@tailor-platform/tailor-sdk --filter=inventory-management --force
+        run: pnpm exec turbo run generate --filter=@examples/basic --filter=inventory-management --force
         env:
           WORKSPACE_ID: dummy
       - name: Commit and push

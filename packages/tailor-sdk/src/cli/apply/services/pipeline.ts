@@ -323,9 +323,7 @@ function processResolver(
       },
     ];
 
-  // Generate type names
   const typeBaseName = inflection.camelize(resolver.name);
-  const outputType = `${typeBaseName}Output`;
 
   // Build inputs
   const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] =
@@ -334,13 +332,14 @@ function processResolver(
       : [];
 
   // Build response
+  const outputType = `${typeBaseName}Output`;
   const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = {
     type: {
       kind: "UserDefined",
       name: outputType,
       description: "",
       required: true,
-      fields: protoFields(outputType, resolver.output.fields),
+      fields: protoFields(outputType, resolver.output.fields, true),
     },
     description: "",
     array: false,
@@ -362,7 +361,8 @@ function processResolver(
 
 function protoFields(
   baseName: string,
-  fields?: Record<string, TailorField>,
+  fields: Record<string, TailorField>,
+  output: boolean = false,
 ): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
   if (!fields) {
     return [];
@@ -370,7 +370,9 @@ function protoFields(
 
   return Object.entries(fields).map(([fieldName, field]) => {
     let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
-    const required = field.metadata.required ?? true;
+    const required =
+      (field.metadata.required ?? true) ||
+      (output && field.metadata.assertNonNull);
 
     switch (field.type) {
       case "uuid":

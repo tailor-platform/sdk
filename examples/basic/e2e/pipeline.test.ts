@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { gql } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
-import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {
@@ -22,7 +22,7 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(3);
+    expect(pipelineResolvers.length).toBe(4);
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
@@ -116,6 +116,36 @@ describe("controlplane", async () => {
       pipelines: [{ name: "body" }],
       publishExecutionEvents: false,
     });
+
+    const passThrough = pipelineResolvers.find((e) => e.name === "passThrough");
+    expect(passThrough).toBeDefined();
+    expect(passThrough?.name).toBe("passThrough");
+    expect(passThrough?.operationType).toBe("query");
+    expect(passThrough?.authorization).toBe("true==true");
+
+    // Verify inputs include expected fields
+    const inputNames = passThrough?.inputs?.map((i) => i.name) ?? [];
+    expect(inputNames).toContain("id");
+    expect(inputNames).toContain("userInfo");
+    expect(inputNames).toContain("metadata");
+    expect(inputNames).toContain("archived");
+    expect(inputNames).toContain("createdAt");
+    expect(inputNames).toContain("updatedAt");
+
+    // Verify response structure
+    expect(passThrough?.response?.type?.kind).toBe("UserDefined");
+    expect(passThrough?.response?.type?.name).toBe("PassThroughOutput");
+
+    const responseFieldNames =
+      passThrough?.response?.type?.fields?.map((f) => f.name) ?? [];
+    expect(responseFieldNames).toContain("id");
+    expect(responseFieldNames).toContain("userInfo");
+    expect(responseFieldNames).toContain("metadata");
+
+    expect(passThrough?.pipelines).toBeDefined();
+    expect(passThrough?.pipelines?.length).toBe(1);
+    expect(passThrough?.pipelines?.[0]?.name).toBe("body");
+    expect(passThrough?.publishExecutionEvents).toBe(false);
   });
 });
 
@@ -223,6 +253,106 @@ describe("dataplane", () => {
           role: "MANAGER",
         },
       });
+    });
+  });
+
+  describe("passThrough", () => {
+    test("returns input data as-is with all required fields", async () => {
+      const testId = randomUUID();
+      const query = gql`
+        query {
+          passThrough(
+            id: "${testId}"
+            userInfo: {
+              name: "John Doe"
+              email: "john@example.com"
+            }
+            metadata: {
+              created: "2024-01-01T00:00:00Z"
+              version: 1
+            }
+          ) {
+            id
+            userInfo {
+              name
+              email
+              age
+              bio
+              phone
+            }
+            metadata {
+              created
+              lastUpdated
+              version
+            }
+            archived
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeUndefined();
+      expect(result.data).toEqual({
+        passThrough: {
+          id: testId,
+          userInfo: {
+            name: "John Doe",
+            email: "john@example.com",
+            age: null,
+            bio: null,
+            phone: null,
+          },
+          metadata: {
+            created: "2024-01-01T00:00:00Z",
+            lastUpdated: null,
+            version: 1,
+          },
+          archived: null,
+        },
+      });
+    });
+
+    test("fails when required field is missing", async () => {
+      const query = gql`
+        query {
+          passThrough(
+            userInfo: { name: "Missing Email" }
+            metadata: { created: "2024-01-01T00:00:00Z", version: 1 }
+          ) {
+            userInfo {
+              name
+              email
+            }
+            metadata {
+              created
+              version
+            }
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeDefined();
+    });
+
+    test("fails when createdAt returns with null", async () => {
+      const query = gql`
+        query {
+          passThrough(
+            id: "${randomUUID()}"
+            userInfo: {
+              name: "John Doe"
+              email: "john@example.com"
+            }
+            metadata: {
+              created: "2024-01-01T00:00:00Z"
+              version: 1
+            }
+          ) { createdAt }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeDefined();
+      expect(result.errors?.[0].path).toEqual(["passThrough", "createdAt"]);
+      expect(result.errors?.[0].message).toMatch(/non-nullable field/);
     });
   });
 });

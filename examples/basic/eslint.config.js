@@ -49,12 +49,7 @@ export default defineConfig([
             {
               pattern: "@tailor-platform/**",
               group: "external",
-              position: "after",
-            },
-            {
-              pattern: "generated/**",
-              group: "internal",
-              position: "after",
+              position: "before",
             },
           ],
           pathGroupsExcludedImportTypes: ["type"],

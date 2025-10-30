@@ -1,9 +1,9 @@
-import { gql } from "graphql-request";
-import { describe, expect, inject, test } from "vitest";
 import {
   ExecutorTargetType,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { gql } from "graphql-request";
+import { describe, expect, inject, test } from "vitest";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {

@@ -41,6 +41,8 @@ export type NestedProfile = {
     version: number;
   };
   archived?: boolean | null;
+  createdAt: Date;
+  updatedAt?: Date | null;
 };
 
 export type PurchaseOrder = {

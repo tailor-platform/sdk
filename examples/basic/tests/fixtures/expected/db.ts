@@ -52,6 +52,8 @@ interface Namespace {
         version: number;
       };
       archived: boolean | null;
+      createdAt: AssertNonNull<Timestamp>;
+      updatedAt: Timestamp | null;
     }
 
     PurchaseOrder: {
