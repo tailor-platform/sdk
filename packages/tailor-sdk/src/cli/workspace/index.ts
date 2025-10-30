@@ -1,6 +1,6 @@
 import { defineCommand, runCommand } from "citty";
 import { createCommand } from "./create";
-import { destroyCommand } from "./destroy";
+import { deleteCommand } from "./delete";
 import { listCommand } from "./list";
 
 export const workspaceCommand = defineCommand({
@@ -10,7 +10,7 @@ export const workspaceCommand = defineCommand({
   },
   subCommands: {
     create: createCommand,
-    destroy: destroyCommand,
+    delete: deleteCommand,
     list: listCommand,
   },
   async run() {

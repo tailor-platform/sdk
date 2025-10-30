@@ -41,6 +41,7 @@ export const withCommonArgs =
       }
       process.exit(1);
     }
+    process.exit(0);
   };
 
 const formatSchema = z.enum(["table", "json"]);

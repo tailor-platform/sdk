@@ -121,17 +121,18 @@ tailor-sdk workspace list [options]
 
 - `-f, --format` - Output format: `table` or `json` (default: `table`)
 
-#### workspace destroy
+#### workspace delete
 
-Destroy a Tailor Platform workspace.
+Delete a Tailor Platform workspace.
 
 ```bash
-tailor-sdk workspace destroy [options]
+tailor-sdk workspace delete [options]
 ```
 
 **Options:**
 
-- `-w, --workspace-id` - ID of the workspace to destroy (required)
+- `-w, --workspace-id` - ID of the workspace to delete (required)
+- `-y, --yes` - Skip confirmation prompt
 
 ### profile
 
