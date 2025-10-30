@@ -43,6 +43,7 @@
     "@connectrpc/connect": "^2.0.3",
     "@connectrpc/connect-node": "^2.0.3",
     "@urql/core": "^5.1.1",
+    "chalk": "5.6.2",
     "chokidar": "^4.0.0",
     "citty": "^0.1.6",
     "confbox": "0.2.2",

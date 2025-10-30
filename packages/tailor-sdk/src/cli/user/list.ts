@@ -1,15 +1,9 @@
+import chalk from "chalk";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, formatArgs, parseFormat, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
-import type { UserInfo } from ".";
 
 export const listCommand = defineCommand({
   meta: {
@@ -26,7 +20,7 @@ export const listCommand = defineCommand({
 
     const config = readPlatformConfig();
 
-    const users = Object.entries(config.users);
+    const users = Object.keys(config.users);
     if (users.length === 0) {
       consola.info(ml`
         No users found.
@@ -35,14 +29,23 @@ export const listCommand = defineCommand({
       return;
     }
 
-    // Show users info
-    const userInfos: UserInfo[] = users.map(([email, user]) => {
-      const tokenExpiresAt = new Date(user!.token_expires_at).toISOString();
-      return {
-        user: email,
-        tokenExpiresAt,
-      };
-    });
-    printWithFormat(userInfos, format);
+    // Show users
+    switch (format) {
+      case "table": {
+        users.forEach((user) => {
+          if (user === config.current_user) {
+            console.log(chalk.green.bold(`${user} (current)`));
+          } else {
+            console.log(user);
+          }
+        });
+        break;
+      }
+      case "json":
+        console.log(JSON.stringify(users));
+        break;
+      default:
+        throw new Error(`Format "${format satisfies never}" is invalid.`);
+    }
   }),
 });

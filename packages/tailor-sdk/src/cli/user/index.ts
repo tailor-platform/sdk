@@ -1,12 +1,7 @@
-import { defineCommand } from "citty";
+import { defineCommand, runCommand } from "citty";
 import { currentCommand } from "./current";
 import { listCommand } from "./list";
 import { useCommand } from "./use";
-
-export interface UserInfo {
-  user: string;
-  tokenExpiresAt: string;
-}
 
 export const userCommand = defineCommand({
   meta: {
@@ -17,5 +12,8 @@ export const userCommand = defineCommand({
     current: currentCommand,
     list: listCommand,
     use: useCommand,
+  },
+  async run() {
+    await runCommand(listCommand, { rawArgs: [] });
   },
 });

@@ -217,10 +217,6 @@ Show current user.
 tailor-sdk user current [options]
 ```
 
-**Options:**
-
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
-
 #### user list
 
 List all users.
@@ -244,7 +240,3 @@ tailor-sdk user use <user>
 **Arguments:**
 
 - `user` - User email (required)
-
-**Options:**
-
-- `-f, --format` - Output format: `table` or `json` (default: `table`)

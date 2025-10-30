@@ -1,15 +1,8 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig, writePlatformConfig } from "../context";
-import type { UserInfo } from ".";
 
 export const useCommand = defineCommand({
   meta: {
@@ -18,7 +11,6 @@ export const useCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
     user: {
       type: "positional",
       description: "User email",
@@ -26,9 +18,6 @@ export const useCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
-    const format = parseFormat(args.format);
-
     const config = readPlatformConfig();
 
     // Check if user exists
@@ -43,17 +32,6 @@ export const useCommand = defineCommand({
     config.current_user = args.user;
     writePlatformConfig(config);
 
-    if (format === "table") {
-      consola.success(`Current user set to "${args.user}" successfully.`);
-    }
-
-    // Show user info
-    const user = config.users[config.current_user]!;
-    const tokenExpiresAt = new Date(user.token_expires_at).toISOString();
-    const userInfo: UserInfo = {
-      user: config.current_user,
-      tokenExpiresAt,
-    };
-    printWithFormat(userInfo, format);
+    consola.success(`Current user set to "${args.user}" successfully.`);
   }),
 });

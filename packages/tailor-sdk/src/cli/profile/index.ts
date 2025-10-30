@@ -1,4 +1,4 @@
-import { defineCommand } from "citty";
+import { defineCommand, runCommand } from "citty";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
 import { listCommand } from "./list";
@@ -21,5 +21,8 @@ export const profileCommand = defineCommand({
     delete: deleteCommand,
     list: listCommand,
     update: updateCommand,
+  },
+  async run() {
+    await runCommand(listCommand, { rawArgs: [] });
   },
 });
