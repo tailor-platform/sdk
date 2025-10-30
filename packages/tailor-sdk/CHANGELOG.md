@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.98
+
+### Patch Changes
+
+- [#639](https://github.com/tailor-platform/tailor-sdk/pull/639) [`07ef858`](https://github.com/tailor-platform/tailor-sdk/commit/07ef85825b51e4a83ab437bad4148d1b33d7a0f1) Thanks [@remiposo](https://github.com/remiposo)! - Adjusted the output format of user commands
+
 ## 0.0.97
 
 ### Patch Changes
