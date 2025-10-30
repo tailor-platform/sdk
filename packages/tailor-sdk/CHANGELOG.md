@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.97
+
+### Patch Changes
+
+- [#636](https://github.com/tailor-platform/tailor-sdk/pull/636) [`ffc1ef7`](https://github.com/tailor-platform/tailor-sdk/commit/ffc1ef74e02e9bcf711431709088d1ff2997dd65) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: export generator types
+
 ## 0.0.96
 
 ### Patch Changes
