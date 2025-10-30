@@ -1315,3 +1315,57 @@ describe("TailorField/TailorType 互換性テスト", () => {
     expectTypeOf<typeof _dbType>().toExtend<TailorType>();
   });
 });
+
+describe("TailorDBType/TailorDBField description support", () => {
+  it("TailorDBField supports description", () => {
+    const userType = db.type("User", {
+      name: db.string().description("User name"),
+      age: db.int().description("User age"),
+    });
+
+    expect(userType.fields.name.metadata.description).toBe("User name");
+    expect(userType.fields.age.metadata.description).toBe("User age");
+  });
+
+  it("TailorDBType description is set via second argument", () => {
+    const userType = db.type("User", "User profile type", {
+      name: db.string(),
+    });
+
+    expect(userType._description).toBe("User profile type");
+  });
+
+  it("TailorDBField nested object supports description", () => {
+    const profileType = db.type("Profile", {
+      userInfo: db
+        .object({
+          name: db.string().description("Full name"),
+          email: db.string().description("Email address"),
+        })
+        .description("User information object"),
+    });
+
+    expect(profileType.fields.userInfo.metadata.description).toBe(
+      "User information object",
+    );
+    expect(profileType.fields.userInfo.fields.name.metadata.description).toBe(
+      "Full name",
+    );
+    expect(profileType.fields.userInfo.fields.email.metadata.description).toBe(
+      "Email address",
+    );
+  });
+
+  it("TailorDBType can be used in resolver with description preserved", () => {
+    const userType = db.type("User", "User type for resolver", {
+      name: db.string().description("User name"),
+      email: db.string().description("User email"),
+    });
+
+    // TailorDBType extends TailorType, so it should have _description
+    expectTypeOf<typeof userType>().toExtend<TailorType>();
+    expect(userType._description).toBe("User type for resolver");
+    expect(userType.fields.name.metadata.description).toBe("User name");
+    expect(userType.fields.email.metadata.description).toBe("User email");
+  });
+});

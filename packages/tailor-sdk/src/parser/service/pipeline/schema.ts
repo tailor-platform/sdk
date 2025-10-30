@@ -45,6 +45,7 @@ export const TailorFieldSchema = z.object({
 
 export const TailorTypeSchema = z.object({
   fields: z.record(z.string(), TailorFieldSchema),
+  _description: z.string().optional(),
 });
 
 export const ResolverSchema = z.object({

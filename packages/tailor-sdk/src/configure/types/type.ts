@@ -24,8 +24,14 @@ export class TailorType<
 > implements TailorTypeInput
 {
   public readonly _output = null as unknown as Output;
+  public _description?: string;
 
   constructor(public readonly fields: F) {}
+
+  description(description: string) {
+    this._description = description;
+    return this;
+  }
 }
 
 export class TailorField<

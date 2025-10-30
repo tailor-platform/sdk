@@ -445,7 +445,6 @@ export class TailorDBType<
   User extends object = InferredAttributeMap,
 > extends TailorType<Fields> {
   public readonly referenced: Record<string, [TailorDBType, string]> = {};
-  private _description: string | undefined;
   private _settings: TypeFeatures = {};
   private _indexes: IndexDef<this>[] = [];
   private _permissions: Permissions = {};
@@ -458,7 +457,9 @@ export class TailorDBType<
   ) {
     super(fields);
 
-    this._description = options.description;
+    if (options.description) {
+      this._description = options.description;
+    }
 
     if (options.pluralForm) {
       if (name === options.pluralForm) {
@@ -684,12 +685,16 @@ export const db = {
   object,
   fields: {
     timestamps: () => ({
-      createdAt: datetime({ optional: true, assertNonNull: true }).hooks({
-        create: () => new Date().toISOString(),
-      }),
-      updatedAt: datetime({ optional: true }).hooks({
-        update: () => new Date().toISOString(),
-      }),
+      createdAt: datetime({ optional: true, assertNonNull: true })
+        .hooks({
+          create: () => new Date().toISOString(),
+        })
+        .description("Record creation timestamp"),
+      updatedAt: datetime({ optional: true })
+        .hooks({
+          update: () => new Date().toISOString(),
+        })
+        .description("Record last update timestamp"),
     }),
   },
 };

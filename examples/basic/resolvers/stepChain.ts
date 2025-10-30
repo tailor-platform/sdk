@@ -5,30 +5,46 @@ import { db } from "../tailordb";
 export default createResolver({
   name: "stepChain",
   operation: "query",
-  input: t.type({
-    user: t.object({
-      name: t.object({
-        first: t
-          .string()
-          .validate([
-            ({ value }) => value.length >= 2,
-            "First name must be at least 2 characters",
-          ]),
-        last: t
-          .string()
-          .validate([
-            ({ value }) => value.length >= 2,
-            "Last name must be at least 2 characters",
-          ]),
-      }),
-      activatedAt: t.datetime({ optional: true }),
-    }),
-  }),
-  output: t.type({
-    result: t.object({
-      summary: t.string({ array: true }),
-    }),
-  }),
+  input: t
+    .type({
+      user: t
+        .object({
+          name: t
+            .object({
+              first: t
+                .string()
+                .description("User's first name")
+                .validate([
+                  ({ value }) => value.length >= 2,
+                  "First name must be at least 2 characters",
+                ]),
+              last: t
+                .string()
+                .description("User's last name")
+                .validate([
+                  ({ value }) => value.length >= 2,
+                  "Last name must be at least 2 characters",
+                ]),
+            })
+            .description("User's full name"),
+          activatedAt: t
+            .datetime({ optional: true })
+            .description("User activation timestamp"),
+        })
+        .description("User information"),
+    })
+    .description("Input parameters for step chain operation"),
+  output: t
+    .type({
+      result: t
+        .object({
+          summary: t
+            .string({ array: true })
+            .description("Summary of processing steps"),
+        })
+        .description("Processing result"),
+    })
+    .description("Result of step chain operation"),
   body: async (context) => {
     const step1 = `step1: Hello ${context.input.user.name.first} ${context.input.user.name.last} on step1!`;
     const step2 = `step2: recorded ${format(

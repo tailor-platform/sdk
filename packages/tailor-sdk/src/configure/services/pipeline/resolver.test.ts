@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, test, expect } from "vitest";
+import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
 import { createResolver } from "./resolver";
 import type { output } from "@/configure/types/helpers";
@@ -571,6 +572,115 @@ describe("createResolver", () => {
       });
 
       expect(resolver.options).toEqual({ dbNamespace: "analytics" });
+    });
+  });
+
+  describe("description support", () => {
+    test("TailorType supports description", () => {
+      const inputType = t
+        .type({
+          name: t.string(),
+        })
+        .description("Input type description");
+
+      const outputType = t
+        .type({
+          result: t.string(),
+        })
+        .description("Output type description");
+
+      const resolver = createResolver({
+        name: "withDescriptions",
+        operation: "query",
+        input: inputType,
+        output: outputType,
+        body: (context) => ({ result: context.input.name }),
+      });
+
+      expect(resolver.input?._description).toBe("Input type description");
+      expect(resolver.output._description).toBe("Output type description");
+    });
+
+    test("TailorDBType description is preserved in resolver", () => {
+      const userType = db.type("User", "User database type", {
+        name: db.string().description("User name"),
+        email: db.string().description("User email"),
+      });
+
+      const resolver = createResolver({
+        name: "getUserInfo",
+        operation: "query",
+        input: userType,
+        output: userType,
+        body: (context) => context.input,
+      });
+
+      expect(resolver.input?._description).toBe("User database type");
+      expect(resolver.output._description).toBe("User database type");
+      expect(resolver.input?.fields.name.metadata.description).toBe(
+        "User name",
+      );
+      expect(resolver.input?.fields.email.metadata.description).toBe(
+        "User email",
+      );
+    });
+
+    test("TailorField supports description", () => {
+      const inputType = t.type({
+        name: t.string().description("User name field"),
+        age: t.int().description("User age field"),
+      });
+
+      const resolver = createResolver({
+        name: "withFieldDescriptions",
+        operation: "query",
+        input: inputType,
+        output: t.type({
+          result: t.string().description("Result message"),
+        }),
+        body: (context) => ({ result: `${context.input.name}` }),
+      });
+
+      expect(resolver.input?.fields.name.metadata.description).toBe(
+        "User name field",
+      );
+      expect(resolver.input?.fields.age.metadata.description).toBe(
+        "User age field",
+      );
+      expect(resolver.output.fields.result.metadata.description).toBe(
+        "Result message",
+      );
+    });
+
+    test("nested object field supports description", () => {
+      const inputType = t.type({
+        user: t
+          .object({
+            name: t.string().description("Name field"),
+            age: t.int().description("Age field"),
+          })
+          .description("User object field"),
+      });
+
+      const resolver = createResolver({
+        name: "withNestedDescriptions",
+        operation: "query",
+        input: inputType,
+        output: t.type({
+          result: t.string(),
+        }),
+        body: (context) => ({ result: context.input.user.name }),
+      });
+
+      expect(resolver.input?.fields.user.metadata.description).toBe(
+        "User object field",
+      );
+      expect(resolver.input?.fields.user.fields.name.metadata.description).toBe(
+        "Name field",
+      );
+      expect(resolver.input?.fields.user.fields.age.metadata.description).toBe(
+        "Age field",
+      );
     });
   });
 

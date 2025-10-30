@@ -11,10 +11,12 @@ export default createResolver({
       role: context.user.attributes?.role ?? "MANAGER",
     };
   },
-  output: t.type({
-    id: t.string(),
-    type: t.string(),
-    workspaceId: t.string(),
-    role: t.enum("MANAGER", "STAFF"),
-  }),
+  output: t
+    .type({
+      id: t.string().description("User ID"),
+      type: t.string().description("User type"),
+      workspaceId: t.string().description("Workspace ID"),
+      role: t.enum("MANAGER", "STAFF").description("User role"),
+    })
+    .description("User information"),
 });

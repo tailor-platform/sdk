@@ -33,29 +33,35 @@ describe("controlplane", async () => {
       inputs: [
         {
           name: "user",
+          description: "User information",
           array: false,
           required: true,
           type: {
             kind: "UserDefined",
             name: "StepChainInputUser",
+            description: "User information",
             fields: expect.any(Array),
           },
         },
       ],
       response: {
+        description: "Result of step chain operation",
         array: false,
         required: true,
         type: {
           kind: "UserDefined",
           name: "StepChainOutput",
+          description: "Result of step chain operation",
           fields: [
             {
               name: "result",
+              description: "Processing result",
               array: false,
               required: true,
               type: {
                 kind: "UserDefined",
                 name: "StepChainOutputResult",
+                description: "Processing result",
                 fields: expect.any(Array),
               },
             },
@@ -66,6 +72,16 @@ describe("controlplane", async () => {
       publishExecutionEvents: true,
     });
 
+    // Verify nested field descriptions in stepChain
+    const userInput = stepChain?.inputs?.[0];
+    const userFields = userInput?.type?.fields ?? [];
+
+    const nameField = userFields.find((f) => f.name === "name");
+    expect(nameField?.description).toBe("User's full name");
+
+    const activatedAtField = userFields.find((f) => f.name === "activatedAt");
+    expect(activatedAtField?.description).toBe("User activation timestamp");
+
     const add = pipelineResolvers.find((e) => e.name === "add");
     expect(add).toMatchObject({
       name: "add",
@@ -75,6 +91,7 @@ describe("controlplane", async () => {
       inputs: [
         {
           name: "a",
+          description: "First number to add",
           array: false,
           required: true,
           type: {
@@ -85,6 +102,7 @@ describe("controlplane", async () => {
         },
         {
           name: "b",
+          description: "Second number to add",
           array: false,
           required: true,
           type: {
@@ -95,14 +113,18 @@ describe("controlplane", async () => {
         },
       ],
       response: {
+        description: "Result of addition operation",
         array: false,
         required: true,
         type: {
           kind: "UserDefined",
           name: "AddOutput",
+          description: "Result of addition operation",
+          required: true,
           fields: [
             {
               name: "result",
+              description: "Sum of the two input numbers",
               array: false,
               required: true,
               type: {
@@ -132,6 +154,23 @@ describe("controlplane", async () => {
     expect(inputNames).toContain("createdAt");
     expect(inputNames).toContain("updatedAt");
 
+    // Verify field descriptions from TailorDBField
+    const userInfoInput = passThrough?.inputs?.find(
+      (i) => i.name === "userInfo",
+    );
+    expect(userInfoInput?.description).toBe("User information");
+    expect(userInfoInput?.type?.kind).toBe("UserDefined");
+
+    const metadataInput = passThrough?.inputs?.find(
+      (i) => i.name === "metadata",
+    );
+    expect(metadataInput?.description).toBe("Profile metadata");
+
+    const archivedInput = passThrough?.inputs?.find(
+      (i) => i.name === "archived",
+    );
+    expect(archivedInput?.description).toBe("Archive status");
+
     // Verify response structure
     expect(passThrough?.response?.type?.kind).toBe("UserDefined");
     expect(passThrough?.response?.type?.name).toBe("PassThroughOutput");
@@ -141,6 +180,22 @@ describe("controlplane", async () => {
     expect(responseFieldNames).toContain("id");
     expect(responseFieldNames).toContain("userInfo");
     expect(responseFieldNames).toContain("metadata");
+
+    // Verify response field descriptions
+    const userInfoResponse = passThrough?.response?.type?.fields?.find(
+      (f) => f.name === "userInfo",
+    );
+    expect(userInfoResponse?.description).toBe("User information");
+
+    const metadataResponse = passThrough?.response?.type?.fields?.find(
+      (f) => f.name === "metadata",
+    );
+    expect(metadataResponse?.description).toBe("Profile metadata");
+
+    const archivedResponse = passThrough?.response?.type?.fields?.find(
+      (f) => f.name === "archived",
+    );
+    expect(archivedResponse?.description).toBe("Archive status");
 
     expect(passThrough?.pipelines).toBeDefined();
     expect(passThrough?.pipelines?.length).toBe(1);
@@ -253,6 +308,34 @@ describe("dataplane", () => {
           role: "MANAGER",
         },
       });
+    });
+
+    test("verify userInfo resolver has field descriptions", async () => {
+      const [client, workspaceId] = createOperatorClient();
+      const namespaceName = "my-pipeline";
+      const { pipelineResolvers } = await client.listPipelineResolvers({
+        workspaceId,
+        namespaceName,
+        pipelineResolverView: PipelineResolverView.FULL,
+      });
+
+      const userInfo = pipelineResolvers.find((e) => e.name === "showUserInfo");
+      expect(userInfo).toBeDefined();
+
+      const responseFields = userInfo?.response?.type?.fields ?? [];
+      const idField = responseFields.find((f) => f.name === "id");
+      expect(idField?.description).toBe("User ID");
+
+      const typeField = responseFields.find((f) => f.name === "type");
+      expect(typeField?.description).toBe("User type");
+
+      const workspaceIdField = responseFields.find(
+        (f) => f.name === "workspaceId",
+      );
+      expect(workspaceIdField?.description).toBe("Workspace ID");
+
+      const roleField = responseFields.find((f) => f.name === "role");
+      expect(roleField?.description).toBe("User role");
     });
   });
 

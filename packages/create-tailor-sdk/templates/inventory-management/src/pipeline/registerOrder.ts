@@ -3,23 +3,29 @@ import { order } from "../db/order";
 import { orderItem } from "../db/orderItem";
 import { type DB, getDB } from "../generated/kysely-tailordb";
 
-const input = t.type({
-  order: t.object({
-    name: order.fields.name,
-    description: order.fields.description,
-    orderDate: order.fields.orderDate,
-    orderType: order.fields.orderType,
-    contactId: order.fields.contactId,
-  }),
-  items: t.object(
-    {
-      productId: orderItem.fields.productId,
-      quantity: orderItem.fields.quantity,
-      unitPrice: orderItem.fields.unitPrice,
-    },
-    { array: true },
-  ),
-});
+const input = t
+  .type({
+    order: t
+      .object({
+        name: order.fields.name,
+        description: order.fields.description,
+        orderDate: order.fields.orderDate,
+        orderType: order.fields.orderType,
+        contactId: order.fields.contactId,
+      })
+      .description("Order information"),
+    items: t
+      .object(
+        {
+          productId: orderItem.fields.productId,
+          quantity: orderItem.fields.quantity,
+          unitPrice: orderItem.fields.unitPrice,
+        },
+        { array: true },
+      )
+      .description("Order items"),
+  })
+  .description("Input parameters for registering a new order");
 type Input = t.infer<typeof input>;
 
 const insertOrder = async (db: DB<"main-db">, input: Input) => {
@@ -108,5 +114,11 @@ export default createResolver({
     });
     return { success: true };
   },
-  output: t.type({ success: t.bool() }),
+  output: t
+    .type({
+      success: t
+        .bool()
+        .description("Whether the order was registered successfully"),
+    })
+    .description("Result of order registration"),
 });

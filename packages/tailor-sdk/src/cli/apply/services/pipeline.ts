@@ -337,11 +337,11 @@ function processResolver(
     type: {
       kind: "UserDefined",
       name: outputType,
-      description: "",
+      description: resolver.output._description ?? "",
       required: true,
       fields: protoFields(outputType, resolver.output.fields, true),
     },
-    description: "",
+    description: resolver.output._description ?? "",
     array: false,
     required: true,
   };
@@ -446,6 +446,7 @@ function protoFields(
         type = {
           kind: "UserDefined",
           name: typeName,
+          description: field.metadata.description ?? "",
           required,
           fields: protoFields(typeName, field.fields),
         };
