@@ -238,3 +238,15 @@ export async function fetchLatestToken(
   writePlatformConfig(config);
   return resp.access_token;
 }
+
+// Load config path from command options or environment variables.
+// Priority: opts/config > env/config > default("tailor.config.ts")
+export function loadConfigPath(configPath?: string): string {
+  if (configPath) {
+    return configPath;
+  }
+  if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
+    return process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+  }
+  return "tailor.config.ts";
+}

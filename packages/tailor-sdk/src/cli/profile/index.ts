@@ -13,8 +13,7 @@ export interface ProfileInfo {
 export const profileCommand = defineCommand({
   meta: {
     name: "profile",
-    description:
-      "Manage Tailor Platform profiles (user + workspace combinations)",
+    description: "Manage workspace profiles (user + workspace combinations)",
   },
   subCommands: {
     create: createCommand,

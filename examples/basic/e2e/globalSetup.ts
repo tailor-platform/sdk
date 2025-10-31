@@ -9,14 +9,8 @@ declare module "vitest" {
 }
 
 function getUrl(): string {
-  const result = execSync(
-    `tailorctl workspace app list -f json ${process.env.TAILOR_PLATFORM_WORKSPACE_ID ? `-w ${process.env.TAILOR_PLATFORM_WORKSPACE_ID}` : ""}`.trim(),
-  );
-  const resultJson = JSON.parse(result.toString("utf-8")) as { url: string }[];
-  if (resultJson.length === 0) {
-    throw new Error("failed to obtain machine user token");
-  }
-  return resultJson[0].url;
+  const result = execSync("pnpm tailor-sdk show -f json");
+  return JSON.parse(result.toString("utf-8")).url;
 }
 
 function getToken(): string {

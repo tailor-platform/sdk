@@ -21,7 +21,8 @@ You can use environment variables to configure workspace and authentication:
 
 - `TAILOR_PLATFORM_WORKSPACE_ID` - Specify workspace ID for the `apply` command
 - `TAILOR_PLATFORM_TOKEN` - Specify authentication token (alternative to using `login`)
-- `TAILOR_PLATFORM_PROFILE` - Specify profile name to use (combines user and workspace configuration)
+- `TAILOR_PLATFORM_PROFILE` - Specify workspace profile name to use (combines user and workspace configuration)
+- `TAILOR_PLATFORM_SDK_CONFIG_PATH` - Specify path to the SDK config file (alternative to using `--config` option)
 
 ## Commands
 
@@ -51,7 +52,7 @@ tailor-sdk generate [options]
 
 **Options:**
 
-- `-c, --config` - Path to the Tailor config file (default: `tailor.config.ts`)
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-w, --watch` - Watch for type/resolver changes and regenerate
 
 ### apply
@@ -65,9 +66,24 @@ tailor-sdk apply [options]
 **Options:**
 
 - `-w, --workspace-id` - ID of the workspace to apply the configuration to
-- `-p, --profile` - Configuration profile to use
-- `-c, --config` - Path to the Tailor config file (default: `tailor.config.ts`)
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-d, --dryRun` - Run the command without making any changes
+
+### show
+
+Show information about the deployed application.
+
+```bash
+tailor-sdk show [options]
+```
+
+**Options:**
+
+- `-w, --workspace-id` - ID of the workspace to show the application from
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
 
 ### login
 
@@ -137,7 +153,7 @@ tailor-sdk workspace delete [options]
 
 ### profile
 
-Manage Tailor Platform profiles (user + workspace combinations).
+Manage workspace profiles (user + workspace combinations).
 
 ```bash
 tailor-sdk profile <subcommand> [options]

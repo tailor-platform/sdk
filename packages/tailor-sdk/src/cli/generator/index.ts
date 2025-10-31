@@ -505,7 +505,7 @@ export const generateCommand = defineCommand({
     ...commonArgs,
     config: {
       type: "string",
-      description: "Path to the Tailor config file",
+      description: "Path to SDK config file",
       alias: "c",
       default: "tailor.config.ts",
     },

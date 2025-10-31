@@ -33,8 +33,8 @@ async function install() {
   }
 
   // Try to find and load the user's tailor.config.ts
-  const configPath = process.env.TAILOR_SDK_CONFIG_PATH
-    ? resolve(cwd, process.env.TAILOR_SDK_CONFIG_PATH)
+  const configPath = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH
+    ? resolve(cwd, process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH)
     : resolve(cwd, "tailor.config.ts");
 
   if (existsSync(configPath)) {

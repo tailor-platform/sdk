@@ -9,6 +9,7 @@ import { initCommand } from "./init";
 import { loginCommand } from "./login";
 import { logoutCommand } from "./logout";
 import { profileCommand } from "./profile";
+import { showCommand } from "./show";
 import { userCommand } from "./user";
 import { workspaceCommand } from "./workspace";
 
@@ -31,6 +32,7 @@ const mainCommand = defineCommand({
     login: loginCommand,
     logout: logoutCommand,
     profile: profileCommand,
+    show: showCommand,
     user: userCommand,
     workspace: workspaceCommand,
   },

@@ -148,12 +148,12 @@ export const applyCommand = defineCommand({
     },
     profile: {
       type: "string",
-      description: "Configuration profile to use",
+      description: "Workspace profile to use",
       alias: "p",
     },
     config: {
       type: "string",
-      description: "Path to the Tailor config file",
+      description: "Path to SDK config file",
       alias: "c",
       default: "tailor.config.ts",
     },
