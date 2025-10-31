@@ -32,18 +32,22 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Create workspace
+        working-directory: examples/basic
         run: |
-          tailorctl workspace create --name "sdk-ci-${{ github.run_id }}" --region asia-northeast
-          TAILOR_PLATFORM_WORKSPACE_ID=$(tailorctl config describe -f json | jq -r '.workspaceId')
-          echo "TAILOR_PLATFORM_WORKSPACE_ID=$TAILOR_PLATFORM_WORKSPACE_ID" >> "$GITHUB_ENV"
+          WORKSPACE_JSON=$(pnpm tailor-sdk workspace create \
+            --name "sdk-ci-${{ github.run_id }}" \
+            --region asia-northeast \
+            --format json)
+          WORKSPACE_ID=$(echo "$WORKSPACE_JSON" | jq -r '.id')
+          echo "TAILOR_PLATFORM_WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
         env:
-          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Apply workspace
         working-directory: examples/basic
         run: pnpm run apply
         env:
-          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Run e2e tests
         working-directory: examples/basic
@@ -53,6 +57,10 @@ jobs:
 
       - name: Destroy workspace
         if: ${{ always() }}
-        run: tailorctl workspace destroy -w "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --auto-approve
+        working-directory: examples/basic
+        run: |
+          pnpm tailor-sdk workspace delete \
+            --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" \
+            --yes
         env:
-          TAILOR_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}

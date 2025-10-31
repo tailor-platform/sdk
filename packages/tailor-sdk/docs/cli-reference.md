@@ -106,8 +106,9 @@ tailor-sdk workspace create [options]
 - `-n, --name` - Name of the workspace (required)
 - `-r, --region` - Region of the workspace: `us-west` or `asia-northeast` (required)
 - `-d, --delete-protection` - Enable delete protection for the workspace
-- `-o, --organization-id` - Organization ID to associate the workspace with
-- `-f, --folder-id` - Folder ID to associate the workspace with
+- `--organization-id` - Organization ID to associate the workspace with
+- `--folder-id` - Folder ID to associate the workspace with
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
 
 #### workspace list
 

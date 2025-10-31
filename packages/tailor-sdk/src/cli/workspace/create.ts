@@ -1,96 +1,102 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { validate as uuidValidate } from "uuid";
-import { commonArgs, withCommonArgs } from "../args";
+import {
+  commonArgs,
+  formatArgs,
+  parseFormat,
+  printWithFormat,
+  withCommonArgs,
+} from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
+import { workspaceInfo } from "./transform";
 
 const validateName = (name: string) => {
   if (name.length < 3 || name.length > 63) {
-    return "Name must be between 3 and 63 characters long.";
+    throw new Error(`Name must be between 3 and 63 characters long.`);
   }
   if (!/^[a-z0-9-]+$/.test(name)) {
-    return "Name can only contain lowercase letters, numbers, and hyphens.";
+    throw new Error(
+      "Name can only contain lowercase letters, numbers, and hyphens.",
+    );
   }
   if (name.startsWith("-") || name.endsWith("-")) {
-    return "Name cannot start or end with a hyphen.";
+    throw new Error("Name cannot start or end with a hyphen.");
   }
 };
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
   if (!availableRegions.regions.includes(region)) {
-    return `Region must be one of: ${availableRegions.regions.join(", ")}`;
+    throw new Error(
+      `Region must be one of: ${availableRegions.regions.join(", ")}.`,
+    );
   }
 };
 
 export const createCommand = defineCommand({
   meta: {
     name: "create",
-    description: "Create a new Tailor Platform workspace",
+    description: "Create new workspace",
   },
   args: {
     ...commonArgs,
+    ...formatArgs,
     name: {
       type: "string",
-      description: "Name of the workspace",
+      description: "Workspace name",
       required: true,
       alias: "n",
     },
     region: {
       type: "string",
-      description: "Region of the workspace (us-west, asia-northeast)",
+      description: "Workspace region (us-west, asia-northeast)",
       required: true,
       alias: "r",
     },
     "delete-protection": {
       type: "boolean",
-      description: "Enable delete protection for the workspace",
+      description: "Enable delete protection",
       alias: "d",
       default: false,
     },
     "organization-id": {
       type: "string",
-      description: "Organization ID to associate the workspace with",
-      alias: "o",
+      description: "Organization ID to workspace associate with",
     },
     "folder-id": {
       type: "string",
-      description: "Folder ID to associate the workspace with",
-      alias: "f",
+      description: "Folder ID to workspace associate with",
     },
   },
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken();
     const client = await initOperatorClient(accessToken);
 
-    // Validate inputs
-    const nameErr = validateName(args.name);
-    if (nameErr) {
-      consola.error(`Invalid name: ${nameErr}`);
-      process.exit(1);
-    }
-    const regionError = await validateRegion(args.region, client);
-    if (regionError) {
-      consola.error(`Invalid region: ${regionError}`);
-      process.exit(1);
-    }
+    // Validate args
+    const format = parseFormat(args.format);
+    validateName(args.name);
+    await validateRegion(args.region, client);
     if (args["organization-id"] && !uuidValidate(args["organization-id"])) {
-      consola.error(`Invalid organization ID: Must be a valid UUID.`);
-      process.exit(1);
+      throw new Error(`Organization ID must be a valid UUID.`);
     }
     if (args["folder-id"] && !uuidValidate(args["folder-id"])) {
-      consola.error(`Invalid folder ID: Must be a valid UUID.`);
-      process.exit(1);
+      throw new Error(`Folder ID must be a valid UUID.`);
     }
 
-    await client.createWorkspace({
+    const resp = await client.createWorkspace({
       workspaceName: args.name,
       workspaceRegion: args.region,
       deleteProtection: args["delete-protection"],
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
     });
-    consola.success(`Workspace "${args.name}" created successfully.`);
+    if (format === "table") {
+      consola.success(`Workspace "${args.name}" created successfully.`);
+    }
+
+    // Show workspace info
+    printWithFormat(workspaceInfo(resp.workspace!), format);
   }),
 });
