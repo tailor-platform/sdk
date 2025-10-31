@@ -15,15 +15,9 @@ function getUrl(): string {
 
 function getToken(): string {
   const result = execSync(
-    `tailorctl workspace machineuser token -a my-app -m manager-machine-user -f json ${process.env.TAILOR_PLATFORM_WORKSPACE_ID ? `-w ${process.env.TAILOR_PLATFORM_WORKSPACE_ID}` : ""}`.trim(),
+    "pnpm tailor-sdk machineuser token manager-machine-user -f json",
   );
-  const resultJson = JSON.parse(result.toString("utf-8")) as {
-    access_token: string;
-  }[];
-  if (resultJson.length === 0) {
-    throw new Error("failed to obtain machine user token");
-  }
-  return resultJson[0].access_token;
+  return JSON.parse(result.toString("utf-8")).access_token;
 }
 
 export function setup(project: TestProject) {

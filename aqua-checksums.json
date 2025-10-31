@@ -91,31 +91,6 @@
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.6.1/tailorctl_darwin_v2.6.1_arm64.tar.gz",
-      "checksum": "BAED75368B57A8CD23EA37E69C79356D071EBC6C4E4CC4A9339CEAEA2E57339F",
-      "algorithm": "sha256"
-    },
-    {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.6.1/tailorctl_darwin_v2.6.1_x86_64.tar.gz",
-      "checksum": "9530D54BC156D42C5EA4FED70E9154B5C5000ABBEF362AB4FE73724AA756579E",
-      "algorithm": "sha256"
-    },
-    {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.6.1/tailorctl_linux_v2.6.1_arm64.tar.gz",
-      "checksum": "A5DDBBE632D5FA3F0EF5B2183EEEF7B10BB4649710CB4BA71286F9A9EFCFC1DF",
-      "algorithm": "sha256"
-    },
-    {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.6.1/tailorctl_linux_v2.6.1_x86_64.tar.gz",
-      "checksum": "E36418C2501AC8142FBBB1D18280C9FC1CEEC50E0D8AC54CB765108245D3C8DC",
-      "algorithm": "sha256"
-    },
-    {
-      "id": "github_release/github.com/tailor-platform/tailorctl/v2.6.1/tailorctl_windows_v2.6.1_x86_64.zip",
-      "checksum": "BD23EA29D98F3A123D5BD0041828C04E0B09E0E1F0A7C5D48C8A7D16D2244733",
-      "algorithm": "sha256"
-    },
-    {
       "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.398.0/registry.yaml",
       "checksum": "7ECB8D2982D9147B59B8EE0FD7F01EEAEAA542BC9AD2A6E57E3FF250CB9FA8233347CC963ACC5BE4E0527B4E6967DA88613D99952B0BC42CCBE7C0FC60C562C5",
       "algorithm": "sha512"

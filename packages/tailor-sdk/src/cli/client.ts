@@ -199,3 +199,35 @@ export async function resolveStaticWebsiteUrls(
 
   return results.flat();
 }
+
+export async function fetchMachineUserToken(
+  url: string,
+  clientId: string,
+  clientSecret: string,
+) {
+  const tokenEndpoint = new URL("/oauth2/token", url).href;
+  const formData = new URLSearchParams();
+  formData.append("grant_type", "client_credentials");
+  formData.append("client_id", clientId);
+  formData.append("client_secret", clientSecret);
+
+  const resp = await fetch(tokenEndpoint, {
+    method: "POST",
+    headers: {
+      "User-Agent": await userAgent(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData,
+  });
+  if (!resp.ok) {
+    throw new Error("Failed to fetch machine user token");
+  }
+  const rawJson = await resp.json();
+
+  const schema = z.object({
+    token_type: z.string(),
+    access_token: z.string(),
+    expires_in: z.number(),
+  });
+  return schema.parse(rawJson);
+}

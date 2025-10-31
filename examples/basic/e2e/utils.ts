@@ -30,9 +30,9 @@ function userAgentInterceptor(): Interceptor {
 }
 
 function bearerTokenInterceptor(): Interceptor {
-  const token = process.env.TAILOR_TOKEN;
+  const token = process.env.TAILOR_PLATFORM_TOKEN;
   if (!token) {
-    throw new Error("TAILOR_TOKEN is not defined");
+    throw new Error("TAILOR_PLATFORM_TOKEN is not defined");
   }
 
   return (next) => async (req) => {

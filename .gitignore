@@ -31,6 +31,4 @@ coverage/
 **/.tailor-sdk/**
 .turbo
 
-# tailorctl
-cue.mod
 .mcp.json

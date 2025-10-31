@@ -8,6 +8,7 @@ import { generateCommand } from "./generator";
 import { initCommand } from "./init";
 import { loginCommand } from "./login";
 import { logoutCommand } from "./logout";
+import { machineuserCommand } from "./machineuser";
 import { profileCommand } from "./profile";
 import { showCommand } from "./show";
 import { userCommand } from "./user";
@@ -31,6 +32,7 @@ const mainCommand = defineCommand({
     init: initCommand,
     login: loginCommand,
     logout: logoutCommand,
+    machineuser: machineuserCommand,
     profile: profileCommand,
     show: showCommand,
     user: userCommand,

@@ -258,3 +258,45 @@ tailor-sdk user use <user>
 **Arguments:**
 
 - `user` - User email (required)
+
+### machineuser
+
+Manage machine users in your Tailor Platform application.
+
+```bash
+tailor-sdk machineuser <subcommand> [options]
+```
+
+#### machineuser list
+
+List all machine users in the application.
+
+```bash
+tailor-sdk machineuser list [options]
+```
+
+**Options:**
+
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
+
+#### machineuser token
+
+Get an access token for a machine user.
+
+```bash
+tailor-sdk machineuser token <name> [options]
+```
+
+**Arguments:**
+
+- `name` - Machine user name (required)
+
+**Options:**
+
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
