@@ -1,5 +1,25 @@
 # @tailor-platform/tailor-sdk
 
+## 0.1.1
+
+### Patch Changes
+
+- [#647](https://github.com/tailor-platform/tailor-sdk/pull/647) [`b3f744b`](https://github.com/tailor-platform/tailor-sdk/commit/b3f744bd0db1751951389f013f6c2e4a6b97e743) Thanks [@remiposo](https://github.com/remiposo)! - Added show command
+
+  Added a command to retrieve information about deployed applications. This can be used to obtain application endpoints after deployment in CI and similar environments.
+
+  ```bash
+  tailor-sdk apply --workspace-id <your-workspace-id>
+  tailor-sdk show --workspace-id <your-workspace-id> -f json | jq -r '.url'
+  ```
+
+- [#649](https://github.com/tailor-platform/tailor-sdk/pull/649) [`46e0b7b`](https://github.com/tailor-platform/tailor-sdk/commit/46e0b7bf56243ea72ae24a477ef9b48779245d49) Thanks [@remiposo](https://github.com/remiposo)! - Added machineuser commands
+
+  ```bash
+  tailor-sdk machineuser list --workspace-id <your-workspace-id>
+  tailor-sdk machineuser token <machine-user-name> --workspace-id <your-workspace-id>
+  ```
+
 ## 0.1.0
 
 ### Minor Changes
