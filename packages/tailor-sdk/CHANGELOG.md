@@ -1,5 +1,20 @@
 # @tailor-platform/tailor-sdk
 
+## 0.0.99
+
+### Patch Changes
+
+- [#641](https://github.com/tailor-platform/tailor-sdk/pull/641) [`fd8b630`](https://github.com/tailor-platform/tailor-sdk/commit/fd8b630a7c92263ee377c8bc2a83f76c338d78e4) Thanks [@remiposo](https://github.com/remiposo)! - Rename workspace destory command
+
+- [#645](https://github.com/tailor-platform/tailor-sdk/pull/645) [`738a904`](https://github.com/tailor-platform/tailor-sdk/commit/738a904d77e5e3f1a65543f2859b0d7f543b2437) Thanks [@remiposo](https://github.com/remiposo)! - Changed to display ID of created workspace
+
+  Made it easier to retrieve the ID of workspaces created with `tailor-sdk workspace create`.
+  This is useful for cases where you want to apply after creating a workspace in CI environments and similar scenarios.
+
+  ```bash
+  tailor-sdk workspace create --name "my-workspace" --region asia-northeast --format json | jq -r '.id'
+  ```
+
 ## 0.0.98
 
 ### Patch Changes
