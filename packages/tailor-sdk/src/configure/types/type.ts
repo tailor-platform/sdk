@@ -58,9 +58,6 @@ export class TailorField<
     if (options) {
       if (options.optional === true) {
         this._metadata.required = false;
-        if (options.assertNonNull === true) {
-          this._metadata.assertNonNull = true;
-        }
       }
       if (options.array === true) {
         this._metadata.array = true;

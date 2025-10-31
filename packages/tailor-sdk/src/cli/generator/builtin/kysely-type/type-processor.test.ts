@@ -182,24 +182,6 @@ describe("Kysely TypeProcessor", () => {
   });
 
   describe("special fields", () => {
-    it("should handle assertNonNull field correctly", async () => {
-      const typeWithAssertNonNull = db.type("UserWithAssertNonNull", {
-        name: db.string(),
-        email: db.string({ optional: true, assertNonNull: true }), // optional but assertNonNull
-        phone: db.string({ optional: true }), // optional and nullable
-      });
-
-      const result = await TypeProcessor.processType(
-        parseTailorDBType(typeWithAssertNonNull),
-      );
-
-      expect(result.name).toBe("UserWithAssertNonNull");
-      expect(result.typeDef).toContain("UserWithAssertNonNull: {");
-      expect(result.typeDef).toContain("name: string");
-      expect(result.typeDef).toContain("email: AssertNonNull<string>"); // assertNonNull wraps the type
-      expect(result.typeDef).toContain("phone: string | null"); // should be nullable
-    });
-
     it("should process timestamp fields through normal field processing", async () => {
       const typeWithTimestamps = db.type("UserWithTimestamp", {
         name: db.string(),
@@ -213,61 +195,8 @@ describe("Kysely TypeProcessor", () => {
       expect(result.name).toBe("UserWithTimestamp");
       expect(result.typeDef).toContain("UserWithTimestamp: {");
       expect(result.typeDef).toContain("name: string");
-      // createdAt has assertNonNull, updatedAt doesn't
-      expect(result.typeDef).toContain("createdAt: AssertNonNull<Timestamp>;");
+      expect(result.typeDef).toContain("createdAt: Generated<Timestamp>;");
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
-    });
-
-    it("should handle assertNonNull with arrays", async () => {
-      const type = db.type("Post", {
-        tags: db.string({ array: true, optional: true, assertNonNull: true }),
-        categories: db.string({ array: true, optional: true }),
-      });
-
-      const result = await TypeProcessor.processType(parseTailorDBType(type));
-
-      expect(result.typeDef).toContain("tags: AssertNonNull<string[]>;");
-      expect(result.typeDef).toContain("categories: string[] | null;");
-    });
-
-    it("should handle assertNonNull with nested objects", async () => {
-      const type = db.type("User", {
-        profile: db.object(
-          {
-            name: db.string(),
-            email: db.string({ optional: true }),
-          },
-          { optional: true, assertNonNull: true },
-        ),
-      });
-
-      const result = await TypeProcessor.processType(parseTailorDBType(type));
-
-      expect(result.typeDef).toContain("profile: AssertNonNull<{");
-      expect(result.typeDef).toContain("name: string");
-      expect(result.typeDef).toContain("email: string | null");
-    });
-
-    it("should handle assertNonNull with enum types", async () => {
-      const type = db.type("User", {
-        role: db.enum(
-          { value: "admin" },
-          { value: "user" },
-          { optional: true, assertNonNull: true },
-        ),
-        status: db.enum(
-          { value: "active" },
-          { value: "inactive" },
-          { optional: true },
-        ),
-      });
-
-      const result = await TypeProcessor.processType(parseTailorDBType(type));
-
-      expect(result.typeDef).toContain(
-        'role: AssertNonNull<"admin" | "user">;',
-      );
-      expect(result.typeDef).toContain('status: "active" | "inactive" | null;');
     });
 
     it("should always include Generated<string> for id field", async () => {

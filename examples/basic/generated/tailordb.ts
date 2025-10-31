@@ -1,13 +1,9 @@
 import { type ColumnType, Kysely } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
-type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<NonNullable<S>, I | null, U | null>
-  : ColumnType<NonNullable<T>, T | null, T | null>
+type Generated<T> = ColumnType<T, T | undefined, T>;
+type Serial<T = string | number> = ColumnType<T, never, never>;
 
 interface Namespace {
   "tailordb": {
@@ -20,20 +16,20 @@ interface Namespace {
       postalCode: string;
       address: string | null;
       city: string | null;
-      fullAddress: string | null;
+      fullAddress: Generated<string | null>;
       state: string;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
     Invoice: {
       id: Generated<string>;
-      invoiceNumber: string | null;
+      invoiceNumber: Serial<string>;
       salesOrderID: string;
       amount: number | null;
-      sequentialId: number | null;
+      sequentialId: Serial<number>;
       status: "draft" | "sent" | "paid" | "cancelled" | null;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -52,7 +48,7 @@ interface Namespace {
         version: number;
       };
       archived: boolean | null;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -68,7 +64,7 @@ interface Namespace {
         size: number;
         type: "text" | "image";
       }[];
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -81,7 +77,7 @@ interface Namespace {
       status: string | null;
       cancelReason: string | null;
       canceledAt: Timestamp | null;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -110,7 +106,7 @@ interface Namespace {
       country: string;
       state: "Alabama" | "Alaska";
       city: string;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -121,7 +117,7 @@ interface Namespace {
       status: string | null;
       department: string | null;
       role: "MANAGER" | "STAFF";
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -129,7 +125,7 @@ interface Namespace {
       id: Generated<string>;
       language: "jp" | "en";
       userID: string;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
   }

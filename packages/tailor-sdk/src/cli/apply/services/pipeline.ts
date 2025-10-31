@@ -328,7 +328,7 @@ function processResolver(
   // Build inputs
   const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] =
     resolver.input?.fields
-      ? protoFields(`${typeBaseName}Input`, resolver.input.fields)
+      ? protoFields(`${typeBaseName}Input`, resolver.input.fields, true)
       : [];
 
   // Build response
@@ -339,7 +339,7 @@ function processResolver(
       name: outputType,
       description: resolver.output._description ?? "",
       required: true,
-      fields: protoFields(outputType, resolver.output.fields, true),
+      fields: protoFields(outputType, resolver.output.fields, false),
     },
     description: resolver.output._description ?? "",
     array: false,
@@ -362,7 +362,7 @@ function processResolver(
 function protoFields(
   baseName: string,
   fields: Record<string, TailorField>,
-  output: boolean = false,
+  isInput: boolean,
 ): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
   if (!fields) {
     return [];
@@ -370,9 +370,9 @@ function protoFields(
 
   return Object.entries(fields).map(([fieldName, field]) => {
     let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
-    const required =
-      (field.metadata.required ?? true) ||
-      (output && field.metadata.assertNonNull);
+    // For input fields, if hooks.create is defined, the field should not be required
+    const hasCreateHook = isInput && field.metadata.hooks?.create !== undefined;
+    const required = hasCreateHook ? false : (field.metadata.required ?? true);
 
     switch (field.type) {
       case "uuid":
@@ -448,7 +448,7 @@ function protoFields(
           name: typeName,
           description: field.metadata.description ?? "",
           required,
-          fields: protoFields(typeName, field.fields),
+          fields: protoFields(typeName, field.fields, isInput),
         };
         break;
       }

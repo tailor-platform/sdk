@@ -16,11 +16,11 @@ export type Customer = {
 
 export type Invoice = {
   id: string;
-  invoiceNumber?: string | null;
+  invoiceNumber: string;
   salesOrderID: string;
   salesOrder: SalesOrder;
   amount?: number | null;
-  sequentialId?: number | null;
+  sequentialId: number;
   status?: "draft" | "sent" | "paid" | "cancelled" | null;
   createdAt: Date;
   updatedAt?: Date | null;

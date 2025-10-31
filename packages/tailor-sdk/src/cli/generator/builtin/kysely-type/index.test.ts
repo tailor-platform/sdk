@@ -80,7 +80,7 @@ describe("KyselyGenerator統合テスト", () => {
       expect(result.typeDef).toContain("birthDate: Timestamp | null;");
       expect(result.typeDef).toContain("lastLogin: Timestamp | null;");
       expect(result.typeDef).toContain("tags: string[];");
-      expect(result.typeDef).toContain("createdAt: AssertNonNull<Timestamp>;");
+      expect(result.typeDef).toContain("createdAt: Generated<Timestamp>;");
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
@@ -358,39 +358,6 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
       });
 
       expect(result.typeDef).toContain("unknownField: string;");
-    });
-  });
-
-  describe("withTimestamps オプションのテスト", () => {
-    it("withTimestamps: true でタイムスタンプフィールドが追加される", async () => {
-      const typeWithTimestamps = db.type("WithTimestamp", {
-        name: db.string(),
-        ...db.fields.timestamps(),
-      });
-
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(typeWithTimestamps),
-        applicationNamespace: "test-app",
-        namespace: "test-namespace",
-      });
-
-      expect(result.typeDef).toContain("createdAt: AssertNonNull<Timestamp>;");
-      expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
-    });
-
-    it("withTimestamps: false でタイムスタンプフィールドが追加されない", async () => {
-      const typeWithoutTimestamps = db.type("WithoutTimestamp", {
-        name: db.string(),
-      });
-
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(typeWithoutTimestamps),
-        applicationNamespace: "test-app",
-        namespace: "test-namespace",
-      });
-
-      expect(result.typeDef).not.toContain("createdAt");
-      expect(result.typeDef).not.toContain("updatedAt");
     });
   });
 });

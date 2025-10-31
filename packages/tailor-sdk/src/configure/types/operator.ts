@@ -32,7 +32,6 @@ export interface OperatorFieldConfig {
   foreignKeyField?: string;
   validate?: OperatorValidateConfig[];
   hooks?: OperatorFieldHook;
-  assertNonNull?: boolean;
   serial?: {
     start: number;
     maxValue?: number;

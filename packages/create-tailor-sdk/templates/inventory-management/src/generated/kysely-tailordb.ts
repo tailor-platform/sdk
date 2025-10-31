@@ -1,13 +1,9 @@
 import { type ColumnType, Kysely } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
-type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<NonNullable<S>, I | null, U | null>
-  : ColumnType<NonNullable<T>, T | null, T | null>
+type Generated<T> = ColumnType<T, T | undefined, T>;
+type Serial<T = string | number> = ColumnType<T, never, never>;
 
 interface Namespace {
   "main-db": {
@@ -15,7 +11,7 @@ interface Namespace {
       id: Generated<string>;
       name: string;
       description: string | null;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -25,7 +21,7 @@ interface Namespace {
       email: string;
       phone: string | null;
       address: string | null;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -33,14 +29,14 @@ interface Namespace {
       id: Generated<string>;
       productId: string;
       quantity: number;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
     Notification: {
       id: Generated<string>;
       message: string;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -51,7 +47,7 @@ interface Namespace {
       orderDate: Timestamp;
       orderType: "PURCHASE" | "SALES";
       contactId: string;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -61,8 +57,8 @@ interface Namespace {
       productId: string;
       quantity: number;
       unitPrice: number;
-      totalPrice: AssertNonNull<number>;
-      createdAt: AssertNonNull<Timestamp>;
+      totalPrice: Generated<number | null>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -71,7 +67,7 @@ interface Namespace {
       name: string;
       description: string | null;
       categoryId: string;
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
 
@@ -80,7 +76,7 @@ interface Namespace {
       name: string;
       email: string;
       role: "MANAGER" | "STAFF";
-      createdAt: AssertNonNull<Timestamp>;
+      createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
   }

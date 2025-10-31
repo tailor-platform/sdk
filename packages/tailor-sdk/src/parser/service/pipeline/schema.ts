@@ -32,7 +32,12 @@ export const FieldMetadataSchema = z.object({
   array: z.boolean().optional(),
   description: z.string().optional(),
   allowedValues: z.array(AllowedValueSchema).optional(),
-  assertNonNull: z.boolean().optional(),
+  hooks: z
+    .object({
+      create: z.function().optional(),
+      update: z.function().optional(),
+    })
+    .optional(),
 });
 
 export const TailorFieldSchema = z.object({

@@ -1,15 +1,8 @@
 import { type TailorUser } from "@/configure/types";
+import { type output, type Prettify } from "@/configure/types/helpers";
 import {
-  type DeepWritable,
-  type NullableToOptional,
-  type output,
-  type Prettify,
-} from "@/configure/types/helpers";
-import {
-  type ArrayFieldOutput,
   type DefinedFieldMetadata,
   type FieldMetadata,
-  type FieldOptions,
 } from "@/configure/types/types";
 import { type TailorDBField } from "./schema";
 import type { NonEmptyObject } from "type-fest";
@@ -34,7 +27,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   foreignKey?: boolean;
   foreignKeyType?: string;
   foreignKeyField?: string;
-  hooks?: Hook<any, any, any>;
+  hooks?: Hook<any, any>;
   serial?: SerialConfig;
   relation?: boolean;
 }
@@ -52,11 +45,10 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
 }
 
 export type ExcludeNestedDBFields<
-  T extends Record<string, TailorDBField<any, any, any>>,
+  T extends Record<string, TailorDBField<any, any>>,
 > = {
   [K in keyof T]: T[K] extends TailorDBField<
     { type: "nested"; array: boolean },
-    any,
     any
   >
     ? never
@@ -65,25 +57,29 @@ export type ExcludeNestedDBFields<
 
 type HookFn<TValue, TData, TReturn> = (args: {
   value: TValue;
-  data: TData;
+  data: TData extends Record<string, unknown>
+    ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
+    : unknown;
   user: TailorUser;
 }) => TReturn;
 
-export type Hook<TValue, TData, TReturn> = {
-  create?: HookFn<TValue, TData, TReturn>;
-  update?: HookFn<TValue, TData, TReturn>;
+export type Hook<TData, TReturn> = {
+  create?: HookFn<TReturn | null, TData, TReturn>;
+  update?: HookFn<TReturn | null, TData, TReturn>;
 };
 
-export type Hooks<F extends Record<string, TailorDBField<any, any, any>>> =
-  NonEmptyObject<{
-    [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
-      hooks: unknown;
-    }
+export type Hooks<
+  F extends Record<string, TailorDBField<any, any>>,
+  TData = { [K in keyof F]: output<F[K]> },
+> = NonEmptyObject<{
+  [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
+    hooks: unknown;
+  }
+    ? never
+    : F[K]["_defined"] extends { type: "nested" }
       ? never
-      : F[K]["_defined"] extends { type: "nested" }
-        ? never
-        : K]?: Hook<InferFieldInput<F[K]>, InferFieldsInput<F>, output<F[K]>>;
-  }>;
+      : K]?: Hook<TData, output<F[K]>>;
+}>;
 
 export type TailorDBServiceConfig = { files: string[] };
 export type TailorDBServiceInput = {
@@ -101,31 +97,3 @@ export interface TypeFeatures {
   aggregation?: true;
   bulkUpsert?: true;
 }
-
-// Return Input type based on FieldOptions.
-// Unlike FieldOutput, it remains nullable even when assertNonNull is set to true.
-export type FieldInput<T, O extends FieldOptions> = OptionalFieldInput<
-  ArrayFieldOutput<T, O>,
-  O
->;
-
-type OptionalFieldInput<T, O extends FieldOptions> = [O] extends [
-  {
-    optional: true;
-  },
-]
-  ? T | null
-  : T;
-
-// Return Input type for TailorDBFields.
-type InferFieldsInput<F extends Record<string, TailorDBField<any, any, any>>> =
-  DeepWritable<
-    Prettify<
-      NullableToOptional<{
-        [K in keyof F]: InferFieldInput<F[K]>;
-      }>
-    >
-  >;
-
-type InferFieldInput<T extends TailorDBField<any, any, any>> =
-  T extends TailorDBField<any, any, infer I> ? I : never;

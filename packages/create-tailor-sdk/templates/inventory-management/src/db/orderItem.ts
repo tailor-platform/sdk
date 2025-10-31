@@ -28,8 +28,8 @@ export const orderItem = db
   })
   .hooks({
     totalPrice: {
-      create: ({ data }) => data.quantity * data.unitPrice,
-      update: ({ data }) => data.quantity * data.unitPrice,
+      create: ({ data }) => (data?.quantity ?? 0) * (data.unitPrice ?? 0),
+      update: ({ data }) => (data?.quantity ?? 0) * (data.unitPrice ?? 0),
     },
   })
   .permission(permissionLoggedIn)

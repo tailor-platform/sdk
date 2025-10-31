@@ -59,7 +59,6 @@ export interface FieldMetadata {
   required?: boolean;
   array?: boolean;
   allowedValues?: AllowedValue[];
-  assertNonNull?: boolean;
   validate?: FieldValidateInput<any>[];
 }
 
@@ -70,31 +69,18 @@ export interface DefinedFieldMetadata {
   validate?: boolean;
 }
 
-export type FieldOptions = (
-  | {
-      optional: true;
-      assertNonNull?: boolean;
-    }
-  | {
-      optional?: false;
-    }
-) & {
+export type FieldOptions = {
+  optional?: boolean;
   array?: boolean;
 };
 
 // Return Output type based on FieldOptions.
-// If assertNonNull is true, it returns non-nullable type.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<
   ArrayFieldOutput<T, O>,
   O
 >;
 
-type OptionalFieldOutput<T, O extends FieldOptions> = [O] extends [
-  {
-    optional: true;
-    assertNonNull?: false;
-  },
-]
+type OptionalFieldOutput<T, O extends FieldOptions> = O["optional"] extends true
   ? T | null
   : T;
 

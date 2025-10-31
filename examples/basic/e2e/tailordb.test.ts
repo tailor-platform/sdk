@@ -40,7 +40,7 @@ describe("controlplane", () => {
           role: { type: "enum", required: true, array: false },
           createdAt: {
             type: "datetime",
-            required: false,
+            required: true,
             array: false,
             hooks: expect.any(Object),
           },

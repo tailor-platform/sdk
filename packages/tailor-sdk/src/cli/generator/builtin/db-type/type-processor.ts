@@ -203,7 +203,6 @@ export class TypeProcessor {
     fieldConfig: FieldConfig,
   ): string {
     const isRequired = fieldConfig.required === true;
-    const assertNonNull = fieldConfig.assertNonNull === true;
     const isArray = fieldConfig.array || false;
 
     let typeDef = fieldType;
@@ -211,10 +210,8 @@ export class TypeProcessor {
       typeDef = `${fieldType}[]`;
     }
 
-    // If required or assertNonNull, field is not optional
-    const optional = isRequired || assertNonNull;
-    const optionalMarker = optional ? "" : "?";
-    const nullability = optional ? "" : " | null";
+    const optionalMarker = isRequired ? "" : "?";
+    const nullability = isRequired ? "" : " | null";
 
     return `${fieldName}${optionalMarker}: ${typeDef}${nullability};`;
   }

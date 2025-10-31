@@ -51,18 +51,20 @@ export class TypeProcessor {
     const baseType = this.getBaseType(fieldConfig);
     const isArray = fieldConfig.array === true;
     const isNullable = fieldConfig.required !== true;
-    const isAssertNonNull = fieldConfig.assertNonNull === true;
 
     let finalType = baseType;
     if (isArray) {
       finalType = `${baseType}[]`;
     }
     if (isNullable) {
-      if (isAssertNonNull) {
-        finalType = `AssertNonNull<${finalType}>`;
-      } else {
-        finalType = `${finalType} | null`;
-      }
+      finalType = `${finalType} | null`;
+    }
+
+    if (fieldConfig.serial) {
+      finalType = `Serial<${finalType}>`;
+    }
+    if (fieldConfig.hooks?.create) {
+      finalType = `Generated<${finalType}>`;
     }
 
     return finalType;
@@ -141,13 +143,9 @@ export class TypeProcessor {
           import { type ColumnType, Kysely } from "kysely";
           import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-          type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-            ? ColumnType<S, I | undefined, U>
-            : ColumnType<T, T | undefined, T>;
           type Timestamp = ColumnType<Date, Date | string, Date | string>;
-          type AssertNonNull<T> = T extends ColumnType<infer S, infer I, infer U>
-            ? ColumnType<NonNullable<S>, I | null, U | null>
-            : ColumnType<NonNullable<T>, T | null, T | null>
+          type Generated<T> = ColumnType<T, T | undefined, T>;
+          type Serial<T = string | number> = ColumnType<T, never, never>;
         `,
         TypeProcessor.generateNamespaceInterface(
           Object.values(types),

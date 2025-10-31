@@ -457,21 +457,14 @@ describe("TailorDBField hooks修飾子テスト", () => {
   it("stringフィールドでhooks修飾子はstringを受け取る", () => {
     const _hooks = db.string().hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
-      Hook<string, unknown, string>
+      Hook<unknown, string>
     >();
   });
 
   it("optionalフィールドでhooks修飾子はnullを受け取る", () => {
     const _hooks = db.string({ optional: true }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
-      Hook<string | null, unknown, string | null>
-    >();
-  });
-
-  it("assertNonNullフィールドでhooks修飾子はnonNullを返す", () => {
-    const _hooks = db.string({ optional: true, assertNonNull: true }).hooks;
-    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
-      Hook<string | null, unknown, string>
+      Hook<unknown, string | null>
     >();
   });
 });
@@ -543,16 +536,6 @@ describe("TailorDBField validate修飾子テスト", () => {
     const _validate = db.string({ optional: true }).validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
       FieldValidateInput<string | null>
-    >();
-  });
-
-  it("assertNonNullフィールドでvalidate修飾子はnonNullを受け取る", () => {
-    const _validate = db.string({
-      optional: true,
-      assertNonNull: true,
-    }).validate;
-    expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
-      FieldValidateInput<string>
     >();
   });
 });
@@ -986,10 +969,9 @@ describe("TailorDBType hooks修飾子テスト", () => {
 
     expectTypeOf<ActualNameType>().toEqualTypeOf<
       Hook<
-        string,
         {
           id: string;
-          name: string;
+          readonly name: string;
         },
         string
       >
@@ -1006,32 +988,11 @@ describe("TailorDBType hooks修飾子テスト", () => {
 
     expectTypeOf<ActualNameType>().toEqualTypeOf<
       Hook<
-        string | null,
         {
           id: string;
           name?: string | null;
         },
         string | null
-      >
-    >();
-  });
-
-  it("assertNonNullフィールドでhooks修飾子はnonNullを返す", () => {
-    const testType = db.type("Test", {
-      name: db.string({ optional: true, assertNonNull: true }),
-    });
-    const _hooks = testType.hooks;
-    type ExpectedHooksParam = Parameters<typeof _hooks>[0];
-    type ActualNameType = Exclude<ExpectedHooksParam["name"], undefined>;
-
-    expectTypeOf<ActualNameType>().toEqualTypeOf<
-      Hook<
-        string | null,
-        {
-          id: string;
-          name?: string | null;
-        },
-        string
       >
     >();
   });
@@ -1124,15 +1085,6 @@ describe("TailorDBType validate修飾子テスト", () => {
     }).validate;
     expectTypeOf<
       ValidateConfig<string | null, { id: string; name?: string | null }>
-    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
-  });
-
-  it("assertNonNullフィールドでvalidate修飾子はnonNullを返す", () => {
-    const _validate = db.type("Test", {
-      name: db.string({ optional: true, assertNonNull: true }),
-    }).validate;
-    expectTypeOf<
-      ValidateConfig<string, { id: string; name: string }>
     >().toExtend<Parameters<typeof _validate>[0]["name"]>();
   });
 });
