@@ -250,27 +250,6 @@ describe("createResolver", () => {
       });
     });
 
-    test("resolver with dbNamespace option", () => {
-      createResolver({
-        name: "withDbNamespace",
-        operation: "mutation",
-        input: t.type({
-          name: t.string(),
-        }),
-        output: t.type({
-          success: t.bool(),
-        }),
-        options: {
-          dbNamespace: "main-db",
-        },
-        body: async (context) => {
-          expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context).toHaveProperty("user");
-          return { success: true };
-        },
-      });
-    });
-
     test("user context always available", () => {
       createResolver({
         name: "withUser",
@@ -480,9 +459,6 @@ describe("createResolver", () => {
         operation: "query",
         input: inputType,
         output: outputType,
-        options: {
-          dbNamespace: "test-db",
-        },
         body: (context) => ({
           message: `Hello ${context.input.name}`,
         }),
@@ -493,7 +469,6 @@ describe("createResolver", () => {
       expect(resolver.operation).toBe("query");
       expect(resolver.input).toBe(inputType);
       expect(resolver.output).toBe(outputType);
-      expect(resolver.options?.dbNamespace).toBe("test-db");
       expect(typeof resolver.body).toBe("function");
     });
 
@@ -514,7 +489,6 @@ describe("createResolver", () => {
       expect(resolver.output).toBe(outputType);
       expect(resolver.description).toBeUndefined();
       expect(resolver.input).toBeUndefined();
-      expect(resolver.options).toBeUndefined();
     });
 
     test("creates query resolver", () => {
@@ -558,20 +532,6 @@ describe("createResolver", () => {
 
       expect(resolver.input).toBe(inputType);
       expect(resolver.output).toBe(outputType);
-    });
-
-    test("preserves options", () => {
-      const resolver = createResolver({
-        name: "dbQuery",
-        operation: "query",
-        output: t.type({ count: t.int() }),
-        options: {
-          dbNamespace: "analytics",
-        },
-        body: () => ({ count: 42 }),
-      });
-
-      expect(resolver.options).toEqual({ dbNamespace: "analytics" });
     });
   });
 
@@ -696,9 +656,6 @@ describe("createResolver", () => {
         output: t.type({
           result: t.string(),
         }),
-        options: {
-          dbNamespace: "test-db",
-        },
         body: (context) => ({ result: context.input.id }),
       });
 
@@ -719,16 +676,12 @@ describe("createResolver", () => {
 
         // Optional fields from ResolverInput
         description: "Full configuration test",
-        options: {
-          dbNamespace: "test-namespace",
-        },
       });
 
       // Verify that all expected fields are present
       expect(resolver.name).toBe("fullConfigTest");
       expect(resolver.operation).toBe("mutation");
       expect(resolver.description).toBe("Full configuration test");
-      expect(resolver.options?.dbNamespace).toBe("test-namespace");
       expectTypeOf(resolver).toExtend<ResolverInput>();
     });
 
@@ -755,9 +708,6 @@ describe("createResolver", () => {
         operation: "query",
         input: inputType,
         output: outputType,
-        options: {
-          dbNamespace: "main",
-        },
         body: (context) => ({
           processed: true,
           result: {
@@ -776,7 +726,6 @@ describe("createResolver", () => {
       expect(resolver.operation).toBe("query");
       expect(resolver.input).toBe(inputType);
       expect(resolver.output).toBe(outputType);
-      expect(resolver.options?.dbNamespace).toBe("main");
     });
 
     test("minimal createResolver config is compatible with ResolverInput", () => {
@@ -794,7 +743,6 @@ describe("createResolver", () => {
       expect(resolver.operation).toBe("query");
       expect(resolver.input).toBeUndefined();
       expect(resolver.description).toBeUndefined();
-      expect(resolver.options).toBeUndefined();
     });
   });
 });

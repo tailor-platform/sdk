@@ -326,11 +326,13 @@ createResolver({
 
 #### Body Function
 
-Define actual resolver logic in the `body` function. Function arguments include: `input` (input data), `user` (user performing the operation), and `client` (database client).
+Define actual resolver logic in the `body` function. Function arguments include: `input` (input data), `user` (user performing the operation).
 
-The `client` property can be used to execute SQL queries:
+If you're generating Kysely types with a generator, you can use `getDB` to execute typed queries:
 
 ```typescript
+import { getDB } from "../generated/tailordb";
+
 createResolver({
   name: "getUser",
   operation: "query",
@@ -338,45 +340,19 @@ createResolver({
     name: t.string(),
   }),
   body: async (context) => {
-    const result = await context.client.execOne<{ id: string } | null>(
-      `SELECT id FROM User WHERE name = ? LIMIT 1`,
-      [context.input.name],
-    );
+    const db = getDB("tailordb");
+    const query = db
+      .selectFrom("User")
+      .select("id")
+      .where("name", "=", context.input.name)
+      .limit(1)
+      .executeTakeFirstOrThrow();
     return {
-      result: result?.id,
+      result: result.id,
     };
   },
   output: t.type({
-    result: t.uuid({ optional: true }),
-  }),
-});
-```
-
-If you're generating Kysely types with a generator, you can use `kyselyWrapper` to execute typed queries:
-
-```typescript
-createResolver({
-  name: "getUser",
-  operation: "query",
-  input: t.type({
-    name: t.string(),
-  }),
-  body: async (context) => {
-    return kyselyWrapper(context, async (context) => {
-      const query = context.db
-        .selectFrom("User")
-        .select("id")
-        .where("name", "=", context.input.name)
-        .limit(1)
-        .compile();
-      const result = await context.client.exec(query);
-      return {
-        result: result[0]?.id,
-      };
-    });
-  },
-  output: t.type({
-    result: t.uuid({ optional: true }),
+    result: t.uuid(),
   }),
 });
 ```
@@ -398,7 +374,7 @@ createExecutor("user-welcome", "Send welcome email to new users")
     ),
   )
   .executeFunction({
-    fn: async ({ newRecord, client }) => {
+    fn: async ({ newRecord }) => {
       // Send welcome email logic here
     },
   });
@@ -452,14 +428,9 @@ resolverExecutedTrigger(
 
 ```typescript
 .executeFunction({
-  fn: async ({ newRecord, client }) => {
-    const result = await client.exec(
-      `SELECT * FROM "Order" WHERE customerId = ?`,
-      [newRecord.id],
-    );
-    console.log(`Found ${result.length} orders for customer`);
+  fn: async ({ newRecord }) => {
+    console.log("New record created:", newRecord);
   },
-  dbNamespace: "my-db",
 })
 ```
 
@@ -510,11 +481,6 @@ Context varies based on trigger type:
 - `typeName`: Name of the TailorDB type
 - `newRecord`: New record state (not available for delete triggers)
 - `oldRecord`: Previous record state (not available for create triggers)
-- `client`: Database client with `exec<T>(sql, params?)` and `execOne<T>(sql, params?)` methods
-
-**Schedule trigger context** - For `scheduleTrigger`:
-
-- `client`: Database client
 
 **Incoming webhook trigger context** - For `incomingWebhookTrigger`:
 
@@ -522,11 +488,9 @@ Context varies based on trigger type:
 - `headers`: Webhook request headers
 - `method`: HTTP method
 - `rawBody`: Raw request body as string
-- `client`: Database client
 
 **Resolver executed trigger context** - For `resolverExecutedTrigger`:
 
 - `resolverName`: Name of the resolver
 - `result`: Resolver's return value (when execution succeeds)
 - `error`: Error object (when execution fails)
-- `client`: Database client

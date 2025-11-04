@@ -18,10 +18,6 @@ export const QueryTypeSchema = z.union([
   z.literal("mutation"),
 ]);
 
-export const ResolverBodyOptionsSchema = z.object({
-  dbNamespace: z.string().optional(),
-});
-
 export const AllowedValueSchema = z.object({
   value: z.string(),
   description: z.string().optional(),
@@ -58,7 +54,6 @@ export const ResolverSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   input: TailorTypeSchema.optional(),
-  options: ResolverBodyOptionsSchema.optional(),
   body: z.function(),
   output: TailorTypeSchema,
 });
