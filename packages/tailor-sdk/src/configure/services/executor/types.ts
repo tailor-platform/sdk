@@ -76,6 +76,7 @@ export interface Executor {
   description?: string;
   trigger: Trigger;
   exec: Target;
+  disabled?: boolean;
 }
 
 export type ExecutorServiceConfig = { files: string[] };

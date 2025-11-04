@@ -3,7 +3,39 @@ import { executorGql } from "./target/gql";
 import { executorWebhook } from "./target/webhook";
 import { type Executor, type TriggerWithArgs } from "./types";
 
-export function createExecutor(name: string, description?: string) {
+export function createExecutor(
+  name: string,
+  description?: string,
+  options?: { disabled?: boolean },
+): ReturnType<typeof createExecutorImpl>;
+export function createExecutor(
+  name: string,
+  options: { disabled?: boolean },
+): ReturnType<typeof createExecutorImpl>;
+export function createExecutor(
+  name: string,
+  descriptionOrOptions?: string | { disabled?: boolean },
+  options?: { disabled?: boolean },
+) {
+  let description: string | undefined;
+  let finalOptions: { disabled?: boolean } | undefined;
+
+  if (typeof descriptionOrOptions === "string") {
+    description = descriptionOrOptions;
+    finalOptions = options;
+  } else {
+    description = undefined;
+    finalOptions = descriptionOrOptions;
+  }
+
+  return createExecutorImpl(name, description, finalOptions);
+}
+
+function createExecutorImpl(
+  name: string,
+  description: string | undefined,
+  options: { disabled?: boolean } | undefined,
+) {
   return {
     on: <Args>(trigger: TriggerWithArgs<Args>) => ({
       executeFunction: ({
@@ -23,6 +55,7 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger,
           exec,
+          disabled: options?.disabled,
         };
       },
 
@@ -44,6 +77,7 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger,
           exec,
+          disabled: options?.disabled,
         };
       },
 
@@ -54,6 +88,7 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger,
           exec,
+          disabled: options?.disabled,
         };
       },
 
@@ -66,6 +101,7 @@ export function createExecutor(name: string, description?: string) {
           description,
           trigger,
           exec,
+          disabled: options?.disabled,
         };
       },
     }),

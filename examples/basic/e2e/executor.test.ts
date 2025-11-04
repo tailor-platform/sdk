@@ -19,6 +19,7 @@ describe("controlplane", async () => {
     expect(salesOrderCreated).toMatchObject({
       name: "sales-order-created",
       description: "Triggered when a new sales order is created",
+      disabled: false,
       triggerType: ExecutorTriggerType.EVENT,
       triggerConfig: {
         config: {
@@ -48,6 +49,7 @@ describe("controlplane", async () => {
     expect(stepChainExecuted).toMatchObject({
       name: "step-chain-executed",
       description: "Triggered when a step chain is executed",
+      disabled: true,
       triggerType: ExecutorTriggerType.EVENT,
       triggerConfig: {
         config: {
@@ -93,6 +95,7 @@ describe("controlplane", async () => {
     expect(userCreated).toMatchObject({
       name: "user-created",
       description: "Triggered when a new user is created",
+      disabled: false,
       triggerType: ExecutorTriggerType.EVENT,
       triggerConfig: {
         config: {

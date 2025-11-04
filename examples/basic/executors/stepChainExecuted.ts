@@ -7,6 +7,7 @@ import stepChain from "../resolvers/stepChain";
 export default createExecutor(
   "step-chain-executed",
   "Triggered when a step chain is executed",
+  { disabled: true },
 )
   .on(
     resolverExecutedTrigger(stepChain, ({ result }) => {

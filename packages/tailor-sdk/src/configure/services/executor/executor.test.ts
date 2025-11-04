@@ -12,6 +12,54 @@ import {
   scheduleTrigger,
 } from "./trigger";
 
+describe("createExecutor", () => {
+  test("can disable executor", () => {
+    const disabled = createExecutor("test-executor", "A test executor", {
+      disabled: true,
+    })
+      .on(incomingWebhookTrigger())
+      .executeFunction({
+        fn: () => {
+          /* do nothing */
+        },
+      });
+    expect(disabled.description).toBe("A test executor");
+    expect(disabled.disabled).toBe(true);
+
+    const disabledWithoutDescription = createExecutor("test-executor", {
+      disabled: true,
+    })
+      .on(incomingWebhookTrigger())
+      .executeFunction({
+        fn: () => {
+          /* do nothing */
+        },
+      });
+    expect(disabledWithoutDescription.description).toBeUndefined();
+    expect(disabledWithoutDescription.disabled).toBe(true);
+
+    const enabled = createExecutor("test-executor", "A test executor")
+      .on(incomingWebhookTrigger())
+      .executeFunction({
+        fn: () => {
+          /* do nothing */
+        },
+      });
+    expect(enabled.description).toBe("A test executor");
+    expect(enabled.disabled).toBeUndefined();
+
+    const enabledWithoutDescription = createExecutor("test-executor")
+      .on(incomingWebhookTrigger())
+      .executeFunction({
+        fn: () => {
+          /* do nothing */
+        },
+      });
+    expect(enabledWithoutDescription.description).toBeUndefined();
+    expect(enabledWithoutDescription.disabled).toBeUndefined();
+  });
+});
+
 describe("scheduleTrigger", () => {
   test("can specify valid cron", () => {
     const trigger = scheduleTrigger("* * * * *");

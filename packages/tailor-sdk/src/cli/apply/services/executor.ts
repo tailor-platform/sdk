@@ -303,5 +303,6 @@ function protoExecutor(
     triggerConfig,
     targetType,
     targetConfig,
+    disabled: executor.disabled ?? false,
   };
 }
