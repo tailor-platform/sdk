@@ -1,5 +1,13 @@
 # @tailor-platform/tailor-sdk
 
+## 0.2.0
+
+### Minor Changes
+
+- [#650](https://github.com/tailor-platform/tailor-sdk/pull/650) [`fcbcc8d`](https://github.com/tailor-platform/tailor-sdk/commit/fcbcc8d35c74b7ae0f458487d4779a07292133aa) Thanks [@remiposo](https://github.com/remiposo)! - Removed unused dbNamespace
+
+  Removed dbNamespace option. While this is a breaking change, it should have minimal impact since it's no longer used. If it's still specified, a type error will occur, so simply remove it.
+
 ## 0.1.1
 
 ### Patch Changes
