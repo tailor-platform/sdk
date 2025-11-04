@@ -1,5 +1,25 @@
 # @tailor-platform/tailor-sdk
 
+## 0.2.1
+
+### Patch Changes
+
+- [#658](https://github.com/tailor-platform/tailor-sdk/pull/658) [`affac14`](https://github.com/tailor-platform/tailor-sdk/commit/affac14e1a33486da3b1540432172018a0e1ca0c) Thanks [@remiposo](https://github.com/remiposo)! - Supported disabling executors
+
+  Made it possible to disable executors by setting the disabled option to true.
+
+  ```typescript
+  const disabled = createExecutor("test-executor", {
+    disabled: true,
+  })
+    .on(incomingWebhookTrigger())
+    .executeFunction({
+      fn: () => {
+        // Do something
+      },
+    });
+  ```
+
 ## 0.2.0
 
 ### Minor Changes
