@@ -30,8 +30,8 @@ export default defineConfig({
   db: {
     "my-db": { files: ["db/**/*.ts"] },
   },
-  pipeline: {
-    "my-pipeline": { files: ["pipeline/**/*.ts"] },
+  resolver: {
+    "my-resolver": { files: ["resolver/**/*.ts"] },
   },
   executor: { files: ["executors/**/*.ts"] },
 });
@@ -39,7 +39,7 @@ export default defineConfig({
 
 **db**: Glob patterns for TailorDB type definitions.
 
-**pipeline**: Glob patterns for Pipeline resolver definitions.
+**resolver**: Glob patterns for Resolver definitions.
 
 **executor**: Glob patterns for Executor definitions.
 

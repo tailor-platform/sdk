@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import ml from "multiline-ts";
 import { type ITransformer } from "@/cli/bundler";
 import { type TailorField } from "@/configure/types/type";
-import { type Resolver } from "@/parser/service/pipeline";
+import { type Resolver } from "@/parser/service/resolver";
 
 export class CodeTransformer implements ITransformer {
   constructor() {}

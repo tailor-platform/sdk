@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { t } from "@/configure/types";
-import { createResolver } from "../pipeline";
+import { createResolver } from "../resolver";
 import { db } from "../tailordb";
 import { createExecutor } from "./executor";
 import {

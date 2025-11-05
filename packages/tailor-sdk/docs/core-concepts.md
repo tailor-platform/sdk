@@ -278,9 +278,9 @@ db.type("User", {
 
 Following the secure-by-default principle, all operations are denied if permissions are not configured.
 
-### Pipeline Concepts
+### Resolver Concepts
 
-Define Pipeline Resolvers in files matching glob patterns specified in `tailor.config.ts`.
+Define Resolvers in files matching glob patterns specified in `tailor.config.ts`.
 
 #### Resolver Creation
 
@@ -413,7 +413,7 @@ scheduleTrigger("0 * * * *", "Asia/Tokyo");
 incomingWebhookTrigger<WebhookPayload>();
 ```
 
-**Resolver Executed Trigger** - Fires when a pipeline resolver is executed:
+**Resolver Executed Trigger** - Fires when a resolver is executed:
 
 ```typescript
 resolverExecutedTrigger(

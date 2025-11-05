@@ -19,11 +19,11 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type Application } from "@/cli/application";
-import { type PipelineResolverService } from "@/cli/application/pipeline/service";
+import { type ResolverService } from "@/cli/application/resolver/service";
 import { getDistDir } from "@/configure/config";
 import { type Executor } from "@/configure/services/executor/types";
 import { tailorUserMap } from "@/configure/types";
-import { type Resolver, type TailorField } from "@/parser/service/pipeline";
+import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet } from ".";
@@ -84,9 +84,9 @@ export async function planPipeline(
   workspaceId: string,
   application: Readonly<Application>,
 ) {
-  const pipelines: Readonly<PipelineResolverService>[] = [];
+  const pipelines: Readonly<ResolverService>[] = [];
   for (const app of application.applications) {
-    for (const pipeline of app.pipelineResolverServices) {
+    for (const pipeline of app.resolverServices) {
       await pipeline.loadResolvers();
       pipelines.push(pipeline);
     }
@@ -131,7 +131,7 @@ type DeleteService = {
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  pipelines: ReadonlyArray<Readonly<PipelineResolverService>>,
+  pipelines: ReadonlyArray<Readonly<ResolverService>>,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Pipeline services");
@@ -214,7 +214,7 @@ type ServiceDeleted = {
 async function planResolvers(
   client: OperatorClient,
   workspaceId: string,
-  pipelines: ReadonlyArray<Readonly<PipelineResolverService>>,
+  pipelines: ReadonlyArray<Readonly<ResolverService>>,
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
 ) {

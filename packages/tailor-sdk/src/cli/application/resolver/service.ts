@@ -1,15 +1,15 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { type PipelineResolverServiceConfig } from "@/configure/services/pipeline/types";
-import { type Resolver, ResolverSchema } from "@/parser/service/pipeline";
+import { type ResolverServiceConfig } from "@/configure/services/resolver/types";
+import { type Resolver, ResolverSchema } from "@/parser/service/resolver";
 
-export class PipelineResolverService {
+export class ResolverService {
   private resolvers: Record<string, Resolver> = {};
 
   constructor(
     public readonly namespace: string,
-    public readonly config: PipelineResolverServiceConfig,
+    public readonly config: ResolverServiceConfig,
   ) {}
 
   async loadResolvers(): Promise<void> {

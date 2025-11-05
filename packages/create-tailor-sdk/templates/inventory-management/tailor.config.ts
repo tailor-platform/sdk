@@ -8,7 +8,7 @@ import { user } from "./src/db/user";
 export default defineConfig({
   name: "inventory-management",
   db: { "main-db": { files: [`./src/db/*.ts`] } },
-  pipeline: { "main-pipeline": { files: [`./src/pipeline/*.ts`] } },
+  resolver: { "main-resolver": { files: [`./src/pipeline/*.ts`] } },
   auth: defineAuth("main-auth", {
     userProfile: {
       type: user,

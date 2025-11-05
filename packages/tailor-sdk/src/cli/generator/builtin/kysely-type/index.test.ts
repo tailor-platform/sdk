@@ -262,7 +262,7 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
               types: processedTypes,
             },
           ],
-          pipeline: [],
+          resolver: [],
         },
       ];
       const result = kyselyGenerator.aggregate({
@@ -305,7 +305,7 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
               types: processedTypes,
             },
           ],
-          pipeline: [],
+          resolver: [],
         },
       ];
       const result = kyselyGenerator.aggregate({

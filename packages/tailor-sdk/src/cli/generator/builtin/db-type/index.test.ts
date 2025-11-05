@@ -80,7 +80,7 @@ describe("DbTypeGenerator", () => {
             types: "export type User = { id: string; }",
           },
         ],
-        pipeline: [],
+        resolver: [],
       },
     ];
 
@@ -111,7 +111,7 @@ describe("DbTypeGenerator", () => {
             types: "export type Product = { id: string; }",
           },
         ],
-        pipeline: [],
+        resolver: [],
       },
       {
         applicationNamespace: "app2",
@@ -121,7 +121,7 @@ describe("DbTypeGenerator", () => {
             types: "export type Order = { id: string; }",
           },
         ],
-        pipeline: [],
+        resolver: [],
       },
     ];
 

@@ -7,7 +7,7 @@ import { createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {
   const [client, workspaceId] = createOperatorClient();
-  const namespaceName = "my-pipeline";
+  const namespaceName = "my-resolver";
 
   test("service applied", async () => {
     const { pipelineServices } = await client.listPipelineServices({
@@ -294,7 +294,7 @@ describe("dataplane", () => {
 
     test("verify userInfo resolver has field descriptions", async () => {
       const [client, workspaceId] = createOperatorClient();
-      const namespaceName = "my-pipeline";
+      const namespaceName = "my-resolver";
       const { pipelineResolvers } = await client.listPipelineResolvers({
         workspaceId,
         namespaceName,

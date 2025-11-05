@@ -3,8 +3,8 @@ import { defineApplication } from "@/cli/application";
 import { Bundler, type BundlerConfig } from "@/cli/bundler";
 import { ExecutorLoader } from "@/cli/bundler/executor/loader";
 import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";
-import { ResolverLoader } from "@/cli/bundler/pipeline/loader";
-import { CodeTransformer } from "@/cli/bundler/pipeline/transformer";
+import { ResolverLoader } from "@/cli/bundler/resolver/loader";
+import { CodeTransformer } from "@/cli/bundler/resolver/transformer";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
@@ -14,14 +14,14 @@ import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
-import { applyPipeline, planPipeline } from "./services/pipeline";
+import { applyPipeline, planPipeline } from "./services/resolver";
 import {
   applyStaticWebsite,
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import type { Executor } from "@/configure/services/executor/types";
-import type { Resolver } from "@/parser/service/pipeline";
+import type { Resolver } from "@/parser/service/resolver";
 
 export type ApplyOptions = {
   workspaceId?: string;
@@ -43,7 +43,7 @@ export async function apply(configPath: string, options: ApplyOptions = {}) {
 
   // Build functions
   for (const app of application.applications) {
-    for (const pipeline of app.pipelineResolverServices) {
+    for (const pipeline of app.resolverServices) {
       await buildPipeline(pipeline.namespace, pipeline.config);
     }
   }

@@ -5,7 +5,7 @@ export {
   type TailorTypePermission,
   type TailorTypeGqlPermission,
 } from "./tailordb";
-export * from "./pipeline";
+export * from "./resolver";
 export * from "./executor";
 export * from "./staticwebsite";
 export * from "./idp";

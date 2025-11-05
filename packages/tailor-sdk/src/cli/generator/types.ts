@@ -1,5 +1,5 @@
 import { type Executor } from "@/configure/services/executor/types";
-import { type Resolver } from "@/parser/service/pipeline";
+import { type Resolver } from "@/parser/service/resolver";
 import type { CodeGeneratorBase } from "@/parser/generator-config";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
@@ -20,8 +20,8 @@ export interface TailorDBNamespaceResult<T> {
   types: T;
 }
 
-// Namespace results for Pipeline
-export interface PipelineNamespaceResult<R> {
+// Namespace results for Resolver
+export interface ResolverNamespaceResult<R> {
   namespace: string;
   resolvers: R;
 }
@@ -30,7 +30,7 @@ export interface PipelineNamespaceResult<R> {
 export interface GeneratorInput<T, R> {
   applicationNamespace: string;
   tailordb: TailorDBNamespaceResult<T>[];
-  pipeline: PipelineNamespaceResult<R>[];
+  resolver: ResolverNamespaceResult<R>[];
 }
 
 // CodeGenerator interface implements the base type from parser
@@ -61,7 +61,7 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
     types: Record<string, T>;
   }): Ts | Promise<Ts>;
 
-  processPipelineNamespace?(args: {
+  processResolverNamespace?(args: {
     applicationNamespace: string;
     namespace: string;
     resolvers: Record<string, R>;

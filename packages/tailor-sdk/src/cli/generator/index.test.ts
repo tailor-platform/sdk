@@ -13,10 +13,10 @@ import {
 import { TailorDBService } from "@/cli/application/tailordb/service";
 import { GeneratorConfigSchema } from "@/cli/config-loader";
 import { KyselyGenerator } from "@/cli/generator/builtin/kysely-type";
-import { createResolver } from "@/configure/services/pipeline/resolver";
+import { createResolver } from "@/configure/services/resolver/resolver";
 import { db, type TailorDBType } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types";
-import { type Resolver } from "@/parser/service/pipeline";
+import { type Resolver } from "@/parser/service/resolver";
 import { DependencyWatcher } from "./watch";
 import { GenerationManager } from "./index";
 import type { AppConfig } from "@/configure/config";
@@ -66,7 +66,7 @@ class TestGenerator {
     return { processed: true, count: Object.keys(args.types).length };
   }
 
-  async processPipelineNamespace(args: {
+  async processResolverNamespace(args: {
     applicationNamespace: string;
     namespace: string;
     resolvers: Record<string, any>;
@@ -107,7 +107,7 @@ describe("GenerationManager", () => {
     mockConfig = {
       name: "testApp",
       db: { main: { files: ["src/types/*.ts"] } },
-      pipeline: { main: { files: ["src/resolvers/*.ts"] } },
+      resolver: { main: { files: ["src/resolvers/*.ts"] } },
       auth: { namespace: "test-auth" },
     } as any;
 
@@ -194,7 +194,7 @@ describe("GenerationManager", () => {
           tailordbNamespaces: {
             "test-namespace": service.getTypes(),
           },
-          pipelineNamespaces: {
+          resolverNamespaces: {
             "test-namespace": {
               testResolver: createResolver({
                 name: "testResolver",
@@ -273,7 +273,7 @@ describe("GenerationManager", () => {
           tailordbNamespaces: {
             "test-namespace": service.getTypes(),
           },
-          pipelineNamespaces: {
+          resolverNamespaces: {
             "test-namespace": {
               testResolver: createResolver({
                 name: "testResolver",
@@ -296,16 +296,16 @@ describe("GenerationManager", () => {
         manager,
         "processTailorDBNamespace",
       );
-      const processPipelineNamespaceSpy = vi.spyOn(
+      const processResolverNamespaceSpy = vi.spyOn(
         manager,
-        "processPipelineNamespace",
+        "processResolverNamespace",
       );
       const aggregateSpy = vi.spyOn(manager, "aggregate");
 
       await manager.processGenerator(testGenerator);
 
       expect(processTailorDBNamespaceSpy).toHaveBeenCalled();
-      expect(processPipelineNamespaceSpy).toHaveBeenCalled();
+      expect(processResolverNamespaceSpy).toHaveBeenCalled();
       expect(aggregateSpy).toHaveBeenCalledWith(testGenerator);
     });
 
@@ -331,9 +331,9 @@ describe("GenerationManager", () => {
           application: {
             "test-app": {
               tailordbResults: {},
-              pipelineResults: {},
+              resolverResults: {},
               tailordbNamespaceResults: {},
-              pipelineNamespaceResults: {},
+              resolverNamespaceResults: {},
             },
           },
           executorResults: {},
@@ -385,7 +385,7 @@ describe("GenerationManager", () => {
     });
   });
 
-  describe("processPipelineNamespace", () => {
+  describe("processResolverNamespace", () => {
     let testGenerator: TestGenerator;
 
     beforeEach(() => {
@@ -395,9 +395,9 @@ describe("GenerationManager", () => {
           application: {
             "test-app": {
               tailordbResults: {},
-              pipelineResults: {},
+              resolverResults: {},
               tailordbNamespaceResults: {},
-              pipelineNamespaceResults: {},
+              resolverNamespaceResults: {},
             },
           },
           executorResults: {},
@@ -424,7 +424,7 @@ describe("GenerationManager", () => {
         }),
       };
 
-      await manager.processPipelineNamespace(
+      await manager.processResolverNamespace(
         testGenerator,
         "test-app",
         "test-namespace",
@@ -434,12 +434,12 @@ describe("GenerationManager", () => {
       expect(processResolverSpy).toHaveBeenCalledTimes(2);
       expect(
         manager.generatorResults[testGenerator.id].application["test-app"]
-          .pipelineResults["test-namespace"],
+          .resolverResults["test-namespace"],
       ).toBeDefined();
       expect(
         Object.keys(
           manager.generatorResults[testGenerator.id].application["test-app"]
-            .pipelineResults["test-namespace"],
+            .resolverResults["test-namespace"],
         ),
       ).toHaveLength(2);
     });
@@ -455,11 +455,11 @@ describe("GenerationManager", () => {
           application: {
             "test-app": {
               tailordbResults: {},
-              pipelineResults: {},
+              resolverResults: {},
               tailordbNamespaceResults: {
                 "test-namespace": { types: "processed" },
               },
-              pipelineNamespaceResults: {
+              resolverNamespaceResults: {
                 "test-namespace": { resolvers: "processed" },
               },
             },
@@ -484,7 +484,7 @@ describe("GenerationManager", () => {
                 types: { types: "processed" },
               },
             ],
-            pipeline: [
+            resolver: [
               {
                 namespace: "test-namespace",
                 resolvers: { resolvers: "processed" },
@@ -524,9 +524,9 @@ describe("GenerationManager", () => {
           application: {
             "test-app": {
               tailordbResults: {},
-              pipelineResults: {},
+              resolverResults: {},
               tailordbNamespaceResults: {},
-              pipelineNamespaceResults: {},
+              resolverNamespaceResults: {},
             },
           },
           executorResults: {},
@@ -558,9 +558,9 @@ describe("GenerationManager", () => {
           application: {
             "test-app": {
               tailordbResults: {},
-              pipelineResults: {},
+              resolverResults: {},
               tailordbNamespaceResults: {},
-              pipelineNamespaceResults: {},
+              resolverNamespaceResults: {},
             },
           },
           executorResults: {},
@@ -600,11 +600,11 @@ describe("GenerationManager", () => {
       );
     });
 
-    it("Pipelineサービス用の監視グループを追加", async () => {
+    it("Resolverサービス用の監視グループを追加", async () => {
       await manager.watch();
 
       expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith(
-        "Pipeline__testApp__main",
+        "Resolver__testApp__main",
         ["src/resolvers/*.ts"],
         expect.any(Function),
       );
@@ -631,7 +631,7 @@ describe("GenerationManager", () => {
           tailordbNamespaces: {
             main: service.getTypes(),
           },
-          pipelineNamespaces: {
+          resolverNamespaces: {
             main: {
               testResolver: createResolver({
                 name: "testResolver",
@@ -651,9 +651,9 @@ describe("GenerationManager", () => {
           application: {
             testApp: {
               tailordbResults: {},
-              pipelineResults: {},
+              resolverResults: {},
               tailordbNamespaceResults: {},
-              pipelineNamespaceResults: {},
+              resolverNamespaceResults: {},
             },
           },
           executorResults: {},
@@ -726,7 +726,7 @@ describe("Integration Tests", () => {
           files: [path.join(tempDir, "types/*.ts")],
         },
       },
-      pipeline: {
+      resolver: {
         main: {
           files: [path.join(tempDir, "resolvers/*.ts")],
         },
@@ -794,7 +794,7 @@ describe("Integration Tests", () => {
           const appName = `test-app-${appIdx}`;
           manager.applications[appName] = {
             tailordbNamespaces: {},
-            pipelineNamespaces: {},
+            resolverNamespaces: {},
           };
 
           // Add multiple namespaces per app
@@ -822,11 +822,11 @@ describe("Integration Tests", () => {
                 service.getTypes();
 
               // Add resolvers to namespace
-              manager.applications[appName].pipelineNamespaces[namespace] = {};
+              manager.applications[appName].resolverNamespaces[namespace] = {};
               Array(10)
                 .fill(0)
                 .forEach((_, resolverIdx) => {
-                  manager.applications[appName].pipelineNamespaces[namespace][
+                  manager.applications[appName].resolverNamespaces[namespace][
                     `resolver${appIdx}_${nsIdx}_${resolverIdx}`
                   ] = createResolver({
                     name: `resolver${appIdx}_${nsIdx}_${resolverIdx}`,

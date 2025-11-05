@@ -11,5 +11,5 @@ export type {
   GeneratorResult,
 } from "./generator/types";
 export type { ParsedTailorDBType as TailorDBType } from "@/parser/service/tailordb/types";
-export type { Resolver } from "@/parser/service/pipeline/index";
+export type { Resolver } from "@/parser/service/resolver/index";
 export type { Executor } from "@/configure/services/executor/types";

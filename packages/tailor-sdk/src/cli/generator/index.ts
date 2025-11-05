@@ -7,13 +7,13 @@ import {
   type CodeGenerator,
   type GeneratorInput,
   type TailorDBNamespaceResult,
-  type PipelineNamespaceResult,
+  type ResolverNamespaceResult,
 } from "@/cli/generator/types";
 import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir, type AppConfig } from "@/configure/config";
 import { type Executor } from "@/configure/services/executor/types";
 import { type Generator } from "@/parser/generator-config";
-import { type Resolver } from "@/parser/service/pipeline";
+import { type Resolver } from "@/parser/service/resolver";
 import { commonArgs, withCommonArgs } from "../args";
 import { DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
@@ -27,7 +27,7 @@ export class GenerationManager {
     string,
     {
       tailordbNamespaces: Record<string, Record<string, ParsedTailorDBType>>;
-      pipelineNamespaces: Record<string, Record<string, Resolver>>;
+      resolverNamespaces: Record<string, Record<string, Resolver>>;
     }
   > = {};
   private executors: Record<string, Executor> = {};
@@ -50,7 +50,7 @@ export class GenerationManager {
       const appNamespace = app.name;
       this.applications[appNamespace] = {
         tailordbNamespaces: {},
-        pipelineNamespaces: {},
+        resolverNamespaces: {},
       };
 
       for (const db of app.tailorDBServices) {
@@ -70,22 +70,22 @@ export class GenerationManager {
         }
       }
 
-      // Pipeline services
-      for (const pipelineService of app.pipelineResolverServices) {
-        const namespace = pipelineService.namespace;
+      // Resolver services
+      for (const resolverService of app.resolverServices) {
+        const namespace = resolverService.namespace;
         try {
-          await pipelineService.loadResolvers();
-          this.applications[appNamespace].pipelineNamespaces[namespace] = {};
-          Object.entries(pipelineService.getResolvers()).forEach(
+          await resolverService.loadResolvers();
+          this.applications[appNamespace].resolverNamespaces[namespace] = {};
+          Object.entries(resolverService.getResolvers()).forEach(
             ([_, resolver]) => {
-              this.applications[appNamespace].pipelineNamespaces[namespace][
+              this.applications[appNamespace].resolverNamespaces[namespace][
                 resolver.name
               ] = resolver;
             },
           );
         } catch (error) {
           console.error(
-            `Error loading resolvers for Pipeline service ${namespace}:`,
+            `Error loading resolvers for Resolver service ${namespace}:`,
             error,
           );
           if (!options.watch) {
@@ -120,12 +120,12 @@ export class GenerationManager {
             /* namespace */ string,
             Record</* type */ string, any>
           >;
-          pipelineResults: Record<
+          resolverResults: Record<
             /* namespace */ string,
             Record</* resolver */ string, any>
           >;
           tailordbNamespaceResults: Record</* namespace */ string, any>;
-          pipelineNamespaceResults: Record</* namespace */ string, any>;
+          resolverNamespaceResults: Record</* namespace */ string, any>;
         }
       >;
       executorResults: Record</* executor */ string, any>;
@@ -149,9 +149,9 @@ export class GenerationManager {
       for (const [appNamespace, appData] of Object.entries(this.applications)) {
         this.generatorResults[gen.id].application[appNamespace] = {
           tailordbResults: {},
-          pipelineResults: {},
+          resolverResults: {},
           tailordbNamespaceResults: {},
-          pipelineNamespaceResults: {},
+          resolverNamespaceResults: {},
         };
 
         for (const [namespace, types] of Object.entries(
@@ -165,11 +165,11 @@ export class GenerationManager {
           );
         }
 
-        // Process Pipeline namespaces
+        // Process Resolver namespaces
         for (const [namespace, resolvers] of Object.entries(
-          appData.pipelineNamespaces,
+          appData.resolverNamespaces,
         )) {
-          await this.processPipelineNamespace(
+          await this.processResolverNamespace(
             gen,
             appNamespace,
             namespace,
@@ -235,20 +235,20 @@ export class GenerationManager {
     }
   }
 
-  async processPipelineNamespace(
+  async processResolverNamespace(
     gen: CodeGenerator,
     appNamespace: string,
     namespace: string,
     resolvers: Record<string, Resolver>,
   ) {
     const results = this.generatorResults[gen.id].application[appNamespace];
-    results.pipelineResults[namespace] = {};
+    results.resolverResults[namespace] = {};
 
     // Process individual resolvers
     await Promise.allSettled(
       Object.entries(resolvers).map(async ([resolverName, resolver]) => {
         try {
-          results.pipelineResults[namespace][resolverName] =
+          results.resolverResults[namespace][resolverName] =
             await gen.processResolver({
               resolver,
               applicationNamespace: appNamespace,
@@ -264,23 +264,23 @@ export class GenerationManager {
     );
 
     // Process namespace summary if available
-    if (gen.processPipelineNamespace) {
+    if (gen.processResolverNamespace) {
       try {
-        results.pipelineNamespaceResults[namespace] =
-          await gen.processPipelineNamespace({
+        results.resolverNamespaceResults[namespace] =
+          await gen.processResolverNamespace({
             applicationNamespace: appNamespace,
             namespace,
-            resolvers: results.pipelineResults[namespace],
+            resolvers: results.resolverResults[namespace],
           });
       } catch (error) {
         console.error(
-          `Error processing Pipeline namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
+          `Error processing Resolver namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
           error,
         );
       }
     } else {
-      results.pipelineNamespaceResults[namespace] =
-        results.pipelineResults[namespace];
+      results.resolverNamespaceResults[namespace] =
+        results.resolverResults[namespace];
     }
   }
 
@@ -311,7 +311,7 @@ export class GenerationManager {
       this.generatorResults[gen.id].application,
     )) {
       const tailordbResults: TailorDBNamespaceResult<any>[] = [];
-      const pipelineResults: PipelineNamespaceResult<any>[] = [];
+      const resolverResults: ResolverNamespaceResult<any>[] = [];
 
       // Collect TailorDB namespace results
       for (const [namespace, types] of Object.entries(
@@ -323,11 +323,11 @@ export class GenerationManager {
         });
       }
 
-      // Collect Pipeline namespace results
+      // Collect Resolver namespace results
       for (const [namespace, resolvers] of Object.entries(
-        results.pipelineNamespaceResults,
+        results.resolverNamespaceResults,
       )) {
-        pipelineResults.push({
+        resolverResults.push({
           namespace,
           resolvers,
         });
@@ -336,7 +336,7 @@ export class GenerationManager {
       inputs.push({
         applicationNamespace: appNamespace,
         tailordb: tailordbResults,
-        pipeline: pipelineResults,
+        resolver: resolverResults,
       });
     }
     // executor: Object.values(results.executorResults),
@@ -428,23 +428,23 @@ export class GenerationManager {
         );
       }
 
-      // Watch Pipeline services
-      for (const pipeline of app.pipelineResolverServices) {
-        const pipelineNamespace = pipeline.namespace;
+      // Watch Resolver services
+      for (const resolverService of app.resolverServices) {
+        const resolverNamespace = resolverService.namespace;
         this.watcher?.addWatchGroup(
-          `Pipeline__${appNamespace}__${pipelineNamespace}`,
-          pipeline["config"].files,
+          `Resolver__${appNamespace}__${resolverNamespace}`,
+          resolverService["config"].files,
           async ({ timestamp }, { affectedFiles }) => {
             try {
               // Reload affected resolvers
               for (const file of affectedFiles) {
                 try {
-                  const resolver = await pipeline.loadResolverForFile(
+                  const resolver = await resolverService.loadResolverForFile(
                     file,
                     timestamp,
                   );
-                  this.applications[appNamespace].pipelineNamespaces[
-                    pipelineNamespace
+                  this.applications[appNamespace].resolverNamespaces[
+                    resolverNamespace
                   ][resolver.name] = resolver;
                 } catch (error) {
                   console.error(
@@ -458,19 +458,19 @@ export class GenerationManager {
 
               // Process with all generators
               for (const gen of this.generators) {
-                await this.processPipelineNamespace(
+                await this.processResolverNamespace(
                   gen,
                   appNamespace,
-                  pipelineNamespace,
-                  this.applications[appNamespace].pipelineNamespaces[
-                    pipelineNamespace
+                  resolverNamespace,
+                  this.applications[appNamespace].resolverNamespaces[
+                    resolverNamespace
                   ],
                 );
                 await this.aggregate(gen);
               }
             } catch (error) {
               console.error(
-                `Error processing Pipeline changes for ${appNamespace}/${pipelineNamespace}:`,
+                `Error processing Resolver changes for ${appNamespace}/${resolverNamespace}:`,
                 error,
               );
             }

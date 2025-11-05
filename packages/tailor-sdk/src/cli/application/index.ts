@@ -1,11 +1,11 @@
 import { AuthService } from "@/cli/application/auth/service";
 import { ExecutorService } from "@/cli/application/executor/service";
-import { PipelineResolverService } from "@/cli/application/pipeline/service";
+import { ResolverService } from "@/cli/application/resolver/service";
 import { TailorDBService } from "@/cli/application/tailordb/service";
 import { type AppConfig } from "@/configure/config";
 import { type AuthConfig } from "@/configure/services/auth";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
-import { type PipelineResolverServiceInput } from "@/configure/services/pipeline/types";
+import { type ResolverServiceInput } from "@/configure/services/resolver/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { IdPSchema, type IdP, type IdPInput } from "@/parser/service/idp";
 import {
@@ -16,7 +16,7 @@ import {
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
-  private _pipelineResolverServices: PipelineResolverService[] = [];
+  private _resolverServices: ResolverService[] = [];
   private _idpServices: IdP[] = [];
   private _authService?: AuthService = undefined;
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
@@ -40,9 +40,8 @@ export class Application {
     return this._tailorDBServices as ReadonlyArray<TailorDBService>;
   }
 
-  get pipelineResolverServices() {
-    return this
-      ._pipelineResolverServices as ReadonlyArray<PipelineResolverService>;
+  get resolverServices() {
+    return this._resolverServices as ReadonlyArray<ResolverService>;
   }
 
   get idpServices() {
@@ -77,18 +76,15 @@ export class Application {
     }
   }
 
-  definePipeline(config?: PipelineResolverServiceInput) {
+  defineResolver(config?: ResolverServiceInput) {
     if (!config) {
       return;
     }
 
     for (const [namespace, serviceConfig] of Object.entries(config)) {
-      const pipelineService = new PipelineResolverService(
-        namespace,
-        serviceConfig,
-      );
-      this._pipelineResolverServices.push(pipelineService);
-      this.addSubgraph("pipeline", pipelineService.namespace);
+      const resolverService = new ResolverService(namespace, serviceConfig);
+      this._resolverServices.push(resolverService);
+      this.addSubgraph("pipeline", resolverService.namespace);
     }
   }
 
@@ -140,7 +136,7 @@ export class Application {
 export function defineApplication(config: AppConfig) {
   const app = new Application(config.name, config);
   app.defineTailorDB(config.db);
-  app.definePipeline(config.pipeline);
+  app.defineResolver(config.resolver);
   app.defineIdp(config.idp);
   app.defineAuth(config.auth);
   app.defineExecutor(config.executor);

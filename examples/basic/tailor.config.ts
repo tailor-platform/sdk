@@ -49,8 +49,8 @@ export default defineConfig({
   db: {
     tailordb: { files: ["./tailordb/*.ts"] },
   },
-  pipeline: {
-    "my-pipeline": { files: ["./resolvers/*.ts"] },
+  resolver: {
+    "my-resolver": { files: ["./resolvers/*.ts"] },
   },
   idp: [idp],
   auth,

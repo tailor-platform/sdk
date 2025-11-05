@@ -32,7 +32,7 @@ export const CodeGeneratorSchema = z.object({
   processResolver: z.function(),
   processExecutor: z.function(),
   processTailorDBNamespace: z.function().optional(),
-  processPipelineNamespace: z.function().optional(),
+  processResolverNamespace: z.function().optional(),
   aggregate: z.function({ output: z.any() }),
 });
 

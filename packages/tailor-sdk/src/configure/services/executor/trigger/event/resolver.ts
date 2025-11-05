@@ -1,7 +1,7 @@
 import { type output } from "@/configure/types/helpers";
 import { type ConditionArgs, type RecordTriggerCondition } from "./types";
 import type { EventTrigger, WithArgs } from "../../types";
-import type { ResolverConfig } from "@/configure/services/pipeline/resolver";
+import type { ResolverConfig } from "@/configure/services/resolver/resolver";
 
 type ResolverTriggerConditionArgs<R extends ResolverConfig> = ConditionArgs & {
   resolverName: string;

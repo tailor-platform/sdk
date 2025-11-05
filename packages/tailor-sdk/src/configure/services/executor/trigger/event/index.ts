@@ -1,2 +1,2 @@
-export * from "./pipeline";
+export * from "./resolver";
 export * from "./tailordb";

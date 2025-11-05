@@ -47,7 +47,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 │   ├── tailor-sdk/          # Core SDK package
 │   │   ├── src/
 │   │   │   ├── configure/   # SDK user-facing APIs (minimal implementation)
-│   │   │   │   ├── services/    # tailordb, pipeline, executor, auth, idp, staticwebsite
+│   │   │   │   ├── services/    # tailordb, resolver, executor, auth, idp, staticwebsite
 │   │   │   │   ├── types/       # Type system and helpers
 │   │   │   │   ├── config.ts
 │   │   │   │   └── application.ts
@@ -75,7 +75,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Use `db.fields.timestamps()` for automatic timestamp fields
    - Relations are defined with `.relation()` method
 
-2. **Pipeline Resolvers** (`src/configure/services/pipeline/`)
+2. **Resolvers** (`src/configure/services/resolver/`)
    - Create GraphQL resolvers using `createResolver`
    - Define resolver configuration with `name`, `operation` (query/mutation), `input`, `body`, and `output`
    - The `body` function receives a context object with `input` and `user` properties
@@ -164,8 +164,8 @@ export default defineConfig({
   db: {
     tailordb: { files: ["./tailordb/*.ts"] },
   },
-  pipeline: {
-    "my-pipeline": { files: ["./resolvers/**/resolver.ts"] },
+  resolver: {
+    "my-resolver": { files: ["./resolvers/**/resolver.ts"] },
   },
   idp: [idp],
   auth,

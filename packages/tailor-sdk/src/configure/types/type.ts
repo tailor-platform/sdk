@@ -13,7 +13,7 @@ import {
 } from "./types";
 import type { Prettify, InferFieldsOutput } from "./helpers";
 import type { FieldValidateInput } from "./validation";
-import type { TailorFieldInput } from "@/parser/service/pipeline/types";
+import type { TailorFieldInput } from "@/parser/service/resolver/types";
 
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,

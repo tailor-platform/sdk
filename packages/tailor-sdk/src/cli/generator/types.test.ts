@@ -28,12 +28,12 @@ describe("Generator type compatibility", () => {
 
   it("CodeGenerator optional methods are optional functions", () => {
     type ProcessTailorDBNamespace = CodeGenerator["processTailorDBNamespace"];
-    type ProcessPipelineNamespace = CodeGenerator["processPipelineNamespace"];
+    type ProcessResolverNamespace = CodeGenerator["processResolverNamespace"];
 
     expectTypeOf<ProcessTailorDBNamespace>().toExtend<
       ((...args: any[]) => any) | undefined
     >();
-    expectTypeOf<ProcessPipelineNamespace>().toExtend<
+    expectTypeOf<ProcessResolverNamespace>().toExtend<
       ((...args: any[]) => any) | undefined
     >();
   });
