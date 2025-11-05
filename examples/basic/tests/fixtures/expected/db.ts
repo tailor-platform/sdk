@@ -2,7 +2,9 @@ import { type ColumnType, Kysely } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
-type Generated<T> = ColumnType<T, T | undefined, T>;
+type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 type Serial<T = string | number> = ColumnType<T, never, never>;
 
 interface Namespace {
@@ -16,7 +18,7 @@ interface Namespace {
       postalCode: string;
       address: string | null;
       city: string | null;
-      fullAddress: Generated<string | null>;
+      fullAddress: Generated<string>;
       state: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;

@@ -60,6 +60,7 @@ export interface FieldMetadata {
   array?: boolean;
   allowedValues?: AllowedValue[];
   validate?: FieldValidateInput<any>[];
+  typeName?: string;
 }
 
 export interface DefinedFieldMetadata {
@@ -67,6 +68,7 @@ export interface DefinedFieldMetadata {
   array: boolean;
   description?: boolean;
   validate?: boolean;
+  typeName?: boolean;
 }
 
 export type FieldOptions = {

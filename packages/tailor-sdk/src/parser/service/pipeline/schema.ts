@@ -34,6 +34,7 @@ export const FieldMetadataSchema = z.object({
       update: z.function().optional(),
     })
     .optional(),
+  typeName: z.string().optional(),
 });
 
 export const TailorFieldSchema = z.object({
@@ -44,16 +45,11 @@ export const TailorFieldSchema = z.object({
   },
 });
 
-export const TailorTypeSchema = z.object({
-  fields: z.record(z.string(), TailorFieldSchema),
-  _description: z.string().optional(),
-});
-
 export const ResolverSchema = z.object({
   operation: QueryTypeSchema,
   name: z.string(),
   description: z.string().optional(),
-  input: TailorTypeSchema.optional(),
+  input: z.record(z.string(), TailorFieldSchema).optional(),
   body: z.function(),
-  output: TailorTypeSchema,
+  output: TailorFieldSchema,
 });

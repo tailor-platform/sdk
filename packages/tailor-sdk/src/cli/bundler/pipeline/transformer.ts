@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import ml from "multiline-ts";
 import { type ITransformer } from "@/cli/bundler";
-import { type TailorType, type TailorField } from "@/configure/types/type";
+import { type TailorField } from "@/configure/types/type";
 import { type Resolver } from "@/parser/service/pipeline";
 
 export class CodeTransformer implements ITransformer {
@@ -22,11 +22,11 @@ export class CodeTransformer implements ITransformer {
 
     // Generate validation code for input fields
     const generateValidationCode = (
-      type: TailorType<any, any> | undefined,
+      type: Record<string, TailorField<any, any>> | undefined,
       dataPath: string,
       displayPath: string,
     ): string => {
-      if (!type || !type.fields) {
+      if (!type) {
         return "";
       }
 
@@ -86,7 +86,7 @@ export class CodeTransformer implements ITransformer {
         }
       };
 
-      processFields(type.fields, dataPath, displayPath);
+      processFields(type, dataPath, displayPath);
 
       validationCode.push(ml /* js */ `
         if (validationErrors.length > 0) {
@@ -98,7 +98,7 @@ export class CodeTransformer implements ITransformer {
     };
 
     const inputValidationCode = generateValidationCode(
-      resolver.input as TailorType<any, any> | undefined,
+      resolver.input as Record<string, TailorField<any, any>> | undefined,
       "context.input",
       "input",
     );

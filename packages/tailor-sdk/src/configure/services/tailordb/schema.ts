@@ -5,7 +5,7 @@ import {
   type AllowedValuesOutput,
 } from "@/configure/types/field";
 import { type OperatorFieldConfig } from "@/configure/types/operator";
-import { TailorField, TailorType } from "@/configure/types/type";
+import { TailorField } from "@/configure/types/type";
 import {
   type FieldOptions,
   type FieldOutput,
@@ -82,8 +82,8 @@ function isRelationSelfConfig(
   return config.toward.type === "self";
 }
 
-interface ReferenceConfig<T extends TailorDBType> {
-  type: TailorDBType;
+interface ReferenceConfig<T extends TailorDBType<any, any>> {
+  type: TailorDBType<any, any>;
   key: keyof T["fields"] & string;
   nameMap: [string | undefined, string];
 }
@@ -197,7 +197,7 @@ export class TailorDBField<
 
   relation<
     S extends RelationType,
-    T extends TailorDBType,
+    T extends TailorDBType<any, any>,
     CurrentDefined extends Defined,
   >(
     this: CurrentDefined extends { relation: unknown }
@@ -306,17 +306,25 @@ export class TailorDBField<
     >;
   }
 
-  hooks<CurrentDefined extends Defined>(
+  hooks<CurrentDefined extends Defined, const H extends Hook<unknown, Output>>(
     this: CurrentDefined extends { hooks: unknown }
       ? never
       : CurrentDefined extends { type: "nested" }
         ? never
         : TailorDBField<CurrentDefined, Output>,
-    hooks: Hook<unknown, Output>,
+    hooks: H,
   ) {
     this._metadata.hooks = hooks;
     return this as TailorDBField<
-      Prettify<CurrentDefined & { hooks: true; serial: false }>,
+      Prettify<
+        CurrentDefined & {
+          hooks?: {
+            create: H extends { create: unknown } ? true : false;
+            update: H extends { update: unknown } ? true : false;
+          };
+          serial: false;
+        }
+      >,
       Output
     >;
   }
@@ -346,9 +354,64 @@ export class TailorDBField<
   ) {
     (this as TailorDBField<CurrentDefined, Output>)._metadata.serial = config;
     return this as TailorDBField<
-      Prettify<CurrentDefined & { serial: true; hooks: false }>,
+      Prettify<
+        CurrentDefined & {
+          serial: true;
+          hooks: { create: false; update: false };
+        }
+      >,
       Output
     >;
+  }
+
+  /**
+   * Clone the field with optional overrides for field options
+   * @param options - Optional field options to override
+   * @returns A new TailorDBField instance with the same configuration
+   */
+  clone<const NewOpt extends FieldOptions>(
+    options?: NewOpt,
+  ): TailorDBField<
+    Prettify<
+      Omit<Defined, "array"> & {
+        array: NewOpt extends { array: true } ? true : Defined["array"];
+      }
+    >,
+    FieldOutput<TailorToTs[Defined["type"]], NewOpt>
+  > {
+    // Create a clone using Object.create to preserve prototype chain
+    const clonedField = Object.create(
+      Object.getPrototypeOf(this),
+    ) as TailorDBField<Defined, Output>;
+
+    // Copy all properties
+    Object.assign(clonedField, {
+      type: this.type,
+      fields: this.fields,
+      _defined: this._defined,
+      _output: this._output,
+    });
+
+    // Clone and merge metadata with new options
+    clonedField._metadata = { ...this._metadata };
+    if (options) {
+      if (options.optional !== undefined) {
+        clonedField._metadata.required = !options.optional;
+      }
+      if (options.array !== undefined) {
+        clonedField._metadata.array = options.array;
+      }
+    }
+
+    // Copy internal state
+    if (this._ref) {
+      clonedField._ref = clone(this._ref);
+    }
+    if (this._pendingSelfRelation) {
+      clonedField._pendingSelfRelation = { ...this._pendingSelfRelation };
+    }
+
+    return clonedField as TailorDBField<any, any>;
   }
 }
 
@@ -427,8 +490,11 @@ function object<
 export class TailorDBType<
   const Fields extends Record<string, TailorDBField<any, any>> = any,
   User extends object = InferredAttributeMap,
-> extends TailorType<Fields> {
-  public readonly referenced: Record<string, [TailorDBType, string]> = {};
+> {
+  public readonly _output = null as unknown as InferFieldsOutput<Fields>;
+  public _description?: string;
+  public readonly referenced: Record<string, [TailorDBType<any, any>, string]> =
+    {};
   private _settings: TypeFeatures = {};
   private _indexes: IndexDef<this>[] = [];
   private _permissions: Permissions = {};
@@ -439,8 +505,6 @@ export class TailorDBType<
     public readonly fields: Fields,
     options: { pluralForm?: string; description?: string },
   ) {
-    super(fields);
-
     this._description = options.description;
 
     if (options.pluralForm) {
@@ -457,7 +521,7 @@ export class TailorDBType<
       const f = field as unknown as {
         _pendingSelfRelation: PendingSelfRelation | undefined;
         _metadata: DBFieldMetadata;
-        _ref: ReferenceConfig<TailorDBType>;
+        _ref: ReferenceConfig<TailorDBType<any, any>>;
       };
       const pending = f._pendingSelfRelation;
       if (pending) {
@@ -594,7 +658,62 @@ export class TailorDBType<
     ret._permissions.gql = normalizeGqlPermission(permission);
     return ret;
   }
+
+  description(description: string) {
+    this._description = description;
+    return this;
+  }
+
+  /**
+   * Pick specific fields from the type
+   * @param keys - Array of field keys to pick
+   * @param options - Optional field options to apply to picked fields
+   * @returns An object containing only the specified fields
+   */
+  pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
+    keys: K[],
+    options: Opt,
+  ) {
+    const result = {} as Record<K, TailorDBField<any, any>>;
+    for (const key of keys) {
+      if (options) {
+        result[key] = this.fields[key].clone(options);
+      } else {
+        result[key] = this.fields[key];
+      }
+    }
+    return result as {
+      [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
+        ? TailorDBField<
+            Omit<D, "array"> & {
+              array: Opt extends { array: true } ? true : D["array"];
+            },
+            FieldOutput<TailorToTs[D["type"]], Opt>
+          >
+        : never;
+    };
+  }
+
+  /**
+   * Omit specific fields from the type
+   * @param keys - Array of field keys to omit
+   * @returns An object containing all fields except the specified ones
+   */
+  omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K> {
+    const keysSet = new Set(keys);
+    const result = {} as Record<string, TailorDBField<any, any>>;
+    for (const key in this.fields) {
+      if (
+        Object.hasOwn(this.fields, key) &&
+        !keysSet.has(key as unknown as K)
+      ) {
+        result[key] = this.fields[key];
+      }
+    }
+    return result as Omit<Fields, K>;
+  }
 }
+
 export type TailorDBInstance<
   Fields extends Record<string, TailorDBField<any, any>> = any,
   User extends object = InferredAttributeMap,

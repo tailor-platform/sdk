@@ -3,42 +3,20 @@ import { order } from "../db/order";
 import { orderItem } from "../db/orderItem";
 import { type DB, getDB } from "../generated/kysely-tailordb";
 
-const input = t
-  .type({
-    order: t
-      .object({
-        name: order.fields.name,
-        description: order.fields.description,
-        orderDate: order.fields.orderDate,
-        orderType: order.fields.orderType,
-        contactId: order.fields.contactId,
-      })
-      .description("Order information"),
-    items: t
-      .object(
-        {
-          productId: orderItem.fields.productId,
-          quantity: orderItem.fields.quantity,
-          unitPrice: orderItem.fields.unitPrice,
-        },
-        { array: true },
-      )
-      .description("Order items"),
-  })
-  .description("Input parameters for registering a new order");
-type Input = t.infer<typeof input>;
+const input = {
+  order: t.object(order.omitFields(["id", "createdAt"])),
+  items: t.object(orderItem.omitFields(["id", "createdAt"]), { array: true }),
+};
+interface Input {
+  order: t.infer<typeof input.order>;
+  items: t.infer<typeof input.items>;
+}
 
 const insertOrder = async (db: DB<"main-db">, input: Input) => {
   // Insert Order
   const order = await db
     .insertInto("Order")
-    .values({
-      name: input.order.name,
-      description: input.order.description,
-      orderDate: input.order.orderDate,
-      orderType: input.order.orderType,
-      contactId: input.order.contactId,
-    })
+    .values(input.order)
     .returning("id")
     .executeTakeFirstOrThrow();
 
@@ -47,10 +25,8 @@ const insertOrder = async (db: DB<"main-db">, input: Input) => {
     .insertInto("OrderItem")
     .values(
       input.items.map((item) => ({
+        ...item,
         orderId: order.id,
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
       })),
     )
     .execute();
@@ -115,7 +91,7 @@ export default createResolver({
     return { success: true };
   },
   output: t
-    .type({
+    .object({
       success: t
         .bool()
         .description("Whether the order was registered successfully"),

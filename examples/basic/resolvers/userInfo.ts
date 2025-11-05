@@ -2,6 +2,7 @@ import { createResolver, t } from "@tailor-platform/tailor-sdk";
 
 export default createResolver({
   name: "showUserInfo",
+  description: "Show current user information",
   operation: "query",
   body: (context) => {
     return {
@@ -12,7 +13,7 @@ export default createResolver({
     };
   },
   output: t
-    .type({
+    .object({
       id: t.string().description("User ID"),
       type: t.string().description("User type"),
       workspaceId: t.string().description("Workspace ID"),

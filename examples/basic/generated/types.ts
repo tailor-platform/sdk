@@ -7,7 +7,7 @@ export type Customer = {
   postalCode: string;
   address?: string | null;
   city?: string | null;
-  fullAddress?: string | null;
+  fullAddress: string;
   state: string;
   createdAt: Date;
   updatedAt?: Date | null;

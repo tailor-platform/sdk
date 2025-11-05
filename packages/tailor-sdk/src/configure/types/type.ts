@@ -13,26 +13,7 @@ import {
 } from "./types";
 import type { Prettify, InferFieldsOutput } from "./helpers";
 import type { FieldValidateInput } from "./validation";
-import type {
-  TailorFieldInput,
-  TailorTypeInput,
-} from "@/parser/service/pipeline/types";
-
-export class TailorType<
-  const F extends Record<string, TailorField<any, any, any>> = any,
-  Output = InferFieldsOutput<F>,
-> implements TailorTypeInput
-{
-  public readonly _output = null as unknown as Output;
-  public _description?: string;
-
-  constructor(public readonly fields: F) {}
-
-  description(description: string) {
-    this._description = description;
-    return this;
-  }
-}
+import type { TailorFieldInput } from "@/parser/service/pipeline/types";
 
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
@@ -92,6 +73,21 @@ export class TailorField<
     this._metadata.description = description;
     return this as TailorField<
       Prettify<CurrentDefined & { description: true }>,
+      Output
+    >;
+  }
+
+  typeName<CurrentDefined extends Defined>(
+    this: CurrentDefined extends { typeName: unknown }
+      ? never
+      : CurrentDefined extends { type: "enum" | "nested" }
+        ? TailorField<CurrentDefined, Output>
+        : never,
+    typeName: string,
+  ) {
+    this._metadata.typeName = typeName;
+    return this as TailorField<
+      Prettify<CurrentDefined & { typeName: true }>,
       Output
     >;
   }
@@ -182,14 +178,7 @@ function object<
   return objectField;
 }
 
-function tailorType<const F extends Record<string, TailorField<any>>>(
-  fields: F,
-): TailorType<F> {
-  return new TailorType<F>(fields);
-}
-
 export const t = {
-  type: tailorType,
   uuid,
   string,
   bool,

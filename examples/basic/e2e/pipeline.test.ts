@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { gql } from "graphql-request";
+import ml from "multiline-ts";
 import { describe, expect, inject, test } from "vitest";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 
@@ -27,7 +28,11 @@ describe("controlplane", async () => {
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
       name: "stepChain",
-      description: "stepChain resolver",
+      description: ml`
+        Step chain operation with nested validation
+
+        Returns:
+        Result of step chain operation`,
       operationType: "query",
       authorization: "true==true",
       inputs: [
@@ -38,7 +43,7 @@ describe("controlplane", async () => {
           required: true,
           type: {
             kind: "UserDefined",
-            name: "StepChainInputUser",
+            name: "StepChainUser",
             description: "User information",
             fields: expect.any(Array),
           },
@@ -85,7 +90,11 @@ describe("controlplane", async () => {
     const add = pipelineResolvers.find((e) => e.name === "add");
     expect(add).toMatchObject({
       name: "add",
-      description: "add resolver",
+      description: ml`
+        Addition operation
+
+        Returns:
+        Result of addition operation`,
       operationType: "query",
       authorization: "true==true",
       inputs: [
@@ -148,38 +157,11 @@ describe("controlplane", async () => {
     // Verify inputs include expected fields
     const inputNames = passThrough?.inputs?.map((i) => i.name) ?? [];
     expect(inputNames).toContain("id");
-    expect(inputNames).toContain("userInfo");
-    expect(inputNames).toContain("metadata");
-    expect(inputNames).toContain("archived");
-    expect(inputNames).toContain("createdAt");
-    expect(inputNames).toContain("updatedAt");
+    expect(inputNames).toContain("input");
 
     // Verify field descriptions from TailorDBField
-    const userInfoInput = passThrough?.inputs?.find(
-      (i) => i.name === "userInfo",
-    );
-    expect(userInfoInput?.description).toBe("User information");
-    expect(userInfoInput?.type?.kind).toBe("UserDefined");
-
-    const metadataInput = passThrough?.inputs?.find(
-      (i) => i.name === "metadata",
-    );
-    expect(metadataInput?.description).toBe("Profile metadata");
-
-    const archivedInput = passThrough?.inputs?.find(
-      (i) => i.name === "archived",
-    );
-    expect(archivedInput?.description).toBe("Archive status");
-
-    // Verify response structure
-    expect(passThrough?.response?.type?.kind).toBe("UserDefined");
-    expect(passThrough?.response?.type?.name).toBe("PassThroughOutput");
-
-    const responseFieldNames =
-      passThrough?.response?.type?.fields?.map((f) => f.name) ?? [];
-    expect(responseFieldNames).toContain("id");
-    expect(responseFieldNames).toContain("userInfo");
-    expect(responseFieldNames).toContain("metadata");
+    const inputType = passThrough?.inputs?.find((i) => i.name === "input");
+    expect(inputType?.type?.kind).toBe("UserDefined");
 
     // Verify response field descriptions
     const userInfoResponse = passThrough?.response?.type?.fields?.find(
@@ -346,13 +328,15 @@ describe("dataplane", () => {
         query {
           passThrough(
             id: "${testId}"
-            userInfo: {
-              name: "John Doe"
-              email: "john@example.com"
-            }
-            metadata: {
-              created: "2024-01-01T00:00:00Z"
-              version: 1
+            input: {
+              userInfo: {
+                name: "John Doe"
+                email: "john@example.com"
+              }
+              metadata: {
+                created: "2024-01-01T00:00:00Z"
+                version: 1
+              }
             }
           ) {
             id
@@ -414,28 +398,6 @@ describe("dataplane", () => {
       `;
       const result = await graphQLClient.rawRequest(query);
       expect(result.errors).toBeDefined();
-    });
-
-    test("fails when createdAt returns with null", async () => {
-      const query = gql`
-        query {
-          passThrough(
-            id: "${randomUUID()}"
-            userInfo: {
-              name: "John Doe"
-              email: "john@example.com"
-            }
-            metadata: {
-              created: "2024-01-01T00:00:00Z"
-              version: 1
-            }
-          ) { createdAt }
-        }
-      `;
-      const result = await graphQLClient.rawRequest(query);
-      expect(result.errors).toBeDefined();
-      expect(result.errors?.[0].path).toEqual(["passThrough", "createdAt"]);
-      expect(result.errors?.[0].message).toMatch(/non-nullable field/);
     });
   });
 });

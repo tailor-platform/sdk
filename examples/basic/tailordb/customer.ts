@@ -13,7 +13,7 @@ export const customer = db
       ({ value }) => (value ? value.length > 1 : true),
       ({ value }) => (value ? value.length < 100 : true),
     ),
-    fullAddress: db.string({ optional: true }),
+    fullAddress: db.string(),
     state: db.string(),
     ...db.fields.timestamps(),
   })

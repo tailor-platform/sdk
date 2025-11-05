@@ -6,25 +6,24 @@ const validators: [(a: { value: number }) => boolean, string][] = [
 ];
 export default createResolver({
   name: "add",
+  description: "Addition operation",
   operation: "query",
-  input: t
-    .type({
-      a: t
-        .int()
-        .description("First number to add")
-        .validate(...validators),
-      b: t
-        .int()
-        .description("Second number to add")
-        .validate(...validators),
-    })
-    .description("Input parameters for addition operation"),
+  input: {
+    a: t
+      .int()
+      .description("First number to add")
+      .validate(...validators),
+    b: t
+      .int()
+      .description("Second number to add")
+      .validate(...validators),
+  },
   body: (context) => {
     console.log(JSON.stringify(context, null, 2));
     return { result: context.input.a + context.input.b };
   },
   output: t
-    .type({
+    .object({
       result: t.int().description("Sum of the two input numbers"),
     })
     .description("Result of addition operation"),

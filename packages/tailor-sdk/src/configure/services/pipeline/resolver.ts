@@ -1,33 +1,29 @@
 import type { TailorUser } from "@/configure/types";
-import type { output } from "@/configure/types/helpers";
-import type { TailorType } from "@/configure/types/type";
+import type { InferFieldsOutput } from "@/configure/types/helpers";
+import type { TailorField } from "@/configure/types/type";
 import type { ResolverInput } from "@/parser/service/pipeline/types";
-import type { Exact } from "type-fest";
 
-type Context<Input extends TailorType<any, any> | undefined> = {
-  input: Input extends TailorType<any, any> ? output<Input> : never;
+type Context<Input extends Record<string, TailorField<any>> | undefined> = {
+  input: Input extends Record<string, TailorField<any>>
+    ? InferFieldsOutput<Input>
+    : never;
   user: TailorUser;
 };
 
 export function createResolver<
-  Input extends TailorType<any, any> | undefined = undefined,
-  Output extends TailorType<any, any> = TailorType<any, any>,
-  Return extends Exact<output<Output>, Return> = any,
+  Input extends Record<string, TailorField<any>> | undefined = undefined,
+  Output extends TailorField<any> = TailorField<any>,
 >(
   config: Omit<ResolverInput, "input" | "output" | "body"> &
     Readonly<{
       input?: Input;
       output: Output;
-      body: (context: Context<Input>) => Return | Promise<Return>;
+      body: (
+        context: Context<Input>,
+      ) => Output["_output"] | Promise<Output["_output"]>;
     }>,
 ) {
   return config;
 }
 
-export type ResolverConfig = ReturnType<
-  typeof createResolver<
-    TailorType<any, any> | undefined,
-    TailorType<any, any>,
-    unknown
-  >
->;
+export type ResolverConfig = ReturnType<typeof createResolver<any, any>>;

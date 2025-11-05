@@ -28,6 +28,21 @@ import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet } from ".";
 
+// Scalar type mapping for field type conversion
+const SCALAR_TYPE_MAP = {
+  uuid: { kind: "ScalarType", name: "ID" },
+  string: { kind: "ScalarType", name: "String" },
+  integer: { kind: "ScalarType", name: "Int" },
+  float: { kind: "ScalarType", name: "Float" },
+  boolean: { kind: "ScalarType", name: "Boolean" },
+  date: { kind: "CustomScalarType", name: "Date" },
+  datetime: { kind: "CustomScalarType", name: "DateTime" },
+  time: { kind: "CustomScalarType", name: "Time" },
+} as const satisfies Record<
+  Exclude<TailorField["type"], "enum" | "nested">,
+  { kind: "ScalarType" | "CustomScalarType"; name: string }
+>;
+
 export async function applyPipeline(
   client: OperatorClient,
   changeSet: Awaited<ReturnType<typeof planPipeline>>,
@@ -327,28 +342,25 @@ function processResolver(
 
   // Build inputs
   const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] =
-    resolver.input?.fields
-      ? protoFields(`${typeBaseName}Input`, resolver.input.fields, true)
+    resolver.input
+      ? protoFields(resolver.input, `${typeBaseName}Input`, true)
       : [];
 
   // Build response
-  const outputType = `${typeBaseName}Output`;
-  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = {
-    type: {
-      kind: "UserDefined",
-      name: outputType,
-      description: resolver.output._description ?? "",
-      required: true,
-      fields: protoFields(outputType, resolver.output.fields, false),
-    },
-    description: resolver.output._description ?? "",
-    array: false,
-    required: true,
-  };
+  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> =
+    protoFields({ "": resolver.output }, `${typeBaseName}Output`, false)[0];
+
+  // Build description (combine resolver description and output description)
+  const resolverDescription =
+    resolver.description || `${resolver.name} resolver`;
+  const outputDescription = resolver.output.metadata.description;
+  const combinedDescription = outputDescription
+    ? `${resolverDescription}\n\nReturns:\n${outputDescription}`
+    : resolverDescription;
 
   return {
     authorization: "true==true",
-    description: resolver.description ?? `${resolver.name} resolver`,
+    description: combinedDescription,
     inputs,
     name: resolver.name,
     operationType: resolver.operation,
@@ -360,8 +372,8 @@ function processResolver(
 }
 
 function protoFields(
-  baseName: string,
   fields: Record<string, TailorField>,
+  baseName: string,
   isInput: boolean,
 ): MessageInitShape<typeof PipelineResolver_FieldSchema>[] {
   if (!fields) {
@@ -370,90 +382,32 @@ function protoFields(
 
   return Object.entries(fields).map(([fieldName, field]) => {
     let type: MessageInitShape<typeof PipelineResolver_TypeSchema>;
-    // For input fields, if hooks.create is defined, the field should not be required
     const hasCreateHook = isInput && field.metadata.hooks?.create !== undefined;
     const required = hasCreateHook ? false : (field.metadata.required ?? true);
 
-    switch (field.type) {
-      case "uuid":
-        type = {
-          kind: "ScalarType",
-          name: "ID",
-          required,
-        };
-        break;
-      case "string":
-        type = {
-          kind: "ScalarType",
-          name: "String",
-          required,
-        };
-        break;
-      case "integer":
-        type = {
-          kind: "ScalarType",
-          name: "Int",
-          required,
-        };
-        break;
-      case "float":
-        type = {
-          kind: "ScalarType",
-          name: "Float",
-          required,
-        };
-        break;
-      case "boolean":
-        type = {
-          kind: "ScalarType",
-          name: "Boolean",
-          required,
-        };
-        break;
-      case "date":
-        type = {
-          kind: "CustomScalarType",
-          name: "Date",
-          required,
-        };
-        break;
-      case "datetime":
-        type = {
-          kind: "CustomScalarType",
-          name: "DateTime",
-          required,
-        };
-        break;
-      case "time":
-        type = {
-          kind: "CustomScalarType",
-          name: "Time",
-          required,
-        };
-        break;
-      case "enum": {
-        const typeName = `${baseName}${inflection.camelize(fieldName)}`;
-        type = {
-          kind: "EnumType",
-          name: typeName,
-          required,
-          allowedValues: field.metadata.allowedValues,
-        };
-        break;
-      }
-      case "nested": {
-        const typeName = `${baseName}${inflection.camelize(fieldName)}`;
-        type = {
-          kind: "UserDefined",
-          name: typeName,
-          description: field.metadata.description ?? "",
-          required,
-          fields: protoFields(typeName, field.fields, isInput),
-        };
-        break;
-      }
-      default:
-        throw new Error(`Unexpected field type: ${field.type satisfies never}`);
+    if (field.type === "nested") {
+      const typeName =
+        field.metadata.typeName ??
+        `${baseName}${inflection.camelize(fieldName)}`;
+      type = {
+        kind: "UserDefined",
+        name: typeName,
+        description: field.metadata.description ?? "",
+        required,
+        fields: protoFields(field.fields, typeName, isInput),
+      };
+    } else if (field.type === "enum") {
+      const typeName =
+        field.metadata.typeName ??
+        `${baseName}${inflection.camelize(fieldName)}`;
+      type = {
+        kind: "EnumType",
+        name: typeName,
+        required,
+        allowedValues: field.metadata.allowedValues,
+      };
+    } else {
+      type = { ...SCALAR_TYPE_MAP[field.type], required };
     }
 
     return {

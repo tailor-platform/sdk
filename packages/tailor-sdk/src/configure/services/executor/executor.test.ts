@@ -341,7 +341,7 @@ describe("resolverExecutedTrigger", () => {
       name: "test",
       operation: "query",
       body: () => ({ result: true }),
-      output: t.type({ result: t.bool() }),
+      output: t.object({ result: t.bool() }),
     });
     resolverExecutedTrigger(resolver);
   });
@@ -351,7 +351,7 @@ describe("resolverExecutedTrigger", () => {
       name: "test",
       operation: "query",
       body: () => ({ result: true }),
-      output: t.type({ result: t.bool() }),
+      output: t.object({ result: t.bool() }),
     });
     resolverExecutedTrigger(resolver, (args) => !args.error);
   });
@@ -361,7 +361,7 @@ describe("resolverExecutedTrigger", () => {
       name: "test",
       operation: "query",
       body: () => ({ result: true }),
-      output: t.type({ result: t.bool() }),
+      output: t.object({ result: t.bool() }),
     });
     // @ts-expect-error invalid return type
     resolverExecutedTrigger(resolver, () => {
@@ -374,7 +374,7 @@ describe("resolverExecutedTrigger", () => {
       name: "test",
       operation: "query",
       body: () => ({ result: true }),
-      output: t.type({ result: t.bool() }),
+      output: t.object({ result: t.bool() }),
     });
     createExecutor("test")
       .on(

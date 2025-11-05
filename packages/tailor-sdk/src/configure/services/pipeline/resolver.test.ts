@@ -12,7 +12,7 @@ describe("createResolver", () => {
       createResolver({
         name: "noInput",
         operation: "query",
-        output: t.type({
+        output: t.object({
           result: t.string(),
         }),
         body: (context) => {
@@ -29,7 +29,7 @@ describe("createResolver", () => {
       createResolver({
         name: "noInput",
         operation: "mutation",
-        output: t.type({
+        output: t.object({
           success: t.bool(),
         }),
         body: (context) => {
@@ -43,16 +43,16 @@ describe("createResolver", () => {
     });
 
     test("resolver with simple input has correct context type", () => {
-      const inputType = t.type({
+      const inputType = {
         name: t.string(),
         age: t.int(),
-      });
+      };
 
       createResolver({
         name: "withInput",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           message: t.string(),
         }),
         body: (context) => {
@@ -68,16 +68,16 @@ describe("createResolver", () => {
     });
 
     test("resolver with optional fields", () => {
-      const inputType = t.type({
+      const inputType = {
         required: t.string(),
         optional: t.string({ optional: true }),
-      });
+      };
 
       createResolver({
         name: "optionalFields",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           result: t.string(),
         }),
         body: (context) => {
@@ -91,16 +91,16 @@ describe("createResolver", () => {
     });
 
     test("resolver with array fields", () => {
-      const inputType = t.type({
+      const inputType = {
         items: t.string({ array: true }),
         numbers: t.int({ array: true }),
-      });
+      };
 
       createResolver({
         name: "arrayFields",
         operation: "mutation",
         input: inputType,
-        output: t.type({
+        output: t.object({
           count: t.int(),
         }),
         body: (context) => {
@@ -112,16 +112,16 @@ describe("createResolver", () => {
     });
 
     test("resolver with enum fields", () => {
-      const inputType = t.type({
+      const inputType = {
         role: t.enum("ADMIN", "USER"),
         status: t.enum("ACTIVE", "INACTIVE", { optional: true }),
-      });
+      };
 
       createResolver({
         name: "enumFields",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           message: t.string(),
         }),
         body: (context) => {
@@ -135,7 +135,7 @@ describe("createResolver", () => {
     });
 
     test("resolver with nested objects", () => {
-      const inputType = t.type({
+      const inputType = {
         user: t.object({
           name: t.object({
             first: t.string(),
@@ -143,13 +143,13 @@ describe("createResolver", () => {
           }),
           age: t.int({ optional: true }),
         }),
-      });
+      };
 
       createResolver({
         name: "nestedObjects",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           fullName: t.string(),
         }),
         body: (context) => {
@@ -166,7 +166,7 @@ describe("createResolver", () => {
     });
 
     test("resolver with mixed types", () => {
-      const inputType = t.type({
+      const inputType = {
         id: t.uuid(),
         name: t.string(),
         active: t.bool(),
@@ -178,13 +178,13 @@ describe("createResolver", () => {
           key: t.string(),
           value: t.string({ optional: true }),
         }),
-      });
+      };
 
       createResolver({
         name: "mixedTypes",
         operation: "mutation",
         input: inputType,
-        output: t.type({
+        output: t.object({
           success: t.bool(),
         }),
         body: (context) => {
@@ -202,7 +202,7 @@ describe("createResolver", () => {
     });
 
     test("resolver output type inference", () => {
-      const outputType = t.type({
+      const outputType = t.object({
         id: t.string(),
         items: t.object(
           {
@@ -235,10 +235,10 @@ describe("createResolver", () => {
       createResolver({
         name: "asyncResolver",
         operation: "query",
-        input: t.type({
+        input: {
           id: t.string(),
-        }),
-        output: t.type({
+        },
+        output: t.object({
           data: t.string(),
         }),
         body: async (context) => {
@@ -250,11 +250,29 @@ describe("createResolver", () => {
       });
     });
 
+    test("resolver with dbNamespace option", () => {
+      createResolver({
+        name: "withDbNamespace",
+        operation: "mutation",
+        input: {
+          name: t.string(),
+        },
+        output: t.object({
+          success: t.bool(),
+        }),
+        body: async (context) => {
+          expectTypeOf(context).toHaveProperty("input");
+          expectTypeOf(context).toHaveProperty("user");
+          return { success: true };
+        },
+      });
+    });
+
     test("user context always available", () => {
       createResolver({
         name: "withUser",
         operation: "query",
-        output: t.type({
+        output: t.object({
           userId: t.string(),
         }),
         body: (context) => {
@@ -268,7 +286,7 @@ describe("createResolver", () => {
     });
 
     test("complex nested structure", () => {
-      const inputType = t.type({
+      const inputType = {
         orders: t.object(
           {
             id: t.string(),
@@ -287,13 +305,13 @@ describe("createResolver", () => {
           },
           { array: true },
         ),
-      });
+      };
 
       createResolver({
         name: "complexNested",
         operation: "mutation",
         input: inputType,
-        output: t.type({
+        output: t.object({
           processed: t.int(),
         }),
         body: (context) => {
@@ -307,7 +325,7 @@ describe("createResolver", () => {
     });
 
     test("all basic types", () => {
-      const inputType = t.type({
+      const inputType = {
         uuid: t.uuid(),
         string: t.string(),
         bool: t.bool(),
@@ -316,13 +334,13 @@ describe("createResolver", () => {
         date: t.date(),
         datetime: t.datetime(),
         time: t.time(),
-      });
+      };
 
       createResolver({
         name: "allBasicTypes",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           summary: t.string(),
         }),
         body: (context) => {
@@ -340,15 +358,15 @@ describe("createResolver", () => {
     });
 
     test("enum with array", () => {
-      const inputType = t.type({
+      const inputType = {
         roles: t.enum("ADMIN", "USER", "GUEST", { array: true }),
-      });
+      };
 
       createResolver({
         name: "enumArray",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           count: t.int(),
         }),
         body: (context) => {
@@ -362,14 +380,14 @@ describe("createResolver", () => {
       const queryResolver = createResolver({
         name: "query",
         operation: "query",
-        output: t.type({ result: t.string() }),
+        output: t.object({ result: t.string() }),
         body: (_context) => ({ result: "ok" }),
       });
 
       const mutationResolver = createResolver({
         name: "mutation",
         operation: "mutation",
-        output: t.type({ success: t.bool() }),
+        output: t.object({ success: t.bool() }),
         body: (_context) => ({ success: true }),
       });
 
@@ -381,7 +399,7 @@ describe("createResolver", () => {
       const resolver = createResolver({
         name: "testResolver",
         operation: "query",
-        output: t.type({ result: t.string() }),
+        output: t.object({ result: t.string() }),
         body: (_context) => ({ result: "ok" }),
       });
 
@@ -389,7 +407,7 @@ describe("createResolver", () => {
     });
 
     test("output type matches return type", () => {
-      const outputType = t.type({
+      const outputType = t.object({
         id: t.string(),
         count: t.int(),
         active: t.bool(),
@@ -412,7 +430,7 @@ describe("createResolver", () => {
     });
 
     test("optional nested objects", () => {
-      const inputType = t.type({
+      const inputType = {
         config: t.object(
           {
             setting1: t.string(),
@@ -420,13 +438,13 @@ describe("createResolver", () => {
           },
           { optional: true },
         ),
-      });
+      };
 
       createResolver({
         name: "optionalNested",
         operation: "query",
         input: inputType,
-        output: t.type({ hasConfig: t.bool() }),
+        output: t.object({ hasConfig: t.bool() }),
         body: (context) => {
           expectTypeOf(context.input.config).toEqualTypeOf<
             | {
@@ -444,12 +462,12 @@ describe("createResolver", () => {
 
   describe("runtime values", () => {
     test("creates resolver with all properties", () => {
-      const inputType = t.type({
+      const inputType = {
         name: t.string(),
         age: t.int(),
-      });
+      };
 
-      const outputType = t.type({
+      const outputType = t.object({
         message: t.string(),
       });
 
@@ -473,7 +491,7 @@ describe("createResolver", () => {
     });
 
     test("creates minimal resolver without optional fields", () => {
-      const outputType = t.type({
+      const outputType = t.object({
         result: t.string(),
       });
 
@@ -495,7 +513,7 @@ describe("createResolver", () => {
       const resolver = createResolver({
         name: "getUser",
         operation: "query",
-        output: t.type({ id: t.string() }),
+        output: t.object({ id: t.string() }),
         body: () => ({ id: "123" }),
       });
 
@@ -506,7 +524,7 @@ describe("createResolver", () => {
       const resolver = createResolver({
         name: "createUser",
         operation: "mutation",
-        output: t.type({ success: t.bool() }),
+        output: t.object({ success: t.bool() }),
         body: () => ({ success: true }),
       });
 
@@ -514,11 +532,11 @@ describe("createResolver", () => {
     });
 
     test("preserves input and output types", () => {
-      const inputType = t.type({
+      const inputType = {
         email: t.string(),
-      });
+      };
 
-      const outputType = t.type({
+      const outputType = t.object({
         userId: t.string(),
       });
 
@@ -536,15 +554,13 @@ describe("createResolver", () => {
   });
 
   describe("description support", () => {
-    test("TailorType supports description", () => {
-      const inputType = t
-        .type({
-          name: t.string(),
-        })
-        .description("Input type description");
+    test("Output field supports description", () => {
+      const inputType = {
+        name: t.string(),
+      };
 
       const outputType = t
-        .type({
+        .object({
           result: t.string(),
         })
         .description("Output type description");
@@ -557,88 +573,80 @@ describe("createResolver", () => {
         body: (context) => ({ result: context.input.name }),
       });
 
-      expect(resolver.input?._description).toBe("Input type description");
-      expect(resolver.output._description).toBe("Output type description");
+      expect(resolver.output.metadata.description).toBe(
+        "Output type description",
+      );
     });
 
-    test("TailorDBType description is preserved in resolver", () => {
-      const userType = db.type("User", "User database type", {
+    test("TailorDBType field descriptions are preserved in resolver", () => {
+      const userFields = {
         name: db.string().description("User name"),
         email: db.string().description("User email"),
-      });
+      };
 
       const resolver = createResolver({
         name: "getUserInfo",
         operation: "query",
-        input: userType,
-        output: userType,
+        input: userFields,
+        output: t.object(userFields).description("User database type"),
         body: (context) => context.input,
       });
 
-      expect(resolver.input?._description).toBe("User database type");
-      expect(resolver.output._description).toBe("User database type");
-      expect(resolver.input?.fields.name.metadata.description).toBe(
-        "User name",
-      );
-      expect(resolver.input?.fields.email.metadata.description).toBe(
-        "User email",
-      );
+      expect(resolver.output.metadata.description).toBe("User database type");
+      expect(resolver.input?.name.metadata.description).toBe("User name");
+      expect(resolver.input?.email.metadata.description).toBe("User email");
     });
 
     test("TailorField supports description", () => {
-      const inputType = t.type({
+      const inputType = {
         name: t.string().description("User name field"),
         age: t.int().description("User age field"),
-      });
+      };
 
       const resolver = createResolver({
         name: "withFieldDescriptions",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           result: t.string().description("Result message"),
         }),
         body: (context) => ({ result: `${context.input.name}` }),
       });
 
-      expect(resolver.input?.fields.name.metadata.description).toBe(
-        "User name field",
-      );
-      expect(resolver.input?.fields.age.metadata.description).toBe(
-        "User age field",
-      );
+      expect(resolver.input?.name.metadata.description).toBe("User name field");
+      expect(resolver.input?.age.metadata.description).toBe("User age field");
       expect(resolver.output.fields.result.metadata.description).toBe(
         "Result message",
       );
     });
 
     test("nested object field supports description", () => {
-      const inputType = t.type({
+      const inputType = {
         user: t
           .object({
             name: t.string().description("Name field"),
             age: t.int().description("Age field"),
           })
           .description("User object field"),
-      });
+      };
 
       const resolver = createResolver({
         name: "withNestedDescriptions",
         operation: "query",
         input: inputType,
-        output: t.type({
+        output: t.object({
           result: t.string(),
         }),
         body: (context) => ({ result: context.input.user.name }),
       });
 
-      expect(resolver.input?.fields.user.metadata.description).toBe(
+      expect(resolver.input?.user.metadata.description).toBe(
         "User object field",
       );
-      expect(resolver.input?.fields.user.fields.name.metadata.description).toBe(
+      expect(resolver.input?.user.fields.name.metadata.description).toBe(
         "Name field",
       );
-      expect(resolver.input?.fields.user.fields.age.metadata.description).toBe(
+      expect(resolver.input?.user.fields.age.metadata.description).toBe(
         "Age field",
       );
     });
@@ -650,10 +658,10 @@ describe("createResolver", () => {
         name: "compatTest",
         description: "Test compatibility",
         operation: "query",
-        input: t.type({
+        input: {
           id: t.string(),
-        }),
-        output: t.type({
+        },
+        output: t.object({
           result: t.string(),
         }),
         body: (context) => ({ result: context.input.id }),
@@ -671,7 +679,7 @@ describe("createResolver", () => {
         // Required fields
         name: "fullConfigTest",
         operation: "mutation",
-        output: t.type({ success: t.bool() }),
+        output: t.object({ success: t.bool() }),
         body: () => ({ success: true }),
 
         // Optional fields from ResolverInput
@@ -686,15 +694,15 @@ describe("createResolver", () => {
     });
 
     test("createResolver with input/output types is compatible with ResolverInput", () => {
-      const inputType = t.type({
+      const inputType = {
         userId: t.string(),
         data: t.object({
           key: t.string(),
           value: t.int(),
         }),
-      });
+      };
 
-      const outputType = t.type({
+      const outputType = t.object({
         processed: t.bool(),
         result: t.object({
           count: t.int(),
@@ -732,7 +740,7 @@ describe("createResolver", () => {
       const resolver = createResolver({
         name: "minimalCompat",
         operation: "query",
-        output: t.type({ value: t.string() }),
+        output: t.object({ value: t.string() }),
         body: () => ({ value: "test" }),
       });
 

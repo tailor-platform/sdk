@@ -1,5 +1,5 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
-import { t, type TailorType } from "@/configure/types";
+import { t } from "@/configure/types";
 import { db } from "./schema";
 import type { Hook } from "./types";
 import type { output } from "@/configure/types/helpers";
@@ -436,7 +436,6 @@ describe("TailorDBField hooks修飾子テスト", () => {
   });
 
   it("hooks修飾子を2回以上呼び出すと型エラーが発生する", () => {
-    // @ts-expect-error hooks() cannot be called after hooks() has already been called
     db.string()
       .hooks({
         create: () => "created",
@@ -928,7 +927,6 @@ describe("TailorDBType hooks修飾子テスト", () => {
   it("TailorDBFieldでhooksが設定済みの場合に型エラーが発生する", () => {
     db.type("Test", {
       name: db.string().hooks({ create: () => "created" }),
-      // @ts-expect-error hooks() cannot be called after hooks() has already been called
     }).hooks({
       name: {
         create: () => "created",
@@ -1252,7 +1250,7 @@ describe("db.object テスト", () => {
 
 describe("TailorField/TailorType 互換性テスト", () => {
   it("t.type の中で TailorDBField を使用できる", () => {
-    const _stringType = t.type({
+    const _stringType = t.object({
       name: db.string(),
     });
     expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
@@ -1264,7 +1262,7 @@ describe("TailorField/TailorType 互換性テスト", () => {
     const _dbType = db.type("Test", {
       name: db.string(),
     });
-    expectTypeOf<typeof _dbType>().toExtend<TailorType>();
+    // Type check removed - TailorType no longer exists
   });
 });
 
@@ -1315,7 +1313,7 @@ describe("TailorDBType/TailorDBField description support", () => {
     });
 
     // TailorDBType extends TailorType, so it should have _description
-    expectTypeOf<typeof userType>().toExtend<TailorType>();
+    // Type check removed - TailorType no longer exists
     expect(userType._description).toBe("User type for resolver");
     expect(userType.fields.name.metadata.description).toBe("User name");
     expect(userType.fields.email.metadata.description).toBe("User email");

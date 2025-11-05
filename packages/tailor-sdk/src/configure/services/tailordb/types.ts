@@ -39,7 +39,10 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   foreignKey?: boolean;
   foreignKeyType?: boolean;
   validate?: boolean;
-  hooks?: boolean;
+  hooks?: {
+    create: boolean;
+    update: boolean;
+  };
   serial?: boolean;
   relation?: boolean;
 }

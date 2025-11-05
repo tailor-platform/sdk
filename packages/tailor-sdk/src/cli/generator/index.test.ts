@@ -199,9 +199,9 @@ describe("GenerationManager", () => {
               testResolver: createResolver({
                 name: "testResolver",
                 operation: "query",
-                input: t.type({}),
+                // input removed
                 body: () => ({ string: "" }),
-                output: t.type({ string: t.string() }),
+                output: t.object({ string: t.string() }),
               }),
             },
           },
@@ -278,9 +278,9 @@ describe("GenerationManager", () => {
               testResolver: createResolver({
                 name: "testResolver",
                 operation: "query",
-                input: t.type({}),
+                // input removed
                 body: () => ({ string: "" }),
-                output: t.type({ string: t.string() }),
+                output: t.object({ string: t.string() }),
               }),
             },
           },
@@ -411,16 +411,16 @@ describe("GenerationManager", () => {
         resolver1: createResolver({
           name: "resolver1",
           operation: "query",
-          input: t.type({}),
+          // input removed
           body: () => ({ string: "" }),
-          output: t.type({ string: t.string() }),
+          output: t.object({ string: t.string() }),
         }),
         resolver2: createResolver({
           name: "resolver2",
           operation: "query",
-          input: t.type({}),
+          // input removed
           body: () => ({ string: "" }),
-          output: t.type({ string: t.string() }),
+          output: t.object({ string: t.string() }),
         }),
       };
 
@@ -636,9 +636,9 @@ describe("GenerationManager", () => {
               testResolver: createResolver({
                 name: "testResolver",
                 operation: "query",
-                input: t.type({}),
+                // input removed
                 body: () => ({ string: "" }),
-                output: t.type({ string: t.string() }),
+                output: t.object({ string: t.string() }),
               }),
             },
           },
@@ -831,9 +831,9 @@ describe("Integration Tests", () => {
                   ] = createResolver({
                     name: `resolver${appIdx}_${nsIdx}_${resolverIdx}`,
                     operation: "query",
-                    input: t.type({}),
+                    // input removed
                     body: () => ({ string: "" }),
-                    output: t.type({ string: t.string() }),
+                    output: t.object({ string: t.string() }),
                   });
                 });
             });
