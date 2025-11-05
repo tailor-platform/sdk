@@ -3,7 +3,6 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import ml from "multiline-ts";
 import { type ITransformer } from "@/cli/bundler";
-import { type TailorField } from "@/configure/types/type";
 import { type Resolver } from "@/parser/service/resolver";
 
 export class CodeTransformer implements ITransformer {
@@ -20,108 +19,67 @@ export class CodeTransformer implements ITransformer {
       await import(`${pathToFileURL(filePath)}?t=${new Date().getTime()}`)
     ).default as Resolver;
 
-    // Generate validation code for input fields
-    const generateValidationCode = (
-      type: Record<string, TailorField<any, any>> | undefined,
-      dataPath: string,
-      displayPath: string,
-    ): string => {
-      if (!type) {
-        return "";
-      }
-
-      const validationCode: string[] = [];
-      validationCode.push(/* js */ `const validationErrors = [];`);
-      validationCode.push(
-        /* js */ `const commonArgs = { data: ${dataPath}, user: context.user };`,
-      );
-
-      // Recursive function to process fields including nested objects
-      const processFields = (
-        fields: Record<string, TailorField<any, any>>,
-        currentDataPath: string,
-        currentDisplayPath: string,
-      ) => {
-        for (const [fieldName, field] of Object.entries(fields)) {
-          const metadata = (field as TailorField<any, any>).metadata;
-          const fieldDataPath = `${currentDataPath}.${fieldName}`;
-          const fieldDisplayPath = `${currentDisplayPath}.${fieldName}`;
-
-          // Check if this is a nested object (t.object())
-          const nestedFields = (field as TailorField<any, any>).fields;
-          if (
-            nestedFields &&
-            typeof nestedFields === "object" &&
-            Object.keys(nestedFields).length > 0
-          ) {
-            // Process nested fields recursively
-            processFields(nestedFields, fieldDataPath, fieldDisplayPath);
-          }
-
-          // Process validation functions for this field
-          const validateFns = metadata.validate;
-          if (!validateFns || validateFns.length === 0) {
-            continue;
-          }
-
-          for (let i = 0; i < validateFns.length; i++) {
-            const validateInput = validateFns[i];
-            const { fn, message } =
-              typeof validateInput === "function"
-                ? {
-                    fn: validateInput.toString(),
-                    message: `Validation failed`,
-                  }
-                : {
-                    fn: validateInput[0].toString(),
-                    message: validateInput[1],
-                  };
-
-            validationCode.push(ml /* js */ `
-              if (!(${fn})({ value: ${fieldDataPath}, ...commonArgs })) {
-                validationErrors.push(\`${fieldDisplayPath}: ${message}\`);
-              }
-            `);
-          }
-        }
-      };
-
-      processFields(type, dataPath, displayPath);
-
-      validationCode.push(ml /* js */ `
-        if (validationErrors.length > 0) {
-          throw new Error(validationErrors.join("\\n"));
-        }
-      `);
-
-      return validationCode.join("\n");
-    };
-
-    const inputValidationCode = generateValidationCode(
-      resolver.input as Record<string, TailorField<any, any>> | undefined,
-      "context.input",
-      "input",
-    );
-
-    // Export the body function wrapped with validation
+    // Generate validation code using TailorField.parseObject
+    const hasInput = resolver.input && Object.keys(resolver.input).length > 0;
     const bodyVariableName = "$tailor_resolver_body";
     const bodyFnStr = resolver.body?.toString() || "() => {}";
-    const wrappedBodyCode = inputValidationCode
+
+    // Modify sourceText to expose resolver for internal use
+    let modifiedSourceText = sourceText;
+
+    // Pattern 1: export default createResolver(...)
+    const defaultExportRegex = /export\s+default\s+createResolver\s*\(/;
+    if (defaultExportRegex.test(sourceText)) {
+      modifiedSourceText = sourceText.replace(
+        defaultExportRegex,
+        "const _internalResolver = createResolver(",
+      );
+      modifiedSourceText += "\nexport default _internalResolver;";
+    }
+    // Pattern 2: export { name_default as default } (bundled code)
+    else {
+      const bundledExportMatch = sourceText.match(
+        /export\s*\{\s*(\w+)\s+as\s+default\s*\}/,
+      );
+      if (bundledExportMatch) {
+        const exportedName = bundledExportMatch[1];
+        // Add alias after the export statement
+        modifiedSourceText += `\nconst _internalResolver = ${exportedName};`;
+      }
+    }
+
+    // If there's input validation, wrap the body with parse call
+    const wrappedBodyCode = hasInput
       ? ml /* js */ `
-        async (context) => {
-        ${inputValidationCode
-          .split("\n")
-          .map((line) => /* js */ `  ${line}`)
-          .join("\n")}
-          const originalBody = ${bodyFnStr};
-          return originalBody(context);
-        }`
+async (context) => {
+  if (_internalResolver.input) {
+    const result = t.object(_internalResolver.input).parse({
+      value: context.input,
+      data: context.input,
+      user: context.user,
+    });
+
+    if (result.issues) {
+      const errorMessages = result.issues
+        .map(issue => {
+          const path = issue.path ? issue.path.join('.') : '';
+          return path ? \`  \${path}: \${issue.message}\` : issue.message;
+        })
+        .join('\\n');
+      throw new Error(\`Failed to input validation:\\n\${errorMessages}\`);
+    }
+  }
+
+  const originalBody = ${bodyFnStr};
+  return originalBody(context);
+}
+`
       : bodyFnStr;
 
     fs.writeFileSync(
       transformedPath,
       ml /* js */ `
-      ${sourceText}
+      ${modifiedSourceText}
 
       export const ${bodyVariableName} = ${wrappedBodyCode};
       `,

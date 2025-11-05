@@ -213,7 +213,7 @@ describe("pnpm apply command integration tests", () => {
 
       // Invalid: a is negative (fails validation: value >= 0)
       await expect(main({ input: { a: -1, b: 5 } })).rejects.toThrow(
-        "input.a: Value must be non-negative",
+        "a: Value must be non-negative",
       );
     });
 
@@ -222,7 +222,7 @@ describe("pnpm apply command integration tests", () => {
 
       // Invalid: a is >= 10 (fails validation: value < 10)
       await expect(main({ input: { a: 10, b: 5 } })).rejects.toThrow(
-        "input.a: Value must be less than 10",
+        "a: Value must be less than 10",
       );
     });
 
@@ -231,7 +231,7 @@ describe("pnpm apply command integration tests", () => {
 
       // Invalid: b is negative
       await expect(main({ input: { a: 5, b: -2 } })).rejects.toThrow(
-        "input.b: Value must be non-negative",
+        "b: Value must be non-negative",
       );
     });
 
@@ -240,7 +240,7 @@ describe("pnpm apply command integration tests", () => {
 
       // Invalid: b is >= 10
       await expect(main({ input: { a: 5, b: 15 } })).rejects.toThrow(
-        "input.b: Value must be less than 10",
+        "b: Value must be less than 10",
       );
     });
 
@@ -250,8 +250,9 @@ describe("pnpm apply command integration tests", () => {
       // Invalid: both a and b are negative
       await expect(main({ input: { a: -1, b: -2 } })).rejects.toThrow(
         [
-          "input.a: Value must be non-negative",
-          "input.b: Value must be non-negative",
+          "Failed to input validation:",
+          "  a: Value must be non-negative",
+          "  b: Value must be non-negative",
         ].join("\n"),
       );
     });
@@ -262,8 +263,9 @@ describe("pnpm apply command integration tests", () => {
       // Invalid: both a and b are >= 10
       await expect(main({ input: { a: 10, b: 15 } })).rejects.toThrow(
         [
-          "input.a: Value must be less than 10",
-          "input.b: Value must be less than 10",
+          "Failed to input validation:",
+          "  a: Value must be less than 10",
+          "  b: Value must be less than 10",
         ].join("\n"),
       );
     });
@@ -327,7 +329,7 @@ describe("pnpm apply command integration tests", () => {
           },
         }),
       ).rejects.toThrow(
-        "input.user.name.first: First name must be at least 2 characters",
+        "user.name.first: First name must be at least 2 characters",
       );
     });
 
@@ -350,7 +352,7 @@ describe("pnpm apply command integration tests", () => {
           },
         }),
       ).rejects.toThrow(
-        "input.user.name.last: Last name must be at least 2 characters",
+        "user.name.last: Last name must be at least 2 characters",
       );
     });
 
@@ -374,8 +376,9 @@ describe("pnpm apply command integration tests", () => {
         }),
       ).rejects.toThrow(
         [
-          "input.user.name.first: First name must be at least 2 characters",
-          "input.user.name.last: Last name must be at least 2 characters",
+          "Failed to input validation:",
+          "  user.name.first: First name must be at least 2 characters",
+          "  user.name.last: Last name must be at least 2 characters",
         ].join("\n"),
       );
     });

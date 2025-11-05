@@ -47,7 +47,7 @@ describe("CodeTransformer", () => {
         export default resolver;
       `.trim();
 
-      const testFile = writeResolverModule("resolver.js", moduleSource);
+      const testFile = writeResolverModule("resolver1.js", moduleSource);
 
       const resultFiles = await transformer.transform(testFile, tempDir);
 
@@ -64,6 +64,88 @@ describe("CodeTransformer", () => {
       );
 
       // bodyファイルが作成されることを確認
+      expect(resultFiles).toHaveLength(1);
+      expect(resultFiles[0]).toContain(`${resolverName}__body.js`);
+    });
+
+    it("createResolverを使ったresolverを正しく変換する", async () => {
+      const resolverName = "testResolver";
+      const moduleSource = multiline /* ts */ `
+        const createResolver = (config) => config;
+
+        export default createResolver({
+          name: "${resolverName}",
+          operation: "query",
+          body: async () => ({ result: "test" }),
+        });
+      `.trim();
+
+      const testFile = writeResolverModule("resolver2.js", moduleSource);
+
+      const resultFiles = await transformer.transform(testFile, tempDir);
+
+      const transformedFile = join(
+        tempDir,
+        `${basename(testFile, ".js")}.transformed.js`,
+      );
+      expect(existsSync(transformedFile)).toBe(true);
+
+      const transformedContent = readFileSync(transformedFile, "utf-8");
+
+      // Should convert to _internalResolver
+      expect(transformedContent).toContain("const _internalResolver");
+      expect(transformedContent).toContain("export default _internalResolver");
+      expect(transformedContent).toContain(
+        "export const $tailor_resolver_body",
+      );
+
+      // bodyファイルが作成されることを確認
+      expect(resultFiles).toHaveLength(1);
+      expect(resultFiles[0]).toContain(`${resolverName}__body.js`);
+    });
+
+    it("inputにvalidateがある場合、StandardSchema Result型を使用する", async () => {
+      const resolverName = "validatedResolver";
+      const moduleSource = multiline /* ts */ `
+        const createResolver = (config) => config;
+
+        export default createResolver({
+          name: "${resolverName}",
+          operation: "mutation",
+          input: {
+            email: {
+              type: "string",
+              metadata: {
+                required: true,
+                validate: [(args) => args.value.includes("@"), "Must be valid email"],
+              },
+              fields: {},
+            },
+          },
+          body: async (context) => ({ result: "validated" }),
+        });
+      `.trim();
+
+      const testFile = writeResolverModule("resolver3.js", moduleSource);
+
+      const resultFiles = await transformer.transform(testFile, tempDir);
+
+      const transformedFile = join(
+        tempDir,
+        `${basename(testFile, ".js")}.transformed.js`,
+      );
+      expect(existsSync(transformedFile)).toBe(true);
+
+      const transformedContent = readFileSync(transformedFile, "utf-8");
+
+      // Should use t.object().parse and handle Result type
+      expect(transformedContent).toContain("t.object");
+      expect(transformedContent).toContain(".parse");
+      expect(transformedContent).toContain("_internalResolver.input");
+      expect(transformedContent).toContain("const result =");
+      expect(transformedContent).toContain("result.issues");
+      expect(transformedContent).toContain("throw new Error");
+
       expect(resultFiles).toHaveLength(1);
       expect(resultFiles[0]).toContain(`${resolverName}__body.js`);
     });

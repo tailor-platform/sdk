@@ -12,6 +12,8 @@ export namespace t {
   export type infer<T> = _output<T>;
 }
 
+export { TailorField } from "@/configure/types/type";
+
 export * from "@/configure/services";
 
 export { defineConfig, defineGenerators } from "@/configure/config";

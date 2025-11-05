@@ -13,7 +13,9 @@ import {
 } from "./types";
 import type { Prettify, InferFieldsOutput } from "./helpers";
 import type { FieldValidateInput } from "./validation";
+import type { TailorUser } from "@/configure/types";
 import type { TailorFieldInput } from "@/parser/service/resolver/types";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
@@ -103,6 +105,75 @@ export class TailorField<
       Prettify<CurrentDefined & { validate: true }>,
       Output
     >;
+  }
+
+  /**
+   * Parse and validate a value against this field's validation rules
+   * Returns StandardSchema Result type with success or failure
+   */
+  parse(args: {
+    value: any;
+    data: any;
+    user: TailorUser;
+  }): StandardSchemaV1.Result<Output> {
+    return this._parseInternal({
+      value: args.value,
+      data: args.data,
+      user: args.user,
+      pathArray: [],
+    });
+  }
+
+  /**
+   * Internal parse method that tracks field path for nested validation
+   * @private
+   */
+  private _parseInternal(args: {
+    value: any;
+    data: any;
+    user: TailorUser;
+    pathArray: string[];
+  }): StandardSchemaV1.Result<Output> {
+    const { value, data, user, pathArray } = args;
+    const issues: StandardSchemaV1.Issue[] = [];
+
+    if (this.fields && Object.keys(this.fields).length > 0) {
+      for (const [fieldName, field] of Object.entries(this.fields)) {
+        const fieldValue = value?.[fieldName];
+        const result = field._parseInternal({
+          value: fieldValue,
+          data,
+          user,
+          pathArray: pathArray.concat(fieldName),
+        });
+        if (result.issues) {
+          issues.push(...result.issues);
+        }
+      }
+    }
+
+    const validateFns = this.metadata.validate;
+    if (validateFns && validateFns.length > 0) {
+      for (const validateInput of validateFns) {
+        const { fn, message } =
+          typeof validateInput === "function"
+            ? { fn: validateInput, message: "Validation failed" }
+            : { fn: validateInput[0], message: validateInput[1] };
+
+        if (!fn({ value, data, user })) {
+          issues.push({
+            message,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+      }
+    }
+
+    if (issues.length > 0) {
+      return { issues };
+    }
+
+    return { value };
   }
 }
 
