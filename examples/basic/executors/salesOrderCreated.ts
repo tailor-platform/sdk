@@ -4,17 +4,15 @@ import {
 } from "@tailor-platform/tailor-sdk";
 import { salesOrder } from "../tailordb/salesOrder";
 
-export default createExecutor(
-  "sales-order-created",
-  "Triggered when a new sales order is created",
-)
-  .on(
-    recordCreatedTrigger(
-      salesOrder,
-      ({ newRecord }) => (newRecord.totalPrice ?? 0) > 100_0000,
-    ),
-  )
-  .executeGql({
+export default createExecutor({
+  name: "sales-order-created",
+  description: "Triggered when a new sales order is created",
+  trigger: recordCreatedTrigger({
+    type: salesOrder,
+    condition: ({ newRecord }) => (newRecord.totalPrice ?? 0) > 100_0000,
+  }),
+  operation: {
+    kind: "graphql",
     appName: "my-app",
     query: /* gql */ `
       mutation createSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {
@@ -31,4 +29,5 @@ export default createExecutor(
         status: newRecord.status,
       },
     }),
-  });
+  },
+});

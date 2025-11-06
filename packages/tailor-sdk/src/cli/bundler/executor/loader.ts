@@ -1,7 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { type ILoader } from "@/cli/bundler";
-import { type Executor } from "@/configure/services/executor/types";
-import { isExecutor } from "@/configure/services/executor/utils";
+import { ExecutorSchema, type Executor } from "@/parser/service/executor";
 
 export class ExecutorLoader implements ILoader<Executor> {
   async load(executorFilePath: string): Promise<Executor | null> {
@@ -9,10 +8,12 @@ export class ExecutorLoader implements ILoader<Executor> {
       `${pathToFileURL(executorFilePath).href}?t=${Date.now()}`
     );
     const executor = executorModule.default;
-    if (!isExecutor(executor)) {
+
+    const parseResult = ExecutorSchema.safeParse(executor);
+    if (!parseResult.success) {
       return null;
     }
 
-    return executor;
+    return parseResult.data;
   }
 }

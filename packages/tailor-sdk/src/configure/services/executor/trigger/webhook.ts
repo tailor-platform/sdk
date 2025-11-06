@@ -1,30 +1,26 @@
-import { type IncomingWebhookTrigger, type WithArgs } from "../types";
+import type { IncomingWebhookTrigger as ParserIncomingWebhookTrigger } from "@/parser/service/executor/types";
 
-interface WebhookArgs<
-  T extends {
-    body?: Record<string, unknown>;
-    headers?: Record<string, string>;
-  },
-> {
-  body: T["body"] extends undefined ? Record<string, unknown> : T["body"];
-  headers: T["headers"] extends undefined
-    ? Record<string, string>
-    : T["headers"];
+export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
+  body: T["body"];
+  headers: T["headers"];
   method: "POST" | "GET" | "PUT" | "DELETE";
   rawBody: string;
 }
 
+export interface IncomingWebhookRequest {
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+}
+
+export type IncomingWebhookTrigger<Args> = ParserIncomingWebhookTrigger & {
+  __args: Args;
+};
+
 export function incomingWebhookTrigger<
-  T extends {
-    body?: Record<string, unknown>;
-    headers?: Record<string, string>;
-  } = {
-    body: Record<string, unknown>;
-    headers: Record<string, string>;
-  },
->(): IncomingWebhookTrigger & WithArgs<WebhookArgs<T>> {
+  T extends IncomingWebhookRequest,
+>(): IncomingWebhookTrigger<IncomingWebhookArgs<T>> {
   return {
-    Kind: "IncomingWebhook",
-    _args: {} as WebhookArgs<T>,
+    kind: "incomingWebhook",
+    __args: {} as IncomingWebhookArgs<T>,
   };
 }

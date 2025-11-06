@@ -480,24 +480,23 @@ EOF
 **Tailor SDK**
 
 ```typescript
-import {
-  createExecutor,
-  recordCreatedTrigger,
-} from "@tailor-platform/tailor-sdk";
+import { createExecutor, recordCreatedTrigger } from "@tailor-platform/tailor-sdk";
 import { customer } from "../tailordb/customer";
 
-export default createExecutor(
-  "send-welcome-email",
-  "Send welcome email to new customers",
-)
-  .on(
-    recordCreatedTrigger(customer, ({ newRecord }) => newRecord.email != null),
-  )
-  .executeFunction({
-    fn: async ({ newRecord }) => {
+export default createExecutor({
+  name: "send-welcome-email",
+  description: "Send welcome email to new customers",
+  trigger: recordCreatedTrigger({
+    type: customer,
+    condition: ({ newRecord }) => newRecord.email != null
+  })
+  operation: {
+    kind: "function",
+    body: async ({ newRecord }) => {
       console.log(`Sending welcome email to ${newRecord.email}`);
     },
-  });
+  }
+});
 ```
 
 **Terraform**
@@ -562,14 +561,18 @@ EOF
 ```typescript
 import { createExecutor, scheduleTrigger } from "@tailor-platform/tailor-sdk";
 
-export default createExecutor("daily-report", "Generate daily report")
-  .on(scheduleTrigger("0 9 * * *")) // Every day at 9 AM
-  .executeFunction({
-    fn: async ({ client }) => {
+export default createExecutor({
+  name: "daily-report",
+  description: "Generate daily report",
+  trigger: scheduleTrigger({ cron: "0 9 * * *" }), // Every day at 9 AM
+  operation: {
+    kind: "function",
+    body: async ({ client }) => {
       const result = await client.exec("SELECT COUNT(*) FROM Customer");
       console.log(`Total customers: ${result[0].count}`);
     },
-  });
+  },
+});
 ```
 
 **Terraform**

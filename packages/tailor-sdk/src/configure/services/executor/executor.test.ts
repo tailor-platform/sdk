@@ -4,57 +4,61 @@ import { createResolver } from "../resolver";
 import { db } from "../tailordb";
 import { createExecutor } from "./executor";
 import {
-  incomingWebhookTrigger,
   recordCreatedTrigger,
   recordDeletedTrigger,
   recordUpdatedTrigger,
   resolverExecutedTrigger,
-  scheduleTrigger,
-} from "./trigger";
+} from "./trigger/event";
+import { scheduleTrigger } from "./trigger/schedule";
+import { incomingWebhookTrigger } from "./trigger/webhook";
 
 describe("createExecutor", () => {
   test("can disable executor", () => {
-    const disabled = createExecutor("test-executor", "A test executor", {
+    const disabled = createExecutor({
+      name: "test-executor",
+      description: "A test executor",
       disabled: true,
-    })
-      .on(incomingWebhookTrigger())
-      .executeFunction({
-        fn: () => {
-          /* do nothing */
-        },
-      });
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
     expect(disabled.description).toBe("A test executor");
     expect(disabled.disabled).toBe(true);
 
-    const disabledWithoutDescription = createExecutor("test-executor", {
+    const disabledWithoutDescription = createExecutor({
+      name: "test-executor",
       disabled: true,
-    })
-      .on(incomingWebhookTrigger())
-      .executeFunction({
-        fn: () => {
-          /* do nothing */
-        },
-      });
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
     expect(disabledWithoutDescription.description).toBeUndefined();
     expect(disabledWithoutDescription.disabled).toBe(true);
 
-    const enabled = createExecutor("test-executor", "A test executor")
-      .on(incomingWebhookTrigger())
-      .executeFunction({
-        fn: () => {
-          /* do nothing */
-        },
-      });
+    const enabled = createExecutor({
+      name: "test-executor",
+      description: "A test executor",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
     expect(enabled.description).toBe("A test executor");
     expect(enabled.disabled).toBeUndefined();
 
-    const enabledWithoutDescription = createExecutor("test-executor")
-      .on(incomingWebhookTrigger())
-      .executeFunction({
-        fn: () => {
-          /* do nothing */
-        },
-      });
+    const enabledWithoutDescription = createExecutor({
+      name: "test-executor",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
     expect(enabledWithoutDescription.description).toBeUndefined();
     expect(enabledWithoutDescription.disabled).toBeUndefined();
   });
@@ -62,37 +66,44 @@ describe("createExecutor", () => {
 
 describe("scheduleTrigger", () => {
   test("can specify valid cron", () => {
-    const trigger = scheduleTrigger("* * * * *");
-    expect(trigger.Frequency).toBe("* * * * *");
+    const trigger = scheduleTrigger({
+      cron: "* * * * *",
+    });
+    expect(trigger.cron).toBe("* * * * *");
   });
 
   test("can not specify invalid cron", () => {
-    // @ts-expect-error invalid cron
-    scheduleTrigger("* * * *");
-  });
-
-  test("default timezone is UTC", () => {
-    const trigger = scheduleTrigger("* * * * *");
-    expect(trigger.Timezone).toBe("UTC");
+    scheduleTrigger({
+      // @ts-expect-error invalid cron
+      cron: "* * * *",
+    });
   });
 
   test("can specify timezone", () => {
-    const trigger = scheduleTrigger("* * * * *", "Asia/Tokyo");
-    expect(trigger.Timezone).toBe("Asia/Tokyo");
+    const trigger = scheduleTrigger({
+      cron: "* * * * *",
+      timezone: "Asia/Tokyo",
+    });
+    expect(trigger.timezone).toBe("Asia/Tokyo");
   });
 
   test("can not specify invalid timezone", () => {
-    // @ts-expect-error invalid timezone
-    scheduleTrigger("* * * * *", "Invalid/Timezone");
+    scheduleTrigger({
+      cron: "* * * * *",
+      // @ts-expect-error invalid timezone
+      timezone: "Invalid/Timezone",
+    });
   });
 });
 
 describe("webhookTrigger", () => {
   test("function args include webhook args", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeFunction({
-        fn: (args) => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: (args) => {
           expectTypeOf(args).toExtend<{
             body: Record<string, unknown>;
             headers: Record<string, string>;
@@ -100,19 +111,20 @@ describe("webhookTrigger", () => {
             rawBody: string;
           }>();
         },
-      });
+      },
+    });
   });
 
   test("can narrow webhook args", () => {
-    createExecutor("test")
-      .on(
-        incomingWebhookTrigger<{
-          body: { id: string };
-          headers: { "x-custom-header": string };
-        }>(),
-      )
-      .executeFunction({
-        fn: (args) => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
           expectTypeOf(args).toExtend<{
             body: { id: string };
             headers: { "x-custom-header": string };
@@ -120,7 +132,8 @@ describe("webhookTrigger", () => {
             rawBody: string;
           }>();
         },
-      });
+      },
+    });
   });
 });
 
@@ -130,7 +143,9 @@ describe("recordCreatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    recordCreatedTrigger(user);
+    recordCreatedTrigger({
+      type: user,
+    });
   });
 
   test("can specify condition", () => {
@@ -138,7 +153,10 @@ describe("recordCreatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    recordCreatedTrigger(user, (args) => args.newRecord.age >= 18);
+    recordCreatedTrigger({
+      type: user,
+      condition: (args) => args.newRecord.age >= 18,
+    });
   });
 
   test("can not return invalid type from condition", () => {
@@ -146,9 +164,12 @@ describe("recordCreatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    // @ts-expect-error invalid return type
-    recordCreatedTrigger(user, () => {
-      return "invalid";
+    recordCreatedTrigger({
+      type: user,
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
     });
   });
 
@@ -157,9 +178,11 @@ describe("recordCreatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    createExecutor("test")
-      .on(
-        recordCreatedTrigger(user, (args) => {
+    createExecutor({
+      name: "test",
+      trigger: recordCreatedTrigger({
+        type: user,
+        condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -171,10 +194,11 @@ describe("recordCreatedTrigger", () => {
             };
           }>();
           return true;
-        }),
-      )
-      .executeFunction({
-        fn: (args) => {
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -186,7 +210,8 @@ describe("recordCreatedTrigger", () => {
             };
           }>();
         },
-      });
+      },
+    });
   });
 });
 
@@ -196,7 +221,9 @@ describe("recordUpdatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    recordUpdatedTrigger(user);
+    recordUpdatedTrigger({
+      type: user,
+    });
   });
 
   test("can specify condition", () => {
@@ -204,10 +231,10 @@ describe("recordUpdatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    recordUpdatedTrigger(
-      user,
-      (args) => args.oldRecord.age < 18 && args.newRecord.age >= 18,
-    );
+    recordUpdatedTrigger({
+      type: user,
+      condition: (args) => args.oldRecord.age < 18 && args.newRecord.age >= 18,
+    });
   });
 
   test("can not return invalid type from condition", () => {
@@ -215,9 +242,12 @@ describe("recordUpdatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    // @ts-expect-error invalid return type
-    recordUpdatedTrigger(user, () => {
-      return "invalid";
+    recordUpdatedTrigger({
+      type: user,
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
     });
   });
 
@@ -226,9 +256,11 @@ describe("recordUpdatedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    createExecutor("test")
-      .on(
-        recordUpdatedTrigger(user, (args) => {
+    createExecutor({
+      name: "test",
+      trigger: recordUpdatedTrigger({
+        type: user,
+        condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -245,10 +277,11 @@ describe("recordUpdatedTrigger", () => {
             };
           }>();
           return true;
-        }),
-      )
-      .executeFunction({
-        fn: (args) => {
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -265,7 +298,8 @@ describe("recordUpdatedTrigger", () => {
             };
           }>();
         },
-      });
+      },
+    });
   });
 });
 
@@ -275,7 +309,9 @@ describe("recordDeletedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    recordDeletedTrigger(user);
+    recordDeletedTrigger({
+      type: user,
+    });
   });
 
   test("can specify condition", () => {
@@ -283,7 +319,10 @@ describe("recordDeletedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    recordDeletedTrigger(user, (args) => args.oldRecord.age < 18);
+    recordDeletedTrigger({
+      type: user,
+      condition: (args) => args.oldRecord.age < 18,
+    });
   });
 
   test("can not return invalid type from condition", () => {
@@ -291,9 +330,12 @@ describe("recordDeletedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    // @ts-expect-error invalid return type
-    recordDeletedTrigger(user, () => {
-      return "invalid";
+    recordDeletedTrigger({
+      type: user,
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
     });
   });
 
@@ -302,9 +344,11 @@ describe("recordDeletedTrigger", () => {
       name: db.string(),
       age: db.int(),
     });
-    createExecutor("test")
-      .on(
-        recordDeletedTrigger(user, (args) => {
+    createExecutor({
+      name: "test",
+      trigger: recordDeletedTrigger({
+        type: user,
+        condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -316,10 +360,11 @@ describe("recordDeletedTrigger", () => {
             };
           }>();
           return true;
-        }),
-      )
-      .executeFunction({
-        fn: (args) => {
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -331,7 +376,8 @@ describe("recordDeletedTrigger", () => {
             };
           }>();
         },
-      });
+      },
+    });
   });
 });
 
@@ -343,7 +389,9 @@ describe("resolverExecutedTrigger", () => {
       body: () => ({ result: true }),
       output: t.object({ result: t.bool() }),
     });
-    resolverExecutedTrigger(resolver);
+    resolverExecutedTrigger({
+      resolver,
+    });
   });
 
   test("can specify condition", () => {
@@ -353,7 +401,10 @@ describe("resolverExecutedTrigger", () => {
       body: () => ({ result: true }),
       output: t.object({ result: t.bool() }),
     });
-    resolverExecutedTrigger(resolver, (args) => !args.error);
+    resolverExecutedTrigger({
+      resolver,
+      condition: (args) => !args.error,
+    });
   });
 
   test("can not return invalid type from condition", () => {
@@ -363,9 +414,12 @@ describe("resolverExecutedTrigger", () => {
       body: () => ({ result: true }),
       output: t.object({ result: t.bool() }),
     });
-    // @ts-expect-error invalid return type
-    resolverExecutedTrigger(resolver, () => {
-      return "invalid";
+    resolverExecutedTrigger({
+      resolver,
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
     });
   });
 
@@ -376,9 +430,11 @@ describe("resolverExecutedTrigger", () => {
       body: () => ({ result: true }),
       output: t.object({ result: t.bool() }),
     });
-    createExecutor("test")
-      .on(
-        resolverExecutedTrigger(resolver, (args) => {
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+        condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -387,10 +443,11 @@ describe("resolverExecutedTrigger", () => {
             error: string | undefined;
           }>();
           return true;
-        }),
-      )
-      .executeFunction({
-        fn: (args) => {
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
             appNamespace: string;
@@ -399,59 +456,99 @@ describe("resolverExecutedTrigger", () => {
             error: string | undefined;
           }>();
         },
-      });
+      },
+    });
   });
 });
 
 describe("functionTarget", () => {
   test("can return void from fn", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeFunction({
-        fn: () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: () => {
           return;
         },
-      });
+      },
+    });
 
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeFunction({
-        fn: async () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: async () => {
           return;
         },
-      });
+      },
+    });
   });
 
   test("can not return invalid type from fn", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeFunction({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
         // @ts-expect-error invalid return type
-        fn: () => {
+        body: () => {
           return "invalid";
         },
-      });
+      },
+    });
+  });
+
+  test("can extract body with type", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "function",
+        body: (_args) => {},
+      },
+    });
+
+    expectTypeOf(executor.operation.body).parameters.toExtend<
+      [
+        {
+          body: { id: string };
+          headers: { "x-custom-header": string };
+          method: "POST" | "GET" | "PUT" | "DELETE";
+          rawBody: string;
+        },
+      ]
+    >();
   });
 });
 
 describe("gqlTarget", () => {
   test("can specify query as string", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeGql({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
         appName: "test-app",
         query: `
           query TestQuery {
             testField
           }
         `,
-      });
+      },
+    });
   });
 
   test("can specify variables", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeGql({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
         appName: "test-app",
         query: `
           query TestQuery($id: ID!) {
@@ -461,18 +558,19 @@ describe("gqlTarget", () => {
         variables: () => ({
           id: "test-id",
         }),
-      });
+      },
+    });
   });
 
   test("variables receive args", () => {
-    createExecutor("test")
-      .on(
-        incomingWebhookTrigger<{
-          body: { id: string };
-          headers: { "x-custom-header": string };
-        }>(),
-      )
-      .executeGql({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "graphql",
         appName: "test-app",
         query: `
           query TestQuery($id: ID!) {
@@ -490,20 +588,21 @@ describe("gqlTarget", () => {
             id: args.body.id,
           };
         },
-      });
+      },
+    });
   });
 });
 
 describe("webhookTarget", () => {
   test("url receive args", () => {
-    createExecutor("test")
-      .on(
-        incomingWebhookTrigger<{
-          body: { id: string };
-          headers: { "x-custom-header": string };
-        }>(),
-      )
-      .executeWebhook({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "webhook",
         url: (args) => {
           expectTypeOf(args).toExtend<{
             body: { id: string };
@@ -513,29 +612,33 @@ describe("webhookTarget", () => {
           }>();
           return `https://example.com/webhook/${args.body.id}`;
         },
-      });
+      },
+    });
   });
 
   test("can not return invalid type from url", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeWebhook({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
         // @ts-expect-error invalid return type
         url: () => {
           return 123;
         },
-      });
+      },
+    });
   });
 
   test("body receive args", () => {
-    createExecutor("test")
-      .on(
-        incomingWebhookTrigger<{
-          body: { id: string };
-          headers: { "x-custom-header": string };
-        }>(),
-      )
-      .executeWebhook({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "webhook",
         url: () => "https://example.com/webhook",
         body: (args) => {
           expectTypeOf(args).toExtend<{
@@ -548,30 +651,37 @@ describe("webhookTarget", () => {
             id: args.body.id,
           };
         },
-      });
+      },
+    });
   });
 
   test("can not return invalid type from body", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeWebhook({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
         url: () => "https://example.com/webhook",
         // @ts-expect-error invalid return type
         body: () => {
           return 123;
         },
-      });
+      },
+    });
   });
 
   test("can specify headers", () => {
-    createExecutor("test")
-      .on(incomingWebhookTrigger())
-      .executeWebhook({
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
         url: () => "https://example.com/webhook",
         headers: {
           "Content-Type": "application/json",
           Authorization: { vault: "my-vault", key: "my-secret" },
         },
-      });
+      },
+    });
   });
 });

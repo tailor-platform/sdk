@@ -5,17 +5,17 @@ import {
 import { user } from "../tailordb/user";
 import userRecordLog from "./userRecordLog";
 
-export default createExecutor(
-  "user-created",
-  "Triggered when a new user is created",
-)
-  .on(
-    recordCreatedTrigger(user, ({ newRecord }) =>
-      newRecord.email.endsWith("@tailor.tech"),
-    ),
-  )
-  .executeFunction({
-    fn: async (args) => {
+export default createExecutor({
+  name: "user-created",
+  description: "Triggered when a new user is created",
+  trigger: recordCreatedTrigger({
+    type: user,
+    condition: ({ newRecord }) => newRecord.email.endsWith("@tailor.tech"),
+  }),
+  operation: {
+    kind: "function",
+    body: async (args) => {
       await userRecordLog(args);
     },
-  });
+  },
+});

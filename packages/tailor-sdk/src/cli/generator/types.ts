@@ -1,4 +1,4 @@
-import { type Executor } from "@/configure/services/executor/types";
+import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import type { CodeGeneratorBase } from "@/parser/generator-config";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";

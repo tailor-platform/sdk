@@ -1,18 +1,6 @@
-import { type ScheduleTrigger, type WithArgs } from "../types";
+import type { ScheduleTriggerInput as ParserScheduleTriggerInput } from "@/parser/service/executor/types";
 import type { StandardCRON } from "ts-cron-validator";
 import type { EmptyObject } from "type-fest";
-
-export function scheduleTrigger<T extends string>(
-  cron: StandardCRON<T> extends never ? never : T,
-  timezone: Timezone = "UTC",
-): ScheduleTrigger & WithArgs<EmptyObject> {
-  return {
-    Kind: "Schedule",
-    Timezone: timezone,
-    Frequency: cron,
-    _args: {},
-  };
-}
 
 type Timezone =
   | "UTC"
@@ -440,3 +428,22 @@ type Timezone =
   | "Pacific/Fakaofo"
   | "Pacific/Tongatapu"
   | "Pacific/Kiritimati";
+
+export type ScheduleTrigger<Args> = ParserScheduleTriggerInput & {
+  __args: Args;
+};
+
+export function scheduleTrigger<T extends string>({
+  cron,
+  timezone,
+}: {
+  cron: StandardCRON<T> extends never ? never : T;
+  timezone?: Timezone;
+}): ScheduleTrigger<EmptyObject> {
+  return {
+    kind: "schedule",
+    cron,
+    timezone,
+    __args: {} as EmptyObject,
+  };
+}

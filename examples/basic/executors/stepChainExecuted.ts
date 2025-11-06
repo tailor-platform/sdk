@@ -4,18 +4,19 @@ import {
 } from "@tailor-platform/tailor-sdk";
 import stepChain from "../resolvers/stepChain";
 
-export default createExecutor(
-  "step-chain-executed",
-  "Triggered when a step chain is executed",
-  { disabled: true },
-)
-  .on(
-    resolverExecutedTrigger(stepChain, ({ result }) => {
+export default createExecutor({
+  name: "step-chain-executed",
+  description: "Triggered when a step chain is executed",
+  disabled: true,
+  trigger: resolverExecutedTrigger({
+    resolver: stepChain,
+    condition: ({ result }) => {
       if (!result) return false;
       return result.result.summary.length > 0;
-    }),
-  )
-  .executeWebhook({
+    },
+  }),
+  operation: {
+    kind: "webhook",
     url: ({ result }) =>
       `https://example.com/webhook/${result!.result.summary.length}`,
     headers: {
@@ -27,4 +28,5 @@ export default createExecutor(
       customerID: result!.result.summary[1],
       totalPrice: result!.result.summary[2],
     }),
-  });
+  },
+});

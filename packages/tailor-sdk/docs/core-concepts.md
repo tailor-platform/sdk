@@ -359,52 +359,50 @@ createResolver({
 
 ### Executor Patterns
 
-Define Executors in files matching glob patterns specified in `tailor.config.ts`. Executors follow a simple pattern:
-
-1. Create an executor with `createExecutor(name, description)`
-2. Add a trigger with `.on(...)`
-3. Choose a target: `.executeFunction({ ... })`, `.executeJobFunction({ ... })`, `.executeWebhook({ ... })`, or `.executeGql({ ... })`
+Define Executors in files matching glob patterns specified in `tailor.config.ts`.
 
 ```typescript
-createExecutor("user-welcome", "Send welcome email to new users")
-  .on(
-    recordCreatedTrigger(
-      user,
-      ({ newRecord }) => !!newRecord.email && newRecord.isActive,
-    ),
-  )
-  .executeFunction({
-    fn: async ({ newRecord }) => {
+createExecutor({
+  name: "user-welcome",
+  description: "Send welcome email to new users",
+  trigger: recordCreatedTrigger({
+    type: user,
+    condition: ({ newRecord }) => !!newRecord.email && newRecord.isActive,
+  }),
+  operation: {
+    kind: "function",
+    body: async ({ newRecord }) => {
       // Send welcome email logic here
     },
-  });
+  },
+});
 ```
 
 #### Trigger Types
 
 **Record Triggers** - Fire when records are created, updated, or deleted:
 
-- `recordCreatedTrigger(type, filter?)`: Fires when a new record is created
-- `recordUpdatedTrigger(type, filter?)`: Fires when a record is updated
-- `recordDeletedTrigger(type, filter?)`: Fires when a record is deleted
+- `recordCreatedTrigger()`: Fires when a new record is created
+- `recordUpdatedTrigger()`: Fires when a record is updated
+- `recordDeletedTrigger()`: Fires when a record is deleted
 
 Each trigger can include an optional filter function:
 
 ```typescript
-recordUpdatedTrigger(
-  order,
-  ({ newRecord, oldRecord }) =>
+recordUpdatedTrigger({
+  type: order,
+  condition: ({ newRecord, oldRecord }) =>
     newRecord.status === "completed" && oldRecord.status !== "completed",
-);
+});
 ```
 
 **Schedule Trigger** - Fires on a cron schedule:
 
 ```typescript
-scheduleTrigger("*/5 * * * *");
-scheduleTrigger("0 9 * * 1");
-scheduleTrigger("0 0 1 * *");
-scheduleTrigger("0 * * * *", "Asia/Tokyo");
+scheduleTrigger({ cron: "*/5 * * * *" });
+scheduleTrigger({ cron: "0 9 * * 1" });
+scheduleTrigger({ cron: "0 0 1 * *" });
+scheduleTrigger({ cron: "0 * * * *", timezone: "Asia/Tokyo" });
 ```
 
 **Incoming Webhook Trigger** - Fires when an external webhook is received:
@@ -416,10 +414,10 @@ incomingWebhookTrigger<WebhookPayload>();
 **Resolver Executed Trigger** - Fires when a resolver is executed:
 
 ```typescript
-resolverExecutedTrigger(
-  createOrderResolver,
-  ({ result, error }) => !error && result?.order?.id,
-);
+resolverExecutedTrigger({
+  resolver: createOrderResolver,
+  condition: ({ result, error }) => !error && result?.order?.id,
+}
 ```
 
 #### Execution Targets
@@ -427,49 +425,59 @@ resolverExecutedTrigger(
 **executeFunction / executeJobFunction** - Execute JavaScript/TypeScript functions:
 
 ```typescript
-.executeFunction({
-  fn: async ({ newRecord }) => {
-    console.log("New record created:", newRecord);
+createExecutor({
+  operation: {
+    kind: "function",
+    body: async ({ newRecord }) => {
+      console.log("New record created:", newRecord);
+    },
   },
-})
+});
 ```
 
 **executeWebhook** - Call external webhooks with dynamic data:
 
 ```typescript
-.executeWebhook({
-  url: ({ newRecord }) => `https://api.example.com/webhooks/${newRecord.type}`,
-  headers: {
-    "Content-Type": "application/json",
-    "X-API-Key": { vault: "api-keys", key: "external-api" },
+createExecutor({
+  operation: {
+    kind: "webhook",
+    url: ({ newRecord }) =>
+      `https://api.example.com/webhooks/${newRecord.type}`,
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": { vault: "api-keys", key: "external-api" },
+    },
+    body: ({ newRecord }) => ({
+      id: newRecord.id,
+      timestamp: new Date().toISOString(),
+      data: newRecord,
+    }),
   },
-  body: ({ newRecord }) => ({
-    id: newRecord.id,
-    timestamp: new Date().toISOString(),
-    data: newRecord,
-  }),
-})
+});
 ```
 
 **executeGql** - Execute GraphQL queries and mutations:
 
 ```typescript
-.executeGql({
-  appName: "my-app",
-  query: gql`
-    mutation UpdateUserStatus($id: ID!, $status: String!) {
-      updateUser(id: $id, input: { status: $status }) {
-        id
-        status
-        updatedAt
+createExecutor({
+  operation: {
+    kind: "graphql",
+    appName: "my-app",
+    query: gql`
+      mutation UpdateUserStatus($id: ID!, $status: String!) {
+        updateUser(id: $id, input: { status: $status }) {
+          id
+          status
+          updatedAt
+        }
       }
-    }
-  `,
-  variables: ({ newRecord }) => ({
-    id: newRecord.userId,
-    status: "active",
-  }),
-})
+    `,
+    variables: ({ newRecord }) => ({
+      id: newRecord.userId,
+      status: "active",
+    }),
+  },
+});
 ```
 
 #### Execution Context

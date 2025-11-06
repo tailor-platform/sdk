@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+# These options ensure the script fails when diagnostics encounter errors.
+set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 

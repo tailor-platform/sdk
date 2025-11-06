@@ -1,37 +1,23 @@
-import { type WebhookTarget } from "../types";
+import type {
+  FunctionOperation as ParserFunctionOperation,
+  GqlOperation as ParserGqlOperation,
+  WebhookOperation as ParserWebhookOperation,
+} from "@/parser/service/executor/types";
+import type { Client } from "@urql/core";
 
-type URLFn<A> = (args: A) => string;
-type BodyFn<A> = (args: A) => Record<string, unknown>;
-type Headers = {
-  [key in RequestHeader]?: string | { vault: string; key: string };
+export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
+  body: (args: Args) => void | Promise<void>;
 };
 
-export function executorWebhook<A>({
-  url,
-  headers,
-  body,
-}: {
-  url: URLFn<A>;
-  headers?: Headers;
-  body?: BodyFn<A>;
-}): WebhookTarget {
-  return {
-    Kind: "webhook",
-    URL: `(${url.toString()})(args)`,
-    Headers: headers
-      ? Object.entries(headers)
-          .filter(([_, value]) => value != null)
-          .map(([key, value]) => ({
-            Key: key,
-            Value:
-              typeof value === "string"
-                ? value
-                : { VaultName: value!.vault, SecretKey: value!.key },
-          }))
-      : undefined,
-    Body: body ? `(${body.toString()})(args)` : undefined,
-  };
-}
+type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
+
+export type GqlOperation<Args> = Omit<
+  ParserGqlOperation,
+  "query" | "variables"
+> & {
+  query: UrqlOperationArgs[0];
+  variables?: (args: Args) => UrqlOperationArgs[1];
+};
 
 type RequestHeader =
   | "A-IM"
@@ -277,3 +263,19 @@ type RequestHeader =
   | "X-Content-Type-Options"
   | "X-Frame-Options"
   | (string & {});
+
+export type WebhookOperation<Args> = Omit<
+  ParserWebhookOperation,
+  "url" | "body" | "headers"
+> & {
+  url: (args: Args) => string;
+  body?: (args: Args) => Record<string, unknown>;
+  headers?: {
+    [key in RequestHeader]?: string | { vault: string; key: string };
+  };
+};
+
+export type Operation<Args> =
+  | FunctionOperation<Args>
+  | GqlOperation<Args>
+  | WebhookOperation<Args>;

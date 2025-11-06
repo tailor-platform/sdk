@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import ml from "multiline-ts";
 import { type ITransformer } from "@/cli/bundler";
-import { type Executor } from "@/configure/services/executor/types";
+import type { Executor } from "@/parser/service/executor";
 
 export class ExecutorTransformer implements ITransformer {
   constructor() {}
@@ -19,12 +19,12 @@ export class ExecutorTransformer implements ITransformer {
       await import(`${pathToFileURL(filePath)}?t=${new Date().getTime()}`)
     ).default as Executor;
     // Check if this is a function executor
-    const exec = executor.exec;
-    if (exec.Kind !== "function" && exec.Kind !== "job_function") {
+    const exec = executor.operation;
+    if (exec.kind !== "function" && exec.kind !== "jobFunction") {
       // For non-function executors (webhook, gql), return empty array
       return [];
     }
-    if (!exec.fn) {
+    if (!exec.body) {
       throw new Error(
         `Function reference not found in executor ${executor.name}`,
       );
@@ -37,7 +37,7 @@ export class ExecutorTransformer implements ITransformer {
       ${sourceText}
 
       // Export the executor function
-      export const __executor_function = ${exec.fn.toString()};
+      export const __executor_function = ${exec.body.toString()};
       `,
     );
 

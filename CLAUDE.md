@@ -354,9 +354,17 @@ const handler = async ({ newRecord }: { newRecord: t.infer<typeof user> }) => {
   console.log(`New user: ${record?.name}`);
 };
 
-export default createExecutor("userLogger", "Log user creation")
-  .on(recordCreatedTrigger(user))
-  .executeFunction({ fn: handler });
+export default createExecutor({
+  name: "userLogger",
+  description: "Logs user creation",
+  trigger: recordCreatedTrigger({
+    type: user,
+  }),
+  operation: {
+    kind: "function",
+    body: handler,
+  },
+});
 ```
 
 ### Important Notes

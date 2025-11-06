@@ -11,8 +11,8 @@ import {
 } from "@/cli/generator/types";
 import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir, type AppConfig } from "@/configure/config";
-import { type Executor } from "@/configure/services/executor/types";
 import { type Generator } from "@/parser/generator-config";
+import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { commonArgs, withCommonArgs } from "../args";
 import { DependencyWatcher } from "./watch";

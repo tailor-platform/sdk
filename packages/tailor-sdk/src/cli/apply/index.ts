@@ -20,7 +20,7 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
-import type { Executor } from "@/configure/services/executor/types";
+import type { Executor } from "@/parser/service/executor";
 import type { Resolver } from "@/parser/service/resolver";
 
 export type ApplyOptions = {
@@ -128,7 +128,7 @@ async function buildExecutor(config: { files?: string[] }) {
       postBundle: "executors",
     },
     shouldProcess: (executor) =>
-      ["function", "job_function"].includes(executor.exec.Kind),
+      ["function", "jobFunction"].includes(executor.operation.kind),
   };
   const bundler = new Bundler(bundlerConfig);
   await bundler.bundle();

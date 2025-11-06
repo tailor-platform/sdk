@@ -36,11 +36,11 @@ function generateResolvers(): string {
     code += `export const resolver${i} = createResolver({
   name: "resolver${i}",
   operation: "${operation}",
-  input: t.type({
+  input: {
     id: t.string(),
     name: t.string(),
     value: t.int(),
-  }),
+  },
   body: async (context) => {
     return {
       id: context.input.id,
@@ -49,7 +49,7 @@ function generateResolvers(): string {
       processed: true,
     };
   },
-  output: t.type({
+  output: t.object({
     id: t.string(),
     name: t.string(),
     value: t.int(),
@@ -62,21 +62,21 @@ function generateResolvers(): string {
 }
 
 function generateExecutors(): string {
-  let code = `import { createExecutor, cronTrigger, webhookTrigger } from "@tailor-platform/tailor-sdk";\n\n`;
+  let code = `import { createExecutor, scheduleTrigger, incomingWebhookTrigger } from "@tailor-platform/tailor-sdk";\n\n`;
 
   for (let i = 0; i < counts.executors; i++) {
-    // Alternate between cronTrigger and webhookTrigger to test different trigger types
+    // Alternate between scheduleTrigger and incomingWebhookTrigger to test different trigger types
     const triggerCode =
       i % 2 === 0
-        ? `cronTrigger({ schedule: "0 0 * * *" })`
-        : `webhookTrigger()`;
+        ? `scheduleTrigger({ cron: "0 0 * * *" })`
+        : `incomingWebhookTrigger()`;
 
-    code += `export const executor${i} = createExecutor(
-  "executor${i}",
-  "Executor ${i} description"
-)
-  .on(${triggerCode})
-  .executeGql({
+    code += `export const executor${i} = createExecutor({
+  name: "executor${i}",
+  description: "Executor ${i} description",
+  trigger: ${triggerCode},
+  operation: {
+    kind: "graphql",
     appName: "my-app",
     query: \`
       mutation createLog($input: LogInput!) {
@@ -91,7 +91,8 @@ function generateExecutors(): string {
         executorId: "${i}",
       },
     }),
-  });\n\n`;
+  },
+});\n\n`;
   }
 
   return code;

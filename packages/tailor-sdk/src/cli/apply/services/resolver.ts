@@ -21,12 +21,12 @@ import * as inflection from "inflection";
 import { type Application } from "@/cli/application";
 import { type ResolverService } from "@/cli/application/resolver/service";
 import { getDistDir } from "@/configure/config";
-import { type Executor } from "@/configure/services/executor/types";
 import { tailorUserMap } from "@/configure/types";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet } from ".";
+import type { Executor } from "@/parser/service/executor";
 
 // Scalar type mapping for field type conversion
 const SCALAR_TYPE_MAP = {
@@ -245,11 +245,8 @@ async function planResolvers(
 
   const executorUsedResolvers = new Set<string>();
   for (const executor of executors) {
-    if (
-      executor.trigger.Kind === "Event" &&
-      executor.trigger.EventType.kind === "pipeline.resolver.executed"
-    ) {
-      executorUsedResolvers.add(executor.trigger.EventType.resolverName);
+    if (executor.trigger.kind === "resolverExecuted") {
+      executorUsedResolvers.add(executor.trigger.resolverName);
     }
   }
 

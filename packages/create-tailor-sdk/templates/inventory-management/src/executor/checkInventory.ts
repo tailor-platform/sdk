@@ -6,19 +6,17 @@ import { inventory } from "../db/inventory";
 import config from "../../tailor.config";
 import { getDB } from "../generated/kysely-tailordb";
 
-export default createExecutor(
-  "check-inventory",
-  "Notify when inventory drops below threshold",
-)
-  .on(
-    recordUpdatedTrigger(
-      inventory,
-      ({ oldRecord, newRecord }) =>
-        oldRecord.quantity >= 10 && newRecord.quantity < 10,
-    ),
-  )
-  .executeFunction({
-    fn: async ({ newRecord }) => {
+export default createExecutor({
+  name: "check-inventory",
+  description: "Notify when inventory drops below threshold",
+  trigger: recordUpdatedTrigger({
+    type: inventory,
+    condition: ({ oldRecord, newRecord }) =>
+      oldRecord.quantity >= 10 && newRecord.quantity < 10,
+  }),
+  operation: {
+    kind: "function",
+    body: async ({ newRecord }) => {
       const db = getDB("main-db");
 
       await db
@@ -29,4 +27,5 @@ export default createExecutor(
         .execute();
     },
     invoker: config.auth.invoker("manager"),
-  });
+  },
+});

@@ -35,7 +35,6 @@ import {
 import * as inflection from "inflection";
 import { type Application } from "@/cli/application";
 import { type TailorDBService } from "@/cli/application/tailordb/service";
-import { type Executor } from "@/configure/services";
 import {
   type PermissionOperand,
   type StandardActionPermission,
@@ -48,6 +47,7 @@ import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet, type HasName } from ".";
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+import type { Executor } from "@/parser/service/executor";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export async function applyTailorDB(
@@ -264,12 +264,11 @@ async function planTypes(
   const executorUsedTypes = new Set<string>();
   for (const executor of executors) {
     if (
-      executor.trigger.Kind === "Event" &&
-      (executor.trigger.EventType.kind === `tailordb.type_record.created` ||
-        executor.trigger.EventType.kind === `tailordb.type_record.updated` ||
-        executor.trigger.EventType.kind === `tailordb.type_record.deleted`)
+      executor.trigger.kind === "recordCreated" ||
+      executor.trigger.kind === "recordUpdated" ||
+      executor.trigger.kind === "recordDeleted"
     ) {
-      executorUsedTypes.add(executor.trigger.EventType.typeName);
+      executorUsedTypes.add(executor.trigger.typeName);
     }
   }
 

@@ -17,10 +17,10 @@ import {
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { type Application } from "@/cli/application";
 import { getDistDir } from "@/configure/config";
-import { type Executor } from "@/configure/services";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet } from ".";
+import type { Executor, Trigger } from "@/parser/service/executor";
 
 export async function applyExecutor(
   client: OperatorClient,
@@ -127,34 +127,70 @@ function protoExecutor(
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
-  switch (trigger.Kind) {
-    case "Schedule":
+  const eventType: { [key in Trigger["kind"]]?: string } = {
+    recordCreated: "tailordb.type_record.created",
+    recordUpdated: "tailordb.type_record.updated",
+    recordDeleted: "tailordb.type_record.deleted",
+    resolverExecuted: "pipeline.resolver.executed",
+  };
+  switch (trigger.kind) {
+    case "schedule":
       triggerType = ExecutorTriggerType.SCHEDULE;
       triggerConfig = {
         config: {
           case: "schedule",
           value: {
-            timezone: trigger.Timezone,
-            frequency: trigger.Frequency,
+            timezone: trigger.timezone,
+            frequency: trigger.cron,
           },
         },
       };
       break;
-    case "Event":
+    case "recordCreated":
+    case "recordUpdated":
+    case "recordDeleted":
       triggerType = ExecutorTriggerType.EVENT;
       triggerConfig = {
         config: {
           case: "event",
           value: {
-            eventType: trigger.EventType.kind,
+            eventType: eventType[trigger.kind],
             condition: {
-              expr: trigger.Condition,
+              expr: [
+                /* js */ `args.typeName === "${trigger.typeName}"`,
+                ...(trigger.condition
+                  ? [
+                      /* js */ `(${trigger.condition.toString()})({ ...args, appNamespace: args.namespaceName })`,
+                    ]
+                  : []),
+              ].join(" && "),
             },
           },
         },
       };
       break;
-    case "IncomingWebhook":
+    case "resolverExecuted":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = {
+        config: {
+          case: "event",
+          value: {
+            eventType: eventType[trigger.kind],
+            condition: {
+              expr: [
+                /* js */ `args.resolverName === "${trigger.resolverName}"`,
+                ...(trigger.condition
+                  ? [
+                      /* js */ `(${trigger.condition.toString()})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })`,
+                    ]
+                  : []),
+              ].join(" && "),
+            },
+          },
+        },
+      };
+      break;
+    case "incomingWebhook":
       triggerType = ExecutorTriggerType.INCOMING_WEBHOOK;
       triggerConfig = {
         config: {
@@ -163,12 +199,14 @@ function protoExecutor(
         },
       };
       break;
+    default:
+      throw new Error(`Unknown trigger: ${trigger satisfies never}`);
   }
 
-  const target = executor.exec;
+  const target = executor.operation;
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
-  switch (target.Kind) {
+  switch (target.kind) {
     case "webhook": {
       targetType = ExecutorTargetType.WEBHOOK;
       targetConfig = {
@@ -176,34 +214,33 @@ function protoExecutor(
           case: "webhook",
           value: {
             url: {
-              expr: target.URL,
+              expr: `(${target.url.toString()})(args)`,
             },
-            headers: target.Headers?.map((header) => {
-              let value: MessageInitShape<
-                typeof ExecutorTargetWebhookHeaderSchema
-              >["value"];
-              if (typeof header.Value === "string") {
-                value = {
-                  case: "rawValue",
-                  value: header.Value,
-                };
-              } else {
-                value = {
-                  case: "secretValue",
-                  value: {
-                    vaultName: header.Value.VaultName,
-                    secretKey: header.Value.SecretKey,
-                  },
-                };
-              }
-              return {
-                key: header.Key,
-                value,
-              };
-            }),
-            body: target.Body
+            headers: target.headers
+              ? Object.entries(target.headers).map(([key, v]) => {
+                  let value: MessageInitShape<
+                    typeof ExecutorTargetWebhookHeaderSchema
+                  >["value"];
+                  if (typeof v === "string") {
+                    value = {
+                      case: "rawValue",
+                      value: v,
+                    };
+                  } else {
+                    value = {
+                      case: "secretValue",
+                      value: {
+                        vaultName: v.vault,
+                        secretKey: v.key,
+                      },
+                    };
+                  }
+                  return { key, value };
+                })
+              : undefined,
+            body: target.body
               ? {
-                  expr: target.Body,
+                  expr: `(${target.body.toString()})(args)`,
                 }
               : undefined,
           },
@@ -217,46 +254,50 @@ function protoExecutor(
         config: {
           case: "tailorGraphql",
           value: {
-            appName: target.AppName,
-            query: target.Query,
-            variables: target.Variables
+            appName: target.appName,
+            query: target.query,
+            variables: target.variables
               ? {
-                  expr: target.Variables,
+                  expr: `(${target.variables.toString()})(args)`,
                 }
               : undefined,
-            invoker: target.Invoker
+            invoker: target.invoker
               ? {
-                  namespace: target.Invoker.AuthNamespace,
-                  machineUserName: target.Invoker.MachineUserName,
+                  namespace: target.invoker.authName,
+                  machineUserName: target.invoker.machineUser,
                 }
               : undefined,
           },
         },
       };
       break;
-    case "function": {
+    case "function":
+    case "jobFunction": {
+      if (target.kind === "function") {
+        targetType = ExecutorTargetType.FUNCTION;
+      } else {
+        targetType = ExecutorTargetType.JOB_FUNCTION;
+      }
+
       const scriptPath = path.join(
         getDistDir(),
         "executors",
         `${executor.name}.js`,
       );
       const script = fs.readFileSync(scriptPath, "utf-8");
-      targetType = ExecutorTargetType.FUNCTION;
       targetConfig = {
         config: {
           case: "function",
           value: {
-            name: target.Name,
+            name: `${executor.name}__target`,
             script,
-            variables: target.Variables
+            variables: {
+              expr: "({ ...args, appNamespace: args.namespaceName })",
+            },
+            invoker: target.invoker
               ? {
-                  expr: target.Variables,
-                }
-              : undefined,
-            invoker: target.Invoker
-              ? {
-                  namespace: target.Invoker.AuthNamespace,
-                  machineUserName: target.Invoker.MachineUserName,
+                  namespace: target.invoker.authName,
+                  machineUserName: target.invoker.machineUser,
                 }
               : undefined,
           },
@@ -264,45 +305,17 @@ function protoExecutor(
       };
       break;
     }
-    case "job_function": {
-      const scriptPath = path.join(
-        getDistDir(),
-        "executors",
-        `${executor.name}.js`,
-      );
-      const script = fs.readFileSync(scriptPath, "utf-8");
-      targetType = ExecutorTargetType.JOB_FUNCTION;
-      targetConfig = {
-        config: {
-          case: "function",
-          value: {
-            name: target.Name,
-            script,
-            variables: target.Variables
-              ? {
-                  expr: target.Variables,
-                }
-              : undefined,
-            invoker: target.Invoker
-              ? {
-                  namespace: target.Invoker.AuthNamespace,
-                  machineUserName: target.Invoker.MachineUserName,
-                }
-              : undefined,
-          },
-        },
-      };
-      break;
-    }
+    default:
+      throw new Error(`Unknown target: ${target satisfies never}`);
   }
 
   return {
     name: executor.name,
     description: executor.description,
+    disabled: executor.disabled,
     triggerType,
     triggerConfig,
     targetType,
     targetConfig,
-    disabled: executor.disabled ?? false,
   };
 }

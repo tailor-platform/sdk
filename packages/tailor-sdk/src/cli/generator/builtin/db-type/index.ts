@@ -3,7 +3,6 @@ import {
   type GeneratorResult,
   type GeneratorInput,
 } from "@/cli/generator/types";
-import { type Executor } from "@/configure/services/executor/types";
 import { TypeProcessor } from "./type-processor";
 import { type DbTypeMetadata } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
@@ -39,7 +38,7 @@ export class DbTypeGenerator
     return undefined;
   }
 
-  processExecutor(_executor: Executor): undefined {
+  processExecutor(): undefined {
     return undefined;
   }
 
