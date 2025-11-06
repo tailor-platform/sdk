@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- [#665](https://github.com/tailor-platform/tailor-sdk/pull/665) [`16e7cf2`](https://github.com/tailor-platform/tailor-sdk/commit/16e7cf2045cfa7dff717ce9001a2925cd5588d5f) Thanks [@toiroakr](https://github.com/toiroakr)! - chore!: rename pipeline -> resolver
+
 ## 0.3.0
 
 ### Minor Changes
