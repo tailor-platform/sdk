@@ -1,5 +1,15 @@
 # @tailor-platform/tailor-sdk
 
+## 0.5.1
+
+### Patch Changes
+
+- [#672](https://github.com/tailor-platform/tailor-sdk/pull/672) [`4730eb1`](https://github.com/tailor-platform/tailor-sdk/commit/4730eb1023b6cb3c74483c419242c7a1a4328897) Thanks [@remiposo](https://github.com/remiposo)! - Use `z.custom<Function>` instead of `z.function`
+
+- [#673](https://github.com/tailor-platform/tailor-sdk/pull/673) [`7672c9b`](https://github.com/tailor-platform/tailor-sdk/commit/7672c9b7866a3a0864bd04cda114b546e07d5051) Thanks [@remiposo](https://github.com/remiposo)! - Exported Namespace of kysely-type
+
+  Exported Namespace to enable retrieving Kysely types like `Selectable<Namespace["main-db"]["User"]>`.
+
 ## 0.5.0
 
 ### Minor Changes
