@@ -7,7 +7,7 @@ type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   : ColumnType<T, T | undefined, T>;
 type Serial<T = string | number> = ColumnType<T, never, never>;
 
-interface Namespace {
+export interface Namespace {
   "main-db": {
     Category: {
       id: Generated<string>;

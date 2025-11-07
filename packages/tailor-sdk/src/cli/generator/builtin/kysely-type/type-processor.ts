@@ -182,6 +182,6 @@ export class TypeProcessor {
       })
       .join("\n\n");
 
-    return `interface Namespace {\n  "${namespace}": {\n${typeDefsWithIndent}\n  }\n}`;
+    return `export interface Namespace {\n  "${namespace}": {\n${typeDefsWithIndent}\n  }\n}`;
   }
 }
