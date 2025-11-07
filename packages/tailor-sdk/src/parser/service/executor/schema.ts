@@ -1,8 +1,5 @@
 import { z } from "zod";
-
-// Use `z.custom` instead of `z.function`, since `z.function` changes `toString` representation.
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-const functionSchema = z.custom<Function>((val) => typeof val === "function");
+import { functionSchema } from "../common";
 
 export const InvokerSchema = z.object({
   authName: z.string(),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { functionSchema } from "../common";
 
 export const TailorFieldTypeSchema = z.enum([
   "uuid",
@@ -30,8 +31,8 @@ export const FieldMetadataSchema = z.object({
   allowedValues: z.array(AllowedValueSchema).optional(),
   hooks: z
     .object({
-      create: z.function().optional(),
-      update: z.function().optional(),
+      create: functionSchema.optional(),
+      update: functionSchema.optional(),
     })
     .optional(),
   typeName: z.string().optional(),
@@ -50,6 +51,6 @@ export const ResolverSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   input: z.record(z.string(), TailorFieldSchema).optional(),
-  body: z.function(),
+  body: functionSchema,
   output: TailorFieldSchema,
 });
