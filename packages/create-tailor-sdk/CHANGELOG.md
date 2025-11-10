@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.5.4
+
+### Patch Changes
+
+- [#682](https://github.com/tailor-platform/tailor-sdk/pull/682) [`7678f09`](https://github.com/tailor-platform/tailor-sdk/commit/7678f09909e4d604604e8845d39e86be3e7fa47a) Thanks [@remiposo](https://github.com/remiposo)! - Renamed from Tailor SDK to Tailor Platform SDK
+
 ## 0.5.3
 
 ### Patch Changes
