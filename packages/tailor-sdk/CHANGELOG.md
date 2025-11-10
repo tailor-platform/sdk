@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.5.2
+
+### Patch Changes
+
+- [#675](https://github.com/tailor-platform/tailor-sdk/pull/675) [`8cb1c77`](https://github.com/tailor-platform/tailor-sdk/commit/8cb1c77582da17f7fa4171ea15fe4d5aa465a9bd) Thanks [@remiposo](https://github.com/remiposo)! - Added testing guides
+
 ## 0.5.1
 
 ### Patch Changes
