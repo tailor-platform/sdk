@@ -27,7 +27,7 @@ coverage/
 .idea/
 .vscode/
 
-# Tailor SDK
+# Tailor Platform SDK
 **/.tailor-sdk/**
 .turbo
 

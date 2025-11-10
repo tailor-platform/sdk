@@ -1,6 +1,6 @@
 # Type Check Performance Measurement
 
-This directory contains tools for measuring TypeScript type checking performance of the Tailor SDK.
+This directory contains tools for measuring TypeScript type checking performance of the Tailor Platform SDK.
 
 Inspired by the Hono project implementation, this performs two types of measurements:
 

@@ -6,7 +6,7 @@ dist/
 build/
 *.tsbuildinfo
 
-# Tailor SDK generated files
+# Tailor Platform SDK generated files
 .tailor-sdk/
 
 # Test files

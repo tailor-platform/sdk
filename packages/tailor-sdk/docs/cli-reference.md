@@ -1,6 +1,6 @@
 # CLI Reference
 
-Tailor SDK provides a command-line interface for managing projects and workspaces.
+The Tailor Platform SDK provides a command-line interface for managing projects and workspaces.
 
 ## Usage
 

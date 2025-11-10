@@ -1,6 +1,6 @@
-# Tailor SDK
+# Tailor Platform SDK
 
-Tailor SDK is a library for building applications on the Tailor Platform using TypeScript.
+The Tailor Platform SDK is a library for building applications on the Tailor Platform using TypeScript.
 
 # Documentation
 

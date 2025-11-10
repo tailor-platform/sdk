@@ -30,7 +30,7 @@ const main = async () => {
       },
     },
     async run({ args }) {
-      intro(pc.bold(pc.cyan("✨ Welcome to Tailor SDK")));
+      intro(pc.bold(pc.cyan("✨ Welcome to Tailor Platform SDK")));
 
       const ctx = await collectContext({
         name: args.name,

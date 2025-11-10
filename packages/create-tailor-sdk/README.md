@@ -1,6 +1,6 @@
-# Create Tailor SDK
+# Create Tailor Platform SDK
 
-`@tailor-platform/create-tailor-sdk` is a CLI tool to quickly scaffold a new [Tailor SDK](https://www.npmjs.com/package/@tailor-platform/tailor-sdk) project.
+`@tailor-platform/create-tailor-sdk` is a CLI tool to quickly scaffold a new [Tailor Platform SDK](https://www.npmjs.com/package/@tailor-platform/tailor-sdk) project.
 
 ## Usage
 
@@ -25,7 +25,7 @@ pnpm create @tailor-platform/tailor-sdk [OPTIONS] [NAME]
 This tool will:
 
 1. Create a new directory with the specified project name.
-2. Scaffold a new Tailor SDK project in that directory using the selected template.
+2. Scaffold a new Tailor Platform SDK project in that directory using the selected template.
 3. Install the necessary dependencies with the package manager being used.
 4. Initialize a new Git repository in the project directory.
 

@@ -24,7 +24,7 @@ const mainCommand = defineCommand({
     version: packageJson.version,
     description:
       packageJson.description ||
-      "Tailor CLI for managing Tailor SDK applications",
+      "Tailor CLI for managing Tailor Platform SDK applications",
   },
   subCommands: {
     apply: applyCommand,

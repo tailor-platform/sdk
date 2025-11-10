@@ -1,8 +1,8 @@
 # Inventory Management
 
-This is a sample project for an inventory management system using [Tailor SDK](https://www.npmjs.com/package/@tailor-platform/tailor-sdk).
+This is a sample project for an inventory management system using [Tailor Platform SDK](https://www.npmjs.com/package/@tailor-platform/tailor-sdk).
 
-This project was bootstrapped with [Create Tailor SDK](https://www.npmjs.com/package/@tailor-platform/create-tailor-sdk).
+This project was bootstrapped with [Create Tailor Platform SDK](https://www.npmjs.com/package/@tailor-platform/create-tailor-sdk).
 
 ## Usage
 

@@ -20,7 +20,7 @@ async function install() {
     return;
   }
 
-  console.log("🔧 Initializing Tailor SDK type definitions...");
+  console.log("🔧 Initializing Tailor Platform SDK type definitions...");
 
   // Create plugin-generated.d.ts in the dist directory
   const distDir = resolve(__dirname, "dist");

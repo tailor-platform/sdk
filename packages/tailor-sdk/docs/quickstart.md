@@ -1,10 +1,10 @@
-# Tailor SDK
+# Tailor Platform SDK
 
 Development kit for building type-safe applications on the Tailor Platform using TypeScript.
 
 ## Getting Started
 
-In this quickstart tutorial, you'll create an app using Tailor SDK.
+In this quickstart tutorial, you'll create an app using the Tailor Platform SDK.
 Follow the steps below to get started.
 
 ## Prerequisite
@@ -14,7 +14,7 @@ Contact us [here](https://www.tailor.tech/demo) to get started.
 
 ### Install Node.js
 
-The Tailor SDK requires Node.js 22 or later. Install Node.js via your package manager by following the official Node.js instructions.
+The SDK requires Node.js 22 or later. Install Node.js via your package manager by following the official Node.js instructions.
 
 ### Create an Example App
 

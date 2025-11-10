@@ -1,6 +1,6 @@
-# Tailor SDK
+# Tailor Platform SDK
 
-Monorepo for Tailor SDK development.
+Monorepo for Tailor Platform SDK development.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ pnpm check
 
 ```
 ├── packages/
-│   ├── tailor-sdk/          # Main SDK package
+│   ├── tailor-sdk/          # Main Tailor Platform SDK package
 │   ├── create-tailor-sdk/   # Project scaffolding CLI
 │   └── tailor-proto/        # Protocol buffer definitions
 └── examples/

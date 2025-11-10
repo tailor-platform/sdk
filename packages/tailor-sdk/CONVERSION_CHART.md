@@ -1,6 +1,6 @@
-# Tailor SDK / Terraform / Cue Configuration Conversion Chart
+# Tailor Platform SDK / Terraform / Cue Configuration Conversion Chart
 
-This document provides a comprehensive comparison of how to configure Tailor Platform resources using Tailor SDK, Terraform, and Cue.
+This document provides a comprehensive comparison of how to configure Tailor Platform resources using the Tailor Platform SDK, Terraform, and Cue.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ This document provides a comprehensive comparison of how to configure Tailor Pla
 
 ## Overview
 
-| Aspect              | Tailor SDK              | Terraform   | Cue               |
+| Aspect              | SDK                     | Terraform   | Cue               |
 | ------------------- | ----------------------- | ----------- | ----------------- |
 | Language            | TypeScript              | HCL         | Cue               |
 | Type Safety         | Full TypeScript support | Limited     | Schema validation |
@@ -29,7 +29,7 @@ This document provides a comprehensive comparison of how to configure Tailor Pla
 
 ### Basic Model Definition
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 import { db, t } from "@tailor-platform/tailor-sdk";
@@ -127,7 +127,7 @@ resource "tailor_tailordb_type" "customer" {
 
 ## Field Types
 
-| Tailor SDK          | Terraform                                       | Cue                                             |
+| SDK                 | Terraform                                       | Cue                                             |
 | ------------------- | ----------------------------------------------- | ----------------------------------------------- |
 | `db.string()`       | `type = "string"`                               | `"Type": "string"`                              |
 | `db.int()`          | `type = "int"`                                  | `"Type": "int"`                                 |
@@ -142,7 +142,7 @@ resource "tailor_tailordb_type" "customer" {
 
 ### Optional Fields
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 field: db.string({ optional: true });
@@ -169,7 +169,7 @@ field {
 
 ### Unique Fields
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 email: db.string().unique();
@@ -198,7 +198,7 @@ field {
 
 ### Indexed Fields
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 productId: db.uuid().index();
@@ -225,7 +225,7 @@ field {
 
 ### Array Fields
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 tags: db.string({ array: true });
@@ -254,7 +254,7 @@ field {
 
 ### One-to-Many Relation
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 customerId: db.uuid().relation({
@@ -295,7 +295,7 @@ field {
 
 ### Field Validation
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 name: db.string().validate(
@@ -351,7 +351,7 @@ field {
 
 ### Create/Update Hooks
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 fullAddress: db.string().hooks({
@@ -399,7 +399,7 @@ field {
 
 ### Query Resolver
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/tailor-sdk";
@@ -477,7 +477,7 @@ EOF
 
 ### Record Created Trigger
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 import { createExecutor, recordCreatedTrigger } from "@tailor-platform/tailor-sdk";
@@ -556,7 +556,7 @@ EOF
 
 ### Schedule Trigger
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 import { createExecutor, scheduleTrigger } from "@tailor-platform/tailor-sdk";
@@ -629,7 +629,7 @@ EOF
 
 ### ID Provider Configuration
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 const user = db.type("User", {
@@ -716,7 +716,7 @@ resource "tailor_auth" "my_auth" {
 
 ### Full Application Setup
 
-**Tailor SDK**
+**SDK**
 
 ```typescript
 import { defineConfig } from "@tailor-platform/tailor-sdk";
@@ -805,30 +805,30 @@ resource "tailor_application" "my_app" {
 
 ### 1. Development Experience
 
-- **Tailor SDK**: Full TypeScript support with type inference, code completion, and compile-time checks
+- **SDK**: Full TypeScript support with type inference, code completion, and compile-time checks
 - **Terraform**: HCL syntax with limited type checking, better for infrastructure-focused teams
 - **Cue**: JSON-like syntax with schema validation, suitable for configuration management
 
 ### 2. Code Reusability
 
-- **Tailor SDK**: Can extract and reuse TypeScript functions, types, and patterns
+- **SDK**: Can extract and reuse TypeScript functions, types, and patterns
 - **Terraform**: Modules and locals for reusability
 - **Cue**: Definitions and references for configuration reuse
 
 ### 3. Validation and Type Safety
 
-- **Tailor SDK**: Compile-time TypeScript validation
+- **SDK**: Compile-time TypeScript validation
 - **Terraform**: Runtime validation with limited type checking
 - **Cue**: Schema-based validation with constraints
 
 ### 4. Integration
 
-- **Tailor SDK**: Direct integration with TypeScript ecosystem
+- **SDK**: Direct integration with TypeScript ecosystem
 - **Terraform**: Integrates with existing Terraform workflows
 - **Cue**: Can be used with various configuration management tools
 
 ### 5. Learning Curve
 
-- **Tailor SDK**: Easiest for TypeScript developers
+- **SDK**: Easiest for TypeScript developers
 - **Terraform**: Familiar to infrastructure engineers
 - **Cue**: Requires learning Cue language concepts

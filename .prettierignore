@@ -23,7 +23,7 @@ lerna-debug.log*
 # Coverage directory used by tools like istanbul
 coverage/
 
-# Tailor SDK
+# Tailor Platform SDK
 .tailor-sdk
 
 # Examples

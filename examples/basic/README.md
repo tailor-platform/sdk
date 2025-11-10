@@ -1,6 +1,6 @@
 # Basic Example
 
-Development and testing example for Tailor SDK.
+Development and testing example for Tailor Platform SDK.
 
 ## Purpose
 
