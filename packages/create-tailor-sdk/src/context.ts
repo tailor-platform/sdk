@@ -27,6 +27,7 @@ const availableTemplates = async () => {
 const templateHints: Record<string, string | undefined> = {
   "hello-world": "Initial project to get started with Tailor SDK",
   "inventory-management": "Simple inventory management system",
+  testing: "Testing guide for Tailor Platform SDK",
 };
 
 const validateName = (name: string) => {

@@ -78,7 +78,7 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
       - name: Generate files
-        run: pnpm exec turbo run generate --filter=@examples/basic --filter=inventory-management --force
+        run: pnpm exec turbo run generate --force
       - name: Commit and push
         uses: csm-actions/securefix-action@70c01dc077f426b39fc8e2f5e52f1f01a61f9798 # v0.3.5
         with:

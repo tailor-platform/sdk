@@ -43,6 +43,15 @@ export type TailorUser = {
   attributeList: InferredAttributeList;
 };
 
+/** Represents an unauthenticated user in the Tailor platform. */
+export const unauthenticatedTailorUser: TailorUser = {
+  id: "00000000-0000-0000-0000-000000000000",
+  type: "",
+  workspaceId: "00000000-0000-0000-0000-000000000000",
+  attributes: null,
+  attributeList: [],
+};
+
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.
 export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes }`;

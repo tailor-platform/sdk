@@ -12,7 +12,11 @@ export namespace t {
   export type infer<T> = _output<T>;
 }
 
-export { TailorField } from "@/configure/types/type";
+export {
+  TailorField,
+  type TailorUser,
+  unauthenticatedTailorUser,
+} from "@/configure/types";
 
 export * from "@/configure/services";
 
