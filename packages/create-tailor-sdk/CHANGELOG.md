@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.5.3
+
+### Patch Changes
+
+- [#680](https://github.com/tailor-platform/tailor-sdk/pull/680) [`4550297`](https://github.com/tailor-platform/tailor-sdk/commit/455029768e43a9d9bffbae0b93fdabd75e905a53) Thanks [@remiposo](https://github.com/remiposo)! - Added @tailor-platform/function-types to testing
+
 ## 0.5.2
 
 ### Patch Changes
