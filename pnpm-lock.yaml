@@ -81,6 +81,9 @@ importers:
       '@tailor-platform/function-types':
         specifier: 0.6.1
         version: 0.6.1
+      '@toiroakr/lines-db':
+        specifier: ^0.4.1
+        version: 0.4.1
       '@types/node':
         specifier: ^22.15.3
         version: 22.19.0
@@ -1161,6 +1164,15 @@ packages:
   '@tailor-platform/function-types@0.7.2':
     resolution: {integrity: sha512-Eg8Bk5QmDeQq8LMXjqlai1d1dDF4krXoeujOCUv3hpoVObwVPTiPIf/hHSemsG1jmp/9tythHA6xInKOgVGLMQ==}
 
+  '@toiroakr/lines-db@0.4.1':
+    resolution: {integrity: sha512-A5N7/70XMXjZvfqnwAfJRKsVMruMRtK9jSb6Q/fgo81ouKaJEzDFQzulbQGXAaXbIL8tBsuxwn1I1wJbFRRqXQ==}
+    hasBin: true
+    peerDependencies:
+      valibot: '>=1.0.0'
+    peerDependenciesMeta:
+      valibot:
+        optional: true
+
   '@ts-graphviz/adapter@2.0.6':
     resolution: {integrity: sha512-kJ10lIMSWMJkLkkCG5gt927SnGZcBuG0s0HHswGzcHTgvtUe7yk5/3zTEr0bafzsodsOq5Gi6FhQeV775nC35Q==}
     engines: {node: '>=18'}
@@ -1579,6 +1591,10 @@ packages:
   commander@12.1.0:
     resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
     engines: {node: '>=18'}
+
+  commander@14.0.2:
+    resolution: {integrity: sha512-TywoWNNRbhoD0BXs1P3ZEScW8W5iKrnbithIl0YH+uCmBd0QpPOA8yc82DS3BIE5Ma6FnBVUsJ7wVUDz4dvOWQ==}
+    engines: {node: '>=20'}
 
   commander@7.2.0:
     resolution: {integrity: sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw==}
@@ -4259,6 +4275,12 @@ snapshots:
 
   '@tailor-platform/function-types@0.7.2': {}
 
+  '@toiroakr/lines-db@0.4.1':
+    dependencies:
+      '@standard-schema/spec': 1.0.0
+      commander: 14.0.2
+      tsx: 4.20.6
+
   '@ts-graphviz/adapter@2.0.6':
     dependencies:
       '@ts-graphviz/common': 2.1.5
@@ -4771,6 +4793,8 @@ snapshots:
   color-name@1.1.4: {}
 
   commander@12.1.0: {}
+
+  commander@14.0.2: {}
 
   commander@7.2.0: {}
 

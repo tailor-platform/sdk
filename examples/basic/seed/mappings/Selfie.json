@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/Selfie.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/Selfie.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

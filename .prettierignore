@@ -29,6 +29,7 @@ coverage/
 # Examples
 examples/*/tests/fixtures/
 examples/*/generated/
+examples/*/seed/
 
 # Generated files
 packages/tailor-proto/

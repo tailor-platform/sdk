@@ -31,6 +31,7 @@
     "@connectrpc/connect-node": "^2.0.3",
     "@tailor-platform/function-kysely-tailordb": "0.1.2",
     "@tailor-platform/function-types": "0.6.1",
+    "@toiroakr/lines-db": "^0.4.1",
     "@types/node": "^22.15.3",
     "graphql": "^16.11.0",
     "graphql-request": "^7.2.0",

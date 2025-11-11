@@ -42,8 +42,9 @@ class TestGenerator {
     type: TailorDBType;
     applicationNamespace: string;
     namespace: string;
+    source: { filePath: string; exportName: string };
   }) {
-    return { name: args.type.name, processed: true };
+    return { name: args.type.name, processed: true, source: args.source };
   }
 
   async processResolver(args: {
@@ -192,7 +193,10 @@ describe("GenerationManager", () => {
       manager.applications = {
         "test-app": {
           tailordbNamespaces: {
-            "test-namespace": service.getTypes(),
+            "test-namespace": {
+              types: service.getTypes(),
+              sourceInfo: service.getTypeSourceInfo(),
+            },
           },
           resolverNamespaces: {
             "test-namespace": {
@@ -271,7 +275,10 @@ describe("GenerationManager", () => {
       manager.applications = {
         "test-app": {
           tailordbNamespaces: {
-            "test-namespace": service.getTypes(),
+            "test-namespace": {
+              types: service.getTypes(),
+              sourceInfo: service.getTypeSourceInfo(),
+            },
           },
           resolverNamespaces: {
             "test-namespace": {
@@ -357,7 +364,10 @@ describe("GenerationManager", () => {
         testGenerator,
         "test-app",
         "test-namespace",
-        service.getTypes(),
+        {
+          types: service.getTypes(),
+          sourceInfo: service.getTypeSourceInfo(),
+        },
       );
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
@@ -379,9 +389,50 @@ describe("GenerationManager", () => {
           testGenerator,
           "test-app",
           "test-namespace",
-          {},
+          {
+            types: {},
+            sourceInfo: {},
+          },
         ),
       ).resolves.not.toThrow();
+    });
+
+    it("sourceInfoがprocessTypeに正しく渡される", async () => {
+      const processTypeSpy = vi.spyOn(testGenerator, "processType");
+      const types = {
+        TestType: db.type("TestType", {}),
+      };
+
+      const service = new TailorDBService("test-namespace", { files: [] });
+      service["rawTypes"]["test.ts"] = types;
+      // Manually set typeSourceInfo since we're not using loadTypesForFile
+      service["typeSourceInfo"]["TestType"] = {
+        filePath: "test.ts",
+        exportName: "TestType",
+      };
+      service["parseTypes"]();
+
+      await manager.processTailorDBNamespace(
+        testGenerator,
+        "test-app",
+        "test-namespace",
+        {
+          types: service.getTypes(),
+          sourceInfo: service.getTypeSourceInfo(),
+        },
+      );
+
+      expect(processTypeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: expect.any(Object),
+          applicationNamespace: "test-app",
+          namespace: "test-namespace",
+          source: expect.objectContaining({
+            filePath: "test.ts",
+            exportName: "TestType",
+          }),
+        }),
+      );
     });
   });
 
@@ -629,7 +680,10 @@ describe("GenerationManager", () => {
       manager.applications = {
         testApp: {
           tailordbNamespaces: {
-            main: service.getTypes(),
+            main: {
+              types: service.getTypes(),
+              sourceInfo: service.getTypeSourceInfo(),
+            },
           },
           resolverNamespaces: {
             main: {

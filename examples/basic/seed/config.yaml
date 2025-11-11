@@ -1,0 +1,11 @@
+entityDependencies:
+  Customer: []
+  Invoice: [SalesOrder]
+  NestedProfile: []
+  PurchaseOrder: [Supplier]
+  SalesOrder: [Customer]
+  SalesOrderCreated: []
+  Selfie: [Selfie]
+  Supplier: []
+  User: []
+  UserSetting: [User]

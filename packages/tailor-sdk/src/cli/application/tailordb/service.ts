@@ -13,6 +13,10 @@ import type {
 export class TailorDBService {
   private rawTypes: Record<string, Record<string, TailorDBType>> = {};
   private types: Record<string, ParsedTailorDBType> = {};
+  private typeSourceInfo: Record<
+    string,
+    { filePath: string; exportName: string }
+  > = {};
 
   constructor(
     public readonly namespace: string,
@@ -20,7 +24,11 @@ export class TailorDBService {
   ) {}
 
   getTypes() {
-    return this.types;
+    return this.types as Readonly<typeof this.types>;
+  }
+
+  getTypeSourceInfo() {
+    return this.typeSourceInfo as Readonly<typeof this.typeSourceInfo>;
   }
 
   async loadTypes() {
@@ -80,6 +88,11 @@ export class TailorDBService {
         if (isDBTypeLike) {
           console.log(`Type: "${exportName}" loaded from ${typeFile}`);
           this.rawTypes[typeFile][exportedValue.name] = exportedValue;
+          // Store source info mapping
+          this.typeSourceInfo[exportedValue.name] = {
+            filePath: typeFile,
+            exportName,
+          };
         }
       }
     } catch (error) {

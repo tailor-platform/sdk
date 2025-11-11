@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/Invoice.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/Invoice.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

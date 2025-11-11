@@ -21,12 +21,16 @@ import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 
+interface TypeInfo {
+  types: Record<string, ParsedTailorDBType>;
+  sourceInfo: Record<string, { filePath: string; exportName: string }>;
+}
 export class GenerationManager {
   public readonly application: Application;
   private applications: Record<
     string,
     {
-      tailordbNamespaces: Record<string, Record<string, ParsedTailorDBType>>;
+      tailordbNamespaces: Record<string, TypeInfo>;
       resolverNamespaces: Record<string, Record<string, Resolver>>;
     }
   > = {};
@@ -57,8 +61,10 @@ export class GenerationManager {
         const namespace = db.namespace;
         try {
           await db.loadTypes();
-          this.applications[appNamespace].tailordbNamespaces[namespace] =
-            db.getTypes();
+          this.applications[appNamespace].tailordbNamespaces[namespace] = {
+            types: db.getTypes(),
+            sourceInfo: db.getTypeSourceInfo(),
+          };
         } catch (error) {
           console.error(
             `Error loading types for TailorDB service ${namespace}:`,
@@ -192,18 +198,19 @@ export class GenerationManager {
     gen: CodeGenerator,
     appNamespace: string,
     namespace: string,
-    types: Record<string, ParsedTailorDBType>,
+    typeInfo: TypeInfo,
   ) {
     const results = this.generatorResults[gen.id].application[appNamespace];
     results.tailordbResults[namespace] = {};
 
     await Promise.allSettled(
-      Object.entries(types).map(async ([typeName, type]) => {
+      Object.entries(typeInfo.types).map(async ([typeName, type]) => {
         try {
           results.tailordbResults[namespace][typeName] = await gen.processType({
             type,
             applicationNamespace: appNamespace,
             namespace,
+            source: typeInfo.sourceInfo[typeName],
           });
         } catch (error) {
           console.error(
@@ -404,9 +411,12 @@ export class GenerationManager {
               }
 
               // Update types
-              const types = db.getTypes();
+              const typeInfo = {
+                types: db.getTypes(),
+                sourceInfo: db.getTypeSourceInfo(),
+              };
               this.applications[appNamespace].tailordbNamespaces[dbNamespace] =
-                types;
+                typeInfo;
 
               // Process with all generators
               for (const gen of this.generators) {
@@ -414,7 +424,7 @@ export class GenerationManager {
                   gen,
                   appNamespace,
                   dbNamespace,
-                  types,
+                  typeInfo,
                 );
                 await this.aggregate(gen);
               }

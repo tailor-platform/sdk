@@ -1,0 +1,5 @@
+{"id":"92c71db2-c062-4c82-95bb-3adad7c90c54","name":"John Smith","email":"john.smith@example.com","status":"active","department":"Engineering","role":"MANAGER"}
+{"id":"29843cc9-be19-4529-9687-ef59d8b9953d","name":"Alice Johnson","email":"alice.johnson@example.com","status":"active","department":"Engineering","role":"STAFF","createdAt":"2025-11-10 01:48:10","updatedAt":null}
+{"id":"7c9f2727-f4af-4fc9-9784-7f9eb1769cf0","name":"Bob Wilson","email":"bob.wilson@example.com","status":"active","department":"Sales","role":"MANAGER","createdAt":"2025-11-10 01:48:10","updatedAt":null}
+{"id":"92c71db2-c062-4c82-95bb-3adad7c90c54","name":"Carol Brown","email":"carol.brown@example.com","status":"inactive","department":"Sales","role":"STAFF","createdAt":"2025-11-10 01:48:10","updatedAt":null}
+{"id":"da183655-c24b-4817-8ddd-468821664e92","name":"David Lee","email":"alice.johnson@example.com","status":"active","department":"Marketing","role":"STAFF","createdAt":"2025-11-10 01:48:10","updatedAt":null}

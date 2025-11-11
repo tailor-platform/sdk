@@ -17,6 +17,14 @@ import type { TailorUser } from "@/configure/types";
 import type { TailorFieldInput } from "@/parser/service/resolver/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
+const regex = {
+  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
+  time: /^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})$/,
+  datetime:
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+} as const;
+
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   const Output = any,
@@ -125,33 +133,130 @@ export class TailorField<
   }
 
   /**
-   * Internal parse method that tracks field path for nested validation
+   * Validate a single value (not an array element)
+   * Used internally for array element validation
    * @private
    */
-  private _parseInternal(args: {
+  private _validateValue(args: {
     value: any;
     data: any;
     user: TailorUser;
     pathArray: string[];
-  }): StandardSchemaV1.Result<Output> {
+  }): StandardSchemaV1.Issue[] {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
-    if (this.fields && Object.keys(this.fields).length > 0) {
-      for (const [fieldName, field] of Object.entries(this.fields)) {
-        const fieldValue = value?.[fieldName];
-        const result = field._parseInternal({
-          value: fieldValue,
-          data,
-          user,
-          pathArray: pathArray.concat(fieldName),
-        });
-        if (result.issues) {
-          issues.push(...result.issues);
+    // Type-specific validation
+    switch (this.type) {
+      case "string":
+        if (typeof value !== "string") {
+          issues.push({
+            message: `Expected a string: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
         }
-      }
+        break;
+
+      case "integer":
+        if (typeof value !== "number" || !Number.isInteger(value)) {
+          issues.push({
+            message: `Expected an integer: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+
+      case "float":
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          issues.push({
+            message: `Expected a number: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+
+      case "boolean":
+        if (typeof value !== "boolean") {
+          issues.push({
+            message: `Expected a boolean: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+
+      case "uuid":
+        if (typeof value !== "string" || !regex.uuid.test(value)) {
+          issues.push({
+            message: `Expected a valid UUID: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+      case "date":
+        if (typeof value !== "string" || !regex.date.test(value)) {
+          issues.push({
+            message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+      case "datetime":
+        if (typeof value !== "string" || !regex.datetime.test(value)) {
+          issues.push({
+            message: `Expected to match ISO format: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+      case "time":
+        if (typeof value !== "string" || !regex.time.test(value)) {
+          issues.push({
+            message: `Expected to match "HH:mm:ss" format`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+      case "enum":
+        if (this.metadata.allowedValues) {
+          const allowedValues = this.metadata.allowedValues.map((v) => v.value);
+          if (!allowedValues.includes(value)) {
+            issues.push({
+              message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
+              path: pathArray.length > 0 ? pathArray : undefined,
+            });
+          }
+        }
+        break;
+
+      case "nested":
+        // Validate nested object fields
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          Array.isArray(value)
+        ) {
+          issues.push({
+            message: `Expected an object: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        } else if (this.fields && Object.keys(this.fields).length > 0) {
+          for (const [fieldName, field] of Object.entries(this.fields)) {
+            const fieldValue = value?.[fieldName];
+            const result = field._parseInternal({
+              value: fieldValue,
+              data,
+              user,
+              pathArray: pathArray.concat(fieldName),
+            });
+            if (result.issues) {
+              issues.push(...result.issues);
+            }
+          }
+        }
+        break;
     }
 
+    // Custom validation functions
     const validateFns = this.metadata.validate;
     if (validateFns && validateFns.length > 0) {
       for (const validateInput of validateFns) {
@@ -168,6 +273,74 @@ export class TailorField<
         }
       }
     }
+
+    return issues;
+  }
+
+  /**
+   * Internal parse method that tracks field path for nested validation
+   * @private
+   */
+  private _parseInternal(args: {
+    value: any;
+    data: any;
+    user: TailorUser;
+    pathArray: string[];
+  }): StandardSchemaV1.Result<Output> {
+    const { value, data, user, pathArray } = args;
+    const issues: StandardSchemaV1.Issue[] = [];
+
+    // 1. Check required/optional
+    const isNullOrUndefined = value === null || value === undefined;
+    if (this.metadata.required && isNullOrUndefined) {
+      issues.push({
+        message: "Required field is missing",
+        path: pathArray.length > 0 ? pathArray : undefined,
+      });
+      return { issues };
+    }
+
+    // If optional and null/undefined, skip further validation
+    if (!this.metadata.required && isNullOrUndefined) {
+      return { value };
+    }
+
+    // 2. Check array type
+    if (this.metadata.array) {
+      if (!Array.isArray(value)) {
+        issues.push({
+          message: "Expected an array",
+          path: pathArray.length > 0 ? pathArray : undefined,
+        });
+        return { issues };
+      }
+
+      // Validate each array element (without array flag)
+      for (let i = 0; i < value.length; i++) {
+        const elementValue = value[i];
+        const elementPath = pathArray.concat(`[${i}]`);
+
+        // Validate element with same type but without array flag
+        const elementIssues = this._validateValue({
+          value: elementValue,
+          data,
+          user,
+          pathArray: elementPath,
+        });
+        if (elementIssues.length > 0) {
+          issues.push(...elementIssues);
+        }
+      }
+
+      if (issues.length > 0) {
+        return { issues };
+      }
+      return { value: value as Output };
+    }
+
+    // 3. Type-specific validation and custom validation
+    const valueIssues = this._validateValue({ value, data, user, pathArray });
+    issues.push(...valueIssues);
 
     if (issues.length > 0) {
       return { issues };

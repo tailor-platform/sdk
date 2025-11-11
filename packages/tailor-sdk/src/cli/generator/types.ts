@@ -44,6 +44,10 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
     type: ParsedTailorDBType;
     applicationNamespace: string;
     namespace: string;
+    source: {
+      filePath: string;
+      exportName: string;
+    };
   }): T | Promise<T>;
 
   processResolver(args: {
