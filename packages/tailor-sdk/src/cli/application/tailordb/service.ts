@@ -1,7 +1,6 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as inflection from "inflection";
+import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type {
@@ -40,16 +39,7 @@ export class TailorDBService {
       return;
     }
 
-    const typeFiles: string[] = [];
-    for (const pattern of this.config.files) {
-      const absolutePattern = path.resolve(process.cwd(), pattern);
-      try {
-        const matchedFiles = fs.globSync(absolutePattern);
-        typeFiles.push(...matchedFiles);
-      } catch (error) {
-        console.warn(`Failed to glob pattern "${pattern}":`, error);
-      }
-    }
+    const typeFiles = loadFilesWithIgnores(this.config);
 
     console.log(
       `Found ${typeFiles.length} type files for TailorDB service "${this.namespace}"`,

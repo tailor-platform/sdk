@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { getDistDir } from "@/configure/config";
 import { type BundlerConfig, type Loader, type Transformer } from "./types";
 
@@ -55,20 +56,7 @@ export class Bundler<T> {
       return [];
     }
 
-    const files: string[] = [];
-
-    for (const pattern of this.config.serviceConfig.files) {
-      const absolutePattern = path.resolve(process.cwd(), pattern);
-
-      try {
-        const matchedFiles = fs.globSync(absolutePattern);
-        files.push(...matchedFiles);
-      } catch (error) {
-        console.warn(`Failed to glob pattern "${pattern}":`, error);
-      }
-    }
-
-    return files;
+    return loadFilesWithIgnores(this.config.serviceConfig);
   }
 
   private async processFile(file: string): Promise<void> {

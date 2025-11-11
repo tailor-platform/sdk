@@ -28,20 +28,25 @@ Specify glob patterns to load service files:
 ```typescript
 export default defineConfig({
   db: {
-    "my-db": { files: ["db/**/*.ts"] },
+    "my-db": {
+      files: ["db/**/*.ts"],
+      ignores: ["db/**/*.draft.ts"],
+    },
   },
   resolver: {
-    "my-resolver": { files: ["resolver/**/*.ts"] },
+    "my-resolver": {
+      files: ["resolver/**/*.ts"],
+    },
   },
-  executor: { files: ["executors/**/*.ts"] },
+  executor: {
+    files: ["executors/**/*.ts"],
+  },
 });
 ```
 
-**db**: Glob patterns for TailorDB type definitions.
+**files**: Glob patterns to match files. Required.
 
-**resolver**: Glob patterns for Resolver definitions.
-
-**executor**: Glob patterns for Executor definitions.
+**ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored.
 
 ### Built-in IdP
 

@@ -1,3 +1,5 @@
+import type { FileLoadConfig } from "@/cli/application/file-loader";
+
 export interface Loader<T> {
   load(filePath: string): Promise<T | null>;
 }
@@ -8,9 +10,7 @@ export interface Transformer {
 
 export interface BundlerConfig<T> {
   namespace: string;
-  serviceConfig: {
-    files?: string[];
-  };
+  serviceConfig: FileLoadConfig;
   loader: Loader<T>;
   transformer: Transformer;
   outputDirs: {

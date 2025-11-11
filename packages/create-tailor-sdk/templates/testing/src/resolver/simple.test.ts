@@ -1,6 +1,6 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/tailor-sdk";
 import { describe, expect, test } from "vitest";
-import resolver from "../src/resolver/add";
+import resolver from "./simple";
 
 describe("add resolver", () => {
   test("basic functionality", async () => {

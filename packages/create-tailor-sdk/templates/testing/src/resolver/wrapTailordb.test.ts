@@ -1,8 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import {
-  DbOperations,
-  decrementUserAge,
-} from "../src/resolver/decrementUserAge";
+import { DbOperations, decrementUserAge } from "./wrapTailordb";
 
 describe("decrementUserAge resolver", () => {
   test("basic functionality", async () => {

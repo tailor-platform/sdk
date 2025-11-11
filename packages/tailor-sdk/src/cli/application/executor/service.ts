@@ -1,6 +1,5 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { type ExecutorServiceConfig } from "@/configure/services/executor/types";
 import { type Executor, ExecutorSchema } from "@/parser/service/executor";
 
@@ -14,16 +13,7 @@ export class ExecutorService {
       return;
     }
 
-    const executorFiles: string[] = [];
-    for (const pattern of this.config.files) {
-      const absolutePattern = path.resolve(process.cwd(), pattern);
-      try {
-        const matchedFiles = fs.globSync(absolutePattern);
-        executorFiles.push(...matchedFiles);
-      } catch (error) {
-        console.warn(`Failed to glob pattern "${pattern}":`, error);
-      }
-    }
+    const executorFiles = loadFilesWithIgnores(this.config);
 
     for (const executorFile of executorFiles) {
       await this.loadExecutorForFile(executorFile);

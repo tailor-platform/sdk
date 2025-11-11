@@ -20,6 +20,7 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
+import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { Executor } from "@/parser/service/executor";
 import type { Resolver } from "@/parser/service/resolver";
 
@@ -102,7 +103,7 @@ export async function apply(configPath: string, options: ApplyOptions = {}) {
   console.log("Successfully applied changes.");
 }
 
-async function buildPipeline(namespace: string, config: { files?: string[] }) {
+async function buildPipeline(namespace: string, config: FileLoadConfig) {
   const bundlerConfig: BundlerConfig<Resolver> = {
     namespace,
     serviceConfig: config,
@@ -117,7 +118,7 @@ async function buildPipeline(namespace: string, config: { files?: string[] }) {
   await bundler.bundle();
 }
 
-async function buildExecutor(config: { files?: string[] }) {
+async function buildExecutor(config: FileLoadConfig) {
   const bundlerConfig: BundlerConfig<Executor> = {
     namespace: "executor",
     serviceConfig: config,

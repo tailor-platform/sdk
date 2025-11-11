@@ -8,7 +8,7 @@ import {
   test,
   vi,
 } from "vitest";
-import resolver from "../src/resolver/incrementUserAge";
+import resolver from "./mockTailordb";
 
 describe("incrementUserAge resolver", () => {
   // Mock queryObject method to simulate database interactions

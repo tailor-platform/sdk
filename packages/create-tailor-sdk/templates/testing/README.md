@@ -53,7 +53,7 @@ Unit tests verify resolver logic without requiring deployment.
 
 #### Simple Resolver Testing
 
-**Example:** [test/simple.test.ts](test/simple.test.ts)
+**Example:** [src/resolver/simple.test.ts](src/resolver/simple.test.ts)
 
 Test resolvers by directly calling `resolver.body()` with mock inputs.
 
@@ -64,7 +64,7 @@ Test resolvers by directly calling `resolver.body()` with mock inputs.
 
 #### Mock TailorDB Client
 
-**Example:** [test/mockTailordb.test.ts](test/mockTailordb.test.ts)
+**Example:** [src/resolver/mockTailordb.test.ts](src/resolver/mockTailordb.test.ts)
 
 Mock the global `tailordb.Client` using `vi.stubGlobal()` to simulate database operations and control responses for each query.
 
@@ -77,7 +77,7 @@ Mock the global `tailordb.Client` using `vi.stubGlobal()` to simulate database o
 
 #### Dependency Injection Pattern
 
-**Example:** [test/wrapTailordb.test.ts](test/wrapTailordb.test.ts)
+**Example:** [src/resolver/wrapTailordb.test.ts](src/resolver/wrapTailordb.test.ts)
 
 Extract database operations into a `DbOperations` interface, allowing business logic to be tested independently from Kysely implementation.
 

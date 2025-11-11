@@ -1,6 +1,5 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { type ResolverServiceConfig } from "@/configure/services/resolver/types";
 import { type Resolver, ResolverSchema } from "@/parser/service/resolver";
 
@@ -17,16 +16,7 @@ export class ResolverService {
       return;
     }
 
-    const resolverFiles: string[] = [];
-    for (const pattern of this.config.files) {
-      const absolutePattern = path.resolve(process.cwd(), pattern);
-      try {
-        const matchedFiles = fs.globSync(absolutePattern);
-        resolverFiles.push(...matchedFiles);
-      } catch (error) {
-        console.warn(`Failed to glob pattern "${pattern}":`, error);
-      }
-    }
+    const resolverFiles = loadFilesWithIgnores(this.config);
 
     for (const resolverFile of resolverFiles) {
       await this.loadResolverForFile(resolverFile);

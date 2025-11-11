@@ -84,7 +84,7 @@ export type Hooks<
       : K]?: Hook<TData, output<F[K]>>;
 }>;
 
-export type TailorDBServiceConfig = { files: string[] };
+export type TailorDBServiceConfig = { files: string[]; ignores?: string[] };
 export type TailorDBServiceInput = {
   [namespace: string]: TailorDBServiceConfig;
 };
