@@ -16,7 +16,7 @@
     "format:check:root": "prettier --check .",
     "typecheck": "turbo run typecheck",
     "typecheck:root": "tsc --noEmit",
-    "perf:typecheck": "pnpm --filter @examples/basic perf:typecheck"
+    "perf:typecheck": "pnpm --filter example perf:typecheck"
   },
   "keywords": [],
   "author": "",

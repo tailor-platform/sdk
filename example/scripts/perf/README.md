@@ -4,7 +4,7 @@ This directory contains tools for measuring TypeScript type checking performance
 
 Inspired by the Hono project implementation, this performs two types of measurements:
 
-1. **Full Project Check**: Type checking time for the entire `examples/basic` project
+1. **Full Project Check**: Type checking time for the entire example project
 2. **Type Inference Checks**: Complexity and scalability of type inference measured separately for each service:
    - **TailorDB**: 100 models
    - **Pipeline**: 200 resolvers
@@ -19,16 +19,16 @@ Run from the project root directory:
 pnpm perf:typecheck
 
 # Full project check only
-pnpm --filter @examples/basic perf:typecheck:full
+pnpm --filter example perf:typecheck:full
 
 # Type inference check only
-pnpm --filter @examples/basic perf:typecheck:inference
+pnpm --filter example perf:typecheck:inference
 ```
 
-Or run directly within the examples/basic directory:
+Or run directly within the example directory:
 
 ```bash
-cd examples/basic
+cd example
 
 # Both measurements
 pnpm perf:typecheck

@@ -37,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK package (`@tailor-platform/tailor-sdk`) is located at `packages/tailor-sdk`, with examples in `examples/basic`.
+This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK package (`@tailor-platform/tailor-sdk`) is located at `packages/tailor-sdk`.
 
 ### Project Structure
 
@@ -62,8 +62,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 │   │   │       └── utils/
 │   │   └── dist/            # Built output
 │   └── tailor-proto/        # Generated protobuf definitions
-├── examples/
-│   └── basic/               # Example implementation
+├── example/                 # Example implementation
 └── turbo.json               # Turbo build orchestration
 ```
 
@@ -541,7 +540,7 @@ export type * from "./types";
    - This prevents bundlers from including zod runtime code in configure module outputs
 
 3. **Verification:**
-   - After changes, run `pnpm exec turbo run test` in examples to regenerate bundles
+   - After changes, run `pnpm exec turbo run test` in example to regenerate bundles
    - Check bundle sizes and search for library-specific code (e.g., `$ZodType`) to confirm removal
    - Expected result: Significant bundle size reduction (e.g., 68KB → 18KB in test cases)
 
@@ -561,4 +560,4 @@ This pattern aligns with the module architecture principle that configure module
 - Run tests: `pnpm exec turbo run test` or `pnpm test` in specific packages
 - Tests use Vitest
 - Test files: `**/__tests__/**/*.ts` or `**/?(*.)+(spec|test).ts`
-- Example tests are in `examples/basic/tests/` and `examples/basic/e2e/`
+- Example tests are in `example/tests/` and `example/e2e/`

@@ -1,4 +1,4 @@
-# Basic Example
+# Example
 
 Development and testing example for Tailor Platform SDK.
 

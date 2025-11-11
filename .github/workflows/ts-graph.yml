@@ -25,7 +25,7 @@ jobs:
           max-size: 100
           show-metrics: true
 
-  examples-basic-typescript-graph:
+  example-typescript-graph:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -38,9 +38,9 @@ jobs:
           persist-credentials: true
       - uses: ysk8hori/delta-typescript-graph-action@7abea70623af0422e16d374720e8dbf73e6ac674 # v1.2.4
         with:
-          comment-title: "TypeScript Graph for Examples/Basic"
+          comment-title: "TypeScript Graph for Example"
           access-token: ${{ secrets.GITHUB_TOKEN }}
-          tsconfig: "./examples/basic/tsconfig.json"
+          tsconfig: "./example/tsconfig.json"
           debug: true
           in-details: true
           exclude: "node_modules, tests, *.test.ts, dist, .tailor-sdk"

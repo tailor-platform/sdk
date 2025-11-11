@@ -60,7 +60,7 @@ jobs:
           files_yaml: |
             paths:
               - .github/workflows/securefix.yml
-              - examples/**.ts
+              - example/**.ts
               - packages/tailor-sdk/**.ts
               - packages/create-tailor-sdk/**.ts
   update-sdk-generate:

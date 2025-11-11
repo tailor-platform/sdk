@@ -1,7 +1,7 @@
 {
-  "name": "@examples/basic",
+  "name": "example",
   "private": true,
-  "description": "Basic example for Tailor Platform SDK usage",
+  "description": "Example for Tailor Platform SDK usage",
   "type": "module",
   "scripts": {
     "generate": "tailor-sdk generate -c tailor.config.ts",

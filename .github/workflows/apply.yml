@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/apply.yml
-      - examples/**
+      - example/**
       - packages/**
       - package.json
       - pnpm-lock.yaml
@@ -32,7 +32,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Create workspace
-        working-directory: examples/basic
+        working-directory: example
         run: |
           WORKSPACE_JSON=$(pnpm tailor-sdk workspace create \
             --name "sdk-ci-${{ github.run_id }}" \
@@ -44,20 +44,20 @@ jobs:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Apply workspace
-        working-directory: examples/basic
+        working-directory: example
         run: pnpm run apply
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Run e2e tests
-        working-directory: examples/basic
+        working-directory: example
         run: pnpm test:e2e
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Destroy workspace
         if: ${{ always() }}
-        working-directory: examples/basic
+        working-directory: example
         run: |
           pnpm tailor-sdk workspace delete \
             --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" \

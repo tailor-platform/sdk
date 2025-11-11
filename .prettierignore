@@ -26,10 +26,10 @@ coverage/
 # Tailor Platform SDK
 .tailor-sdk
 
-# Examples
-examples/*/tests/fixtures/
-examples/*/generated/
-examples/*/seed/
+# Example
+example/tests/fixtures/
+example/generated/
+example/seed/
 
 # Generated files
 packages/tailor-proto/

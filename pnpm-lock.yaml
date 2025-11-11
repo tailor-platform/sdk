@@ -57,14 +57,14 @@ importers:
         specifier: 8.46.3
         version: 8.46.3(eslint@9.39.1(jiti@2.5.1))(typescript@5.9.3)
 
-  examples/basic:
+  example:
     dependencies:
       '@tailor-platform/tailor-proto':
         specifier: workspace:^
-        version: link:../../packages/tailor-proto
+        version: link:../packages/tailor-proto
       '@tailor-platform/tailor-sdk':
         specifier: workspace:^
-        version: link:../../packages/tailor-sdk
+        version: link:../packages/tailor-sdk
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
