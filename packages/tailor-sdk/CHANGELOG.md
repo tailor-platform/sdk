@@ -1,5 +1,24 @@
 # @tailor-platform/tailor-sdk
 
+## 0.5.5
+
+### Patch Changes
+
+- [#686](https://github.com/tailor-platform/tailor-sdk/pull/686) [`e8841b6`](https://github.com/tailor-platform/tailor-sdk/commit/e8841b654507b67fcd4b0d1919159bd7c0ab217b) Thanks [@remiposo](https://github.com/remiposo)! - Added ignores option
+
+  When specifying files for db, resolver, and executor, we can now exclude specific files with `ignores`. Test-related files (`**/*.test.ts`, `**/*.spec.ts`) are excluded by default.
+
+  ```typescript
+  defineConfig({
+    db: {
+      "my-db": {
+        files: ["db/**/*.ts"],
+        ignores: ["db/**/*.draft.ts"],
+      },
+    },
+  });
+  ```
+
 ## 0.5.4
 
 ### Patch Changes
