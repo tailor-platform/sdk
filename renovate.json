@@ -1,6 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>tailor-inc/renovate-config"],
+  "extends": [
+    "github>tailor-inc/renovate-config",
+    ":pinAllExceptPeerDependencies"
+  ],
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
   "customManagers": [
