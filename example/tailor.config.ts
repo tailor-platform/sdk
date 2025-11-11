@@ -5,8 +5,6 @@ import {
   defineIdp,
   defineStaticWebSite,
 } from "@tailor-platform/tailor-sdk";
-import { gqlIngestGenerator } from "./generator/gql-ingest";
-import { linesDbGenerator } from "./generator/lines-db";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -68,6 +66,5 @@ export default defineConfig({
 export const generators = defineGenerators(
   ["@tailor/kysely-type", { distPath: "./generated/tailordb.ts" }],
   ["@tailor/db-type", { distPath: "./generated/types.ts" }],
-  gqlIngestGenerator,
-  linesDbGenerator,
+  ["@tailor-platform/seed", { distPath: "./seed" }],
 );

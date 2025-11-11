@@ -23,6 +23,11 @@
       "types": "./dist/cli/api.d.mts",
       "import": "./dist/cli/api.mjs",
       "default": "./dist/cli/api.mjs"
+    },
+    "./test": {
+      "types": "./dist/utils/test/index.d.mts",
+      "import": "./dist/utils/test/index.mjs",
+      "default": "./dist/utils/test/index.mjs"
     }
   },
   "bin": {

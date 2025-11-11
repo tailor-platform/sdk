@@ -1,4 +1,4 @@
-import { unauthenticatedTailorUser } from "@tailor-platform/tailor-sdk";
+import { unauthenticatedTailorUser } from "@tailor-platform/tailor-sdk/test";
 import {
   afterAll,
   afterEach,

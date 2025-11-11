@@ -24,6 +24,11 @@ export const DbTypeConfigSchema = z.tuple([
   }),
 ]);
 
+export const SeedConfigSchema = z.tuple([
+  z.literal("@tailor-platform/seed"),
+  z.object({ distPath: z.string() }),
+]);
+
 // FIXME: more strict schema validation
 export const CodeGeneratorSchema = z.object({
   id: z.string(),
@@ -40,6 +45,7 @@ export const CodeGeneratorSchema = z.object({
 export const BaseGeneratorConfigSchema = z.union([
   KyselyTypeConfigSchema,
   DbTypeConfigSchema,
+  SeedConfigSchema,
   CodeGeneratorSchema,
 ]);
 
@@ -57,7 +63,12 @@ export function createGeneratorConfigSchema(
   >,
 ) {
   return z
-    .union([KyselyTypeConfigSchema, DbTypeConfigSchema, CodeGeneratorSchema])
+    .union([
+      KyselyTypeConfigSchema,
+      DbTypeConfigSchema,
+      SeedConfigSchema,
+      CodeGeneratorSchema,
+    ])
     .transform((gen) => {
       if (Array.isArray(gen)) {
         const [id, options] = gen;

@@ -1,15 +1,17 @@
 import { t as _t } from "@/configure/types";
-import type { output as _output } from "@/configure/types/helpers";
+import type * as helperTypes from "@/configure/types/helpers";
 
-export type infer<T> = _output<T>;
-export type output<T> = _output<T>;
+type TailorOutput<T> = helperTypes.output<T>;
+
+export type infer<T> = TailorOutput<T>;
+export type output<T> = TailorOutput<T>;
 
 // eslint-disable-next-line import/export
 export const t = { ..._t };
 // eslint-disable-next-line @typescript-eslint/no-namespace, import/export
 export namespace t {
-  export type output<T> = _output<T>;
-  export type infer<T> = _output<T>;
+  export type output<T> = TailorOutput<T>;
+  export type infer<T> = TailorOutput<T>;
 }
 
 export {

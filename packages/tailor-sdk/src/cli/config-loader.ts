@@ -14,6 +14,7 @@ import {
   KyselyGenerator,
   KyselyGeneratorID,
 } from "./generator/builtin/kysely-type";
+import { createSeedGenerator, SeedGeneratorID } from "./generator/builtin/seed";
 import type { AppConfig } from "@/configure/config";
 import "./mock";
 
@@ -29,6 +30,10 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
     (options: {
       distPath: string | ((context: { tailorDB: string }) => string);
     }) => new DbTypeGenerator(options),
+  ],
+  [
+    SeedGeneratorID,
+    (options: { distPath: string }) => createSeedGenerator(options),
   ],
 ]);
 
