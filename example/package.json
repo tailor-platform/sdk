@@ -24,20 +24,20 @@
   "dependencies": {
     "@tailor-platform/tailor-proto": "workspace:^",
     "@tailor-platform/tailor-sdk": "workspace:^",
-    "date-fns": "^4.1.0"
+    "date-fns": "4.1.0"
   },
   "devDependencies": {
-    "@connectrpc/connect": "^2.0.3",
-    "@connectrpc/connect-node": "^2.0.3",
+    "@connectrpc/connect": "2.1.0",
+    "@connectrpc/connect-node": "2.1.0",
     "@tailor-platform/function-kysely-tailordb": "0.1.2",
     "@tailor-platform/function-types": "0.6.1",
-    "@toiroakr/lines-db": "^0.4.1",
-    "@types/node": "^22.15.3",
-    "graphql": "^16.11.0",
-    "graphql-request": "^7.2.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.8.3",
-    "vitest": "^3.1.4"
+    "@toiroakr/lines-db": "0.4.1",
+    "@types/node": "22.19.0",
+    "graphql": "16.11.0",
+    "graphql-request": "7.3.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   },
   "engines": {
     "node": ">= 22.14.0"
