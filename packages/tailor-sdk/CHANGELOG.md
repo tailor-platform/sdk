@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.6.1
+
+### Patch Changes
+
+- [#698](https://github.com/tailor-platform/tailor-sdk/pull/698) [`c781753`](https://github.com/tailor-platform/tailor-sdk/commit/c781753971a8b3443bce1e03e9d629ce9667e5fa) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: time regex
+
 ## 0.6.0
 
 ### Minor Changes
