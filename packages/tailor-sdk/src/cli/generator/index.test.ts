@@ -142,7 +142,7 @@ describe("GenerationManager", () => {
 
     it("Kysely ジェネレーターを受け取る", () => {
       const kyselyGen = GeneratorConfigSchema.parse([
-        "@tailor/kysely-type",
+        "@tailor-platform/kysely-type",
         { distPath: "types/db.ts" },
       ]);
       const managerWithKysely = new GenerationManager(
@@ -801,7 +801,7 @@ describe("Integration Tests", () => {
     const indexModule = await import("./index");
     const GenerationManager = (indexModule as any).GenerationManager;
     const kyselyGen = GeneratorConfigSchema.parse([
-      "@tailor/kysely-type",
+      "@tailor-platform/kysely-type",
       { distPath: "db.ts" },
     ]);
     const generators = [new TestGenerator(), kyselyGen] as any;

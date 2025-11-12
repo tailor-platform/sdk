@@ -7,10 +7,6 @@ import {
   type Generator,
 } from "@/parser/generator-config";
 import {
-  DbTypeGenerator,
-  DbTypeGeneratorID,
-} from "./generator/builtin/db-type";
-import {
   KyselyGenerator,
   KyselyGeneratorID,
 } from "./generator/builtin/kysely-type";
@@ -24,12 +20,6 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
   [
     KyselyGeneratorID,
     (options: { distPath: string }) => new KyselyGenerator(options),
-  ],
-  [
-    DbTypeGeneratorID,
-    (options: {
-      distPath: string | ((context: { tailorDB: string }) => string);
-    }) => new DbTypeGenerator(options),
   ],
   [
     SeedGeneratorID,

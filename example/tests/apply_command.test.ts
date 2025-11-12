@@ -10,10 +10,9 @@ describe("pnpm apply command integration tests", () => {
   const expectedDir = path.join(__dirname, "fixtures/expected");
   const actualDir = path.join(__dirname, "fixtures/actual");
 
-  const expectedGeneratedFilesWithContent = ["db.ts", "types.ts"] as const;
+  const expectedGeneratedFilesWithContent = ["db.ts"] as const;
   const expectedGeneratedFiles = [
     "db.ts",
-    "types.ts",
     "executor_steps/user-created.js",
     "executors/user-created.js",
     "executors/user-created.js.map",

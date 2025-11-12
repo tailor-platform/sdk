@@ -103,11 +103,11 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Central configuration using `defineConfig()` for a single application
    - Required fields: `name`
    - Specify component locations with glob patterns
-   - Configure generators using `defineGenerators()` - must include `@tailor/kysely-type` for database access
+   - Configure generators using `defineGenerators()` - must include `@tailor-platform/kysely-type` for database access
    - Application-level settings: `cors`, `allowedIPAddresses`, `disableIntrospection`
 
 7. **Code Generators**
-   - `@tailor/kysely-type`: Generates Kysely type definitions and `getDB()` function (required for database access)
+   - `@tailor-platform/kysely-type`: Generates Kysely type definitions and `getDB()` function (required for database access)
    - Configure generators with `defineGenerators()` and specify `distPath` for output files
 
 ### Code Patterns
@@ -280,12 +280,12 @@ export default defineConfig({
 import { defineGenerators } from "@tailor-platform/tailor-sdk";
 
 export const generators = defineGenerators([
-  "@tailor/kysely-type",
+  "@tailor-platform/kysely-type",
   { distPath: "./generated/tailordb.ts" },
 ]);
 ```
 
-**Important**: The `@tailor/kysely-type` generator is required to use Kysely query builder in resolvers and executors.
+**Important**: The `@tailor-platform/kysely-type` generator is required to use Kysely query builder in resolvers and executors.
 
 **Prerequisites**:
 

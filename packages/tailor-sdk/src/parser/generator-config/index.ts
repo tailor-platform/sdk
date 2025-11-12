@@ -3,25 +3,8 @@ import type { CodeGeneratorBase } from "./types";
 
 // Literal-based schemas for each generator
 export const KyselyTypeConfigSchema = z.tuple([
-  z.literal("@tailor/kysely-type"),
+  z.literal("@tailor-platform/kysely-type"),
   z.object({ distPath: z.string() }),
-]);
-
-export const DbTypeConfigSchema = z.tuple([
-  z.literal("@tailor/db-type"),
-  z.object({
-    distPath: z.union([
-      z.string(),
-      z.function({
-        input: [
-          z.object({
-            tailorDB: z.string(),
-          }),
-        ],
-        output: z.string(),
-      }),
-    ]),
-  }),
 ]);
 
 export const SeedConfigSchema = z.tuple([
@@ -44,7 +27,6 @@ export const CodeGeneratorSchema = z.object({
 // Base schema for generator config (before transformation to actual Generator instances)
 export const BaseGeneratorConfigSchema = z.union([
   KyselyTypeConfigSchema,
-  DbTypeConfigSchema,
   SeedConfigSchema,
   CodeGeneratorSchema,
 ]);
@@ -63,12 +45,7 @@ export function createGeneratorConfigSchema(
   >,
 ) {
   return z
-    .union([
-      KyselyTypeConfigSchema,
-      DbTypeConfigSchema,
-      SeedConfigSchema,
-      CodeGeneratorSchema,
-    ])
+    .union([KyselyTypeConfigSchema, SeedConfigSchema, CodeGeneratorSchema])
     .transform((gen) => {
       if (Array.isArray(gen)) {
         const [id, options] = gen;

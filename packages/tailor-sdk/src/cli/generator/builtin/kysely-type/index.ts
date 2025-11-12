@@ -7,7 +7,7 @@ import { TypeProcessor } from "./type-processor";
 import { type KyselyTypeMetadata } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
-export const KyselyGeneratorID = "@tailor/kysely-type";
+export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 
 /**
  * Main entry point for the Kysely type generation system.
