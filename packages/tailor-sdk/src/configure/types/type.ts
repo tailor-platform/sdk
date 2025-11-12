@@ -20,7 +20,7 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})$/,
+  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
 } as const;
