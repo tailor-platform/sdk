@@ -1,4 +1,6 @@
 minimumReleaseAge: 4320 # 3 days
+minimumReleaseAgeExclude: # FIXME: remove later
+  - "@toiroakr/lines-db"
 
 packages:
   - packages/*
