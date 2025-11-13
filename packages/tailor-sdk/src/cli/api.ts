@@ -13,3 +13,25 @@ export type {
 export type { ParsedTailorDBType as TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
+
+export { show, type ShowOptions, type ApplicationInfo } from "./show";
+export {
+  workspaceCreate,
+  type WorkspaceCreateOptions,
+} from "./workspace/create";
+export { workspaceList } from "./workspace/list";
+export {
+  workspaceDelete,
+  type WorkspaceDeleteOptions,
+} from "./workspace/delete";
+export type { WorkspaceInfo } from "./workspace/transform";
+export {
+  machineUserList,
+  type MachineUserListOptions,
+  type MachineUserInfo,
+} from "./machineuser/list";
+export {
+  machineUserToken,
+  type MachineUserTokenOptions,
+  type MachineUserTokenInfo,
+} from "./machineuser/token";

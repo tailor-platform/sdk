@@ -8,7 +8,23 @@ import {
 } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { workspaceInfo } from "./transform";
+import { workspaceInfo, type WorkspaceInfo } from "./transform";
+
+export async function workspaceList(): Promise<WorkspaceInfo[]> {
+  // Load and validate options
+  const accessToken = await loadAccessToken();
+  const client = await initOperatorClient(accessToken);
+
+  // Fetch all workspaces
+  const workspaces = await fetchAll(async (pageToken) => {
+    const { workspaces, nextPageToken } = await client.listWorkspaces({
+      pageToken,
+    });
+    return [workspaces, nextPageToken];
+  });
+
+  return workspaces.map(workspaceInfo);
+}
 
 export const listCommand = defineCommand({
   meta: {
@@ -20,19 +36,13 @@ export const listCommand = defineCommand({
     ...formatArgs,
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
+    // Validate CLI specific args
     const format = parseFormat(args.format);
 
+    // Execute workspace list logic
+    const workspaces = await workspaceList();
+
     // Show workspaces info
-    const accessToken = await loadAccessToken();
-    const client = await initOperatorClient(accessToken);
-    const workspaces = await fetchAll(async (pageToken) => {
-      const { workspaces, nextPageToken } = await client.listWorkspaces({
-        pageToken,
-      });
-      return [workspaces, nextPageToken];
-    });
-    const workspaceInfos = workspaces.map(workspaceInfo);
-    printWithFormat(workspaceInfos, format);
+    printWithFormat(workspaces, format);
   }),
 });

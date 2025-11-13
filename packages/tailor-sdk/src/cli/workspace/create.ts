@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { validate as uuidValidate } from "uuid";
+import { validate as validateUuid } from "uuid";
 import {
   commonArgs,
   formatArgs,
@@ -10,7 +10,15 @@ import {
 } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { workspaceInfo } from "./transform";
+import { workspaceInfo, type WorkspaceInfo } from "./transform";
+
+export interface WorkspaceCreateOptions {
+  name: string;
+  region: string;
+  deleteProtection?: boolean;
+  organizationId?: string;
+  folderId?: string;
+}
 
 const validateName = (name: string) => {
   if (name.length < 3 || name.length > 63) {
@@ -34,6 +42,34 @@ const validateRegion = async (region: string, client: OperatorClient) => {
     );
   }
 };
+
+export async function workspaceCreate(
+  options: WorkspaceCreateOptions,
+): Promise<WorkspaceInfo> {
+  // Load and validate options
+  const accessToken = await loadAccessToken();
+  const client = await initOperatorClient(accessToken);
+  validateName(options.name);
+  await validateRegion(options.region, client);
+  const deleteProtection = options.deleteProtection ?? false;
+  if (options.organizationId && !validateUuid(options.organizationId)) {
+    throw new Error(`Organization ID must be a valid UUID.`);
+  }
+  if (options.folderId && !validateUuid(options.folderId)) {
+    throw new Error(`Folder ID must be a valid UUID.`);
+  }
+
+  // Create workspace
+  const resp = await client.createWorkspace({
+    workspaceName: options.name,
+    workspaceRegion: options.region,
+    deleteProtection,
+    organizationId: options.organizationId,
+    folderId: options.folderId,
+  });
+
+  return workspaceInfo(resp.workspace!);
+}
 
 export const createCommand = defineCommand({
   meta: {
@@ -71,32 +107,24 @@ export const createCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const accessToken = await loadAccessToken();
-    const client = await initOperatorClient(accessToken);
-
-    // Validate args
+    // Validate CLI specific args
     const format = parseFormat(args.format);
-    validateName(args.name);
-    await validateRegion(args.region, client);
-    if (args["organization-id"] && !uuidValidate(args["organization-id"])) {
-      throw new Error(`Organization ID must be a valid UUID.`);
-    }
-    if (args["folder-id"] && !uuidValidate(args["folder-id"])) {
-      throw new Error(`Folder ID must be a valid UUID.`);
-    }
 
-    const resp = await client.createWorkspace({
-      workspaceName: args.name,
-      workspaceRegion: args.region,
+    // Execute workspace create logic
+    const workspace = await workspaceCreate({
+      name: args.name,
+      region: args.region,
       deleteProtection: args["delete-protection"],
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
     });
+
+    // Show success message for table format
     if (format === "table") {
       consola.success(`Workspace "${args.name}" created successfully.`);
     }
 
     // Show workspace info
-    printWithFormat(workspaceInfo(resp.workspace!), format);
+    printWithFormat(workspace, format);
   }),
 });

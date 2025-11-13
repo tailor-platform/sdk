@@ -1,4 +1,11 @@
-import { execSync } from "node:child_process";
+import {
+  apply,
+  machineUserToken,
+  show,
+  workspaceCreate,
+  workspaceDelete,
+  type WorkspaceInfo,
+} from "@tailor-platform/tailor-sdk/cli";
 import type { TestProject } from "vitest/node";
 
 declare module "vitest" {
@@ -8,51 +15,28 @@ declare module "vitest" {
   }
 }
 
-interface WorkspaceInfo {
-  id: string;
-  name: string;
-}
 let createdWorkspace: WorkspaceInfo | null = null;
 
-function getUrl(): string {
-  const result = execSync("pnpm tailor-sdk show -f json");
-  return (JSON.parse(result.toString()) as { url: string }).url;
-}
-
-function getToken(): string {
-  const result = execSync("pnpm tailor-sdk machineuser token admin -f json");
-  return (JSON.parse(result.toString()) as { access_token: string })
-    .access_token;
-}
-
-function createWorkspace(name: string, region: string): WorkspaceInfo {
+async function createWorkspace(name: string, region: string) {
   console.log(`Creating workspace "${name}" in region "${region}"...`);
-  const result = execSync(
-    `pnpm tailor-sdk workspace create --name ${name} --region ${region} -f json`,
-  );
-  const workspace = JSON.parse(result.toString()) as WorkspaceInfo;
+  const workspace = await workspaceCreate({ name, region });
   console.log(`Workspace "${workspace.name}" created successfully.`);
   return workspace;
 }
 
-function deployApplication(): void {
+async function deployApplication() {
   console.log("Deploying application...");
-  execSync("pnpm tailor-sdk apply", { stdio: "inherit" });
+  await apply("tailor.config.ts");
   console.log("Application deployed successfully.");
 }
 
-function deleteWorkspace(workspaceId: string): void {
+async function deleteWorkspace(workspaceId: string) {
   console.log("Deleting workspace...");
-  execSync(
-    `pnpm tailor-sdk workspace delete --workspace-id ${workspaceId} --yes`,
-    {
-      stdio: "inherit",
-    },
-  );
+  await workspaceDelete({ workspaceId });
   console.log("Workspace deleted successfully.");
 }
 
-export function setup(project: TestProject) {
+export async function setup(project: TestProject) {
   const isCI = process.env.CI === "true";
   if (isCI) {
     const workspaceName = process.env.TAILOR_PLATFORM_WORKSPACE_NAME;
@@ -62,18 +46,20 @@ export function setup(project: TestProject) {
         "TAILOR_PLATFORM_WORKSPACE_NAME and TAILOR_PLATFORM_WORKSPACE_REGION must be set when CI=true",
       );
     }
-    createdWorkspace = createWorkspace(workspaceName, workspaceRegion);
+    createdWorkspace = await createWorkspace(workspaceName, workspaceRegion);
     process.env.TAILOR_PLATFORM_WORKSPACE_ID = createdWorkspace.id;
-    deployApplication();
+    await deployApplication();
   }
 
-  project.provide("url", getUrl());
-  project.provide("token", getToken());
+  const app = await show();
+  const tokens = await machineUserToken({ name: "admin" });
+  project.provide("url", app.url);
+  project.provide("token", tokens.accessToken);
 }
 
-export function teardown() {
+export async function teardown() {
   if (createdWorkspace) {
-    deleteWorkspace(createdWorkspace.id);
+    await deleteWorkspace(createdWorkspace.id);
     createdWorkspace = null;
   }
 }

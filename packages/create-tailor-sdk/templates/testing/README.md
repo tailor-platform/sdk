@@ -99,8 +99,8 @@ E2E tests verify your application works correctly when deployed to Tailor Platfo
 
 Before running tests, `globalSetup` retrieves deployment information:
 
-- Application URL via `tailor-sdk show -f json`
-- Machine user access token via `tailor-sdk machineuser token admin -f json`
+- Application URL via `show()`
+- Machine user access token via `machineUserToken()`
 - Provides credentials to tests via `inject("url")` and `inject("token")`
 
 **2. Test Files** ([e2e/resolver.test.ts](e2e/resolver.test.ts))

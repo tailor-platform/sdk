@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { machineUserToken, show } from "@tailor-platform/tailor-sdk/cli";
 import type { TestProject } from "vitest/node";
 
 declare module "vitest" {
@@ -8,19 +8,11 @@ declare module "vitest" {
   }
 }
 
-function getUrl(): string {
-  const result = execSync("pnpm tailor-sdk show -f json");
-  return JSON.parse(result.toString("utf-8")).url;
-}
-
-function getToken(): string {
-  const result = execSync(
-    "pnpm tailor-sdk machineuser token manager-machine-user -f json",
-  );
-  return JSON.parse(result.toString("utf-8")).access_token;
-}
-
-export function setup(project: TestProject) {
-  project.provide("url", getUrl());
-  project.provide("token", getToken());
+export async function setup(project: TestProject) {
+  const app = await show();
+  const tokens = await machineUserToken({
+    name: "manager-machine-user",
+  });
+  project.provide("url", app.url);
+  project.provide("token", tokens.accessToken);
 }

@@ -10,6 +10,72 @@ import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
 
+export interface MachineUserTokenOptions {
+  name: string;
+  workspaceId?: string;
+  profile?: string;
+  configPath?: string;
+}
+
+export interface MachineUserTokenInfo {
+  accessToken: string;
+  tokenType: string;
+  expiresAt: string;
+}
+
+export async function machineUserToken(
+  options: MachineUserTokenOptions,
+): Promise<MachineUserTokenInfo> {
+  // Load and validate options
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+  const configPath = loadConfigPath(options.configPath);
+
+  // Get application
+  const { config } = await loadConfig(configPath);
+  const { application } = await client.getApplication({
+    workspaceId,
+    applicationName: config.name,
+  });
+  if (!application?.authNamespace) {
+    throw new Error(
+      `Application ${config.name} does not have an auth configuration.`,
+    );
+  }
+
+  // Get machine user
+  const { machineUser } = await client.getAuthMachineUser({
+    workspaceId,
+    authNamespace: application.authNamespace,
+    name: options.name,
+  });
+  if (!machineUser) {
+    throw new Error(`Machine user ${options.name} not found.`);
+  }
+
+  // Fetch machine user token
+  const resp = await fetchMachineUserToken(
+    application.url,
+    machineUser.clientId,
+    machineUser.clientSecret,
+  );
+  const expiresAt = new Date();
+  expiresAt.setSeconds(expiresAt.getSeconds() + resp.expires_in);
+
+  return {
+    accessToken: resp.access_token,
+    tokenType: resp.token_type,
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
 export const tokenCommand = defineCommand({
   meta: {
     name: "token",
@@ -41,54 +107,23 @@ export const tokenCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
+    // Validate CLI specific args
     const format = parseFormat(args.format);
 
-    // Initialize client
-    const workspaceId = loadWorkspaceId({
+    // Execute machineuser token logic
+    const token = await machineUserToken({
+      name: args.name,
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      configPath: args.config,
     });
-    const accessToken = await loadAccessToken({
-      useProfile: true,
-      profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-
-    // Get machine user
-    const { config } = await loadConfig(loadConfigPath(args.config));
-    const { application } = await client.getApplication({
-      workspaceId,
-      applicationName: config.name,
-    });
-    if (!application?.authNamespace) {
-      throw new Error(
-        `Application ${config.name} does not have an auth configuration.`,
-      );
-    }
-    const { machineUser } = await client.getAuthMachineUser({
-      workspaceId,
-      authNamespace: application.authNamespace,
-      name: args.name,
-    });
-    if (!machineUser) {
-      throw new Error(`Machine user ${args.name} not found.`);
-    }
-
-    // Fetch machine user token
-    const resp = await fetchMachineUserToken(
-      application.url,
-      machineUser.clientId,
-      machineUser.clientSecret,
-    );
-    const expiresAt = new Date();
-    expiresAt.setSeconds(expiresAt.getSeconds() + resp.expires_in);
 
     // Show machine user token info
+    // TODO: remove this transformation
     const tokenInfo = {
-      access_token: resp.access_token,
-      token_type: resp.token_type,
-      expires_at: expiresAt.toISOString(),
+      access_token: token.accessToken,
+      token_type: token.tokenType,
+      expires_at: token.expiresAt,
     };
     printWithFormat(tokenInfo, format);
   }),

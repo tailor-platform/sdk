@@ -1,9 +1,39 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { validate as uuidValidate } from "uuid";
+import { validate as validateUuid } from "uuid";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
+
+export interface WorkspaceDeleteOptions {
+  workspaceId: string;
+}
+
+async function loadOptions(options: WorkspaceDeleteOptions) {
+  const accessToken = await loadAccessToken();
+  const client = await initOperatorClient(accessToken);
+  if (!validateUuid(options.workspaceId)) {
+    throw new Error(
+      `Workspace ID "${options.workspaceId}" is not a valid UUID.`,
+    );
+  }
+  return {
+    client,
+    workspaceId: options.workspaceId,
+  };
+}
+
+export async function workspaceDelete(
+  options: WorkspaceDeleteOptions,
+): Promise<void> {
+  // Load and validate options
+  const { client, workspaceId } = await loadOptions(options);
+
+  // Delete workspace
+  await client.deleteWorkspace({
+    workspaceId,
+  });
+}
 
 export const deleteCommand = defineCommand({
   meta: {
@@ -26,26 +56,22 @@ export const deleteCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
-    if (!uuidValidate(args["workspace-id"])) {
-      throw new Error(
-        `Workspace ID "${args["workspace-id"]}" is not a valid UUID.`,
-      );
-    }
-
-    const accessToken = await loadAccessToken();
-    const client = await initOperatorClient(accessToken);
+    // Load and validate options
+    const { client, workspaceId } = await loadOptions({
+      workspaceId: args["workspace-id"],
+    });
 
     // Check if workspace exists
     let workspace;
     try {
       workspace = await client.getWorkspace({
-        workspaceId: args["workspace-id"],
+        workspaceId,
       });
     } catch {
-      throw new Error(`Workspace "${args["workspace-id"]}" not found.`);
+      throw new Error(`Workspace "${workspaceId}" not found.`);
     }
 
+    // Confirm deletion if not forced
     if (!args.yes) {
       const confirmation = await consola.prompt(
         `Enter the workspace name to confirm deletion (${workspace.workspace?.name}):`,
@@ -59,10 +85,12 @@ export const deleteCommand = defineCommand({
       }
     }
 
+    // Delete workspace
     await client.deleteWorkspace({
-      workspaceId: args["workspace-id"],
+      workspaceId,
     });
 
+    // Show success message
     consola.success(
       `Workspace "${args["workspace-id"]}" deleted successfully.`,
     );

@@ -1,7 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
 
-interface WorkspaceInfo {
+export interface WorkspaceInfo {
   id: string;
   name: string;
   region: string;

@@ -12,7 +12,13 @@ import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
 import type { MachineUser } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
-interface MachineUserInfo {
+export interface MachineUserListOptions {
+  workspaceId?: string;
+  profile?: string;
+  configPath?: string;
+}
+
+export interface MachineUserInfo {
   name: string;
   clientId: string;
   clientSecret: string;
@@ -32,6 +38,46 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
       ? timestampDate(user.updatedAt).toISOString()
       : "N/A",
   };
+}
+
+export async function machineUserList(
+  options?: MachineUserListOptions,
+): Promise<MachineUserInfo[]> {
+  // Load and validate options
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options?.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options?.workspaceId,
+    profile: options?.profile,
+  });
+  const configPath = loadConfigPath(options?.configPath);
+
+  // Get application
+  const { config } = await loadConfig(configPath);
+  const { application } = await client.getApplication({
+    workspaceId,
+    applicationName: config.name,
+  });
+  if (!application?.authNamespace) {
+    throw new Error(
+      `Application ${config.name} does not have an auth configuration.`,
+    );
+  }
+
+  // Fetch all machine users
+  const machineUsers = await fetchAll(async (pageToken) => {
+    const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
+      workspaceId,
+      pageToken,
+      authNamespace: application.authNamespace,
+    });
+    return [machineUsers, nextPageToken];
+  });
+
+  return machineUsers.map(machineUserInfo);
 }
 
 export const listCommand = defineCommand({
@@ -60,44 +106,17 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
+    // Validate CLI specific args
     const format = parseFormat(args.format);
 
-    // Initialize client
-    const workspaceId = loadWorkspaceId({
+    // Execute machineuser list logic
+    const machineUsers = await machineUserList({
       workspaceId: args["workspace-id"],
       profile: args.profile,
-    });
-    const accessToken = await loadAccessToken({
-      useProfile: true,
-      profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-
-    // List machine users
-    const { config } = await loadConfig(loadConfigPath(args.config));
-    const { application } = await client.getApplication({
-      workspaceId,
-      applicationName: config.name,
-    });
-    if (!application?.authNamespace) {
-      throw new Error(
-        `Application ${config.name} does not have an auth configuration.`,
-      );
-    }
-    const machineUsers = await fetchAll(async (pageToken) => {
-      const { machineUsers, nextPageToken } = await client.listAuthMachineUsers(
-        {
-          workspaceId,
-          pageToken,
-          authNamespace: application.authNamespace,
-        },
-      );
-      return [machineUsers, nextPageToken];
+      configPath: args.config,
     });
 
     // Show machine users info
-    const machineUserInfos = machineUsers.map(machineUserInfo);
-    printWithFormat(machineUserInfos, format);
+    printWithFormat(machineUsers, format);
   }),
 });

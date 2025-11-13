@@ -12,7 +12,13 @@ import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "./context";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
-interface AppInfo {
+export interface ShowOptions {
+  workspaceId?: string;
+  profile?: string;
+  configPath?: string;
+}
+
+export interface ApplicationInfo {
   name: string;
   domain: string;
   url: string;
@@ -24,7 +30,7 @@ interface AppInfo {
   updatedAt: string;
 }
 
-function appInfo(app: Application): AppInfo {
+function applicationInfo(app: Application): ApplicationInfo {
   return {
     name: app.name,
     domain: app.domain,
@@ -40,6 +46,28 @@ function appInfo(app: Application): AppInfo {
       ? timestampDate(app.updateTime).toISOString()
       : "N/A",
   };
+}
+
+export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
+  // Load and validate options
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options?.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options?.workspaceId,
+    profile: options?.profile,
+  });
+  const configPath = loadConfigPath(options?.configPath);
+
+  // Get application
+  const { config } = await loadConfig(configPath);
+  const resp = await client.getApplication({
+    workspaceId,
+    applicationName: config.name,
+  });
+  return applicationInfo(resp.application!);
 }
 
 export const showCommand = defineCommand({
@@ -68,28 +96,17 @@ export const showCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
+    // Validate cli specific args
     const format = parseFormat(args.format);
 
-    // Initialize client
-    const workspaceId = loadWorkspaceId({
+    // Execute show logic
+    const appInfo = await show({
       workspaceId: args["workspace-id"],
       profile: args.profile,
-    });
-    const accessToken = await loadAccessToken({
-      useProfile: true,
-      profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-
-    // Get application info
-    const { config } = await loadConfig(loadConfigPath(args.config));
-    const resp = await client.getApplication({
-      workspaceId,
-      applicationName: config.name,
+      configPath: args.config,
     });
 
-    // Show application info
-    printWithFormat(appInfo(resp.application!), format);
+    // Show application
+    printWithFormat(appInfo, format);
   }),
 });
