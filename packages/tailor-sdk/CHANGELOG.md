@@ -1,5 +1,31 @@
 # @tailor-platform/tailor-sdk
 
+## 0.7.1
+
+### Patch Changes
+
+- [#713](https://github.com/tailor-platform/tailor-sdk/pull/713) [`b1c9e3c`](https://github.com/tailor-platform/tailor-sdk/commit/b1c9e3c252d1bbc86701255b92877ba3344ba102) Thanks [@remiposo](https://github.com/remiposo)! - Also accept simple objects instead of `t.object()` in resolver output
+
+  Previously, you had to always use `t.object()`, but now you can specify output in the same format as input.
+
+  ```typescript
+  // OK
+  createResolver({
+    output: t.object({
+      name: t.string(),
+      age: t.int(),
+    }),
+  });
+
+  // Also OK (same meaning as above)
+  createResolver({
+    output: {
+      name: t.string(),
+      age: t.int(),
+    },
+  });
+  ```
+
 ## 0.7.0
 
 ### Minor Changes
