@@ -1,3 +1,4 @@
 export type GenerateOptions = {
-  watch: boolean;
+  configPath?: string;
+  watch?: boolean;
 };

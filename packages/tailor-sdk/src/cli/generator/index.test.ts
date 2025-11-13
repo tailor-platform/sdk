@@ -174,7 +174,7 @@ describe("GenerationManager", () => {
       };
       const multiAppManager = new GenerationManager(multiAppConfig, []);
 
-      await multiAppManager.generate({ watch: false });
+      await multiAppManager.generate(false);
       expect(multiAppManager.application.applications.length).toBeGreaterThan(
         0,
       );
@@ -741,7 +741,7 @@ describe("generate function", () => {
 
   it("GenerationManagerを作成して実行", async () => {
     const manager = new GenerationManager(mockConfig, []);
-    await expect(manager.generate({ watch: false })).resolves.not.toThrow();
+    await expect(manager.generate(false)).resolves.not.toThrow();
   });
 
   it("watch オプションが true の場合 watch を開始", async () => {
@@ -749,7 +749,7 @@ describe("generate function", () => {
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
     const manager = new GenerationManager(mockConfig, []);
-    await manager.generate({ watch: false });
+    await manager.generate(false);
     await manager.watch();
 
     expect(watchSpy).toHaveBeenCalled();
@@ -760,7 +760,7 @@ describe("generate function", () => {
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
     const manager = new GenerationManager(mockConfig, []);
-    await manager.generate({ watch: false });
+    await manager.generate(false);
 
     expect(watchSpy).not.toHaveBeenCalled();
   });

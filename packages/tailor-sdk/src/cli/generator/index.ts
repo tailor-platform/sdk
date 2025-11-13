@@ -15,6 +15,7 @@ import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { commonArgs, withCommonArgs } from "../args";
+import { loadConfigPath } from "../context";
 import { DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
@@ -46,7 +47,7 @@ export class GenerationManager {
     fs.mkdirSync(this.baseDir, { recursive: true });
   }
 
-  async generate(options: GenerateOptions) {
+  async generate(watch: boolean) {
     console.log("Generation for application:", this.application.config.name);
 
     // Initialize data structure for each application
@@ -70,7 +71,7 @@ export class GenerationManager {
             `Error loading types for TailorDB service ${namespace}:`,
             error,
           );
-          if (!options.watch) {
+          if (!watch) {
             throw error;
           }
         }
@@ -94,7 +95,7 @@ export class GenerationManager {
             `Error loading resolvers for Resolver service ${namespace}:`,
             error,
           );
-          if (!options.watch) {
+          if (!watch) {
             throw error;
           }
         }
@@ -506,17 +507,17 @@ export class GenerationManager {
   }
 }
 
-export async function generate(
-  configPath: string,
-  options: GenerateOptions = { watch: false },
-) {
+export async function generate(options?: GenerateOptions) {
+  // Load and validate options
+  const configPath = loadConfigPath(options?.configPath);
   const { config, generators } = await loadConfig(configPath);
+  const watch = options?.watch ?? false;
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
   const manager = new GenerationManager(config, generators);
-  await manager.generate(options);
-  if (options.watch) {
+  await manager.generate(watch);
+  if (watch) {
     await manager.watch();
   }
 }
@@ -538,10 +539,13 @@ export const generateCommand = defineCommand({
       type: "boolean",
       description: "Watch for type/resolver changes and regenerate",
       alias: "w",
+      default: false,
     },
   },
   run: withCommonArgs(async (args) => {
-    const configPath = args.config || "tailor.config.ts";
-    await generate(configPath, args);
+    await generate({
+      configPath: args.config,
+      watch: args.watch,
+    });
   }),
 });

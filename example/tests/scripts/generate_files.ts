@@ -50,7 +50,9 @@ export async function generateExpectedFiles(): Promise<void> {
     }
 
     process.env.TAILOR_SDK_OUTPUT_DIR = expectedDir;
-    await generate("./tests/tailor.config.expected.ts");
+    await generate({
+      configPath: "./tests/tailor.config.expected.ts",
+    });
     replaceAbsolutePaths(expectedDir);
 
     console.log("\nGenerated files:");
@@ -98,8 +100,13 @@ export async function generateActualFiles(): Promise<void> {
   }
 
   process.env.TAILOR_SDK_OUTPUT_DIR = actualDir;
-  await generate("./tests/tailor.config.actual.ts");
-  await apply("./tests/tailor.config.actual.ts", { buildOnly: true });
+  await generate({
+    configPath: "./tests/tailor.config.actual.ts",
+  });
+  await apply({
+    configPath: "./tests/tailor.config.actual.ts",
+    buildOnly: true,
+  });
   replaceAbsolutePaths(actualDir);
 }
 

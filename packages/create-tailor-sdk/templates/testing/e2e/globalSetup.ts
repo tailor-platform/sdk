@@ -26,7 +26,7 @@ async function createWorkspace(name: string, region: string) {
 
 async function deployApplication() {
   console.log("Deploying application...");
-  await apply("tailor.config.ts");
+  await apply();
   console.log("Application deployed successfully.");
 }
 

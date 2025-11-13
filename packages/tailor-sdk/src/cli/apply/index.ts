@@ -9,7 +9,7 @@ import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken, loadWorkspaceId } from "../context";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import { applyExecutor, planExecutor } from "./services/executor";
@@ -24,19 +24,24 @@ import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { Executor } from "@/parser/service/executor";
 import type { Resolver } from "@/parser/service/resolver";
 
-export type ApplyOptions = {
+export interface ApplyOptions {
   workspaceId?: string;
   profile?: string;
+  configPath?: string;
   dryRun?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
-};
+}
 
 export type ApplyPhase = "create-update" | "delete";
 
-export async function apply(configPath: string, options: ApplyOptions = {}) {
+export async function apply(options?: ApplyOptions) {
+  // Load and validate options
+  const configPath = loadConfigPath(options?.configPath);
   const { config } = await loadConfig(configPath);
+  const dryRun = options?.dryRun ?? false;
+  const buildOnly = options?.buildOnly ?? false;
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
@@ -51,19 +56,18 @@ export async function apply(configPath: string, options: ApplyOptions = {}) {
   if (application.executorService) {
     await buildExecutor(application.executorService.config);
   }
-  if (options.buildOnly) {
-    return;
-  }
+  if (buildOnly) return;
 
+  // Initialize client
   const accessToken = await loadAccessToken({
     useProfile: true,
-    profile: options.profile,
-  });
-  const workspaceId = loadWorkspaceId({
-    workspaceId: options.workspaceId,
-    profile: options.profile,
+    profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options?.workspaceId,
+    profile: options?.profile,
+  });
 
   // Phase 1: Plan
   const tailorDB = await planTailorDB(client, workspaceId, application);
@@ -77,7 +81,7 @@ export async function apply(configPath: string, options: ApplyOptions = {}) {
   const pipeline = await planPipeline(client, workspaceId, application);
   const app = await planApplication(client, workspaceId, application);
   const executor = await planExecutor(client, workspaceId, application);
-  if (options.dryRun) {
+  if (dryRun) {
     console.log("Dry run enabled. No changes applied.");
     return;
   }
@@ -165,10 +169,10 @@ export const applyCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const configPath = args.config || "tailor.config.ts";
-    await apply(configPath, {
+    await apply({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      configPath: args.config,
       dryRun: args.dryRun,
     });
   }),
