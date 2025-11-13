@@ -45,7 +45,21 @@ jobs:
 
       - name: Apply workspace
         working-directory: example
+        run: pnpm run generate
+        env:
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Apply workspace
+        working-directory: example
         run: pnpm run apply
+        env:
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Seed data
+        working-directory: example
+        run: |
+          pnpm run seed:validate
+          pnpm run seed
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 

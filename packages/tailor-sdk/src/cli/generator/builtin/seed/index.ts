@@ -17,8 +17,24 @@ export const SeedGeneratorID = "@tailor-platform/seed";
  * Factory function to create a Seed generator.
  * Combines GraphQL Ingest and lines-db schema generation.
  */
+/**
+ * Generates the exec.sh script content
+ */
+function generateExecScript(
+  machineUserName: string,
+  configDir: string,
+): string {
+  return /* sh */ `#!/usr/bin/env bash
+
+ENDPOINT="$(pnpm exec tailor-sdk show -f json | jq -r '.url' || true)/query"
+HEADER="{ \\"Authorization\\": \\"Bearer $(pnpm exec tailor-sdk machineuser token "${machineUserName}" -f json | jq -r '.access_token' || true)\\" }"
+gql-ingest -c ${configDir} -e "\${ENDPOINT}" --headers "\${HEADER}"
+`;
+}
+
 export function createSeedGenerator(options: {
   distPath: string;
+  machineUserName?: string;
 }): CodeGenerator<
   SeedTypeMetadata,
   undefined,
@@ -122,6 +138,18 @@ export function createSeedGenerator(options: {
     .join("\n  ")}
 `,
         });
+
+        // Generate exec.sh if machineUserName is provided
+        if (options.machineUserName) {
+          files.push({
+            path: path.join(outputDir, "exec.sh"),
+            content: generateExecScript(
+              options.machineUserName,
+              path.basename(outputDir),
+            ),
+            executable: true,
+          });
+        }
       }
 
       return { files };

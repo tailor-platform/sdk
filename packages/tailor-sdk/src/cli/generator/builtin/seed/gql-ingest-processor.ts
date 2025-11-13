@@ -8,7 +8,10 @@ export function processGqlIngest(type: ParsedTailorDBType): GqlIngestMetadata {
   // Extract dependencies from relations
   const dependencies = Array.from(
     Object.values(type.fields).reduce<Set<string>>((set, field) => {
-      if (field.relation?.targetType) {
+      if (
+        field.relation?.targetType &&
+        field.relation.targetType !== type.name
+      ) {
         set.add(field.relation.targetType);
       }
       return set;

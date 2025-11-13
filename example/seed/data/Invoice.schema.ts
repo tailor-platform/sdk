@@ -5,7 +5,7 @@ import { invoice } from "../../tailordb/invoice";
 
 const schemaType = t.object({
   ...invoice.pickFields(["id","createdAt"], { optional: true }),
-  ...invoice.omitFields(["id","createdAt"]),
+  ...invoice.omitFields(["id","createdAt","invoiceNumber","sequentialId"]),
 });
 
 const hook = createTailorDBHook(invoice);

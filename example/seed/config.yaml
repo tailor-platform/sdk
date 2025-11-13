@@ -5,7 +5,7 @@ entityDependencies:
   PurchaseOrder: [Supplier]
   SalesOrder: [Customer]
   SalesOrderCreated: []
-  Selfie: [Selfie]
+  Selfie: []
   Supplier: []
   User: []
   UserSetting: [User]

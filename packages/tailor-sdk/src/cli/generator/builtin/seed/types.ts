@@ -27,6 +27,7 @@ export interface LinesDbMetadata {
   exportName: string;
   importPath: string;
   optionalFields: string[];
+  omitFields: string[];
   foreignKeys: ForeignKeyDefinition[];
   indexes: IndexDefinition[];
 }

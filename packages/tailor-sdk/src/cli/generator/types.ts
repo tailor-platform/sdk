@@ -7,6 +7,7 @@ interface GeneratedFile {
   path: string;
   content: string;
   skipIfExists?: boolean; // default: false
+  executable?: boolean; // default: false - if true, sets chmod +x
 }
 
 export interface GeneratorResult {

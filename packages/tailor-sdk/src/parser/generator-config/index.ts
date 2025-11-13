@@ -9,7 +9,7 @@ export const KyselyTypeConfigSchema = z.tuple([
 
 export const SeedConfigSchema = z.tuple([
   z.literal("@tailor-platform/seed"),
-  z.object({ distPath: z.string() }),
+  z.object({ distPath: z.string(), machineUserName: z.string().optional() }),
 ]);
 
 // FIXME: more strict schema validation

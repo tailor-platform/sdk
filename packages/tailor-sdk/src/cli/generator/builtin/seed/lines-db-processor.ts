@@ -15,13 +15,18 @@ export function processLinesDb(
   }
 
   const optionalFields = ["id"]; // id is always optional
+  const omitFields = [];
   const indexes: IndexDefinition[] = [];
   const foreignKeys: ForeignKeyDefinition[] = [];
 
-  // Find fields with hooks.create
+  // Find fields with hooks.create or serial
   for (const [fieldName, field] of Object.entries(type.fields)) {
     if (field.config.hooks?.create) {
       optionalFields.push(fieldName);
+    }
+    // Serial fields are auto-generated, so they should be optional in seed data
+    if (field.config.serial) {
+      omitFields.push(fieldName);
     }
     if (field.config.unique) {
       indexes.push({
@@ -61,6 +66,7 @@ export function processLinesDb(
     exportName: source.exportName,
     importPath: source.filePath,
     optionalFields,
+    omitFields,
     foreignKeys,
     indexes,
   };
@@ -73,13 +79,13 @@ export function generateLinesDbSchemaFile(
   metadata: LinesDbMetadata,
   importPath: string,
 ): string {
-  const { exportName, optionalFields, foreignKeys, indexes } = metadata;
+  const { exportName, optionalFields, omitFields, foreignKeys, indexes } =
+    metadata;
 
-  const pickFieldsArray = JSON.stringify(optionalFields);
   const schemaTypeCode = ml /* ts */ `
     const schemaType = t.object({
-      ...${exportName}.pickFields(${pickFieldsArray}, { optional: true }),
-      ...${exportName}.omitFields(${pickFieldsArray}),
+      ...${exportName}.pickFields(${JSON.stringify(optionalFields)}, { optional: true }),
+      ...${exportName}.omitFields(${JSON.stringify([...optionalFields, ...omitFields])}),
     });
     `;
 

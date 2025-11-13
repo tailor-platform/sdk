@@ -75,6 +75,9 @@ importers:
       '@connectrpc/connect-node':
         specifier: 2.1.0
         version: 2.1.0(@bufbuild/protobuf@2.10.0)(@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.10.0))
+      '@jackchuka/gql-ingest':
+        specifier: ^2.0.2
+        version: 2.0.2(graphql@16.11.0)
       '@tailor-platform/function-kysely-tailordb':
         specifier: 0.1.2
         version: 0.1.2(kysely@0.28.7)
@@ -82,8 +85,8 @@ importers:
         specifier: 0.6.1
         version: 0.6.1
       '@toiroakr/lines-db':
-        specifier: 0.4.1
-        version: 0.4.1
+        specifier: 0.6.0
+        version: 0.6.0
       '@types/node':
         specifier: 22.19.0
         version: 22.19.0
@@ -730,6 +733,10 @@ packages:
       '@types/node':
         optional: true
 
+  '@jackchuka/gql-ingest@2.0.2':
+    resolution: {integrity: sha512-JipmM1f/ZmDtZi8OXcjCv+lcTmeWLbWW2YTeDwk/uWky4IaxiDmHoqWT0z1rKuZhWnoketyfz6myzny9h+hqdQ==}
+    hasBin: true
+
   '@jridgewell/gen-mapping@0.3.12':
     resolution: {integrity: sha512-OuLGC46TjB5BbN1dH8JULVVZY4WTdkF7tV9Ys6wLL1rubZnCMstOhNHueU5bLCrnRuDhKPDM4g6sw4Bel5Gzqg==}
 
@@ -1164,8 +1171,8 @@ packages:
   '@tailor-platform/function-types@0.7.2':
     resolution: {integrity: sha512-Eg8Bk5QmDeQq8LMXjqlai1d1dDF4krXoeujOCUv3hpoVObwVPTiPIf/hHSemsG1jmp/9tythHA6xInKOgVGLMQ==}
 
-  '@toiroakr/lines-db@0.4.1':
-    resolution: {integrity: sha512-A5N7/70XMXjZvfqnwAfJRKsVMruMRtK9jSb6Q/fgo81ouKaJEzDFQzulbQGXAaXbIL8tBsuxwn1I1wJbFRRqXQ==}
+  '@toiroakr/lines-db@0.6.0':
+    resolution: {integrity: sha512-4AEo/KmyyrWPaq59vMhASIgBZ3DTpwTwrrzxN/x+oFFeeRlTpKYeu178x9myw1xTq0aZgn4368NtNKJC0ee7Xw==}
     hasBin: true
     peerDependencies:
       valibot: '>=1.0.0'
@@ -1590,6 +1597,11 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
+
+  csv-parser@3.2.0:
+    resolution: {integrity: sha512-fgKbp+AJbn1h2dcAHKIdKNSSjfp43BZZykXsCjzALjKy80VXQNHPFJ6T9Afwdzoj24aMkq8GwDS7KGcDPpejrA==}
+    engines: {node: '>= 10'}
+    hasBin: true
 
   data-view-buffer@1.0.2:
     resolution: {integrity: sha512-EmKO5V3OLXh1rtK2wgXRansaK1/mtVdTUEiEI0W8RkvgT05kfxaH29PliLnpLP73yYO6142Q72QNa8Wx/A5CqQ==}
@@ -3893,6 +3905,15 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.19.0
 
+  '@jackchuka/gql-ingest@2.0.2(graphql@16.11.0)':
+    dependencies:
+      commander: 14.0.2
+      csv-parser: 3.2.0
+      graphql-request: 7.3.1(graphql@16.11.0)
+      js-yaml: 4.1.0
+    transitivePeerDependencies:
+      - graphql
+
   '@jridgewell/gen-mapping@0.3.12':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -4212,7 +4233,7 @@ snapshots:
 
   '@tailor-platform/function-types@0.7.2': {}
 
-  '@toiroakr/lines-db@0.4.1':
+  '@toiroakr/lines-db@0.6.0':
     dependencies:
       '@standard-schema/spec': 1.0.0
       commander: 14.0.2
@@ -4711,6 +4732,8 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
+
+  csv-parser@3.2.0: {}
 
   data-view-buffer@1.0.2:
     dependencies:

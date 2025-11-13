@@ -373,7 +373,22 @@ export class GenerationManager {
               reject(err);
             } else {
               console.log(`Generated file: ${file.path}`);
-              resolve();
+              // Set executable permission if requested
+              if (file.executable) {
+                fs.chmod(file.path, 0o755, (chmodErr) => {
+                  if (chmodErr) {
+                    console.error(
+                      `Error setting executable permission on ${file.path}:`,
+                      chmodErr,
+                    );
+                    reject(chmodErr);
+                  } else {
+                    resolve();
+                  }
+                });
+              } else {
+                resolve();
+              }
             }
           });
         });

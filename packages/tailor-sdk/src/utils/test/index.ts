@@ -14,7 +14,7 @@ export const unauthenticatedTailorUser: TailorUser = {
 
 /**
  * Creates a hook function that processes TailorDB type fields
- * - Generates UUID for id fields
+ * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
  *
@@ -30,7 +30,12 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const field = value as TailorField<any, any, any>;
         if (key === "id") {
-          hooked[key] = crypto.randomUUID();
+          // Use existing id from data if provided, otherwise generate new UUID
+          const existingId =
+            data && typeof data === "object"
+              ? (data as Record<string, unknown>)[key]
+              : undefined;
+          hooked[key] = existingId ?? crypto.randomUUID();
         } else if (field.type === "nested") {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           hooked[key] = createTailorDBHook({ fields: field.fields } as any)(

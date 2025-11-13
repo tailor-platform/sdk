@@ -1,0 +1,5 @@
+{"id":"50000000-0000-0000-0000-000000000001","customerID":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","approvedByUserIDs":["01234567-89ab-cdef-0123-456789abcdef"],"totalPrice":150000,"discount":0.1,"status":"approved"}
+{"id":"50000000-0000-0000-0000-000000000002","customerID":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb","approvedByUserIDs":["01234567-89ab-cdef-0123-456789abcdef","33333333-3333-3333-3333-333333333333"],"totalPrice":280000,"discount":0.15,"status":"processing"}
+{"id":"50000000-0000-0000-0000-000000000003","customerID":"cccccccc-cccc-cccc-cccc-cccccccccccc","totalPrice":95000,"status":"pending"}
+{"id":"50000000-0000-0000-0000-000000000004","customerID":"dddddddd-dddd-dddd-dddd-dddddddddddd","approvedByUserIDs":["33333333-3333-3333-3333-333333333333"],"totalPrice":420000,"discount":0.2,"status":"approved"}
+{"id":"50000000-0000-0000-0000-000000000005","customerID":"eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee","totalPrice":75000,"status":"cancelled","cancelReason":"Customer requested cancellation","canceledAt":"2024-11-10T10:30:00Z"}
