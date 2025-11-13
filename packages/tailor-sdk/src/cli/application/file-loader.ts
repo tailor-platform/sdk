@@ -10,17 +10,14 @@ const DEFAULT_IGNORE_PATTERNS = ["**/*.test.ts", "**/*.spec.ts"];
 
 /**
  * Load files matching the given patterns, excluding files that match ignore patterns.
- * By default, test files (*.test.ts, *.spec.ts) are excluded.
+ * By default, test files (*.test.ts, *.spec.ts) are excluded unless ignores is explicitly specified.
  *
  * @param config - Configuration with files patterns and optional ignores patterns
  * @returns Array of absolute file paths
  */
 export function loadFilesWithIgnores(config: FileLoadConfig): string[] {
-  // Combine default ignore patterns with user-provided patterns
-  const ignorePatterns = [
-    ...DEFAULT_IGNORE_PATTERNS,
-    ...(config.ignores || []),
-  ];
+  // Use user-provided patterns if specified, otherwise use defaults
+  const ignorePatterns = config.ignores ?? DEFAULT_IGNORE_PATTERNS;
 
   const ignoreFiles = new Set<string>();
   for (const ignorePattern of ignorePatterns) {

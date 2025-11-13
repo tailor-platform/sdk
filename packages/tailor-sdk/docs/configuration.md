@@ -46,7 +46,7 @@ export default defineConfig({
 
 **files**: Glob patterns to match files. Required.
 
-**ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored.
+**ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored. If you explicitly specify `ignores`, the default patterns will not be applied. Use `ignores: []` to include all files including test files.
 
 ### Built-in IdP
 

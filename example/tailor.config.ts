@@ -47,12 +47,7 @@ export default defineConfig({
     website.url, // This will be replaced with the actual Static Website URL
   ],
   db: {
-    tailordb: {
-      files: ["./tailordb/*.ts"],
-      // Note: *.test.ts and *.spec.ts are automatically ignored by default
-      // You can add additional ignore patterns if needed:
-      // ignores: ["./tailordb/*.draft.ts"],
-    },
+    tailordb: { files: ["./tailordb/*.ts"] },
   },
   resolver: {
     "my-resolver": { files: ["./resolvers/*.ts"] },
