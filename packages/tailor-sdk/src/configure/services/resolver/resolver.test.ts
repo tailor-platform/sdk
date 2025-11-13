@@ -551,6 +551,24 @@ describe("createResolver", () => {
       expect(resolver.input).toBe(inputType);
       expect(resolver.output).toBe(outputType);
     });
+
+    test("accepts Record<string, TailorField> as output and converts to t.object()", () => {
+      const resolver = createResolver({
+        name: "recordOutput",
+        operation: "query",
+        output: {
+          name: t.string(),
+          age: t.int(),
+        },
+        body: () => ({ name: "John", age: 30 }),
+      });
+
+      // Verify the output was converted to t.object()
+      expect(resolver.output.type).toBe("nested");
+      expect(resolver.output.fields).toBeDefined();
+      expect(resolver.output.fields.name.type).toBe("string");
+      expect(resolver.output.fields.age.type).toBe("integer");
+    });
   });
 
   describe("description support", () => {

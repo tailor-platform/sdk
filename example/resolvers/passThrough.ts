@@ -19,5 +19,5 @@ export default createResolver({
     id: input.id ?? crypto.randomUUID(),
     createdAt: format(new Date(), "yyyy-MM-dd HH:mm:ss"),
   }),
-  output: t.object(nestedProfile.fields),
+  output: nestedProfile.fields,
 });
