@@ -53,7 +53,7 @@ const mockNestedType = db.type("ComplexUser", {
   ...db.fields.timestamps(),
 });
 
-describe("KyselyGenerator統合テスト", () => {
+describe("KyselyGenerator integration tests", () => {
   let kyselyGenerator: KyselyGenerator;
   const testDistPath = "/test/dist/kysely-types.ts";
 
@@ -61,8 +61,8 @@ describe("KyselyGenerator統合テスト", () => {
     kyselyGenerator = new KyselyGenerator({ distPath: testDistPath });
   });
 
-  describe("基本的な動作テスト", () => {
-    it("processType メソッドが基本的な TailorDBType を正しく処理する", async () => {
+  describe("basic functionality tests", () => {
+    it("processType method correctly processes basic TailorDBType", async () => {
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(mockBasicType),
         applicationNamespace: "test-app",
@@ -84,14 +84,14 @@ describe("KyselyGenerator統合テスト", () => {
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
-    it("processResolver メソッドが undefined を返す", () => {
+    it("processResolver method returns undefined", () => {
       const result = kyselyGenerator.processResolver();
       expect(result).toBeUndefined();
     });
   });
 
-  describe("型マッピングのテスト", () => {
-    it("enum型を正しくKysely型にマッピングする", async () => {
+  describe("type mapping tests", () => {
+    it("correctly maps enum type to Kysely type", async () => {
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(mockEnumType),
         applicationNamespace: "test-app",
@@ -106,7 +106,7 @@ describe("KyselyGenerator統合テスト", () => {
       );
     });
 
-    it("ネストしたオブジェクト型を正しく処理する", async () => {
+    it("correctly processes nested object type", async () => {
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(mockNestedType),
         applicationNamespace: "test-app",
@@ -124,7 +124,7 @@ describe("KyselyGenerator統合テスト", () => {
       expect(result.typeDef).toContain("}[] | null;");
     });
 
-    it("required/optional フィールドを正しく処理する", async () => {
+    it("correctly processes required/optional fields", async () => {
       const testType = db.type("TestRequired", {
         requiredField: db.string(),
         optionalField: db.string({ optional: true }),
@@ -144,7 +144,7 @@ describe("KyselyGenerator統合テスト", () => {
       );
     });
 
-    it("配列型を正しく処理する", async () => {
+    it("correctly processes array types", async () => {
       const arrayType = db.type("ArrayTest", {
         stringArray: db.string({ array: true }),
         optionalIntArray: db.int({ optional: true, array: true }),
@@ -161,8 +161,8 @@ describe("KyselyGenerator統合テスト", () => {
     });
   });
 
-  describe("processTailorDBNamespace メソッドのテスト", () => {
-    it("複数の型を統合してKysely型定義ファイルを生成する", async () => {
+  describe("processTailorDBNamespace method tests", () => {
+    it("integrates multiple types to generate Kysely type definition file", async () => {
       const typeMetadata = {
         User: {
           name: "User",
@@ -211,7 +211,7 @@ describe("KyselyGenerator統合テスト", () => {
       expect(result.endsWith("\n")).toBe(true);
     });
 
-    it("空の型定義でも正常に動作する", async () => {
+    it("works correctly with empty type definitions", async () => {
       const result = await kyselyGenerator.processTailorDBNamespace({
         applicationNamespace: "test-app",
         namespace: "test-namespace",
@@ -231,8 +231,8 @@ describe("KyselyGenerator統合テスト", () => {
     });
   });
 
-  describe("aggregate関数のテスト", () => {
-    it("型定義を統合してファイル生成結果を返す", () => {
+  describe("aggregate function tests", () => {
+    it("integrates type definitions and returns file generation result", () => {
       const processedTypes = `import { type ColumnType, Kysely } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
@@ -277,7 +277,7 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
       expect(result.errors).toBeUndefined();
     });
 
-    it("複数の型を持つ完全な統合テスト", async () => {
+    it("complete integration test with multiple types", async () => {
       const types = {
         User: await kyselyGenerator.processType({
           type: parseTailorDBType(mockBasicType),
@@ -325,8 +325,8 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
     });
   });
 
-  describe("エラーハンドリングのテスト", () => {
-    it("無効な型定義でエラーが発生しても適切に処理する", async () => {
+  describe("error handling tests", () => {
+    it("handles errors appropriately with invalid type definitions", async () => {
       const invalidType = {
         name: "Invalid",
         fields: null, // Invalid field
@@ -346,7 +346,7 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
       ).rejects.toThrow();
     });
 
-    it("未知の型定義を文字列型として処理する", async () => {
+    it("processes unknown type definitions as string type", async () => {
       const unknownType = db.type("UnknownType", {
         unknownField: db.string(),
       });

@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/tailor-sdk";
 import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const customer = db
-  .type("Customer", "カスタマー", {
+  .type("Customer", "Customer information", {
     name: db.string(),
     email: db.string(),
     phone: db.string({ optional: true }),
@@ -19,8 +19,8 @@ export const customer = db
   })
   .hooks({
     fullAddress: {
-      create: ({ data }) => `〒${data.postalCode} ${data.address} ${data.city}`,
-      update: ({ data }) => `〒${data.postalCode} ${data.address} ${data.city}`,
+      create: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
+      update: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
     },
   })
   .validate({

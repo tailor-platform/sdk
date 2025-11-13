@@ -412,7 +412,7 @@
 
   ```typescript
   fullAddress: db.string({ optional: true }).hooks({
-    create: ({ data }) => `〒${data.postalCode} ${data.address} ${data.city}`,
+    create: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
     // data.postalCode was guaranteed to be present
   });
   ```
@@ -422,7 +422,7 @@
   ```typescript
   fullAddress: db.string({ optional: true }).hooks({
     create: ({ data }) =>
-      `〒${data.postalCode ?? ""} ${data.address ?? ""} ${data.city ?? ""}`,
+      `${data.postalCode ?? ""} ${data.address ?? ""} ${data.city ?? ""}`,
     // All fields may be undefined - use ?? or add null checks
   });
   ```

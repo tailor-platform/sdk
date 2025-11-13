@@ -557,7 +557,7 @@ describe("dataplane", () => {
         createCustomer: {
           id: expect.any(String),
           name: "customer",
-          fullAddress: "〒12345 123 Main St Los Angeles",
+          fullAddress: "12345 123 Main St Los Angeles",
         },
       });
     });

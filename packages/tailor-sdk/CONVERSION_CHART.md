@@ -355,8 +355,8 @@ field {
 
 ```typescript
 fullAddress: db.string().hooks({
-  create: ({ data }) => `〒${data.postalCode} ${data.address} ${data.city}`,
-  update: ({ data }) => `〒${data.postalCode} ${data.address} ${data.city}`,
+  create: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
+  update: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
 });
 ```
 
@@ -369,12 +369,12 @@ field {
 
   hook {
     type       = "create"
-    expression = "`〒${data.postalCode} ${data.address} ${data.city}`"
+    expression = "`${data.postalCode} ${data.address} ${data.city}`"
   }
 
   hook {
     type       = "update"
-    expression = "`〒${data.postalCode} ${data.address} ${data.city}`"
+    expression = "`${data.postalCode} ${data.address} ${data.city}`"
   }
 }
 ```
@@ -386,10 +386,10 @@ field {
   "Type": "string",
   "Hooks": {
     "Create": {
-      "Expr": "(({data})=>`〒${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
+      "Expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
     },
     "Update": {
-      "Expr": "(({data})=>`〒${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
+      "Expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user })"
     }
   }
 }

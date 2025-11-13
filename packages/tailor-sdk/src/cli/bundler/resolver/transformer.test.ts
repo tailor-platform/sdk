@@ -36,7 +36,7 @@ describe("CodeTransformer", () => {
       return filePath;
     };
 
-    it("resolverのbodyを適切にエクスポートする", async () => {
+    it("exports resolver body appropriately", async () => {
       const resolverName = "testResolver";
       const moduleSource = multiline /* ts */ `
         const resolver = {
@@ -63,12 +63,12 @@ describe("CodeTransformer", () => {
         "export const $tailor_resolver_body",
       );
 
-      // bodyファイルが作成されることを確認
+      // Verify that the body file is created
       expect(resultFiles).toHaveLength(1);
       expect(resultFiles[0]).toContain(`${resolverName}__body.js`);
     });
 
-    it("createResolverを使ったresolverを正しく変換する", async () => {
+    it("transforms resolver using createResolver correctly", async () => {
       const resolverName = "testResolver";
       const moduleSource = multiline /* ts */ `
         const createResolver = (config) => config;
@@ -99,12 +99,12 @@ describe("CodeTransformer", () => {
         "export const $tailor_resolver_body",
       );
 
-      // bodyファイルが作成されることを確認
+      // Verify that the body file is created
       expect(resultFiles).toHaveLength(1);
       expect(resultFiles[0]).toContain(`${resolverName}__body.js`);
     });
 
-    it("inputにvalidateがある場合、StandardSchema Result型を使用する", async () => {
+    it("uses StandardSchema Result type when input has validate", async () => {
       const resolverName = "validatedResolver";
       const moduleSource = multiline /* ts */ `
         const createResolver = (config) => config;

@@ -121,13 +121,13 @@ describe("GenerationManager", () => {
     }
   });
 
-  describe("コンストラクター", () => {
-    it("正常に初期化される", () => {
+  describe("constructor", () => {
+    it("initializes correctly", () => {
       expect(manager.application).toBeDefined();
       expect(manager.baseDir).toContain("generated");
     });
 
-    it("ベースディレクトリが作成される", () => {
+    it("base directory is created", () => {
       expect(fs.mkdirSync).toHaveBeenCalledWith(
         expect.stringContaining("generated"),
         { recursive: true },
@@ -136,11 +136,11 @@ describe("GenerationManager", () => {
   });
 
   describe("generators", () => {
-    it("ジェネレーターが正しく渡される", () => {
+    it("generators are passed correctly", () => {
       expect(manager.generators.length).toBeGreaterThan(0);
     });
 
-    it("Kysely ジェネレーターを受け取る", () => {
+    it("receives Kysely generator", () => {
       const kyselyGen = GeneratorConfigSchema.parse([
         "@tailor-platform/kysely-type",
         { distPath: "types/db.ts" },
@@ -158,7 +158,7 @@ describe("GenerationManager", () => {
   });
 
   describe("generate", () => {
-    it("完全な生成プロセスを実行", async () => {
+    it("executes complete generation process", async () => {
       await manager.generate({ watch: false });
 
       // Generators are configured but may be 0 if actual type files do not exist
@@ -167,7 +167,7 @@ describe("GenerationManager", () => {
       expect(manager.applications).toBeDefined();
     });
 
-    it("複数のアプリケーションを処理", async () => {
+    it("processes multiple applications", async () => {
       const multiAppConfig = {
         ...mockConfig,
         name: "multi-app",
@@ -213,7 +213,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("全てのジェネレーターを並列処理", async () => {
+    it("processes all generators in parallel", async () => {
       const processGeneratorSpy = vi.spyOn(manager, "processGenerator");
 
       await manager.processGenerators();
@@ -223,7 +223,7 @@ describe("GenerationManager", () => {
       );
     });
 
-    it("ジェネレーター処理でエラーが発生しても他に影響しない", async () => {
+    it("errors in generator processing do not affect others", async () => {
       const errorGenerator = {
         id: "error-generator",
         description: "Error generator",
@@ -295,7 +295,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("単一ジェネレーターの完全処理", async () => {
+    it("complete processing of single generator", async () => {
       // Initialize generatorResults
       manager.generatorResults = {};
 
@@ -316,7 +316,7 @@ describe("GenerationManager", () => {
       expect(aggregateSpy).toHaveBeenCalledWith(testGenerator);
     });
 
-    it("typesとresolversが並列処理される", async () => {
+    it("types and resolvers are processed in parallel", async () => {
       // Initialize generatorResults
       manager.generatorResults = {};
 
@@ -348,7 +348,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("全てのタイプを処理", async () => {
+    it("processes all types", async () => {
       const processTypeSpy = vi.spyOn(testGenerator, "processType");
       const types = {
         type1: db.type("Type1", {}),
@@ -383,7 +383,7 @@ describe("GenerationManager", () => {
       ).toHaveLength(3);
     });
 
-    it("空のtypesでもエラーにならない", async () => {
+    it("does not error with empty types", async () => {
       await expect(
         manager.processTailorDBNamespace(
           testGenerator,
@@ -397,7 +397,7 @@ describe("GenerationManager", () => {
       ).resolves.not.toThrow();
     });
 
-    it("sourceInfoがprocessTypeに正しく渡される", async () => {
+    it("sourceInfo is correctly passed to processType", async () => {
       const processTypeSpy = vi.spyOn(testGenerator, "processType");
       const types = {
         TestType: db.type("TestType", {}),
@@ -456,7 +456,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("全てのリゾルバーを処理", async () => {
+    it("processes all resolvers", async () => {
       const processResolverSpy = vi.spyOn(testGenerator, "processResolver");
       const resolvers = {
         resolver1: createResolver({
@@ -520,7 +520,7 @@ describe("GenerationManager", () => {
       };
     });
 
-    it("ジェネレーターのaggregateメソッドを呼び出し", async () => {
+    it("calls generator aggregate method", async () => {
       const aggregateSpy = vi.spyOn(testGenerator, "aggregate");
 
       await manager.aggregate(testGenerator);
@@ -548,14 +548,14 @@ describe("GenerationManager", () => {
       });
     });
 
-    it("ファイルを正しく書き込み", async () => {
+    it("writes files correctly", async () => {
       await manager.aggregate(testGenerator);
 
       expect(fs.writeFile).toHaveBeenCalled();
       expect(fs.mkdirSync).toHaveBeenCalled();
     });
 
-    it("複数ファイルの並列書き込み", async () => {
+    it("parallel writing of multiple files", async () => {
       // Clear previous calls
       vi.mocked(fs.writeFile).mockClear();
 
@@ -589,7 +589,7 @@ describe("GenerationManager", () => {
       expect(fs.writeFile).toHaveBeenCalledTimes(3);
     });
 
-    it("ファイル書き込みエラーのハンドリング", async () => {
+    it("handles file write errors", async () => {
       const writeFileError = new Error("Write permission denied");
       vi.mocked(fs.writeFile).mockImplementationOnce(
         (_path, _content, callback: any) => {
@@ -636,12 +636,12 @@ describe("GenerationManager", () => {
       );
     });
 
-    it("ワッチャーを初期化", async () => {
+    it("initializes watcher", async () => {
       await manager.watch();
       expect(manager.watcher).toBeInstanceOf(DependencyWatcher);
     });
 
-    it("TailorDBサービス用の監視グループを追加", async () => {
+    it("adds watch group for TailorDB service", async () => {
       await manager.watch();
 
       expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith(
@@ -651,7 +651,7 @@ describe("GenerationManager", () => {
       );
     });
 
-    it("Resolverサービス用の監視グループを追加", async () => {
+    it("adds watch group for Resolver service", async () => {
       await manager.watch();
 
       expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith(
@@ -661,7 +661,7 @@ describe("GenerationManager", () => {
       );
     });
 
-    it("ファイル変更時のコールバック処理", async () => {
+    it("callback processing on file change", async () => {
       // Verify that TestGenerator has processTailorDBNamespace method
       const testGen = manager.generators.find(
         (g: any) => g.id === "test-generator",
@@ -739,12 +739,12 @@ describe("generate function", () => {
     } as any;
   });
 
-  it("GenerationManagerを作成して実行", async () => {
+  it("creates and executes GenerationManager", async () => {
     const manager = new GenerationManager(mockConfig, []);
     await expect(manager.generate(false)).resolves.not.toThrow();
   });
 
-  it("watch オプションが true の場合 watch を開始", async () => {
+  it("starts watch when watch option is true", async () => {
     const watchSpy = vi.fn();
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
@@ -755,7 +755,7 @@ describe("generate function", () => {
     expect(watchSpy).toHaveBeenCalled();
   });
 
-  it("watch オプションが false の場合 watch を開始しない", async () => {
+  it("does not start watch when watch option is false", async () => {
     const watchSpy = vi.fn();
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
@@ -797,7 +797,7 @@ describe("Integration Tests", () => {
     }
   });
 
-  it("複数ジェネレーターでの完全統合テスト", async () => {
+  it("complete integration test with multiple generators", async () => {
     const indexModule = await import("./index");
     const GenerationManager = (indexModule as any).GenerationManager;
     const kyselyGen = GeneratorConfigSchema.parse([
@@ -818,7 +818,7 @@ describe("Integration Tests", () => {
     ).toBe(true);
   });
 
-  it("エラー回復とパフォーマンスの統合テスト", async () => {
+  it("integration test for error recovery and performance", async () => {
     const indexModule = await import("./index");
     const GenerationManager = (indexModule as any).GenerationManager;
     const manager = new GenerationManager(fullConfig, []);
@@ -831,7 +831,7 @@ describe("Integration Tests", () => {
   });
 
   describe("Memory Management", () => {
-    it("大量データ処理でメモリリークなし", async () => {
+    it("no memory leak with large data processing", async () => {
       const largeGenerators = Array(10)
         .fill(0)
         .map(() => new TestGenerator());

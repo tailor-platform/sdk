@@ -34,14 +34,14 @@ beforeEach(() => {
 });
 
 /**
- * テスト用の一時ディレクトリを作成
+ * Create temporary directory for testing
  */
 async function createTempDir(): Promise<string> {
   return await fs.mkdtemp(path.join(os.tmpdir(), "dependency-watcher-test-"));
 }
 
 /**
- * テスト用のファイルを作成
+ * Create files for testing
  */
 async function createTestFile(
   filePath: string,
@@ -68,8 +68,8 @@ describe("DependencyWatcher", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  describe("初期化", () => {
-    it("正常に初期化できる", async () => {
+  describe("initialization", () => {
+    it("can initialize correctly", async () => {
       await watcher.initialize();
       const status = watcher.getWatchStatus();
       expect(status.isWatching).toBe(true);
@@ -78,8 +78,8 @@ describe("DependencyWatcher", () => {
     });
   });
 
-  describe("監視グループの管理", () => {
-    it("監視グループを追加できる", async () => {
+  describe("watch group management", () => {
+    it("can add watch group", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -91,7 +91,7 @@ describe("DependencyWatcher", () => {
       expect(status.fileCount).toBe(1);
     });
 
-    it("glob パターンで複数ファイルを監視できる", async () => {
+    it("can watch multiple files with glob pattern", async () => {
       const testFile1 = path.join(tempDir, "file1.ts");
       const testFile2 = path.join(tempDir, "file2.ts");
       await createTestFile(testFile1, 'export const file1 = "hello";');
@@ -106,7 +106,7 @@ describe("DependencyWatcher", () => {
       expect(status.fileCount).toBe(2);
     });
 
-    it("監視グループを削除できる", async () => {
+    it("can remove watch group", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -119,7 +119,7 @@ describe("DependencyWatcher", () => {
       expect(status.fileCount).toBe(0);
     });
 
-    it("重複するグループIDでエラーが発生する", async () => {
+    it("duplicate group ID causes error", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -132,15 +132,15 @@ describe("DependencyWatcher", () => {
     });
   });
 
-  describe("バリデーション", () => {
-    it("無効なグループIDでエラーが発生する", async () => {
+  describe("validation", () => {
+    it("invalid group ID causes error", async () => {
       const callback = vi.fn();
       await expect(
         watcher.addWatchGroup("", ["test.ts"], callback),
       ).rejects.toThrow(WatcherError);
     });
 
-    it("空のパターン配列でエラーが発生する", async () => {
+    it("empty pattern array causes error", async () => {
       const callback = vi.fn();
       await expect(
         watcher.addWatchGroup("test-group", [], callback),
@@ -148,8 +148,8 @@ describe("DependencyWatcher", () => {
     });
   });
 
-  describe("影響範囲計算", () => {
-    it("依存関係のないファイルの影響範囲は空", async () => {
+  describe("impact scope calculation", () => {
+    it("impact scope is empty for files without dependencies", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
@@ -163,15 +163,15 @@ describe("DependencyWatcher", () => {
     });
   });
 
-  describe("エラーハンドリング", () => {
-    it("エラーコールバックが設定できる", () => {
+  describe("error handling", () => {
+    it("can set error callback", () => {
       const errorCallback = vi.fn();
       watcher.onError(errorCallback);
 
       expect(errorCallback).not.toHaveBeenCalled();
     });
 
-    it("WatcherError が正しく作成される", () => {
+    it("WatcherError is created correctly", () => {
       const error = new WatcherError(
         "Test error",
         WatcherErrorCode.INVALID_WATCH_GROUP,
@@ -185,8 +185,8 @@ describe("DependencyWatcher", () => {
     });
   });
 
-  describe("監視状態", () => {
-    it("監視状態を正しく取得できる", async () => {
+  describe("watch status", () => {
+    it("can get watch status correctly", async () => {
       const testFile1 = path.join(tempDir, "file1.ts");
       const testFile2 = path.join(tempDir, "file2.ts");
       await createTestFile(testFile1, 'export const file1 = "hello";');
@@ -204,8 +204,8 @@ describe("DependencyWatcher", () => {
     });
   });
 
-  describe("循環依存検出", () => {
-    it("循環依存を検出できる", async () => {
+  describe("circular dependency detection", () => {
+    it("can detect circular dependencies", async () => {
       const circular = watcher.detectCircularDependencies();
       expect(Array.isArray(circular)).toBe(true);
     });
@@ -223,11 +223,11 @@ describe("DependencyGraphManager", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("空のファイル配列でグラフを構築できる", async () => {
+  it("can build graph with empty file array", async () => {
     await expect(manager.buildGraph([])).resolves.not.toThrow();
   });
 
-  it("madge を呼び出して依存関係グラフを構築する", async () => {
+  it("calls madge to build dependency graph", async () => {
     const testFile = path.join(tempDir, "sample.ts");
     await createTestFile(testFile, "export const value = 1;");
 
@@ -241,7 +241,7 @@ describe("DependencyGraphManager", () => {
     );
   });
 
-  it("madge が関数を提供しない場合にエラーを検出する", async () => {
+  it("detects error when madge does not provide function", async () => {
     const mockedMadge = await import("madge");
     const originalDefault = (mockedMadge as { default?: unknown }).default;
     (mockedMadge as { default?: unknown }).default = undefined;
@@ -261,7 +261,7 @@ describe("DependencyGraphManager", () => {
 });
 
 describe("WatcherErrorCode", () => {
-  it("すべてのエラーコードが定義されている", () => {
+  it("all error codes are defined", () => {
     expect(WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED).toBe(
       "DEPENDENCY_ANALYSIS_FAILED",
     );

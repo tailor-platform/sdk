@@ -2,8 +2,8 @@ import { describe, it, expect, expectTypeOf } from "vitest";
 import { t } from "./type";
 import type { output } from "./helpers";
 
-describe("TailorType 基本フィールド型テスト", () => {
-  it("string型フィールドが正しくstring型を出力する", () => {
+describe("TailorType basic field type tests", () => {
+  it("string field outputs string type correctly", () => {
     const _stringType = t.object({
       name: t.string(),
     });
@@ -12,7 +12,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("int型フィールドが正しくnumber型を出力する", () => {
+  it("int field outputs number type correctly", () => {
     const _intType = t.object({
       age: t.int(),
     });
@@ -21,7 +21,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("bool型フィールドが正しくboolean型を出力する", () => {
+  it("bool field outputs boolean type correctly", () => {
     const _boolType = t.object({
       active: t.bool(),
     });
@@ -30,7 +30,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("float型フィールドが正しくnumber型を出力する", () => {
+  it("float field outputs number type correctly", () => {
     const _floatType = t.object({
       price: t.float(),
     });
@@ -39,7 +39,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("uuid型フィールドが正しくstring型を出力する", () => {
+  it("uuid field outputs string type correctly", () => {
     const _uuidType = t.object({
       id: t.uuid(),
     });
@@ -48,7 +48,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("date型フィールドが正しくstring型を出力する", () => {
+  it("date field outputs string type correctly", () => {
     const _dateType = t.object({
       birthDate: t.date(),
     });
@@ -57,7 +57,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("datetime型フィールドが正しくstring型を出力する", () => {
+  it("datetime field outputs string type correctly", () => {
     const _datetimeType = t.object({
       createdAt: t.datetime(),
     });
@@ -66,7 +66,7 @@ describe("TailorType 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("time型フィールドが正しくstring型を出力する", () => {
+  it("time field outputs string type correctly", () => {
     const _timeType = t.object({
       openingTime: t.time(),
     });
@@ -76,8 +76,8 @@ describe("TailorType 基本フィールド型テスト", () => {
   });
 });
 
-describe("TailorField optionalオプションテスト", () => {
-  it("optionalオプションがnull許可型を生成する", () => {
+describe("TailorField optional option tests", () => {
+  it("optional option generates nullable type", () => {
     const _optionalType = t.object({
       description: t.string({ optional: true }),
     });
@@ -86,7 +86,7 @@ describe("TailorField optionalオプションテスト", () => {
     }>();
   });
 
-  it("複数のオプショナルフィールドが正しく動作する", () => {
+  it("multiple optional fields work correctly", () => {
     const _multiOptionalType = t.object({
       title: t.string(),
       description: t.string({ optional: true }),
@@ -100,8 +100,8 @@ describe("TailorField optionalオプションテスト", () => {
   });
 });
 
-describe("TailorField arrayオプションテスト", () => {
-  it("arrayオプションが配列型を生成する", () => {
+describe("TailorField array option tests", () => {
+  it("array option generates array type", () => {
     const _arrayType = t.object({
       tags: t.string({ array: true }),
     });
@@ -110,7 +110,7 @@ describe("TailorField arrayオプションテスト", () => {
     }>();
   });
 
-  it("オプショナル配列が正しく動作する", () => {
+  it("optional array works correctly", () => {
     const _optionalArrayType = t.object({
       items: t.string({ optional: true, array: true }),
     });
@@ -119,7 +119,7 @@ describe("TailorField arrayオプションテスト", () => {
     }>();
   });
 
-  it("複数の配列フィールドが正しく動作する", () => {
+  it("multiple array fields work correctly", () => {
     const _multiArrayType = t.object({
       tags: t.string({ array: true }),
       numbers: t.int({ array: true }),
@@ -133,8 +133,8 @@ describe("TailorField arrayオプションテスト", () => {
   });
 });
 
-describe("TailorField enum フィールドテスト", () => {
-  it("stringを渡してenumフィールドを設定する", () => {
+describe("TailorField enum field tests", () => {
+  it("set enum field by passing string", () => {
     const enumField = t.enum("active", "inactive", "pending");
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "active" | "inactive" | "pending"
@@ -146,7 +146,7 @@ describe("TailorField enum フィールドテスト", () => {
     ]);
   });
 
-  it("objectを渡してenumフィールドを設定する", () => {
+  it("set enum field by passing object", () => {
     const enumField = t.enum(
       { value: "small", description: "Small size" },
       { value: "medium" },
@@ -162,7 +162,7 @@ describe("TailorField enum フィールドテスト", () => {
     ]);
   });
 
-  it("stringとobjectを混在させてenumフィールドを設定する", () => {
+  it("set enum field by mixing string and object", () => {
     const enumField = t.enum(
       "red",
       { value: "green", description: "Green color" },
@@ -178,14 +178,14 @@ describe("TailorField enum フィールドテスト", () => {
     ]);
   });
 
-  it("値を持たないenumを設定すると型エラーになる", () => {
+  it("setting enum without values causes type error", () => {
     // @ts-expect-error AllowedValues requires at least one value
     t.enum();
     // @ts-expect-error AllowedValues requires at least one value
     t.enum({ optional: true });
   });
 
-  it("オプショナルenum()が正しく動作する", () => {
+  it("optional enum() works correctly", () => {
     const _optionalEnumType = t.object({
       priority: t.enum("high", "medium", "low", { optional: true }),
     });
@@ -194,7 +194,7 @@ describe("TailorField enum フィールドテスト", () => {
     }>();
   });
 
-  it("enum配列が正しく動作する", () => {
+  it("enum array works correctly", () => {
     const _enumArrayType = t.object({
       categories: t.enum("a", "b", "c", { array: true }),
     });
@@ -204,8 +204,8 @@ describe("TailorField enum フィールドテスト", () => {
   });
 });
 
-describe("TailorType 複合型テスト", () => {
-  it("複数フィールドを持つ型が正しく動作する", () => {
+describe("TailorType composite type tests", () => {
+  it("type with multiple fields works correctly", () => {
     const _complexType = t.object({
       id: t.uuid(),
       name: t.string(),
@@ -227,8 +227,8 @@ describe("TailorType 複合型テスト", () => {
   });
 });
 
-describe("TailorType エッジケーステスト", () => {
-  it("単一フィールドの型が正しく動作する", () => {
+describe("TailorType edge case tests", () => {
+  it("type with single field works correctly", () => {
     const _singleFieldType = t.object({
       value: t.string(),
     });
@@ -237,7 +237,7 @@ describe("TailorType エッジケーステスト", () => {
     }>();
   });
 
-  it("すべてオプショナルフィールドの型が正しく動作する", () => {
+  it("type with all optional fields works correctly", () => {
     const _allOptionalType = t.object({
       a: t.string({ optional: true }),
       b: t.int({ optional: true }),
@@ -250,7 +250,7 @@ describe("TailorType エッジケーステスト", () => {
     }>();
   });
 
-  it("すべて配列フィールドの型が正しく動作する", () => {
+  it("type with all array fields works correctly", () => {
     const _allArrayType = t.object({
       strings: t.string({ array: true }),
       numbers: t.int({ array: true }),
@@ -264,8 +264,8 @@ describe("TailorType エッジケーステスト", () => {
   });
 });
 
-describe("TailorType 型の一貫性テスト", () => {
-  it("同じ定義は同じ型を生成する", () => {
+describe("TailorType type consistency tests", () => {
+  it("same definition generates same type", () => {
     const _type1 = t.object({
       name: t.string(),
       age: t.int(),
@@ -280,8 +280,8 @@ describe("TailorType 型の一貫性テスト", () => {
   });
 });
 
-describe("t.object テスト", () => {
-  it("基本的なオブジェクト型を正しく推論する", () => {
+describe("t.object tests", () => {
+  it("correctly infers basic object type", () => {
     const _objectType = t.object({
       user: t.object({
         name: t.string(),
@@ -296,7 +296,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("オプショナルフィールドを含むオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with optional fields", () => {
     const _objectType = t.object({
       profile: t.object({
         name: t.string(),
@@ -313,7 +313,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("配列フィールドを含むオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with array fields", () => {
     const _objectType = t.object({
       data: t.object({
         name: t.string(),
@@ -330,7 +330,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("ネストしたオブジェクト型を正しく推論する", () => {
+  it("correctly infers nested object type", () => {
     const _objectType = t.object({
       user: t.object({
         name: t.string(),
@@ -364,7 +364,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("optionalオプションを持つオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with optional option", () => {
     const _objectType = t.object({
       metadata: t.object(
         {
@@ -382,7 +382,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("arrayオプションを持つオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with array option", () => {
     const _objectType = t.object({
       items: t.object(
         {
@@ -400,7 +400,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("複数の修飾子を組み合わせたオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with multiple modifiers", () => {
     const _objectType = t.object({
       optionalItems: t.object(
         {
@@ -420,7 +420,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("enum型を含むオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with enum type", () => {
     const _objectType = t.object({
       config: t.object({
         name: t.string(),
@@ -437,7 +437,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("単一フィールドのオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with single field", () => {
     const _objectType = t.object({
       settings: t.object({
         theme: t.string(),
@@ -450,7 +450,7 @@ describe("t.object テスト", () => {
     }>();
   });
 
-  it("空オブジェクトを正しく推論する", () => {
+  it("correctly infers empty object", () => {
     const _objectType = t.object({
       empty: t.object({}),
     });

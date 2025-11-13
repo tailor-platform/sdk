@@ -8,8 +8,8 @@ import type {
   ValidateConfig,
 } from "@/configure/types/validation";
 
-describe("TailorDBField 基本フィールド型テスト", () => {
-  it("string型フィールドが正しくstring型を出力する", () => {
+describe("TailorDBField basic field type tests", () => {
+  it("string field outputs string type correctly", () => {
     const _stringType = db.type("Test", {
       name: db.string(),
     });
@@ -19,7 +19,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("int型フィールドが正しくnumber型を出力する", () => {
+  it("int field outputs number type correctly", () => {
     const _intType = db.type("Test", {
       age: db.int(),
     });
@@ -29,7 +29,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("bool型フィールドが正しくboolean型を出力する", () => {
+  it("bool field outputs boolean type correctly", () => {
     const _boolType = db.type("Test", {
       active: db.bool(),
     });
@@ -39,7 +39,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("float型フィールドが正しくnumber型を出力する", () => {
+  it("float field outputs number type correctly", () => {
     const _floatType = db.type("Test", {
       price: db.float(),
     });
@@ -49,7 +49,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("uuid型フィールドが正しくstring型を出力する", () => {
+  it("uuid field outputs string type correctly", () => {
     const _uuidType = db.type("Test", {
       uuid: db.uuid(),
     });
@@ -59,7 +59,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("date型フィールドが正しくstring型を出力する", () => {
+  it("date field outputs string type correctly", () => {
     const _dateType = db.type("Test", {
       birthDate: db.date(),
     });
@@ -69,7 +69,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("datetime型フィールドが正しくstring型を出力する", () => {
+  it("datetime field outputs string type correctly", () => {
     const _datetimeType = db.type("Test", {
       timestamp: db.datetime(),
     });
@@ -79,7 +79,7 @@ describe("TailorDBField 基本フィールド型テスト", () => {
     }>();
   });
 
-  it("time型フィールドが正しくstring型を出力する", () => {
+  it("time field outputs string type correctly", () => {
     const _timeType = db.type("Test", {
       openingTime: db.time(),
     });
@@ -90,8 +90,8 @@ describe("TailorDBField 基本フィールド型テスト", () => {
   });
 });
 
-describe("TailorDBField optionalオプションテスト", () => {
-  it("optionalオプションがnull許可型を生成する", () => {
+describe("TailorDBField optional option tests", () => {
+  it("optional option generates nullable type", () => {
     const _optionalType = db.type("Test", {
       description: db.string({ optional: true }),
     });
@@ -101,7 +101,7 @@ describe("TailorDBField optionalオプションテスト", () => {
     }>();
   });
 
-  it("複数のオプショナルフィールドが正しく動作する", () => {
+  it("multiple optional fields work correctly", () => {
     const _multiOptionalType = db.type("Test", {
       title: db.string(),
       description: db.string({ optional: true }),
@@ -116,8 +116,8 @@ describe("TailorDBField optionalオプションテスト", () => {
   });
 });
 
-describe("TailorDBField arrayオプションテスト", () => {
-  it("arrayオプションが配列型を生成する", () => {
+describe("TailorDBField array option tests", () => {
+  it("array option generates array type", () => {
     const _arrayType = db.type("Test", {
       tags: db.string({ array: true }),
     });
@@ -127,7 +127,7 @@ describe("TailorDBField arrayオプションテスト", () => {
     }>();
   });
 
-  it("オプショナル配列が正しく動作する", () => {
+  it("optional array works correctly", () => {
     const _optionalArrayType = db.type("Test", {
       items: db.string({ optional: true, array: true }),
     });
@@ -137,7 +137,7 @@ describe("TailorDBField arrayオプションテスト", () => {
     }>();
   });
 
-  it("複数の配列フィールドが正しく動作する", () => {
+  it("multiple array fields work correctly", () => {
     const _multiArrayType = db.type("Test", {
       tags: db.string({ array: true }),
       numbers: db.int({ array: true }),
@@ -152,8 +152,8 @@ describe("TailorDBField arrayオプションテスト", () => {
   });
 });
 
-describe("TailorDBField enum フィールドテスト", () => {
-  it("stringを渡してenumフィールドを設定する", () => {
+describe("TailorDBField enum field tests", () => {
+  it("set enum field by passing string", () => {
     const enumField = db.enum("active", "inactive", "pending");
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "active" | "inactive" | "pending"
@@ -165,7 +165,7 @@ describe("TailorDBField enum フィールドテスト", () => {
     ]);
   });
 
-  it("objectを渡してenumフィールドを設定する", () => {
+  it("set enum field by passing object", () => {
     const enumField = db.enum(
       { value: "small", description: "Small size" },
       { value: "medium" },
@@ -181,7 +181,7 @@ describe("TailorDBField enum フィールドテスト", () => {
     ]);
   });
 
-  it("stringとobjectを混在させてenumフィールドを設定する", () => {
+  it("set enum field by mixing string and object", () => {
     const enumField = db.enum(
       "red",
       { value: "green", description: "Green color" },
@@ -197,14 +197,14 @@ describe("TailorDBField enum フィールドテスト", () => {
     ]);
   });
 
-  it("値を持たないenumを設定すると型エラーになる", () => {
+  it("setting enum without values causes type error", () => {
     // @ts-expect-error AllowedValues requires at least one value
     db.enum();
     // @ts-expect-error AllowedValues requires at least one value
     db.enum({ optional: true });
   });
 
-  it("オプショナルenum()が正しく動作する", () => {
+  it("optional enum() works correctly", () => {
     const _optionalEnumType = db.type("Test", {
       priority: db.enum("high", "medium", "low", { optional: true }),
     });
@@ -214,7 +214,7 @@ describe("TailorDBField enum フィールドテスト", () => {
     }>();
   });
 
-  it("enum配列が正しく動作する", () => {
+  it("enum array works correctly", () => {
     const _enumArrayType = db.type("Test", {
       categories: db.enum("a", "b", "c", { array: true }),
     });
@@ -225,7 +225,7 @@ describe("TailorDBField enum フィールドテスト", () => {
   });
 });
 
-describe("TailorDBField RelationConfig オプションフィールドテスト", () => {
+describe("TailorDBField RelationConfig option field tests", () => {
   const User = db.type("User", {
     name: db.string(),
     email: db.string(),
@@ -236,7 +236,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     customerId: db.string(),
   });
 
-  it("toward.asが省略された場合、undefinedが保存される（inflectionはparser層で実行される）", () => {
+  it("when toward.as is omitted, undefined is stored (inflection is executed at parser layer)", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -251,7 +251,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
-  it('toward.keyが省略された場合、"id"がデフォルトで使用される', () => {
+  it('when toward.key is omitted, "id" is used by default', () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -265,7 +265,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
-  it("toward.as、toward.key、backwardが全て明示的に指定された場合の動作", () => {
+  it("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
     const managerField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -283,7 +283,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(managerField.metadata.foreignKeyField).toEqual("email");
   });
 
-  it("toward.asのみ明示的に指定した場合の動作", () => {
+  it("behavior when only toward.as is explicitly specified", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -299,7 +299,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
-  it("toward.keyのみ明示的に指定した場合の動作", () => {
+  it("behavior when only toward.key is explicitly specified", () => {
     const customerField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -315,7 +315,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(customerField.metadata.foreignKeyField).toEqual("customerId");
   });
 
-  it("toward.keyに存在しないフィールド名を指定した場合、型エラーが発生する", () => {
+  it("specifying non-existent field name for toward.key causes type error", () => {
     // @ts-expect-error 'nonExisting' does not exist on type 'Customer'
     db.uuid().relation({
       type: "oneToOne",
@@ -326,7 +326,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     });
   });
 
-  it("backwardのみ明示的に指定した場合の動作", () => {
+  it("behavior when only backward is explicitly specified", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -342,7 +342,7 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
     expect(userField.metadata.foreignKeyField).toEqual("id");
   });
 
-  it("manyToOneリレーションでの型推論確認", () => {
+  it("type inference verification for manyToOne relation", () => {
     const userField = db.uuid().relation({
       type: "manyToOne",
       toward: {
@@ -361,8 +361,8 @@ describe("TailorDBField RelationConfig オプションフィールドテスト",
   });
 });
 
-describe("TailorDBField 修飾子チェーンテスト", () => {
-  it("index()修飾子が型に影響しない", () => {
+describe("TailorDBField modifier chain tests", () => {
+  it("index() modifier does not affect type", () => {
     const _indexType = db.type("Test", {
       email: db.string().index(),
     });
@@ -372,7 +372,7 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
     }>();
   });
 
-  it("unique()修飾子が型に影響しない", () => {
+  it("unique() modifier does not affect type", () => {
     const _uniqueType = db.type("Test", {
       username: db.string().unique(),
     });
@@ -383,8 +383,8 @@ describe("TailorDBField 修飾子チェーンテスト", () => {
   });
 });
 
-describe("TailorDBField relation修飾子テスト", () => {
-  it("relation によって参照型は作成されない", () => {
+describe("TailorDBField relation modifier tests", () => {
+  it("relation does not create reference type", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -403,7 +403,7 @@ describe("TailorDBField relation修飾子テスト", () => {
     }>();
   });
 
-  it("relationを2回設定しようとすると型エラーが発生する", () => {
+  it("attempting to set relation twice causes type error", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -421,8 +421,8 @@ describe("TailorDBField relation修飾子テスト", () => {
   });
 });
 
-describe("TailorDBField hooks修飾子テスト", () => {
-  it("hooks修飾子がoutput型に影響しない", () => {
+describe("TailorDBField hooks modifier tests", () => {
+  it("hooks modifier does not affect output type", () => {
     const _hookType = db.type("Test", {
       name: db.string().hooks({
         create: () => "created",
@@ -435,7 +435,7 @@ describe("TailorDBField hooks修飾子テスト", () => {
     }>();
   });
 
-  it("hooks修飾子を2回以上呼び出すと型エラーが発生する", () => {
+  it("calling hooks modifier more than once causes type error", () => {
     db.string()
       .hooks({
         create: () => "created",
@@ -445,7 +445,7 @@ describe("TailorDBField hooks修飾子テスト", () => {
       });
   });
 
-  it("nestedフィールドにhooksを設定すると型エラーが発生する", () => {
+  it("setting hooks on nested field causes type error", () => {
     // @ts-expect-error hooks() cannot be called on nested fields
     db.object({
       first: db.string(),
@@ -453,14 +453,14 @@ describe("TailorDBField hooks修飾子テスト", () => {
     }).hooks({ create: () => ({ first: "A", last: "B" }) });
   });
 
-  it("stringフィールドでhooks修飾子はstringを受け取る", () => {
+  it("hooks modifier on string field receives string", () => {
     const _hooks = db.string().hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
       Hook<unknown, string>
     >();
   });
 
-  it("optionalフィールドでhooks修飾子はnullを受け取る", () => {
+  it("hooks modifier on optional field receives null", () => {
     const _hooks = db.string({ optional: true }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
       Hook<unknown, string | null>
@@ -468,8 +468,8 @@ describe("TailorDBField hooks修飾子テスト", () => {
   });
 });
 
-describe("TailorDBField validate修飾子テスト", () => {
-  it("validate修飾子が型に影響しない", () => {
+describe("TailorDBField validate modifier tests", () => {
+  it("validate modifier does not affect type", () => {
     const _validateType = db.type("Test", {
       email: db.string().validate(() => true),
     });
@@ -479,7 +479,7 @@ describe("TailorDBField validate修飾子テスト", () => {
     }>();
   });
 
-  it("validate修飾子がメッセージ付きオブジェクトを受け取れる", () => {
+  it("validate modifier can receive object with message", () => {
     const _validateType = db.type("Test", {
       email: db
         .string()
@@ -497,7 +497,7 @@ describe("TailorDBField validate修飾子テスト", () => {
     );
   });
 
-  it("validate修飾子が複数のバリデーターを受け取れる", () => {
+  it("validate modifier can receive multiple validators", () => {
     const _validateType = db.type("Test", {
       password: db
         .string()
@@ -517,21 +517,21 @@ describe("TailorDBField validate修飾子テスト", () => {
     );
   });
 
-  it("validate修飾子を2回以上呼び出すと型エラーが発生する", () => {
+  it("calling validate modifier more than once causes type error", () => {
     // @ts-expect-error validate() cannot be called after validate() has already been called
     db.string()
       .validate(() => true)
       .validate(() => true);
   });
 
-  it("stringフィールドでvalidate修飾子はstringを受け取る", () => {
+  it("validate modifier on string field receives string", () => {
     const _validate = db.string().validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
       FieldValidateInput<string>
     >();
   });
 
-  it("optionalフィールドでvalidate修飾子はnullを受け取る", () => {
+  it("validate modifier on optional field receives null", () => {
     const _validate = db.string({ optional: true }).validate;
     expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
       FieldValidateInput<string | null>
@@ -539,8 +539,8 @@ describe("TailorDBField validate修飾子テスト", () => {
   });
 });
 
-describe("TailorDBField vector修飾子テスト", () => {
-  it("vector修飾子はstringフィールドでのみ使用できる", () => {
+describe("TailorDBField vector modifier tests", () => {
+  it("vector modifier can only be used on string field", () => {
     const _vector = db.string().vector();
     expectTypeOf<output<typeof _vector>>().toEqualTypeOf<string>();
     expect(_vector.metadata.vector).toBe(true);
@@ -551,14 +551,14 @@ describe("TailorDBField vector修飾子テスト", () => {
     db.string({ array: true }).vector();
   });
 
-  it("vector修飾子を2回以上呼び出すと型エラーが発生する", () => {
+  it("calling vector modifier more than once causes type error", () => {
     // @ts-expect-error vector() cannot be called after vector() has already been called
     db.string().vector().vector();
   });
 });
 
-describe("TailorDBField serial修飾子テスト", () => {
-  it("serial修飾子はstringおよびintフィールドでのみ使用できる", () => {
+describe("TailorDBField serial modifier tests", () => {
+  it("serial modifier can only be used on string and int fields", () => {
     const _stringSerial = db.string().serial({ start: 0 });
     expectTypeOf<output<typeof _stringSerial>>().toEqualTypeOf<string>();
     expect(_stringSerial.metadata.serial).toEqual({ start: 0 });
@@ -573,14 +573,14 @@ describe("TailorDBField serial修飾子テスト", () => {
     db.string({ array: true }).serial({ start: 0 });
   });
 
-  it("serial修飾子を2回以上呼び出すと型エラーが発生する", () => {
+  it("calling serial modifier more than once causes type error", () => {
     // @ts-expect-error serial() cannot be called after serial() has already been called
     db.string().serial({ start: 0 }).serial({ start: 0 });
   });
 });
 
-describe("TailorDBType withTimestamps オプションテスト", () => {
-  it("withTimestamps: falseでタイムスタンプフィールドが追加されない", () => {
+describe("TailorDBType withTimestamps option tests", () => {
+  it("withTimestamps: false does not add timestamp fields", () => {
     const _noTimestampType = db.type("Test", {
       name: db.string(),
       ...db.fields.timestamps(),
@@ -593,7 +593,7 @@ describe("TailorDBType withTimestamps オプションテスト", () => {
     }>();
   });
 
-  it("withTimestamps: trueでタイムスタンプフィールドが追加される", () => {
+  it("withTimestamps: true adds timestamp fields", () => {
     const _timestampType = db.type("TestWithTimestamp", {
       name: db.string(),
       ...db.fields.timestamps(),
@@ -607,8 +607,8 @@ describe("TailorDBType withTimestamps オプションテスト", () => {
   });
 });
 
-describe("TailorDBType 複合型テスト", () => {
-  it("複数フィールドを持つ型が正しく動作する", () => {
+describe("TailorDBType composite type tests", () => {
+  it("type with multiple fields works correctly", () => {
     const _complexType = db.type("User", {
       name: db.string(),
       email: db.string(),
@@ -637,8 +637,8 @@ describe("TailorDBType 複合型テスト", () => {
   });
 });
 
-describe("TailorDBType エッジケーステスト", () => {
-  it("単一フィールドの型が正しく動作する", () => {
+describe("TailorDBType edge case tests", () => {
+  it("type with single field works correctly", () => {
     const _singleFieldType = db.type("Simple", {
       value: db.string(),
     });
@@ -648,7 +648,7 @@ describe("TailorDBType エッジケーステスト", () => {
     }>();
   });
 
-  it("すべてオプショナルフィールドの型が正しく動作する", () => {
+  it("type with all optional fields works correctly", () => {
     const _allOptionalType = db.type("Optional", {
       a: db.string({ optional: true }),
       b: db.int({ optional: true }),
@@ -662,7 +662,7 @@ describe("TailorDBType エッジケーステスト", () => {
     }>();
   });
 
-  it("すべて配列フィールドの型が正しく動作する", () => {
+  it("type with all array fields works correctly", () => {
     const _allArrayType = db.type("Array", {
       strings: db.string({ array: true }),
       numbers: db.int({ array: true }),
@@ -677,8 +677,8 @@ describe("TailorDBType エッジケーステスト", () => {
   });
 });
 
-describe("TailorDBType 型の一貫性テスト", () => {
-  it("同じ定義は同じ型を生成する", () => {
+describe("TailorDBType type consistency tests", () => {
+  it("same definition generates same type", () => {
     const _type1 = db.type("Same", {
       name: db.string(),
       age: db.int(),
@@ -692,7 +692,7 @@ describe("TailorDBType 型の一貫性テスト", () => {
     >();
   });
 
-  it("idフィールドが自動的に追加される", () => {
+  it("id field is automatically added", () => {
     const _typeWithoutId = db.type("Test", {
       name: db.string(),
     });
@@ -703,8 +703,8 @@ describe("TailorDBType 型の一貫性テスト", () => {
   });
 });
 
-describe("TailorDBType self relation テスト", () => {
-  it("toward.typeがselfのとき、前方名はフィールド名由来/別名、後方名は指定どおりに解決される", () => {
+describe("TailorDBType self relation tests", () => {
+  it("when toward.type is self, forward name is derived from field name/alias, backward name is resolved as specified", () => {
     const TestType = db.type("TestType", {
       name: db.string(),
       parentID: db.uuid().relation({
@@ -752,7 +752,7 @@ describe("TailorDBType self relation テスト", () => {
     expect(TestType.fields.dependId.metadata.foreignKeyField).toBe("id");
   });
 
-  it("backward未指定時はconfigureでは空文字列が設定される（self relationのforwardはID接尾辞除去で生成される）", () => {
+  it("when backward is not specified, empty string is set in configure (forward for self relation is generated by removing ID suffix)", () => {
     const A = db.type("Node", {
       // Many-to-one (non-unique): backward is plural (nodes)
       parentID: db.uuid().relation({ type: "n-1", toward: { type: "self" } }),
@@ -774,8 +774,8 @@ describe("TailorDBType self relation テスト", () => {
   });
 });
 
-describe("TailorDBType plural form テスト", () => {
-  it("単一の名前でtype定義した場合、configureではpluralFormは設定されない（inflectionはparser層で実行される）", () => {
+describe("TailorDBType plural form tests", () => {
+  it("when defining type with single name, pluralForm is not set in configure (inflection is executed at parser layer)", () => {
     const _userType = db.type("User", {
       name: db.string(),
     });
@@ -783,7 +783,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(_userType.metadata.schema?.settings?.pluralForm).toBeUndefined();
   });
 
-  it("タプルで名前とplural formを指定した場合、pluralFormが設定される", () => {
+  it("when specifying name and plural form as tuple, pluralForm is set", () => {
     const _personType = db.type(["Person", "People"], {
       name: db.string(),
     });
@@ -791,7 +791,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(_personType.metadata.schema?.settings?.pluralForm).toBe("People");
   });
 
-  it("複数形が明示的に指定された場合、デフォルトの複数形変換は使用されない", () => {
+  it("when plural form is explicitly specified, default pluralization is not used", () => {
     const _childType = db.type(["Child", "Children"], {
       name: db.string(),
       age: db.int(),
@@ -800,7 +800,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(_childType.metadata.schema?.settings?.pluralForm).toBe("Children");
   });
 
-  it("空文字列のplural formの場合、configureでは設定されない（inflectionはparser層で実行される）", () => {
+  it("when plural form is empty string, it is not set in configure (inflection is executed at parser layer)", () => {
     const _dataType = db.type(["Datum", ""], {
       value: db.string(),
     });
@@ -808,22 +808,13 @@ describe("TailorDBType plural form テスト", () => {
     expect(_dataType.metadata.schema?.settings?.pluralForm).toBeUndefined();
   });
 
-  it("plural formがnameと同じ場合エラー（タプル形式で明示的に指定した場合）", () => {
+  it("error when plural form is same as name (when explicitly specified in tuple format)", () => {
     expect(() => db.type(["Data", "Data"], {})).toThrowError(
       "The name and the plural form must be different. name=Data",
     );
   });
 
-  it("日本語のplural formも設定可能", () => {
-    const _bookType = db.type(["Book", "本"], {
-      title: db.string(),
-      author: db.string(),
-    });
-
-    expect(_bookType.metadata.schema?.settings?.pluralForm).toBe("本");
-  });
-
-  it("タプル形式でもすべての既存機能が正常に動作する", () => {
+  it("all existing features work correctly with tuple format", () => {
     const _postType = db.type(["Post", "Posts"], {
       title: db.string(),
       content: db.string({ optional: true }),
@@ -842,7 +833,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(_postType.metadata.schema?.settings?.pluralForm).toBe("Posts");
   });
 
-  it("特殊文字を含むplural formも設定可能", () => {
+  it("plural form with special characters can also be set", () => {
     const _deviceType = db.type(["Device", "Device's"], {
       name: db.string(),
       status: db.enum("active", "inactive"),
@@ -851,7 +842,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(_deviceType.metadata.schema?.settings?.pluralForm).toBe("Device's");
   });
 
-  it("数字を含むplural formも設定可能", () => {
+  it("plural form with numbers can also be set", () => {
     const _itemType = db.type(["Item", "100Items"], {
       name: db.string(),
       quantity: db.int(),
@@ -860,7 +851,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(_itemType.metadata.schema?.settings?.pluralForm).toBe("100Items");
   });
 
-  it("タプル形式でvalidationとplural formが共存する", () => {
+  it("validation and plural form coexist in tuple format", () => {
     const _userType = db
       .type(["User", "Users"], {
         name: db.string(),
@@ -878,7 +869,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(emailConfig.validate[0].errorMessage).toBe("Invalid email format");
   });
 
-  it("リレーションを持つ型でもplural formが正しく動作する", () => {
+  it("plural form works correctly for types with relations", () => {
     const _categoryType = db.type(["Category", "Categories"], {
       name: db.string(),
     });
@@ -897,7 +888,7 @@ describe("TailorDBType plural form テスト", () => {
     expect(_productType.metadata.schema?.settings?.pluralForm).toBe("Products");
   });
 
-  it("大文字小文字が混在するplural formも設定可能", () => {
+  it("plural form with mixed case can also be set", () => {
     const _dataType = db.type(["Data", "DataSet"], {
       value: db.string(),
     });
@@ -906,8 +897,8 @@ describe("TailorDBType plural form テスト", () => {
   });
 });
 
-describe("TailorDBType hooks修飾子テスト", () => {
-  it("hooks修飾子がoutput型に影響しない", () => {
+describe("TailorDBType hooks modifier tests", () => {
+  it("hooks modifier does not affect output type", () => {
     const _hookType = db
       .type("Test", {
         name: db.string(),
@@ -924,7 +915,7 @@ describe("TailorDBType hooks修飾子テスト", () => {
     }>();
   });
 
-  it("TailorDBFieldでhooksが設定済みの場合に型エラーが発生する", () => {
+  it("type error occurs when hooks is already set on TailorDBField", () => {
     db.type("Test", {
       name: db.string().hooks({ create: () => "created" }),
     }).hooks({
@@ -934,7 +925,7 @@ describe("TailorDBType hooks修飾子テスト", () => {
     });
   });
 
-  it("idにhooksを設定すると型エラーが発生する", () => {
+  it("setting hooks on id causes type error", () => {
     db.type("Test", {
       name: db.string(),
     }).hooks({
@@ -945,7 +936,7 @@ describe("TailorDBType hooks修飾子テスト", () => {
     });
   });
 
-  it("nestedフィールドにhooksを設定すると型エラーが発生する", () => {
+  it("setting hooks on nested field causes type error", () => {
     db.type("Test", {
       name: db.object({
         first: db.string(),
@@ -959,7 +950,7 @@ describe("TailorDBType hooks修飾子テスト", () => {
     });
   });
 
-  it("stringフィールドでhooks修飾子はstringを受け取る", () => {
+  it("hooks modifier on string field receives string", () => {
     const testType = db.type("Test", { name: db.string() });
     const _hooks = testType.hooks;
     type ExpectedHooksParam = Parameters<typeof _hooks>[0];
@@ -976,7 +967,7 @@ describe("TailorDBType hooks修飾子テスト", () => {
     >();
   });
 
-  it("optionalフィールドでhooks修飾子はnullを受け取る", () => {
+  it("hooks modifier on optional field receives null", () => {
     const testType = db.type("Test", {
       name: db.string({ optional: true }),
     });
@@ -996,8 +987,8 @@ describe("TailorDBType hooks修飾子テスト", () => {
   });
 });
 
-describe("TailorDBType validate修飾子テスト", () => {
-  it("validate修飾子が関数を受け取れる", () => {
+describe("TailorDBType validate modifier tests", () => {
+  it("validate modifier can receive function", () => {
     const _validateType = db
       .type("Test", {
         email: db.string(),
@@ -1014,7 +1005,7 @@ describe("TailorDBType validate修飾子テスト", () => {
     expect(fieldConfig.validate).toHaveLength(1);
   });
 
-  it("validate修飾子がメッセージ付きオブジェクトを受け取れる", () => {
+  it("validate modifier can receive object with message", () => {
     const _validateType = db
       .type("Test", {
         email: db.string(),
@@ -1030,7 +1021,7 @@ describe("TailorDBType validate修飾子テスト", () => {
     );
   });
 
-  it("validate修飾子が複数のバリデーターを受け取れる", () => {
+  it("validate modifier can receive multiple validators", () => {
     const _validateType = db
       .type("Test", {
         password: db.string(),
@@ -1052,7 +1043,7 @@ describe("TailorDBType validate修飾子テスト", () => {
     );
   });
 
-  it("TailorDBFieldでvalidateが設定済みの場合に型エラーが発生する", () => {
+  it("type error occurs when validate is already set on TailorDBField", () => {
     db.type("Test", {
       name: db.string().validate(() => true),
       // @ts-expect-error validate() cannot be called after validate() has already been called
@@ -1061,7 +1052,7 @@ describe("TailorDBType validate修飾子テスト", () => {
     });
   });
 
-  it("idにvalidateを設定すると型エラーが発生する", () => {
+  it("setting validate on id causes type error", () => {
     db.type("Test", {
       name: db.string(),
     }).validate({
@@ -1070,14 +1061,14 @@ describe("TailorDBType validate修飾子テスト", () => {
     });
   });
 
-  it("stringフィールドでvalidate修飾子はstringを受け取る", () => {
+  it("validate modifier on string field receives string", () => {
     const _validate = db.type("Test", { name: db.string() }).validate;
     expectTypeOf<
       ValidateConfig<string, { id: string; name: string }>
     >().toExtend<Parameters<typeof _validate>[0]["name"]>();
   });
 
-  it("optionalフィールドでvalidate修飾子はnullを受け取る", () => {
+  it("validate modifier on optional field receives null", () => {
     const _validate = db.type("Test", {
       name: db.string({ optional: true }),
     }).validate;
@@ -1087,8 +1078,8 @@ describe("TailorDBType validate修飾子テスト", () => {
   });
 });
 
-describe("db.object テスト", () => {
-  it("基本的なオブジェクト型を正しく推論する", () => {
+describe("db.object tests", () => {
+  it("correctly infers basic object type", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
@@ -1104,7 +1095,7 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("db.objectをネストすると型エラーが発生する", () => {
+  it("nesting db.object causes type error", () => {
     db.object({
       name: db.string(),
       // @ts-expect-error Nested db.object() is not allowed
@@ -1114,7 +1105,7 @@ describe("db.object テスト", () => {
     });
   });
 
-  it("オプショナルフィールドを含むオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with optional fields", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
@@ -1132,7 +1123,7 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("optionalオプションを持つオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with optional option", () => {
     const _objectType = db.type("Test", {
       user: db.object(
         {
@@ -1151,7 +1142,7 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("arrayオプションを持つオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with array option", () => {
     const _objectType = db.type("Test", {
       users: db.object(
         {
@@ -1170,7 +1161,7 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("配列フィールドを含むオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with array fields", () => {
     const _objectType = db.type("Test", {
       user: db.object({
         name: db.string(),
@@ -1188,7 +1179,7 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("複数の修飾子を組み合わせたオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with multiple modifiers", () => {
     const _objectType = db.type("Test", {
       optionalUsers: db.object(
         {
@@ -1211,7 +1202,7 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("bool型を含むオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with bool type", () => {
     const _objectType = db.type("Test", {
       settings: db.object({
         enabled: db.bool(),
@@ -1227,7 +1218,7 @@ describe("db.object テスト", () => {
     }>();
   });
 
-  it("float型とenum型を含むオブジェクト型を正しく推論する", () => {
+  it("correctly infers object type with float and enum types", () => {
     const _objectType = db.type("Test", {
       product: db.object({
         name: db.string(),
@@ -1248,8 +1239,8 @@ describe("db.object テスト", () => {
   });
 });
 
-describe("TailorField/TailorType 互換性テスト", () => {
-  it("t.object の中で TailorDBField を使用できる", () => {
+describe("TailorField/TailorType compatibility tests", () => {
+  it("can use TailorDBField inside t.type", () => {
     const _stringType = t.object({
       name: db.string(),
     });
@@ -1258,7 +1249,7 @@ describe("TailorField/TailorType 互換性テスト", () => {
     }>();
   });
 
-  it("TailorType に TailorDBType を代入できる", () => {
+  it("can assign TailorDBType to TailorType", () => {
     const _dbType = db.type("Test", {
       name: db.string(),
     });

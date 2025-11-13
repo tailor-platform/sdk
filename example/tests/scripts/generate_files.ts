@@ -37,8 +37,8 @@ function replaceAbsolutePathsInFile(filePath: string) {
 }
 
 /**
- * 期待値ファイルを生成するスクリプト
- * 現在の実装で正常な出力を生成し、期待値として保存する
+ * Script to generate expected files
+ * Generates correct output with the current implementation and saves as expected values
  */
 export async function generateExpectedFiles(): Promise<void> {
   try {
@@ -64,10 +64,10 @@ export async function generateExpectedFiles(): Promise<void> {
 }
 
 /**
- * 生成されたファイルの一覧を表示する
- * @param dirPath ディレクトリパス
- * @param depth 現在の深度
- * @param maxDepth 最大深度
+ * Display list of generated files
+ * @param dirPath Directory path
+ * @param depth Current depth
+ * @param maxDepth Maximum depth
  */
 async function listGeneratedFiles(
   dirPath: string,

@@ -1,5 +1,5 @@
 ---
-# actionlint　と ghalint を使って GitHub Actions の静的解析する
+# Static analysis for GitHub Actions using actionlint and ghalint
 #
 # - actionlint: https://github.com/rhysd/actionlint
 # - ghalint: https://github.com/suzuki-shunsuke/ghalint
