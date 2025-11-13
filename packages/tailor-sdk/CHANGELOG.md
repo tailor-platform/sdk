@@ -1,5 +1,37 @@
 # @tailor-platform/tailor-sdk
 
+## 0.7.0
+
+### Minor Changes
+
+- [#706](https://github.com/tailor-platform/tailor-sdk/pull/706) [`6942868`](https://github.com/tailor-platform/tailor-sdk/commit/69428681170f6a4a6ec44bdc630be1da456106f0) Thanks [@remiposo](https://github.com/remiposo)! - Changed the interface for `apply` / `generate`
+
+  **Breaking Changes:**
+
+  When calling `apply` / `generate` as functions, specifying `configPath` as the first argument was mandatory, but We've made it optional to align with other commands.
+
+  before:
+
+  ```ts
+  import { apply } from "@tailor-platform/tailor-sdk/cli";
+
+  // default
+  await apply("tailor.config.ts");
+  // custom path
+  await apply("./path/to/tailor.config.ts");
+  ```
+
+  after:
+
+  ```ts
+  import { apply } from "@tailor-platform/tailor-sdk/cli";
+
+  // default
+  await apply();
+  // custom path
+  await apply({ configPath: "./path/to/tailor.config.ts" });
+  ```
+
 ## 0.6.2
 
 ### Patch Changes
