@@ -1,5 +1,21 @@
 # @tailor-platform/tailor-sdk
 
+## 0.6.2
+
+### Patch Changes
+
+- [#702](https://github.com/tailor-platform/tailor-sdk/pull/702) [`6a4f2b1`](https://github.com/tailor-platform/tailor-sdk/commit/6a4f2b174cfaec0e0f76380a4f5855d7b275b916) Thanks [@remiposo](https://github.com/remiposo)! - Apply the default value only when ignores is not specified
+
+- [#700](https://github.com/tailor-platform/tailor-sdk/pull/700) [`3ab0b98`](https://github.com/tailor-platform/tailor-sdk/commit/3ab0b9820fed04d1b19c38c70d938bca79c8ba1b) Thanks [@remiposo](https://github.com/remiposo)! - Exported some commands as functions
+
+  Exported `tailor-sdk workspace create|delete|list` and `tailor-sdk machineuser list|token` as functions. The allowed options are the same except for CLI-specific ones (e.g., `--format`, `--yes`)
+
+  ```typescript
+  import { machineUserToken } from "@tailor-platform/tailor-sdk/cli";
+
+  const tokens = await machineUserToken({ name: "admin" });
+  ```
+
 ## 0.6.1
 
 ### Patch Changes

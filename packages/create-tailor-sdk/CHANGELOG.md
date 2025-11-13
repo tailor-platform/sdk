@@ -1,5 +1,11 @@
 # @tailor-platform/create-tailor-sdk
 
+## 0.6.2
+
+### Patch Changes
+
+- [#701](https://github.com/tailor-platform/tailor-sdk/pull/701) [`1d9e798`](https://github.com/tailor-platform/tailor-sdk/commit/1d9e798c667e75734da9b9119770442ce62a48ac) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: seed generator
+
 ## 0.6.1
 
 ## 0.6.0
