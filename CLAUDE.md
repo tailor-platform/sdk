@@ -309,9 +309,9 @@ import { getDB } from "generated/tailordb";
 export default createResolver({
   name: "resolverName",
   operation: "query", // or "mutation"
-  input: t.type({
+  input: {
     field: t.string(),
-  }),
+  },
   body: async (context) => {
     // Access: context.input, context.user
     // Use getDB() to access database with Kysely
@@ -324,7 +324,7 @@ export default createResolver({
 
     return { result };
   },
-  output: t.type({
+  output: t.object({
     result: t.string(),
   }),
 });

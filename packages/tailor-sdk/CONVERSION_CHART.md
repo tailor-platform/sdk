@@ -407,12 +407,12 @@ import { createResolver, t } from "@tailor-platform/tailor-sdk";
 export default createResolver({
   name: "getCustomer",
   operation: "query",
-  input: t.type({ id: t.string() }),
+  input: { id: t.string() },
   body: async (context) => {
     const customer = { id: context.input.id, name: "John Doe" };
     return { customer };
   },
-  output: t.type({
+  output: t.object({
     customer: t.object({ id: t.string(), name: t.string() }),
   }),
 });

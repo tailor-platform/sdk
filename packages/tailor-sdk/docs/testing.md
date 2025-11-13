@@ -129,13 +129,13 @@ export async function decrementUserAge(
 export default createResolver({
   name: "decrementUserAge",
   operation: "mutation",
-  input: t.type({ email: t.string() }),
+  input: { email: t.string() },
   body: async (context) => {
     const db = getDB("tailordb");
     const dbOperations = createDbOperations(db);
     return await decrementUserAge(context.input.email, dbOperations);
   },
-  output: t.type({ oldAge: t.number(), newAge: t.number() }),
+  output: t.object({ oldAge: t.number(), newAge: t.number() }),
 });
 ```
 

@@ -290,16 +290,16 @@ Define Resolvers using `createResolver` method:
 createResolver({
   name: "add",
   operation: "query",
-  input: t.type({
+  input: {
     left: t.int(),
     right: t.int(),
-  }),
+  },
   body: (context) => {
     return {
       result: context.input.left + context.input.right,
     };
   },
-  output: t.type({
+  output: t.object({
     result: t.int(),
   }),
 });
@@ -318,9 +318,9 @@ const user = db.type("User", {
 });
 
 createResolver({
-  input: t.type({
+  input: {
     name: user.fields.name,
-  }),
+  },
 });
 ```
 
@@ -336,9 +336,9 @@ import { getDB } from "../generated/tailordb";
 createResolver({
   name: "getUser",
   operation: "query",
-  input: t.type({
+  input: {
     name: t.string(),
-  }),
+  },
   body: async (context) => {
     const db = getDB("tailordb");
     const query = db
@@ -351,7 +351,7 @@ createResolver({
       result: result.id,
     };
   },
-  output: t.type({
+  output: t.object({
     result: t.uuid(),
   }),
 });

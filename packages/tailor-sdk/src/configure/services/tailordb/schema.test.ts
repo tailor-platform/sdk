@@ -1249,7 +1249,7 @@ describe("db.object テスト", () => {
 });
 
 describe("TailorField/TailorType 互換性テスト", () => {
-  it("t.type の中で TailorDBField を使用できる", () => {
+  it("t.object の中で TailorDBField を使用できる", () => {
     const _stringType = t.object({
       name: db.string(),
     });
