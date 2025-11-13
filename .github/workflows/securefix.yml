@@ -39,7 +39,7 @@ jobs:
       - name: Fix aqua-checksums.json
         run: aqua upc -prune
       - name: Commit and push
-        uses: csm-actions/securefix-action@70c01dc077f426b39fc8e2f5e52f1f01a61f9798 # v0.3.5
+        uses: csm-actions/securefix-action@4f3e711a06d7d5a3f5527cc622f6c75362fec74b # v0.3.6
         with:
           app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
           app_private_key: ${{ secrets.SECUREFIX_CLIENT_APP_PRIVATE_KEY }}
@@ -80,7 +80,7 @@ jobs:
       - name: Generate files
         run: pnpm exec turbo run generate --force
       - name: Commit and push
-        uses: csm-actions/securefix-action@70c01dc077f426b39fc8e2f5e52f1f01a61f9798 # v0.3.5
+        uses: csm-actions/securefix-action@4f3e711a06d7d5a3f5527cc622f6c75362fec74b # v0.3.6
         with:
           app_id: ${{ vars.SECUREFIX_CLIENT_APP_ID }}
           app_private_key: ${{ secrets.SECUREFIX_CLIENT_APP_PRIVATE_KEY }}
