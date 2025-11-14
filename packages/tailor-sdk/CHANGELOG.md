@@ -1,5 +1,13 @@
 # @tailor-platform/tailor-sdk
 
+## 0.7.5
+
+### Patch Changes
+
+- [#723](https://github.com/tailor-platform/tailor-sdk/pull/723) [`c9233ea`](https://github.com/tailor-platform/tailor-sdk/commit/c9233eae05a0c6d09bfb02891f283b278119290c) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add tailordb command with truncate functionality
+
+  see `tailor-sdk tailordb --help`
+
 ## 0.7.4
 
 ### Patch Changes
