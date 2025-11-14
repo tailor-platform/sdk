@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.7.4
+
+### Patch Changes
+
+- [#721](https://github.com/tailor-platform/tailor-sdk/pull/721) [`d83ca38`](https://github.com/tailor-platform/tailor-sdk/commit/d83ca38cd9e3f40cbecd342fad6c7d36ece68d5d) Thanks [@remiposo](https://github.com/remiposo)! - Improve Built-in IdP not found error message
+
 ## 0.7.3
 
 ### Patch Changes
