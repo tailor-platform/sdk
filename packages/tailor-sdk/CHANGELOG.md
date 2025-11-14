@@ -1,5 +1,13 @@
 # @tailor-platform/tailor-sdk
 
+## 0.7.3
+
+### Patch Changes
+
+- [#718](https://github.com/tailor-platform/tailor-sdk/pull/718) [`857811e`](https://github.com/tailor-platform/tailor-sdk/commit/857811e3d57b3b86b45bfe3bb0f9a8b231ff28f5) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add personal access token management commands
+
+  see `tailor-sdk user pat --help`
+
 ## 0.7.2
 
 ### Patch Changes
