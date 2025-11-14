@@ -74,150 +74,166 @@ export async function applyAuth(
 ) {
   if (phase === "create-update") {
     // Services
-    for (const create of changeSet.service.creates) {
-      await client.createAuthService(create.request);
-    }
+    await Promise.all(
+      changeSet.service.creates.map((create) =>
+        client.createAuthService(create.request),
+      ),
+    );
 
     // IdPConfigs
-    for (const create of changeSet.idpConfig.creates) {
-      if (create.idpConfig.kind === "BuiltInIdP") {
-        create.request.idpConfig!.config = await protoBuiltinIdPConfig(
-          client,
-          create.request.workspaceId!,
-          create.idpConfig,
-        );
-      }
-      await client.createAuthIDPConfig(create.request);
-    }
-    for (const update of changeSet.idpConfig.updates) {
-      if (update.idpConfig.kind === "BuiltInIdP") {
-        update.request.idpConfig!.config = await protoBuiltinIdPConfig(
-          client,
-          update.request.workspaceId!,
-          update.idpConfig,
-        );
-      }
-      await client.updateAuthIDPConfig(update.request);
-    }
+    await Promise.all([
+      ...changeSet.idpConfig.creates.map(async (create) => {
+        if (create.idpConfig.kind === "BuiltInIdP") {
+          create.request.idpConfig!.config = await protoBuiltinIdPConfig(
+            client,
+            create.request.workspaceId!,
+            create.idpConfig,
+          );
+        }
+        return client.createAuthIDPConfig(create.request);
+      }),
+      ...changeSet.idpConfig.updates.map(async (update) => {
+        if (update.idpConfig.kind === "BuiltInIdP") {
+          update.request.idpConfig!.config = await protoBuiltinIdPConfig(
+            client,
+            update.request.workspaceId!,
+            update.idpConfig,
+          );
+        }
+        return client.updateAuthIDPConfig(update.request);
+      }),
+    ]);
 
     // UserProfileConfigs
-    for (const create of changeSet.userProfileConfig.creates) {
-      await client.createUserProfileConfig(create.request);
-    }
-    for (const update of changeSet.userProfileConfig.updates) {
-      await client.updateUserProfileConfig(update.request);
-    }
+    await Promise.all([
+      ...changeSet.userProfileConfig.creates.map((create) =>
+        client.createUserProfileConfig(create.request),
+      ),
+      ...changeSet.userProfileConfig.updates.map((update) =>
+        client.updateUserProfileConfig(update.request),
+      ),
+    ]);
 
     // TenantConfigs
-    for (const create of changeSet.tenantConfig.creates) {
-      await client.createTenantConfig(create.request);
-    }
-    for (const update of changeSet.tenantConfig.updates) {
-      await client.updateTenantConfig(update.request);
-    }
+    await Promise.all([
+      ...changeSet.tenantConfig.creates.map((create) =>
+        client.createTenantConfig(create.request),
+      ),
+      ...changeSet.tenantConfig.updates.map((update) =>
+        client.updateTenantConfig(update.request),
+      ),
+    ]);
 
     // MachineUsers
-    for (const create of changeSet.machineUser.creates) {
-      await client.createAuthMachineUser(create.request);
-    }
-    for (const update of changeSet.machineUser.updates) {
-      await client.updateAuthMachineUser(update.request);
-    }
+    await Promise.all([
+      ...changeSet.machineUser.creates.map((create) =>
+        client.createAuthMachineUser(create.request),
+      ),
+      ...changeSet.machineUser.updates.map((update) =>
+        client.updateAuthMachineUser(update.request),
+      ),
+    ]);
 
     // OAuth2Clients
-    for (const create of changeSet.oauth2Client.creates) {
-      create.request.oauth2Client!.redirectUris =
-        await resolveStaticWebsiteUrls(
-          client,
-          create.request.workspaceId!,
-          create.request.oauth2Client!.redirectUris,
-          "OAuth2 redirect URIs",
-        );
-
-      await client.createAuthOAuth2Client(create.request);
-    }
-    for (const update of changeSet.oauth2Client.updates) {
-      update.request.oauth2Client!.redirectUris =
-        await resolveStaticWebsiteUrls(
-          client,
-          update.request.workspaceId!,
-          update.request.oauth2Client!.redirectUris,
-          "OAuth2 redirect URIs",
-        );
-
-      await client.updateAuthOAuth2Client(update.request);
-    }
+    await Promise.all([
+      ...changeSet.oauth2Client.creates.map(async (create) => {
+        create.request.oauth2Client!.redirectUris =
+          await resolveStaticWebsiteUrls(
+            client,
+            create.request.workspaceId!,
+            create.request.oauth2Client!.redirectUris,
+            "OAuth2 redirect URIs",
+          );
+        return client.createAuthOAuth2Client(create.request);
+      }),
+      ...changeSet.oauth2Client.updates.map(async (update) => {
+        update.request.oauth2Client!.redirectUris =
+          await resolveStaticWebsiteUrls(
+            client,
+            update.request.workspaceId!,
+            update.request.oauth2Client!.redirectUris,
+            "OAuth2 redirect URIs",
+          );
+        return client.updateAuthOAuth2Client(update.request);
+      }),
+    ]);
 
     // SCIMConfigs
-    for (const create of changeSet.scim.creates) {
-      await client.createAuthSCIMConfig(create.request);
-    }
-    for (const update of changeSet.scim.updates) {
-      await client.updateAuthSCIMConfig(update.request);
-    }
+    await Promise.all([
+      ...changeSet.scim.creates.map((create) =>
+        client.createAuthSCIMConfig(create.request),
+      ),
+      ...changeSet.scim.updates.map((update) =>
+        client.updateAuthSCIMConfig(update.request),
+      ),
+    ]);
 
     // SCIMResources
-    for (const create of changeSet.scimResource.creates) {
-      await client.createAuthSCIMResource(create.request);
-    }
-    for (const update of changeSet.scimResource.updates) {
-      await client.updateAuthSCIMResource(update.request);
-    }
+    await Promise.all([
+      ...changeSet.scimResource.creates.map((create) =>
+        client.createAuthSCIMResource(create.request),
+      ),
+      ...changeSet.scimResource.updates.map((update) =>
+        client.updateAuthSCIMResource(update.request),
+      ),
+    ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // SCIMResources
-    for (const del of changeSet.scimResource.deletes) {
-      if (del.tag === "scim-resource-deleted") {
-        await client.deleteAuthSCIMResource(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.scimResource.deletes
+        .filter((del) => del.tag === "scim-resource-deleted")
+        .map((del) => client.deleteAuthSCIMResource(del.request)),
+    );
 
     // SCIMConfigs
-    for (const del of changeSet.scim.deletes) {
-      if (del.tag === "scim-config-deleted") {
-        await client.deleteAuthSCIMConfig(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.scim.deletes
+        .filter((del) => del.tag === "scim-config-deleted")
+        .map((del) => client.deleteAuthSCIMConfig(del.request)),
+    );
 
     // OAuth2Clients
-    for (const del of changeSet.oauth2Client.deletes) {
-      if (del.tag === "oauth2-client-deleted") {
-        await client.deleteAuthOAuth2Client(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.oauth2Client.deletes
+        .filter((del) => del.tag === "oauth2-client-deleted")
+        .map((del) => client.deleteAuthOAuth2Client(del.request)),
+    );
 
     // MachineUsers
-    for (const del of changeSet.machineUser.deletes) {
-      if (del.tag === "machine-user-deleted") {
-        await client.deleteAuthMachineUser(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.machineUser.deletes
+        .filter((del) => del.tag === "machine-user-deleted")
+        .map((del) => client.deleteAuthMachineUser(del.request)),
+    );
 
     // TenantConfigs
-    for (const del of changeSet.tenantConfig.deletes) {
-      if (del.tag === "tenant-config-deleted") {
-        await client.deleteTenantConfig(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.tenantConfig.deletes
+        .filter((del) => del.tag === "tenant-config-deleted")
+        .map((del) => client.deleteTenantConfig(del.request)),
+    );
 
     // UserProfileConfigs
-    for (const del of changeSet.userProfileConfig.deletes) {
-      if (del.tag === "user-profile-config-deleted") {
-        await client.deleteUserProfileConfig(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.userProfileConfig.deletes
+        .filter((del) => del.tag === "user-profile-config-deleted")
+        .map((del) => client.deleteUserProfileConfig(del.request)),
+    );
 
     // IdPConfigs
-    for (const del of changeSet.idpConfig.deletes) {
-      if (del.tag === "idp-config-deleted") {
-        await client.deleteAuthIDPConfig(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.idpConfig.deletes
+        .filter((del) => del.tag === "idp-config-deleted")
+        .map((del) => client.deleteAuthIDPConfig(del.request)),
+    );
 
     // Services
-    for (const del of changeSet.service.deletes) {
-      await client.deleteAuthService(del.request);
-    }
+    await Promise.all(
+      changeSet.service.deletes.map((del) =>
+        client.deleteAuthService(del.request),
+      ),
+    );
   }
 }
 

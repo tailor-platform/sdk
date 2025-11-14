@@ -28,84 +28,96 @@ export async function applyIdP(
 ) {
   if (phase === "create-update") {
     // Services
-    for (const create of changeSet.service.creates) {
-      await client.createIdPService(create.request);
-    }
-    for (const update of changeSet.service.updates) {
-      await client.updateIdPService(update.request);
-    }
+    await Promise.all([
+      ...changeSet.service.creates.map((create) =>
+        client.createIdPService(create.request),
+      ),
+      ...changeSet.service.updates.map((update) =>
+        client.updateIdPService(update.request),
+      ),
+    ]);
 
     // Clients
-    for (const create of changeSet.client.creates) {
-      const resp = await client.createIdPClient(create.request);
+    await Promise.all([
+      ...changeSet.client.creates.map(async (create) => {
+        const resp = await client.createIdPClient(create.request);
 
-      // Create the secret manager vault and secret
-      const vaultName = idpClientVaultName(
-        create.request.namespaceName!,
-        create.request.client?.name || "",
-      );
-      const secretName = idpClientSecretName(
-        create.request.namespaceName!,
-        create.request.client?.name || "",
-      );
-      await client.createSecretManagerVault({
-        workspaceId: create.request.workspaceId,
-        secretmanagerVaultName: vaultName,
-      });
-      await client.createSecretManagerSecret({
-        workspaceId: create.request.workspaceId,
-        secretmanagerVaultName: vaultName,
-        secretmanagerSecretName: secretName,
-        secretmanagerSecretValue: resp.client?.clientSecret,
-      });
-    }
-    for (const update of changeSet.client.updates) {
-      // Ensure the vault and secret exist
-      const vaultName = idpClientVaultName(update.namespaceName, update.name);
-      const secretName = idpClientSecretName(update.namespaceName, update.name);
-      try {
-        await client.getSecretManagerVault({
+        // Create the secret manager vault and secret
+        const vaultName = idpClientVaultName(
+          create.request.namespaceName!,
+          create.request.client?.name || "",
+        );
+        const secretName = idpClientSecretName(
+          create.request.namespaceName!,
+          create.request.client?.name || "",
+        );
+        await client.createSecretManagerVault({
+          workspaceId: create.request.workspaceId,
+          secretmanagerVaultName: vaultName,
+        });
+        await client.createSecretManagerSecret({
+          workspaceId: create.request.workspaceId,
+          secretmanagerVaultName: vaultName,
+          secretmanagerSecretName: secretName,
+          secretmanagerSecretValue: resp.client?.clientSecret,
+        });
+      }),
+      ...changeSet.client.updates.map(async (update) => {
+        // Ensure the vault and secret exist
+        const vaultName = idpClientVaultName(update.namespaceName, update.name);
+        const secretName = idpClientSecretName(
+          update.namespaceName,
+          update.name,
+        );
+        try {
+          await client.getSecretManagerVault({
+            workspaceId: update.workspaceId,
+            secretmanagerVaultName: vaultName,
+          });
+          return;
+        } catch (error) {
+          if (
+            !(error instanceof ConnectError && error.code === Code.NotFound)
+          ) {
+            throw error;
+          }
+        }
+        await client.createSecretManagerVault({
           workspaceId: update.workspaceId,
           secretmanagerVaultName: vaultName,
         });
-        return;
-      } catch (error) {
-        if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
-          throw error;
-        }
-      }
-      await client.createSecretManagerVault({
-        workspaceId: update.workspaceId,
-        secretmanagerVaultName: vaultName,
-      });
-      await client.createSecretManagerSecret({
-        workspaceId: update.workspaceId,
-        secretmanagerVaultName: vaultName,
-        secretmanagerSecretName: secretName,
-        secretmanagerSecretValue: update.clientSecret,
-      });
-    }
+        await client.createSecretManagerSecret({
+          workspaceId: update.workspaceId,
+          secretmanagerVaultName: vaultName,
+          secretmanagerSecretName: secretName,
+          secretmanagerSecretValue: update.clientSecret,
+        });
+      }),
+    ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // Clients
-    for (const del of changeSet.client.deletes) {
-      if (del.tag === "service-deleted") {
-        continue;
-      }
-      await client.deleteIdPClient(del.request);
+    await Promise.all(
+      changeSet.client.deletes
+        .filter((del) => del.tag === "client-deleted")
+        .map(async (del) => {
+          await client.deleteIdPClient(del.request);
 
-      // Delete the secret manager vault and secret
-      const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
-      await client.deleteSecretManagerVault({
-        workspaceId: del.request.workspaceId,
-        secretmanagerVaultName: vaultName,
-      });
-    }
+          // Delete the secret manager vault and secret
+          const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
+          await client.deleteSecretManagerVault({
+            workspaceId: del.request.workspaceId,
+            secretmanagerVaultName: vaultName,
+          });
+        }),
+    );
 
     // Services
-    for (const del of changeSet.service.deletes) {
-      await client.deleteIdPService(del.request);
-    }
+    await Promise.all(
+      changeSet.service.deletes.map((del) =>
+        client.deleteIdPService(del.request),
+      ),
+    );
   }
 }
 

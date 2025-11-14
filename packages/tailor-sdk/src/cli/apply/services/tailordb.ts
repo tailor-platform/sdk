@@ -57,41 +57,53 @@ export async function applyTailorDB(
 ) {
   if (phase === "create-update") {
     // Services
-    for (const create of changeSet.service.creates) {
-      await client.createTailorDBService(create.request);
-    }
+    await Promise.all(
+      changeSet.service.creates.map((create) =>
+        client.createTailorDBService(create.request),
+      ),
+    );
+
     // Types
-    for (const create of changeSet.type.creates) {
-      await client.createTailorDBType(create.request);
-    }
-    for (const update of changeSet.type.updates) {
-      await client.updateTailorDBType(update.request);
-    }
+    await Promise.all([
+      ...changeSet.type.creates.map((create) =>
+        client.createTailorDBType(create.request),
+      ),
+      ...changeSet.type.updates.map((update) =>
+        client.updateTailorDBType(update.request),
+      ),
+    ]);
+
     // GQLPermissions
-    for (const create of changeSet.gqlPermission.creates) {
-      await client.createTailorDBGQLPermission(create.request);
-    }
-    for (const update of changeSet.gqlPermission.updates) {
-      await client.updateTailorDBGQLPermission(update.request);
-    }
+    await Promise.all([
+      ...changeSet.gqlPermission.creates.map((create) =>
+        client.createTailorDBGQLPermission(create.request),
+      ),
+      ...changeSet.gqlPermission.updates.map((update) =>
+        client.updateTailorDBGQLPermission(update.request),
+      ),
+    ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // GQLPermissions
-    for (const del of changeSet.gqlPermission.deletes) {
-      if (del.tag === "gql-permission-deleted") {
-        await client.deleteTailorDBGQLPermission(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.gqlPermission.deletes
+        .filter((del) => del.tag === "gql-permission-deleted")
+        .map((del) => client.deleteTailorDBGQLPermission(del.request)),
+    );
+
     // Types
-    for (const del of changeSet.type.deletes) {
-      if (del.tag === "type-deleted") {
-        await client.deleteTailorDBType(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.type.deletes
+        .filter((del) => del.tag === "type-deleted")
+        .map((del) => client.deleteTailorDBType(del.request)),
+    );
+
     // Services
-    for (const del of changeSet.service.deletes) {
-      await client.deleteTailorDBService(del.request);
-    }
+    await Promise.all(
+      changeSet.service.deletes.map((del) =>
+        client.deleteTailorDBService(del.request),
+      ),
+    );
   }
 }
 

@@ -29,18 +29,22 @@ export async function applyExecutor(
 ) {
   if (phase === "create-update") {
     // Executors
-    for (const create of changeSet.creates) {
-      await client.createExecutorExecutor(create.request);
-    }
-    for (const update of changeSet.updates) {
-      await client.updateExecutorExecutor(update.request);
-    }
+    await Promise.all([
+      ...changeSet.creates.map((create) =>
+        client.createExecutorExecutor(create.request),
+      ),
+      ...changeSet.updates.map((update) =>
+        client.updateExecutorExecutor(update.request),
+      ),
+    ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // Executors
-    for (const del of changeSet.deletes) {
-      await client.deleteExecutorExecutor(del.request);
-    }
+    await Promise.all(
+      changeSet.deletes.map((del) =>
+        client.deleteExecutorExecutor(del.request),
+      ),
+    );
   }
 }
 

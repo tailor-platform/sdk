@@ -25,32 +25,32 @@ export async function applyApplication(
 ) {
   if (phase === "create-update") {
     // Applications
-    for (const create of changeSet.creates) {
-      create.request.cors = await resolveStaticWebsiteUrls(
-        client,
-        create.request.workspaceId!,
-        create.request.cors,
-        "CORS",
-      );
-
-      await client.createApplication(create.request);
-    }
-    for (const update of changeSet.updates) {
-      update.request.cors = await resolveStaticWebsiteUrls(
-        client,
-        update.request.workspaceId!,
-        update.request.cors,
-        "CORS",
-      );
-
-      await client.updateApplication(update.request);
-    }
+    await Promise.all([
+      ...changeSet.creates.map(async (create) => {
+        create.request.cors = await resolveStaticWebsiteUrls(
+          client,
+          create.request.workspaceId!,
+          create.request.cors,
+          "CORS",
+        );
+        return client.createApplication(create.request);
+      }),
+      ...changeSet.updates.map(async (update) => {
+        update.request.cors = await resolveStaticWebsiteUrls(
+          client,
+          update.request.workspaceId!,
+          update.request.cors,
+          "CORS",
+        );
+        return client.updateApplication(update.request);
+      }),
+    ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // Applications
-    for (const del of changeSet.deletes) {
-      await client.deleteApplication(del.request);
-    }
+    await Promise.all(
+      changeSet.deletes.map((del) => client.deleteApplication(del.request)),
+    );
   }
 }
 

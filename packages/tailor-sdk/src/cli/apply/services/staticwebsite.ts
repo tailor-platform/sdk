@@ -17,18 +17,20 @@ export async function applyStaticWebsite(
 ) {
   if (phase === "create-update") {
     // StaticWebsites
-    for (const create of changeSet.creates) {
-      await client.createStaticWebsite(create.request);
-    }
-    for (const update of changeSet.updates) {
-      await client.updateStaticWebsite(update.request);
-    }
+    await Promise.all([
+      ...changeSet.creates.map((create) =>
+        client.createStaticWebsite(create.request),
+      ),
+      ...changeSet.updates.map((update) =>
+        client.updateStaticWebsite(update.request),
+      ),
+    ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // StaticWebsites
-    for (const del of changeSet.deletes) {
-      await client.deleteStaticWebsite(del.request);
-    }
+    await Promise.all(
+      changeSet.deletes.map((del) => client.deleteStaticWebsite(del.request)),
+    );
   }
 }
 

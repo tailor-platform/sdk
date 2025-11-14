@@ -50,33 +50,39 @@ export async function applyPipeline(
 ) {
   if (phase === "create-update") {
     // Services
-    for (const create of changeSet.service.creates) {
-      await client.createPipelineService(create.request);
-    }
-    for (const update of changeSet.service.updates) {
-      await client.updatePipelineService(update.request);
-    }
+    await Promise.all([
+      ...changeSet.service.creates.map((create) =>
+        client.createPipelineService(create.request),
+      ),
+      ...changeSet.service.updates.map((update) =>
+        client.updatePipelineService(update.request),
+      ),
+    ]);
 
     // Resolvers
-    for (const create of changeSet.resolver.creates) {
-      await client.createPipelineResolver(create.request);
-    }
-    for (const update of changeSet.resolver.updates) {
-      await client.updatePipelineResolver(update.request);
-    }
+    await Promise.all([
+      ...changeSet.resolver.creates.map((create) =>
+        client.createPipelineResolver(create.request),
+      ),
+      ...changeSet.resolver.updates.map((update) =>
+        client.updatePipelineResolver(update.request),
+      ),
+    ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // Resolvers
-    for (const del of changeSet.resolver.deletes) {
-      if (del.tag === "resolver-deleted") {
-        await client.deletePipelineResolver(del.request);
-      }
-    }
+    await Promise.all(
+      changeSet.resolver.deletes
+        .filter((del) => del.tag === "resolver-deleted")
+        .map((del) => client.deletePipelineResolver(del.request)),
+    );
 
     // Services
-    for (const del of changeSet.service.deletes) {
-      await client.deletePipelineService(del.request);
-    }
+    await Promise.all(
+      changeSet.service.deletes.map((del) =>
+        client.deletePipelineService(del.request),
+      ),
+    );
   }
 }
 export async function planPipeline(
