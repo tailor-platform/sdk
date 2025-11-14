@@ -571,10 +571,20 @@ async function protoBuiltinIdPConfig(
   workspaceId: string,
   builtinIdPConfig: BuiltinIdP,
 ): Promise<MessageInitShape<typeof AuthIDPConfig_ConfigSchema>> {
-  const idpService = await client.getIdPService({
-    workspaceId,
-    namespaceName: builtinIdPConfig.namespace,
-  });
+  let idpService;
+  try {
+    idpService = await client.getIdPService({
+      workspaceId,
+      namespaceName: builtinIdPConfig.namespace,
+    });
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.NotFound) {
+      throw new Error(
+        `Built-in IdP "${builtinIdPConfig.namespace}" not found. Please ensure that idp is configured correctly.`,
+      );
+    }
+    throw error;
+  }
   const idpClient = await client.getIdPClient({
     workspaceId,
     namespaceName: builtinIdPConfig.namespace,
