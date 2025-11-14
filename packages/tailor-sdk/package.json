@@ -5,6 +5,11 @@
   "license": "MIT",
   "main": "./dist/configure/index.mjs",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tailor-platform/tailor-sdk.git",
+    "directory": "packages/tailor-sdk"
+  },
   "files": [
     "dist",
     "postinstall.mjs",
