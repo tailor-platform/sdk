@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
+import { styleText } from "node:util";
 import ml from "multiline-ts";
 import type { AppConfig } from "@/configure/config";
 
@@ -166,15 +167,15 @@ export async function generateUserTypes(
   try {
     const { attributeMap, attributeList } = extractAttributesFromConfig(config);
     if (!attributeMap && !attributeList) {
-      console.log("ℹ️  No attributes found in configuration.");
+      console.log(styleText("cyan", "No attributes found in configuration"));
       return;
     }
 
     if (attributeMap) {
-      console.log("🔧 Extracted AttributeMap:", attributeMap);
+      console.log("Extracted AttributeMap:", attributeMap);
     }
     if (attributeList) {
-      console.log("🔧 Extracted AttributeList:", attributeList);
+      console.log("Extracted AttributeList:", attributeList);
     }
 
     // Generate type definition
@@ -184,9 +185,15 @@ export async function generateUserTypes(
     // Write to file
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, typeDefContent);
-    console.log(`✅ Generated type definitions: ${outputPath}`);
+    const relativePath = path.relative(process.cwd(), outputPath);
+    console.log("");
+    console.log(
+      "Generated type definitions:",
+      styleText("green", relativePath),
+    );
   } catch (error) {
-    console.error("❌ Error generating types:", error);
+    console.error(styleText("red", "Error generating types"));
+    console.error(error);
     // Don't throw - this should not block apply/generate
   }
 }

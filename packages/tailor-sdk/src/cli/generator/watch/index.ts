@@ -1,5 +1,6 @@
 import { glob } from "node:fs/promises";
 import * as path from "node:path";
+import { styleText } from "node:util";
 import chokidar from "chokidar";
 import * as madgeModule from "madge";
 
@@ -9,18 +10,6 @@ type MadgeLoader = typeof madgeModule;
  * Types of file change events.
  */
 type FileChangeEvent = "add" | "change" | "unlink";
-
-/**
- * File change information.
- */
-interface FileChangeInfo {
-  /** Path of the changed file. */
-  filePath: string;
-  /** Type of change event. */
-  event: FileChangeEvent;
-  /** Timestamp of the change. */
-  timestamp: Date;
-}
 
 /**
  * Definition of a watch group.
@@ -57,14 +46,6 @@ interface ImpactAnalysisResult {
   /** List of affected watch groups. */
   affectedGroups: string[];
 }
-
-/**
- * Type of the change notification callback.
- */
-type ChangeCallback = (
-  changeInfo: FileChangeInfo,
-  impactResult: ImpactAnalysisResult,
-) => void | Promise<void>;
 
 /**
  * Type of the error handling callback.
@@ -354,7 +335,6 @@ class DependencyWatcher {
   private chokidarWatcher: ReturnType<typeof chokidar.watch> | null = null;
   private watchGroups: Map<string, WatchGroup> = new Map();
   private dependencyGraphManager: DependencyGraphManager;
-  private changeCallbacks: Map<string, ChangeCallback> = new Map();
   private errorCallback: ErrorCallback | null = null;
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private isInitialized = false;
@@ -375,7 +355,6 @@ class DependencyWatcher {
     if (this.isInitialized) return;
 
     try {
-      console.log("🚀 Initializing watcher...");
       this.chokidarWatcher = chokidar.watch([], {
         ignored: /node_modules/,
         persistent: true,
@@ -388,28 +367,27 @@ class DependencyWatcher {
         ...this.options.chokidarOptions,
       });
 
-      this.chokidarWatcher.on("ready", () => {
-        console.log("✅ Watcher is ready");
-      });
-
       this.chokidarWatcher.on("add", (filePath: string) => {
-        console.log(`➕ File added: ${filePath}`);
+        console.log(styleText("gray", `File added: ${filePath}`));
         this.debounceFileChange("add", filePath);
       });
 
       this.chokidarWatcher.on("change", (filePath: string) => {
-        console.log(`📝 File changed: ${filePath}`);
+        console.log(styleText("gray", `File changed: ${filePath}`));
         this.debounceFileChange("change", filePath);
       });
 
       this.chokidarWatcher.on("unlink", (filePath: string) => {
-        console.log(`🗑️ File removed: ${filePath}`);
+        console.log(styleText("gray", `File removed: ${filePath}`));
         this.debounceFileChange("unlink", filePath);
       });
 
       this.chokidarWatcher.on("error", (error: unknown) => {
         console.error(
-          `❌ Watcher error: ${error instanceof Error ? error.message : String(error)}`,
+          styleText(
+            "red",
+            `Watcher error: ${error instanceof Error ? error.message : String(error)}`,
+          ),
         );
         this.handleError(
           new WatcherError(
@@ -436,11 +414,7 @@ class DependencyWatcher {
   /**
    * Add a watch group.
    */
-  async addWatchGroup(
-    groupId: string,
-    patterns: string[],
-    callback: ChangeCallback,
-  ): Promise<void> {
+  async addWatchGroup(groupId: string, patterns: string[]): Promise<void> {
     this.validateWatchGroup(groupId, patterns);
 
     if (!this.isInitialized) {
@@ -450,7 +424,9 @@ class DependencyWatcher {
     const files = new Set<string>();
     for (const pattern of patterns) {
       console.log(
-        `Adding watch pattern for ${groupId}: ${path.resolve(pattern)}`,
+        styleText("gray", `Watch pattern for`),
+        styleText("gray", groupId + ":"),
+        path.relative(process.cwd(), pattern),
       );
       for await (const file of glob(pattern)) {
         files.add(path.resolve(file));
@@ -464,7 +440,6 @@ class DependencyWatcher {
     };
 
     this.watchGroups.set(groupId, watchGroup);
-    this.changeCallbacks.set(groupId, callback);
 
     if (this.chokidarWatcher) {
       const filePaths = Array.from(files);
@@ -490,7 +465,6 @@ class DependencyWatcher {
     }
 
     this.watchGroups.delete(groupId);
-    this.changeCallbacks.delete(groupId);
     this.dependencyCache.clear();
   }
 
@@ -614,18 +588,21 @@ class DependencyWatcher {
     this.debounceTimers.set(key, timer);
   }
 
+  private restartCallback: (() => void) | null = null;
+
+  /**
+   * Set the restart callback to be called when a file change is detected.
+   */
+  setRestartCallback(callback: () => void): void {
+    this.restartCallback = callback;
+  }
+
   private async handleFileChange(
     event: FileChangeEvent,
     filePath: string,
   ): Promise<void> {
     try {
       const absolutePath = path.resolve(filePath);
-
-      const changeInfo: FileChangeInfo = {
-        filePath: absolutePath,
-        event,
-        timestamp: new Date(),
-      };
 
       if (event === "unlink") {
         this.dependencyGraphManager.removeNode(absolutePath);
@@ -639,29 +616,33 @@ class DependencyWatcher {
       this.dependencyCache.clear();
 
       const impactResult = this.calculateImpact(absolutePath);
-      for (const groupId of impactResult.affectedGroups) {
-        console.log(`🎯 Calling callback for group: ${groupId}`);
-        const callback = this.changeCallbacks.get(groupId);
-        if (callback) {
-          try {
-            await callback(changeInfo, impactResult);
-          } catch (error) {
-            this.handleError(
-              new WatcherError(
-                `Callback error for group ${groupId}: ${error instanceof Error ? error.message : String(error)}`,
-                WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED,
-                absolutePath,
-                error instanceof Error ? error : undefined,
-              ),
-            );
-          }
-        } else {
-          console.log(`⚠️ No callback found for group: ${groupId}`);
-        }
-      }
 
-      if (impactResult.affectedGroups.length === 0) {
-        console.log(`⚠️ No affected groups found for file: ${absolutePath}`);
+      // If any groups are affected, trigger restart instead of calling callbacks
+      if (impactResult.affectedGroups.length > 0) {
+        console.log(
+          styleText(
+            "yellow",
+            "File change detected, restarting watch process...",
+          ),
+        );
+        console.log(styleText("cyan", `Changed file: ${absolutePath}`));
+        console.log(
+          styleText(
+            "cyan",
+            `Affected groups: ${impactResult.affectedGroups.join(", ")}`,
+          ),
+        );
+
+        if (this.restartCallback) {
+          this.restartCallback();
+        }
+      } else {
+        console.log(
+          styleText(
+            "gray",
+            `No affected groups found for file: ${absolutePath}`,
+          ),
+        );
       }
     } catch (error) {
       this.handleError(
@@ -680,14 +661,22 @@ class DependencyWatcher {
   }
 
   private findAffectedGroups(affectedFiles: string[]): string[] {
-    console.log(`🔍 Finding affected groups for files:`, affectedFiles);
+    console.log(
+      styleText(
+        "gray",
+        `Finding affected groups for files: ${affectedFiles.join(", ")}`,
+      ),
+    );
     const affectedGroups = new Set<string>();
 
     for (const [groupId, group] of this.watchGroups) {
       for (const affectedFile of affectedFiles) {
         if (group.files.has(affectedFile)) {
           console.log(
-            `✅ Group ${groupId} is affected by file: ${affectedFile}`,
+            styleText(
+              "gray",
+              `Group ${groupId} is affected by file: ${affectedFile}`,
+            ),
           );
           affectedGroups.add(groupId);
           break;

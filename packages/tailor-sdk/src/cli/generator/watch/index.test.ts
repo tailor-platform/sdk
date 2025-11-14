@@ -83,8 +83,7 @@ describe("DependencyWatcher", () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      const callback = vi.fn();
-      await watcher.addWatchGroup("test-group", [testFile], callback);
+      await watcher.addWatchGroup("test-group", [testFile]);
 
       const status = watcher.getWatchStatus();
       expect(status.groupCount).toBe(1);
@@ -97,9 +96,8 @@ describe("DependencyWatcher", () => {
       await createTestFile(testFile1, 'export const file1 = "hello";');
       await createTestFile(testFile2, 'export const file2 = "world";');
 
-      const callback = vi.fn();
       const pattern = path.join(tempDir, "*.ts");
-      await watcher.addWatchGroup("test-group", [pattern], callback);
+      await watcher.addWatchGroup("test-group", [pattern]);
 
       const status = watcher.getWatchStatus();
       expect(status.groupCount).toBe(1);
@@ -110,8 +108,7 @@ describe("DependencyWatcher", () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      const callback = vi.fn();
-      await watcher.addWatchGroup("test-group", [testFile], callback);
+      await watcher.addWatchGroup("test-group", [testFile]);
       await watcher.removeWatchGroup("test-group");
 
       const status = watcher.getWatchStatus();
@@ -123,28 +120,25 @@ describe("DependencyWatcher", () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      const callback = vi.fn();
-      await watcher.addWatchGroup("test-group", [testFile], callback);
+      await watcher.addWatchGroup("test-group", [testFile]);
 
       await expect(
-        watcher.addWatchGroup("test-group", [testFile], callback),
+        watcher.addWatchGroup("test-group", [testFile]),
       ).rejects.toThrow(WatcherError);
     });
   });
 
   describe("validation", () => {
     it("invalid group ID causes error", async () => {
-      const callback = vi.fn();
-      await expect(
-        watcher.addWatchGroup("", ["test.ts"], callback),
-      ).rejects.toThrow(WatcherError);
+      await expect(watcher.addWatchGroup("", ["test.ts"])).rejects.toThrow(
+        WatcherError,
+      );
     });
 
     it("empty pattern array causes error", async () => {
-      const callback = vi.fn();
-      await expect(
-        watcher.addWatchGroup("test-group", [], callback),
-      ).rejects.toThrow(WatcherError);
+      await expect(watcher.addWatchGroup("test-group", [])).rejects.toThrow(
+        WatcherError,
+      );
     });
   });
 
@@ -153,8 +147,7 @@ describe("DependencyWatcher", () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      const callback = vi.fn();
-      await watcher.addWatchGroup("test-group", [testFile], callback);
+      await watcher.addWatchGroup("test-group", [testFile]);
 
       const impact = watcher.calculateImpact(testFile);
       expect(impact.changedFile).toBe(testFile);
@@ -192,9 +185,8 @@ describe("DependencyWatcher", () => {
       await createTestFile(testFile1, 'export const file1 = "hello";');
       await createTestFile(testFile2, 'export const file2 = "world";');
 
-      const callback = vi.fn();
-      await watcher.addWatchGroup("group1", [testFile1], callback);
-      await watcher.addWatchGroup("group2", [testFile2], callback);
+      await watcher.addWatchGroup("group1", [testFile1]);
+      await watcher.addWatchGroup("group2", [testFile2]);
 
       const status = watcher.getWatchStatus();
       expect(status.isWatching).toBe(true);

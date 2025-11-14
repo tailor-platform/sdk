@@ -1,4 +1,6 @@
+import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { styleText } from "node:util";
 import * as inflection from "inflection";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
@@ -41,8 +43,12 @@ export class TailorDBService {
 
     const typeFiles = loadFilesWithIgnores(this.config);
 
+    console.log("");
     console.log(
-      `Found ${typeFiles.length} type files for TailorDB service "${this.namespace}"`,
+      "Found",
+      styleText("cyanBright", typeFiles.length.toString()),
+      "type files for TailorDB service",
+      styleText("cyanBright", `"${this.namespace}"`),
     );
 
     for (const typeFile of typeFiles) {
@@ -76,7 +82,13 @@ export class TailorDBService {
           typeof exportedValue.metadata === "object";
 
         if (isDBTypeLike) {
-          console.log(`Type: "${exportName}" loaded from ${typeFile}`);
+          const relativePath = path.relative(process.cwd(), typeFile);
+          console.log(
+            "Type:",
+            styleText("greenBright", `"${exportName}"`),
+            "loaded from",
+            styleText("cyan", relativePath),
+          );
           this.rawTypes[typeFile][exportedValue.name] = exportedValue;
           // Store source info mapping
           this.typeSourceInfo[exportedValue.name] = {
@@ -86,7 +98,12 @@ export class TailorDBService {
         }
       }
     } catch (error) {
-      console.error(`Failed to load type from ${typeFile}:`, error);
+      const relativePath = path.relative(process.cwd(), typeFile);
+      console.error(
+        styleText("red", "Failed to load type from"),
+        styleText("redBright", relativePath),
+      );
+      console.error(error);
       throw error;
     }
     this.parseTypes();

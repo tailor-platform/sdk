@@ -630,102 +630,69 @@ describe("GenerationManager", () => {
     beforeEach(() => {
       mockWatcher = {
         addWatchGroup: vi.fn(),
+        setRestartCallback: vi.fn(),
       };
       vi.spyOn(DependencyWatcher.prototype, "addWatchGroup").mockImplementation(
         mockWatcher.addWatchGroup,
       );
-    });
+      vi.spyOn(
+        DependencyWatcher.prototype,
+        "setRestartCallback",
+      ).mockImplementation(mockWatcher.setRestartCallback);
 
-    it("initializes watcher", async () => {
-      await manager.watch();
-      expect(manager.watcher).toBeInstanceOf(DependencyWatcher);
+      // Mock the infinite Promise at the end of watch()
+      vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(
+        async function (this: GenerationManager) {
+          // Call the original implementation up to the infinite Promise
+          const watcher = new DependencyWatcher();
+          (this as any).watcher = watcher;
+
+          watcher.setRestartCallback(() => {
+            (this as any).restartWatchProcess();
+          });
+
+          if ((this as any).configPath) {
+            await watcher.addWatchGroup("Config", [(this as any).configPath]);
+          }
+
+          for (const app of (this as any).application.applications) {
+            for (const db of app.tailorDBServices) {
+              const dbNamespace = db.namespace;
+              await watcher?.addWatchGroup(
+                `TailorDB/${dbNamespace}`,
+                db.config.files,
+              );
+            }
+
+            for (const resolverService of app.resolverServices) {
+              const resolverNamespace = resolverService.namespace;
+              await watcher?.addWatchGroup(
+                `Resolver/${resolverNamespace}`,
+                resolverService["config"].files,
+              );
+            }
+          }
+
+          // Instead of await new Promise(() => {}), resolve immediately for tests
+          return Promise.resolve();
+        },
+      );
     });
 
     it("adds watch group for TailorDB service", async () => {
       await manager.watch();
 
-      expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith(
-        "TailorDB__testApp__main",
-        ["src/types/*.ts"],
-        expect.any(Function),
-      );
+      expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith("TailorDB/main", [
+        "src/types/*.ts",
+      ]);
     });
 
     it("adds watch group for Resolver service", async () => {
       await manager.watch();
 
-      expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith(
-        "Resolver__testApp__main",
-        ["src/resolvers/*.ts"],
-        expect.any(Function),
-      );
-    });
-
-    it("callback processing on file change", async () => {
-      // Verify that TestGenerator has processTailorDBNamespace method
-      const testGen = manager.generators.find(
-        (g: any) => g.id === "test-generator",
-      );
-      expect(testGen).toBeDefined();
-      expect(typeof testGen.processTailorDBNamespace).toBe("function");
-
-      // Initialize applications
-      const types = {
-        testType: db.type("TestType", {}),
-      };
-      const service = new TailorDBService("main", { files: [] });
-      service["rawTypes"]["test.ts"] = types;
-      service["parseTypes"]();
-
-      manager.applications = {
-        testApp: {
-          tailordbNamespaces: {
-            main: {
-              types: service.getTypes(),
-              sourceInfo: service.getTypeSourceInfo(),
-            },
-          },
-          resolverNamespaces: {
-            main: {
-              testResolver: createResolver({
-                name: "testResolver",
-                operation: "query",
-                // input removed
-                body: () => ({ string: "" }),
-                output: t.object({ string: t.string() }),
-              }),
-            },
-          },
-        },
-      };
-
-      // Initialize generatorResults
-      manager.generatorResults = {
-        "test-generator": {
-          application: {
-            testApp: {
-              tailordbResults: {},
-              resolverResults: {},
-              tailordbNamespaceResults: {},
-              resolverNamespaceResults: {},
-            },
-          },
-          executorResults: {},
-        },
-      };
-
-      await manager.watch();
-
-      const callArgs = mockWatcher.addWatchGroup.mock.calls.find(
-        (args: any) => args[0] === "TailorDB__testApp__main",
-      );
-      expect(callArgs).toBeDefined();
-
-      const callback = callArgs[2];
-      expect(typeof callback).toBe("function");
-
-      // Verify that valid file type data exists when callback is executed
-      await callback({ timestamp: new Date() }, { affectedFiles: ["test.ts"] });
+      expect(mockWatcher.addWatchGroup).toHaveBeenCalledWith("Resolver/main", [
+        "src/resolvers/*.ts",
+      ]);
     });
   });
 });

@@ -1,4 +1,6 @@
+import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { styleText } from "node:util";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { type ResolverServiceConfig } from "@/configure/services/resolver/types";
 import { type Resolver, ResolverSchema } from "@/parser/service/resolver";
@@ -18,6 +20,14 @@ export class ResolverService {
 
     const resolverFiles = loadFilesWithIgnores(this.config);
 
+    console.log("");
+    console.log(
+      "Found",
+      styleText("cyanBright", resolverFiles.length.toString()),
+      "resolver files for service",
+      styleText("cyanBright", `"${this.namespace}"`),
+    );
+
     for (const resolverFile of resolverFiles) {
       await this.loadResolverForFile(resolverFile);
     }
@@ -34,10 +44,22 @@ export class ResolverService {
       const resolverModule = await import(moduleSpecifier);
       const result = ResolverSchema.safeParse(resolverModule.default);
       if (result.success) {
+        const relativePath = path.relative(process.cwd(), resolverFile);
+        console.log(
+          "Resolver:",
+          styleText("greenBright", `"${result.data.name}"`),
+          "loaded from",
+          styleText("cyan", relativePath),
+        );
         this.resolvers[resolverFile] = result.data;
       }
     } catch (error) {
-      console.error(`Failed to load resolver from ${resolverFile}:`, error);
+      const relativePath = path.relative(process.cwd(), resolverFile);
+      console.error(
+        styleText("red", "Failed to load resolver from"),
+        styleText("redBright", relativePath),
+      );
+      console.error(error);
       throw error;
     }
     return this.resolvers[resolverFile];

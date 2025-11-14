@@ -1,5 +1,7 @@
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { styleText } from "node:util";
 import { defineCommand } from "citty";
 import { defineApplication, type Application } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
@@ -41,6 +43,7 @@ export class GenerationManager {
   constructor(
     config: AppConfig,
     private generators: Generator[] = [],
+    private configPath?: string,
   ) {
     this.application = defineApplication(config);
     this.baseDir = path.join(getDistDir(), "generated");
@@ -48,7 +51,12 @@ export class GenerationManager {
   }
 
   async generate(watch: boolean) {
-    console.log("Generation for application:", this.application.config.name);
+    console.log("");
+    console.log(
+      "Generation for application:",
+      styleText("cyanBright", this.application.config.name),
+    );
+    console.log("");
 
     // Initialize data structure for each application
     for (const app of this.application.applications) {
@@ -68,9 +76,10 @@ export class GenerationManager {
           };
         } catch (error) {
           console.error(
-            `Error loading types for TailorDB service ${namespace}:`,
-            error,
+            styleText("red", "Error loading types for TailorDB service"),
+            styleText("redBright", namespace),
           );
+          console.error(error);
           if (!watch) {
             throw error;
           }
@@ -92,9 +101,10 @@ export class GenerationManager {
           );
         } catch (error) {
           console.error(
-            `Error loading resolvers for Resolver service ${namespace}:`,
-            error,
+            styleText("red", "Error loading resolvers for Resolver service"),
+            styleText("redBright", namespace),
           );
+          console.error(error);
           if (!watch) {
             throw error;
           }
@@ -191,7 +201,11 @@ export class GenerationManager {
       // Aggregate all results
       await this.aggregate(gen);
     } catch (error) {
-      console.error(`Error processing generator ${gen.id}:`, error);
+      console.error(
+        styleText("red", "Error processing generator"),
+        styleText("redBright", gen.id),
+      );
+      console.error(error);
     }
   }
 
@@ -215,9 +229,14 @@ export class GenerationManager {
           });
         } catch (error) {
           console.error(
-            `Error processing type ${typeName} in ${appNamespace}/${namespace} with generator ${gen.id}:`,
-            error,
+            styleText("red", `Error processing type`),
+            styleText("redBright", typeName),
+            styleText(
+              "red",
+              `in ${appNamespace}/${namespace} with generator ${gen.id}`,
+            ),
           );
+          console.error(error);
         }
       }),
     );
@@ -233,9 +252,11 @@ export class GenerationManager {
           });
       } catch (error) {
         console.error(
-          `Error processing TailorDB namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
-          error,
+          styleText("red", `Error processing TailorDB namespace`),
+          styleText("redBright", namespace),
+          styleText("red", `in ${appNamespace} with generator ${gen.id}`),
         );
+        console.error(error);
       }
     } else {
       results.tailordbNamespaceResults[namespace] =
@@ -264,9 +285,14 @@ export class GenerationManager {
             });
         } catch (error) {
           console.error(
-            `Error processing resolver ${resolverName} in ${appNamespace}/${namespace} with generator ${gen.id}:`,
-            error,
+            styleText("red", `Error processing resolver`),
+            styleText("redBright", resolverName),
+            styleText(
+              "red",
+              `in ${appNamespace}/${namespace} with generator ${gen.id}`,
+            ),
           );
+          console.error(error);
         }
       }),
     );
@@ -282,9 +308,11 @@ export class GenerationManager {
           });
       } catch (error) {
         console.error(
-          `Error processing Resolver namespace ${namespace} in ${appNamespace} with generator ${gen.id}:`,
-          error,
+          styleText("red", `Error processing Resolver namespace`),
+          styleText("redBright", namespace),
+          styleText("red", `in ${appNamespace} with generator ${gen.id}`),
         );
+        console.error(error);
       }
     } else {
       results.resolverNamespaceResults[namespace] =
@@ -303,9 +331,11 @@ export class GenerationManager {
             await gen.processExecutor(executor);
         } catch (error) {
           console.error(
-            `Error processing executor ${executor.name} with generator ${gen.id}:`,
-            error,
+            styleText("red", `Error processing executor`),
+            styleText("redBright", executor.name),
+            styleText("red", `with generator ${gen.id}`),
           );
+          console.error(error);
         }
       }),
     );
@@ -364,24 +394,44 @@ export class GenerationManager {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
         return new Promise<void>((resolve, reject) => {
           if (file.skipIfExists && fs.existsSync(file.path)) {
-            console.log(`Skipping existing file: ${file.path}`);
+            const relativePath = path.relative(process.cwd(), file.path);
+            console.log(
+              styleText("gray", `${gen.id} | skip existing: ${relativePath}`),
+            );
             return resolve();
           }
 
           fs.writeFile(file.path, file.content, (err) => {
             if (err) {
-              console.error(`Error writing file ${file.path}:`, err);
+              const relativePath = path.relative(process.cwd(), file.path);
+              console.error(
+                styleText("red", "Error writing file"),
+                styleText("redBright", relativePath),
+              );
+              console.error(err);
               reject(err);
             } else {
-              console.log(`Generated file: ${file.path}`);
+              const relativePath = path.relative(process.cwd(), file.path);
+              console.log(
+                `${gen.id} | generate:`,
+                styleText("green", relativePath),
+              );
               // Set executable permission if requested
               if (file.executable) {
                 fs.chmod(file.path, 0o755, (chmodErr) => {
                   if (chmodErr) {
-                    console.error(
-                      `Error setting executable permission on ${file.path}:`,
-                      chmodErr,
+                    const relativePath = path.relative(
+                      process.cwd(),
+                      file.path,
                     );
+                    console.error(
+                      styleText(
+                        "red",
+                        "Error setting executable permission on",
+                      ),
+                      styleText("redBright", relativePath),
+                    );
+                    console.error(chmodErr);
                     reject(chmodErr);
                   } else {
                     resolve();
@@ -395,115 +445,89 @@ export class GenerationManager {
         });
       }),
     );
+    console.log("");
   }
 
   private watcher: DependencyWatcher | null = null;
   async watch() {
     this.watcher = new DependencyWatcher();
 
+    // Set up restart callback
+    this.watcher.setRestartCallback(() => {
+      this.restartWatchProcess();
+    });
+
+    // Watch config file if available
+    if (this.configPath) {
+      await this.watcher.addWatchGroup("Config", [this.configPath]);
+    }
+
     // Watch for each application
     for (const app of this.application.applications) {
-      const appNamespace = app.name;
-
       // Watch TailorDB services
       for (const db of app.tailorDBServices) {
         const dbNamespace = db.namespace;
-        this.watcher?.addWatchGroup(
-          `TailorDB__${appNamespace}__${dbNamespace}`,
+        await this.watcher?.addWatchGroup(
+          `TailorDB/${dbNamespace}`,
           db.config.files,
-          async ({ timestamp }, { affectedFiles }) => {
-            try {
-              // Reload affected types
-              for (const file of affectedFiles) {
-                try {
-                  await db.loadTypesForFile(file, timestamp);
-                } catch (error) {
-                  console.error(
-                    `Error loading types from file ${file}:`,
-                    error,
-                  );
-                  continue;
-                }
-              }
-
-              // Update types
-              const typeInfo = {
-                types: db.getTypes(),
-                sourceInfo: db.getTypeSourceInfo(),
-              };
-              this.applications[appNamespace].tailordbNamespaces[dbNamespace] =
-                typeInfo;
-
-              // Process with all generators
-              for (const gen of this.generators) {
-                await this.processTailorDBNamespace(
-                  gen,
-                  appNamespace,
-                  dbNamespace,
-                  typeInfo,
-                );
-                await this.aggregate(gen);
-              }
-            } catch (error) {
-              console.error(
-                `Error processing TailorDB changes for ${appNamespace}/${dbNamespace}:`,
-                error,
-              );
-            }
-          },
         );
       }
 
       // Watch Resolver services
       for (const resolverService of app.resolverServices) {
         const resolverNamespace = resolverService.namespace;
-        this.watcher?.addWatchGroup(
-          `Resolver__${appNamespace}__${resolverNamespace}`,
+        await this.watcher?.addWatchGroup(
+          `Resolver/${resolverNamespace}`,
           resolverService["config"].files,
-          async ({ timestamp }, { affectedFiles }) => {
-            try {
-              // Reload affected resolvers
-              for (const file of affectedFiles) {
-                try {
-                  const resolver = await resolverService.loadResolverForFile(
-                    file,
-                    timestamp,
-                  );
-                  this.applications[appNamespace].resolverNamespaces[
-                    resolverNamespace
-                  ][resolver.name] = resolver;
-                } catch (error) {
-                  console.error(
-                    `Error loading resolver from file ${file}:`,
-                    error,
-                  );
-                  // Continue with other files in watch mode
-                  continue;
-                }
-              }
-
-              // Process with all generators
-              for (const gen of this.generators) {
-                await this.processResolverNamespace(
-                  gen,
-                  appNamespace,
-                  resolverNamespace,
-                  this.applications[appNamespace].resolverNamespaces[
-                    resolverNamespace
-                  ],
-                );
-                await this.aggregate(gen);
-              }
-            } catch (error) {
-              console.error(
-                `Error processing Resolver changes for ${appNamespace}/${resolverNamespace}:`,
-                error,
-              );
-            }
-          },
         );
       }
     }
+
+    // Keep the process running
+    await new Promise(() => {});
+  }
+
+  private async restartWatchProcess() {
+    console.log("");
+    console.log(
+      styleText("yellow", "Restarting watch process to clear module cache..."),
+    );
+    console.log("");
+
+    // Clean up watcher first
+    if (this.watcher) {
+      await this.watcher.stop();
+    }
+
+    // Spawn a new process with the same arguments
+    const args = process.argv.slice(2);
+    const env = {
+      ...process.env,
+      TAILOR_WATCH_GENERATION: (
+        parseInt(process.env.TAILOR_WATCH_GENERATION || "0", 10) + 1
+      ).toString(),
+    };
+
+    const child = spawn(process.argv[0], [process.argv[1], ...args], {
+      stdio: "inherit",
+      env,
+      detached: false,
+    });
+
+    // Forward signals to child
+    const forwardSignal = (signal: NodeJS.Signals) => {
+      child.kill(signal);
+    };
+
+    process.on("SIGINT", forwardSignal);
+    process.on("SIGTERM", forwardSignal);
+
+    // Wait for child to exit, then exit parent
+    child.on("exit", (code) => {
+      process.exit(code || 0);
+    });
+
+    // Don't exit immediately - let child handle everything
   }
 }
 
@@ -515,7 +539,7 @@ export async function generate(options?: GenerateOptions) {
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
-  const manager = new GenerationManager(config, generators);
+  const manager = new GenerationManager(config, generators, configPath);
   await manager.generate(watch);
   if (watch) {
     await manager.watch();
