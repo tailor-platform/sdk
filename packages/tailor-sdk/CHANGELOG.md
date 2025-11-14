@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.7.2
+
+### Patch Changes
+
+- [#716](https://github.com/tailor-platform/tailor-sdk/pull/716) [`9e094fa`](https://github.com/tailor-platform/tailor-sdk/commit/9e094fa6831837063f4ea62722882c26d31dd256) Thanks [@remiposo](https://github.com/remiposo)! - Apply concurrently
+
 ## 0.7.1
 
 ### Patch Changes
