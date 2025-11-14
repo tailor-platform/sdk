@@ -4,6 +4,11 @@
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tailor-platform/tailor-sdk.git",
+    "directory": "packages/create-tailor-sdk"
+  },
   "bin": "dist/index.js",
   "files": [
     "dist",

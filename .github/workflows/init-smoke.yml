@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/init-smoke.yml
       - packages/tailor-sdk/**
+      - packages/create-tailor-sdk/**
       - pnpm-lock.yaml
       - package.json
   workflow_dispatch:
@@ -14,7 +15,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      urls: ${{ steps.publish.outputs.urls }}
+      sha: ${{ steps.publish.outputs.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Build create-tailor-sdk
+        run: pnpm --filter @tailor-platform/create-tailor-sdk build
+
+      - name: Publish to pkg.pr.new
+        id: publish
+        run: pnpm dlx pkg-pr-new publish --pnpm ./packages/create-tailor-sdk
+
   init-smoke:
+    needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -29,13 +56,21 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
+      - name: Extract create-tailor-sdk URL
+        id: extract-url
+        run: |
+          # Extract the create-tailor-sdk URL from the published packages
+          CREATE_TAILOR_SDK_URL=$(echo "${{ needs.publish.outputs.urls }}" | tr ' ' '\n' | grep create-tailor-sdk)
+          echo "url=$CREATE_TAILOR_SDK_URL" >> "$GITHUB_OUTPUT"
+          echo "Using create-tailor-sdk from: $CREATE_TAILOR_SDK_URL"
+
       - name: Show CLI version
-        run: npx --yes tailor-sdk --version
+        run: pnpm dlx --package=${{ steps.extract-url.outputs.url }} tailor-sdk --version
 
       - name: Run init non-interactively
         run: |
-          # Create into a temp folder under repo root so local bin is used
-          npx tailor-sdk init tmp-init-app --template hello-world
+          # Create into a temp folder using the pkg.pr.new version via pnpm dlx
+          pnpm dlx --package=${{ steps.extract-url.outputs.url }} tailor-sdk init tmp-init-app --template hello-world
           ls -la tmp-init-app
 
       - name: Verify generated files
