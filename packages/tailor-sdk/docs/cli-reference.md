@@ -40,7 +40,7 @@ tailor-sdk init [name] [options]
 
 **Options:**
 
-- `--template` - Template name
+- `-t, --template` - Template name
 
 ### generate
 
@@ -122,8 +122,8 @@ tailor-sdk workspace create [options]
 - `-n, --name` - Name of the workspace (required)
 - `-r, --region` - Region of the workspace: `us-west` or `asia-northeast` (required)
 - `-d, --delete-protection` - Enable delete protection for the workspace
-- `--organization-id` - Organization ID to associate the workspace with
-- `--folder-id` - Folder ID to associate the workspace with
+- `-o, --organization-id` - Organization ID to associate the workspace with
+- `-f, --folder-id` - Folder ID to associate the workspace with
 - `-f, --format` - Output format: `table` or `json` (default: `table`)
 
 #### workspace list
@@ -311,7 +311,7 @@ tailor-sdk user pat create <name> [options]
 
 **Options:**
 
-- `--write` - Grant write permission (default: read-only)
+- `-w, --write` - Grant write permission (default: read-only)
 - `-f, --format` - Output format: `text` or `json` (default: `text`)
 
 **Output (default):**
@@ -358,7 +358,7 @@ tailor-sdk user pat update <name> [options]
 
 **Options:**
 
-- `--write` - Grant write permission (if not specified, keeps read-only)
+- `-w, --write` - Grant write permission (if not specified, keeps read-only)
 - `-f, --format` - Output format: `text` or `json` (default: `text`)
 
 **Output (default):**

@@ -100,10 +100,12 @@ export const createCommand = defineCommand({
     "organization-id": {
       type: "string",
       description: "Organization ID to workspace associate with",
+      alias: "o",
     },
     "folder-id": {
       type: "string",
       description: "Folder ID to workspace associate with",
+      alias: "f",
     },
   },
   run: withCommonArgs(async (args) => {

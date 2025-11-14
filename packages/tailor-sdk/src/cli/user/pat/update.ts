@@ -27,6 +27,7 @@ export const updateCommand = defineCommand({
       type: "boolean",
       description: "Grant write permission (if not specified, keeps read-only)",
       default: false,
+      alias: "w",
     },
   },
   run: withCommonArgs(async (args) => {

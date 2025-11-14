@@ -29,6 +29,7 @@ export const initCommand = defineCommand({
       type: "string",
       description: "Template name",
       required: false,
+      alias: "t",
     },
   },
   run: withCommonArgs(async (args) => {
