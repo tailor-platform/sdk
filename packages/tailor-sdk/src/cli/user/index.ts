@@ -1,6 +1,7 @@
 import { defineCommand, runCommand } from "citty";
 import { currentCommand } from "./current";
 import { listCommand } from "./list";
+import { patCommand } from "./pat";
 import { useCommand } from "./use";
 
 export const userCommand = defineCommand({
@@ -11,6 +12,7 @@ export const userCommand = defineCommand({
   subCommands: {
     current: currentCommand,
     list: listCommand,
+    pat: patCommand,
     use: useCommand,
   },
   async run() {
