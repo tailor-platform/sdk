@@ -11,6 +11,7 @@ import { logoutCommand } from "./logout";
 import { machineuserCommand } from "./machineuser";
 import { profileCommand } from "./profile";
 import { showCommand } from "./show";
+import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
 import { workspaceCommand } from "./workspace";
 
@@ -35,6 +36,7 @@ const mainCommand = defineCommand({
     machineuser: machineuserCommand,
     profile: profileCommand,
     show: showCommand,
+    tailordb: tailordbCommand,
     user: userCommand,
     workspace: workspaceCommand,
   },

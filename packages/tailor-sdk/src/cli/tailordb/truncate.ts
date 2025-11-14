@@ -1,0 +1,309 @@
+import { defineCommand } from "citty";
+import { consola } from "consola";
+import { commonArgs, withCommonArgs } from "../args";
+import { initOperatorClient } from "../client";
+import { loadConfig } from "../config-loader";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+
+export interface TruncateOptions {
+  workspaceId?: string;
+  profile?: string;
+  configPath?: string;
+  all?: boolean;
+  namespace?: string;
+  types?: string[];
+  yes?: boolean;
+}
+
+interface TruncateSingleTypeOptions {
+  workspaceId: string;
+  namespaceName: string;
+  typeName: string;
+}
+
+async function truncateSingleType(
+  options: TruncateSingleTypeOptions,
+  client: Awaited<ReturnType<typeof initOperatorClient>>,
+): Promise<void> {
+  await client.truncateTailorDBType({
+    workspaceId: options.workspaceId,
+    namespaceName: options.namespaceName,
+    tailordbTypeName: options.typeName,
+  });
+
+  consola.success(
+    `Truncated type "${options.typeName}" in namespace "${options.namespaceName}"`,
+  );
+}
+
+async function truncateNamespace(
+  workspaceId: string,
+  namespaceName: string,
+  client: Awaited<ReturnType<typeof initOperatorClient>>,
+): Promise<void> {
+  await client.truncateTailorDBTypes({
+    workspaceId,
+    namespaceName,
+  });
+
+  consola.success(`Truncated all types in namespace "${namespaceName}"`);
+}
+
+async function getAllNamespaces(
+  workspaceId: string,
+  configPath: string,
+): Promise<string[]> {
+  const { config } = await loadConfig(configPath);
+  const namespaces = new Set<string>();
+
+  // Collect namespace names from db configuration
+  if (config.db) {
+    for (const [namespaceName] of Object.entries(config.db)) {
+      namespaces.add(namespaceName);
+    }
+  }
+
+  return Array.from(namespaces);
+}
+
+async function getTypeNamespace(
+  workspaceId: string,
+  typeName: string,
+  client: Awaited<ReturnType<typeof initOperatorClient>>,
+  configPath: string,
+): Promise<string | null> {
+  const namespaces = await getAllNamespaces(workspaceId, configPath);
+
+  // Try to find the type in each namespace
+  for (const namespace of namespaces) {
+    try {
+      const { tailordbTypes } = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName: namespace,
+      });
+
+      if (tailordbTypes.some((type) => type.name === typeName)) {
+        return namespace;
+      }
+    } catch {
+      // Continue to next namespace if error occurs
+      continue;
+    }
+  }
+
+  return null;
+}
+
+export async function truncate(options?: TruncateOptions): Promise<void> {
+  // Load and validate options
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options?.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options?.workspaceId,
+    profile: options?.profile,
+  });
+
+  // Validate arguments
+  const hasTypes = options?.types && options.types.length > 0;
+  const hasNamespace = !!options?.namespace;
+  const hasAll = !!options?.all;
+
+  if ([hasTypes, hasNamespace, hasAll].filter(Boolean).length > 1) {
+    throw new Error(
+      "Cannot specify multiple options: choose one of --all, --namespace, or type names",
+    );
+  }
+
+  if (!hasTypes && !hasNamespace && !hasAll) {
+    throw new Error(
+      "Please specify one of: --all, --namespace <name>, or type names",
+    );
+  }
+
+  // Load config path - always required to ensure we only truncate managed namespaces
+  const configPath = loadConfigPath(options?.configPath);
+
+  // Validate config and get namespaces before confirmation
+  const namespaces = await getAllNamespaces(workspaceId, configPath);
+
+  // Handle --all flag
+  if (hasAll) {
+    if (namespaces.length === 0) {
+      consola.warn("No namespaces found in config file.");
+      return;
+    }
+
+    if (!options?.yes) {
+      const namespaceList = namespaces.join(", ");
+      const confirmation = await consola.prompt(
+        `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue? (yes/no)`,
+        {
+          type: "confirm",
+          initial: false,
+        },
+      );
+      if (!confirmation) {
+        consola.info("Truncate cancelled.");
+        return;
+      }
+    }
+
+    for (const namespace of namespaces) {
+      await truncateNamespace(workspaceId, namespace, client);
+    }
+    consola.success("Truncated all tables in all namespaces");
+    return;
+  }
+
+  // Handle --namespace flag
+  if (hasNamespace && options?.namespace) {
+    const namespace = options.namespace;
+
+    // Validate namespace exists in config
+    if (!namespaces.includes(namespace)) {
+      throw new Error(
+        `Namespace "${namespace}" not found in config. Available namespaces: ${namespaces.join(", ")}`,
+      );
+    }
+
+    if (!options.yes) {
+      const confirmation = await consola.prompt(
+        `This will truncate ALL tables in namespace "${namespace}". Continue? (yes/no)`,
+        {
+          type: "confirm",
+          initial: false,
+        },
+      );
+      if (!confirmation) {
+        consola.info("Truncate cancelled.");
+        return;
+      }
+    }
+
+    await truncateNamespace(workspaceId, namespace, client);
+    return;
+  }
+
+  // Handle specific types
+  if (hasTypes && options?.types) {
+    const typeNames = options.types;
+
+    // Validate all types exist and get their namespaces before confirmation
+    const typeNamespaceMap = new Map<string, string>();
+    const notFoundTypes: string[] = [];
+
+    for (const typeName of typeNames) {
+      const namespace = await getTypeNamespace(
+        workspaceId,
+        typeName,
+        client,
+        configPath,
+      );
+
+      if (namespace) {
+        typeNamespaceMap.set(typeName, namespace);
+      } else {
+        notFoundTypes.push(typeName);
+      }
+    }
+
+    if (notFoundTypes.length > 0) {
+      throw new Error(
+        `The following types were not found in any namespace: ${notFoundTypes.join(", ")}`,
+      );
+    }
+
+    if (!options.yes) {
+      const typeList = typeNames.join(", ");
+      const confirmation = await consola.prompt(
+        `This will truncate the following types: ${typeList}. Continue? (yes/no)`,
+        {
+          type: "confirm",
+          initial: false,
+        },
+      );
+      if (!confirmation) {
+        consola.info("Truncate cancelled.");
+        return;
+      }
+    }
+
+    for (const typeName of typeNames) {
+      const namespace = typeNamespaceMap.get(typeName);
+      if (!namespace) {
+        continue;
+      }
+
+      await truncateSingleType(
+        {
+          workspaceId,
+          namespaceName: namespace,
+          typeName,
+        },
+        client,
+      );
+    }
+  }
+}
+
+export const truncateCommand = defineCommand({
+  meta: {
+    name: "truncate",
+    description: "Truncate TailorDB tables",
+  },
+  args: {
+    ...commonArgs,
+    types: {
+      type: "positional",
+      description: "Type names to truncate (space-separated)",
+      required: false,
+    },
+    all: {
+      type: "boolean",
+      description: "Truncate all tables in all namespaces",
+      default: false,
+      alias: "a",
+    },
+    namespace: {
+      type: "string",
+      description: "Truncate all tables in specified namespace",
+      alias: "n",
+    },
+    yes: {
+      type: "boolean",
+      description: "Skip confirmation prompt",
+      alias: "y",
+      default: false,
+    },
+    "workspace-id": {
+      type: "string",
+      description: "Workspace ID",
+      alias: "w",
+    },
+    profile: {
+      type: "string",
+      description: "Workspace profile",
+      alias: "p",
+    },
+    config: {
+      type: "string",
+      description: "Path to tailor config file",
+      default: "tailor.config.ts",
+      alias: "c",
+    },
+  },
+  run: withCommonArgs(async (args) => {
+    await truncate({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      configPath: args.config,
+      all: args.all,
+      namespace: args.namespace,
+      types: args.types ? args.types.split(/\s+/).filter(Boolean) : undefined,
+      yes: args.yes,
+    });
+  }),
+});

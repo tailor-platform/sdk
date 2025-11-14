@@ -383,6 +383,64 @@ Please save this token in a secure location. You won't be able to see it again.
 }
 ```
 
+### tailordb
+
+Manage TailorDB tables and data.
+
+```bash
+tailor-sdk tailordb <subcommand> [options]
+```
+
+#### tailordb truncate
+
+Truncate (delete all records from) TailorDB tables.
+
+```bash
+tailor-sdk tailordb truncate [types...] [options]
+```
+
+**Arguments:**
+
+- `types...` - Space-separated list of type names to truncate (optional)
+
+**Options:**
+
+- `-a, --all` - Truncate all tables in all namespaces
+- `-n, --namespace` - Truncate all tables in the specified namespace
+- `-y, --yes` - Skip confirmation prompt
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+
+**Usage Examples:**
+
+```bash
+# Truncate all tables in all namespaces (requires confirmation)
+tailor-sdk tailordb truncate --all
+
+# Truncate all tables in all namespaces (skip confirmation)
+tailor-sdk tailordb truncate --all --yes
+
+# Truncate all tables in a specific namespace
+tailor-sdk tailordb truncate --namespace myNamespace
+
+# Truncate specific types (namespace is auto-detected)
+tailor-sdk tailordb truncate User Post Comment
+
+# Truncate specific types with confirmation skipped
+tailor-sdk tailordb truncate User Post --yes
+```
+
+**Notes:**
+
+- You must specify exactly one of: `--all`, `--namespace`, or type names
+- When truncating specific types, the namespace is automatically detected from your config
+- Confirmation prompts vary based on the operation:
+  - `--all`: requires typing `truncate all`
+  - `--namespace`: requires typing `truncate <namespace-name>`
+  - Specific types: requires typing `yes`
+- Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
+
 ### machineuser
 
 Manage machine users in your Tailor Platform application.

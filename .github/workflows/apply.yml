@@ -60,6 +60,7 @@ jobs:
         run: |
           pnpm run seed:validate
           pnpm run seed
+          pnpm run seed:truncate -y
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 

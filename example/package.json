@@ -14,7 +14,7 @@
     "test:generator:update-expects": "tsx tests/scripts/generate_files.ts",
     "test:e2e": "vitest --project e2e",
     "seed:validate": "lines-db validate ./seed/data",
-    "seed:truncate": "tailorctl workspace service tailordb truncate-all -n tailordb",
+    "seed:truncate": "tailor-sdk tailordb truncate -a",
     "seed": "./seed/exec.sh",
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "eslint --cache .",
