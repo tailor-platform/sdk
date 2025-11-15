@@ -1,4 +1,4 @@
-import { defineGenerators } from "@tailor-platform/tailor-sdk";
+import { defineGenerators } from "@tailor-platform/sdk";
 import config from "../tailor.config";
 
 export default config;

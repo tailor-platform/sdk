@@ -1,4 +1,4 @@
-import { db } from "@tailor-platform/tailor-sdk";
+import { db } from "@tailor-platform/sdk";
 
 export const attachedFiles = db.object(
   {

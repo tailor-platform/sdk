@@ -1,4 +1,4 @@
-import { createResolver, t } from "@tailor-platform/tailor-sdk";
+import { createResolver, t } from "@tailor-platform/sdk";
 
 export default createResolver({
   name: "showUserInfo",

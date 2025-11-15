@@ -4,8 +4,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/init-smoke.yml
-      - packages/tailor-sdk/**
-      - packages/create-tailor-sdk/**
+      - packages/sdk/**
+      - packages/create-sdk/**
       - pnpm-lock.yaml
       - package.json
   workflow_dispatch:
@@ -33,12 +33,12 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Build create-tailor-sdk
-        run: pnpm --filter @tailor-platform/create-tailor-sdk build
+      - name: Build create-sdk
+        run: pnpm --filter @tailor-platform/create-sdk build
 
       - name: Publish to pkg.pr.new
         id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm ./packages/create-tailor-sdk
+        run: pnpm dlx pkg-pr-new publish --pnpm ./packages/create-sdk
 
   init-smoke:
     needs: publish
@@ -56,13 +56,13 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Extract create-tailor-sdk URL
+      - name: Extract create-sdk URL
         id: extract-url
         run: |
-          # Extract the create-tailor-sdk URL from the published packages
-          CREATE_TAILOR_SDK_URL=$(echo "${{ needs.publish.outputs.urls }}" | tr ' ' '\n' | grep create-tailor-sdk)
+          # Extract the create-sdk URL from the published packages
+          CREATE_TAILOR_SDK_URL=$(echo "${{ needs.publish.outputs.urls }}" | tr ' ' '\n' | grep create-sdk)
           echo "url=$CREATE_TAILOR_SDK_URL" >> "$GITHUB_OUTPUT"
-          echo "Using create-tailor-sdk from: $CREATE_TAILOR_SDK_URL"
+          echo "Using create-sdk from: $CREATE_TAILOR_SDK_URL"
 
       - name: Show CLI version
         run: pnpm dlx --package=${{ steps.extract-url.outputs.url }} tailor-sdk --version

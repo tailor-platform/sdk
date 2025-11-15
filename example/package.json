@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@tailor-platform/tailor-proto": "workspace:^",
-    "@tailor-platform/tailor-sdk": "workspace:^",
+    "@tailor-platform/sdk": "workspace:^",
     "date-fns": "4.1.0"
   },
   "devDependencies": {

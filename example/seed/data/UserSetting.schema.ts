@@ -1,5 +1,5 @@
-import { t } from "@tailor-platform/tailor-sdk";
-import { createTailorDBHook, createStandardSchema } from "@tailor-platform/tailor-sdk/test";
+import { t } from "@tailor-platform/sdk";
+import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
 import { userSetting } from "../../tailordb/userSetting";
 

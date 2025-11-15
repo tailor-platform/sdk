@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm exec turbo run format:check` - Check code formatting
 - `pnpm exec turbo run typecheck` - Run TypeScript type checking
 
-### Package-specific Commands (in packages/tailor-sdk)
+### Package-specific Commands (in packages/sdk)
 
 - `pnpm test` - Run all tests with Vitest
 - `pnpm test path/to/test.ts` - Run specific test file
@@ -37,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK package (`@tailor-platform/tailor-sdk`) is located at `packages/tailor-sdk`.
+This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK package (`@tailor-platform/sdk`) is located at `packages/sdk`.
 
 ### Project Structure
 
@@ -120,7 +120,7 @@ import {
   defineAuth,
   defineIdp,
   defineStaticWebSite,
-} from "@tailor-platform/tailor-sdk";
+} from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -176,7 +176,7 @@ export default defineConfig({
 **Model Definition Pattern:**
 
 ```typescript
-import { db } from "@tailor-platform/tailor-sdk";
+import { db } from "@tailor-platform/sdk";
 
 export const modelName = db.type("ModelName", {
   field: db.string(),
@@ -190,7 +190,7 @@ export const modelName = db.type("ModelName", {
 **Auth Configuration Pattern:**
 
 ```typescript
-import { defineAuth, defineIdp } from "@tailor-platform/tailor-sdk";
+import { defineAuth, defineIdp } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 // Define IdP configuration
@@ -234,7 +234,7 @@ import {
   defineIdp,
   defineAuth,
   defineConfig,
-} from "@tailor-platform/tailor-sdk";
+} from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 // Define a static website with type-safe URL references
@@ -277,7 +277,7 @@ export default defineConfig({
 **Generator Configuration Pattern:**
 
 ```typescript
-import { defineGenerators } from "@tailor-platform/tailor-sdk";
+import { defineGenerators } from "@tailor-platform/sdk";
 
 export const generators = defineGenerators([
   "@tailor-platform/kysely-type",
@@ -303,7 +303,7 @@ This generator creates:
 **Resolver Pattern:**
 
 ```typescript
-import { createResolver, t } from "@tailor-platform/tailor-sdk";
+import { createResolver, t } from "@tailor-platform/sdk";
 import { getDB } from "generated/tailordb";
 
 export default createResolver({
@@ -333,11 +333,7 @@ export default createResolver({
 **Executor Pattern:**
 
 ```typescript
-import {
-  createExecutor,
-  recordCreatedTrigger,
-  t,
-} from "@tailor-platform/tailor-sdk";
+import { createExecutor, recordCreatedTrigger, t } from "@tailor-platform/sdk";
 import { getDB } from "generated/tailordb";
 import { user } from "tailordb/user";
 

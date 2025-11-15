@@ -35,4 +35,4 @@ example/seed/
 packages/tailor-proto/
 
 # Templates
-packages/create-tailor-sdk/templates/**/generated/
+packages/create-sdk/templates/**/generated/

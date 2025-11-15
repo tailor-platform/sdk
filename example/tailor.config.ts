@@ -4,7 +4,7 @@ import {
   defineGenerators,
   defineIdp,
   defineStaticWebSite,
-} from "@tailor-platform/tailor-sdk";
+} from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {

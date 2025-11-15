@@ -1,7 +1,4 @@
-import {
-  createExecutor,
-  resolverExecutedTrigger,
-} from "@tailor-platform/tailor-sdk";
+import { createExecutor, resolverExecutedTrigger } from "@tailor-platform/sdk";
 import stepChain from "../resolvers/stepChain";
 
 export default createExecutor({

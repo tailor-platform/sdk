@@ -5,8 +5,8 @@ pre-commit:
   commands:
     1-build:
       glob: "*.{ts}"
-      root: "packages/tailor-sdk"
-      run: pnpm exec turbo run build --filter=@tailor-platform/tailor-sdk
+      root: "packages/sdk"
+      run: pnpm exec turbo run build --filter=@tailor-platform/sdk
 
     2-format:
       glob: "*.{ts,js,json,md,yml,yaml}"
@@ -14,8 +14,8 @@ pre-commit:
 
     3-lint:
       glob: "*.{ts,js}"
-      run: pnpm exec turbo run lint --filter=@tailor-platform/tailor-sdk --filter=example
+      run: pnpm exec turbo run lint --filter=@tailor-platform/sdk --filter=example
 
     4-typecheck:
       glob: "*.{ts,js}"
-      run: pnpm exec turbo run typecheck --filter=@tailor-platform/tailor-sdk --filter=example
+      run: pnpm exec turbo run typecheck --filter=@tailor-platform/sdk --filter=example

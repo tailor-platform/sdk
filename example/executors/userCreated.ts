@@ -1,7 +1,4 @@
-import {
-  createExecutor,
-  recordCreatedTrigger,
-} from "@tailor-platform/tailor-sdk";
+import { createExecutor, recordCreatedTrigger } from "@tailor-platform/sdk";
 import { user } from "../tailordb/user";
 import userRecordLog from "./userRecordLog";
 

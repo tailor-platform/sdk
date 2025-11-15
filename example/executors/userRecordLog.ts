@@ -1,4 +1,4 @@
-import { t } from "@tailor-platform/tailor-sdk";
+import { t } from "@tailor-platform/sdk";
 import { getDB } from "../generated/tailordb";
 import { user } from "../tailordb/user";
 

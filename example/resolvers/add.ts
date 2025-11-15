@@ -1,4 +1,4 @@
-import { createResolver, t } from "@tailor-platform/tailor-sdk";
+import { createResolver, t } from "@tailor-platform/sdk";
 
 const validators: [(a: { value: number }) => boolean, string][] = [
   [({ value }) => value >= 0, "Value must be non-negative"],

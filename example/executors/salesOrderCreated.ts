@@ -1,7 +1,4 @@
-import {
-  createExecutor,
-  recordCreatedTrigger,
-} from "@tailor-platform/tailor-sdk";
+import { createExecutor, recordCreatedTrigger } from "@tailor-platform/sdk";
 import { salesOrder } from "../tailordb/salesOrder";
 
 export default createExecutor({

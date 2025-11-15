@@ -41,7 +41,7 @@ pnpm check
 ```
 ├── packages/
 │   ├── tailor-sdk/          # Main Tailor Platform SDK package
-│   ├── create-tailor-sdk/   # Project scaffolding CLI
+│   ├── create-sdk/   # Project scaffolding CLI
 │   └── tailor-proto/        # Protocol buffer definitions
 └── example/                 # Development and testing example
 ```

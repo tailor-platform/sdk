@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
-import { generate, apply } from "@tailor-platform/tailor-sdk/cli";
+import { generate, apply } from "@tailor-platform/sdk/cli";
 
 const __filename = url.fileURLToPath(import.meta.url);
 

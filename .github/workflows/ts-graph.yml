@@ -17,7 +17,7 @@ jobs:
         with:
           comment-title: "TypeScript Graph for SDK"
           access-token: ${{ secrets.GITHUB_TOKEN }}
-          tsconfig: "./packages/tailor-sdk/tsconfig.json"
+          tsconfig: "./packages/sdk/tsconfig.json"
           debug: true
           in-details: true
           exclude: "node_modules, tests, *.test.ts, dist"

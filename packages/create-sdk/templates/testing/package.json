@@ -1,0 +1,33 @@
+{
+  "name": "testing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "tailor-sdk generate",
+    "deploy": "tailor-sdk apply",
+    "test": "vitest --project unit",
+    "test:unit": "vitest --project unit",
+    "test:e2e": "vitest --project e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint --cache .",
+    "lint:fix": "eslint --cache --fix .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tailor-platform/function-kysely-tailordb": "0.1.3",
+    "kysely": "0.28.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@tailor-platform/function-types": "0.7.2",
+    "@tailor-platform/sdk": "workspace:^",
+    "@types/node": "22.19.0",
+    "eslint": "9.39.1",
+    "graphql-request": "7.3.1",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.3",
+    "vitest": "4.0.8"
+  }
+}

@@ -58,8 +58,8 @@ function extractModules(filePath: string): Map<string, LibraryModule[]> {
             currentRegion,
           );
           libraryName = match ? match[1] : "unknown";
-        } else if (currentRegion.includes("packages/tailor-sdk/")) {
-          libraryName = "@tailor-platform/tailor-sdk";
+        } else if (currentRegion.includes("packages/sdk/")) {
+          libraryName = "@tailor-platform/sdk";
         } else {
           libraryName = "[user-code]";
         }

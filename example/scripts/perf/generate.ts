@@ -13,7 +13,7 @@ export const counts: Record<string, number> = {
 };
 
 function generateTypes(): string {
-  let code = `import { db } from "@tailor-platform/tailor-sdk";\n\n`;
+  let code = `import { db } from "@tailor-platform/sdk";\n\n`;
 
   for (let i = 0; i < counts.types; i++) {
     code += `export const model${i} = db.type("Model${i}", {
@@ -29,7 +29,7 @@ function generateTypes(): string {
 }
 
 function generateResolvers(): string {
-  let code = `import { createResolver, t } from "@tailor-platform/tailor-sdk";\n\n`;
+  let code = `import { createResolver, t } from "@tailor-platform/sdk";\n\n`;
 
   for (let i = 0; i < counts.resolvers; i++) {
     const operation = i % 2 === 0 ? "query" : "mutation";
@@ -62,7 +62,7 @@ function generateResolvers(): string {
 }
 
 function generateExecutors(): string {
-  let code = `import { createExecutor, scheduleTrigger, incomingWebhookTrigger } from "@tailor-platform/tailor-sdk";\n\n`;
+  let code = `import { createExecutor, scheduleTrigger, incomingWebhookTrigger } from "@tailor-platform/sdk";\n\n`;
 
   for (let i = 0; i < counts.executors; i++) {
     // Alternate between scheduleTrigger and incomingWebhookTrigger to test different trigger types

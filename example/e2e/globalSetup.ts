@@ -1,4 +1,4 @@
-import { machineUserToken, show } from "@tailor-platform/tailor-sdk/cli";
+import { machineUserToken, show } from "@tailor-platform/sdk/cli";
 import type { TestProject } from "vitest/node";
 
 declare module "vitest" {

@@ -1,4 +1,4 @@
-import { db } from "@tailor-platform/tailor-sdk";
+import { db } from "@tailor-platform/sdk";
 import { customer } from "./customer";
 import { defaultPermission, defaultGqlPermission } from "./permissions";
 import { user } from "./user";

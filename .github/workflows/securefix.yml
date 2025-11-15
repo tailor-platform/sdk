@@ -61,8 +61,8 @@ jobs:
             paths:
               - .github/workflows/securefix.yml
               - example/**.ts
-              - packages/tailor-sdk/**.ts
-              - packages/create-tailor-sdk/**.ts
+              - packages/sdk/**.ts
+              - packages/create-sdk/**.ts
   update-sdk-generate:
     runs-on: ubuntu-latest
     permissions:

@@ -4,7 +4,7 @@ minimumReleaseAgeExclude: # FIXME: remove later
 
 packages:
   - packages/*
-  - packages/create-tailor-sdk/templates/*
+  - packages/create-sdk/templates/*
   - example
 
 onlyBuiltDependencies:

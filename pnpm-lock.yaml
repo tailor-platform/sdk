@@ -20,9 +20,9 @@ importers:
       '@eslint/js':
         specifier: 9.39.1
         version: 9.39.1
-      '@tailor-platform/tailor-sdk':
+      '@tailor-platform/sdk':
         specifier: workspace:^
-        version: link:packages/tailor-sdk
+        version: link:packages/sdk
       '@types/node':
         specifier: 22.19.0
         version: 22.19.0
@@ -62,9 +62,9 @@ importers:
       '@tailor-platform/tailor-proto':
         specifier: workspace:^
         version: link:../packages/tailor-proto
-      '@tailor-platform/tailor-sdk':
+      '@tailor-platform/sdk':
         specifier: workspace:^
-        version: link:../packages/tailor-sdk
+        version: link:../packages/sdk
       date-fns:
         specifier: 4.1.0
         version: 4.1.0
@@ -106,7 +106,7 @@ importers:
         specifier: 4.0.8
         version: 4.0.8(@types/node@22.19.0)(jiti@2.5.1)(tsx@4.20.6)
 
-  packages/create-tailor-sdk:
+  packages/create-sdk:
     dependencies:
       '@clack/prompts':
         specifier: 0.11.0
@@ -143,12 +143,12 @@ importers:
         specifier: 8.46.3
         version: 8.46.3(eslint@9.39.1(jiti@2.5.1))(typescript@5.9.3)
 
-  packages/create-tailor-sdk/templates/hello-world:
+  packages/create-sdk/templates/hello-world:
     devDependencies:
       '@eslint/js':
         specifier: 9.39.1
         version: 9.39.1
-      '@tailor-platform/tailor-sdk':
+      '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../tailor-sdk
       '@types/node':
@@ -167,7 +167,7 @@ importers:
         specifier: 8.46.3
         version: 8.46.3(eslint@9.39.1(jiti@2.5.1))(typescript@5.9.3)
 
-  packages/create-tailor-sdk/templates/inventory-management:
+  packages/create-sdk/templates/inventory-management:
     dependencies:
       '@tailor-platform/function-kysely-tailordb':
         specifier: 0.1.3
@@ -182,7 +182,7 @@ importers:
       '@tailor-platform/function-types':
         specifier: 0.7.2
         version: 0.7.2
-      '@tailor-platform/tailor-sdk':
+      '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../tailor-sdk
       '@types/node':
@@ -201,7 +201,7 @@ importers:
         specifier: 8.46.3
         version: 8.46.3(eslint@9.39.1(jiti@2.5.1))(typescript@5.9.3)
 
-  packages/create-tailor-sdk/templates/testing:
+  packages/create-sdk/templates/testing:
     dependencies:
       '@tailor-platform/function-kysely-tailordb':
         specifier: 0.1.3
@@ -216,7 +216,7 @@ importers:
       '@tailor-platform/function-types':
         specifier: 0.7.2
         version: 0.7.2
-      '@tailor-platform/tailor-sdk':
+      '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../tailor-sdk
       '@types/node':
@@ -250,7 +250,7 @@ importers:
         specifier: 2.1.0
         version: 2.1.0(@bufbuild/protobuf@2.10.0)
 
-  packages/tailor-sdk:
+  packages/sdk:
     dependencies:
       '@bufbuild/protobuf':
         specifier: 2.10.0

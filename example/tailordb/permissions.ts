@@ -2,7 +2,7 @@ import type {
   PermissionCondition,
   TailorTypePermission,
   TailorTypeGqlPermission,
-} from "@tailor-platform/tailor-sdk";
+} from "@tailor-platform/sdk";
 
 const defaultMachineUser = [
   { user: "role" },

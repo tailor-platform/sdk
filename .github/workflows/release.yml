@@ -54,7 +54,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          VERSION=$(node -p "require('./packages/tailor-sdk/package.json').version")
+          VERSION=$(node -p "require('./packages/sdk/package.json').version")
           TAG_NAME="v${VERSION}"
 
           git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
