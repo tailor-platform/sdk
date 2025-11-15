@@ -1,5 +1,11 @@
 # @tailor-platform/tailor-sdk
 
+## 0.7.6
+
+### Patch Changes
+
+- [#730](https://github.com/tailor-platform/tailor-sdk/pull/730) [`c737903`](https://github.com/tailor-platform/tailor-sdk/commit/c73790316fb70924cfe47ea447782648691eb78e) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: generate watch mode
+
 ## 0.7.5
 
 ### Patch Changes
