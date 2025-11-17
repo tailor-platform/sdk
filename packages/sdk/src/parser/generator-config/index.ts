@@ -12,6 +12,16 @@ export const SeedConfigSchema = z.tuple([
   z.object({ distPath: z.string(), machineUserName: z.string().optional() }),
 ]);
 
+export const EnumConstantsConfigSchema = z.tuple([
+  z.literal("@tailor-platform/enum-constants"),
+  z.object({ distPath: z.string() }),
+]);
+
+export const FileUtilsConfigSchema = z.tuple([
+  z.literal("@tailor-platform/file-utils"),
+  z.object({ distPath: z.string() }),
+]);
+
 // FIXME: more strict schema validation
 export const CodeGeneratorSchema = z.object({
   id: z.string(),
@@ -28,6 +38,8 @@ export const CodeGeneratorSchema = z.object({
 export const BaseGeneratorConfigSchema = z.union([
   KyselyTypeConfigSchema,
   SeedConfigSchema,
+  EnumConstantsConfigSchema,
+  FileUtilsConfigSchema,
   CodeGeneratorSchema,
 ]);
 
@@ -45,7 +57,13 @@ export function createGeneratorConfigSchema(
   >,
 ) {
   return z
-    .union([KyselyTypeConfigSchema, SeedConfigSchema, CodeGeneratorSchema])
+    .union([
+      KyselyTypeConfigSchema,
+      SeedConfigSchema,
+      EnumConstantsConfigSchema,
+      FileUtilsConfigSchema,
+      CodeGeneratorSchema,
+    ])
     .transform((gen) => {
       if (Array.isArray(gen)) {
         const [id, options] = gen;

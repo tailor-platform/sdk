@@ -20,6 +20,10 @@ export const salesOrder = db
     canceledAt: db.datetime({ optional: true }),
     ...db.fields.timestamps(),
   })
+  .files({
+    receipt: "receipt file",
+    form: "order form file",
+  })
   .indexes(
     { fields: ["status", "createdAt"], unique: false },
     { fields: ["customerID", "status"], unique: false },
