@@ -63,7 +63,7 @@ export class FileProcessor {
     ` + "\n";
 
     // Generate downloadFile helper function
-    const helperFunction =
+    const downloadFunction =
       multiline /* ts */ `
       export async function downloadFile<T extends keyof TypeWithFiles>(
         type: T,
@@ -74,8 +74,28 @@ export class FileProcessor {
       }
     ` + "\n";
 
+    // Generate uploadFile helper function
+    const uploadFunction =
+      multiline /* ts */ `
+      export async function uploadFile<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+        data: string | ArrayBuffer | Uint8Array<ArrayBufferLike> | number[],
+        options?: FileUploadOptions,
+      ): Promise<FileUploadResponse> {
+        return await tailordb.file.upload(namespaces[type], type, field, recordId, data, options);
+      }
+    ` + "\n";
+
     return (
-      interfaceDefinition + "\n" + namespacesDefinition + "\n" + helperFunction
+      interfaceDefinition +
+      "\n" +
+      namespacesDefinition +
+      "\n" +
+      downloadFunction +
+      "\n" +
+      uploadFunction
     );
   }
 
@@ -129,7 +149,7 @@ export class FileProcessor {
     ` + "\n";
 
     // Generate downloadFile helper function
-    const helperFunction =
+    const downloadFunction =
       multiline /* ts */ `
       export async function downloadFile<T extends keyof TypeWithFiles>(
         type: T,
@@ -140,8 +160,28 @@ export class FileProcessor {
       }
     ` + "\n";
 
+    // Generate uploadFile helper function
+    const uploadFunction =
+      multiline /* ts */ `
+      export async function uploadFile<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+        data: string | ArrayBuffer | Uint8Array<ArrayBufferLike> | number[],
+        options?: FileUploadOptions,
+      ): Promise<FileUploadResponse> {
+        return await tailordb.file.upload(namespaces[type], type, field, recordId, data, options);
+      }
+    ` + "\n";
+
     return (
-      interfaceDefinition + "\n" + namespacesDefinition + "\n" + helperFunction
+      interfaceDefinition +
+      "\n" +
+      namespacesDefinition +
+      "\n" +
+      downloadFunction +
+      "\n" +
+      uploadFunction
     );
   }
 }
