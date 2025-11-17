@@ -33,6 +33,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Node.js for publishing
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          registry-url: "https://registry.npmjs.org"
+
       - name: Publish
         id: publish
         if: steps.changesets.outputs.hasChangesets == 'false'
