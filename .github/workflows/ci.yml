@@ -1,4 +1,4 @@
-name: Check Lint and Format
+name: Lint / Format / Type Check
 
 on:
   push:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-lint-format:
+  ci:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

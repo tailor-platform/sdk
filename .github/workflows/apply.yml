@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  apply:
     runs-on: ubuntu-latest
     permissions:
       contents: read
