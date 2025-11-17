@@ -522,14 +522,18 @@ function protoIdPConfig(
               ...(idpConfig.metadataURL !== undefined
                 ? { metadataUrl: idpConfig.metadataURL }
                 : { rawMetadata: idpConfig.rawMetadata! }),
-              spCertBase64: {
-                vaultName: idpConfig.spCertBase64.VaultName,
-                secretKey: idpConfig.spCertBase64.SecretKey,
-              },
-              spKeyBase64: {
-                vaultName: idpConfig.spKeyBase64.VaultName,
-                secretKey: idpConfig.spKeyBase64.SecretKey,
-              },
+              ...(idpConfig.spCertBase64 && {
+                spCertBase64: {
+                  vaultName: idpConfig.spCertBase64.VaultName,
+                  secretKey: idpConfig.spCertBase64.SecretKey,
+                },
+              }),
+              ...(idpConfig.spKeyBase64 && {
+                spKeyBase64: {
+                  vaultName: idpConfig.spKeyBase64.VaultName,
+                  secretKey: idpConfig.spKeyBase64.SecretKey,
+                },
+              }),
             },
           },
         },
