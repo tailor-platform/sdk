@@ -3,18 +3,29 @@
 import { resolve } from "node:path";
 import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 
-// Read version from tailor-sdk's package.json
-const tailorSdkPackageJsonPath = resolve(
-  import.meta.dirname,
-  "..",
-  "..",
-  "tailor-sdk",
-  "package.json",
-);
-const tailorSdkPackageJson = JSON.parse(
-  readFileSync(tailorSdkPackageJsonPath, "utf-8"),
-);
-const version = tailorSdkPackageJson.version;
+// Get SDK version or URL from environment variable or package.json
+const sdkVersionOrUrl = process.env.TAILOR_SDK_VERSION;
+
+let version;
+if (sdkVersionOrUrl) {
+  // If TAILOR_SDK_VERSION is set, use it (can be version string or pkg-pr-new URL)
+  version = sdkVersionOrUrl;
+  console.log(`Using SDK version from environment: ${version}`);
+} else {
+  // Otherwise, read version from tailor-sdk's package.json
+  const tailorSdkPackageJsonPath = resolve(
+    import.meta.dirname,
+    "..",
+    "..",
+    "sdk",
+    "package.json",
+  );
+  const tailorSdkPackageJson = JSON.parse(
+    readFileSync(tailorSdkPackageJsonPath, "utf-8"),
+  );
+  version = tailorSdkPackageJson.version;
+  console.log(`Using SDK version from package.json: ${version}`);
+}
 
 // Update version in each template's package.json
 const templatesDir = resolve(import.meta.dirname, "..", "templates");
@@ -34,7 +45,7 @@ for (const template of templates) {
   }
 
   writeFileSync(packageJsonPath, JSON.stringify(content, null, 2) + "\n");
-  console.log(`Updated ${template}/package.json`);
+  console.log(`Updated ${template}/package.json to use SDK: ${version}`);
 }
 
 console.log("Done!");
