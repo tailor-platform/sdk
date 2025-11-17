@@ -5,12 +5,14 @@ on:
   pull_request:
 
 jobs:
-  build:
+  publish-sdk:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
+    outputs:
+      sdk_url: ${{ steps.extract-url.outputs.sdk_url }}
 
     steps:
       - name: Checkout code
@@ -21,7 +23,114 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Build
-        run: pnpm exec turbo run build
+      - name: Build SDK
+        run: pnpm exec turbo run build --filter @tailor-platform/sdk
 
-      - run: pnpm dlx pkg-pr-new publish --pnpm --bin "packages/sdk"
+      - name: Publish SDK to pkg.pr.new
+        id: publish
+        run: pnpm dlx pkg-pr-new publish --pnpm --bin "packages/sdk"
+
+      - name: Extract SDK URL
+        id: extract-url
+        run: |
+          SDK_URL=$(echo "${{ steps.publish.outputs.urls }}" | tr ' ' '\n' | grep -E '@tailor-platform/sdk@')
+          echo "sdk_url=$SDK_URL" >> "$GITHUB_OUTPUT"
+          echo "Published SDK at: $SDK_URL"
+
+  publish-create-sdk:
+    needs: publish-sdk
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      create_sdk_url: ${{ steps.extract-url.outputs.create_sdk_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Build create-sdk with pkg.pr.new SDK
+        run: |
+          export TAILOR_SDK_VERSION="${{ needs.publish-sdk.outputs.sdk_url }}"
+          node packages/create-sdk/scripts/set-sdk-version.js
+          pnpm --filter @tailor-platform/create-sdk build
+
+      - name: Publish create-sdk to pkg.pr.new
+        id: publish
+        run: pnpm dlx pkg-pr-new publish --pnpm ./packages/create-sdk
+
+      - name: Extract create-sdk URL
+        id: extract-url
+        run: |
+          CREATE_SDK_URL=$(echo "${{ steps.publish.outputs.urls }}" | tr ' ' '\n' | grep -E '@tailor-platform/create-sdk@')
+          echo "create_sdk_url=$CREATE_SDK_URL" >> "$GITHUB_OUTPUT"
+          echo "Published create-sdk at: $CREATE_SDK_URL"
+
+  init-smoke:
+    needs: [publish-sdk, publish-create-sdk]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Configure git for create-sdk
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "SDK CI"
+
+      - name: Show CLI version
+        run: pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk --version
+
+      - name: Run init non-interactively
+        run: |
+          # Create into a temp folder outside the workspace
+          cd /tmp
+          pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
+          ls -la test-init-app
+
+      - name: Verify generated files
+        run: |
+          test -f /tmp/test-init-app/tailor.config.ts
+          test -f /tmp/test-init-app/package.json
+          test -f /tmp/test-init-app/tsconfig.json
+          test -f /tmp/test-init-app/src/resolvers/hello.ts
+
+      - name: Verify SDK dependency uses pkg.pr.new URL
+        run: |
+          SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk"]' /tmp/test-init-app/package.json)
+          echo "SDK version in generated project: $SDK_VERSION"
+          EXPECTED_SDK_URL="${{ needs.publish-sdk.outputs.sdk_url }}"
+          echo "Expected SDK URL: $EXPECTED_SDK_URL"
+          if [[ "$SDK_VERSION" != "$EXPECTED_SDK_URL" ]]; then
+            echo "Error: SDK dependency should be '$EXPECTED_SDK_URL' but got '$SDK_VERSION'"
+            exit 1
+          fi
+          echo "✅ SDK dependency correctly uses pkg.pr.new URL"
+
+      - name: Install dependencies with pkg.pr.new SDK
+        run: |
+          cd /tmp/test-init-app
+          pnpm install
+
+      - name: Verify SDK dependency was installed
+        run: |
+          cd /tmp/test-init-app
+          # Verify the SDK is installed
+          test -d node_modules/@tailor-platform/sdk
+          echo "✅ SDK dependency successfully installed from pkg.pr.new"
