@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.8.1
+
+### Patch Changes
+
+- [#11](https://github.com/tailor-platform/sdk/pull/11) [`64436f0`](https://github.com/tailor-platform/sdk/commit/64436f00d936631a239c8229c1c94be4c8230ece) Thanks [@haru0017](https://github.com/haru0017)! - Make `sp_cert_base64` and `sp_key_base64` optional.
+
 ## 0.8.0
 
 ### Minor Changes
