@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.8.0
+
+### Minor Changes
+
+- [#3](https://github.com/tailor-platform/sdk/pull/3) [`b9c3dba`](https://github.com/tailor-platform/sdk/commit/b9c3dbaa4b1df4beb27f5b1da7fe23a83a278637) Thanks [@toiroakr](https://github.com/toiroakr)! - chore!: rename tailor-sdk to sdk
+
 ## 0.7.6
 
 ### Patch Changes
