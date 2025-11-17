@@ -94,20 +94,21 @@ jobs:
 
       - name: Run init non-interactively
         run: |
-          # Create into a temp folder using pkg.pr.new create-sdk
-          pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk tmp-init-app --template hello-world
-          ls -la tmp-init-app
+          # Create into a temp folder outside the workspace
+          cd /tmp
+          pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
+          ls -la test-init-app
 
       - name: Verify generated files
         run: |
-          test -f tmp-init-app/tailor.config.ts
-          test -f tmp-init-app/package.json
-          test -f tmp-init-app/tsconfig.json
-          test -f tmp-init-app/src/resolvers/hello.ts
+          test -f /tmp/test-init-app/tailor.config.ts
+          test -f /tmp/test-init-app/package.json
+          test -f /tmp/test-init-app/tsconfig.json
+          test -f /tmp/test-init-app/src/resolvers/hello.ts
 
       - name: Verify SDK dependency uses pkg.pr.new URL
         run: |
-          SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk"]' tmp-init-app/package.json)
+          SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk"]' /tmp/test-init-app/package.json)
           echo "SDK version in generated project: $SDK_VERSION"
           EXPECTED_SDK_URL="${{ needs.publish-sdk.outputs.sdk_url }}"
           echo "Expected SDK URL: $EXPECTED_SDK_URL"
@@ -119,12 +120,12 @@ jobs:
 
       - name: Install dependencies with pkg.pr.new SDK
         run: |
-          cd tmp-init-app
+          cd /tmp/test-init-app
           pnpm install
 
       - name: Verify SDK dependency was installed
         run: |
-          cd tmp-init-app
+          cd /tmp/test-init-app
           # Verify the SDK is installed
           test -d node_modules/@tailor-platform/sdk
           echo "✅ SDK dependency successfully installed from pkg.pr.new"
