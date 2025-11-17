@@ -39,8 +39,19 @@ jobs:
         run: |
           # Update npm to use ID token authentication
           npm install -g pnpm@latest
-          OUTPUT=$(pnpm publish -r --no-git-checks --access=public 2>&1)
+
+          # Capture output and exit code separately
+          set +e
+          OUTPUT=$(pnpm publish -r --provenance --no-git-checks --access=public 2>&1)
+          EXIT_CODE=$?
+          set -e
+
           echo "${OUTPUT}"
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "::error::pnpm publish failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
 
           if echo "${OUTPUT}" | grep -q "There are no new packages"; then
             echo "published=false" >> "${GITHUB_OUTPUT}"
