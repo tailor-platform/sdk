@@ -95,7 +95,7 @@ jobs:
       - name: Run init non-interactively
         run: |
           # Create into a temp folder using pkg.pr.new create-sdk
-          pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk init tmp-init-app --template hello-world
+          pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk tmp-init-app --template hello-world
           ls -la tmp-init-app
 
       - name: Verify generated files
