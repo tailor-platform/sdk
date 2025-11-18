@@ -30,12 +30,7 @@ export class EnumProcessor {
         const enumTypeName = `${type.name}${this.capitalizeFirst(fieldName)}`;
         enums.push({
           name: enumTypeName,
-          values: parsedField.config.allowedValues
-            .filter((v) => v.value !== undefined)
-            .map((_valueObj) => ({
-              value: _valueObj.value,
-              description: _valueObj.description,
-            })),
+          values: parsedField.config.allowedValues,
           fieldDescription: parsedField.config.description,
         });
       }
@@ -70,12 +65,7 @@ export class EnumProcessor {
         const enumTypeName = `${typeName}${this.capitalizeFirst(fullFieldName)}`;
         enums.push({
           name: enumTypeName,
-          values: nestedFieldConfig.allowedValues
-            .filter((v) => v.value !== undefined)
-            .map((_valueObj) => ({
-              value: _valueObj.value,
-              description: _valueObj.description,
-            })),
+          values: nestedFieldConfig.allowedValues,
           fieldDescription: nestedFieldConfig.description,
         });
       }
