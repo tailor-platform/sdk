@@ -353,10 +353,8 @@ describe("EnumConstantsGenerator", () => {
 
       expect(result).toContain("/**");
       expect(result).toContain(" * User role");
-      expect(result).toContain(" *");
-      expect(result).toContain(" * @property admin");
-      expect(result).toContain(" * @property user");
       expect(result).toContain(" */");
+      expect(result).not.toContain(" * @property");
     });
   });
 });

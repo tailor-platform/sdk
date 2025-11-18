@@ -81,27 +81,29 @@ export class EnumProcessor {
           })
           .join(",\n");
 
+        const hasDescriptions = e.values.some((v) => v.description);
         let jsDoc = "";
-        const hasAnyDescription =
-          e.fieldDescription || e.values.some((v) => v.description);
-
-        if (hasAnyDescription) {
+        if (e.fieldDescription || hasDescriptions) {
           const lines: string[] = [];
 
           if (e.fieldDescription) {
             lines.push(` * ${e.fieldDescription}`);
-            lines.push(" *");
+            if (hasDescriptions) {
+              lines.push(" *");
+            }
           }
 
-          const propertyDocs = e.values.map((v) => {
-            const key = v.value.replace(/[-\s]/g, "_");
-            return v.description
-              ? ` * @property ${key} - ${v.description}`
-              : ` * @property ${key}`;
-          });
-          lines.push(...propertyDocs);
+          if (hasDescriptions) {
+            const propertyDocs = e.values.map((v) => {
+              const key = v.value.replace(/[-\s]/g, "_");
+              return ` * @property ${[key, v.description].filter(Boolean).join(" - ")}`;
+            });
+            lines.push(...propertyDocs);
+          }
 
-          jsDoc = `/**\n${lines.join("\n")}\n */\n`;
+          if (lines.length > 0) {
+            jsDoc = `/**\n${lines.join("\n")}\n */\n`;
+          }
         }
 
         const constDef = `${jsDoc}export const ${e.name} = {\n${members}\n} as const;`;
