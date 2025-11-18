@@ -88,6 +88,42 @@ export class FileProcessor {
       }
     ` + "\n";
 
+    // Generate deleteFile helper function
+    const deleteFunction =
+      multiline /* ts */ `
+      export async function deleteFile<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+      ): Promise<void> {
+        return await tailordb.file.delete(namespaces[type], type, field, recordId);
+      }
+    ` + "\n";
+
+    // Generate getFileMetadata helper function
+    const getMetadataFunction =
+      multiline /* ts */ `
+      export async function getFileMetadata<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+      ): Promise<FileMetadata> {
+        return await tailordb.file.getMetadata(namespaces[type], type, field, recordId);
+      }
+    ` + "\n";
+
+    // Generate openFileDownloadStream helper function
+    const openDownloadStreamFunction =
+      multiline /* ts */ `
+      export async function openFileDownloadStream<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+      ): Promise<FileStreamIterator> {
+        return await tailordb.file.openDownloadStream(namespaces[type], type, field, recordId);
+      }
+    ` + "\n";
+
     return (
       interfaceDefinition +
       "\n" +
@@ -95,7 +131,13 @@ export class FileProcessor {
       "\n" +
       downloadFunction +
       "\n" +
-      uploadFunction
+      uploadFunction +
+      "\n" +
+      deleteFunction +
+      "\n" +
+      getMetadataFunction +
+      "\n" +
+      openDownloadStreamFunction
     );
   }
 
@@ -174,6 +216,42 @@ export class FileProcessor {
       }
     ` + "\n";
 
+    // Generate deleteFile helper function
+    const deleteFunction =
+      multiline /* ts */ `
+      export async function deleteFile<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+      ): Promise<void> {
+        return await tailordb.file.delete(namespaces[type], type, field, recordId);
+      }
+    ` + "\n";
+
+    // Generate getFileMetadata helper function
+    const getMetadataFunction =
+      multiline /* ts */ `
+      export async function getFileMetadata<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+      ): Promise<FileMetadata> {
+        return await tailordb.file.getMetadata(namespaces[type], type, field, recordId);
+      }
+    ` + "\n";
+
+    // Generate openFileDownloadStream helper function
+    const openDownloadStreamFunction =
+      multiline /* ts */ `
+      export async function openFileDownloadStream<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+      ): Promise<FileStreamIterator> {
+        return await tailordb.file.openDownloadStream(namespaces[type], type, field, recordId);
+      }
+    ` + "\n";
+
     return (
       interfaceDefinition +
       "\n" +
@@ -181,7 +259,13 @@ export class FileProcessor {
       "\n" +
       downloadFunction +
       "\n" +
-      uploadFunction
+      uploadFunction +
+      "\n" +
+      deleteFunction +
+      "\n" +
+      getMetadataFunction +
+      "\n" +
+      openDownloadStreamFunction
     );
   }
 }
