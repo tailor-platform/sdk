@@ -2,6 +2,7 @@
  * Invoice status
  *
  * @property draft - Draft invoice
+ * @property sent
  * @property paid - Paid invoice
  * @property cancelled - Cancelled invoice
  */
