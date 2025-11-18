@@ -1,8 +1,5 @@
 import type { EnumConstantMetadata } from "./types";
-import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
-
-type FieldConfig = TailorDBTypeConfig["schema"]["fields"][string];
 
 /**
  * Processor that collects enum fields and generates enum constants.
@@ -35,48 +32,24 @@ export class EnumProcessor {
         });
       }
 
+      // Process nested fields
       if (parsedField.config.type === "nested" && parsedField.config.fields) {
-        const nestedEnums = this.collectNestedEnums(
+        for (const [nestedFieldName, nestedFieldConfig] of Object.entries(
           parsedField.config.fields,
-          type.name,
-          fieldName,
-        );
-        enums.push(...nestedEnums);
-      }
-    }
-
-    return enums;
-  }
-
-  private static collectNestedEnums(
-    fields: Record<string, FieldConfig>,
-    typeName: string,
-    fieldPrefix: string,
-  ): EnumConstantMetadata["enums"] {
-    const enums: EnumConstantMetadata["enums"] = [];
-
-    for (const [nestedFieldName, nestedFieldConfig] of Object.entries(fields)) {
-      const fullFieldName = `${fieldPrefix}${this.capitalizeFirst(nestedFieldName)}`;
-
-      if (
-        nestedFieldConfig.type === "enum" &&
-        nestedFieldConfig.allowedValues
-      ) {
-        const enumTypeName = `${typeName}${this.capitalizeFirst(fullFieldName)}`;
-        enums.push({
-          name: enumTypeName,
-          values: nestedFieldConfig.allowedValues,
-          fieldDescription: nestedFieldConfig.description,
-        });
-      }
-
-      if (nestedFieldConfig.type === "nested" && nestedFieldConfig.fields) {
-        const deeperEnums = this.collectNestedEnums(
-          nestedFieldConfig.fields,
-          typeName,
-          fullFieldName,
-        );
-        enums.push(...deeperEnums);
+        )) {
+          if (
+            nestedFieldConfig.type === "enum" &&
+            nestedFieldConfig.allowedValues
+          ) {
+            const fullFieldName = `${fieldName}${this.capitalizeFirst(nestedFieldName)}`;
+            const enumTypeName = `${type.name}${this.capitalizeFirst(fullFieldName)}`;
+            enums.push({
+              name: enumTypeName,
+              values: nestedFieldConfig.allowedValues,
+              fieldDescription: nestedFieldConfig.description,
+            });
+          }
+        }
       }
     }
 
