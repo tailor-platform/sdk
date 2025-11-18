@@ -300,7 +300,7 @@ describe("EnumConstantsGenerator", () => {
 
       expect(result).toContain("/**");
       expect(result).toContain(" * @property draft - Draft invoice");
-      expect(result).not.toContain("@property sent");
+      expect(result).toContain(" * @property sent");
       expect(result).toContain(" * @property paid - Paid invoice");
       expect(result).toContain(" */");
       expect(result).toContain("export const InvoiceStatus = {");
@@ -330,7 +330,7 @@ describe("EnumConstantsGenerator", () => {
       expect(result).toContain(" * Invoice status");
       expect(result).toContain(" *");
       expect(result).toContain(" * @property draft - Draft invoice");
-      expect(result).not.toContain("@property sent");
+      expect(result).toContain(" * @property sent");
       expect(result).toContain(" * @property paid - Paid invoice");
       expect(result).toContain(" */");
     });
@@ -353,8 +353,10 @@ describe("EnumConstantsGenerator", () => {
 
       expect(result).toContain("/**");
       expect(result).toContain(" * User role");
+      expect(result).toContain(" *");
+      expect(result).toContain(" * @property admin");
+      expect(result).toContain(" * @property user");
       expect(result).toContain(" */");
-      expect(result).not.toContain("@property");
     });
   });
 });
