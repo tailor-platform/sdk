@@ -5,6 +5,7 @@
     ":pinAllExceptPeerDependencies",
     ":disableDependencyDashboard"
   ],
+  "dependencyDashboardApproval": false,
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
   "customManagers": [
