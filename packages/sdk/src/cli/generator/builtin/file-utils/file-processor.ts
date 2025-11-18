@@ -134,20 +134,14 @@ export class FileProcessor {
       }
     ` + "\n";
 
-    return (
-      interfaceDefinition +
-      "\n" +
-      namespacesDefinition +
-      "\n" +
-      downloadFunction +
-      "\n" +
-      uploadFunction +
-      "\n" +
-      deleteFunction +
-      "\n" +
-      getMetadataFunction +
-      "\n" +
-      openDownloadStreamFunction
-    );
+    return [
+      interfaceDefinition,
+      namespacesDefinition,
+      downloadFunction,
+      uploadFunction,
+      deleteFunction,
+      getMetadataFunction,
+      openDownloadStreamFunction,
+    ].join("\n");
   }
 }
