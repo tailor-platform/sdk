@@ -4,7 +4,7 @@ import {
   type GeneratorInput,
 } from "@/cli/generator/types";
 import { EnumProcessor } from "./enum-processor";
-import { type EnumConstantMetadata } from "./types";
+import { type EnumConstantMetadata, type EnumDefinition } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const EnumConstantsGeneratorID = "@tailor-platform/enum-constants";
@@ -47,7 +47,19 @@ export class EnumConstantsGenerator
     namespace: string;
     types: Record<string, EnumConstantMetadata>;
   }): Promise<string> {
-    return await EnumProcessor.generateEnumConstants(args.types);
+    const allEnums: EnumDefinition[] = [];
+    for (const enumConstantMetadata of Object.values(args.types)) {
+      allEnums.push(...enumConstantMetadata.enums);
+    }
+
+    if (allEnums.length === 0) {
+      return "";
+    }
+
+    return JSON.stringify({
+      namespace: args.namespace,
+      enums: allEnums,
+    });
   }
 
   processIdProvider(): undefined {
@@ -69,16 +81,24 @@ export class EnumConstantsGenerator
   }): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
+    const allEnums: EnumDefinition[] = [];
+
     for (const input of args.inputs) {
       for (const nsResult of input.tailordb) {
-        if (nsResult.types) {
-          files.push({
-            path: this.options.distPath,
-            content: nsResult.types,
-          });
+        const parsed = JSON.parse(nsResult.types);
+        if (parsed.namespace && parsed.enums) {
+          allEnums.push(...parsed.enums);
         }
       }
     }
+
+    console.log(JSON.stringify(allEnums, null, 2));
+
+    if (allEnums.length === 0) {
+      return { files };
+    }
+
+    // Generate content
 
     return { files };
   }

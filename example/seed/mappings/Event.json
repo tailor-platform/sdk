@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/Event.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/Event.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

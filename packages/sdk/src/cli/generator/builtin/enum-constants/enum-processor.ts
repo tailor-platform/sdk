@@ -56,69 +56,6 @@ export class EnumProcessor {
     return enums;
   }
 
-  /**
-   * Generate enum constant definitions from collected metadata.
-   */
-  static async generateEnumConstants(
-    types: Record<string, EnumConstantMetadata>,
-  ): Promise<string> {
-    const allEnums = new Map<string, EnumConstantMetadata["enums"][number]>();
-
-    for (const typeMetadata of Object.values(types)) {
-      if (typeMetadata.enums) {
-        for (const enumDef of typeMetadata.enums) {
-          allEnums.set(enumDef.name, enumDef);
-        }
-      }
-    }
-
-    const enumDefs = Array.from(allEnums.values())
-      .map((e) => {
-        const members = e.values
-          .map((v) => {
-            const key = v.value.replace(/[-\s]/g, "_");
-            return `  "${key}": "${v.value}"`;
-          })
-          .join(",\n");
-
-        const hasDescriptions = e.values.some((v) => v.description);
-        let jsDoc = "";
-        if (e.fieldDescription || hasDescriptions) {
-          const lines: string[] = [];
-
-          if (e.fieldDescription) {
-            lines.push(` * ${e.fieldDescription}`);
-            if (hasDescriptions) {
-              lines.push(" *");
-            }
-          }
-
-          if (hasDescriptions) {
-            const propertyDocs = e.values.map((v) => {
-              const key = v.value.replace(/[-\s]/g, "_");
-              return ` * @property ${[key, v.description].filter(Boolean).join(" - ")}`;
-            });
-            lines.push(...propertyDocs);
-          }
-
-          if (lines.length > 0) {
-            jsDoc = `/**\n${lines.join("\n")}\n */\n`;
-          }
-        }
-
-        const constDef = `${jsDoc}export const ${e.name} = {\n${members}\n} as const;`;
-        const typeDef = `export type ${e.name} = (typeof ${e.name})[keyof typeof ${e.name}];`;
-        return `${constDef}\n${typeDef}`;
-      })
-      .join("\n\n");
-
-    if (!enumDefs) {
-      return "";
-    }
-
-    return enumDefs + "\n";
-  }
-
   private static capitalizeFirst(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
