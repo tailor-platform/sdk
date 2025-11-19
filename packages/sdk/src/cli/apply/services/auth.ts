@@ -21,6 +21,7 @@ import {
   type OperatorClient,
 } from "../../client";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
+import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type {
   BuiltinIdP,
@@ -338,6 +339,10 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteAuthServiceRequestSchema>;
 };
 
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
+}
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -361,26 +366,18 @@ async function planServices(
       throw error;
     }
   });
-  const existingServices: Partial<
-    Record<
-      string,
-      {
-        service: (typeof withoutLabel)[number];
-        labels: Partial<Record<string, string>>;
-      }
-    >
-  > = {};
+  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
   await Promise.all(
-    withoutLabel.map(async (service) => {
-      if (!service.namespace?.name) {
+    withoutLabel.map(async (resource) => {
+      if (!resource.namespace?.name) {
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: `trn:v1:workspace:${workspaceId}:auth:${service.namespace.name}`,
+        trn: trn(workspaceId, resource.namespace.name),
       });
-      existingServices[service.namespace.name] = {
-        service,
-        labels: metadata?.labels ?? {},
+      existingServices[resource.namespace.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
       };
     }),
   );
@@ -389,22 +386,14 @@ async function planServices(
     const existing = existingServices[config.name];
     if (existing) {
       // Check if managed by another application
-      if (
-        existing.labels["sdk-name"] &&
-        existing.labels["sdk-name"] !== appName
-      ) {
+      if (existing.label && existing.label !== appName) {
         throw new Error(
-          `Auth service "${config.name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+          `Auth service "${config.name}" already exists and is managed by another application "${existing.label}"`,
         );
       }
       changeSet.updates.push({
         name: config.name,
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:auth:${config.name}`,
-          labels: {
-            "sdk-name": appName,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, config.name), appName),
       });
       delete existingServices[config.name];
     } else {
@@ -414,18 +403,13 @@ async function planServices(
           workspaceId,
           namespaceName: config.name,
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:auth:${config.name}`,
-          labels: {
-            "sdk-name": appName,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, config.name), appName),
       });
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     // Only delete services managed by this application
-    if (existingServices[namespaceName]?.labels["sdk-name"] === appName) {
+    if (existingServices[namespaceName]?.label === appName) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {

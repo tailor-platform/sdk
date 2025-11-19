@@ -8,6 +8,7 @@ import {
 import { type Application } from "@/cli/application";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -54,6 +55,10 @@ type DeleteStaticWebsite = {
   request: MessageInitShape<typeof DeleteStaticWebsiteRequestSchema>;
 };
 
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
+}
+
 export async function planStaticWebsite(
   client: OperatorClient,
   workspaceId: string,
@@ -82,23 +87,15 @@ export async function planStaticWebsite(
       throw error;
     }
   });
-  const existingWebsites: Partial<
-    Record<
-      string,
-      {
-        website: (typeof withoutLabel)[number];
-        labels: Partial<Record<string, string>>;
-      }
-    >
-  > = {};
+  const existingWebsites: WithLabel<(typeof withoutLabel)[number]> = {};
   await Promise.all(
-    withoutLabel.map(async (website) => {
+    withoutLabel.map(async (resource) => {
       const { metadata } = await client.getMetadata({
-        trn: `trn:v1:workspace:${workspaceId}:staticwebsite:${website.name}`,
+        trn: trn(workspaceId, resource.name),
       });
-      existingWebsites[website.name] = {
-        website,
-        labels: metadata?.labels ?? {},
+      existingWebsites[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
       };
     }),
   );
@@ -110,12 +107,9 @@ export async function planStaticWebsite(
 
     if (existing) {
       // Check if managed by another application
-      if (
-        existing.labels["sdk-name"] &&
-        existing.labels["sdk-name"] !== application.name
-      ) {
+      if (existing.label && existing.label !== application.name) {
         throw new Error(
-          `StaticWebsite "${name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+          `StaticWebsite "${name}" already exists and is managed by another application "${existing.label}"`,
         );
       }
       // For backward compatibility and idempotency, update even when labels don't exist
@@ -129,12 +123,7 @@ export async function planStaticWebsite(
             allowedIpAddresses: config.allowedIpAddresses || [],
           },
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`,
-          labels: {
-            "sdk-name": application.name,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, name), application.name),
       });
       delete existingWebsites[name];
     } else {
@@ -148,18 +137,13 @@ export async function planStaticWebsite(
             allowedIpAddresses: config.allowedIpAddresses || [],
           },
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`,
-          labels: {
-            "sdk-name": application.name,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, name), application.name),
       });
     }
   }
   Object.entries(existingWebsites).forEach(([name]) => {
     // Only delete websites managed by this application
-    if (existingWebsites[name]?.labels["sdk-name"] === application.name) {
+    if (existingWebsites[name]?.label === application.name) {
       changeSet.deletes.push({
         name,
         request: {

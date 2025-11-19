@@ -19,6 +19,7 @@ import { type Application } from "@/cli/application";
 import { getDistDir } from "@/configure/config";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor, Trigger } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -68,6 +69,10 @@ type DeleteExecutor = {
   request: MessageInitShape<typeof DeleteExecutorExecutorRequestSchema>;
 };
 
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
+}
+
 export async function planExecutor(
   client: OperatorClient,
   workspaceId: string,
@@ -90,23 +95,15 @@ export async function planExecutor(
       throw error;
     }
   });
-  const existingExecutors: Partial<
-    Record<
-      string,
-      {
-        executor: (typeof withoutLabel)[number];
-        labels: Partial<Record<string, string>>;
-      }
-    >
-  > = {};
+  const existingExecutors: WithLabel<(typeof withoutLabel)[number]> = {};
   await Promise.all(
-    withoutLabel.map(async (executor) => {
+    withoutLabel.map(async (resource) => {
       const { metadata } = await client.getMetadata({
-        trn: `trn:v1:workspace:${workspaceId}:executor:${executor.name}`,
+        trn: trn(workspaceId, resource.name),
       });
-      existingExecutors[executor.name] = {
-        executor,
-        labels: metadata?.labels ?? {},
+      existingExecutors[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
       };
     }),
   );
@@ -116,12 +113,9 @@ export async function planExecutor(
     const existing = existingExecutors[executor.name];
     if (existing) {
       // Check if managed by another application
-      if (
-        existing.labels["sdk-name"] &&
-        existing.labels["sdk-name"] !== application.name
-      ) {
+      if (existing.label && existing.label !== application.name) {
         throw new Error(
-          `Executor "${executor.name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+          `Executor "${executor.name}" already exists and is managed by another application "${existing.label}"`,
         );
       }
       // For backward compatibility and idempotency, update even when labels don't exist
@@ -131,12 +125,10 @@ export async function planExecutor(
           workspaceId,
           executor: protoExecutor(executor),
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:executor:${executor.name}`,
-          labels: {
-            "sdk-name": application.name,
-          },
-        },
+        metaRequest: metaRequest(
+          trn(workspaceId, executor.name),
+          application.name,
+        ),
       });
       delete existingExecutors[executor.name];
     } else {
@@ -146,18 +138,16 @@ export async function planExecutor(
           workspaceId,
           executor: protoExecutor(executor),
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:executor:${executor.name}`,
-          labels: {
-            "sdk-name": application.name,
-          },
-        },
+        metaRequest: metaRequest(
+          trn(workspaceId, executor.name),
+          application.name,
+        ),
       });
     }
   }
   Object.entries(existingExecutors).forEach(([name]) => {
     // Only delete executors managed by this application
-    if (existingExecutors[name]?.labels["sdk-name"] === application.name) {
+    if (existingExecutors[name]?.label === application.name) {
       changeSet.deletes.push({
         name,
         request: {

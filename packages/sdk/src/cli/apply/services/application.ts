@@ -15,6 +15,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
+import { metaRequest } from "./label";
 import { ChangeSet, type HasName } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -61,6 +62,10 @@ type UpdateApplication = {
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
+
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:application:${name}`;
+}
 
 export async function planApplication(
   client: OperatorClient,
@@ -110,12 +115,10 @@ export async function planApplication(
         allowedIpAddresses: application.config.allowedIPAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
-      metaRequest: {
-        trn: `trn:v1:workspace:${workspaceId}:application:${application.name}`,
-        labels: {
-          "sdk-name": application.name,
-        },
-      },
+      metaRequest: metaRequest(
+        trn(workspaceId, application.name),
+        application.name,
+      ),
     });
   } else {
     changeSet.creates.push({
@@ -132,12 +135,10 @@ export async function planApplication(
         allowedIpAddresses: application.config.allowedIPAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
-      metaRequest: {
-        trn: `trn:v1:workspace:${workspaceId}:application:${application.name}`,
-        labels: {
-          "sdk-name": application.name,
-        },
-      },
+      metaRequest: metaRequest(
+        trn(workspaceId, application.name),
+        application.name,
+      ),
     });
   }
 

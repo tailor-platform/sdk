@@ -45,6 +45,12 @@ import {
 } from "@/configure/services/tailordb/permission";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import {
+  metaRequest,
+  sdkNameLabelKey,
+  trnPrefix,
+  type WithLabel,
+} from "./label";
 import { ChangeSet } from ".";
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 import type { Executor } from "@/parser/service/executor";
@@ -173,6 +179,10 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteTailorDBServiceRequestSchema>;
 };
 
+function trn(workspaceId: string, name: string) {
+  return `${trnPrefix(workspaceId)}:tailordb:${name}`;
+}
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -197,26 +207,18 @@ async function planServices(
       throw error;
     }
   });
-  const existingServices: Partial<
-    Record<
-      string,
-      {
-        service: (typeof withoutLabel)[number];
-        labels: Partial<Record<string, string>>;
-      }
-    >
-  > = {};
+  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
   await Promise.all(
-    withoutLabel.map(async (service) => {
-      if (!service.namespace?.name) {
+    withoutLabel.map(async (resource) => {
+      if (!resource.namespace?.name) {
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: `trn:v1:workspace:${workspaceId}:tailordb:${service.namespace.name}`,
+        trn: trn(workspaceId, resource.namespace.name),
       });
-      existingServices[service.namespace.name] = {
-        service,
-        labels: metadata?.labels ?? {},
+      existingServices[resource.namespace.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
       };
     }),
   );
@@ -225,23 +227,15 @@ async function planServices(
     const existing = existingServices[tailordb.namespace];
     if (existing) {
       // Check if managed by another application
-      if (
-        existing.labels["sdk-name"] &&
-        existing.labels["sdk-name"] !== appName
-      ) {
+      if (existing.label && existing.label !== appName) {
         throw new Error(
-          `TailorDB service "${tailordb.namespace}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+          `TailorDB service "${tailordb.namespace}" already exists and is managed by another application "${existing.label}"`,
         );
       }
       // For backward compatibility and idempotency, update even when labels don't exist
       changeSet.updates.push({
         name: tailordb.namespace,
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:tailordb:${tailordb.namespace}`,
-          labels: {
-            "sdk-name": appName,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, tailordb.namespace), appName),
       });
       delete existingServices[tailordb.namespace];
     } else {
@@ -253,18 +247,13 @@ async function planServices(
           // Set UTC to match tailorctl/terraform
           defaultTimezone: "UTC",
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:tailordb:${tailordb.namespace}`,
-          labels: {
-            "sdk-name": appName,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, tailordb.namespace), appName),
       });
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     // Only delete services managed by this application
-    if (existingServices[namespaceName]?.labels["sdk-name"] === appName) {
+    if (existingServices[namespaceName]?.label === appName) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {

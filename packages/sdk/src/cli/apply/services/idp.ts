@@ -11,6 +11,7 @@ import { type Application } from "@/cli/application";
 import { type IdP } from "@/parser/service/idp";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -167,6 +168,10 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
 };
 
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
+}
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -190,26 +195,18 @@ async function planServices(
       throw error;
     }
   });
-  const existingServices: Partial<
-    Record<
-      string,
-      {
-        service: (typeof withoutLabel)[number];
-        labels: Partial<Record<string, string>>;
-      }
-    >
-  > = {};
+  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
   await Promise.all(
-    withoutLabel.map(async (service) => {
-      if (!service.namespace?.name) {
+    withoutLabel.map(async (resource) => {
+      if (!resource.namespace?.name) {
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: `trn:v1:workspace:${workspaceId}:idp:${service.namespace?.name}`,
+        trn: trn(workspaceId, resource.namespace.name),
       });
-      existingServices[service.namespace.name] = {
-        service,
-        labels: metadata?.labels ?? {},
+      existingServices[resource.namespace.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
       };
     }),
   );
@@ -232,12 +229,9 @@ async function planServices(
 
     if (existing) {
       // Check if managed by another application
-      if (
-        existing.labels["sdk-name"] &&
-        existing.labels["sdk-name"] !== appName
-      ) {
+      if (existing.label && existing.label !== appName) {
         throw new Error(
-          `IdP service "${idp.name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+          `IdP service "${idp.name}" already exists and is managed by another application "${existing.label}"`,
         );
       }
       // For backward compatibility and idempotency, update even when labels don't exist
@@ -248,12 +242,7 @@ async function planServices(
           namespaceName,
           authorization,
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:idp:${namespaceName}`,
-          labels: {
-            "sdk-name": appName,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, namespaceName), appName),
       });
       delete existingServices[namespaceName];
     } else {
@@ -264,18 +253,13 @@ async function planServices(
           namespaceName,
           authorization,
         },
-        metaRequest: {
-          trn: `trn:v1:workspace:${workspaceId}:idp:${namespaceName}`,
-          labels: {
-            "sdk-name": appName,
-          },
-        },
+        metaRequest: metaRequest(trn(workspaceId, namespaceName), appName),
       });
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     // Only delete services managed by this application
-    if (existingServices[namespaceName]?.labels["sdk-name"] === appName) {
+    if (existingServices[namespaceName]?.label === appName) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
