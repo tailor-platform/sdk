@@ -21,7 +21,7 @@ import {
   type OperatorClient,
 } from "../../client";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type {
   BuiltinIdP,
@@ -384,6 +384,10 @@ async function planServices(
 
   for (const { config } of auths) {
     const existing = existingServices[config.name];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, config.name),
+      appName,
+    );
     if (existing) {
       // Check if managed by another application
       if (existing.label && existing.label !== appName) {
@@ -393,7 +397,7 @@ async function planServices(
       }
       changeSet.updates.push({
         name: config.name,
-        metaRequest: metaRequest(trn(workspaceId, config.name), appName),
+        metaRequest,
       });
       delete existingServices[config.name];
     } else {
@@ -403,7 +407,7 @@ async function planServices(
           workspaceId,
           namespaceName: config.name,
         },
-        metaRequest: metaRequest(trn(workspaceId, config.name), appName),
+        metaRequest,
       });
     }
   }

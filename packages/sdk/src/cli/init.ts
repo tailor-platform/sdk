@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { readPackageJSON } from "pkg-types";
 import { commonArgs, withCommonArgs } from "./args";
+import { readPackageJson } from "./package-json";
 
 const detectPackageManager = () => {
   const availablePMs = ["npm", "yarn", "pnpm"];
@@ -33,7 +33,7 @@ export const initCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const packageJson = await readPackageJSON(import.meta.url);
+    const packageJson = await readPackageJson();
     const version =
       packageJson.version && packageJson.version !== "0.0.0"
         ? packageJson.version

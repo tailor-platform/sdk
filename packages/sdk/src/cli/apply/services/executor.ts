@@ -19,7 +19,7 @@ import { type Application } from "@/cli/application";
 import { getDistDir } from "@/configure/config";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor, Trigger } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -111,6 +111,10 @@ export async function planExecutor(
   const executors = (await application.executorService?.loadExecutors()) ?? {};
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, executor.name),
+      application.name,
+    );
     if (existing) {
       // Check if managed by another application
       if (existing.label && existing.label !== application.name) {
@@ -125,10 +129,7 @@ export async function planExecutor(
           workspaceId,
           executor: protoExecutor(executor),
         },
-        metaRequest: metaRequest(
-          trn(workspaceId, executor.name),
-          application.name,
-        ),
+        metaRequest,
       });
       delete existingExecutors[executor.name];
     } else {
@@ -138,10 +139,7 @@ export async function planExecutor(
           workspaceId,
           executor: protoExecutor(executor),
         },
-        metaRequest: metaRequest(
-          trn(workspaceId, executor.name),
-          application.name,
-        ),
+        metaRequest,
       });
     }
   }

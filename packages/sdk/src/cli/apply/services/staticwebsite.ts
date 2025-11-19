@@ -8,7 +8,7 @@ import {
 import { type Application } from "@/cli/application";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -104,6 +104,10 @@ export async function planStaticWebsite(
     const config = websiteService;
     const name = websiteService.name;
     const existing = existingWebsites[name];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, name),
+      application.name,
+    );
 
     if (existing) {
       // Check if managed by another application
@@ -123,7 +127,7 @@ export async function planStaticWebsite(
             allowedIpAddresses: config.allowedIpAddresses || [],
           },
         },
-        metaRequest: metaRequest(trn(workspaceId, name), application.name),
+        metaRequest,
       });
       delete existingWebsites[name];
     } else {
@@ -137,7 +141,7 @@ export async function planStaticWebsite(
             allowedIpAddresses: config.allowedIpAddresses || [],
           },
         },
-        metaRequest: metaRequest(trn(workspaceId, name), application.name),
+        metaRequest,
       });
     }
   }

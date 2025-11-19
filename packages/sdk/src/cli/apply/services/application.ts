@@ -15,7 +15,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
-import { metaRequest } from "./label";
+import { buildMetaRequest } from "./label";
 import { ChangeSet, type HasName } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -99,6 +99,10 @@ export async function planApplication(
       authIdpConfigName = idProvider.name;
     }
   }
+  const metaRequest = await buildMetaRequest(
+    trn(workspaceId, application.name),
+    application.name,
+  );
 
   if (existingApplications.some((app) => app.name === application.name)) {
     changeSet.updates.push({
@@ -115,10 +119,7 @@ export async function planApplication(
         allowedIpAddresses: application.config.allowedIPAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
-      metaRequest: metaRequest(
-        trn(workspaceId, application.name),
-        application.name,
-      ),
+      metaRequest,
     });
   } else {
     changeSet.creates.push({
@@ -135,10 +136,7 @@ export async function planApplication(
         allowedIpAddresses: application.config.allowedIPAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
-      metaRequest: metaRequest(
-        trn(workspaceId, application.name),
-        application.name,
-      ),
+      metaRequest,
     });
   }
 

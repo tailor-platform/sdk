@@ -46,7 +46,7 @@ import {
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import {
-  metaRequest,
+  buildMetaRequest,
   sdkNameLabelKey,
   trnPrefix,
   type WithLabel,
@@ -225,6 +225,10 @@ async function planServices(
 
   for (const tailordb of tailordbs) {
     const existing = existingServices[tailordb.namespace];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, tailordb.namespace),
+      appName,
+    );
     if (existing) {
       // Check if managed by another application
       if (existing.label && existing.label !== appName) {
@@ -235,7 +239,7 @@ async function planServices(
       // For backward compatibility and idempotency, update even when labels don't exist
       changeSet.updates.push({
         name: tailordb.namespace,
-        metaRequest: metaRequest(trn(workspaceId, tailordb.namespace), appName),
+        metaRequest,
       });
       delete existingServices[tailordb.namespace];
     } else {
@@ -247,7 +251,7 @@ async function planServices(
           // Set UTC to match tailorctl/terraform
           defaultTimezone: "UTC",
         },
-        metaRequest: metaRequest(trn(workspaceId, tailordb.namespace), appName),
+        metaRequest,
       });
     }
   }

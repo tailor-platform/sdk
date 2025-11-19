@@ -11,7 +11,7 @@ import { type Application } from "@/cli/application";
 import { type IdP } from "@/parser/service/idp";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -214,6 +214,10 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, namespaceName),
+      appName,
+    );
     let authorization;
     switch (idp.authorization) {
       case "insecure":
@@ -242,7 +246,7 @@ async function planServices(
           namespaceName,
           authorization,
         },
-        metaRequest: metaRequest(trn(workspaceId, namespaceName), appName),
+        metaRequest,
       });
       delete existingServices[namespaceName];
     } else {
@@ -253,7 +257,7 @@ async function planServices(
           namespaceName,
           authorization,
         },
-        metaRequest: metaRequest(trn(workspaceId, namespaceName), appName),
+        metaRequest,
       });
     }
   }

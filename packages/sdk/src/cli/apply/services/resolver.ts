@@ -25,7 +25,7 @@ import { tailorUserMap } from "@/configure/types";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { metaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -189,6 +189,10 @@ async function planServices(
 
   for (const pipeline of pipelines) {
     const existing = existingServices[pipeline.namespace];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, pipeline.namespace),
+      appName,
+    );
     if (existing) {
       // Check if managed by another application
       if (existing.label && existing.label !== appName) {
@@ -203,7 +207,7 @@ async function planServices(
           workspaceId,
           namespaceName: pipeline.namespace,
         },
-        metaRequest: metaRequest(trn(workspaceId, pipeline.namespace), appName),
+        metaRequest,
       });
       delete existingServices[pipeline.namespace];
     } else {
@@ -213,7 +217,7 @@ async function planServices(
           workspaceId,
           namespaceName: pipeline.namespace,
         },
-        metaRequest: metaRequest(trn(workspaceId, pipeline.namespace), appName),
+        metaRequest,
       });
     }
   }
