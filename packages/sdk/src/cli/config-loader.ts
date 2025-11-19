@@ -7,6 +7,14 @@ import {
   type Generator,
 } from "@/parser/generator-config";
 import {
+  EnumConstantsGenerator,
+  EnumConstantsGeneratorID,
+} from "./generator/builtin/enum-constants";
+import {
+  FileUtilsGenerator,
+  FileUtilsGeneratorID,
+} from "./generator/builtin/file-utils";
+import {
   KyselyGenerator,
   KyselyGeneratorID,
 } from "./generator/builtin/kysely-type";
@@ -24,6 +32,14 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
   [
     SeedGeneratorID,
     (options: { distPath: string }) => createSeedGenerator(options),
+  ],
+  [
+    EnumConstantsGeneratorID,
+    (options: { distPath: string }) => new EnumConstantsGenerator(options),
+  ],
+  [
+    FileUtilsGeneratorID,
+    (options: { distPath: string }) => new FileUtilsGenerator(options),
   ],
 ]);
 

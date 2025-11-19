@@ -1,5 +1,15 @@
 # @tailor-platform/create-sdk
 
+## 0.8.4
+
+### Patch Changes
+
+- [#19](https://github.com/tailor-platform/sdk/pull/19) [`58e3486`](https://github.com/tailor-platform/sdk/commit/58e34866f5af9027c05d80f9164ffba8b1d1ff55) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: remove unused Serial type and track utility type usage in Kysely generator
+
+## 0.8.3
+
+## 0.8.2
+
 ## 0.8.1
 
 ## 0.8.0

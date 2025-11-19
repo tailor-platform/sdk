@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 0.8.4
+
+### Patch Changes
+
+- [#19](https://github.com/tailor-platform/sdk/pull/19) [`58e3486`](https://github.com/tailor-platform/sdk/commit/58e34866f5af9027c05d80f9164ffba8b1d1ff55) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: remove unused Serial type and track utility type usage in Kysely generator
+
+## 0.8.3
+
+### Patch Changes
+
+- [#17](https://github.com/tailor-platform/sdk/pull/17) [`4705799`](https://github.com/tailor-platform/sdk/commit/47057990e183fb9eea132d8802d3d3ec65f07487) Thanks [@remiposo](https://github.com/remiposo)! - Fixed an issue where resolvers returning scalar values didn't work properly
+
+## 0.8.2
+
+### Patch Changes
+
+- [#12](https://github.com/tailor-platform/sdk/pull/12) [`d861a04`](https://github.com/tailor-platform/sdk/commit/d861a0448081566cd7e9ae1ba7eb837f1634c6a9) Thanks [@riku99](https://github.com/riku99)! - Add enum-constants and file-utils built-in generators for type-safe code generation
+
 ## 0.8.1
 
 ### Patch Changes

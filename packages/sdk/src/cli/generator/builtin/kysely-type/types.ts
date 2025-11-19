@@ -5,4 +5,8 @@
 export interface KyselyTypeMetadata {
   name: string;
   typeDef: string;
+  usedUtilityTypes: {
+    Timestamp: boolean;
+    Serial: boolean;
+  };
 }

@@ -208,5 +208,52 @@ describe("Kysely TypeProcessor", () => {
 
       expect(result.typeDef).toContain("id: Generated<string>;");
     });
+
+    it("should correctly track used utility types - basic types only", async () => {
+      const type = db.type("User", {
+        name: db.string(),
+        age: db.int(),
+      });
+
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
+
+      expect(result.usedUtilityTypes.Timestamp).toBe(false);
+      expect(result.usedUtilityTypes.Serial).toBe(false);
+    });
+
+    it("should correctly track used utility types - Timestamp", async () => {
+      const type = db.type("User", {
+        name: db.string(),
+        ...db.fields.timestamps(),
+      });
+
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
+
+      expect(result.usedUtilityTypes.Timestamp).toBe(true);
+      expect(result.usedUtilityTypes.Serial).toBe(false);
+    });
+
+    it("should correctly track used utility types - Serial", async () => {
+      const type = db.type("Invoice", {
+        invoiceNumber: db.string().serial({ start: 1000 }),
+      });
+
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
+
+      expect(result.usedUtilityTypes.Timestamp).toBe(false);
+      expect(result.usedUtilityTypes.Serial).toBe(true);
+    });
+
+    it("should correctly track used utility types - both", async () => {
+      const type = db.type("Order", {
+        orderNumber: db.string().serial({ start: 1000 }),
+        ...db.fields.timestamps(),
+      });
+
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
+
+      expect(result.usedUtilityTypes.Timestamp).toBe(true);
+      expect(result.usedUtilityTypes.Serial).toBe(true);
+    });
   });
 });
