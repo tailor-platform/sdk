@@ -2,7 +2,6 @@ import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateApplicationRequestSchema,
-  type DeleteApplicationRequestSchema,
   type UpdateApplicationRequestSchema,
 } from "@tailor-proto/tailor/v1/application_pb";
 import {
@@ -16,7 +15,8 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
-import { ChangeSet } from ".";
+import { ChangeSet, type HasName } from ".";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyApplication(
   client: OperatorClient,
@@ -33,7 +33,8 @@ export async function applyApplication(
           create.request.cors,
           "CORS",
         );
-        return client.createApplication(create.request);
+        await client.createApplication(create.request);
+        await client.setMetadata(create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
@@ -42,31 +43,23 @@ export async function applyApplication(
           update.request.cors,
           "CORS",
         );
-        return client.updateApplication(update.request);
+        await client.updateApplication(update.request);
+        await client.setMetadata(update.metaRequest);
       }),
     ]);
-  } else if (phase === "delete") {
-    // Delete in reverse order of dependencies
-    // Applications
-    await Promise.all(
-      changeSet.deletes.map((del) => client.deleteApplication(del.request)),
-    );
   }
 }
 
 type CreateApplication = {
   name: string;
   request: MessageInitShape<typeof CreateApplicationRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateApplication = {
   name: string;
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
-};
-
-type DeleteApplication = {
-  name: string;
-  request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 export async function planApplication(
@@ -74,11 +67,8 @@ export async function planApplication(
   workspaceId: string,
   application: Readonly<Application>,
 ) {
-  const changeSet: ChangeSet<
-    CreateApplication,
-    UpdateApplication,
-    DeleteApplication
-  > = new ChangeSet("Applications");
+  const changeSet: ChangeSet<CreateApplication, UpdateApplication, HasName> =
+    new ChangeSet("Applications");
 
   const existingApplications = await fetchAll(async (pageToken) => {
     try {
@@ -94,62 +84,62 @@ export async function planApplication(
       throw error;
     }
   });
-  const existingNameSet = new Set<string>();
-  existingApplications.forEach((application) => {
-    existingNameSet.add(application.name);
-  });
-  for (const app of application.applications) {
-    let authNamespace: string | undefined;
-    let authIdpConfigName: string | undefined;
-    if (app.authService && app.authService.config) {
-      authNamespace = app.authService.config.name;
+  let authNamespace: string | undefined;
+  let authIdpConfigName: string | undefined;
+  if (application.authService && application.authService.config) {
+    authNamespace = application.authService.config.name;
 
-      const idProvider = app.authService.config.idProvider;
-      if (idProvider) {
-        authIdpConfigName = idProvider.name;
-      }
-    }
-
-    if (existingNameSet.has(app.name)) {
-      changeSet.updates.push({
-        name: app.name,
-        request: {
-          workspaceId,
-          applicationName: app.name,
-          authNamespace,
-          authIdpConfigName,
-          cors: app.config.cors,
-          subgraphs: app.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
-          allowedIpAddresses: app.config.allowedIPAddresses,
-          disableIntrospection: app.config.disableIntrospection,
-        },
-      });
-      existingNameSet.delete(app.name);
-    } else {
-      changeSet.creates.push({
-        name: app.name,
-        request: {
-          workspaceId,
-          applicationName: app.name,
-          authNamespace,
-          authIdpConfigName,
-          cors: app.config.cors,
-          subgraphs: app.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
-          allowedIpAddresses: app.config.allowedIPAddresses,
-          disableIntrospection: app.config.disableIntrospection,
-        },
-      });
+    const idProvider = application.authService.config.idProvider;
+    if (idProvider) {
+      authIdpConfigName = idProvider.name;
     }
   }
-  existingNameSet.forEach((name) => {
-    changeSet.deletes.push({
-      name,
+
+  if (existingApplications.some((app) => app.name === application.name)) {
+    changeSet.updates.push({
+      name: application.name,
       request: {
         workspaceId,
-        applicationName: name,
+        applicationName: application.name,
+        authNamespace,
+        authIdpConfigName,
+        cors: application.config.cors,
+        subgraphs: application.subgraphs.map((subgraph) =>
+          protoSubgraph(subgraph),
+        ),
+        allowedIpAddresses: application.config.allowedIPAddresses,
+        disableIntrospection: application.config.disableIntrospection,
+      },
+      metaRequest: {
+        trn: `trn:v1:workspace:${workspaceId}:application:${application.name}`,
+        labels: {
+          "sdk-name": application.name,
+        },
       },
     });
-  });
+  } else {
+    changeSet.creates.push({
+      name: application.name,
+      request: {
+        workspaceId,
+        applicationName: application.name,
+        authNamespace,
+        authIdpConfigName,
+        cors: application.config.cors,
+        subgraphs: application.subgraphs.map((subgraph) =>
+          protoSubgraph(subgraph),
+        ),
+        allowedIpAddresses: application.config.allowedIPAddresses,
+        disableIntrospection: application.config.disableIntrospection,
+      },
+      metaRequest: {
+        trn: `trn:v1:workspace:${workspaceId}:application:${application.name}`,
+        labels: {
+          "sdk-name": application.name,
+        },
+      },
+    });
+  }
 
   changeSet.print();
   return changeSet;

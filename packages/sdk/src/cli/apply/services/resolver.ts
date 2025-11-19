@@ -27,6 +27,7 @@ import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet } from ".";
 import type { Executor } from "@/parser/service/executor";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // Scalar type mapping for field type conversion
 const SCALAR_TYPE_MAP = {
@@ -51,12 +52,14 @@ export async function applyPipeline(
   if (phase === "create-update") {
     // Services
     await Promise.all([
-      ...changeSet.service.creates.map((create) =>
-        client.createPipelineService(create.request),
-      ),
-      ...changeSet.service.updates.map((update) =>
-        client.updatePipelineService(update.request),
-      ),
+      ...changeSet.service.creates.map(async (create) => {
+        await client.createPipelineService(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.service.updates.map(async (update) => {
+        await client.updatePipelineService(update.request);
+        await client.setMetadata(update.metaRequest);
+      }),
     ]);
 
     // Resolvers
@@ -91,17 +94,20 @@ export async function planPipeline(
   application: Readonly<Application>,
 ) {
   const pipelines: Readonly<ResolverService>[] = [];
-  for (const app of application.applications) {
-    for (const pipeline of app.resolverServices) {
-      await pipeline.loadResolvers();
-      pipelines.push(pipeline);
-    }
+  for (const pipeline of application.resolverServices) {
+    await pipeline.loadResolvers();
+    pipelines.push(pipeline);
   }
   const executors = Object.values(
     (await application.executorService?.loadExecutors()) ?? {},
   );
 
-  const serviceChangeSet = await planServices(client, workspaceId, pipelines);
+  const serviceChangeSet = await planServices(
+    client,
+    workspaceId,
+    application.name,
+    pipelines,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const resolverChangeSet = await planResolvers(
     client,
@@ -122,11 +128,13 @@ export async function planPipeline(
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreatePipelineServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateService = {
   name: string;
   request: MessageInitShape<typeof UpdatePipelineServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteService = {
@@ -137,12 +145,13 @@ type DeleteService = {
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
+  appName: string,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Pipeline services");
 
-  const existingServices = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { pipelineServices, nextPageToken } =
         await client.listPipelineServices({
@@ -157,23 +166,57 @@ async function planServices(
       throw error;
     }
   });
-  const existingNameSet = new Set<string>();
-  existingServices.forEach((service) => {
-    const name = service.namespace?.name;
-    if (name) {
-      existingNameSet.add(name);
-    }
-  });
+  const existingServices: Partial<
+    Record<
+      string,
+      {
+        service: (typeof withoutLabel)[number];
+        labels: Partial<Record<string, string>>;
+      }
+    >
+  > = {};
+  await Promise.all(
+    withoutLabel.map(async (service) => {
+      if (!service.namespace?.name) {
+        return;
+      }
+      const { metadata } = await client.getMetadata({
+        trn: `trn:v1:workspace:${workspaceId}:pipeline:${service.namespace.name}`,
+      });
+      existingServices[service.namespace.name] = {
+        service,
+        labels: metadata?.labels ?? {},
+      };
+    }),
+  );
+
   for (const pipeline of pipelines) {
-    if (existingNameSet.has(pipeline.namespace)) {
+    const existing = existingServices[pipeline.namespace];
+    if (existing) {
+      // Check if managed by another application
+      if (
+        existing.labels["sdk-name"] &&
+        existing.labels["sdk-name"] !== appName
+      ) {
+        throw new Error(
+          `Pipeline service "${pipeline.namespace}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+        );
+      }
+      // For backward compatibility and idempotency, update even when labels don't exist
       changeSet.updates.push({
         name: pipeline.namespace,
         request: {
           workspaceId,
           namespaceName: pipeline.namespace,
         },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:pipeline:${pipeline.namespace}`,
+          labels: {
+            "sdk-name": appName,
+          },
+        },
       });
-      existingNameSet.delete(pipeline.namespace);
+      delete existingServices[pipeline.namespace];
     } else {
       changeSet.creates.push({
         name: pipeline.namespace,
@@ -181,17 +224,26 @@ async function planServices(
           workspaceId,
           namespaceName: pipeline.namespace,
         },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:pipeline:${pipeline.namespace}`,
+          labels: {
+            "sdk-name": appName,
+          },
+        },
       });
     }
   }
-  existingNameSet.forEach((namespaceName) => {
-    changeSet.deletes.push({
-      name: namespaceName,
-      request: {
-        workspaceId,
-        namespaceName,
-      },
-    });
+  Object.entries(existingServices).forEach(([namespaceName]) => {
+    // Only delete services managed by this application
+    if (existingServices[namespaceName]?.labels["sdk-name"] === appName) {
+      changeSet.deletes.push({
+        name: namespaceName,
+        request: {
+          workspaceId,
+          namespaceName,
+        },
+      });
+    }
   });
   return changeSet;
 }

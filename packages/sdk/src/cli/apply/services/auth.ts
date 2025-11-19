@@ -21,7 +21,7 @@ import {
   type OperatorClient,
 } from "../../client";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { ChangeSet, type HasName } from ".";
+import { ChangeSet } from ".";
 import type {
   BuiltinIdP,
   IdProviderConfig,
@@ -66,6 +66,7 @@ import type {
   TenantProviderConfigSchema,
   UserProfileProviderConfigSchema,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyAuth(
   client: OperatorClient,
@@ -74,11 +75,15 @@ export async function applyAuth(
 ) {
   if (phase === "create-update") {
     // Services
-    await Promise.all(
-      changeSet.service.creates.map((create) =>
-        client.createAuthService(create.request),
+    await Promise.all([
+      ...changeSet.service.creates.map(async (create) => {
+        await client.createAuthService(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.service.updates.map((update) =>
+        client.setMetadata(update.metaRequest),
       ),
-    );
+    ]);
 
     // IdPConfigs
     await Promise.all([
@@ -181,51 +186,51 @@ export async function applyAuth(
     // Delete in reverse order of dependencies
     // SCIMResources
     await Promise.all(
-      changeSet.scimResource.deletes
-        .filter((del) => del.tag === "scim-resource-deleted")
-        .map((del) => client.deleteAuthSCIMResource(del.request)),
+      changeSet.scimResource.deletes.map((del) =>
+        client.deleteAuthSCIMResource(del.request),
+      ),
     );
 
     // SCIMConfigs
     await Promise.all(
-      changeSet.scim.deletes
-        .filter((del) => del.tag === "scim-config-deleted")
-        .map((del) => client.deleteAuthSCIMConfig(del.request)),
+      changeSet.scim.deletes.map((del) =>
+        client.deleteAuthSCIMConfig(del.request),
+      ),
     );
 
     // OAuth2Clients
     await Promise.all(
-      changeSet.oauth2Client.deletes
-        .filter((del) => del.tag === "oauth2-client-deleted")
-        .map((del) => client.deleteAuthOAuth2Client(del.request)),
+      changeSet.oauth2Client.deletes.map((del) =>
+        client.deleteAuthOAuth2Client(del.request),
+      ),
     );
 
     // MachineUsers
     await Promise.all(
-      changeSet.machineUser.deletes
-        .filter((del) => del.tag === "machine-user-deleted")
-        .map((del) => client.deleteAuthMachineUser(del.request)),
+      changeSet.machineUser.deletes.map((del) =>
+        client.deleteAuthMachineUser(del.request),
+      ),
     );
 
     // TenantConfigs
     await Promise.all(
-      changeSet.tenantConfig.deletes
-        .filter((del) => del.tag === "tenant-config-deleted")
-        .map((del) => client.deleteTenantConfig(del.request)),
+      changeSet.tenantConfig.deletes.map((del) =>
+        client.deleteTenantConfig(del.request),
+      ),
     );
 
     // UserProfileConfigs
     await Promise.all(
-      changeSet.userProfileConfig.deletes
-        .filter((del) => del.tag === "user-profile-config-deleted")
-        .map((del) => client.deleteUserProfileConfig(del.request)),
+      changeSet.userProfileConfig.deletes.map((del) =>
+        client.deleteUserProfileConfig(del.request),
+      ),
     );
 
     // IdPConfigs
     await Promise.all(
-      changeSet.idpConfig.deletes
-        .filter((del) => del.tag === "idp-config-deleted")
-        .map((del) => client.deleteAuthIDPConfig(del.request)),
+      changeSet.idpConfig.deletes.map((del) =>
+        client.deleteAuthIDPConfig(del.request),
+      ),
     );
 
     // Services
@@ -243,13 +248,16 @@ export async function planAuth(
   application: Readonly<Application>,
 ) {
   const auths: Readonly<AuthService>[] = [];
-  for (const app of application.applications) {
-    if (app.authService) {
-      await app.authService.resolveNamespaces();
-      auths.push(app.authService);
-    }
+  if (application.authService) {
+    await application.authService.resolveNamespaces();
+    auths.push(application.authService);
   }
-  const serviceChangeSet = await planServices(client, workspaceId, auths);
+  const serviceChangeSet = await planServices(
+    client,
+    workspaceId,
+    application.name,
+    auths,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const idpConfigChangeSet = await planIdPConfigs(
     client,
@@ -317,6 +325,12 @@ export async function planAuth(
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateAuthServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+};
+
+type UpdateService = {
+  name: string;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteService = {
@@ -324,20 +338,16 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteAuthServiceRequestSchema>;
 };
 
-type ServiceDeleted = {
-  tag: "service-deleted";
-  name: string;
-};
-
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
+  appName: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
-  const changeSet: ChangeSet<CreateService, HasName, DeleteService> =
+  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Auth services");
 
-  const existingServices = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { authServices, nextPageToken } = await client.listAuthServices({
         workspaceId,
@@ -351,19 +361,52 @@ async function planServices(
       throw error;
     }
   });
-  const existingNameSet = new Set<string>();
-  existingServices.forEach((service) => {
-    const name = service.namespace?.name;
-    if (name) {
-      existingNameSet.add(name);
-    }
-  });
+  const existingServices: Partial<
+    Record<
+      string,
+      {
+        service: (typeof withoutLabel)[number];
+        labels: Partial<Record<string, string>>;
+      }
+    >
+  > = {};
+  await Promise.all(
+    withoutLabel.map(async (service) => {
+      if (!service.namespace?.name) {
+        return;
+      }
+      const { metadata } = await client.getMetadata({
+        trn: `trn:v1:workspace:${workspaceId}:auth:${service.namespace.name}`,
+      });
+      existingServices[service.namespace.name] = {
+        service,
+        labels: metadata?.labels ?? {},
+      };
+    }),
+  );
+
   for (const { config } of auths) {
-    if (existingNameSet.has(config.name)) {
+    const existing = existingServices[config.name];
+    if (existing) {
+      // Check if managed by another application
+      if (
+        existing.labels["sdk-name"] &&
+        existing.labels["sdk-name"] !== appName
+      ) {
+        throw new Error(
+          `Auth service "${config.name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+        );
+      }
       changeSet.updates.push({
         name: config.name,
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:auth:${config.name}`,
+          labels: {
+            "sdk-name": appName,
+          },
+        },
       });
-      existingNameSet.delete(config.name);
+      delete existingServices[config.name];
     } else {
       changeSet.creates.push({
         name: config.name,
@@ -371,17 +414,26 @@ async function planServices(
           workspaceId,
           namespaceName: config.name,
         },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:auth:${config.name}`,
+          labels: {
+            "sdk-name": appName,
+          },
+        },
       });
     }
   }
-  existingNameSet.forEach((namespaceName) => {
-    changeSet.deletes.push({
-      name: namespaceName,
-      request: {
-        workspaceId,
-        namespaceName,
-      },
-    });
+  Object.entries(existingServices).forEach(([namespaceName]) => {
+    // Only delete services managed by this application
+    if (existingServices[namespaceName]?.labels["sdk-name"] === appName) {
+      changeSet.deletes.push({
+        name: namespaceName,
+        request: {
+          workspaceId,
+          namespaceName,
+        },
+      });
+    }
   });
   return changeSet;
 }
@@ -399,9 +451,7 @@ type UpdateIdPConfig = {
 };
 
 type DeleteIdPConfig = {
-  tag: "idp-config-deleted";
   name: string;
-
   request: MessageInitShape<typeof DeleteAuthIDPConfigRequestSchema>;
 };
 
@@ -414,7 +464,7 @@ async function planIdPConfigs(
   const changeSet: ChangeSet<
     CreateIdPConfig,
     UpdateIdPConfig,
-    DeleteIdPConfig | ServiceDeleted
+    DeleteIdPConfig
   > = new ChangeSet("Auth idpConfigs");
 
   const fetchIdPConfigs = (namespaceName: string) => {
@@ -468,7 +518,6 @@ async function planIdPConfigs(
     }
     existingNameSet.forEach((name) => {
       changeSet.deletes.push({
-        tag: "idp-config-deleted",
         name,
         request: {
           workspaceId,
@@ -483,8 +532,12 @@ async function planIdPConfigs(
     const existingIdPConfigs = await fetchIdPConfigs(namespaceName);
     existingIdPConfigs.forEach((idpConfig) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: idpConfig.name,
+        request: {
+          workspaceId,
+          namespaceName,
+          name: idpConfig.name,
+        },
       });
     });
   }
@@ -629,9 +682,7 @@ type UpdateUserProfileConfig = {
 };
 
 type DeleteUserProfileConfig = {
-  tag: "user-profile-config-deleted";
   name: string;
-
   request: MessageInitShape<typeof DeleteUserProfileConfigRequestSchema>;
 };
 
@@ -644,7 +695,7 @@ async function planUserProfileConfigs(
   const changeSet: ChangeSet<
     CreateUserProfileConfig,
     UpdateUserProfileConfig,
-    DeleteUserProfileConfig | ServiceDeleted
+    DeleteUserProfileConfig
   > = new ChangeSet("Auth userProfileConfigs");
 
   for (const auth of auths) {
@@ -683,7 +734,6 @@ async function planUserProfileConfigs(
       });
     } else {
       changeSet.deletes.push({
-        tag: "user-profile-config-deleted",
         name,
         request: {
           workspaceId,
@@ -706,8 +756,11 @@ async function planUserProfileConfigs(
       throw error;
     }
     changeSet.deletes.push({
-      tag: "service-deleted",
       name: `${namespaceName}-user-profile-config`,
+      request: {
+        workspaceId,
+        namespaceName,
+      },
     });
   }
   return changeSet;
@@ -753,9 +806,7 @@ type UpdateTenantConfig = {
 };
 
 type DeleteTenantConfig = {
-  tag: "tenant-config-deleted";
   name: string;
-
   request: MessageInitShape<typeof DeleteTenantConfigRequestSchema>;
 };
 
@@ -768,7 +819,7 @@ async function planTenantConfigs(
   const changeSet: ChangeSet<
     CreateTenantConfig,
     UpdateTenantConfig,
-    DeleteTenantConfig | ServiceDeleted
+    DeleteTenantConfig
   > = new ChangeSet("Auth tenantConfigs");
 
   for (const auth of auths) {
@@ -805,7 +856,6 @@ async function planTenantConfigs(
       });
     } else {
       changeSet.deletes.push({
-        tag: "tenant-config-deleted",
         name,
         request: {
           workspaceId,
@@ -828,8 +878,11 @@ async function planTenantConfigs(
       throw error;
     }
     changeSet.deletes.push({
-      tag: "service-deleted",
       name: `${namespaceName}-tenant-config`,
+      request: {
+        workspaceId,
+        namespaceName,
+      },
     });
   }
   return changeSet;
@@ -864,7 +917,6 @@ type UpdateMachineUser = {
 };
 
 type DeleteMachineUser = {
-  tag: "machine-user-deleted";
   name: string;
   request: MessageInitShape<typeof DeleteAuthMachineUserRequestSchema>;
 };
@@ -878,7 +930,7 @@ async function planMachineUsers(
   const changeSet: ChangeSet<
     CreateMachineUser,
     UpdateMachineUser,
-    DeleteMachineUser | ServiceDeleted
+    DeleteMachineUser
   > = new ChangeSet("Auth machineUsers");
 
   const fetchMachineUsers = (authNamespace: string) => {
@@ -942,7 +994,6 @@ async function planMachineUsers(
     }
     existingNameSet.forEach((name) => {
       changeSet.deletes.push({
-        tag: "machine-user-deleted",
         name,
         request: {
           workspaceId,
@@ -957,8 +1008,12 @@ async function planMachineUsers(
     const existingMachineUsers = await fetchMachineUsers(namespaceName);
     existingMachineUsers.forEach((machineUser) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: machineUser.name,
+        request: {
+          workspaceId,
+          authNamespace: namespaceName,
+          name: machineUser.name,
+        },
       });
     });
   }
@@ -986,7 +1041,6 @@ type UpdateOAuth2Client = {
 };
 
 type DeleteOAuth2Client = {
-  tag: "oauth2-client-deleted";
   name: string;
   request: MessageInitShape<typeof DeleteAuthOAuth2ClientRequestSchema>;
 };
@@ -1000,7 +1054,7 @@ async function planOAuth2Clients(
   const changeSet: ChangeSet<
     CreateOAuth2Clients,
     UpdateOAuth2Client,
-    DeleteOAuth2Client | ServiceDeleted
+    DeleteOAuth2Client
   > = new ChangeSet("Auth oauth2Clients");
 
   const fetchOAuth2Clients = (namespaceName: string) => {
@@ -1056,7 +1110,6 @@ async function planOAuth2Clients(
     }
     existingNameSet.forEach((name) => {
       changeSet.deletes.push({
-        tag: "oauth2-client-deleted",
         name,
         request: {
           workspaceId,
@@ -1071,8 +1124,12 @@ async function planOAuth2Clients(
     const existingOAuth2Clients = await fetchOAuth2Clients(namespaceName);
     existingOAuth2Clients.forEach((oauth2Client) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: oauth2Client.name,
+        request: {
+          workspaceId,
+          namespaceName,
+          name: oauth2Client.name,
+        },
       });
     });
   }
@@ -1123,9 +1180,7 @@ type UpdateSCIMConfig = {
 };
 
 type DeleteSCIMConfig = {
-  tag: "scim-config-deleted";
   name: string;
-
   request: MessageInitShape<typeof DeleteAuthSCIMConfigRequestSchema>;
 };
 
@@ -1138,7 +1193,7 @@ async function planSCIMConfigs(
   const changeSet: ChangeSet<
     CreateSCIMConfig,
     UpdateSCIMConfig,
-    DeleteSCIMConfig | ServiceDeleted
+    DeleteSCIMConfig
   > = new ChangeSet("Auth scimConfigs");
 
   for (const { config } of auths) {
@@ -1175,7 +1230,6 @@ async function planSCIMConfigs(
       });
     } else {
       changeSet.deletes.push({
-        tag: "scim-config-deleted",
         name,
         request: {
           workspaceId,
@@ -1198,8 +1252,11 @@ async function planSCIMConfigs(
       throw error;
     }
     changeSet.deletes.push({
-      tag: "service-deleted",
       name: `${namespaceName}-scim-config`,
+      request: {
+        workspaceId,
+        namespaceName,
+      },
     });
   }
   return changeSet;
@@ -1246,7 +1303,6 @@ type UpdateSCIMResource = {
 };
 
 type DeleteSCIMResource = {
-  tag: "scim-resource-deleted";
   name: string;
   request: MessageInitShape<typeof DeleteAuthSCIMResourceRequestSchema>;
 };
@@ -1260,7 +1316,7 @@ async function planSCIMResources(
   const changeSet: ChangeSet<
     CreateSCIMResource,
     UpdateSCIMResource,
-    DeleteSCIMResource | ServiceDeleted
+    DeleteSCIMResource
   > = new ChangeSet("Auth scimResources");
 
   const fetchSCIMResources = async (namespaceName: string) => {
@@ -1308,7 +1364,6 @@ async function planSCIMResources(
     }
     existingNameSet.forEach((name) => {
       changeSet.deletes.push({
-        tag: "scim-resource-deleted",
         name,
         request: {
           workspaceId,
@@ -1323,8 +1378,12 @@ async function planSCIMResources(
     const existingSCIMResources = await fetchSCIMResources(namespaceName);
     existingSCIMResources.forEach((scimResource) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: scimResource.name,
+        request: {
+          workspaceId,
+          namespaceName,
+          name: scimResource.name,
+        },
       });
     });
   }

@@ -233,6 +233,7 @@ async function planServices(
           `TailorDB service "${tailordb.namespace}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
         );
       }
+      // For backward compatibility and idempotency, update even when labels don't exist
       changeSet.updates.push({
         name: tailordb.namespace,
         metaRequest: {

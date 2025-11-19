@@ -30,12 +30,14 @@ export async function applyIdP(
   if (phase === "create-update") {
     // Services
     await Promise.all([
-      ...changeSet.service.creates.map((create) =>
-        client.createIdPService(create.request),
-      ),
-      ...changeSet.service.updates.map((update) =>
-        client.updateIdPService(update.request),
-      ),
+      ...changeSet.service.creates.map(async (create) => {
+        await client.createIdPService(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.service.updates.map(async (update) => {
+        await client.updateIdPService(update.request);
+        await client.setMetadata(update.metaRequest);
+      }),
     ]);
 
     // Clients
@@ -238,6 +240,7 @@ async function planServices(
           `IdP service "${idp.name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
         );
       }
+      // For backward compatibility and idempotency, update even when labels don't exist
       changeSet.updates.push({
         name: namespaceName,
         request: {

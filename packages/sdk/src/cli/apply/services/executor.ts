@@ -21,6 +21,7 @@ import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet } from ".";
 import type { Executor, Trigger } from "@/parser/service/executor";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyExecutor(
   client: OperatorClient,
@@ -30,12 +31,14 @@ export async function applyExecutor(
   if (phase === "create-update") {
     // Executors
     await Promise.all([
-      ...changeSet.creates.map((create) =>
-        client.createExecutorExecutor(create.request),
-      ),
-      ...changeSet.updates.map((update) =>
-        client.updateExecutorExecutor(update.request),
-      ),
+      ...changeSet.creates.map(async (create) => {
+        await client.createExecutorExecutor(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.updates.map(async (update) => {
+        await client.updateExecutorExecutor(update.request);
+        await client.setMetadata(update.metaRequest);
+      }),
     ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
@@ -51,11 +54,13 @@ export async function applyExecutor(
 type CreateExecutor = {
   name: string;
   request: MessageInitShape<typeof CreateExecutorExecutorRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateExecutor = {
   name: string;
   request: MessageInitShape<typeof UpdateExecutorExecutorRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteExecutor = {
@@ -71,7 +76,7 @@ export async function planExecutor(
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
     new ChangeSet("Executors");
 
-  const existingExecutors = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { executors, nextPageToken } = await client.listExecutorExecutors({
         workspaceId,
@@ -85,22 +90,55 @@ export async function planExecutor(
       throw error;
     }
   });
-  const existingNameSet = new Set<string>();
-  existingExecutors.forEach((executor) => {
-    existingNameSet.add(executor.name);
-  });
+  const existingExecutors: Partial<
+    Record<
+      string,
+      {
+        executor: (typeof withoutLabel)[number];
+        labels: Partial<Record<string, string>>;
+      }
+    >
+  > = {};
+  await Promise.all(
+    withoutLabel.map(async (executor) => {
+      const { metadata } = await client.getMetadata({
+        trn: `trn:v1:workspace:${workspaceId}:executor:${executor.name}`,
+      });
+      existingExecutors[executor.name] = {
+        executor,
+        labels: metadata?.labels ?? {},
+      };
+    }),
+  );
 
   const executors = (await application.executorService?.loadExecutors()) ?? {};
   for (const executor of Object.values(executors)) {
-    if (existingNameSet.has(executor.name)) {
+    const existing = existingExecutors[executor.name];
+    if (existing) {
+      // Check if managed by another application
+      if (
+        existing.labels["sdk-name"] &&
+        existing.labels["sdk-name"] !== application.name
+      ) {
+        throw new Error(
+          `Executor "${executor.name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+        );
+      }
+      // For backward compatibility and idempotency, update even when labels don't exist
       changeSet.updates.push({
         name: executor.name,
         request: {
           workspaceId,
           executor: protoExecutor(executor),
         },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:executor:${executor.name}`,
+          labels: {
+            "sdk-name": application.name,
+          },
+        },
       });
-      existingNameSet.delete(executor.name);
+      delete existingExecutors[executor.name];
     } else {
       changeSet.creates.push({
         name: executor.name,
@@ -108,17 +146,26 @@ export async function planExecutor(
           workspaceId,
           executor: protoExecutor(executor),
         },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:executor:${executor.name}`,
+          labels: {
+            "sdk-name": application.name,
+          },
+        },
       });
     }
   }
-  existingNameSet.forEach((name) => {
-    changeSet.deletes.push({
-      name,
-      request: {
-        workspaceId,
+  Object.entries(existingExecutors).forEach(([name]) => {
+    // Only delete executors managed by this application
+    if (existingExecutors[name]?.labels["sdk-name"] === application.name) {
+      changeSet.deletes.push({
         name,
-      },
-    });
+        request: {
+          workspaceId,
+          name,
+        },
+      });
+    }
   });
 
   changeSet.print();
