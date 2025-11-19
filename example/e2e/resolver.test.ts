@@ -94,7 +94,7 @@ describe("controlplane", async () => {
         Addition operation
 
         Returns:
-        Result of addition operation`,
+        Sum of the two input numbers`,
       operationType: "query",
       authorization: "true==true",
       inputs: [
@@ -122,26 +122,12 @@ describe("controlplane", async () => {
         },
       ],
       response: {
-        description: "Result of addition operation",
+        description: "Sum of the two input numbers",
         array: false,
         required: true,
         type: {
-          kind: "UserDefined",
-          name: "AddOutput",
-          description: "Result of addition operation",
-          required: true,
-          fields: [
-            {
-              name: "result",
-              description: "Sum of the two input numbers",
-              array: false,
-              required: true,
-              type: {
-                kind: "ScalarType",
-                name: "Int",
-              },
-            },
-          ],
+          kind: "ScalarType",
+          name: "Int",
         },
       },
       pipelines: [{ name: "body" }],
