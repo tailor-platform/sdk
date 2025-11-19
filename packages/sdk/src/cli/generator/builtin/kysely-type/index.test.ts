@@ -171,6 +171,10 @@ describe("KyselyGenerator integration tests", () => {
   name: string;
   email: string;
 }`,
+          usedUtilityTypes: {
+            Timestamp: false,
+            Serial: false,
+          },
         },
         Post: {
           name: "Post",
@@ -179,6 +183,10 @@ describe("KyselyGenerator integration tests", () => {
   title: string;
   content: string;
 }`,
+          usedUtilityTypes: {
+            Timestamp: false,
+            Serial: false,
+          },
         },
       };
 

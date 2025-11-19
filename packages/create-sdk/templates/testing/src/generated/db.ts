@@ -5,7 +5,6 @@ type Timestamp = ColumnType<Date, Date | string, Date | string>;
 type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
-type Serial<T = string | number> = ColumnType<T, never, never>;
 
 export interface Namespace {
   "main-db": {

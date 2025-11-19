@@ -15,87 +15,125 @@ export class TypeProcessor {
   static async processType(
     type: ParsedTailorDBType,
   ): Promise<KyselyTypeMetadata> {
-    const typeDef = this.generateTableInterface(type);
+    const result = this.generateTableInterface(type);
 
     return {
       name: type.name,
-      typeDef,
+      typeDef: result.typeDef,
+      usedUtilityTypes: result.usedUtilityTypes,
     };
   }
 
   /**
    * Generate the table interface.
    */
-  private static generateTableInterface(type: ParsedTailorDBType): string {
+  private static generateTableInterface(type: ParsedTailorDBType): {
+    typeDef: string;
+    usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
+  } {
     const fields: string[] = ["id: Generated<string>;"];
+    const aggregatedUtilityTypes = { Timestamp: false, Serial: false };
+
     for (const [fieldName, parsedField] of Object.entries(type.fields)) {
       if (fieldName === "id") {
         continue;
       }
 
-      const fieldType = this.generateFieldType(parsedField.config);
-      fields.push(`${fieldName}: ${fieldType};`);
+      const fieldTypeResult = this.generateFieldType(parsedField.config);
+      fields.push(`${fieldName}: ${fieldTypeResult.type};`);
+
+      // Aggregate utility types from fields
+      if (fieldTypeResult.usedUtilityTypes.Timestamp) {
+        aggregatedUtilityTypes.Timestamp = true;
+      }
+      if (fieldTypeResult.usedUtilityTypes.Serial) {
+        aggregatedUtilityTypes.Serial = true;
+      }
     }
 
-    return multiline /* ts */ `
+    const typeDef = multiline /* ts */ `
       ${type.name}: {
         ${fields.join("\n")}
       }
     `;
+
+    return { typeDef, usedUtilityTypes: aggregatedUtilityTypes };
   }
 
   /**
    * Generate the complete field type including array and null modifiers.
    */
-  private static generateFieldType(fieldConfig: FieldConfig): string {
-    const baseType = this.getBaseType(fieldConfig);
+  private static generateFieldType(fieldConfig: FieldConfig): {
+    type: string;
+    usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
+  } {
+    const baseTypeResult = this.getBaseType(fieldConfig);
+    const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
+
     const isArray = fieldConfig.array === true;
     const isNullable = fieldConfig.required !== true;
 
-    let finalType = baseType;
+    let finalType = baseTypeResult.type;
     if (isArray) {
-      finalType = `${baseType}[]`;
+      finalType = `${baseTypeResult.type}[]`;
     }
     if (isNullable) {
       finalType = `${finalType} | null`;
     }
 
     if (fieldConfig.serial) {
+      usedUtilityTypes.Serial = true;
       finalType = `Serial<${finalType}>`;
     }
     if (fieldConfig.hooks?.create) {
       finalType = `Generated<${finalType}>`;
     }
 
-    return finalType;
+    return { type: finalType, usedUtilityTypes };
   }
 
   /**
    * Get the base Kysely type for a field (without array/null modifiers).
    */
-  private static getBaseType(fieldConfig: FieldConfig): string {
+  private static getBaseType(fieldConfig: FieldConfig): {
+    type: string;
+    usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
+  } {
     const fieldType = fieldConfig.type;
+    const usedUtilityTypes = { Timestamp: false, Serial: false };
 
+    let type: string;
     switch (fieldType) {
       case "uuid":
       case "string":
-        return "string";
+        type = "string";
+        break;
       case "integer":
       case "float":
-        return "number";
+        type = "number";
+        break;
       case "date":
       case "datetime":
-        return "Timestamp";
+        usedUtilityTypes.Timestamp = true;
+        type = "Timestamp";
+        break;
       case "bool":
       case "boolean":
-        return "boolean";
+        type = "boolean";
+        break;
       case "enum":
-        return this.getEnumType(fieldConfig);
-      case "nested":
-        return this.getNestedType(fieldConfig);
+        type = this.getEnumType(fieldConfig);
+        break;
+      case "nested": {
+        const nestedResult = this.getNestedType(fieldConfig);
+        return nestedResult;
+      }
       default:
-        return "string";
+        type = "string";
+        break;
     }
+
+    return { type, usedUtilityTypes };
   }
 
   /**
@@ -106,7 +144,7 @@ export class TypeProcessor {
 
     if (allowedValues && Array.isArray(allowedValues)) {
       return allowedValues
-        .map((v: any) => {
+        .map((v: string | { value: string }) => {
           const value = typeof v === "string" ? v : v.value;
           return `"${value}"`;
         })
@@ -118,36 +156,81 @@ export class TypeProcessor {
   /**
    * Get the nested object type definition.
    */
-  private static getNestedType(fieldConfig: FieldConfig): string {
+  private static getNestedType(fieldConfig: FieldConfig): {
+    type: string;
+    usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
+  } {
     const fields = fieldConfig.fields;
     if (!fields || typeof fields !== "object") {
-      return "string";
+      return {
+        type: "string",
+        usedUtilityTypes: { Timestamp: false, Serial: false },
+      };
     }
 
     const fieldTypes: string[] = [];
+    const aggregatedUtilityTypes = { Timestamp: false, Serial: false };
+
     for (const [fieldName, nestedFieldConfig] of Object.entries(fields)) {
-      const fieldType = this.generateFieldType(nestedFieldConfig);
-      fieldTypes.push(`${fieldName}: ${fieldType}`);
+      const fieldTypeResult = this.generateFieldType(nestedFieldConfig);
+      fieldTypes.push(`${fieldName}: ${fieldTypeResult.type}`);
+
+      // Aggregate utility types from nested fields
+      if (fieldTypeResult.usedUtilityTypes.Timestamp) {
+        aggregatedUtilityTypes.Timestamp = true;
+      }
+      if (fieldTypeResult.usedUtilityTypes.Serial) {
+        aggregatedUtilityTypes.Serial = true;
+      }
     }
 
-    return `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
+    const type = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
+    return { type, usedUtilityTypes: aggregatedUtilityTypes };
   }
 
   static async processTypes(
     types: Record<string, KyselyTypeMetadata>,
     namespace: string,
   ): Promise<string> {
+    // Aggregate used utility types from all types
+    const aggregatedUtilityTypes = { Timestamp: false, Serial: false };
+    for (const type of Object.values(types)) {
+      if (type.usedUtilityTypes.Timestamp) {
+        aggregatedUtilityTypes.Timestamp = true;
+      }
+      if (type.usedUtilityTypes.Serial) {
+        aggregatedUtilityTypes.Serial = true;
+      }
+    }
+
+    // Generate utility type declarations based on usage
+    const utilityTypeDeclarations: string[] = [];
+    if (aggregatedUtilityTypes.Timestamp) {
+      utilityTypeDeclarations.push(
+        "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
+      );
+    }
+    // Generated is always needed for the id field
+    utilityTypeDeclarations.push(
+      multiline /* ts */ `
+        type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+          ? ColumnType<S, I | undefined, U>
+          : ColumnType<T, T | undefined, T>;
+      `,
+    );
+    if (aggregatedUtilityTypes.Serial) {
+      utilityTypeDeclarations.push(
+        "type Serial<T = string | number> = ColumnType<T, never, never>;",
+      );
+    }
+
     return (
       [
         multiline /* ts */ `
           import { type ColumnType, Kysely } from "kysely";
           import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-          type Timestamp = ColumnType<Date, Date | string, Date | string>;
-          type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-            ? ColumnType<S, I | undefined, U>
-            : ColumnType<T, T | undefined, T>;
-          type Serial<T = string | number> = ColumnType<T, never, never>;
+          ${utilityTypeDeclarations.join("\n")}
         `,
         TypeProcessor.generateNamespaceInterface(
           Object.values(types),
