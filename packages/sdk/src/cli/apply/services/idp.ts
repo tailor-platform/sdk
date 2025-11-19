@@ -12,6 +12,7 @@ import { type IdP } from "@/parser/service/idp";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { ChangeSet } from ".";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export function idpClientVaultName(namespaceName: string, clientName: string) {
   return `idp-${namespaceName}-${clientName}`;
@@ -98,18 +99,16 @@ export async function applyIdP(
     // Delete in reverse order of dependencies
     // Clients
     await Promise.all(
-      changeSet.client.deletes
-        .filter((del) => del.tag === "client-deleted")
-        .map(async (del) => {
-          await client.deleteIdPClient(del.request);
+      changeSet.client.deletes.map(async (del) => {
+        await client.deleteIdPClient(del.request);
 
-          // Delete the secret manager vault and secret
-          const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
-          await client.deleteSecretManagerVault({
-            workspaceId: del.request.workspaceId,
-            secretmanagerVaultName: vaultName,
-          });
-        }),
+        // Delete the secret manager vault and secret
+        const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
+        await client.deleteSecretManagerVault({
+          workspaceId: del.request.workspaceId,
+          secretmanagerVaultName: vaultName,
+        });
+      }),
     );
 
     // Services
@@ -126,11 +125,13 @@ export async function planIdP(
   workspaceId: string,
   application: Readonly<Application>,
 ) {
-  const idps: IdP[] = [];
-  for (const app of application.applications) {
-    idps.push(...app.idpServices);
-  }
-  const serviceChangeSet = await planServices(client, workspaceId, idps);
+  const idps = application.idpServices;
+  const serviceChangeSet = await planServices(
+    client,
+    workspaceId,
+    application.config.id,
+    idps,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
     client,
@@ -150,11 +151,13 @@ export async function planIdP(
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateIdPServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateService = {
   name: string;
   request: MessageInitShape<typeof UpdateIdPServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteService = {
@@ -165,12 +168,13 @@ type DeleteService = {
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
+  projectId: string,
   idps: ReadonlyArray<IdP>,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("IdP services");
 
-  const existingServices = await fetchAll(async (pageToken) => {
+  const existingAllServices = await fetchAll(async (pageToken) => {
     try {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
@@ -184,6 +188,22 @@ async function planServices(
       throw error;
     }
   });
+  const existingServices = (
+    await Promise.all(
+      existingAllServices.map(async (service) => {
+        const { metadata } = await client.getMetadata({
+          trn: `trn:v1:workspace:${workspaceId}:idp:${service.namespace?.name}`,
+        });
+        if (!metadata) {
+          return null;
+        }
+        const hasMatchingLabel = Object.entries(metadata.labels).some(
+          ([key, value]) => key === "sdk-project-id" && value === projectId,
+        );
+        return hasMatchingLabel ? service : null;
+      }),
+    )
+  ).filter((service) => service !== null);
   const existingNameSet = new Set<string>();
   existingServices.forEach((service) => {
     const name = service.namespace?.name;
@@ -214,6 +234,12 @@ async function planServices(
           namespaceName,
           authorization,
         },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:idp:${namespaceName}`,
+          labels: {
+            "sdk-project-id": projectId,
+          },
+        },
       });
       existingNameSet.delete(namespaceName);
     } else {
@@ -223,6 +249,12 @@ async function planServices(
           workspaceId,
           namespaceName,
           authorization,
+        },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:idp:${namespaceName}`,
+          labels: {
+            "sdk-project-id": projectId,
+          },
         },
       });
     }
@@ -252,14 +284,8 @@ type UpdateClient = {
 };
 
 type DeleteClient = {
-  tag: "client-deleted";
   name: string;
   request: MessageInitShape<typeof DeleteIdPClientRequestSchema>;
-};
-
-type ServiceDeleted = {
-  tag: "service-deleted";
-  name: string;
 };
 
 async function planClients(
@@ -268,11 +294,8 @@ async function planClients(
   idps: ReadonlyArray<IdP>,
   deletedServices: string[],
 ) {
-  const changeSet: ChangeSet<
-    CreateClient,
-    UpdateClient,
-    DeleteClient | ServiceDeleted
-  > = new ChangeSet("IdP clients");
+  const changeSet: ChangeSet<CreateClient, UpdateClient, DeleteClient> =
+    new ChangeSet("IdP clients");
 
   const fetchClients = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -323,7 +346,6 @@ async function planClients(
     }
     existingNameMap.forEach((name) => {
       changeSet.deletes.push({
-        tag: "client-deleted",
         name,
         request: {
           workspaceId,
@@ -338,8 +360,12 @@ async function planClients(
     const existingClients = await fetchClients(namespaceName);
     existingClients.forEach((client) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: client.name,
+        request: {
+          workspaceId,
+          namespaceName,
+          name: client.name,
+        },
       });
     });
   }
