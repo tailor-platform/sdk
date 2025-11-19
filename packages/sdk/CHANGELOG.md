@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.8.3
+
+### Patch Changes
+
+- [#17](https://github.com/tailor-platform/sdk/pull/17) [`4705799`](https://github.com/tailor-platform/sdk/commit/47057990e183fb9eea132d8802d3d3ec65f07487) Thanks [@remiposo](https://github.com/remiposo)! - Fixed an issue where resolvers returning scalar values didn't work properly
+
 ## 0.8.2
 
 ### Patch Changes
