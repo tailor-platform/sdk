@@ -18,13 +18,6 @@ export default createResolver({
       .description("Second number to add")
       .validate(...validators),
   },
-  body: (context) => {
-    console.log(JSON.stringify(context, null, 2));
-    return { result: context.input.a + context.input.b };
-  },
-  output: t
-    .object({
-      result: t.int().description("Sum of the two input numbers"),
-    })
-    .description("Result of addition operation"),
+  body: ({ input }) => input.a + input.b,
+  output: t.int().description("Sum of the two input numbers"),
 });
