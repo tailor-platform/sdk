@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.8.2
+
+### Patch Changes
+
+- [#12](https://github.com/tailor-platform/sdk/pull/12) [`d861a04`](https://github.com/tailor-platform/sdk/commit/d861a0448081566cd7e9ae1ba7eb837f1634c6a9) Thanks [@riku99](https://github.com/riku99)! - Add enum-constants and file-utils built-in generators for type-safe code generation
+
 ## 0.8.1
 
 ### Patch Changes
