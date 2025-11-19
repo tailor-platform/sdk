@@ -31,25 +31,27 @@ export class TypeProcessor {
     typeDef: string;
     usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
   } {
-    const fields: string[] = ["id: Generated<string>;"];
-    const aggregatedUtilityTypes = { Timestamp: false, Serial: false };
+    const fieldEntries = Object.entries(type.fields).filter(
+      ([fieldName]) => fieldName !== "id",
+    );
 
-    for (const [fieldName, parsedField] of Object.entries(type.fields)) {
-      if (fieldName === "id") {
-        continue;
-      }
+    const fieldResults = fieldEntries.map(([fieldName, parsedField]) => ({
+      fieldName,
+      ...this.generateFieldType(parsedField.config),
+    }));
 
-      const fieldTypeResult = this.generateFieldType(parsedField.config);
-      fields.push(`${fieldName}: ${fieldTypeResult.type};`);
+    const fields = [
+      "id: Generated<string>;",
+      ...fieldResults.map((result) => `${result.fieldName}: ${result.type};`),
+    ];
 
-      // Aggregate utility types from fields
-      if (fieldTypeResult.usedUtilityTypes.Timestamp) {
-        aggregatedUtilityTypes.Timestamp = true;
-      }
-      if (fieldTypeResult.usedUtilityTypes.Serial) {
-        aggregatedUtilityTypes.Serial = true;
-      }
-    }
+    const aggregatedUtilityTypes = fieldResults.reduce(
+      (acc, result) => ({
+        Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
+        Serial: acc.Serial || result.usedUtilityTypes.Serial,
+      }),
+      { Timestamp: false, Serial: false },
+    );
 
     const typeDef = multiline /* ts */ `
       ${type.name}: {
@@ -168,21 +170,24 @@ export class TypeProcessor {
       };
     }
 
-    const fieldTypes: string[] = [];
-    const aggregatedUtilityTypes = { Timestamp: false, Serial: false };
+    const fieldResults = Object.entries(fields).map(
+      ([fieldName, nestedFieldConfig]) => ({
+        fieldName,
+        ...this.generateFieldType(nestedFieldConfig),
+      }),
+    );
 
-    for (const [fieldName, nestedFieldConfig] of Object.entries(fields)) {
-      const fieldTypeResult = this.generateFieldType(nestedFieldConfig);
-      fieldTypes.push(`${fieldName}: ${fieldTypeResult.type}`);
+    const fieldTypes = fieldResults.map(
+      (result) => `${result.fieldName}: ${result.type}`,
+    );
 
-      // Aggregate utility types from nested fields
-      if (fieldTypeResult.usedUtilityTypes.Timestamp) {
-        aggregatedUtilityTypes.Timestamp = true;
-      }
-      if (fieldTypeResult.usedUtilityTypes.Serial) {
-        aggregatedUtilityTypes.Serial = true;
-      }
-    }
+    const aggregatedUtilityTypes = fieldResults.reduce(
+      (acc, result) => ({
+        Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
+        Serial: acc.Serial || result.usedUtilityTypes.Serial,
+      }),
+      { Timestamp: false, Serial: false },
+    );
 
     const type = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
     return { type, usedUtilityTypes: aggregatedUtilityTypes };
@@ -193,21 +198,19 @@ export class TypeProcessor {
     namespace: string,
   ): Promise<string> {
     // Aggregate used utility types from all types
-    const aggregatedUtilityTypes = { Timestamp: false, Serial: false };
-    for (const type of Object.values(types)) {
-      if (type.usedUtilityTypes.Timestamp) {
-        aggregatedUtilityTypes.Timestamp = true;
-      }
-      if (type.usedUtilityTypes.Serial) {
-        aggregatedUtilityTypes.Serial = true;
-      }
-    }
+    const aggregatedUtilityTypes = Object.values(types).reduce(
+      (acc, type) => ({
+        Timestamp: acc.Timestamp || type.usedUtilityTypes.Timestamp,
+        Serial: acc.Serial || type.usedUtilityTypes.Serial,
+      }),
+      { Timestamp: false, Serial: false },
+    );
 
     // Generate utility type declarations based on usage
     const utilityTypeDeclarations: string[] = [];
     if (aggregatedUtilityTypes.Timestamp) {
       utilityTypeDeclarations.push(
-        "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
+        /* ts */ `type Timestamp = ColumnType<Date, Date | string, Date | string>;`,
       );
     }
     // Generated is always needed for the id field
@@ -220,7 +223,7 @@ export class TypeProcessor {
     );
     if (aggregatedUtilityTypes.Serial) {
       utilityTypeDeclarations.push(
-        "type Serial<T = string | number> = ColumnType<T, never, never>;",
+        /* ts */ `type Serial<T = string | number> = ColumnType<T, never, never>;`,
       );
     }
 
