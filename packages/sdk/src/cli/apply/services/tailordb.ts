@@ -45,10 +45,11 @@ import {
 } from "@/configure/services/tailordb/permission";
 import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { ChangeSet, type HasName } from ".";
+import { ChangeSet } from ".";
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 import type { Executor } from "@/parser/service/executor";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyTailorDB(
   client: OperatorClient,
@@ -57,11 +58,15 @@ export async function applyTailorDB(
 ) {
   if (phase === "create-update") {
     // Services
-    await Promise.all(
-      changeSet.service.creates.map((create) =>
-        client.createTailorDBService(create.request),
+    await Promise.all([
+      ...changeSet.service.creates.map(async (create) => {
+        await client.createTailorDBService(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.service.updates.map((update) =>
+        client.setMetadata(update.metaRequest),
       ),
-    );
+    ]);
 
     // Types
     await Promise.all([
@@ -86,16 +91,16 @@ export async function applyTailorDB(
     // Delete in reverse order of dependencies
     // GQLPermissions
     await Promise.all(
-      changeSet.gqlPermission.deletes
-        .filter((del) => del.tag === "gql-permission-deleted")
-        .map((del) => client.deleteTailorDBGQLPermission(del.request)),
+      changeSet.gqlPermission.deletes.map((del) =>
+        client.deleteTailorDBGQLPermission(del.request),
+      ),
     );
 
     // Types
     await Promise.all(
-      changeSet.type.deletes
-        .filter((del) => del.tag === "type-deleted")
-        .map((del) => client.deleteTailorDBType(del.request)),
+      changeSet.type.deletes.map((del) =>
+        client.deleteTailorDBType(del.request),
+      ),
     );
 
     // Services
@@ -113,17 +118,20 @@ export async function planTailorDB(
   application: Readonly<Application>,
 ) {
   const tailordbs: TailorDBService[] = [];
-  for (const app of application.applications) {
-    for (const tailordb of app.tailorDBServices) {
-      await tailordb.loadTypes();
-      tailordbs.push(tailordb);
-    }
+  for (const tailordb of application.tailorDBServices) {
+    await tailordb.loadTypes();
+    tailordbs.push(tailordb);
   }
   const executors = Object.values(
     (await application.executorService?.loadExecutors()) ?? {},
   );
 
-  const serviceChangeSet = await planServices(client, workspaceId, tailordbs);
+  const serviceChangeSet = await planServices(
+    client,
+    workspaceId,
+    application.config.id,
+    tailordbs,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const typeChangeSet = await planTypes(
     client,
@@ -152,6 +160,12 @@ export async function planTailorDB(
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateTailorDBServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+};
+
+type UpdateService = {
+  name: string;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteService = {
@@ -159,20 +173,16 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteTailorDBServiceRequestSchema>;
 };
 
-type ServiceDeleted = {
-  tag: "service-deleted";
-  name: string;
-};
-
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
+  projectId: string,
   tailordbs: ReadonlyArray<TailorDBService>,
 ) {
-  const changeSet: ChangeSet<CreateService, HasName, DeleteService> =
+  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("TailorDB services");
 
-  const existingServices = await fetchAll(async (pageToken) => {
+  const existingAllServices = await fetchAll(async (pageToken) => {
     try {
       const { tailordbServices, nextPageToken } =
         await client.listTailorDBServices({
@@ -187,17 +197,36 @@ async function planServices(
       throw error;
     }
   });
+  const existingServices = (
+    await Promise.all(
+      existingAllServices.map(async (service) => {
+        const { metadata } = await client.getMetadata({
+          trn: `trn:v1:workspace:${workspaceId}:tailordb:${service.namespace?.name}`,
+        });
+        if (!metadata) {
+          return null;
+        }
+        const hasMatchingLabel = Object.entries(metadata.labels).some(
+          ([key, value]) => key === "sdk-project-id" && value === projectId,
+        );
+        return hasMatchingLabel ? service : null;
+      }),
+    )
+  ).filter((service) => service !== null);
   const existingNameSet = new Set<string>();
   existingServices.forEach((service) => {
-    const name = service.namespace?.name;
-    if (name) {
-      existingNameSet.add(name);
-    }
+    existingNameSet.add(service.namespace?.name as string);
   });
   for (const tailordb of tailordbs) {
     if (existingNameSet.has(tailordb.namespace)) {
       changeSet.updates.push({
         name: tailordb.namespace,
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:tailordb:${tailordb.namespace}`,
+          labels: {
+            "sdk-project-id": projectId,
+          },
+        },
       });
       existingNameSet.delete(tailordb.namespace);
     } else {
@@ -208,6 +237,12 @@ async function planServices(
           namespaceName: tailordb.namespace,
           // Set UTC to match tailorctl/terraform
           defaultTimezone: "UTC",
+        },
+        metaRequest: {
+          trn: `trn:v1:workspace:${workspaceId}:tailordb:${tailordb.namespace}`,
+          labels: {
+            "sdk-project-id": projectId,
+          },
         },
       });
     }
@@ -235,7 +270,6 @@ type UpdateType = {
 };
 
 type DeleteType = {
-  tag: "type-deleted";
   name: string;
   request: MessageInitShape<typeof DeleteTailorDBTypeRequestSchema>;
 };
@@ -247,11 +281,8 @@ async function planTypes(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateType,
-    UpdateType,
-    DeleteType | ServiceDeleted
-  > = new ChangeSet("TailorDB types");
+  const changeSet: ChangeSet<CreateType, UpdateType, DeleteType> =
+    new ChangeSet("TailorDB types");
 
   const fetchTypes = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -318,7 +349,6 @@ async function planTypes(
     }
     existingNameSet.forEach((name) => {
       changeSet.deletes.push({
-        tag: "type-deleted",
         name,
         request: {
           workspaceId,
@@ -332,8 +362,12 @@ async function planTypes(
     const existingTypes = await fetchTypes(namespaceName);
     existingTypes.forEach((typ) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: typ.name,
+        request: {
+          workspaceId,
+          namespaceName,
+          tailordbTypeName: typ.name,
+        },
       });
     });
   }
@@ -694,7 +728,6 @@ type UpdateGqlPermission = {
 };
 
 type DeleteGqlPermission = {
-  tag: "gql-permission-deleted";
   name: string;
   request: MessageInitShape<typeof DeleteTailorDBGQLPermissionRequestSchema>;
 };
@@ -708,7 +741,7 @@ async function planGqlPermissions(
   const changeSet: ChangeSet<
     CreateGqlPermission,
     UpdateGqlPermission,
-    DeleteGqlPermission | ServiceDeleted
+    DeleteGqlPermission
   > = new ChangeSet("TailorDB gqlPermissions");
 
   const fetchGqlPermissions = (namespaceName: string) => {
@@ -770,7 +803,6 @@ async function planGqlPermissions(
     }
     existingNameSet.forEach((name) => {
       changeSet.deletes.push({
-        tag: "gql-permission-deleted",
         name,
         request: {
           workspaceId,
@@ -784,8 +816,12 @@ async function planGqlPermissions(
     const existingGqlPermissions = await fetchGqlPermissions(namespaceName);
     existingGqlPermissions.forEach((gqlPermission) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: gqlPermission.typeName,
+        request: {
+          workspaceId,
+          namespaceName,
+          typeName: gqlPermission.typeName,
+        },
       });
     });
   }
