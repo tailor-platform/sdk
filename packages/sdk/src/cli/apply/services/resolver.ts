@@ -369,7 +369,6 @@ function processResolver(
     operationType: resolver.operation,
     response,
     pipelines,
-    postHook: { expr: "({ ...context.pipeline.body });" },
     publishExecutionEvents: executorUsedResolvers.has(resolver.name),
   };
 }
