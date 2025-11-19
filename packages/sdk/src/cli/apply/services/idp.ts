@@ -129,7 +129,7 @@ export async function planIdP(
   const serviceChangeSet = await planServices(
     client,
     workspaceId,
-    application.config.id,
+    application.name,
     idps,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -168,13 +168,13 @@ type DeleteService = {
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  projectId: string,
+  appName: string,
   idps: ReadonlyArray<IdP>,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("IdP services");
 
-  const existingAllServices = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
@@ -188,31 +188,33 @@ async function planServices(
       throw error;
     }
   });
-  const existingServices = (
-    await Promise.all(
-      existingAllServices.map(async (service) => {
-        const { metadata } = await client.getMetadata({
-          trn: `trn:v1:workspace:${workspaceId}:idp:${service.namespace?.name}`,
-        });
-        if (!metadata) {
-          return null;
-        }
-        const hasMatchingLabel = Object.entries(metadata.labels).some(
-          ([key, value]) => key === "sdk-project-id" && value === projectId,
-        );
-        return hasMatchingLabel ? service : null;
-      }),
-    )
-  ).filter((service) => service !== null);
-  const existingNameSet = new Set<string>();
-  existingServices.forEach((service) => {
-    const name = service.namespace?.name;
-    if (name) {
-      existingNameSet.add(name);
-    }
-  });
+  const existingServices: Partial<
+    Record<
+      string,
+      {
+        service: (typeof withoutLabel)[number];
+        labels: Partial<Record<string, string>>;
+      }
+    >
+  > = {};
+  await Promise.all(
+    withoutLabel.map(async (service) => {
+      if (!service.namespace?.name) {
+        return;
+      }
+      const { metadata } = await client.getMetadata({
+        trn: `trn:v1:workspace:${workspaceId}:idp:${service.namespace?.name}`,
+      });
+      existingServices[service.namespace.name] = {
+        service,
+        labels: metadata?.labels ?? {},
+      };
+    }),
+  );
+
   for (const idp of idps) {
     const namespaceName = idp.name;
+    const existing = existingServices[namespaceName];
     let authorization;
     switch (idp.authorization) {
       case "insecure":
@@ -226,7 +228,16 @@ async function planServices(
         break;
     }
 
-    if (existingNameSet.has(namespaceName)) {
+    if (existing) {
+      // Check if managed by another application
+      if (
+        existing.labels["sdk-name"] &&
+        existing.labels["sdk-name"] !== appName
+      ) {
+        throw new Error(
+          `IdP service "${idp.name}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+        );
+      }
       changeSet.updates.push({
         name: namespaceName,
         request: {
@@ -237,11 +248,11 @@ async function planServices(
         metaRequest: {
           trn: `trn:v1:workspace:${workspaceId}:idp:${namespaceName}`,
           labels: {
-            "sdk-project-id": projectId,
+            "sdk-name": appName,
           },
         },
       });
-      existingNameSet.delete(namespaceName);
+      delete existingServices[namespaceName];
     } else {
       changeSet.creates.push({
         name: namespaceName,
@@ -253,20 +264,23 @@ async function planServices(
         metaRequest: {
           trn: `trn:v1:workspace:${workspaceId}:idp:${namespaceName}`,
           labels: {
-            "sdk-project-id": projectId,
+            "sdk-name": appName,
           },
         },
       });
     }
   }
-  existingNameSet.forEach((namespaceName) => {
-    changeSet.deletes.push({
-      name: namespaceName,
-      request: {
-        workspaceId,
-        namespaceName,
-      },
-    });
+  Object.entries(existingServices).forEach(([namespaceName]) => {
+    // Only delete services managed by this application
+    if (existingServices[namespaceName]?.labels["sdk-name"] === appName) {
+      changeSet.deletes.push({
+        name: namespaceName,
+        request: {
+          workspaceId,
+          namespaceName,
+        },
+      });
+    }
   });
   return changeSet;
 }

@@ -42,7 +42,6 @@ const auth = defineAuth("my-auth", {
 });
 
 export default defineConfig({
-  id: "app-001",
   name: "my-app",
   cors: [
     website.url, // This will be replaced with the actual Static Website URL

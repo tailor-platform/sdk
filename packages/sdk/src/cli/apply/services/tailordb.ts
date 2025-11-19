@@ -129,7 +129,7 @@ export async function planTailorDB(
   const serviceChangeSet = await planServices(
     client,
     workspaceId,
-    application.config.id,
+    application.name,
     tailordbs,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -176,13 +176,13 @@ type DeleteService = {
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  projectId: string,
+  appName: string,
   tailordbs: ReadonlyArray<TailorDBService>,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("TailorDB services");
 
-  const existingAllServices = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { tailordbServices, nextPageToken } =
         await client.listTailorDBServices({
@@ -197,38 +197,52 @@ async function planServices(
       throw error;
     }
   });
-  const existingServices = (
-    await Promise.all(
-      existingAllServices.map(async (service) => {
-        const { metadata } = await client.getMetadata({
-          trn: `trn:v1:workspace:${workspaceId}:tailordb:${service.namespace?.name}`,
-        });
-        if (!metadata) {
-          return null;
-        }
-        const hasMatchingLabel = Object.entries(metadata.labels).some(
-          ([key, value]) => key === "sdk-project-id" && value === projectId,
-        );
-        return hasMatchingLabel ? service : null;
-      }),
-    )
-  ).filter((service) => service !== null);
-  const existingNameSet = new Set<string>();
-  existingServices.forEach((service) => {
-    existingNameSet.add(service.namespace?.name as string);
-  });
+  const existingServices: Partial<
+    Record<
+      string,
+      {
+        service: (typeof withoutLabel)[number];
+        labels: Partial<Record<string, string>>;
+      }
+    >
+  > = {};
+  await Promise.all(
+    withoutLabel.map(async (service) => {
+      if (!service.namespace?.name) {
+        return;
+      }
+      const { metadata } = await client.getMetadata({
+        trn: `trn:v1:workspace:${workspaceId}:tailordb:${service.namespace.name}`,
+      });
+      existingServices[service.namespace.name] = {
+        service,
+        labels: metadata?.labels ?? {},
+      };
+    }),
+  );
+
   for (const tailordb of tailordbs) {
-    if (existingNameSet.has(tailordb.namespace)) {
+    const existing = existingServices[tailordb.namespace];
+    if (existing) {
+      // Check if managed by another application
+      if (
+        existing.labels["sdk-name"] &&
+        existing.labels["sdk-name"] !== appName
+      ) {
+        throw new Error(
+          `TailorDB service "${tailordb.namespace}" already exists and is managed by another application "${existing.labels["sdk-name"]}"`,
+        );
+      }
       changeSet.updates.push({
         name: tailordb.namespace,
         metaRequest: {
           trn: `trn:v1:workspace:${workspaceId}:tailordb:${tailordb.namespace}`,
           labels: {
-            "sdk-project-id": projectId,
+            "sdk-name": appName,
           },
         },
       });
-      existingNameSet.delete(tailordb.namespace);
+      delete existingServices[tailordb.namespace];
     } else {
       changeSet.creates.push({
         name: tailordb.namespace,
@@ -241,20 +255,23 @@ async function planServices(
         metaRequest: {
           trn: `trn:v1:workspace:${workspaceId}:tailordb:${tailordb.namespace}`,
           labels: {
-            "sdk-project-id": projectId,
+            "sdk-name": appName,
           },
         },
       });
     }
   }
-  existingNameSet.forEach((namespaceName) => {
-    changeSet.deletes.push({
-      name: namespaceName,
-      request: {
-        workspaceId,
-        namespaceName,
-      },
-    });
+  Object.entries(existingServices).forEach(([namespaceName]) => {
+    // Only delete services managed by this application
+    if (existingServices[namespaceName]?.labels["sdk-name"] === appName) {
+      changeSet.deletes.push({
+        name: namespaceName,
+        request: {
+          workspaceId,
+          namespaceName,
+        },
+      });
+    }
   });
   return changeSet;
 }
