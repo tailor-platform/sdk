@@ -37,3 +37,10 @@ export const UserSettingLanguage = {
   "en": "en"
 } as const;
 export type UserSettingLanguage = (typeof UserSettingLanguage)[keyof typeof UserSettingLanguage];
+
+export const EventName = {
+  "CLICK": "CLICK",
+  "VIEW": "VIEW",
+  "PURCHASE": "PURCHASE"
+} as const;
+export type EventName = (typeof EventName)[keyof typeof EventName];

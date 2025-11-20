@@ -92,13 +92,16 @@ export class EnumConstantsGenerator
       }
     }
 
-    console.log(JSON.stringify(allEnums, null, 2));
-
     if (allEnums.length === 0) {
       return { files };
     }
 
-    // Generate content
+    const content = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+
+    files.push({
+      path: this.options.distPath,
+      content,
+    });
 
     return { files };
   }
