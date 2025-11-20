@@ -20,7 +20,9 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
+import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
+import type { OperatorClient } from "@/cli/client";
 import type { Executor } from "@/parser/service/executor";
 import type { Resolver } from "@/parser/service/resolver";
 
@@ -29,9 +31,17 @@ export interface ApplyOptions {
   profile?: string;
   configPath?: string;
   dryRun?: boolean;
+  yes?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
+}
+
+export interface PlanContext {
+  client: OperatorClient;
+  workspaceId: string;
+  application: Readonly<Application>;
+  yes: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete";
@@ -41,6 +51,7 @@ export async function apply(options?: ApplyOptions) {
   const configPath = loadConfigPath(options?.configPath);
   const { config } = await loadConfig(configPath);
   const dryRun = options?.dryRun ?? false;
+  const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? false;
 
   // Generate user types from loaded config
@@ -70,17 +81,14 @@ export async function apply(options?: ApplyOptions) {
   });
 
   // Phase 1: Plan
-  const tailorDB = await planTailorDB(client, workspaceId, application);
-  const staticWebsite = await planStaticWebsite(
-    client,
-    workspaceId,
-    application,
-  );
-  const idp = await planIdP(client, workspaceId, application);
-  const auth = await planAuth(client, workspaceId, application);
-  const pipeline = await planPipeline(client, workspaceId, application);
-  const app = await planApplication(client, workspaceId, application);
-  const executor = await planExecutor(client, workspaceId, application);
+  const ctx: PlanContext = { client, workspaceId, application, yes };
+  const tailorDB = await planTailorDB(ctx);
+  const staticWebsite = await planStaticWebsite(ctx);
+  const idp = await planIdP(ctx);
+  const auth = await planAuth(ctx);
+  const pipeline = await planPipeline(ctx);
+  const app = await planApplication(ctx);
+  const executor = await planExecutor(ctx);
   if (dryRun) {
     console.log("Dry run enabled. No changes applied.");
     return;
@@ -167,6 +175,11 @@ export const applyCommand = defineCommand({
       description: "Run the command without making any changes",
       alias: "d",
     },
+    yes: {
+      type: "boolean",
+      description: "Skip all confirmation prompts",
+      alias: "y",
+    },
   },
   run: withCommonArgs(async (args) => {
     await apply({
@@ -174,6 +187,7 @@ export const applyCommand = defineCommand({
       profile: args.profile,
       configPath: args.config,
       dryRun: args.dryRun,
+      yes: args.yes,
     });
   }),
 });

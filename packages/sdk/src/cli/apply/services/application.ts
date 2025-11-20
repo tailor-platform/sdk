@@ -8,8 +8,7 @@ import {
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { type Application } from "@/cli/application";
-import { type ApplyPhase } from "..";
+import { type ApplyPhase, type PlanContext } from "..";
 import {
   fetchAll,
   resolveStaticWebsiteUrls,
@@ -67,11 +66,11 @@ function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:application:${name}`;
 }
 
-export async function planApplication(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+export async function planApplication({
+  client,
+  workspaceId,
+  application,
+}: PlanContext) {
   const changeSet: ChangeSet<CreateApplication, UpdateApplication, HasName> =
     new ChangeSet("Applications");
 

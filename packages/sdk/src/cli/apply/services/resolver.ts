@@ -18,13 +18,18 @@ import {
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
-import { type Application } from "@/cli/application";
 import { type ResolverService } from "@/cli/application/resolver/service";
 import { getDistDir } from "@/configure/config";
 import { tailorUserMap } from "@/configure/types";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
-import { type ApplyPhase } from "..";
+import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import {
+  confirmOwnershipConflicts,
+  confirmUnlabeledResources,
+  type OwnershipConflict,
+  type UnlabeledResource,
+} from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor } from "@/parser/service/executor";
@@ -76,9 +81,9 @@ export async function applyPipeline(
     // Delete in reverse order of dependencies
     // Resolvers
     await Promise.all(
-      changeSet.resolver.deletes
-        .filter((del) => del.tag === "resolver-deleted")
-        .map((del) => client.deletePipelineResolver(del.request)),
+      changeSet.resolver.deletes.map((del) =>
+        client.deletePipelineResolver(del.request),
+      ),
     );
 
     // Services
@@ -89,11 +94,12 @@ export async function applyPipeline(
     );
   }
 }
-export async function planPipeline(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+export async function planPipeline({
+  client,
+  workspaceId,
+  application,
+  yes,
+}: PlanContext) {
   const pipelines: Readonly<ResolverService>[] = [];
   for (const pipeline of application.resolverServices) {
     await pipeline.loadResolvers();
@@ -108,6 +114,7 @@ export async function planPipeline(
     workspaceId,
     application.name,
     pipelines,
+    yes,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const resolverChangeSet = await planResolvers(
@@ -152,9 +159,12 @@ async function planServices(
   workspaceId: string,
   appName: string,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
+  yes: boolean,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Pipeline services");
+  const conflicts: OwnershipConflict[] = [];
+  const unlabeled: UnlabeledResource[] = [];
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -194,13 +204,20 @@ async function planServices(
       appName,
     );
     if (existing) {
-      // Check if managed by another application
-      if (existing.label && existing.label !== appName) {
-        throw new Error(
-          `Pipeline service "${pipeline.namespace}" already exists and is managed by another application "${existing.label}"`,
-        );
+      if (!existing.label) {
+        unlabeled.push({
+          resourceType: "Pipeline service",
+          resourceName: pipeline.namespace,
+        });
+      } else if (existing.label && existing.label !== appName) {
+        conflicts.push({
+          resourceType: "Pipeline service",
+          resourceName: pipeline.namespace,
+          currentOwner: existing.label,
+          newOwner: appName,
+        });
       }
-      // For backward compatibility and idempotency, update even when labels don't exist
+
       changeSet.updates.push({
         name: pipeline.namespace,
         request: {
@@ -233,6 +250,11 @@ async function planServices(
       });
     }
   });
+
+  // Confirm ownership conflicts and unlabeled resources
+  await confirmOwnershipConflicts(conflicts, yes);
+  await confirmUnlabeledResources(unlabeled, yes);
+
   return changeSet;
 }
 
@@ -247,14 +269,8 @@ type UpdateResolver = {
 };
 
 type DeleteResolver = {
-  tag: "resolver-deleted";
   name: string;
   request: MessageInitShape<typeof DeletePipelineResolverRequestSchema>;
-};
-
-type ServiceDeleted = {
-  tag: "service-deleted";
-  name: string;
 };
 
 async function planResolvers(
@@ -264,11 +280,8 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateResolver,
-    UpdateResolver,
-    DeleteResolver | ServiceDeleted
-  > = new ChangeSet("Pipeline resolvers");
+  const changeSet: ChangeSet<CreateResolver, UpdateResolver, DeleteResolver> =
+    new ChangeSet("Pipeline resolvers");
 
   const fetchResolvers = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -326,7 +339,6 @@ async function planResolvers(
     }
     existingNameSet.forEach((name) => {
       changeSet.deletes.push({
-        tag: "resolver-deleted",
         name,
         request: {
           workspaceId,
@@ -341,8 +353,12 @@ async function planResolvers(
     const existingResolvers = await fetchResolvers(namespaceName);
     existingResolvers.forEach((resolver) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: resolver.name,
+        request: {
+          workspaceId,
+          namespaceName,
+          resolverName: resolver.name,
+        },
       });
     });
   }

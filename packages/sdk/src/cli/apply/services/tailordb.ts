@@ -33,7 +33,6 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as inflection from "inflection";
-import { type Application } from "@/cli/application";
 import { type TailorDBService } from "@/cli/application/tailordb/service";
 import {
   type PermissionOperand,
@@ -43,8 +42,14 @@ import {
   type StandardTailorTypeGqlPermission,
   type StandardTailorTypePermission,
 } from "@/configure/services/tailordb/permission";
-import { type ApplyPhase } from "..";
+import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import {
+  confirmOwnershipConflicts,
+  confirmUnlabeledResources,
+  type OwnershipConflict,
+  type UnlabeledResource,
+} from "./confirm";
 import {
   buildMetaRequest,
   sdkNameLabelKey,
@@ -118,11 +123,12 @@ export async function applyTailorDB(
   }
 }
 
-export async function planTailorDB(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+export async function planTailorDB({
+  client,
+  workspaceId,
+  application,
+  yes,
+}: PlanContext) {
   const tailordbs: TailorDBService[] = [];
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
@@ -137,6 +143,7 @@ export async function planTailorDB(
     workspaceId,
     application.name,
     tailordbs,
+    yes,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const typeChangeSet = await planTypes(
@@ -188,9 +195,12 @@ async function planServices(
   workspaceId: string,
   appName: string,
   tailordbs: ReadonlyArray<TailorDBService>,
+  yes: boolean,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("TailorDB services");
+  const conflicts: OwnershipConflict[] = [];
+  const unlabeled: UnlabeledResource[] = [];
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -230,13 +240,20 @@ async function planServices(
       appName,
     );
     if (existing) {
-      // Check if managed by another application
-      if (existing.label && existing.label !== appName) {
-        throw new Error(
-          `TailorDB service "${tailordb.namespace}" already exists and is managed by another application "${existing.label}"`,
-        );
+      if (!existing.label) {
+        unlabeled.push({
+          resourceType: "TailorDB service",
+          resourceName: tailordb.namespace,
+        });
+      } else if (existing.label !== appName) {
+        conflicts.push({
+          resourceType: "TailorDB service",
+          resourceName: tailordb.namespace,
+          currentOwner: existing.label,
+          newOwner: appName,
+        });
       }
-      // For backward compatibility and idempotency, update even when labels don't exist
+
       changeSet.updates.push({
         name: tailordb.namespace,
         metaRequest,
@@ -267,6 +284,11 @@ async function planServices(
       });
     }
   });
+
+  // Confirm ownership conflicts and unlabeled resources
+  await confirmOwnershipConflicts(conflicts, yes);
+  await confirmUnlabeledResources(unlabeled, yes);
+
   return changeSet;
 }
 

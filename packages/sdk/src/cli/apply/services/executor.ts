@@ -15,10 +15,15 @@ import {
   type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { type Application } from "@/cli/application";
 import { getDistDir } from "@/configure/config";
-import { type ApplyPhase } from "..";
+import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import {
+  confirmOwnershipConflicts,
+  confirmUnlabeledResources,
+  type OwnershipConflict,
+  type UnlabeledResource,
+} from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor, Trigger } from "@/parser/service/executor";
@@ -73,13 +78,16 @@ function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:executor:${name}`;
 }
 
-export async function planExecutor(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+export async function planExecutor({
+  client,
+  workspaceId,
+  application,
+  yes,
+}: PlanContext) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
     new ChangeSet("Executors");
+  const conflicts: OwnershipConflict[] = [];
+  const unlabeled: UnlabeledResource[] = [];
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -116,13 +124,20 @@ export async function planExecutor(
       application.name,
     );
     if (existing) {
-      // Check if managed by another application
-      if (existing.label && existing.label !== application.name) {
-        throw new Error(
-          `Executor "${executor.name}" already exists and is managed by another application "${existing.label}"`,
-        );
+      if (!existing.label) {
+        unlabeled.push({
+          resourceType: "Executor",
+          resourceName: executor.name,
+        });
+      } else if (existing.label && existing.label !== application.name) {
+        conflicts.push({
+          resourceType: "Executor",
+          resourceName: executor.name,
+          currentOwner: existing.label,
+          newOwner: application.name,
+        });
       }
-      // For backward compatibility and idempotency, update even when labels don't exist
+
       changeSet.updates.push({
         name: executor.name,
         request: {
@@ -155,6 +170,10 @@ export async function planExecutor(
       });
     }
   });
+
+  // Confirm ownership conflicts and unlabeled resources
+  await confirmOwnershipConflicts(conflicts, yes);
+  await confirmUnlabeledResources(unlabeled, yes);
 
   changeSet.print();
   return changeSet;

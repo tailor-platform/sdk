@@ -12,14 +12,19 @@ import {
   TenantProviderConfig_TenantProviderType,
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { type Application } from "@/cli/application";
 import { type AuthService } from "@/cli/application/auth/service";
-import { type ApplyPhase } from "..";
+import { type ApplyPhase, type PlanContext } from "..";
 import {
   fetchAll,
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
+import {
+  confirmOwnershipConflicts,
+  confirmUnlabeledResources,
+  type OwnershipConflict,
+  type UnlabeledResource,
+} from "./confirm";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
@@ -243,11 +248,12 @@ export async function applyAuth(
   }
 }
 
-export async function planAuth(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+export async function planAuth({
+  client,
+  workspaceId,
+  application,
+  yes,
+}: PlanContext) {
   const auths: Readonly<AuthService>[] = [];
   if (application.authService) {
     await application.authService.resolveNamespaces();
@@ -258,6 +264,7 @@ export async function planAuth(
     workspaceId,
     application.name,
     auths,
+    yes,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const idpConfigChangeSet = await planIdPConfigs(
@@ -348,9 +355,12 @@ async function planServices(
   workspaceId: string,
   appName: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
+  yes: boolean,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Auth services");
+  const conflicts: OwnershipConflict[] = [];
+  const unlabeled: UnlabeledResource[] = [];
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -389,12 +399,20 @@ async function planServices(
       appName,
     );
     if (existing) {
-      // Check if managed by another application
-      if (existing.label && existing.label !== appName) {
-        throw new Error(
-          `Auth service "${config.name}" already exists and is managed by another application "${existing.label}"`,
-        );
+      if (!existing.label) {
+        unlabeled.push({
+          resourceType: "Auth service",
+          resourceName: config.name,
+        });
+      } else if (existing.label !== appName) {
+        conflicts.push({
+          resourceType: "Auth service",
+          resourceName: config.name,
+          currentOwner: existing.label,
+          newOwner: appName,
+        });
       }
+
       changeSet.updates.push({
         name: config.name,
         metaRequest,
@@ -423,6 +441,11 @@ async function planServices(
       });
     }
   });
+
+  // Confirm ownership conflicts and unlabeled resources
+  await confirmOwnershipConflicts(conflicts, yes);
+  await confirmUnlabeledResources(unlabeled, yes);
+
   return changeSet;
 }
 

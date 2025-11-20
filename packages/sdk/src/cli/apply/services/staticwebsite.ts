@@ -5,9 +5,14 @@ import {
   type DeleteStaticWebsiteRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { type Application } from "@/cli/application";
-import { type ApplyPhase } from "..";
+import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import {
+  confirmOwnershipConflicts,
+  confirmUnlabeledResources,
+  type OwnershipConflict,
+  type UnlabeledResource,
+} from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -59,16 +64,19 @@ function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
 }
 
-export async function planStaticWebsite(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+export async function planStaticWebsite({
+  client,
+  workspaceId,
+  application,
+  yes,
+}: PlanContext) {
   const changeSet: ChangeSet<
     CreateStaticWebsite,
     UpdateStaticWebsite,
     DeleteStaticWebsite
   > = new ChangeSet("StaticWebsites");
+  const conflicts: OwnershipConflict[] = [];
+  const unlabeled: UnlabeledResource[] = [];
 
   // Fetch existing static websites
   const withoutLabel = await fetchAll(async (pageToken) => {
@@ -110,13 +118,20 @@ export async function planStaticWebsite(
     );
 
     if (existing) {
-      // Check if managed by another application
-      if (existing.label && existing.label !== application.name) {
-        throw new Error(
-          `StaticWebsite "${name}" already exists and is managed by another application "${existing.label}"`,
-        );
+      if (!existing.label) {
+        unlabeled.push({
+          resourceType: "StaticWebsite",
+          resourceName: name,
+        });
+      } else if (existing.label !== application.name) {
+        conflicts.push({
+          resourceType: "StaticWebsite",
+          resourceName: name,
+          currentOwner: existing.label,
+          newOwner: application.name,
+        });
       }
-      // For backward compatibility and idempotency, update even when labels don't exist
+
       changeSet.updates.push({
         name,
         request: {
@@ -157,6 +172,10 @@ export async function planStaticWebsite(
       });
     }
   });
+
+  // Confirm ownership conflicts and unlabeled resources
+  await confirmOwnershipConflicts(conflicts, yes);
+  await confirmUnlabeledResources(unlabeled, yes);
 
   changeSet.print();
   return changeSet;

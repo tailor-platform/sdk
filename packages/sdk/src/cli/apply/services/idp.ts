@@ -7,10 +7,15 @@ import {
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { type Application } from "@/cli/application";
 import { type IdP } from "@/parser/service/idp";
-import { type ApplyPhase } from "..";
+import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import {
+  confirmOwnershipConflicts,
+  confirmUnlabeledResources,
+  type OwnershipConflict,
+  type UnlabeledResource,
+} from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -123,17 +128,19 @@ export async function applyIdP(
   }
 }
 
-export async function planIdP(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+export async function planIdP({
+  client,
+  workspaceId,
+  application,
+  yes,
+}: PlanContext) {
   const idps = application.idpServices;
   const serviceChangeSet = await planServices(
     client,
     workspaceId,
     application.name,
     idps,
+    yes,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
@@ -177,9 +184,12 @@ async function planServices(
   workspaceId: string,
   appName: string,
   idps: ReadonlyArray<IdP>,
+  yes: boolean,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("IdP services");
+  const conflicts: OwnershipConflict[] = [];
+  const unlabeled: UnlabeledResource[] = [];
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -232,13 +242,20 @@ async function planServices(
     }
 
     if (existing) {
-      // Check if managed by another application
-      if (existing.label && existing.label !== appName) {
-        throw new Error(
-          `IdP service "${idp.name}" already exists and is managed by another application "${existing.label}"`,
-        );
+      if (!existing.label) {
+        unlabeled.push({
+          resourceType: "IdP service",
+          resourceName: idp.name,
+        });
+      } else if (existing.label && existing.label !== appName) {
+        conflicts.push({
+          resourceType: "IdP service",
+          resourceName: idp.name,
+          currentOwner: existing.label,
+          newOwner: appName,
+        });
       }
-      // For backward compatibility and idempotency, update even when labels don't exist
+
       changeSet.updates.push({
         name: namespaceName,
         request: {
@@ -273,6 +290,11 @@ async function planServices(
       });
     }
   });
+
+  // Confirm ownership conflicts and unlabeled resources
+  await confirmOwnershipConflicts(conflicts, yes);
+  await confirmUnlabeledResources(unlabeled, yes);
+
   return changeSet;
 }
 
