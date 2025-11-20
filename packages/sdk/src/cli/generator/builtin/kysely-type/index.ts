@@ -46,7 +46,24 @@ export class KyselyGenerator
     namespace: string;
     types: Record<string, KyselyTypeMetadata>;
   }): Promise<string> {
-    return await TypeProcessor.processTypes(args.types, args.namespace);
+    const typesList = Object.values(args.types);
+    if (typesList.length === 0) {
+      return "";
+    }
+
+    const usedUtilityTypes = typesList.reduce(
+      (acc, type) => ({
+        Timestamp: acc.Timestamp || type.usedUtilityTypes.Timestamp,
+        Serial: acc.Serial || type.usedUtilityTypes.Serial,
+      }),
+      { Timestamp: false, Serial: false },
+    );
+
+    return JSON.stringify({
+      namespace: args.namespace,
+      types: typesList,
+      usedUtilityTypes,
+    });
   }
 
   aggregate(args: {
@@ -56,15 +73,33 @@ export class KyselyGenerator
   }): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
+    const allNamespaceData: {
+      namespace: string;
+      types: KyselyTypeMetadata[];
+      usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
+    }[] = [];
+
     for (const input of args.inputs) {
       for (const nsResult of input.tailordb) {
         if (nsResult.types) {
-          files.push({
-            path: this.options.distPath,
-            content: nsResult.types,
-          });
+          const parsed = JSON.parse(nsResult.types);
+          if (parsed.namespace && parsed.types) {
+            allNamespaceData.push(parsed);
+          }
         }
       }
+    }
+
+    if (allNamespaceData.length === 0) {
+      return { files };
+    }
+
+    const content = TypeProcessor.generateUnifiedTypes(allNamespaceData);
+    if (content) {
+      files.push({
+        path: this.options.distPath,
+        content,
+      });
     }
 
     return { files };

@@ -193,26 +193,36 @@ export class TypeProcessor {
     return { type, usedUtilityTypes: aggregatedUtilityTypes };
   }
 
-  static async processTypes(
-    types: Record<string, KyselyTypeMetadata>,
-    namespace: string,
-  ): Promise<string> {
-    // Aggregate used utility types from all types
-    const aggregatedUtilityTypes = Object.values(types).reduce(
-      (acc, type) => ({
-        Timestamp: acc.Timestamp || type.usedUtilityTypes.Timestamp,
-        Serial: acc.Serial || type.usedUtilityTypes.Serial,
+  /**
+   * Generate unified types file from multiple namespaces.
+   */
+  static generateUnifiedTypes(
+    namespaceData: {
+      namespace: string;
+      types: KyselyTypeMetadata[];
+      usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
+    }[],
+  ): string {
+    if (namespaceData.length === 0) {
+      return "";
+    }
+
+    // Aggregate used utility types from all namespaces
+    const globalUsedUtilityTypes = namespaceData.reduce(
+      (acc, ns) => ({
+        Timestamp: acc.Timestamp || ns.usedUtilityTypes.Timestamp,
+        Serial: acc.Serial || ns.usedUtilityTypes.Serial,
       }),
       { Timestamp: false, Serial: false },
     );
 
-    // Generate utility type declarations based on usage
     const utilityTypeDeclarations: string[] = [];
-    if (aggregatedUtilityTypes.Timestamp) {
+    if (globalUsedUtilityTypes.Timestamp) {
       utilityTypeDeclarations.push(
         /* ts */ `type Timestamp = ColumnType<Date, Date | string, Date | string>;`,
       );
     }
+
     // Generated is always needed for the id field
     utilityTypeDeclarations.push(
       multiline /* ts */ `
@@ -221,53 +231,48 @@ export class TypeProcessor {
           : ColumnType<T, T | undefined, T>;
       `,
     );
-    if (aggregatedUtilityTypes.Serial) {
+    if (globalUsedUtilityTypes.Serial) {
       utilityTypeDeclarations.push(
         /* ts */ `type Serial<T = string | number> = ColumnType<T, never, never>;`,
       );
     }
 
-    return (
-      [
-        multiline /* ts */ `
-          import { type ColumnType, Kysely } from "kysely";
-          import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+    const importsSection = multiline /* ts */ `
+      import { type ColumnType, Kysely } from "kysely";
+      import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-          ${utilityTypeDeclarations.join("\n")}
-        `,
-        TypeProcessor.generateNamespaceInterface(
-          Object.values(types),
-          namespace,
-        ),
-        multiline /* ts */ `
-          export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
-            const client = new tailordb.Client({ namespace });
-            return new Kysely<Namespace[N]>({ dialect: new TailordbDialect(client) });
-          }
+      ${utilityTypeDeclarations.join("\n")}
+    `;
 
-          export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;
-        `,
-      ].join("\n\n") + "\n"
-    );
-  }
+    // Generate Namespace interface with multiple namespaces
+    const namespaceInterfaces = namespaceData
+      .map(({ namespace, types }) => {
+        const typeDefsWithIndent = types
+          .map((type) => {
+            return type.typeDef
+              .split("\n")
+              .map((line) => (line.trim() ? `    ${line}` : ""))
+              .join("\n");
+          })
+          .join("\n\n");
 
-  /**
-   * Generate the Namespace interface.
-   */
-  private static generateNamespaceInterface(
-    types: KyselyTypeMetadata[],
-    namespace: string,
-  ): string {
-    const typeDefsWithIndent = types
-      .map((type) => {
-        // Add 4 spaces indent to each line of typeDef
-        return type.typeDef
-          .split("\n")
-          .map((line) => (line.trim() ? `    ${line}` : ""))
-          .join("\n");
+        return `  "${namespace}": {\n${typeDefsWithIndent}\n  }`;
       })
-      .join("\n\n");
+      .join(",\n");
 
-    return `export interface Namespace {\n  "${namespace}": {\n${typeDefsWithIndent}\n  }\n}`;
+    const namespaceInterface = `export interface Namespace {\n${namespaceInterfaces}\n}`;
+
+    const getDBFunction = multiline /* ts */ `
+      export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
+        const client = new tailordb.Client({ namespace });
+        return new Kysely<Namespace[N]>({ dialect: new TailordbDialect(client) });
+      }
+
+      export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;
+    `;
+
+    return (
+      [importsSection, namespaceInterface, getDBFunction].join("\n\n") + "\n"
+    );
   }
 }

@@ -162,7 +162,7 @@ describe("KyselyGenerator integration tests", () => {
   });
 
   describe("processTailorDBNamespace method tests", () => {
-    it("integrates multiple types to generate Kysely type definition file", async () => {
+    it("returns JSON metadata for namespace", async () => {
       const typeMetadata = {
         User: {
           name: "User",
@@ -196,70 +196,49 @@ describe("KyselyGenerator integration tests", () => {
         types: typeMetadata,
       });
 
-      // Common imports are included
-      expect(result).toContain(
-        'import { type ColumnType, Kysely } from "kysely";',
-      );
-      expect(result).toContain(
-        'import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";',
-      );
+      // Result should be JSON string
+      const parsed = JSON.parse(result);
 
-      // Type definitions are included in Namespace interface
-      expect(result).toContain("interface Namespace {");
-      expect(result).toContain('"test-namespace": {');
-      expect(result).toContain("User: {");
-      expect(result).toContain("Post: {");
-
-      // getDB function is included
-      expect(result).toContain(
-        "export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]>",
-      );
-
-      // File ends with newline
-      expect(result.endsWith("\n")).toBe(true);
+      // Check structure
+      expect(parsed.namespace).toBe("test-namespace");
+      expect(parsed.types).toHaveLength(2);
+      expect(parsed.types[0].name).toBe("User");
+      expect(parsed.types[1].name).toBe("Post");
+      expect(parsed.usedUtilityTypes).toEqual({
+        Timestamp: false,
+        Serial: false,
+      });
     });
 
-    it("works correctly with empty type definitions", async () => {
+    it("returns empty string for empty type definitions", async () => {
       const result = await kyselyGenerator.processTailorDBNamespace({
         applicationNamespace: "test-app",
         namespace: "test-namespace",
         types: {},
       });
 
-      expect(result).toContain(
-        'import { type ColumnType, Kysely } from "kysely";',
-      );
-      expect(result).toContain(
-        'import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";',
-      );
-      expect(result).toContain("interface Namespace {");
-      expect(result).toContain('"test-namespace": {');
-      expect(result).toContain("export function getDB");
-      expect(result.endsWith("\n")).toBe(true);
+      expect(result).toBe("");
     });
   });
 
   describe("aggregate function tests", () => {
     it("integrates type definitions and returns file generation result", () => {
-      const processedTypes = `import { type ColumnType, Kysely } from "kysely";
-import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
-
-interface Namespace {
-  "test-namespace": {
-    User: {
-      id: Generated<string>;
-      name: string;
-      email: string;
-    }
-  }
-}
-
-export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
-  return new Kysely<Namespace[N]>({
-    dialect: new TailordbDialect(new tailordb.Client({ namespace }))
-  });
-}
-`;
+      // JSON metadata from processTailorDBNamespace
+      const processedTypes = JSON.stringify({
+        namespace: "test-namespace",
+        types: [
+          {
+            name: "User",
+            typeDef: `User: {
+  id: Generated<string>;
+  name: string;
+  email: string;
+}`,
+            usedUtilityTypes: { Timestamp: false, Serial: false },
+          },
+        ],
+        usedUtilityTypes: { Timestamp: false, Serial: false },
+      });
 
       const inputs = [
         {
@@ -281,7 +260,15 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(testDistPath);
-      expect(result.files[0].content).toBe(processedTypes);
+
+      const content = result.files[0].content;
+      expect(content).toContain(
+        'import { type ColumnType, Kysely } from "kysely"',
+      );
+      expect(content).toContain("interface Namespace {");
+      expect(content).toContain('"test-namespace": {');
+      expect(content).toContain("User: {");
+      expect(content).toContain("export function getDB");
       expect(result.errors).toBeUndefined();
     });
 
@@ -366,6 +353,110 @@ export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Nam
       });
 
       expect(result.typeDef).toContain("unknownField: string;");
+    });
+  });
+
+  describe("multiple namespace support", () => {
+    it("aggregates types from multiple namespaces", () => {
+      const tailordbTypes = JSON.stringify({
+        namespace: "tailordb",
+        types: [
+          {
+            name: "User",
+            typeDef: `User: {
+  id: Generated<string>;
+  name: string;
+}`,
+            usedUtilityTypes: { Timestamp: false, Serial: false },
+          },
+        ],
+        usedUtilityTypes: { Timestamp: false, Serial: false },
+      });
+
+      const analyticsTypes = JSON.stringify({
+        namespace: "analytics",
+        types: [
+          {
+            name: "Event",
+            typeDef: `Event: {
+  id: Generated<string>;
+  timestamp: Timestamp;
+}`,
+            usedUtilityTypes: { Timestamp: true, Serial: false },
+          },
+        ],
+        usedUtilityTypes: { Timestamp: true, Serial: false },
+      });
+
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [
+            { namespace: "tailordb", types: tailordbTypes },
+            { namespace: "analytics", types: analyticsTypes },
+          ],
+          resolver: [],
+        },
+      ];
+
+      const result = kyselyGenerator.aggregate({
+        inputs,
+        executorInputs: [],
+        baseDir: "/test",
+      });
+
+      expect(result.files).toHaveLength(1);
+      const content = result.files[0].content;
+
+      // Check both namespaces are included
+      expect(content).toContain('"tailordb": {');
+      expect(content).toContain('"analytics": {');
+      expect(content).toContain("User: {");
+      expect(content).toContain("Event: {");
+
+      // Check Timestamp utility type is included (used by analytics)
+      expect(content).toContain("type Timestamp = ColumnType");
+      expect(content).toContain("interface Namespace {");
+    });
+
+    it("includes only necessary utility types", () => {
+      const types = JSON.stringify({
+        namespace: "test",
+        types: [
+          {
+            name: "Simple",
+            typeDef: `Simple: {
+  id: Generated<string>;
+  name: string;
+}`,
+            usedUtilityTypes: { Timestamp: false, Serial: false },
+          },
+        ],
+        usedUtilityTypes: { Timestamp: false, Serial: false },
+      });
+
+      const inputs = [
+        {
+          applicationNamespace: "test-app",
+          tailordb: [{ namespace: "test", types }],
+          resolver: [],
+        },
+      ];
+
+      const result = kyselyGenerator.aggregate({
+        inputs,
+        executorInputs: [],
+        baseDir: "/test",
+      });
+
+      const content = result.files[0].content;
+
+      // Timestamp should not be included
+      expect(content).not.toContain("type Timestamp = ColumnType");
+      // Generated should always be included
+      expect(content).toContain("type Generated<T>");
+      // Serial should not be included
+      expect(content).not.toContain("type Serial<T");
     });
   });
 });
