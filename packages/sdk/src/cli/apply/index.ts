@@ -95,7 +95,7 @@ export async function apply(options?: ApplyOptions) {
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
 
-  // Collect all conflicts and unlabeled resources
+  // Confirm all conflicts and unlabeled resources
   const allConflicts: OwnershipConflict[] = [
     ...tailorDB.conflicts,
     ...staticWebsite.conflicts,
@@ -112,19 +112,21 @@ export async function apply(options?: ApplyOptions) {
     ...pipeline.unlabeled,
     ...executor.unlabeled,
   ];
+  await confirmOwnershipConflicts(allConflicts, yes);
+  await confirmUnlabeledResources(allUnlabeled, yes);
 
   // Delete renamed applications
-  const orphanedOwners = new Set([
-    ...tailorDB.orphanedOwners,
-    ...staticWebsite.orphanedOwners,
-    ...idp.orphanedOwners,
-    ...auth.orphanedOwners,
-    ...pipeline.orphanedOwners,
-    ...executor.orphanedOwners,
+  const resourceOwners = new Set([
+    ...tailorDB.resourceOwners,
+    ...staticWebsite.resourceOwners,
+    ...idp.resourceOwners,
+    ...auth.resourceOwners,
+    ...pipeline.resourceOwners,
+    ...executor.resourceOwners,
   ]);
   const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
   const emptyApps = [...conflictOwners].filter(
-    (owner) => !orphanedOwners.has(owner),
+    (owner) => !resourceOwners.has(owner),
   );
   for (const emptyApp of emptyApps) {
     app.deletes.push({
@@ -135,10 +137,6 @@ export async function apply(options?: ApplyOptions) {
       },
     });
   }
-
-  // Confirm all conflicts and unlabeled resources at once
-  await confirmOwnershipConflicts(allConflicts, yes);
-  await confirmUnlabeledResources(allUnlabeled, yes);
 
   if (dryRun) {
     console.log("Dry run enabled. No changes applied.");

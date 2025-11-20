@@ -134,7 +134,7 @@ export async function planIdP({
     changeSet: serviceChangeSet,
     conflicts,
     unlabeled,
-    orphanedOwners,
+    resourceOwners,
   } = await planServices(client, workspaceId, application.name, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
@@ -153,7 +153,7 @@ export async function planIdP({
     },
     conflicts,
     unlabeled,
-    orphanedOwners,
+    resourceOwners,
   };
 }
 
@@ -188,7 +188,7 @@ async function planServices(
     new ChangeSet("IdP services");
   const conflicts: OwnershipConflict[] = [];
   const unlabeled: UnlabeledResource[] = [];
-  const orphanedOwners = new Set<string>();
+  const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -280,7 +280,7 @@ async function planServices(
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const label = existingServices[namespaceName]?.label;
     if (label && label !== appName) {
-      orphanedOwners.add(label);
+      resourceOwners.add(label);
     }
     // Only delete services managed by this application
     if (label === appName) {
@@ -294,7 +294,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unlabeled, orphanedOwners };
+  return { changeSet, conflicts, unlabeled, resourceOwners };
 }
 
 type CreateClient = {
