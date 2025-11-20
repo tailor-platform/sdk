@@ -196,49 +196,51 @@ describe("KyselyGenerator integration tests", () => {
         types: typeMetadata,
       });
 
-      // Result should be JSON string
-      const parsed = JSON.parse(result);
-
-      // Check structure
-      expect(parsed.namespace).toBe("test-namespace");
-      expect(parsed.types).toHaveLength(2);
-      expect(parsed.types[0].name).toBe("User");
-      expect(parsed.types[1].name).toBe("Post");
-      expect(parsed.usedUtilityTypes).toEqual({
+      // Result should be object
+      expect(result.namespace).toBe("test-namespace");
+      expect(result.types).toHaveLength(2);
+      expect(result.types[0].name).toBe("User");
+      expect(result.types[1].name).toBe("Post");
+      expect(result.usedUtilityTypes).toEqual({
         Timestamp: false,
         Serial: false,
       });
     });
 
-    it("returns empty string for empty type definitions", async () => {
+    it("returns metadata with empty types array for empty type definitions", async () => {
       const result = await kyselyGenerator.processTailorDBNamespace({
         applicationNamespace: "test-app",
         namespace: "test-namespace",
         types: {},
       });
 
-      expect(result).toBe("");
+      expect(result.namespace).toBe("test-namespace");
+      expect(result.types).toEqual([]);
+      expect(result.usedUtilityTypes).toEqual({
+        Timestamp: false,
+        Serial: false,
+      });
     });
   });
 
   describe("aggregate function tests", () => {
     it("integrates type definitions and returns file generation result", () => {
-      // JSON metadata from processTailorDBNamespace
-      const processedTypes = JSON.stringify({
+      // Metadata object from processTailorDBNamespace
+      const processedTypes = {
         namespace: "test-namespace",
         types: [
           {
             name: "User",
             typeDef: `User: {
-  id: Generated<string>;
-  name: string;
-  email: string;
-}`,
+              id: Generated<string>;
+              name: string;
+              email: string;
+            }`,
             usedUtilityTypes: { Timestamp: false, Serial: false },
           },
         ],
         usedUtilityTypes: { Timestamp: false, Serial: false },
-      });
+      };
 
       const inputs = [
         {
@@ -358,35 +360,35 @@ describe("KyselyGenerator integration tests", () => {
 
   describe("multiple namespace support", () => {
     it("aggregates types from multiple namespaces", () => {
-      const tailordbTypes = JSON.stringify({
+      const tailordbTypes = {
         namespace: "tailordb",
         types: [
           {
             name: "User",
             typeDef: `User: {
-  id: Generated<string>;
-  name: string;
-}`,
+              id: Generated<string>;
+              name: string;
+            }`,
             usedUtilityTypes: { Timestamp: false, Serial: false },
           },
         ],
         usedUtilityTypes: { Timestamp: false, Serial: false },
-      });
+      };
 
-      const analyticsTypes = JSON.stringify({
+      const analyticsTypes = {
         namespace: "analytics",
         types: [
           {
             name: "Event",
             typeDef: `Event: {
-  id: Generated<string>;
-  timestamp: Timestamp;
-}`,
+              id: Generated<string>;
+              timestamp: Timestamp;
+            }`,
             usedUtilityTypes: { Timestamp: true, Serial: false },
           },
         ],
         usedUtilityTypes: { Timestamp: true, Serial: false },
-      });
+      };
 
       const inputs = [
         {
@@ -420,20 +422,20 @@ describe("KyselyGenerator integration tests", () => {
     });
 
     it("includes only necessary utility types", () => {
-      const types = JSON.stringify({
+      const types = {
         namespace: "test",
         types: [
           {
             name: "Simple",
             typeDef: `Simple: {
-  id: Generated<string>;
-  name: string;
-}`,
+              id: Generated<string>;
+              name: string;
+            }`,
             usedUtilityTypes: { Timestamp: false, Serial: false },
           },
         ],
         usedUtilityTypes: { Timestamp: false, Serial: false },
-      });
+      };
 
       const inputs = [
         {

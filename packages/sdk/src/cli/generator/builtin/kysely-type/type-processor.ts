@@ -1,5 +1,5 @@
 import multiline from "multiline-ts";
-import { type KyselyTypeMetadata } from "./types";
+import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
@@ -197,11 +197,7 @@ export class TypeProcessor {
    * Generate unified types file from multiple namespaces.
    */
   static generateUnifiedTypes(
-    namespaceData: {
-      namespace: string;
-      types: KyselyTypeMetadata[];
-      usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
-    }[],
+    namespaceData: KyselyNamespaceMetadata[],
   ): string {
     if (namespaceData.length === 0) {
       return "";
