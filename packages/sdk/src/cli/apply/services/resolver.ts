@@ -24,12 +24,7 @@ import { tailorUserMap } from "@/configure/types";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import {
-  confirmOwnershipConflicts,
-  confirmUnlabeledResources,
-  type OwnershipConflict,
-  type UnlabeledResource,
-} from "./confirm";
+import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor } from "@/parser/service/executor";
@@ -52,9 +47,10 @@ const SCALAR_TYPE_MAP = {
 
 export async function applyPipeline(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planPipeline>>,
+  result: Awaited<ReturnType<typeof planPipeline>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // Services
     await Promise.all([
@@ -98,7 +94,6 @@ export async function planPipeline({
   client,
   workspaceId,
   application,
-  yes,
 }: PlanContext) {
   const pipelines: Readonly<ResolverService>[] = [];
   for (const pipeline of application.resolverServices) {
@@ -109,13 +104,11 @@ export async function planPipeline({
     (await application.executorService?.loadExecutors()) ?? {},
   );
 
-  const serviceChangeSet = await planServices(
-    client,
-    workspaceId,
-    application.name,
-    pipelines,
-    yes,
-  );
+  const {
+    changeSet: serviceChangeSet,
+    conflicts,
+    unlabeled,
+  } = await planServices(client, workspaceId, application.name, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const resolverChangeSet = await planResolvers(
     client,
@@ -128,8 +121,12 @@ export async function planPipeline({
   serviceChangeSet.print();
   resolverChangeSet.print();
   return {
-    service: serviceChangeSet,
-    resolver: resolverChangeSet,
+    changeSet: {
+      service: serviceChangeSet,
+      resolver: resolverChangeSet,
+    },
+    conflicts,
+    unlabeled,
   };
 }
 
@@ -159,7 +156,6 @@ async function planServices(
   workspaceId: string,
   appName: string,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
-  yes: boolean,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Pipeline services");
@@ -251,11 +247,7 @@ async function planServices(
     }
   });
 
-  // Confirm ownership conflicts and unlabeled resources
-  await confirmOwnershipConflicts(conflicts, yes);
-  await confirmUnlabeledResources(unlabeled, yes);
-
-  return changeSet;
+  return { changeSet, conflicts, unlabeled };
 }
 
 type CreateResolver = {

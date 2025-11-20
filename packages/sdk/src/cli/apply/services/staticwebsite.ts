@@ -7,21 +7,17 @@ import {
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import {
-  confirmOwnershipConflicts,
-  confirmUnlabeledResources,
-  type OwnershipConflict,
-  type UnlabeledResource,
-} from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { OwnershipConflict, UnlabeledResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyStaticWebsite(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planStaticWebsite>>,
+  result: Awaited<ReturnType<typeof planStaticWebsite>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // StaticWebsites
     await Promise.all([
@@ -68,7 +64,6 @@ export async function planStaticWebsite({
   client,
   workspaceId,
   application,
-  yes,
 }: PlanContext) {
   const changeSet: ChangeSet<
     CreateStaticWebsite,
@@ -173,10 +168,6 @@ export async function planStaticWebsite({
     }
   });
 
-  // Confirm ownership conflicts and unlabeled resources
-  await confirmOwnershipConflicts(conflicts, yes);
-  await confirmUnlabeledResources(unlabeled, yes);
-
   changeSet.print();
-  return changeSet;
+  return { changeSet, conflicts, unlabeled };
 }

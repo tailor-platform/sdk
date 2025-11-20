@@ -18,12 +18,7 @@ import {
 import { getDistDir } from "@/configure/config";
 import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import {
-  confirmOwnershipConflicts,
-  confirmUnlabeledResources,
-  type OwnershipConflict,
-  type UnlabeledResource,
-} from "./confirm";
+import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor, Trigger } from "@/parser/service/executor";
@@ -31,9 +26,10 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 export async function applyExecutor(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planExecutor>>,
+  result: Awaited<ReturnType<typeof planExecutor>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // Executors
     await Promise.all([
@@ -82,7 +78,6 @@ export async function planExecutor({
   client,
   workspaceId,
   application,
-  yes,
 }: PlanContext) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
     new ChangeSet("Executors");
@@ -171,12 +166,8 @@ export async function planExecutor({
     }
   });
 
-  // Confirm ownership conflicts and unlabeled resources
-  await confirmOwnershipConflicts(conflicts, yes);
-  await confirmUnlabeledResources(unlabeled, yes);
-
   changeSet.print();
-  return changeSet;
+  return { changeSet, conflicts, unlabeled };
 }
 
 function protoExecutor(

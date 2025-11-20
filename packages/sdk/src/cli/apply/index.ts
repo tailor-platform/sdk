@@ -12,6 +12,12 @@ import { initOperatorClient } from "../client";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
+import {
+  confirmOwnershipConflicts,
+  confirmUnlabeledResources,
+  type OwnershipConflict,
+  type UnlabeledResource,
+} from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
@@ -41,7 +47,6 @@ export interface PlanContext {
   client: OperatorClient;
   workspaceId: string;
   application: Readonly<Application>;
-  yes: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete";
@@ -81,7 +86,7 @@ export async function apply(options?: ApplyOptions) {
   });
 
   // Phase 1: Plan
-  const ctx: PlanContext = { client, workspaceId, application, yes };
+  const ctx: PlanContext = { client, workspaceId, application };
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
   const idp = await planIdP(ctx);
@@ -89,6 +94,28 @@ export async function apply(options?: ApplyOptions) {
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
+
+  // Collect all conflicts and unlabeled resources
+  const allConflicts: OwnershipConflict[] = [
+    ...tailorDB.conflicts,
+    ...staticWebsite.conflicts,
+    ...idp.conflicts,
+    ...auth.conflicts,
+    ...pipeline.conflicts,
+    ...executor.conflicts,
+  ];
+  const allUnlabeled: UnlabeledResource[] = [
+    ...tailorDB.unlabeled,
+    ...staticWebsite.unlabeled,
+    ...idp.unlabeled,
+    ...auth.unlabeled,
+    ...pipeline.unlabeled,
+    ...executor.unlabeled,
+  ];
+  // Confirm all conflicts and unlabeled resources at once
+  await confirmOwnershipConflicts(allConflicts, yes);
+  await confirmUnlabeledResources(allUnlabeled, yes);
+
   if (dryRun) {
     console.log("Dry run enabled. No changes applied.");
     return;

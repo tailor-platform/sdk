@@ -19,12 +19,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
-import {
-  confirmOwnershipConflicts,
-  confirmUnlabeledResources,
-  type OwnershipConflict,
-  type UnlabeledResource,
-} from "./confirm";
+import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
@@ -76,9 +71,10 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 export async function applyAuth(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planAuth>>,
+  result: Awaited<ReturnType<typeof planAuth>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // Services
     await Promise.all([
@@ -252,20 +248,17 @@ export async function planAuth({
   client,
   workspaceId,
   application,
-  yes,
 }: PlanContext) {
   const auths: Readonly<AuthService>[] = [];
   if (application.authService) {
     await application.authService.resolveNamespaces();
     auths.push(application.authService);
   }
-  const serviceChangeSet = await planServices(
-    client,
-    workspaceId,
-    application.name,
-    auths,
-    yes,
-  );
+  const {
+    changeSet: serviceChangeSet,
+    conflicts,
+    unlabeled,
+  } = await planServices(client, workspaceId, application.name, auths);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const idpConfigChangeSet = await planIdPConfigs(
     client,
@@ -319,14 +312,18 @@ export async function planAuth({
   scimChangeSet.print();
   scimResourceChangeSet.print();
   return {
-    service: serviceChangeSet,
-    idpConfig: idpConfigChangeSet,
-    userProfileConfig: userProfileConfigChangeSet,
-    tenantConfig: tenantConfigChangeSet,
-    machineUser: machineUserChangeSet,
-    oauth2Client: oauth2ClientChangeSet,
-    scim: scimChangeSet,
-    scimResource: scimResourceChangeSet,
+    changeSet: {
+      service: serviceChangeSet,
+      idpConfig: idpConfigChangeSet,
+      userProfileConfig: userProfileConfigChangeSet,
+      tenantConfig: tenantConfigChangeSet,
+      machineUser: machineUserChangeSet,
+      oauth2Client: oauth2ClientChangeSet,
+      scim: scimChangeSet,
+      scimResource: scimResourceChangeSet,
+    },
+    conflicts,
+    unlabeled,
   };
 }
 
@@ -355,7 +352,6 @@ async function planServices(
   workspaceId: string,
   appName: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
-  yes: boolean,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Auth services");
@@ -442,11 +438,7 @@ async function planServices(
     }
   });
 
-  // Confirm ownership conflicts and unlabeled resources
-  await confirmOwnershipConflicts(conflicts, yes);
-  await confirmUnlabeledResources(unlabeled, yes);
-
-  return changeSet;
+  return { changeSet, conflicts, unlabeled };
 }
 
 type CreateIdPConfig = {

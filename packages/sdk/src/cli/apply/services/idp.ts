@@ -10,12 +10,7 @@ import {
 import { type IdP } from "@/parser/service/idp";
 import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import {
-  confirmOwnershipConflicts,
-  confirmUnlabeledResources,
-  type OwnershipConflict,
-  type UnlabeledResource,
-} from "./confirm";
+import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -30,9 +25,10 @@ export function idpClientSecretName(namespaceName: string, clientName: string) {
 
 export async function applyIdP(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planIdP>>,
+  result: Awaited<ReturnType<typeof planIdP>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // Services
     await Promise.all([
@@ -132,16 +128,13 @@ export async function planIdP({
   client,
   workspaceId,
   application,
-  yes,
 }: PlanContext) {
   const idps = application.idpServices;
-  const serviceChangeSet = await planServices(
-    client,
-    workspaceId,
-    application.name,
-    idps,
-    yes,
-  );
+  const {
+    changeSet: serviceChangeSet,
+    conflicts,
+    unlabeled,
+  } = await planServices(client, workspaceId, application.name, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
     client,
@@ -153,8 +146,12 @@ export async function planIdP({
   serviceChangeSet.print();
   clientChangeSet.print();
   return {
-    service: serviceChangeSet,
-    client: clientChangeSet,
+    changeSet: {
+      service: serviceChangeSet,
+      client: clientChangeSet,
+    },
+    conflicts,
+    unlabeled,
   };
 }
 
@@ -184,7 +181,6 @@ async function planServices(
   workspaceId: string,
   appName: string,
   idps: ReadonlyArray<IdP>,
-  yes: boolean,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("IdP services");
@@ -291,11 +287,7 @@ async function planServices(
     }
   });
 
-  // Confirm ownership conflicts and unlabeled resources
-  await confirmOwnershipConflicts(conflicts, yes);
-  await confirmUnlabeledResources(unlabeled, yes);
-
-  return changeSet;
+  return { changeSet, conflicts, unlabeled };
 }
 
 type CreateClient = {
