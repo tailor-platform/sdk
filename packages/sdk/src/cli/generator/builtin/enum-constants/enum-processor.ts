@@ -69,7 +69,7 @@ export class EnumProcessor {
       enumMap.set(enumDef.name, enumDef);
     }
 
-    const enumDefs = Array.from(allEnums.values())
+    const enumDefs = Array.from(enumMap.values())
       .map((e) => {
         const members = e.values
           .map((v) => {
@@ -109,7 +109,11 @@ export class EnumProcessor {
       })
       .join("\n\n");
 
-    return enumDefs;
+    if (!enumDefs) {
+      return "";
+    }
+
+    return enumDefs + "\n";
   }
 
   private static capitalizeFirst(str: string): string {

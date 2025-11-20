@@ -97,11 +97,12 @@ export class EnumConstantsGenerator
     }
 
     const content = EnumProcessor.generateUnifiedEnumConstants(allEnums);
-
-    files.push({
-      path: this.options.distPath,
-      content,
-    });
+    if (content) {
+      files.push({
+        path: this.options.distPath,
+        content,
+      });
+    }
 
     return { files };
   }
