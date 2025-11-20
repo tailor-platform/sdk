@@ -8,11 +8,11 @@ import {
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
 import { type IdP } from "@/parser/service/idp";
-import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export function idpClientVaultName(namespaceName: string, clientName: string) {
@@ -246,7 +246,7 @@ async function planServices(
           resourceType: "IdP service",
           resourceName: idp.name,
         });
-      } else if (existing.label && existing.label !== appName) {
+      } else if (existing.label !== appName) {
         conflicts.push({
           resourceType: "IdP service",
           resourceName: idp.name,

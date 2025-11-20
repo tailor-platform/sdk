@@ -22,11 +22,11 @@ import { type ResolverService } from "@/cli/application/resolver/service";
 import { getDistDir } from "@/configure/config";
 import { tailorUserMap } from "@/configure/types";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
-import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -208,7 +208,7 @@ async function planServices(
           resourceType: "Pipeline service",
           resourceName: pipeline.namespace,
         });
-      } else if (existing.label && existing.label !== appName) {
+      } else if (existing.label !== appName) {
         conflicts.push({
           resourceType: "Pipeline service",
           resourceName: pipeline.namespace,

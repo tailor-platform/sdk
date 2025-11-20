@@ -4,7 +4,6 @@ import {
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { type ApplyPhase, type PlanContext } from "..";
 import {
   fetchAll,
   resolveStaticWebsiteUrls,
@@ -12,6 +11,7 @@ import {
 } from "../../client";
 import { buildMetaRequest } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,

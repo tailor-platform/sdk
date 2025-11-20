@@ -42,7 +42,6 @@ import {
   type StandardTailorTypeGqlPermission,
   type StandardTailorTypePermission,
 } from "@/configure/services/tailordb/permission";
-import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import {
   buildMetaRequest,
@@ -51,6 +50,7 @@ import {
   type WithLabel,
 } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 import type { Executor } from "@/parser/service/executor";

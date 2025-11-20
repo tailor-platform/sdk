@@ -5,10 +5,10 @@ import {
   type DeleteStaticWebsiteRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 

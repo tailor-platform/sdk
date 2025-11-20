@@ -16,11 +16,11 @@ import {
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { getDistDir } from "@/configure/config";
-import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor, Trigger } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -125,7 +125,7 @@ export async function planExecutor({
           resourceType: "Executor",
           resourceName: executor.name,
         });
-      } else if (existing.label && existing.label !== application.name) {
+      } else if (existing.label !== application.name) {
         conflicts.push({
           resourceType: "Executor",
           resourceName: executor.name,

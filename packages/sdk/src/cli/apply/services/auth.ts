@@ -12,17 +12,17 @@ import {
   TenantProviderConfig_TenantProviderType,
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { type AuthService } from "@/cli/application/auth/service";
-import { type ApplyPhase, type PlanContext } from "..";
 import {
   fetchAll,
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
-import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { AuthService } from "@/cli/application/auth/service";
 import type {
   BuiltinIdP,
   IdProviderConfig,
