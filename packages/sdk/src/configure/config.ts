@@ -34,7 +34,10 @@ export const getDistDir = (): string => {
   return distPath;
 };
 
-export function defineConfig<const Config extends AppConfig>(config: Config) {
+export function defineConfig<
+  const Config extends AppConfig &
+    Record<Exclude<keyof Config, keyof AppConfig>, never>,
+>(config: Config) {
   return config;
 }
 
