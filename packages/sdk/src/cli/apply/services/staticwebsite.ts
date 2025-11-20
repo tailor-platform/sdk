@@ -9,7 +9,7 @@ import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
-import type { OwnershipConflict, UnlabeledResource } from "./confirm";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyStaticWebsite(
@@ -70,8 +70,8 @@ export async function planStaticWebsite({
     UpdateStaticWebsite,
     DeleteStaticWebsite
   > = new ChangeSet("StaticWebsites");
-  const conflicts: OwnershipConflict[] = [];
-  const unlabeled: UnlabeledResource[] = [];
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   // Fetch existing static websites
@@ -115,7 +115,7 @@ export async function planStaticWebsite({
 
     if (existing) {
       if (!existing.label) {
-        unlabeled.push({
+        unmanaged.push({
           resourceType: "StaticWebsite",
           resourceName: name,
         });
@@ -124,7 +124,6 @@ export async function planStaticWebsite({
           resourceType: "StaticWebsite",
           resourceName: name,
           currentOwner: existing.label,
-          newOwner: application.name,
         });
       }
 
@@ -174,5 +173,5 @@ export async function planStaticWebsite({
   });
 
   changeSet.print();
-  return { changeSet, conflicts, unlabeled, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }

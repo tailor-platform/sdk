@@ -19,7 +19,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "../../client";
-import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
+import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
@@ -257,7 +257,7 @@ export async function planAuth({
   const {
     changeSet: serviceChangeSet,
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, auths);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -324,7 +324,7 @@ export async function planAuth({
       scimResource: scimResourceChangeSet,
     },
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   };
 }
@@ -357,8 +357,8 @@ async function planServices(
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Auth services");
-  const conflicts: OwnershipConflict[] = [];
-  const unlabeled: UnlabeledResource[] = [];
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
@@ -399,7 +399,7 @@ async function planServices(
     );
     if (existing) {
       if (!existing.label) {
-        unlabeled.push({
+        unmanaged.push({
           resourceType: "Auth service",
           resourceName: config.name,
         });
@@ -408,7 +408,6 @@ async function planServices(
           resourceType: "Auth service",
           resourceName: config.name,
           currentOwner: existing.label,
-          newOwner: appName,
         });
       }
 
@@ -445,7 +444,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unlabeled, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 type CreateIdPConfig = {

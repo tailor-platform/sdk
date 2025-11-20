@@ -13,10 +13,10 @@ import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import {
-  confirmOwnershipConflicts,
-  confirmUnlabeledResources,
-  type OwnershipConflict,
-  type UnlabeledResource,
+  confirmOwnerConflict,
+  confirmUnmanagedResources,
+  type OwnerConflict,
+  type UnmanagedResource,
 } from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
@@ -95,8 +95,8 @@ export async function apply(options?: ApplyOptions) {
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
 
-  // Confirm all conflicts and unlabeled resources
-  const allConflicts: OwnershipConflict[] = [
+  // Confirm all conflicts and unmanaged resources
+  const allConflicts: OwnerConflict[] = [
     ...tailorDB.conflicts,
     ...staticWebsite.conflicts,
     ...idp.conflicts,
@@ -104,18 +104,20 @@ export async function apply(options?: ApplyOptions) {
     ...pipeline.conflicts,
     ...executor.conflicts,
   ];
-  const allUnlabeled: UnlabeledResource[] = [
-    ...tailorDB.unlabeled,
-    ...staticWebsite.unlabeled,
-    ...idp.unlabeled,
-    ...auth.unlabeled,
-    ...pipeline.unlabeled,
-    ...executor.unlabeled,
+  const allUnmanaged: UnmanagedResource[] = [
+    ...tailorDB.unmanaged,
+    ...staticWebsite.unmanaged,
+    ...idp.unmanaged,
+    ...auth.unmanaged,
+    ...pipeline.unmanaged,
+    ...executor.unmanaged,
   ];
-  await confirmOwnershipConflicts(allConflicts, yes);
-  await confirmUnlabeledResources(allUnlabeled, yes);
+  await confirmOwnerConflict(allConflicts, application.name, yes);
+  await confirmUnmanagedResources(allUnmanaged, application.name, yes);
 
   // Delete renamed applications
+  // NOTE: When removing resources while renaming the app at the same time,
+  // the app and its resources don't get deleted and are left orphaned...
   const resourceOwners = new Set([
     ...tailorDB.resourceOwners,
     ...staticWebsite.resourceOwners,

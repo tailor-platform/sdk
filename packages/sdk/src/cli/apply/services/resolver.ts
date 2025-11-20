@@ -24,7 +24,7 @@ import { tailorUserMap } from "@/configure/types";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
+import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor } from "@/parser/service/executor";
@@ -107,7 +107,7 @@ export async function planPipeline({
   const {
     changeSet: serviceChangeSet,
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -127,7 +127,7 @@ export async function planPipeline({
       resolver: resolverChangeSet,
     },
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   };
 }
@@ -161,8 +161,8 @@ async function planServices(
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("Pipeline services");
-  const conflicts: OwnershipConflict[] = [];
-  const unlabeled: UnlabeledResource[] = [];
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
@@ -204,7 +204,7 @@ async function planServices(
     );
     if (existing) {
       if (!existing.label) {
-        unlabeled.push({
+        unmanaged.push({
           resourceType: "Pipeline service",
           resourceName: pipeline.namespace,
         });
@@ -213,7 +213,6 @@ async function planServices(
           resourceType: "Pipeline service",
           resourceName: pipeline.namespace,
           currentOwner: existing.label,
-          newOwner: appName,
         });
       }
 
@@ -254,7 +253,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unlabeled, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 type CreateResolver = {

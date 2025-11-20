@@ -18,7 +18,7 @@ import {
 import { getDistDir } from "@/configure/config";
 import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
+import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { Executor, Trigger } from "@/parser/service/executor";
@@ -81,8 +81,8 @@ export async function planExecutor({
 }: PlanContext) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
     new ChangeSet("Executors");
-  const conflicts: OwnershipConflict[] = [];
-  const unlabeled: UnlabeledResource[] = [];
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
@@ -121,7 +121,7 @@ export async function planExecutor({
     );
     if (existing) {
       if (!existing.label) {
-        unlabeled.push({
+        unmanaged.push({
           resourceType: "Executor",
           resourceName: executor.name,
         });
@@ -130,7 +130,6 @@ export async function planExecutor({
           resourceType: "Executor",
           resourceName: executor.name,
           currentOwner: existing.label,
-          newOwner: application.name,
         });
       }
 
@@ -172,7 +171,7 @@ export async function planExecutor({
   });
 
   changeSet.print();
-  return { changeSet, conflicts, unlabeled, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 function protoExecutor(

@@ -51,7 +51,7 @@ import {
   type WithLabel,
 } from "./label";
 import { ChangeSet } from ".";
-import type { OwnershipConflict, UnlabeledResource } from "./confirm";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 import type { Executor } from "@/parser/service/executor";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
@@ -136,7 +136,7 @@ export async function planTailorDB({
   const {
     changeSet: serviceChangeSet,
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -165,7 +165,7 @@ export async function planTailorDB({
       gqlPermission: gqlPermissionChangeSet,
     },
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   };
 }
@@ -198,8 +198,8 @@ async function planServices(
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("TailorDB services");
-  const conflicts: OwnershipConflict[] = [];
-  const unlabeled: UnlabeledResource[] = [];
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
@@ -241,7 +241,7 @@ async function planServices(
     );
     if (existing) {
       if (!existing.label) {
-        unlabeled.push({
+        unmanaged.push({
           resourceType: "TailorDB service",
           resourceName: tailordb.namespace,
         });
@@ -250,7 +250,6 @@ async function planServices(
           resourceType: "TailorDB service",
           resourceName: tailordb.namespace,
           currentOwner: existing.label,
-          newOwner: appName,
         });
       }
 
@@ -289,7 +288,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unlabeled, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 type CreateType = {

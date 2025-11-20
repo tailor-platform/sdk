@@ -2,62 +2,55 @@ import chalk from "chalk";
 import { consola } from "consola";
 import ml from "multiline-ts";
 
-export interface OwnershipConflict {
+export interface OwnerConflict {
   resourceType: string;
   resourceName: string;
   currentOwner: string;
-  newOwner: string;
 }
 
-export interface UnlabeledResource {
+export interface UnmanagedResource {
   resourceType: string;
   resourceName: string;
 }
 
-/**
- * Confirms with the user whether to take ownership of resources managed by other applications.
- * In CI/CD mode (skipPrompt=true), automatically proceeds with ownership transfer.
- *
- * @param conflicts - List of resources with ownership conflicts
- * @param skipPrompt - If true, skip confirmation prompt (for --yes flag)
- * @throws Error if user declines to take ownership
- */
-export async function confirmOwnershipConflicts(
-  conflicts: OwnershipConflict[],
-  skipPrompt: boolean,
+export async function confirmOwnerConflict(
+  conflicts: OwnerConflict[],
+  appName: string,
+  yes: boolean,
 ): Promise<void> {
   if (conflicts.length === 0) return;
 
-  // Get unique current owners and the new owner
   const currentOwners = [...new Set(conflicts.map((c) => c.currentOwner))];
-  const newOwner = conflicts[0].newOwner; // All conflicts have the same new owner
 
-  consola.warn("Resource ownership conflicts detected:");
-  console.log("");
+  consola.warn("Application name mismatch detected:");
+
   console.log(
-    `  ${chalk.yellow("Current owner(s)")}: ${currentOwners.map((o) => chalk.bold(`"${o}"`)).join(", ")}`,
+    `  ${chalk.yellow("Current application(s)")}: ${currentOwners.map((o) => chalk.bold(`"${o}"`)).join(", ")}`,
   );
-  console.log(`  ${chalk.green("New owner")}: ${chalk.bold(`"${newOwner}"`)}`);
+  console.log(
+    `  ${chalk.green("New application")}:        ${chalk.bold(`"${appName}"`)}`,
+  );
   console.log("");
-  console.log(`  ${chalk.cyan("Resources to transfer")}:`);
-
+  console.log(`  ${chalk.cyan("Resources")}:`);
   for (const c of conflicts) {
     console.log(
       `    • ${chalk.bold(c.resourceType)} ${chalk.cyan(`"${c.resourceName}"`)}`,
     );
   }
-  console.log("");
 
-  if (skipPrompt) {
-    consola.success("Taking ownership (--yes flag specified)...");
+  if (yes) {
+    consola.success("Updating resources (--yes flag specified)...");
     return;
   }
 
-  const confirmed = await consola.prompt(
-    `Take ownership of these ${conflicts.length} resource(s) and update them?`,
-    { type: "confirm", initial: false },
-  );
-
+  const promptMessage =
+    currentOwners.length === 1
+      ? `Update these resources to be managed by "${appName}"?\n${chalk.gray("(Common when renaming your application)")}`
+      : `Update these resources to be managed by "${appName}"?`;
+  const confirmed = await consola.prompt(promptMessage, {
+    type: "confirm",
+    initial: false,
+  });
   if (!confirmed) {
     throw new Error(ml`
       Apply cancelled. Resources remain managed by their current applications.
@@ -66,44 +59,37 @@ export async function confirmOwnershipConflicts(
   }
 }
 
-/**
- * Confirms with the user whether to add ownership labels to resources created before label tracking.
- * In CI/CD mode (skipPrompt=true), automatically adds labels.
- *
- * @param resources - List of resources without ownership labels
- * @param skipPrompt - If true, skip confirmation prompt (for --yes flag)
- * @throws Error if user declines to add labels
- */
-export async function confirmUnlabeledResources(
-  resources: UnlabeledResource[],
-  skipPrompt: boolean,
+export async function confirmUnmanagedResources(
+  resources: UnmanagedResource[],
+  appName: string,
+  yes: boolean,
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  consola.info("Resources without ownership tracking detected:");
+  consola.warn("Unmanaged resources detected:");
+
+  console.log(`  ${chalk.cyan("Resources")}:`);
   for (const r of resources) {
     console.log(
-      `  ${chalk.bold(r.resourceType)} ${chalk.cyan(`"${r.resourceName}"`)}`,
+      `    • ${chalk.bold(r.resourceType)} ${chalk.cyan(`"${r.resourceName}"`)}`,
     );
   }
-  consola.info(
-    "These resources were created before ownership tracking was introduced.",
-  );
+  console.log("");
+  console.log("  These resources are not managed by any application.");
 
-  if (skipPrompt) {
-    consola.success("Adding ownership tracking (--yes flag specified)...");
+  if (yes) {
+    consola.success(`Adding to "${appName}" (--yes flag specified)...`);
     return;
   }
 
   const confirmed = await consola.prompt(
-    "Add ownership tracking and continue?",
-    {
-      type: "confirm",
-      initial: true, // Backward compatibility - default to Yes
-    },
+    `Add these resources to "${appName}"?`,
+    { type: "confirm", initial: false },
   );
-
   if (!confirmed) {
-    throw new Error("Apply cancelled.");
+    throw new Error(ml`
+      Apply cancelled. Resources remain unmanaged.
+      To override, run again and confirm, or use --yes flag.
+    `);
   }
 }

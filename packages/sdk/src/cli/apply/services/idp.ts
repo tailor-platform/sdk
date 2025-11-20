@@ -10,7 +10,7 @@ import {
 import { type IdP } from "@/parser/service/idp";
 import { type ApplyPhase, type PlanContext } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
-import { type OwnershipConflict, type UnlabeledResource } from "./confirm";
+import { type OwnerConflict, type UnmanagedResource } from "./confirm";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -133,7 +133,7 @@ export async function planIdP({
   const {
     changeSet: serviceChangeSet,
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
@@ -152,7 +152,7 @@ export async function planIdP({
       client: clientChangeSet,
     },
     conflicts,
-    unlabeled,
+    unmanaged,
     resourceOwners,
   };
 }
@@ -186,8 +186,8 @@ async function planServices(
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("IdP services");
-  const conflicts: OwnershipConflict[] = [];
-  const unlabeled: UnlabeledResource[] = [];
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
@@ -242,7 +242,7 @@ async function planServices(
 
     if (existing) {
       if (!existing.label) {
-        unlabeled.push({
+        unmanaged.push({
           resourceType: "IdP service",
           resourceName: idp.name,
         });
@@ -251,7 +251,6 @@ async function planServices(
           resourceType: "IdP service",
           resourceName: idp.name,
           currentOwner: existing.label,
-          newOwner: appName,
         });
       }
 
@@ -294,7 +293,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unlabeled, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 type CreateClient = {
