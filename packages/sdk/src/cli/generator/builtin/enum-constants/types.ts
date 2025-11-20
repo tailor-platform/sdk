@@ -17,3 +17,8 @@ export interface EnumConstantMetadata {
   name: string;
   enums: EnumDefinition[];
 }
+
+export interface EnumNamespaceMetadata {
+  namespace: string;
+  enums: EnumDefinition[];
+}
