@@ -6,7 +6,7 @@ import { type ITransformer } from "@/cli/bundler";
 import { type Resolver } from "@/parser/service/resolver";
 
 export class CodeTransformer implements ITransformer {
-  constructor() {}
+  constructor(private env: Record<string, string | number | boolean> = {}) {}
 
   async transform(filePath: string, tempDir: string): Promise<string[]> {
     const sourceText = fs.readFileSync(filePath).toString();
@@ -48,6 +48,9 @@ export class CodeTransformer implements ITransformer {
       }
     }
 
+    // Inject env into context
+    const envJson = JSON.stringify(this.env);
+
     // If there's input validation, wrap the body with parse call
     const wrappedBodyCode = hasInput
       ? ml /* js */ `
@@ -71,10 +74,17 @@ async (context) => {
   }
 
   const originalBody = ${bodyFnStr};
-  return originalBody(context);
+  const contextWithEnv = { ...context, env: ${envJson} };
+  return originalBody(contextWithEnv);
 }
 `
-      : bodyFnStr;
+      : ml /* js */ `
+async (context) => {
+  const originalBody = ${bodyFnStr};
+  const contextWithEnv = { ...context, env: ${envJson} };
+  return originalBody(contextWithEnv);
+}
+`;
 
     fs.writeFileSync(
       transformedPath,

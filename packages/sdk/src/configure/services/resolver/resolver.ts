@@ -1,13 +1,17 @@
 import { t, TailorField } from "@/configure/types/type";
 import type { TailorUser } from "@/configure/types";
+import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { ResolverInput } from "@/parser/service/resolver/types";
 
-type Context<Input extends Record<string, TailorField<any>> | undefined> = {
+type Context<
+  Input extends Record<string, TailorField<any>> | undefined
+> = {
   input: Input extends Record<string, TailorField<any>>
     ? InferFieldsOutput<Input>
     : never;
   user: TailorUser;
+  env: TailorEnv;
 };
 
 type OutputType<O> =

@@ -54,4 +54,25 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("namespace TailorSDK {");
     expect(result).toContain("export {};");
   });
+
+  it("should generate Env interface with literal types", () => {
+    const env = {
+      hoge: 1,
+      fuga: "hello",
+      piyo: true,
+    };
+
+    const result = generateTypeDefinition(undefined, undefined, env);
+
+    expect(result).toContain("interface Env");
+    expect(result).toContain("hoge: 1;");
+    expect(result).toContain('fuga: "hello";');
+    expect(result).toContain("piyo: true;");
+  });
+
+  it("should generate empty Env interface when no env provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface Env {}");
+  });
 });

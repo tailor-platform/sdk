@@ -22,11 +22,14 @@ export class Application {
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
   private _executorService?: ExecutorService = undefined;
   private _staticWebsiteServices: StaticWebsite[] = [];
+  private _env: Record<string, string | number | boolean> = {};
 
   constructor(
     public readonly name: string,
     public readonly config: AppConfig,
-  ) {}
+  ) {
+    this._env = config.env || {};
+  }
 
   private addSubgraph(type: string, name: string) {
     this._subgraphs.push({ Type: type, Name: name });
@@ -58,6 +61,10 @@ export class Application {
 
   get staticWebsiteServices() {
     return this._staticWebsiteServices as ReadonlyArray<StaticWebsite>;
+  }
+
+  get env() {
+    return this._env as Readonly<Record<string, string | number | boolean>>;
   }
 
   get applications() {

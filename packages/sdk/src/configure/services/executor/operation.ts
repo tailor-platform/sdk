@@ -1,3 +1,4 @@
+import type { TailorEnv } from "@/configure/types/env";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -6,7 +7,7 @@ import type {
 import type { Client } from "@urql/core";
 
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
-  body: (args: Args) => void | Promise<void>;
+  body: (args: Args & { env: TailorEnv }) => void | Promise<void>;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
@@ -16,7 +17,7 @@ export type GqlOperation<Args> = Omit<
   "query" | "variables"
 > & {
   query: UrqlOperationArgs[0];
-  variables?: (args: Args) => UrqlOperationArgs[1];
+  variables?: (args: Args & { env: TailorEnv }) => UrqlOperationArgs[1];
 };
 
 type RequestHeader =
@@ -268,8 +269,8 @@ export type WebhookOperation<Args> = Omit<
   ParserWebhookOperation,
   "url" | "body" | "headers"
 > & {
-  url: (args: Args) => string;
-  body?: (args: Args) => Record<string, unknown>;
+  url: (args: Args & { env: TailorEnv }) => string;
+  body?: (args: Args & { env: TailorEnv }) => Record<string, unknown>;
   headers?: {
     [key in RequestHeader]?: string | { vault: string; key: string };
   };
