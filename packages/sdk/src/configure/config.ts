@@ -36,6 +36,7 @@ export const getDistDir = (): string => {
 
 export function defineConfig<
   const Config extends AppConfig &
+    // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
     Record<Exclude<keyof Config, keyof AppConfig>, never>,
 >(config: Config) {
   return config;
