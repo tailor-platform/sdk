@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.8.5
+
+### Patch Changes
+
+- [#22](https://github.com/tailor-platform/sdk/pull/22) [`a0bf525`](https://github.com/tailor-platform/sdk/commit/a0bf5259af8a87415d0d731c7995c2612ccc1046) Thanks [@remiposo](https://github.com/remiposo)! - Force excess property checking in defineConfig
+
 ## 0.8.4
 
 ### Patch Changes
