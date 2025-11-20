@@ -137,6 +137,7 @@ export async function planTailorDB({
     changeSet: serviceChangeSet,
     conflicts,
     unlabeled,
+    orphanedOwners,
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const typeChangeSet = await planTypes(
@@ -165,6 +166,7 @@ export async function planTailorDB({
     },
     conflicts,
     unlabeled,
+    orphanedOwners,
   };
 }
 
@@ -198,6 +200,7 @@ async function planServices(
     new ChangeSet("TailorDB services");
   const conflicts: OwnershipConflict[] = [];
   const unlabeled: UnlabeledResource[] = [];
+  const orphanedOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -270,8 +273,12 @@ async function planServices(
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
+    const label = existingServices[namespaceName]?.label;
+    if (label && label !== appName) {
+      orphanedOwners.add(label);
+    }
     // Only delete services managed by this application
-    if (existingServices[namespaceName]?.label === appName) {
+    if (label === appName) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {
@@ -282,7 +289,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unlabeled };
+  return { changeSet, conflicts, unlabeled, orphanedOwners };
 }
 
 type CreateType = {

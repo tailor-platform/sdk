@@ -72,6 +72,7 @@ export async function planStaticWebsite({
   > = new ChangeSet("StaticWebsites");
   const conflicts: OwnershipConflict[] = [];
   const unlabeled: UnlabeledResource[] = [];
+  const orphanedOwners = new Set<string>();
 
   // Fetch existing static websites
   const withoutLabel = await fetchAll(async (pageToken) => {
@@ -156,8 +157,12 @@ export async function planStaticWebsite({
     }
   }
   Object.entries(existingWebsites).forEach(([name]) => {
+    const label = existingWebsites[name]?.label;
+    if (label && label !== application.name) {
+      orphanedOwners.add(label);
+    }
     // Only delete websites managed by this application
-    if (existingWebsites[name]?.label === application.name) {
+    if (label === application.name) {
       changeSet.deletes.push({
         name,
         request: {
@@ -169,5 +174,5 @@ export async function planStaticWebsite({
   });
 
   changeSet.print();
-  return { changeSet, conflicts, unlabeled };
+  return { changeSet, conflicts, unlabeled, orphanedOwners };
 }

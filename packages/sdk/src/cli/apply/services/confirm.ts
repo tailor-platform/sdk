@@ -28,15 +28,25 @@ export async function confirmOwnershipConflicts(
 ): Promise<void> {
   if (conflicts.length === 0) return;
 
-  // Display conflicts
+  // Get unique current owners and the new owner
+  const currentOwners = [...new Set(conflicts.map((c) => c.currentOwner))];
+  const newOwner = conflicts[0].newOwner; // All conflicts have the same new owner
+
   consola.warn("Resource ownership conflicts detected:");
+  console.log("");
+  console.log(
+    `  ${chalk.yellow("Current owner(s)")}: ${currentOwners.map((o) => chalk.bold(`"${o}"`)).join(", ")}`,
+  );
+  console.log(`  ${chalk.green("New owner")}: ${chalk.bold(`"${newOwner}"`)}`);
+  console.log("");
+  console.log(`  ${chalk.cyan("Resources to transfer")}:`);
+
   for (const c of conflicts) {
-    console.log(ml`
-      ${chalk.bold(c.resourceType)} ${chalk.cyan(`"${c.resourceName}"`)}
-        Currently managed by: ${chalk.yellow(`"${c.currentOwner}"`)}
-        New owner would be: ${chalk.green(`"${c.newOwner}"`)}
-    `);
+    console.log(
+      `    • ${chalk.bold(c.resourceType)} ${chalk.cyan(`"${c.resourceName}"`)}`,
+    );
   }
+  console.log("");
 
   if (skipPrompt) {
     consola.success("Taking ownership (--yes flag specified)...");
@@ -45,7 +55,7 @@ export async function confirmOwnershipConflicts(
 
   const confirmed = await consola.prompt(
     `Take ownership of these ${conflicts.length} resource(s) and update them?`,
-    { type: "confirm" },
+    { type: "confirm", initial: false },
   );
 
   if (!confirmed) {

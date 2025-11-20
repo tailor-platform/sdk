@@ -1,10 +1,6 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
-  type CreateApplicationRequestSchema,
-  type UpdateApplicationRequestSchema,
-} from "@tailor-proto/tailor/v1/application_pb";
-import {
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
@@ -15,7 +11,12 @@ import {
   type OperatorClient,
 } from "../../client";
 import { buildMetaRequest } from "./label";
-import { ChangeSet, type HasName } from ".";
+import { ChangeSet } from ".";
+import type {
+  DeleteApplicationRequestSchema,
+  CreateApplicationRequestSchema,
+  UpdateApplicationRequestSchema,
+} from "@tailor-proto/tailor/v1/application_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyApplication(
@@ -47,6 +48,14 @@ export async function applyApplication(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
+  } else if (phase === "delete") {
+    // Delete in reverse order of dependencies
+    // Applications
+    await Promise.all(
+      changeSet.deletes.map(async (del) => {
+        await client.deleteApplication(del.request);
+      }),
+    );
   }
 }
 
@@ -62,6 +71,11 @@ type UpdateApplication = {
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
+type DeleteApplication = {
+  name: string;
+  request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
+};
+
 function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:application:${name}`;
 }
@@ -71,8 +85,11 @@ export async function planApplication({
   workspaceId,
   application,
 }: PlanContext) {
-  const changeSet: ChangeSet<CreateApplication, UpdateApplication, HasName> =
-    new ChangeSet("Applications");
+  const changeSet: ChangeSet<
+    CreateApplication,
+    UpdateApplication,
+    DeleteApplication
+  > = new ChangeSet("Applications");
 
   const existingApplications = await fetchAll(async (pageToken) => {
     try {

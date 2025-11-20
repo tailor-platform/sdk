@@ -112,6 +112,30 @@ export async function apply(options?: ApplyOptions) {
     ...pipeline.unlabeled,
     ...executor.unlabeled,
   ];
+
+  // Delete renamed applications
+  const orphanedOwners = new Set([
+    ...tailorDB.orphanedOwners,
+    ...staticWebsite.orphanedOwners,
+    ...idp.orphanedOwners,
+    ...auth.orphanedOwners,
+    ...pipeline.orphanedOwners,
+    ...executor.orphanedOwners,
+  ]);
+  const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
+  const emptyApps = [...conflictOwners].filter(
+    (owner) => !orphanedOwners.has(owner),
+  );
+  for (const emptyApp of emptyApps) {
+    app.deletes.push({
+      name: emptyApp,
+      request: {
+        workspaceId,
+        applicationName: emptyApp,
+      },
+    });
+  }
+
   // Confirm all conflicts and unlabeled resources at once
   await confirmOwnershipConflicts(allConflicts, yes);
   await confirmUnlabeledResources(allUnlabeled, yes);

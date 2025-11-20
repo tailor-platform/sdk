@@ -83,6 +83,7 @@ export async function planExecutor({
     new ChangeSet("Executors");
   const conflicts: OwnershipConflict[] = [];
   const unlabeled: UnlabeledResource[] = [];
+  const orphanedOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
@@ -154,8 +155,12 @@ export async function planExecutor({
     }
   }
   Object.entries(existingExecutors).forEach(([name]) => {
+    const label = existingExecutors[name]?.label;
+    if (label && label !== application.name) {
+      orphanedOwners.add(label);
+    }
     // Only delete executors managed by this application
-    if (existingExecutors[name]?.label === application.name) {
+    if (label === application.name) {
       changeSet.deletes.push({
         name,
         request: {
@@ -167,7 +172,7 @@ export async function planExecutor({
   });
 
   changeSet.print();
-  return { changeSet, conflicts, unlabeled };
+  return { changeSet, conflicts, unlabeled, orphanedOwners };
 }
 
 function protoExecutor(
