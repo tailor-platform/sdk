@@ -9,3 +9,4 @@ entityDependencies:
   Supplier: []
   User: []
   UserSetting: [User]
+  Event: []

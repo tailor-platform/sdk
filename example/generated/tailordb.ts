@@ -130,6 +130,14 @@ export interface Namespace {
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
+  },
+  "analyticsdb": {
+    Event: {
+      id: Generated<string>;
+      name: "CLICK" | "VIEW" | "PURCHASE";
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
   }
 }
 

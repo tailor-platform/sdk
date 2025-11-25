@@ -3,6 +3,7 @@ import { TailorDBService } from "@/cli/application/tailordb/service";
 import { db } from "@/configure/services/tailordb";
 import { EnumProcessor } from "./enum-processor";
 import { EnumConstantsGenerator } from "./index";
+import type { EnumDefinition } from "./types";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
@@ -118,21 +119,16 @@ describe("EnumConstantsGenerator", () => {
     });
   });
 
-  describe("generateEnumConstants", () => {
-    it("should generate enum constants in as const format", async () => {
-      const types = {
-        User: {
-          name: "User",
-          enums: [
-            {
-              name: "UserRole",
-              values: [{ value: "admin" }, { value: "user" }],
-            },
-          ],
+  describe("generateUnifiedEnumConstants", () => {
+    it("should generate enum constants in as const format", () => {
+      const allEnums = [
+        {
+          name: "UserRole",
+          values: [{ value: "admin" }, { value: "user" }],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("export const UserRole = {");
       expect(result).toContain('  "admin": "admin"');
@@ -143,113 +139,79 @@ describe("EnumConstantsGenerator", () => {
       );
     });
 
-    it("should preserve original enum values", async () => {
-      const types = {
-        Invoice: {
-          name: "Invoice",
-          enums: [
-            {
-              name: "InvoiceStatus",
-              values: [
-                { value: "draft" },
-                { value: "sent" },
-                { value: "paid" },
-              ],
-            },
-          ],
+    it("should preserve original enum values", () => {
+      const allEnums = [
+        {
+          name: "InvoiceStatus",
+          values: [{ value: "draft" }, { value: "sent" }, { value: "paid" }],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain('  "draft": "draft"');
       expect(result).toContain('  "sent": "sent"');
       expect(result).toContain('  "paid": "paid"');
     });
 
-    it("should handle enum values with hyphens and spaces", async () => {
-      const types = {
-        Order: {
-          name: "Order",
-          enums: [
-            {
-              name: "OrderStatus",
-              values: [
-                { value: "in-progress" },
-                { value: "ready to ship" },
-                { value: "delivered" },
-              ],
-            },
+    it("should handle enum values with hyphens and spaces", () => {
+      const allEnums = [
+        {
+          name: "OrderStatus",
+          values: [
+            { value: "in-progress" },
+            { value: "ready to ship" },
+            { value: "delivered" },
           ],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain('  "in_progress": "in-progress"');
       expect(result).toContain('  "ready_to_ship": "ready to ship"');
       expect(result).toContain('  "delivered": "delivered"');
     });
 
-    it("should return empty string when no enums are present", async () => {
-      const types = {
-        User: {
-          name: "User",
-          enums: [],
-        },
-      };
+    it("should return empty string when no enums are present", () => {
+      const allEnums: EnumDefinition[] = [];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toBe("");
     });
 
-    it("should handle multiple types with multiple enums", async () => {
-      const types = {
-        User: {
-          name: "User",
-          enums: [
-            {
-              name: "UserRole",
-              values: [{ value: "admin" }, { value: "user" }],
-            },
-          ],
+    it("should handle multiple enums", () => {
+      const allEnums = [
+        {
+          name: "UserRole",
+          values: [{ value: "admin" }, { value: "user" }],
         },
-        Invoice: {
-          name: "Invoice",
-          enums: [
-            {
-              name: "InvoiceStatus",
-              values: [{ value: "draft" }, { value: "sent" }],
-            },
-          ],
+        {
+          name: "InvoiceStatus",
+          values: [{ value: "draft" }, { value: "sent" }],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("export const UserRole = {");
       expect(result).toContain("export const InvoiceStatus = {");
     });
 
-    it("should generate JSDoc comments for enums with descriptions", async () => {
-      const types = {
-        Invoice: {
-          name: "Invoice",
-          enums: [
-            {
-              name: "InvoiceStatus",
-              values: [
-                { value: "draft", description: "Draft invoice" },
-                { value: "sent", description: "Sent invoice" },
-                { value: "paid", description: "Paid invoice" },
-              ],
-            },
+    it("should generate JSDoc comments for enums with descriptions", () => {
+      const allEnums = [
+        {
+          name: "InvoiceStatus",
+          values: [
+            { value: "draft", description: "Draft invoice" },
+            { value: "sent", description: "Sent invoice" },
+            { value: "paid", description: "Paid invoice" },
           ],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * @property draft - Draft invoice");
@@ -259,44 +221,34 @@ describe("EnumConstantsGenerator", () => {
       expect(result).toContain("export const InvoiceStatus = {");
     });
 
-    it("should not generate JSDoc comments when no descriptions are present", async () => {
-      const types = {
-        User: {
-          name: "User",
-          enums: [
-            {
-              name: "UserRole",
-              values: [{ value: "admin" }, { value: "user" }],
-            },
-          ],
+    it("should not generate JSDoc comments when no descriptions are present", () => {
+      const allEnums = [
+        {
+          name: "UserRole",
+          values: [{ value: "admin" }, { value: "user" }],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).not.toContain("/**");
       expect(result).not.toContain("@property");
       expect(result).toContain("export const UserRole = {");
     });
 
-    it("should only include @property for values with descriptions", async () => {
-      const types = {
-        Invoice: {
-          name: "Invoice",
-          enums: [
-            {
-              name: "InvoiceStatus",
-              values: [
-                { value: "draft", description: "Draft invoice" },
-                { value: "sent" },
-                { value: "paid", description: "Paid invoice" },
-              ],
-            },
+    it("should only include @property for values with descriptions", () => {
+      const allEnums = [
+        {
+          name: "InvoiceStatus",
+          values: [
+            { value: "draft", description: "Draft invoice" },
+            { value: "sent" },
+            { value: "paid", description: "Paid invoice" },
           ],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * @property draft - Draft invoice");
@@ -306,25 +258,20 @@ describe("EnumConstantsGenerator", () => {
       expect(result).toContain("export const InvoiceStatus = {");
     });
 
-    it("should include field description at the top of JSDoc", async () => {
-      const types = {
-        Invoice: {
-          name: "Invoice",
-          enums: [
-            {
-              name: "InvoiceStatus",
-              fieldDescription: "Invoice status",
-              values: [
-                { value: "draft", description: "Draft invoice" },
-                { value: "sent" },
-                { value: "paid", description: "Paid invoice" },
-              ],
-            },
+    it("should include field description at the top of JSDoc", () => {
+      const allEnums = [
+        {
+          name: "InvoiceStatus",
+          fieldDescription: "Invoice status",
+          values: [
+            { value: "draft", description: "Draft invoice" },
+            { value: "sent" },
+            { value: "paid", description: "Paid invoice" },
           ],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * Invoice status");
@@ -335,26 +282,42 @@ describe("EnumConstantsGenerator", () => {
       expect(result).toContain(" */");
     });
 
-    it("should only show field description when no value descriptions exist", async () => {
-      const types = {
-        User: {
-          name: "User",
-          enums: [
-            {
-              name: "UserRole",
-              fieldDescription: "User role",
-              values: [{ value: "admin" }, { value: "user" }],
-            },
-          ],
+    it("should only show field description when no value descriptions exist", () => {
+      const allEnums = [
+        {
+          name: "UserRole",
+          fieldDescription: "User role",
+          values: [{ value: "admin" }, { value: "user" }],
         },
-      };
+      ];
 
-      const result = await EnumProcessor.generateEnumConstants(types);
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * User role");
       expect(result).toContain(" */");
       expect(result).not.toContain(" * @property");
+    });
+
+    it("should deduplicate enums by name", () => {
+      const allEnums = [
+        {
+          name: "UserRole",
+          values: [{ value: "admin" }, { value: "user" }],
+        },
+        {
+          name: "UserRole", // Duplicate name
+          values: [{ value: "superadmin" }],
+        },
+      ];
+
+      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+
+      // Should only contain one UserRole definition (the last one wins)
+      const matches = result.match(/export const UserRole = {/g);
+      expect(matches).toHaveLength(1);
+      expect(result).toContain('  "superadmin": "superadmin"');
+      expect(result).not.toContain('  "admin": "admin"');
     });
   });
 });
