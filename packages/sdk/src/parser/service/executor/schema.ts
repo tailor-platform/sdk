@@ -43,7 +43,7 @@ export const FunctionOperationSchema = z.object({
 
 export const GqlOperationSchema = z.object({
   kind: z.literal("graphql"),
-  appName: z.string(),
+  appName: z.string().optional(),
   query: z.string(),
   variables: functionSchema.optional(),
   invoker: InvokerSchema.optional(),
