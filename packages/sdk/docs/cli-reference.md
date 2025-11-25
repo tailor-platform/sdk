@@ -69,6 +69,7 @@ tailor-sdk apply [options]
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-d, --dryRun` - Run the command without making any changes
+- `-y, --yes` - Skip confirmation prompt
 
 ### show
 
