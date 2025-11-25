@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.8.6
+
+### Patch Changes
+
+- [#24](https://github.com/tailor-platform/sdk/pull/24) [`ffa71fe`](https://github.com/tailor-platform/sdk/commit/ffa71feba26b36be84292dbaaadc0d2a37dc6b96) Thanks [@riku99](https://github.com/riku99)! - Fix generator bugs with multiple TailorDB namespaces and refactor to object-based data passing
+
 ## 0.8.5
 
 ### Patch Changes
