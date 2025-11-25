@@ -17,7 +17,7 @@ export type GqlOperation<Args> = Omit<
   "query" | "variables"
 > & {
   query: UrqlOperationArgs[0];
-  variables?: (args: Args & { env: TailorEnv }) => UrqlOperationArgs[1];
+  variables?: (args: Args) => UrqlOperationArgs[1];
 };
 
 type RequestHeader =
@@ -270,7 +270,7 @@ export type WebhookOperation<Args> = Omit<
   "url" | "body" | "headers"
 > & {
   url: (args: Args) => string;
-  body?: (args: Args & { env: TailorEnv }) => Record<string, unknown>;
+  body?: (args: Args) => Record<string, unknown>;
   headers?: {
     [key in RequestHeader]?: string | { vault: string; key: string };
   };
