@@ -114,6 +114,27 @@ export async function planApplication({
     if (idProvider) {
       authIdpConfigName = idProvider.name;
     }
+  } else if (application.config.auth) {
+    // Retrieve idpConfig from remote when auth references an external namespace
+    authNamespace = application.config.auth.name;
+    const idpConfigs = await fetchAll(async (pageToken) => {
+      try {
+        const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
+          workspaceId,
+          namespaceName: authNamespace!,
+          pageToken,
+        });
+        return [idpConfigs, nextPageToken];
+      } catch (error) {
+        if (error instanceof ConnectError && error.code === Code.NotFound) {
+          return [[], ""];
+        }
+        throw error;
+      }
+    });
+    if (idpConfigs.length > 0) {
+      authIdpConfigName = idpConfigs[0].name;
+    }
   }
   const metaRequest = await buildMetaRequest(
     trn(workspaceId, application.name),
