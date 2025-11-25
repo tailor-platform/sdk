@@ -17,14 +17,18 @@ if [ -f "dist/configure/index.mjs" ]; then
   CONFIGURE_SIZE=$(stat -c%s "dist/configure/index.mjs" 2>/dev/null || stat -f%z "dist/configure/index.mjs")
 fi
 
-# Measure auth/config chunk files
+# Measure dependency chunk files by parsing imports from configure/index.mjs
 CHUNK_SIZE=0
-for file in dist/auth-*.mjs dist/config-*.mjs; do
-  if [ -f "$file" ]; then
-    SIZE=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
-    CHUNK_SIZE=$((CHUNK_SIZE + SIZE))
-  fi
-done
+if [ -f "dist/configure/index.mjs" ]; then
+  CHUNK_FILES=$(grep -oE 'from "[\.]{2}/[^"]+\.mjs"' "dist/configure/index.mjs" | sed 's/from "//; s/"//' | sed 's|^\.\./|dist/|')
+
+  for chunk_file in $CHUNK_FILES; do
+    if [ -f "$chunk_file" ]; then
+      SIZE=$(stat -c%s "$chunk_file" 2>/dev/null || stat -f%z "$chunk_file")
+      CHUNK_SIZE=$((CHUNK_SIZE + SIZE))
+    fi
+  done
+fi
 
 # Calculate total
 TOTAL_SIZE=$((CONFIGURE_SIZE + CHUNK_SIZE))
