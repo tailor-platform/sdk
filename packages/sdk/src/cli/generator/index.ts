@@ -123,6 +123,9 @@ export class GenerationManager {
       this.executors[filePath] = executor as Executor;
     });
 
+    // Workflow services
+    await this.application.workflowService?.loadWorkflows();
+
     await this.processGenerators();
   }
 

@@ -1,10 +1,9 @@
 import { defineCommand } from "citty";
 import { defineApplication } from "@/cli/application";
-import { Bundler, type BundlerConfig } from "@/cli/bundler";
-import { ExecutorLoader } from "@/cli/bundler/executor/loader";
-import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";
-import { ResolverLoader } from "@/cli/bundler/resolver/loader";
-import { CodeTransformer } from "@/cli/bundler/resolver/transformer";
+import { ExecutorBundler } from "@/cli/bundler/executor/executor-bundler";
+import { ResolverBundler } from "@/cli/bundler/resolver/resolver-bundler";
+import { WorkflowJobLoader } from "@/cli/bundler/workflow/job-loader";
+import { WorkflowBundler } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
@@ -28,11 +27,11 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
+import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
-import type { Executor } from "@/parser/service/executor";
-import type { Resolver } from "@/parser/service/resolver";
+import type { WorkflowServiceConfig } from "@/configure/services/workflow/types";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -74,6 +73,9 @@ export async function apply(options?: ApplyOptions) {
   if (application.executorService) {
     await buildExecutor(application.executorService.config);
   }
+  if (application.workflowService) {
+    await buildWorkflow(application.workflowService.config);
+  }
   if (buildOnly) return;
 
   // Initialize client
@@ -108,6 +110,7 @@ export async function apply(options?: ApplyOptions) {
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
+  const workflow = await planWorkflow(client, workspaceId, application);
 
   // Confirm conflicts
   const allConflicts: OwnerConflict[] = [
@@ -169,7 +172,6 @@ export async function apply(options?: ApplyOptions) {
       },
     });
   }
-
   if (dryRun) {
     console.log("Dry run enabled. No changes applied.");
     return;
@@ -183,8 +185,10 @@ export async function apply(options?: ApplyOptions) {
   await applyPipeline(client, pipeline, "create-update");
   await applyApplication(client, app, "create-update");
   await applyExecutor(client, executor, "create-update");
+  await applyWorkflow(client, workflow, "create-update");
 
   // Phase 3: Apply Delete in reverse order
+  await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
   await applyApplication(client, app, "delete");
   await applyPipeline(client, pipeline, "delete");
@@ -197,34 +201,21 @@ export async function apply(options?: ApplyOptions) {
 }
 
 async function buildPipeline(namespace: string, config: FileLoadConfig) {
-  const bundlerConfig: BundlerConfig<Resolver> = {
-    namespace,
-    serviceConfig: config,
-    loader: new ResolverLoader(),
-    transformer: new CodeTransformer(),
-    outputDirs: {
-      preBundle: "resolvers",
-      postBundle: "functions",
-    },
-  };
-  const bundler = new Bundler(bundlerConfig);
+  const bundler = new ResolverBundler(namespace, config);
   await bundler.bundle();
 }
 
 async function buildExecutor(config: FileLoadConfig) {
-  const bundlerConfig: BundlerConfig<Executor> = {
-    namespace: "executor",
-    serviceConfig: config,
-    loader: new ExecutorLoader(),
-    transformer: new ExecutorTransformer(),
-    outputDirs: {
-      preBundle: "executors",
-      postBundle: "executors",
-    },
-    shouldProcess: (executor) =>
-      ["function", "jobFunction"].includes(executor.operation.kind),
-  };
-  const bundler = new Bundler(bundlerConfig);
+  const bundler = new ExecutorBundler(config);
+  await bundler.bundle();
+}
+
+async function buildWorkflow(config: WorkflowServiceConfig) {
+  // Collect all jobs from workflow files and job files using the loader
+  const allJobs = await WorkflowJobLoader.collectAllJobs(config);
+
+  // Use the new simplified workflow bundler
+  const bundler = new WorkflowBundler(allJobs);
   await bundler.bundle();
 }
 

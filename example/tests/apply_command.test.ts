@@ -13,10 +13,11 @@ describe("pnpm apply command integration tests", () => {
   const expectedGeneratedFilesWithContent = ["db.ts"] as const;
   const expectedGeneratedFiles = [
     "db.ts",
-    "executor_steps/user-created.js",
+    // New executor bundler creates only entry and output files (no intermediate .base.js or .transformed.js)
+    "executor-entry/user-created.js",
     "executors/user-created.js",
     "executors/user-created.js.map",
-    "executors/user-created.transformed.js",
+    // New resolver bundler creates only entry and output files (no intermediate .base.js or .transformed.js)
     "functions/add__body.js",
     "functions/add__body.js.map",
     "functions/env__body.js",
@@ -27,16 +28,30 @@ describe("pnpm apply command integration tests", () => {
     "functions/showUserInfo__body.js.map",
     "functions/stepChain__body.js",
     "functions/stepChain__body.js.map",
-    "resolvers/add.js",
-    "resolvers/add.transformed.js",
-    "resolvers/env.js",
-    "resolvers/env.transformed.js",
-    "resolvers/passThrough.js",
-    "resolvers/passThrough.transformed.js",
-    "resolvers/showUserInfo.js",
-    "resolvers/showUserInfo.transformed.js",
-    "resolvers/stepChain.js",
-    "resolvers/stepChain.transformed.js",
+    "resolver-entry/add__body.js",
+    "resolver-entry/env__body.js",
+    "resolver-entry/passThrough__body.js",
+    "resolver-entry/showUserInfo__body.js",
+    "resolver-entry/stepChain__body.js",
+    // New workflow bundler creates only entry and output files (no intermediate .base.js or .transformed.js)
+    "workflow-jobs-entry/check-inventory.js",
+    "workflow-jobs-entry/fetch-customer.js",
+    "workflow-jobs-entry/process-order.js",
+    "workflow-jobs-entry/process-payment.js",
+    "workflow-jobs-entry/send-notification.js",
+    "workflow-jobs-entry/validate-order.js",
+    "workflow-jobs/check-inventory.js",
+    "workflow-jobs/check-inventory.js.map",
+    "workflow-jobs/fetch-customer.js",
+    "workflow-jobs/fetch-customer.js.map",
+    "workflow-jobs/process-order.js",
+    "workflow-jobs/process-order.js.map",
+    "workflow-jobs/process-payment.js",
+    "workflow-jobs/process-payment.js.map",
+    "workflow-jobs/send-notification.js",
+    "workflow-jobs/send-notification.js.map",
+    "workflow-jobs/validate-order.js",
+    "workflow-jobs/validate-order.js.map",
   ] as const;
 
   const collectGeneratedFiles = (rootDir: string): string[] => {
@@ -97,6 +112,14 @@ describe("pnpm apply command integration tests", () => {
           query: string,
           params?: unknown[],
         ): Promise<{ rows: unknown[] }> | { rows: unknown[] };
+      };
+    };
+    tailor?: {
+      workflow: {
+        triggerJobFunction: (
+          jobName: string,
+          args: unknown,
+        ) => Promise<unknown>;
       };
     };
   };
@@ -188,6 +211,13 @@ describe("pnpm apply command integration tests", () => {
       "functions/add__body.js": 4504 + sizeBuffer,
       "functions/showUserInfo__body.js": 4588 + sizeBuffer,
       "functions/stepChain__body.js": 176907 + sizeBuffer,
+      // workflow-jobs: Kysely jobs (~160KB), date-fns jobs (~28KB), simple jobs (~9KB)
+      "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 160819 + sizeBuffer,
+      "workflow-jobs/process-order.js": 8755 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 160816 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 28162 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 8554 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {
@@ -474,6 +504,103 @@ describe("pnpm apply command integration tests", () => {
           { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
         ]);
         expect(createdClients).toMatchObject([{ namespace: "tailordb" }]);
+      });
+    });
+
+    describe("workflow-jobs", () => {
+      type JobHandler = (
+        jobName: string,
+        args: unknown,
+      ) => Promise<unknown> | unknown;
+
+      const setupWorkflowMock = (
+        handler: JobHandler,
+      ): { triggeredJobs: { jobName: string; args: unknown }[] } => {
+        const triggeredJobs: { jobName: string; args: unknown }[] = [];
+
+        GlobalThis.tailor = {
+          workflow: {
+            triggerJobFunction: async (jobName: string, args: unknown) => {
+              triggeredJobs.push({ jobName, args });
+              return handler(jobName, args);
+            },
+          },
+        } as typeof GlobalThis.tailor;
+
+        return { triggeredJobs };
+      };
+
+      test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
+        const { triggeredJobs } = setupWorkflowMock((jobName, args) => {
+          if (jobName === "fetch-customer") {
+            const { customerId } = args as { customerId: string };
+            return { id: customerId, email: "customer@example.com" };
+          }
+          if (jobName === "send-notification") {
+            return { sent: true, timestamp: "2025-01-01 12:00:00" };
+          }
+          return null;
+        });
+
+        const main = await importActualMain("workflow-jobs/process-order.js");
+        const result = await main({
+          orderId: "order-123",
+          customerId: "customer-456",
+        });
+
+        expect(result).toEqual({
+          orderId: "order-123",
+          customerId: "customer-456",
+          customerEmail: "customer@example.com",
+          notificationSent: true,
+          processedAt: "2025-01-01 12:00:00",
+        });
+
+        expect(triggeredJobs).toEqual([
+          { jobName: "fetch-customer", args: { customerId: "customer-456" } },
+          {
+            jobName: "send-notification",
+            args: {
+              message: "Your order order-123 is being processed",
+              recipient: "customer@example.com",
+            },
+          },
+        ]);
+      });
+
+      test("workflow-jobs/process-order.js throws error when customer not found", async () => {
+        setupWorkflowMock((jobName) => {
+          if (jobName === "fetch-customer") {
+            return null; // Customer not found
+          }
+          return null;
+        });
+
+        const main = await importActualMain("workflow-jobs/process-order.js");
+
+        await expect(
+          main({
+            orderId: "order-123",
+            customerId: "non-existent",
+          }),
+        ).rejects.toThrow("Customer non-existent not found");
+      });
+
+      test("workflow-jobs/send-notification.js executes correctly", async () => {
+        const main = await importActualMain(
+          "workflow-jobs/send-notification.js",
+        );
+        const result = await main({
+          message: "Test message",
+          recipient: "test@example.com",
+        });
+
+        expect(result).toMatchObject({
+          sent: true,
+          timestamp: expect.stringMatching(
+            /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+          ),
+        });
       });
     });
   });

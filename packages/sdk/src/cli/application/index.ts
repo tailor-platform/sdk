@@ -2,11 +2,13 @@ import { AuthService } from "@/cli/application/auth/service";
 import { ExecutorService } from "@/cli/application/executor/service";
 import { ResolverService } from "@/cli/application/resolver/service";
 import { TailorDBService } from "@/cli/application/tailordb/service";
+import { WorkflowService } from "@/cli/application/workflow/service";
 import { type AppConfig } from "@/configure/config";
 import { type AuthConfig } from "@/configure/services/auth";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type ResolverServiceInput } from "@/configure/services/resolver/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
+import { type WorkflowServiceInput } from "@/configure/services/workflow/types";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import {
   StaticWebsiteSchema,
@@ -22,6 +24,7 @@ export class Application {
   private _authService?: AuthService = undefined;
   private _subgraphs: Array<{ Type: string; Name: string }> = [];
   private _executorService?: ExecutorService = undefined;
+  private _workflowService?: WorkflowService = undefined;
   private _staticWebsiteServices: StaticWebsite[] = [];
   private _env: Record<string, string | number | boolean> = {};
 
@@ -58,6 +61,10 @@ export class Application {
 
   get executorService() {
     return this._executorService as Readonly<ExecutorService> | undefined;
+  }
+
+  get workflowService() {
+    return this._workflowService as Readonly<WorkflowService> | undefined;
   }
 
   get staticWebsiteServices() {
@@ -139,6 +146,13 @@ export class Application {
     this._executorService = new ExecutorService(config);
   }
 
+  defineWorkflow(config?: WorkflowServiceInput) {
+    if (!config) {
+      return;
+    }
+    this._workflowService = new WorkflowService(config);
+  }
+
   defineStaticWebsites(websites?: readonly StaticWebsiteInput[]) {
     const websiteNames = new Set<string>();
     (websites ?? []).forEach((config) => {
@@ -161,6 +175,7 @@ export function defineApplication(config: AppConfig) {
   app.defineIdp(config.idp);
   app.defineAuth(config.auth);
   app.defineExecutor(config.executor);
+  app.defineWorkflow(config.workflow);
   app.defineStaticWebsites(config.staticWebsites);
   return app;
 }

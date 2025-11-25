@@ -61,6 +61,9 @@ export default defineConfig({
   idp: [idp],
   auth,
   executor: { files: ["./executors/*.ts"] },
+  workflow: {
+    files: ["./workflows/**/*.ts"],
+  },
   staticWebsites: [website],
 });
 
