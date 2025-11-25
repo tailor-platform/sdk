@@ -29,6 +29,11 @@ done
 # Calculate total
 TOTAL_SIZE=$((CONFIGURE_SIZE + CHUNK_SIZE))
 
+# Convert bytes to KB (with 2 decimal places)
+CONFIGURE_SIZE_KB=$(awk "BEGIN {printf \"%.2f\", ${CONFIGURE_SIZE}/1024}")
+CHUNK_SIZE_KB=$(awk "BEGIN {printf \"%.2f\", ${CHUNK_SIZE}/1024}")
+TOTAL_SIZE_KB=$(awk "BEGIN {printf \"%.2f\", ${TOTAL_SIZE}/1024}")
+
 # Output JSON for octocov
 cat <<EOF
 {
@@ -38,20 +43,20 @@ cat <<EOF
     {
       "key": "configure-index-size",
       "name": "Configure index.mjs size",
-      "value": ${CONFIGURE_SIZE},
-      "unit": " bytes"
+      "value": ${CONFIGURE_SIZE_KB},
+      "unit": " KB"
     },
     {
       "key": "auth-config-chunk-size",
       "name": "Auth/Config chunk size",
-      "value": ${CHUNK_SIZE},
-      "unit": " bytes"
+      "value": ${CHUNK_SIZE_KB},
+      "unit": " KB"
     },
     {
       "key": "total-bundle-size",
       "name": "Total bundle size",
-      "value": ${TOTAL_SIZE},
-      "unit": " bytes"
+      "value": ${TOTAL_SIZE_KB},
+      "unit": " KB"
     }
   ]
 }

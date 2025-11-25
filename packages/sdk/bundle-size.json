@@ -5,20 +5,20 @@
     {
       "key": "configure-index-size",
       "name": "Configure index.mjs size",
-      "value": 2486,
-      "unit": " bytes"
+      "value": 2.43,
+      "unit": " KB"
     },
     {
       "key": "auth-config-chunk-size",
       "name": "Auth/Config chunk size",
-      "value": 21121,
-      "unit": " bytes"
+      "value": 20.63,
+      "unit": " KB"
     },
     {
       "key": "total-bundle-size",
       "name": "Total bundle size",
-      "value": 23607,
-      "unit": " bytes"
+      "value": 23.05,
+      "unit": " KB"
     }
   ]
 }
