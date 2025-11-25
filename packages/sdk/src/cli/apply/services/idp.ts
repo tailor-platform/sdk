@@ -7,11 +7,13 @@ import {
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { type Application } from "@/cli/application";
 import { type IdP } from "@/parser/service/idp";
-import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export function idpClientVaultName(namespaceName: string, clientName: string) {
   return `idp-${namespaceName}-${clientName}`;
@@ -23,18 +25,21 @@ export function idpClientSecretName(namespaceName: string, clientName: string) {
 
 export async function applyIdP(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planIdP>>,
+  result: Awaited<ReturnType<typeof planIdP>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // Services
     await Promise.all([
-      ...changeSet.service.creates.map((create) =>
-        client.createIdPService(create.request),
-      ),
-      ...changeSet.service.updates.map((update) =>
-        client.updateIdPService(update.request),
-      ),
+      ...changeSet.service.creates.map(async (create) => {
+        await client.createIdPService(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.service.updates.map(async (update) => {
+        await client.updateIdPService(update.request);
+        await client.setMetadata(update.metaRequest);
+      }),
     ]);
 
     // Clients
@@ -98,18 +103,16 @@ export async function applyIdP(
     // Delete in reverse order of dependencies
     // Clients
     await Promise.all(
-      changeSet.client.deletes
-        .filter((del) => del.tag === "client-deleted")
-        .map(async (del) => {
-          await client.deleteIdPClient(del.request);
+      changeSet.client.deletes.map(async (del) => {
+        await client.deleteIdPClient(del.request);
 
-          // Delete the secret manager vault and secret
-          const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
-          await client.deleteSecretManagerVault({
-            workspaceId: del.request.workspaceId,
-            secretmanagerVaultName: vaultName,
-          });
-        }),
+        // Delete the secret manager vault and secret
+        const vaultName = `idp-${del.request.namespaceName}-${del.request.name}`;
+        await client.deleteSecretManagerVault({
+          workspaceId: del.request.workspaceId,
+          secretmanagerVaultName: vaultName,
+        });
+      }),
     );
 
     // Services
@@ -121,16 +124,18 @@ export async function applyIdP(
   }
 }
 
-export async function planIdP(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
-  const idps: IdP[] = [];
-  for (const app of application.applications) {
-    idps.push(...app.idpServices);
-  }
-  const serviceChangeSet = await planServices(client, workspaceId, idps);
+export async function planIdP({
+  client,
+  workspaceId,
+  application,
+}: PlanContext) {
+  const idps = application.idpServices;
+  const {
+    changeSet: serviceChangeSet,
+    conflicts,
+    unmanaged,
+    resourceOwners,
+  } = await planServices(client, workspaceId, application.name, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
     client,
@@ -142,19 +147,26 @@ export async function planIdP(
   serviceChangeSet.print();
   clientChangeSet.print();
   return {
-    service: serviceChangeSet,
-    client: clientChangeSet,
+    changeSet: {
+      service: serviceChangeSet,
+      client: clientChangeSet,
+    },
+    conflicts,
+    unmanaged,
+    resourceOwners,
   };
 }
 
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateIdPServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateService = {
   name: string;
   request: MessageInitShape<typeof UpdateIdPServiceRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteService = {
@@ -162,15 +174,23 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
 };
 
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
+}
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
+  appName: string,
   idps: ReadonlyArray<IdP>,
 ) {
   const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
     new ChangeSet("IdP services");
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
+  const resourceOwners = new Set<string>();
 
-  const existingServices = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
@@ -184,15 +204,29 @@ async function planServices(
       throw error;
     }
   });
-  const existingNameSet = new Set<string>();
-  existingServices.forEach((service) => {
-    const name = service.namespace?.name;
-    if (name) {
-      existingNameSet.add(name);
-    }
-  });
+  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
+  await Promise.all(
+    withoutLabel.map(async (resource) => {
+      if (!resource.namespace?.name) {
+        return;
+      }
+      const { metadata } = await client.getMetadata({
+        trn: trn(workspaceId, resource.namespace.name),
+      });
+      existingServices[resource.namespace.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
+      };
+    }),
+  );
+
   for (const idp of idps) {
     const namespaceName = idp.name;
+    const existing = existingServices[namespaceName];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, namespaceName),
+      appName,
+    );
     let authorization;
     switch (idp.authorization) {
       case "insecure":
@@ -206,7 +240,20 @@ async function planServices(
         break;
     }
 
-    if (existingNameSet.has(namespaceName)) {
+    if (existing) {
+      if (!existing.label) {
+        unmanaged.push({
+          resourceType: "IdP service",
+          resourceName: idp.name,
+        });
+      } else if (existing.label !== appName) {
+        conflicts.push({
+          resourceType: "IdP service",
+          resourceName: idp.name,
+          currentOwner: existing.label,
+        });
+      }
+
       changeSet.updates.push({
         name: namespaceName,
         request: {
@@ -214,8 +261,9 @@ async function planServices(
           namespaceName,
           authorization,
         },
+        metaRequest,
       });
-      existingNameSet.delete(namespaceName);
+      delete existingServices[namespaceName];
     } else {
       changeSet.creates.push({
         name: namespaceName,
@@ -224,19 +272,28 @@ async function planServices(
           namespaceName,
           authorization,
         },
+        metaRequest,
       });
     }
   }
-  existingNameSet.forEach((namespaceName) => {
-    changeSet.deletes.push({
-      name: namespaceName,
-      request: {
-        workspaceId,
-        namespaceName,
-      },
-    });
+  Object.entries(existingServices).forEach(([namespaceName]) => {
+    const label = existingServices[namespaceName]?.label;
+    if (label && label !== appName) {
+      resourceOwners.add(label);
+    }
+    // Only delete services managed by this application
+    if (label === appName) {
+      changeSet.deletes.push({
+        name: namespaceName,
+        request: {
+          workspaceId,
+          namespaceName,
+        },
+      });
+    }
   });
-  return changeSet;
+
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 type CreateClient = {
@@ -252,14 +309,8 @@ type UpdateClient = {
 };
 
 type DeleteClient = {
-  tag: "client-deleted";
   name: string;
   request: MessageInitShape<typeof DeleteIdPClientRequestSchema>;
-};
-
-type ServiceDeleted = {
-  tag: "service-deleted";
-  name: string;
 };
 
 async function planClients(
@@ -268,11 +319,8 @@ async function planClients(
   idps: ReadonlyArray<IdP>,
   deletedServices: string[],
 ) {
-  const changeSet: ChangeSet<
-    CreateClient,
-    UpdateClient,
-    DeleteClient | ServiceDeleted
-  > = new ChangeSet("IdP clients");
+  const changeSet: ChangeSet<CreateClient, UpdateClient, DeleteClient> =
+    new ChangeSet("IdP clients");
 
   const fetchClients = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -323,7 +371,6 @@ async function planClients(
     }
     existingNameMap.forEach((name) => {
       changeSet.deletes.push({
-        tag: "client-deleted",
         name,
         request: {
           workspaceId,
@@ -338,8 +385,12 @@ async function planClients(
     const existingClients = await fetchClients(namespaceName);
     existingClients.forEach((client) => {
       changeSet.deletes.push({
-        tag: "service-deleted",
         name: client.name,
+        request: {
+          workspaceId,
+          namespaceName,
+          name: client.name,
+        },
       });
     });
   }

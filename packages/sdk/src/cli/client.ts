@@ -8,8 +8,8 @@ import {
 } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
-import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
+import { readPackageJson } from "./package-json";
 
 const baseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -41,7 +41,7 @@ async function userAgentInterceptor(): Promise<Interceptor> {
 }
 
 export async function userAgent() {
-  const packageJson = await readPackageJSON(import.meta.url);
+  const packageJson = await readPackageJson();
   return `tailor-sdk/${packageJson.version ?? "unknown"}`;
 }
 

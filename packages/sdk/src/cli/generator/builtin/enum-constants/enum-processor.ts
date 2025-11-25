@@ -1,4 +1,4 @@
-import type { EnumConstantMetadata } from "./types";
+import type { EnumConstantMetadata, EnumDefinition } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 /**
@@ -59,20 +59,17 @@ export class EnumProcessor {
   /**
    * Generate enum constant definitions from collected metadata.
    */
-  static async generateEnumConstants(
-    types: Record<string, EnumConstantMetadata>,
-  ): Promise<string> {
-    const allEnums = new Map<string, EnumConstantMetadata["enums"][number]>();
-
-    for (const typeMetadata of Object.values(types)) {
-      if (typeMetadata.enums) {
-        for (const enumDef of typeMetadata.enums) {
-          allEnums.set(enumDef.name, enumDef);
-        }
-      }
+  static generateUnifiedEnumConstants(allEnums: EnumDefinition[]): string {
+    if (allEnums.length === 0) {
+      return "";
     }
 
-    const enumDefs = Array.from(allEnums.values())
+    const enumMap = new Map<string, EnumDefinition>();
+    for (const enumDef of allEnums) {
+      enumMap.set(enumDef.name, enumDef);
+    }
+
+    const enumDefs = Array.from(enumMap.values())
       .map((e) => {
         const members = e.values
           .map((v) => {

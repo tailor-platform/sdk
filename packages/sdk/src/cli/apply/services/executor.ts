@@ -15,27 +15,32 @@ import {
   type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { type Application } from "@/cli/application";
 import { getDistDir } from "@/configure/config";
-import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor, Trigger } from "@/parser/service/executor";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyExecutor(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planExecutor>>,
+  result: Awaited<ReturnType<typeof planExecutor>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // Executors
     await Promise.all([
-      ...changeSet.creates.map((create) =>
-        client.createExecutorExecutor(create.request),
-      ),
-      ...changeSet.updates.map((update) =>
-        client.updateExecutorExecutor(update.request),
-      ),
+      ...changeSet.creates.map(async (create) => {
+        await client.createExecutorExecutor(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.updates.map(async (update) => {
+        await client.updateExecutorExecutor(update.request);
+        await client.setMetadata(update.metaRequest);
+      }),
     ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
@@ -51,11 +56,13 @@ export async function applyExecutor(
 type CreateExecutor = {
   name: string;
   request: MessageInitShape<typeof CreateExecutorExecutorRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateExecutor = {
   name: string;
   request: MessageInitShape<typeof UpdateExecutorExecutorRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteExecutor = {
@@ -63,15 +70,22 @@ type DeleteExecutor = {
   request: MessageInitShape<typeof DeleteExecutorExecutorRequestSchema>;
 };
 
-export async function planExecutor(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
+}
+
+export async function planExecutor({
+  client,
+  workspaceId,
+  application,
+}: PlanContext) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
     new ChangeSet("Executors");
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
+  const resourceOwners = new Set<string>();
 
-  const existingExecutors = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { executors, nextPageToken } = await client.listExecutorExecutors({
         workspaceId,
@@ -85,47 +99,83 @@ export async function planExecutor(
       throw error;
     }
   });
-  const existingNameSet = new Set<string>();
-  existingExecutors.forEach((executor) => {
-    existingNameSet.add(executor.name);
-  });
+  const existingExecutors: WithLabel<(typeof withoutLabel)[number]> = {};
+  await Promise.all(
+    withoutLabel.map(async (resource) => {
+      const { metadata } = await client.getMetadata({
+        trn: trn(workspaceId, resource.name),
+      });
+      existingExecutors[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
+      };
+    }),
+  );
 
   const executors = (await application.executorService?.loadExecutors()) ?? {};
   for (const executor of Object.values(executors)) {
-    if (existingNameSet.has(executor.name)) {
+    const existing = existingExecutors[executor.name];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, executor.name),
+      application.name,
+    );
+    if (existing) {
+      if (!existing.label) {
+        unmanaged.push({
+          resourceType: "Executor",
+          resourceName: executor.name,
+        });
+      } else if (existing.label !== application.name) {
+        conflicts.push({
+          resourceType: "Executor",
+          resourceName: executor.name,
+          currentOwner: existing.label,
+        });
+      }
+
       changeSet.updates.push({
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(executor, application.env),
+          executor: protoExecutor(application.name, executor, application.env),
         },
+        metaRequest,
       });
-      existingNameSet.delete(executor.name);
+      delete existingExecutors[executor.name];
     } else {
       changeSet.creates.push({
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(executor, application.env),
+          executor: protoExecutor(application.name, executor, application.env),
         },
+        metaRequest,
       });
     }
   }
-  existingNameSet.forEach((name) => {
-    changeSet.deletes.push({
-      name,
-      request: {
-        workspaceId,
+  Object.entries(existingExecutors).forEach(([name]) => {
+    const label = existingExecutors[name]?.label;
+    if (label && label !== application.name) {
+      resourceOwners.add(label);
+    }
+    // Only delete executors managed by this application
+    if (label === application.name) {
+      changeSet.deletes.push({
         name,
-      },
-    });
+        request: {
+          workspaceId,
+          name,
+        },
+      });
+    }
   });
 
   changeSet.print();
-  return changeSet;
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 function protoExecutor(
+  appName: string,
   executor: Executor,
   env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
@@ -259,7 +309,7 @@ function protoExecutor(
         config: {
           case: "tailorGraphql",
           value: {
-            appName: target.appName,
+            appName: target.appName ?? appName,
             query: target.query,
             variables: target.variables
               ? {

@@ -5,11 +5,15 @@ export interface TypeWithFiles {
   User: {
     fields: "avatar";
   };
+  Event: {
+    fields: "screenshot";
+  };
 }
 
 const namespaces: Record<keyof TypeWithFiles, string> = {
   SalesOrder: "tailordb",
   User: "tailordb",
+  Event: "analyticsdb",
 };
 
 export async function downloadFile<T extends keyof TypeWithFiles>(

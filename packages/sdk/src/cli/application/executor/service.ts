@@ -11,6 +11,9 @@ export class ExecutorService {
   constructor(public readonly config: ExecutorServiceConfig) {}
 
   async loadExecutors() {
+    if (Object.keys(this.executors).length > 0) {
+      return this.executors;
+    }
     if (!this.config.files || this.config.files.length === 0) {
       return;
     }

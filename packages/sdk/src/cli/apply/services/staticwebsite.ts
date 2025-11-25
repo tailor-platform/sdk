@@ -5,25 +5,30 @@ import {
   type DeleteStaticWebsiteRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { type Application } from "@/cli/application";
-import { type ApplyPhase } from "..";
 import { fetchAll, type OperatorClient } from "../../client";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { ApplyPhase, PlanContext } from "..";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyStaticWebsite(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planStaticWebsite>>,
+  result: Awaited<ReturnType<typeof planStaticWebsite>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // StaticWebsites
     await Promise.all([
-      ...changeSet.creates.map((create) =>
-        client.createStaticWebsite(create.request),
-      ),
-      ...changeSet.updates.map((update) =>
-        client.updateStaticWebsite(update.request),
-      ),
+      ...changeSet.creates.map(async (create) => {
+        await client.createStaticWebsite(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.updates.map(async (update) => {
+        await client.updateStaticWebsite(update.request);
+        await client.setMetadata(update.metaRequest);
+      }),
     ]);
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
@@ -37,11 +42,13 @@ export async function applyStaticWebsite(
 type CreateStaticWebsite = {
   name: string;
   request: MessageInitShape<typeof CreateStaticWebsiteRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateStaticWebsite = {
   name: string;
   request: MessageInitShape<typeof UpdateStaticWebsiteRequestSchema>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteStaticWebsite = {
@@ -49,19 +56,26 @@ type DeleteStaticWebsite = {
   request: MessageInitShape<typeof DeleteStaticWebsiteRequestSchema>;
 };
 
-export async function planStaticWebsite(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-) {
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
+}
+
+export async function planStaticWebsite({
+  client,
+  workspaceId,
+  application,
+}: PlanContext) {
   const changeSet: ChangeSet<
     CreateStaticWebsite,
     UpdateStaticWebsite,
     DeleteStaticWebsite
   > = new ChangeSet("StaticWebsites");
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
+  const resourceOwners = new Set<string>();
 
   // Fetch existing static websites
-  const existingWebsites = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     try {
       const { staticwebsites, nextPageToken } = await client.listStaticWebsites(
         {
@@ -77,17 +91,42 @@ export async function planStaticWebsite(
       throw error;
     }
   });
-
-  const existingNameSet = new Set<string>();
-  existingWebsites.forEach((website) => {
-    existingNameSet.add(website.name);
-  });
+  const existingWebsites: WithLabel<(typeof withoutLabel)[number]> = {};
+  await Promise.all(
+    withoutLabel.map(async (resource) => {
+      const { metadata } = await client.getMetadata({
+        trn: trn(workspaceId, resource.name),
+      });
+      existingWebsites[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
+      };
+    }),
+  );
 
   for (const websiteService of application.staticWebsiteServices) {
     const config = websiteService;
     const name = websiteService.name;
+    const existing = existingWebsites[name];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, name),
+      application.name,
+    );
 
-    if (existingNameSet.has(name)) {
+    if (existing) {
+      if (!existing.label) {
+        unmanaged.push({
+          resourceType: "StaticWebsite",
+          resourceName: name,
+        });
+      } else if (existing.label !== application.name) {
+        conflicts.push({
+          resourceType: "StaticWebsite",
+          resourceName: name,
+          currentOwner: existing.label,
+        });
+      }
+
       changeSet.updates.push({
         name,
         request: {
@@ -98,8 +137,9 @@ export async function planStaticWebsite(
             allowedIpAddresses: config.allowedIpAddresses || [],
           },
         },
+        metaRequest,
       });
-      existingNameSet.delete(name);
+      delete existingWebsites[name];
     } else {
       changeSet.creates.push({
         name,
@@ -111,20 +151,27 @@ export async function planStaticWebsite(
             allowedIpAddresses: config.allowedIpAddresses || [],
           },
         },
+        metaRequest,
       });
     }
   }
-
-  existingNameSet.forEach((name) => {
-    changeSet.deletes.push({
-      name,
-      request: {
-        workspaceId,
+  Object.entries(existingWebsites).forEach(([name]) => {
+    const label = existingWebsites[name]?.label;
+    if (label && label !== application.name) {
+      resourceOwners.add(label);
+    }
+    // Only delete websites managed by this application
+    if (label === application.name) {
+      changeSet.deletes.push({
         name,
-      },
-    });
+        request: {
+          workspaceId,
+          name,
+        },
+      });
+    }
   });
 
   changeSet.print();
-  return changeSet;
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }

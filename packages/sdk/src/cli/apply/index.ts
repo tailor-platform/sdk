@@ -12,6 +12,14 @@ import { initOperatorClient } from "../client";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
+import {
+  confirmImportantResourceDeletion,
+  confirmOwnerConflict,
+  confirmUnmanagedResources,
+  type ImportantResourceDeletion,
+  type OwnerConflict,
+  type UnmanagedResource,
+} from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
@@ -20,7 +28,9 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
+import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
+import type { OperatorClient } from "@/cli/client";
 import type { Executor } from "@/parser/service/executor";
 import type { Resolver } from "@/parser/service/resolver";
 
@@ -29,9 +39,16 @@ export interface ApplyOptions {
   profile?: string;
   configPath?: string;
   dryRun?: boolean;
+  yes?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
+}
+
+export interface PlanContext {
+  client: OperatorClient;
+  workspaceId: string;
+  application: Readonly<Application>;
 }
 
 export type ApplyPhase = "create-update" | "delete";
@@ -41,6 +58,7 @@ export async function apply(options?: ApplyOptions) {
   const configPath = loadConfigPath(options?.configPath);
   const { config } = await loadConfig(configPath);
   const dryRun = options?.dryRun ?? false;
+  const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? false;
 
   // Generate user types from loaded config
@@ -69,18 +87,89 @@ export async function apply(options?: ApplyOptions) {
     profile: options?.profile,
   });
 
+  // Load files
+  for (const tailordb of application.tailorDBServices) {
+    await tailordb.loadTypes();
+  }
+  for (const pipeline of application.resolverServices) {
+    await pipeline.loadResolvers();
+  }
+  if (application.executorService) {
+    await application.executorService.loadExecutors();
+  }
+  console.log("");
+
   // Phase 1: Plan
-  const tailorDB = await planTailorDB(client, workspaceId, application);
-  const staticWebsite = await planStaticWebsite(
-    client,
-    workspaceId,
-    application,
+  const ctx: PlanContext = { client, workspaceId, application };
+  const tailorDB = await planTailorDB(ctx);
+  const staticWebsite = await planStaticWebsite(ctx);
+  const idp = await planIdP(ctx);
+  const auth = await planAuth(ctx);
+  const pipeline = await planPipeline(ctx);
+  const app = await planApplication(ctx);
+  const executor = await planExecutor(ctx);
+
+  // Confirm conflicts
+  const allConflicts: OwnerConflict[] = [
+    ...tailorDB.conflicts,
+    ...staticWebsite.conflicts,
+    ...idp.conflicts,
+    ...auth.conflicts,
+    ...pipeline.conflicts,
+    ...executor.conflicts,
+  ];
+  await confirmOwnerConflict(allConflicts, application.name, yes);
+  // Confirm unmanaged resources
+  const allUnmanaged: UnmanagedResource[] = [
+    ...tailorDB.unmanaged,
+    ...staticWebsite.unmanaged,
+    ...idp.unmanaged,
+    ...auth.unmanaged,
+    ...pipeline.unmanaged,
+    ...executor.unmanaged,
+  ];
+  await confirmUnmanagedResources(allUnmanaged, application.name, yes);
+  // Confirm important deletions
+  const importantDeletions: ImportantResourceDeletion[] = [];
+  for (const del of tailorDB.changeSet.type.deletes) {
+    importantDeletions.push({
+      resourceType: "TailorDB type",
+      resourceName: del.name,
+    });
+  }
+  for (const del of staticWebsite.changeSet.deletes) {
+    importantDeletions.push({
+      resourceType: "StaticWebsite",
+      resourceName: del.name,
+    });
+  }
+  await confirmImportantResourceDeletion(importantDeletions, yes);
+
+  // Delete renamed applications
+  // NOTE: When removing resources while renaming the app at the same time,
+  // the app and its resources don't get deleted and are left orphaned...
+  const resourceOwners = new Set([
+    ...tailorDB.resourceOwners,
+    ...staticWebsite.resourceOwners,
+    ...idp.resourceOwners,
+    ...auth.resourceOwners,
+    ...pipeline.resourceOwners,
+    ...executor.resourceOwners,
+  ]);
+  const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
+  const emptyApps = [...conflictOwners].filter(
+    (owner) => !resourceOwners.has(owner),
   );
-  const idp = await planIdP(client, workspaceId, application);
-  const auth = await planAuth(client, workspaceId, application);
-  const pipeline = await planPipeline(client, workspaceId, application);
-  const app = await planApplication(client, workspaceId, application);
-  const executor = await planExecutor(client, workspaceId, application);
+  for (const emptyApp of emptyApps) {
+    app.deletes.push({
+      name: emptyApp,
+      request: {
+        workspaceId,
+        applicationName: emptyApp,
+      },
+    });
+  }
+
   if (dryRun) {
     console.log("Dry run enabled. No changes applied.");
     return;
@@ -167,6 +256,11 @@ export const applyCommand = defineCommand({
       description: "Run the command without making any changes",
       alias: "d",
     },
+    yes: {
+      type: "boolean",
+      description: "Skip all confirmation prompts",
+      alias: "y",
+    },
   },
   run: withCommonArgs(async (args) => {
     await apply({
@@ -174,6 +268,7 @@ export const applyCommand = defineCommand({
       profile: args.profile,
       configPath: args.config,
       dryRun: args.dryRun,
+      yes: args.yes,
     });
   }),
 });

@@ -10,3 +10,12 @@ export interface KyselyTypeMetadata {
     Serial: boolean;
   };
 }
+
+export interface KyselyNamespaceMetadata {
+  namespace: string;
+  types: KyselyTypeMetadata[];
+  usedUtilityTypes: {
+    Timestamp: boolean;
+    Serial: boolean;
+  };
+}

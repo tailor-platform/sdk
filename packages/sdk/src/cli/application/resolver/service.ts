@@ -14,6 +14,9 @@ export class ResolverService {
   ) {}
 
   async loadResolvers(): Promise<void> {
+    if (Object.keys(this.resolvers).length > 0) {
+      return;
+    }
     if (!this.config.files || this.config.files.length === 0) {
       return;
     }
