@@ -85,6 +85,18 @@ export async function apply(options?: ApplyOptions) {
     profile: options?.profile,
   });
 
+  // Load files
+  for (const tailordb of application.tailorDBServices) {
+    await tailordb.loadTypes();
+  }
+  for (const pipeline of application.resolverServices) {
+    await pipeline.loadResolvers();
+  }
+  if (application.executorService) {
+    await application.executorService.loadExecutors();
+  }
+  console.log("");
+
   // Phase 1: Plan
   const ctx: PlanContext = { client, workspaceId, application };
   const tailorDB = await planTailorDB(ctx);
