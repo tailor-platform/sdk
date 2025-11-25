@@ -137,7 +137,7 @@ export async function planExecutor({
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(application.name, executor),
+          executor: protoExecutor(application.name, executor, application.env),
         },
         metaRequest,
       });
@@ -147,7 +147,7 @@ export async function planExecutor({
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(application.name, executor),
+          executor: protoExecutor(application.name, executor, application.env),
         },
         metaRequest,
       });
@@ -177,6 +177,7 @@ export async function planExecutor({
 function protoExecutor(
   appName: string,
   executor: Executor,
+  env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
@@ -346,7 +347,7 @@ function protoExecutor(
             name: `${executor.name}__target`,
             script,
             variables: {
-              expr: "({ ...args, appNamespace: args.namespaceName })",
+              expr: `({ ...args, appNamespace: args.namespaceName, env: ${JSON.stringify(env)} })`,
             },
             invoker: target.invoker
               ? {
