@@ -1,16 +1,24 @@
 {
+  "key": "bundle-size",
+  "name": "SDK Configure Bundle Size",
   "metrics": [
     {
       "key": "configure-index-size",
-      "value": 2486
+      "name": "Configure index.mjs size",
+      "value": 2486,
+      "unit": " bytes"
     },
     {
       "key": "auth-config-chunk-size",
-      "value": 21121
+      "name": "Auth/Config chunk size",
+      "value": 21121,
+      "unit": " bytes"
     },
     {
       "key": "total-bundle-size",
-      "value": 23607
+      "name": "Total bundle size",
+      "value": 23607,
+      "unit": " bytes"
     }
   ]
 }

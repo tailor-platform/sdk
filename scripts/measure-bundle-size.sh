@@ -32,18 +32,26 @@ TOTAL_SIZE=$((CONFIGURE_SIZE + CHUNK_SIZE))
 # Output JSON for octocov
 cat <<EOF
 {
+  "key": "bundle-size",
+  "name": "SDK Configure Bundle Size",
   "metrics": [
     {
       "key": "configure-index-size",
-      "value": ${CONFIGURE_SIZE}
+      "name": "Configure index.mjs size",
+      "value": ${CONFIGURE_SIZE},
+      "unit": " bytes"
     },
     {
       "key": "auth-config-chunk-size",
-      "value": ${CHUNK_SIZE}
+      "name": "Auth/Config chunk size",
+      "value": ${CHUNK_SIZE},
+      "unit": " bytes"
     },
     {
       "key": "total-bundle-size",
-      "value": ${TOTAL_SIZE}
+      "name": "Total bundle size",
+      "value": ${TOTAL_SIZE},
+      "unit": " bytes"
     }
   ]
 }
