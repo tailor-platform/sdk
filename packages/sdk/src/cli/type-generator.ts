@@ -189,7 +189,6 @@ export async function generateUserTypes(
     const { attributeMap, attributeList } = extractAttributesFromConfig(config);
     if (!attributeMap && !attributeList) {
       console.log(styleText("cyan", "No attributes found in configuration"));
-      return;
     }
 
     if (attributeMap) {
