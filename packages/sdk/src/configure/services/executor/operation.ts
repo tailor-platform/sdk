@@ -269,7 +269,7 @@ export type WebhookOperation<Args> = Omit<
   ParserWebhookOperation,
   "url" | "body" | "headers"
 > & {
-  url: (args: Args & { env: TailorEnv }) => string;
+  url: (args: Args) => string;
   body?: (args: Args & { env: TailorEnv }) => Record<string, unknown>;
   headers?: {
     [key in RequestHeader]?: string | { vault: string; key: string };
