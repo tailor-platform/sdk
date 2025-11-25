@@ -6,6 +6,11 @@ import {
 
 export default defineConfig({
   name: "testing",
+  env: {
+    foo: 1,
+    bar: "hello",
+    baz: true,
+  },
   auth: defineAuth("main-auth", {
     machineUsers: {
       admin: {
