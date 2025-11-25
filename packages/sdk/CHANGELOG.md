@@ -1,5 +1,34 @@
 # @tailor-platform/sdk
 
+## 0.10.0
+
+### Minor Changes
+
+- [#25](https://github.com/tailor-platform/sdk/pull/25) [`50069ae`](https://github.com/tailor-platform/sdk/commit/50069aeebeb1c0e09cf66f660367cd26cc565f29) Thanks [@haru0017](https://github.com/haru0017)! - Define environment variables in `defineConfig()` and access them in resolvers and executors via the `env` parameter.
+
+  ```typescript
+  export default defineConfig({
+    name: "my-app",
+    env: { logLevel: "debug", cacheTtl: 3600 },
+  });
+
+  // Access in resolver
+  body: ({ input, env }) => {
+    // env.logLevel, env.cacheTtl available with full type safety
+  };
+  ```
+
+### Patch Changes
+
+- [#33](https://github.com/tailor-platform/sdk/pull/33) [`1f73bd1`](https://github.com/tailor-platform/sdk/commit/1f73bd1d7abaa0a55358086a0d1b7f7c00cccbf3) Thanks [@remiposo](https://github.com/remiposo)! - Confirm important resource deletion
+
+  Added a confirmation prompt when attempting to delete resources that would result in data loss (tailordb and staticwebsite).
+  This can be skipped with the `--yes` flag.
+
+- [#31](https://github.com/tailor-platform/sdk/pull/31) [`5fc5594`](https://github.com/tailor-platform/sdk/commit/5fc5594e0b7b1cdf72dadce505aa58a8ae2e5f4a) Thanks [@remiposo](https://github.com/remiposo)! - Make appName for the Executor's GraphQL target optional
+
+  The default value is its own application name.
+
 ## 0.9.0
 
 ### Minor Changes
