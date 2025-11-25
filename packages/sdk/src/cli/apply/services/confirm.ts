@@ -93,3 +93,46 @@ export async function confirmUnmanagedResources(
     `);
   }
 }
+
+export interface ImportantResourceDeletion {
+  resourceType: string;
+  resourceName: string;
+}
+
+export async function confirmImportantResourceDeletion(
+  resources: ImportantResourceDeletion[],
+  yes: boolean,
+): Promise<void> {
+  if (resources.length === 0) return;
+
+  consola.warn("The following resources will be deleted:");
+
+  console.log(`  ${chalk.cyan("Resources")}:`);
+  for (const r of resources) {
+    console.log(
+      `    • ${chalk.bold(r.resourceType)} ${chalk.red(`"${r.resourceName}"`)}`,
+    );
+  }
+  console.log("");
+  console.log(
+    chalk.yellow(
+      "  Deleting these resources will permanently remove all associated data.",
+    ),
+  );
+
+  if (yes) {
+    consola.success("Deleting resources (--yes flag specified)...");
+    return;
+  }
+
+  const confirmed = await consola.prompt(
+    "Are you sure you want to delete these resources?",
+    { type: "confirm", initial: false },
+  );
+  if (!confirmed) {
+    throw new Error(ml`
+      Apply cancelled. Resources will not be deleted.
+      To override, run again and confirm, or use --yes flag.
+    `);
+  }
+}

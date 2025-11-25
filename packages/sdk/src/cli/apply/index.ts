@@ -13,8 +13,10 @@ import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import {
+  confirmImportantResourceDeletion,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  type ImportantResourceDeletion,
   type OwnerConflict,
   type UnmanagedResource,
 } from "./services/confirm";
@@ -107,7 +109,7 @@ export async function apply(options?: ApplyOptions) {
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
 
-  // Confirm all conflicts and unmanaged resources
+  // Confirm conflicts
   const allConflicts: OwnerConflict[] = [
     ...tailorDB.conflicts,
     ...staticWebsite.conflicts,
@@ -116,6 +118,8 @@ export async function apply(options?: ApplyOptions) {
     ...pipeline.conflicts,
     ...executor.conflicts,
   ];
+  await confirmOwnerConflict(allConflicts, application.name, yes);
+  // Confirm unmanaged resources
   const allUnmanaged: UnmanagedResource[] = [
     ...tailorDB.unmanaged,
     ...staticWebsite.unmanaged,
@@ -124,8 +128,22 @@ export async function apply(options?: ApplyOptions) {
     ...pipeline.unmanaged,
     ...executor.unmanaged,
   ];
-  await confirmOwnerConflict(allConflicts, application.name, yes);
   await confirmUnmanagedResources(allUnmanaged, application.name, yes);
+  // Confirm important deletions
+  const importantDeletions: ImportantResourceDeletion[] = [];
+  for (const del of tailorDB.changeSet.type.deletes) {
+    importantDeletions.push({
+      resourceType: "TailorDB type",
+      resourceName: del.name,
+    });
+  }
+  for (const del of staticWebsite.changeSet.deletes) {
+    importantDeletions.push({
+      resourceType: "StaticWebsite",
+      resourceName: del.name,
+    });
+  }
+  await confirmImportantResourceDeletion(importantDeletions, yes);
 
   // Delete renamed applications
   // NOTE: When removing resources while renaming the app at the same time,
