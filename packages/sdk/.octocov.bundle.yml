@@ -1,0 +1,35 @@
+locale: en
+repository: ${GITHUB_REPOSITORY}/packages/sdk
+
+# Disable coverage metrics
+coverage:
+  if: false
+
+codeToTestRatio:
+  if: false
+
+testExecutionTime:
+  if: false
+
+report:
+  if: is_default_branch
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}
+
+diff:
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}
+
+comment:
+  if: is_pull_request
+
+summary:
+  if: true
+
+customMetrics:
+  configure-index-size:
+    key: configure-index-size
+  auth-config-chunk-size:
+    key: auth-config-chunk-size
+  total-bundle-size:
+    key: total-bundle-size

@@ -1,0 +1,16 @@
+{
+  "metrics": [
+    {
+      "key": "configure-index-size",
+      "value": 2486
+    },
+    {
+      "key": "auth-config-chunk-size",
+      "value": 21121
+    },
+    {
+      "key": "total-bundle-size",
+      "value": 23607
+    }
+  ]
+}
