@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "types": ["node", "@tailor-platform/function-types"]
   },
-  "include": ["src/**/*", "tailor.config.ts"]
+  "include": ["**/*.ts"]
 }
