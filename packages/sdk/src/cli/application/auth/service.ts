@@ -1,16 +1,16 @@
 import type { TailorDBService } from "@/cli/application/tailordb/service";
-import type { AuthConfig } from "@/configure/services/auth";
+import type { AuthOwnConfig } from "@/configure/services/auth";
 
 export class AuthService {
-  private _userProfile?: AuthConfig["userProfile"] & {
+  private _userProfile?: AuthOwnConfig["userProfile"] & {
     namespace: string;
   };
-  private _tenantProvider?: AuthConfig["tenantProvider"] & {
+  private _tenantProvider?: AuthOwnConfig["tenantProvider"] & {
     namespace: string;
   };
 
   constructor(
-    public readonly config: AuthConfig,
+    public readonly config: AuthOwnConfig,
     public readonly tailorDBServices: ReadonlyArray<TailorDBService>,
   ) {}
 

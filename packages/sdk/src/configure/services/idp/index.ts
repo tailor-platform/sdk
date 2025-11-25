@@ -29,4 +29,8 @@ export function defineIdp<const TClients extends string[]>(
   return result as typeof result & IdpDefinitionBrand;
 }
 
-export type IdPConfig = Omit<ReturnType<typeof defineIdp>, "provider">;
+export type IdPExternalConfig = { name: string; external: true };
+
+export type IdPConfig =
+  | Omit<ReturnType<typeof defineIdp>, "provider">
+  | IdPExternalConfig;
