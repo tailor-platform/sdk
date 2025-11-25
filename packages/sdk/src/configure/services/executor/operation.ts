@@ -1,3 +1,4 @@
+import type { TailorEnv } from "@/configure/types/env";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -6,7 +7,7 @@ import type {
 import type { Client } from "@urql/core";
 
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
-  body: (args: Args) => void | Promise<void>;
+  body: (args: Args & { env: TailorEnv }) => void | Promise<void>;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;

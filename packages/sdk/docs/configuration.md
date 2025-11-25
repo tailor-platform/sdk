@@ -130,3 +130,34 @@ export default defineConfig({
 **description**: Description of the site.
 
 **allowedIPAddresses**: List of IP addresses allowed to access the site in CIDR format.
+
+### Environment Variables
+
+Define environment variables that can be accessed in resolvers and executors:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  env: {
+    foo: 1,
+    bar: "hello",
+    baz: true,
+  },
+});
+```
+
+```typescript
+// In resolvers
+body: ({ input, env }) => {
+  return {
+    result: input.multiplier * env.foo,
+    message: env.bar,
+    enabled: env.baz,
+  };
+};
+
+// In executors
+body: ({ newRecord, env }) => {
+  console.log(`Environment: ${env.bar}, User: ${newRecord.name}`);
+};
+```
