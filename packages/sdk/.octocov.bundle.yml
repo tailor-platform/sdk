@@ -27,9 +27,5 @@ summary:
   if: true
 
 customMetrics:
-  configure-index-size:
-    key: configure-index-size
-  auth-config-chunk-size:
-    key: auth-config-chunk-size
-  total-bundle-size:
-    key: total-bundle-size
+  bundle-size:
+    key: bundle-size

@@ -64,6 +64,4 @@ jobs:
         with:
           config: packages/sdk/.octocov.bundle.yml
         env:
-          OCTOCOV_CUSTOM_METRICS_CONFIGURE_INDEX_SIZE: packages/sdk/bundle-size.json
-          OCTOCOV_CUSTOM_METRICS_AUTH_CONFIG_CHUNK_SIZE: packages/sdk/bundle-size.json
-          OCTOCOV_CUSTOM_METRICS_TOTAL_BUNDLE_SIZE: packages/sdk/bundle-size.json
+          OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: packages/sdk/bundle-size.json
