@@ -4,7 +4,7 @@ import {
   type GeneratorInput,
 } from "@/cli/generator/types";
 import { TypeProcessor } from "./type-processor";
-import { type KyselyTypeMetadata } from "./types";
+import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const KyselyGeneratorID = "@tailor-platform/kysely-type";
@@ -14,7 +14,13 @@ export const KyselyGeneratorID = "@tailor-platform/kysely-type";
  */
 export class KyselyGenerator
   implements
-    CodeGenerator<KyselyTypeMetadata, undefined, undefined, string, undefined>
+    CodeGenerator<
+      KyselyTypeMetadata,
+      undefined,
+      undefined,
+      KyselyNamespaceMetadata,
+      undefined
+    >
 {
   readonly id = KyselyGeneratorID;
   readonly description = "Generates Kysely type definitions for TailorDB types";
@@ -45,26 +51,47 @@ export class KyselyGenerator
     applicationNamespace: string;
     namespace: string;
     types: Record<string, KyselyTypeMetadata>;
-  }): Promise<string> {
-    return await TypeProcessor.processTypes(args.types, args.namespace);
+  }): Promise<KyselyNamespaceMetadata> {
+    const typesList = Object.values(args.types);
+
+    const usedUtilityTypes = typesList.reduce(
+      (acc, type) => ({
+        Timestamp: acc.Timestamp || type.usedUtilityTypes.Timestamp,
+        Serial: acc.Serial || type.usedUtilityTypes.Serial,
+      }),
+      { Timestamp: false, Serial: false },
+    );
+
+    return {
+      namespace: args.namespace,
+      types: typesList,
+      usedUtilityTypes,
+    };
   }
 
   aggregate(args: {
-    inputs: GeneratorInput<string, undefined>[];
+    inputs: GeneratorInput<KyselyNamespaceMetadata, undefined>[];
     executorInputs: undefined[];
     baseDir: string;
   }): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
+    const allNamespaceData: KyselyNamespaceMetadata[] = [];
+
     for (const input of args.inputs) {
       for (const nsResult of input.tailordb) {
-        if (nsResult.types) {
-          files.push({
-            path: this.options.distPath,
-            content: nsResult.types,
-          });
+        if (nsResult.types && nsResult.types.types.length > 0) {
+          allNamespaceData.push(nsResult.types);
         }
       }
+    }
+
+    if (allNamespaceData.length > 0) {
+      const content = TypeProcessor.generateUnifiedTypes(allNamespaceData);
+      files.push({
+        path: this.options.distPath,
+        content,
+      });
     }
 
     return { files };

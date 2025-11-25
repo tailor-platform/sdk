@@ -48,6 +48,7 @@ export default defineConfig({
   ],
   db: {
     tailordb: { files: ["./tailordb/*.ts"] },
+    analyticsdb: { files: ["./analyticsdb/*.ts"] },
   },
   resolver: {
     "my-resolver": { files: ["./resolvers/*.ts"] },

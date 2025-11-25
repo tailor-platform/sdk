@@ -12,8 +12,12 @@ describe("controlplane", () => {
     const { tailordbServices } = await client.listTailorDBServices({
       workspaceId,
     });
-    expect(tailordbServices.length).toBe(1);
-    expect(tailordbServices[0].namespace?.name).toBe(namespaceName);
+    expect(tailordbServices.length).toBe(2); // tailordb + analyticsdb
+    const tailordbService = tailordbServices.find(
+      (s) => s.namespace?.name === namespaceName,
+    );
+    expect(tailordbService).toBeDefined();
+    expect(tailordbService?.namespace?.name).toBe(namespaceName);
   });
 
   test("type applied", async () => {
