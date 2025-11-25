@@ -137,7 +137,7 @@ export async function planExecutor({
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(executor),
+          executor: protoExecutor(application.name, executor),
         },
         metaRequest,
       });
@@ -147,7 +147,7 @@ export async function planExecutor({
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(executor),
+          executor: protoExecutor(application.name, executor),
         },
         metaRequest,
       });
@@ -175,6 +175,7 @@ export async function planExecutor({
 }
 
 function protoExecutor(
+  appName: string,
   executor: Executor,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const trigger = executor.trigger;
@@ -307,7 +308,7 @@ function protoExecutor(
         config: {
           case: "tailorGraphql",
           value: {
-            appName: target.appName,
+            appName: target.appName ?? appName,
             query: target.query,
             variables: target.variables
               ? {

@@ -10,7 +10,6 @@ export default createExecutor({
   }),
   operation: {
     kind: "graphql",
-    appName: "my-app",
     query: /* gql */ `
       mutation createSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {
         createSalesOrderCreated(input: $input) {
