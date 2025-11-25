@@ -12,7 +12,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
     "@tailor-platform/function-kysely-tailordb": "0.1.3",
