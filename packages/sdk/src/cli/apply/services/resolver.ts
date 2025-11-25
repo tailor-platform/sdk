@@ -109,6 +109,7 @@ export async function planPipeline(
     pipelines,
     executors,
     deletedServices,
+    application.env,
   );
 
   serviceChangeSet.print();
@@ -223,6 +224,7 @@ async function planResolvers(
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
+  env: Record<string, string | number | boolean>,
 ) {
   const changeSet: ChangeSet<
     CreateResolver,
@@ -269,7 +271,11 @@ async function planResolvers(
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(resolver, executorUsedResolvers),
+            pipelineResolver: processResolver(
+              resolver,
+              executorUsedResolvers,
+              env,
+            ),
           },
         });
         existingNameSet.delete(resolver.name);
@@ -279,7 +285,11 @@ async function planResolvers(
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(resolver, executorUsedResolvers),
+            pipelineResolver: processResolver(
+              resolver,
+              executorUsedResolvers,
+              env,
+            ),
           },
         });
       }
@@ -312,6 +322,7 @@ async function planResolvers(
 function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
+  env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   // Read body function code
   const functionPath = path.join(
@@ -335,7 +346,7 @@ function processResolver(
         operationType: PipelineResolver_OperationType.FUNCTION,
         operationSource: functionCode,
         operationHook: {
-          expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap} });`,
+          expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
         },
         postScript: `args.body`,
       },

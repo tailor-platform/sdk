@@ -50,11 +50,11 @@ export async function apply(options?: ApplyOptions) {
   // Build functions
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
-      await buildPipeline(pipeline.namespace, pipeline.config, app.env);
+      await buildPipeline(pipeline.namespace, pipeline.config);
     }
   }
   if (application.executorService) {
-    await buildExecutor(application.executorService.config, application.env);
+    await buildExecutor(application.executorService.config);
   }
   if (buildOnly) return;
 
@@ -107,16 +107,12 @@ export async function apply(options?: ApplyOptions) {
   console.log("Successfully applied changes.");
 }
 
-async function buildPipeline(
-  namespace: string,
-  config: FileLoadConfig,
-  env: Record<string, string | number | boolean>,
-) {
+async function buildPipeline(namespace: string, config: FileLoadConfig) {
   const bundlerConfig: BundlerConfig<Resolver> = {
     namespace,
     serviceConfig: config,
     loader: new ResolverLoader(),
-    transformer: new CodeTransformer(env),
+    transformer: new CodeTransformer(),
     outputDirs: {
       preBundle: "resolvers",
       postBundle: "functions",
@@ -126,15 +122,12 @@ async function buildPipeline(
   await bundler.bundle();
 }
 
-async function buildExecutor(
-  config: FileLoadConfig,
-  env: Record<string, string | number | boolean>,
-) {
+async function buildExecutor(config: FileLoadConfig) {
   const bundlerConfig: BundlerConfig<Executor> = {
     namespace: "executor",
     serviceConfig: config,
     loader: new ExecutorLoader(),
-    transformer: new ExecutorTransformer(env),
+    transformer: new ExecutorTransformer(),
     outputDirs: {
       preBundle: "executors",
       postBundle: "executors",

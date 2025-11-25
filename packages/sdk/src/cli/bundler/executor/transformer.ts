@@ -6,7 +6,7 @@ import { type ITransformer } from "@/cli/bundler";
 import type { Executor } from "@/parser/service/executor";
 
 export class ExecutorTransformer implements ITransformer {
-  constructor(private env: Record<string, string | number | boolean> = {}) {}
+  constructor() {}
 
   async transform(filePath: string, tempDir: string): Promise<string[]> {
     const sourceText = fs.readFileSync(filePath).toString();
@@ -30,16 +30,6 @@ export class ExecutorTransformer implements ITransformer {
       );
     }
 
-    // Inject env into args
-    const envJson = JSON.stringify(this.env);
-    const wrappedFunction = ml /* js */ `
-      (args) => {
-        const originalFunction = ${exec.body.toString()};
-        const argsWithEnv = { ...args, env: ${envJson} };
-        return originalFunction(argsWithEnv);
-      }
-    `;
-
     // Write the transformed file with the executor function
     fs.writeFileSync(
       transformedPath,
@@ -47,7 +37,7 @@ export class ExecutorTransformer implements ITransformer {
       ${sourceText}
 
       // Export the executor function
-      export const __executor_function = ${wrappedFunction};
+      export const __executor_function = ${exec.body.toString()};
       `,
     );
 
