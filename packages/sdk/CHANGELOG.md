@@ -1,5 +1,31 @@
 # @tailor-platform/sdk
 
+## 0.10.1
+
+### Patch Changes
+
+- [#34](https://github.com/tailor-platform/sdk/pull/34) [`ed71900`](https://github.com/tailor-platform/sdk/commit/ed719007420794d50d26eb2a3f1f77c5bb3e60a9) Thanks [@remiposo](https://github.com/remiposo)! - Reference external resources
+
+  You can now add resources managed by Terraform or other SDK projects to your application's subgraph for shared use.
+  In this case, the resources themselves are not deployed.
+
+  ```typescript
+  defineConfig({
+    name: "ref-app",
+    db: {
+      "shared-db": { external: true },
+    },
+    resolver: { "shared-resolver": { external: true } },
+    auth: { name: "shared-auth", external: true },
+    idp: [{ name: "shared-idp", external: true }],
+  });
+  ```
+
+- [#36](https://github.com/tailor-platform/sdk/pull/36) [`00701da`](https://github.com/tailor-platform/sdk/commit/00701da46ceb9624b58c123fcf0ff19e4dc513f5) Thanks [@remiposo](https://github.com/remiposo)! - Allow specifying the path where types are generated
+
+  By default, types are generated inside `node_modules/@tailor-platform/sdk` based on env and attribute settings, but you can now change the path with `TAILOR_PLATFORM_SDK_TYPE_PATH`.
+  This is primarily an option for developers, preventing type definitions from being overridden when working with multiple SDK projects simultaneously.
+
 ## 0.10.0
 
 ### Minor Changes
