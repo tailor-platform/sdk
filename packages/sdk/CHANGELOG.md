@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 0.10.2
+
+### Patch Changes
+
+- [#45](https://github.com/tailor-platform/sdk/pull/45) [`efba21f`](https://github.com/tailor-platform/sdk/commit/efba21f0991a3ee9068684d13407dbdb0b19c425) Thanks [@remiposo](https://github.com/remiposo)! - Callback to localhost on WSL environments
+
+  Adjusted the redirect_uri value to fix an issue where login fails on WSL environments.
+
 ## 0.10.1
 
 ### Patch Changes
