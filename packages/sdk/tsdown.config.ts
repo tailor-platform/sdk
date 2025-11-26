@@ -34,11 +34,10 @@ export default defineConfig({
   sourcemap: true,
   plugins: [
     Sonda({
-      open: false, // Don't auto-open browser in CI
-      format: "json", // Output JSON format for scripting
+      open: false,
+      format: "json",
       filename: "bundle-analysis.json",
       deep: true,
-      // sources: true,
     }),
   ],
 });

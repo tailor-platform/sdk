@@ -12,8 +12,11 @@ function getChunkSize(report, distPath) {
   const normalized = distPath.startsWith("dist/")
     ? distPath
     : `dist/${distPath}`;
+
   const entry = report.resources.find(
-    (r) => r.kind === "asset" && r.name === normalized,
+    (r) =>
+      r.kind === "asset" &&
+      path.normalize(r.name) === path.normalize(normalized),
   );
   return entry?.uncompressed ?? 0;
 }
@@ -21,7 +24,11 @@ function getChunkSize(report, distPath) {
 function getImports(file) {
   const code = fs.readFileSync(file, "utf8");
   const [imports] = parse(code);
-  return imports.map((i) => code.slice(i.s, i.e));
+
+  return imports.map((i) => {
+    const raw = code.slice(i.s, i.e);
+    return raw.replace(/^['"]|['"]$/g, ""); // remove quotes
+  });
 }
 
 function collectDependencies(entryFile, visited = new Set()) {
@@ -29,9 +36,9 @@ function collectDependencies(entryFile, visited = new Set()) {
   visited.add(entryFile);
 
   const deps = [];
+
   for (const imp of getImports(entryFile)) {
-    // Skip non-relative imports (node_modules)
-    if (!imp.startsWith(".")) continue;
+    if (!imp.startsWith(".")) continue; // skip node_modules etc.
 
     const target = path.resolve(path.dirname(entryFile), imp);
     if (fs.existsSync(target)) {
@@ -65,44 +72,30 @@ async function main() {
 
   const totalSize = configureSize + depsSize;
 
-  const configureSizeKB = parseFloat((configureSize / 1024).toFixed(2));
-  const depsSizeKB = parseFloat((depsSize / 1024).toFixed(2));
-  const totalSizeKB = parseFloat((totalSize / 1024).toFixed(2));
-
   const output = {
     key: "bundle-size",
     name: "SDK Configure Bundle Size",
     metrics: [
       {
         key: "configure-index-size",
-        name: "Configure index.mjs size",
-        value: configureSizeKB,
-        unit: " KB",
+        value: +(configureSize / 1024).toFixed(2),
+        unit: "KB",
       },
       {
         key: "dependency-chunks-size",
-        name: "Dependency chunks size",
-        value: depsSizeKB,
-        unit: " KB",
+        value: +(depsSize / 1024).toFixed(2),
+        unit: "KB",
       },
       {
         key: "total-bundle-size",
-        name: "Total bundle size",
-        value: totalSizeKB,
-        unit: " KB",
+        value: +(totalSize / 1024).toFixed(2),
+        unit: "KB",
       },
     ],
   };
 
   const outputPath = path.join(sdkDir, "bundle-size.json");
   fs.writeFileSync(outputPath, JSON.stringify(output, null, 2) + "\n");
-
-  console.log(
-    `✓ Bundle size report written to ${path.relative(process.cwd(), outputPath)}`,
-  );
-  console.log(
-    `  Total: ${totalSizeKB} KB (configure: ${configureSizeKB} KB + deps: ${depsSizeKB} KB)`,
-  );
 }
 
 main();
