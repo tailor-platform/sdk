@@ -59,12 +59,12 @@ importers:
 
   example:
     dependencies:
-      '@tailor-platform/tailor-proto':
-        specifier: workspace:^
-        version: link:../packages/tailor-proto
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../packages/sdk
+      '@tailor-platform/tailor-proto':
+        specifier: workspace:^
+        version: link:../packages/tailor-proto
       date-fns:
         specifier: 4.1.0
         version: 4.1.0
@@ -150,7 +150,7 @@ importers:
         version: 9.39.1
       '@tailor-platform/sdk':
         specifier: workspace:^
-        version: link:../../../tailor-sdk
+        version: link:../../../sdk
       '@types/node':
         specifier: 22.19.0
         version: 22.19.0
@@ -184,7 +184,7 @@ importers:
         version: 0.7.2
       '@tailor-platform/sdk':
         specifier: workspace:^
-        version: link:../../../tailor-sdk
+        version: link:../../../sdk
       '@types/node':
         specifier: 22.19.0
         version: 22.19.0
@@ -218,7 +218,7 @@ importers:
         version: 0.7.2
       '@tailor-platform/sdk':
         specifier: workspace:^
-        version: link:../../../tailor-sdk
+        version: link:../../../sdk
       '@types/node':
         specifier: 22.19.0
         version: 22.19.0
@@ -240,15 +240,6 @@ importers:
       vitest:
         specifier: 4.0.8
         version: 4.0.8(@types/node@22.19.0)(jiti@2.5.1)(tsx@4.20.6)
-
-  packages/tailor-proto:
-    dependencies:
-      '@bufbuild/protobuf':
-        specifier: 2.10.0
-        version: 2.10.0
-      '@connectrpc/connect':
-        specifier: 2.1.0
-        version: 2.1.0(@bufbuild/protobuf@2.10.0)
 
   packages/sdk:
     dependencies:
@@ -288,6 +279,9 @@ importers:
       inflection:
         specifier: 3.0.2
         version: 3.0.2
+      is-wsl:
+        specifier: 3.1.0
+        version: 3.1.0
       madge:
         specifier: 8.0.0
         version: 8.0.0(typescript@5.9.3)
@@ -358,6 +352,15 @@ importers:
       vitest:
         specifier: 4.0.8
         version: 4.0.8(@types/node@22.19.0)(jiti@2.5.1)(tsx@4.20.6)
+
+  packages/tailor-proto:
+    dependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.10.0
+        version: 2.10.0
+      '@connectrpc/connect':
+        specifier: 2.1.0
+        version: 2.1.0(@bufbuild/protobuf@2.10.0)
 
 packages:
 

@@ -2,15 +2,18 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { defineCommand } from "citty";
 import { consola } from "consola";
+import isWsl from "is-wsl";
 import open from "open";
 import { z } from "zod";
 import { commonArgs, withCommonArgs } from "./args";
 import { userAgent } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
 
-// Since we need to specify an allowed callback, use the same value as tailorctl for now.
+// Since accessing via domain is difficult, specify localhost directly on WSL environments.
 const CALLBACK_PORT = 8085;
-const CALLBACK_URL = `http://tailorctl.tailor.tech:${CALLBACK_PORT}/callback`;
+const CALLBACK_URL = isWsl
+  ? `http://localhost:${CALLBACK_PORT}/callback`
+  : `http://tailorctl.tailor.tech:${CALLBACK_PORT}/callback`;
 
 export const PLATFORM_AUTH_URL = "https://api.tailor.tech/auth/platform";
 const LOGIN_URL = PLATFORM_AUTH_URL + "/login";
