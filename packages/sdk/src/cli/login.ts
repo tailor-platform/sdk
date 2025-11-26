@@ -1,11 +1,11 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
-import { generateCodeVerifier, OAuth2Client } from "@badgateway/oauth2-client";
+import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import open from "open";
 import { commonArgs, withCommonArgs } from "./args";
-import { fetchUserInfo, oauth2ClientId, platformBaseUrl } from "./client";
+import { fetchUserInfo, initOAuth2Client } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
 
 const redirectPort = 8085;
@@ -16,12 +16,7 @@ function randomState() {
 }
 
 const startAuthServer = async () => {
-  const client = new OAuth2Client({
-    clientId: oauth2ClientId,
-    server: platformBaseUrl,
-    authorizationEndpoint: "/oauth2/platform/authorize",
-    tokenEndpoint: "/oauth2/platform/token",
-  });
+  const client = initOAuth2Client();
   const state = randomState();
   const codeVerifier = await generateCodeVerifier();
 

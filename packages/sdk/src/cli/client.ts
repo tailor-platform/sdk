@@ -1,3 +1,4 @@
+import { OAuth2Client } from "@badgateway/oauth2-client";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import {
   type Client,
@@ -14,7 +15,17 @@ import { readPackageJson } from "./package-json";
 export const platformBaseUrl =
   process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
-export const oauth2ClientId = "cpoc_6X8NTyohCX1PMRilxSsmJ9CVh8ZNmH5B";
+const oauth2ClientId = "cpoc_6X8NTyohCX1PMRilxSsmJ9CVh8ZNmH5B";
+const oauth2DiscoveryEndpoint =
+  "/.well-known/oauth-authorization-server/oauth2/platform";
+
+export function initOAuth2Client() {
+  return new OAuth2Client({
+    server: platformBaseUrl,
+    discoveryEndpoint: oauth2DiscoveryEndpoint,
+    clientId: oauth2ClientId,
+  });
+}
 
 export type OperatorClient = Client<typeof OperatorService>;
 
@@ -130,30 +141,17 @@ export async function fetchAll<T>(
   return items;
 }
 
-export async function refreshToken(refreshToken: string) {
-  const refreshUrl = new URL("/auth/platform/token/refresh", platformBaseUrl)
-    .href;
-  const body = new URLSearchParams();
-  body.append("refresh_token", refreshToken);
-  const resp = await fetch(refreshUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": await userAgent(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
+export async function refreshToken(tokens: {
+  access_token: string;
+  refresh_token: string;
+  token_expires_at: string;
+}) {
+  const client = initOAuth2Client();
+  return await client.refreshToken({
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    expiresAt: Date.parse(tokens.token_expires_at),
   });
-  if (!resp.ok) {
-    throw new Error(`Failed to refresh token: ${resp.statusText}`);
-  }
-
-  const rawJson = await resp.json();
-  const schema = z.object({
-    access_token: z.string(),
-    refresh_token: z.string(),
-    expires_in: z.number(),
-  });
-  return schema.parse(rawJson);
 }
 
 export async function fetchUserInfo(accessToken: string) {
@@ -173,26 +171,6 @@ export async function fetchUserInfo(accessToken: string) {
     email: z.string(),
   });
   return schema.parse(rawJson);
-}
-
-export async function revokeToken(refreshToken: string, clientId: string) {
-  const revokeUrl = new URL("/oauth2/platform/revoke", platformBaseUrl).href;
-
-  const body = new URLSearchParams();
-  body.append("client_id", clientId);
-  body.append("token", refreshToken);
-  body.append("token_type_hint", "refresh_token");
-  const resp = await fetch(revokeUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": await userAgent(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
-  if (!resp.ok) {
-    throw new Error(`Failed to logout: ${resp.statusText}`);
-  }
 }
 
 // Converting "name:url" patterns to actual Static Website URLs
