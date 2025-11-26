@@ -85,8 +85,11 @@ export type Hooks<
 }>;
 
 export type TailorDBServiceConfig = { files: string[]; ignores?: string[] };
+
+export type TailorDBExternalConfig = { external: true };
+
 export type TailorDBServiceInput = {
-  [namespace: string]: TailorDBServiceConfig;
+  [namespace: string]: TailorDBServiceConfig | TailorDBExternalConfig;
 };
 
 export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {

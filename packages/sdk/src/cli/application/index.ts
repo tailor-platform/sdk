@@ -7,12 +7,13 @@ import { type AuthConfig } from "@/configure/services/auth";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type ResolverServiceInput } from "@/configure/services/resolver/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import { IdPSchema, type IdP, type IdPInput } from "@/parser/service/idp";
+import { IdPSchema, type IdP } from "@/parser/service/idp";
 import {
   StaticWebsiteSchema,
   type StaticWebsite,
   type StaticWebsiteInput,
 } from "@/parser/service/staticwebsite";
+import type { IdPConfig } from "@/configure/services/idp";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
@@ -77,9 +78,11 @@ export class Application {
     }
 
     for (const [namespace, serviceConfig] of Object.entries(config)) {
-      const tailorDB = new TailorDBService(namespace, serviceConfig);
-      this._tailorDBServices.push(tailorDB);
-      this.addSubgraph("tailordb", tailorDB.namespace);
+      if (!("external" in serviceConfig)) {
+        const tailorDB = new TailorDBService(namespace, serviceConfig);
+        this._tailorDBServices.push(tailorDB);
+      }
+      this.addSubgraph("tailordb", namespace);
     }
   }
 
@@ -89,22 +92,31 @@ export class Application {
     }
 
     for (const [namespace, serviceConfig] of Object.entries(config)) {
-      const resolverService = new ResolverService(namespace, serviceConfig);
-      this._resolverServices.push(resolverService);
-      this.addSubgraph("pipeline", resolverService.namespace);
+      if (!("external" in serviceConfig)) {
+        const resolverService = new ResolverService(namespace, serviceConfig);
+        this._resolverServices.push(resolverService);
+      }
+      this.addSubgraph("pipeline", namespace);
     }
   }
 
-  defineIdp(config?: readonly IdPInput[]) {
+  defineIdp(config?: readonly IdPConfig[]) {
+    if (!config) {
+      return;
+    }
+
     const idpNames = new Set<string>();
-    (config ?? []).forEach((idpConfig) => {
-      const idp = IdPSchema.parse(idpConfig);
-      if (idpNames.has(idp.name)) {
-        throw new Error(`IdP with name "${idp.name}" already defined.`);
+    config.forEach((idpConfig) => {
+      const name = idpConfig.name;
+      if (idpNames.has(name)) {
+        throw new Error(`IdP with name "${name}" already defined.`);
       }
-      idpNames.add(idp.name);
-      this._idpServices.push(idp);
-      this.addSubgraph("idp", idp.name);
+      idpNames.add(name);
+      if (!("external" in idpConfig)) {
+        const idp = IdPSchema.parse(idpConfig);
+        this._idpServices.push(idp);
+      }
+      this.addSubgraph("idp", name);
     });
   }
 
@@ -113,9 +125,11 @@ export class Application {
       return;
     }
 
-    const authService = new AuthService(config, this.tailorDBServices);
-    this._authService = authService;
-    this.addSubgraph("auth", authService.config.name);
+    if (!("external" in config)) {
+      const authService = new AuthService(config, this.tailorDBServices);
+      this._authService = authService;
+    }
+    this.addSubgraph("auth", config.name);
   }
 
   defineExecutor(config?: ExecutorServiceInput) {

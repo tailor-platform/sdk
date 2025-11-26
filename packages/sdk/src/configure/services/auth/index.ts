@@ -62,6 +62,10 @@ export function defineAuth<
   return result as typeof result & AuthDefinitionBrand;
 }
 
-export type AuthConfig = ReturnType<
+export type AuthExternalConfig = { name: string; external: true };
+
+export type AuthOwnConfig = ReturnType<
   typeof defineAuth<string, any, any, any, string>
 >;
+
+export type AuthConfig = AuthOwnConfig | AuthExternalConfig;
