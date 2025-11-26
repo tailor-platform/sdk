@@ -7,7 +7,7 @@ describe("add resolver", () => {
     const result = await resolver.body({
       input: { left: 1, right: 2 },
       user: unauthenticatedTailorUser,
-      env: { foo: 1, bar: "hello", baz: true },
+      env: {},
     });
     expect(result).toBe(3);
   });
