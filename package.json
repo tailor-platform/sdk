@@ -14,7 +14,7 @@
     "format:root": "prettier --write .",
     "format:check": "turbo run format:check",
     "format:check:root": "prettier --check .",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "TAILOR_PLATFORM_SDK_TYPE_PATH=./plugin-generated.d.ts turbo run typecheck",
     "typecheck:root": "tsc --noEmit",
     "perf:typecheck": "pnpm --filter example perf:typecheck"
   },
