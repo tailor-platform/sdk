@@ -5,9 +5,9 @@ import { findAllJobs, transformWorkflowSource } from "./ast-transformer";
 // Note: parseSync is imported here for unit tests of findAllJobs
 // transformWorkflowSource uses it internally
 
-describe("AST Transformer - createWorkflowJob呼び出し検出", () => {
+describe("AST Transformer - createWorkflowJob call detection", () => {
   describe("findAllJobs", () => {
-    it("createWorkflowJob呼び出しを検出できる", () => {
+    it("detects createWorkflowJob calls", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -34,7 +34,7 @@ const job2 = createWorkflowJob({
       expect(jobs[1].depsRange).toBeDefined();
     });
 
-    it("bodyが関数でないオブジェクトは検出しない", () => {
+    it("does not detect objects where body is not a function", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -55,7 +55,7 @@ const realJob = createWorkflowJob({
       expect(jobs[0].name).toBe("real-job");
     });
 
-    it("nameが文字列リテラルでないオブジェクトは検出しない", () => {
+    it("does not detect objects where name is not a string literal", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -76,7 +76,7 @@ const realJob = createWorkflowJob({
       expect(jobs[0].name).toBe("real-job");
     });
 
-    it("bodyValueRangeが正しい位置を返す", () => {
+    it("bodyValueRange returns correct position", () => {
       const source = `import { createWorkflowJob } from "@tailor-platform/sdk";
 const job = createWorkflowJob({ name: "test", body: () => { return 42; } });`;
       const { program } = parseSync("test.ts", source);
@@ -90,7 +90,7 @@ const job = createWorkflowJob({ name: "test", body: () => { return 42; } });`;
       expect(bodyCode).toBe("() => { return 42; }");
     });
 
-    it("depsRangeが正しい位置を返す", () => {
+    it("depsRange returns correct position", () => {
       const source = `import { createWorkflowJob } from "@tailor-platform/sdk";
 const job = createWorkflowJob({ name: "test", deps: [a, b], body: () => {} });`;
       const { program } = parseSync("test.ts", source);
@@ -105,8 +105,8 @@ const job = createWorkflowJob({ name: "test", deps: [a, b], body: () => {} });`;
       expect(depsCode).toBe("deps: [a, b]");
     });
 
-    describe("偽陽性が発生しないことを確認", () => {
-      it("createWorkflowJob以外の関数呼び出しは検出されない", () => {
+    describe("verify no false positives occur", () => {
+      it("function calls other than createWorkflowJob are not detected", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -123,22 +123,22 @@ const realJob = createWorkflowJob({
         const { program } = parseSync("test.ts", source);
         const jobs = findAllJobs(program, source);
 
-        // createWorkflowJob呼び出しのみ検出される
+        // only createWorkflowJob calls are detected
         expect(jobs).toHaveLength(1);
         expect(jobs[0].name).toBe("real-job");
       });
 
-      it("createWorkflowJobに渡されないオブジェクトは検出されない", () => {
+      it("objects not passed to createWorkflowJob are not detected", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
-// createWorkflowJobには渡されないが、同じパターンを持つオブジェクト
+// object with same pattern but not passed to createWorkflowJob
 const config = { name: "unused-job", body: async () => {} };
 
-// 別の用途で使われる
+// used for different purpose
 doSomethingElse(config);
 
-// 本物のジョブ
+// real job
 const realJob = createWorkflowJob({
   name: "real-job",
   body: async () => {}
@@ -147,34 +147,34 @@ const realJob = createWorkflowJob({
         const { program } = parseSync("test.ts", source);
         const jobs = findAllJobs(program, source);
 
-        // createWorkflowJob呼び出しのみ検出される
+        // only createWorkflowJob calls are detected
         expect(jobs).toHaveLength(1);
         expect(jobs[0].name).toBe("real-job");
       });
 
-      it("配列内のオブジェクトはcreateWorkflowJob呼び出しでなければ検出されない", () => {
+      it("objects in arrays are not detected unless used with createWorkflowJob", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
-// createWorkflowJobには使われない配列
+// array not used with createWorkflowJob
 const configs = [
   { name: "config-one", body: async () => {} },
   { name: "config-two", body: async () => {} }
 ];
 
-// 別の用途
+// different usage
 processConfigs(configs);
 `;
         const { program } = parseSync("test.ts", source);
         const jobs = findAllJobs(program, source);
 
-        // createWorkflowJob呼び出しがないので検出されない
+        // not detected because no createWorkflowJob call exists
         expect(jobs).toHaveLength(0);
       });
     });
 
-    describe("様々なインポートパターン", () => {
-      it("エイリアス付きインポート", () => {
+    describe("various import patterns", () => {
+      it("aliased import", () => {
         const source = `
 import { createWorkflowJob as create } from "@tailor-platform/sdk";
 
@@ -190,7 +190,7 @@ const job = create({
         expect(jobs[0].name).toBe("job-one");
       });
 
-      it("デフォルトインポート", () => {
+      it("default import", () => {
         const source = `
 import sdk from "@tailor-platform/sdk";
 
@@ -206,7 +206,7 @@ const job = sdk.createWorkflowJob({
         expect(jobs[0].name).toBe("job-one");
       });
 
-      it("名前空間インポート", () => {
+      it("namespace import", () => {
         const source = `
 import * as sdk from "@tailor-platform/sdk";
 
@@ -222,7 +222,7 @@ const job = sdk.createWorkflowJob({
         expect(jobs[0].name).toBe("job-one");
       });
 
-      it("サブパスからのインポート", () => {
+      it("subpath import", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk/configure";
 
@@ -238,7 +238,7 @@ const job = createWorkflowJob({
         expect(jobs[0].name).toBe("job-one");
       });
 
-      it("動的インポート", () => {
+      it("dynamic import", () => {
         const source = `
 const sdk = await import("@tailor-platform/sdk");
 
@@ -271,8 +271,8 @@ const job = createWorkflowJob({
       });
     });
 
-    describe("偽陰性（検出できないパターン）", () => {
-      it("bodyが関数への参照の場合は検出できない", () => {
+    describe("false negatives (patterns that cannot be detected)", () => {
+      it("cannot detect when body is a reference to a function", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -289,7 +289,7 @@ const job = createWorkflowJob({
         expect(jobs).toHaveLength(0);
       });
 
-      it("nameが変数の場合は検出できない", () => {
+      it("cannot detect when name is a variable", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -306,7 +306,7 @@ const job = createWorkflowJob({
         expect(jobs).toHaveLength(0);
       });
 
-      it("スプレッドのみで構成されたオブジェクトは検出できない", () => {
+      it("cannot detect objects composed only of spread operators", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -321,7 +321,7 @@ const job = createWorkflowJob({ ...nameConfig, ...bodyConfig });
         expect(jobs).toHaveLength(0);
       });
 
-      it("変数として渡された設定オブジェクトは検出できない", () => {
+      it("cannot detect config objects passed as variables", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -332,11 +332,11 @@ const job = createWorkflowJob(config);
         const { program } = parseSync("test.ts", source);
         const jobs = findAllJobs(program, source);
 
-        // configは変数なので検出できない
+        // cannot detect because config is a variable
         expect(jobs).toHaveLength(0);
       });
 
-      it("変数への再代入後は検出できない", () => {
+      it("cannot detect after reassignment to a variable", () => {
         const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -352,7 +352,7 @@ const job = create({
         expect(jobs).toHaveLength(0);
       });
 
-      it("名前空間からの分割代入後は検出できない", () => {
+      it("cannot detect after destructuring from namespace", () => {
         const source = `
 import * as sdk from "@tailor-platform/sdk";
 
@@ -371,9 +371,9 @@ const job = createWorkflowJob({
   });
 });
 
-describe("AST Transformer - 変換ロジック", () => {
+describe("AST Transformer - transformation logic", () => {
   describe("transformWorkflowSource", () => {
-    it("ターゲットジョブのdepsを削除する", () => {
+    it("removes deps from target job", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -392,15 +392,15 @@ const job2 = createWorkflowJob({
 `;
       const result = transformWorkflowSource(source, "job-two");
 
-      // job-twoのdepsが削除されている
+      // deps removed from job-two
       expect(result).not.toMatch(/name: "job-two"[\s\S]*deps:/);
-      // job-twoのbodyは残っている
+      // body of job-two is preserved
       expect(result).toContain("await jobs.jobOne()");
-      // job1の宣言が削除されている
+      // job1 declaration is removed
       expect(result).not.toContain("job-one");
     });
 
-    it("他ジョブの宣言を完全に削除する", () => {
+    it("completely removes other job declarations", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -422,16 +422,16 @@ const mainJob = createWorkflowJob({
 `;
       const result = transformWorkflowSource(source, "main-job");
 
-      // heavyJobの宣言が完全に削除されている
+      // heavyJob declaration is completely removed
       expect(result).not.toContain("heavy-job");
       expect(result).not.toContain("heavyJob");
-      // getDBが削除されている
+      // getDB is removed
       expect(result).not.toContain("getDB");
-      // mainJobのbodyは残っている
+      // mainJob body is preserved
       expect(result).toContain('result: "main"');
     });
 
-    it("複数の他ジョブの宣言を削除する", () => {
+    it("removes declarations of multiple other jobs", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -453,16 +453,16 @@ const mainJob = createWorkflowJob({
 `;
       const result = transformWorkflowSource(source, "main-job");
 
-      // job1, job2の宣言が削除されている
+      // job1, job2 declarations are removed
       expect(result).not.toContain("job-one");
       expect(result).not.toContain("job-two");
-      // mainJobのbodyは残っている
+      // mainJob body is preserved
       expect(result).toContain('"main"');
-      // heavy codeが削除されている
+      // heavy code is removed
       expect(result).not.toContain("heavy code");
     });
 
-    it("depsがないジョブは変更しない", () => {
+    it("does not modify jobs without deps", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -473,7 +473,7 @@ const simpleJob = createWorkflowJob({
 `;
       const result = transformWorkflowSource(source, "simple-job");
 
-      // 変更なし
+      // no changes
       expect(result).toContain('"simple"');
     });
   });
