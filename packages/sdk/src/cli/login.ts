@@ -1,116 +1,53 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
+import { generateCodeVerifier, OAuth2Client } from "@badgateway/oauth2-client";
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import isWsl from "is-wsl";
 import open from "open";
-import { z } from "zod";
 import { commonArgs, withCommonArgs } from "./args";
-import { userAgent } from "./client";
+import { fetchUserInfo, oauth2ClientId, platformBaseUrl } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
 
-// Since accessing via domain is difficult, specify localhost directly on WSL environments.
-const CALLBACK_PORT = 8085;
-const CALLBACK_URL = isWsl
-  ? `http://localhost:${CALLBACK_PORT}/callback`
-  : `http://tailorctl.tailor.tech:${CALLBACK_PORT}/callback`;
+const redirectPort = 8085;
+const redirectUri = `http://tailorctl.tailor.tech:${redirectPort}/callback`;
 
-export const PLATFORM_AUTH_URL = "https://api.tailor.tech/auth/platform";
-const LOGIN_URL = PLATFORM_AUTH_URL + "/login";
-const TOKEN_URL = PLATFORM_AUTH_URL + "/token";
-const USER_INFO_URL = PLATFORM_AUTH_URL + "/userinfo";
-
-const randomState = () => {
+function randomState() {
   return crypto.randomBytes(32).toString("base64url");
-};
-
-const exchangeCode = async (code: string) => {
-  const body = new URLSearchParams();
-  body.append("code", code);
-  body.append("redirect_uri", CALLBACK_URL);
-
-  const resp = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "User-Agent": await userAgent(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
-  if (!resp.ok) {
-    throw new Error(`Failed to exchange code: ${resp.statusText}`);
-  }
-
-  const rawData = await resp.json();
-  const schema = z.object({
-    access_token: z.string(),
-    refresh_token: z.string(),
-    expires_in: z.number(),
-  });
-  return schema.parse(rawData);
-};
-
-const fetchUserInfo = async (accessToken: string) => {
-  const resp = await fetch(USER_INFO_URL, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "User-Agent": await userAgent(),
-    },
-  });
-  if (!resp.ok) {
-    throw new Error(`Failed to fetch user info: ${resp.statusText}`);
-  }
-
-  const rawData = await resp.json();
-  const schema = z.object({
-    email: z.string(),
-  });
-  return schema.parse(rawData);
-};
+}
 
 const startAuthServer = async () => {
+  const client = new OAuth2Client({
+    clientId: oauth2ClientId,
+    server: platformBaseUrl,
+    authorizationEndpoint: "/oauth2/platform/authorize",
+    tokenEndpoint: "/oauth2/platform/token",
+  });
+  const state = randomState();
+  const codeVerifier = await generateCodeVerifier();
+
   return new Promise<void>((resolve, reject) => {
-    const state = randomState();
     const server = http.createServer(async (req, res) => {
       try {
         if (!req.url?.startsWith("/callback")) {
-          res.writeHead(404);
-          const msg = "Invalid callback URL";
-          res.end(msg);
-          reject(msg);
-          return;
+          throw new Error("Invalid callback URL");
         }
+        const tokens = await client.authorizationCode.getTokenFromCodeRedirect(
+          `http://${req.headers.host}${req.url}`,
+          {
+            redirectUri: redirectUri,
+            state,
+            codeVerifier,
+          },
+        );
+        const userInfo = await fetchUserInfo(tokens.accessToken);
 
-        const url = new URL(req.url, `http://${req.headers.host}`);
-        const receivedState = url.searchParams.get("state");
-        const code = url.searchParams.get("code");
-        if (receivedState !== state) {
-          res.writeHead(400);
-          const msg = "Invalid state parameter";
-          res.end(msg);
-          reject(msg);
-          return;
-        }
-        if (!code) {
-          res.writeHead(400);
-          const msg = "Missing authorization code";
-          res.end(msg);
-          reject(msg);
-          return;
-        }
-
-        const tokens = await exchangeCode(code);
-        const userInfo = await fetchUserInfo(tokens.access_token);
-
-        const expiresAt = new Date();
-        expiresAt.setSeconds(expiresAt.getSeconds() + tokens.expires_in);
         const pfConfig = readPlatformConfig();
         pfConfig.users = {
           ...pfConfig.users,
           [userInfo.email]: {
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            token_expires_at: expiresAt.toISOString(),
+            access_token: tokens.accessToken,
+            refresh_token: tokens.refreshToken!,
+            token_expires_at: new Date(tokens.expiresAt!).toISOString(),
           },
         };
         pfConfig.current_user = userInfo.email;
@@ -125,8 +62,8 @@ const startAuthServer = async () => {
         );
         resolve();
       } catch (error) {
-        res.writeHead(500);
-        res.end("Internal server error");
+        res.writeHead(401);
+        res.end("Authentication failed");
         reject(error);
       } finally {
         // Close the server after handling one request.
@@ -150,14 +87,16 @@ const startAuthServer = async () => {
       reject(error);
     });
 
-    server.listen(CALLBACK_PORT, async () => {
-      const loginUrl = new URL(LOGIN_URL);
-      loginUrl.searchParams.set("redirect_uri", CALLBACK_URL);
-      loginUrl.searchParams.set("state", state);
+    server.listen(redirectPort, async () => {
+      const authorizeUri = await client.authorizationCode.getAuthorizeUri({
+        redirectUri,
+        state,
+        codeVerifier,
+      });
 
-      consola.info(`Opening browser for login:\n\n${loginUrl.href}\n`);
+      consola.info(`Opening browser for login:\n\n${authorizeUri}\n`);
       try {
-        await open(loginUrl.href);
+        await open(authorizeUri);
       } catch {
         consola.warn(
           "Failed to open browser automatically. Please open the URL above manually.",

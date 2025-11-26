@@ -1,11 +1,8 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "./args";
-import { userAgent } from "./client";
+import { oauth2ClientId, revokeToken } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
-import { PLATFORM_AUTH_URL } from "./login";
-
-const LOGOUT_URL = PLATFORM_AUTH_URL + "/logout";
 
 export const logoutCommand = defineCommand({
   meta: {
@@ -19,21 +16,12 @@ export const logoutCommand = defineCommand({
       consola.warn("You are not logged in.");
       return;
     }
-    const token = pfConfig.users[pfConfig.current_user]?.access_token;
+    const token = pfConfig.users[pfConfig.current_user]?.refresh_token;
     if (!token) {
       consola.warn("You are not logged in.");
       return;
     }
-
-    const resp = await fetch(LOGOUT_URL, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "User-Agent": await userAgent(),
-      },
-    });
-    if (!resp.ok) {
-      throw new Error(`Failed to logout: ${resp.statusText}`);
-    }
+    await revokeToken(token, oauth2ClientId);
 
     delete pfConfig.users[pfConfig.current_user];
     pfConfig.current_user = null;

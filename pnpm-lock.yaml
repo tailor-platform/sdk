@@ -243,6 +243,9 @@ importers:
 
   packages/sdk:
     dependencies:
+      '@badgateway/oauth2-client':
+        specifier: 3.3.1
+        version: 3.3.1
       '@bufbuild/protobuf':
         specifier: 2.10.0
         version: 2.10.0
@@ -408,6 +411,10 @@ packages:
   '@babel/types@7.28.4':
     resolution: {integrity: sha512-bkFqkLhh3pMBUQQkpVgWDWq/lqzc2678eUyDlTBhRqhCHFguYYGM0Efga7tYk4TogG/3x0EEl66/OQ+WGbWB/Q==}
     engines: {node: '>=6.9.0'}
+
+  '@badgateway/oauth2-client@3.3.1':
+    resolution: {integrity: sha512-7R4mZocEt8nOIMCz9cQyxsrY7n/jhFW9YUW6Er9ySnBzH92wA0KmQUR1cT2encq2Lix6kRD2GyQRAmT1dWtwzg==}
+    engines: {node: '>= 18'}
 
   '@bufbuild/protobuf@2.10.0':
     resolution: {integrity: sha512-fdRs9PSrBF7QUntpZpq6BTw58fhgGJojgg39m9oFOJGZT+nip9b0so5cYY1oWl5pvemDLr0cPPsH46vwThEbpQ==}
@@ -3443,6 +3450,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
+
+  '@badgateway/oauth2-client@3.3.1': {}
 
   '@bufbuild/protobuf@2.10.0': {}
 

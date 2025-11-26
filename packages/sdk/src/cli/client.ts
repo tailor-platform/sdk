@@ -11,14 +11,17 @@ import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { z } from "zod";
 import { readPackageJson } from "./package-json";
 
-const baseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+export const platformBaseUrl =
+  process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+
+export const oauth2ClientId = "cpoc_6X8NTyohCX1PMRilxSsmJ9CVh8ZNmH5B";
 
 export type OperatorClient = Client<typeof OperatorService>;
 
 export async function initOperatorClient(accessToken: string) {
   const transport = createConnectTransport({
     httpVersion: "2",
-    baseUrl,
+    baseUrl: platformBaseUrl,
     interceptors: [
       await userAgentInterceptor(),
       await bearerTokenInterceptor(accessToken),
@@ -56,31 +59,6 @@ async function bearerTokenInterceptor(
     req.header.set("Authorization", `Bearer ${accessToken}`);
     return await next(req);
   };
-}
-
-export async function refreshToken(refreshToken: string) {
-  const refreshUrl = new URL("/auth/platform/token/refresh", baseUrl).href;
-  const formData = new URLSearchParams();
-  formData.append("refresh_token", refreshToken);
-  const resp = await fetch(refreshUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": await userAgent(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData,
-  });
-  if (!resp.ok) {
-    throw new Error("Failed to refresh token");
-  }
-  const rawJson = await resp.json();
-
-  const schema = z.object({
-    access_token: z.string(),
-    refresh_token: z.string(),
-    expires_in: z.number(),
-  });
-  return schema.parse(rawJson);
 }
 
 function retryInterceptor(): Interceptor {
@@ -150,6 +128,71 @@ export async function fetchAll<T>(
     pageToken = nextPageToken;
   }
   return items;
+}
+
+export async function refreshToken(refreshToken: string) {
+  const refreshUrl = new URL("/auth/platform/token/refresh", platformBaseUrl)
+    .href;
+  const body = new URLSearchParams();
+  body.append("refresh_token", refreshToken);
+  const resp = await fetch(refreshUrl, {
+    method: "POST",
+    headers: {
+      "User-Agent": await userAgent(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to refresh token: ${resp.statusText}`);
+  }
+
+  const rawJson = await resp.json();
+  const schema = z.object({
+    access_token: z.string(),
+    refresh_token: z.string(),
+    expires_in: z.number(),
+  });
+  return schema.parse(rawJson);
+}
+
+export async function fetchUserInfo(accessToken: string) {
+  const userInfoUrl = new URL("/auth/platform/userinfo", platformBaseUrl).href;
+  const resp = await fetch(userInfoUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "User-Agent": await userAgent(),
+    },
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch user info: ${resp.statusText}`);
+  }
+
+  const rawJson = await resp.json();
+  const schema = z.object({
+    email: z.string(),
+  });
+  return schema.parse(rawJson);
+}
+
+export async function revokeToken(refreshToken: string, clientId: string) {
+  const revokeUrl = new URL("/oauth2/platform/revoke", platformBaseUrl).href;
+
+  const body = new URLSearchParams();
+  body.append("client_id", clientId);
+  body.append("token", refreshToken);
+  body.append("token_type_hint", "refresh_token");
+  const resp = await fetch(revokeUrl, {
+    method: "POST",
+    headers: {
+      "User-Agent": await userAgent(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to logout: ${resp.statusText}`);
+  }
 }
 
 // Converting "name:url" patterns to actual Static Website URLs
