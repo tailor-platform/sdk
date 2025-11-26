@@ -28,7 +28,7 @@ jobs:
 
       - name: Publish SDK to pkg.pr.new
         id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm --bin "packages/sdk"
+        run: pnpm dlx pkg-pr-new publish --pnpm "packages/sdk"
 
       - name: Extract SDK URL
         id: extract-url
