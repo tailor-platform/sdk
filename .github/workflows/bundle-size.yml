@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
         with:
           persist-credentials: false
 
@@ -60,7 +60,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Run octocov
-        uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
+        uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20
         with:
           config: packages/sdk/.octocov.bundle.yml
         env:

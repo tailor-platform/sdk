@@ -46,7 +46,7 @@
     "typecheck": "tsc --noEmit",
     "prepublish": "pnpm run build",
     "postinstall": "node postinstall.mjs",
-    "measure:bundle": "../../scripts/measure-bundle-size.sh > bundle-size.json"
+    "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.mjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.10.0",
@@ -82,6 +82,7 @@
     "@types/node": "22.19.0",
     "eslint": "9.39.1",
     "globals": "16.5.0",
+    "sonda": "^0.10.0",
     "tsdown": "0.15.6",
     "typescript": "5.9.3",
     "typescript-eslint": "8.46.3",
