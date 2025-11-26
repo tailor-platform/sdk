@@ -141,19 +141,6 @@ export async function fetchAll<T>(
   return items;
 }
 
-export async function refreshToken(tokens: {
-  access_token: string;
-  refresh_token: string;
-  token_expires_at: string;
-}) {
-  const client = initOAuth2Client();
-  return await client.refreshToken({
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    expiresAt: Date.parse(tokens.token_expires_at),
-  });
-}
-
 export async function fetchUserInfo(accessToken: string) {
   const userInfoUrl = new URL("/auth/platform/userinfo", platformBaseUrl).href;
   const resp = await fetch(userInfoUrl, {
