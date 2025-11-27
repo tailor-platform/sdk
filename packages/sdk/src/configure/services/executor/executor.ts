@@ -2,7 +2,7 @@ import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
 import type { ExecutorInput } from "@/parser/service/executor/types";
 
-export type Executor<Args, O extends Operation<Args>> = Omit<
+type Executor<Args, O extends Operation<Args>> = Omit<
   ExecutorInput,
   "trigger" | "operation"
 > & {
