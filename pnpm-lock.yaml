@@ -340,6 +340,9 @@ importers:
       globals:
         specifier: 16.5.0
         version: 16.5.0
+      sonda:
+        specifier: ^0.10.0
+        version: 0.10.0
       tsdown:
         specifier: 0.15.6
         version: 0.15.6(oxc-resolver@11.7.1)(typescript@5.9.3)
@@ -746,6 +749,9 @@ packages:
 
   '@jridgewell/gen-mapping@0.3.12':
     resolution: {integrity: sha512-OuLGC46TjB5BbN1dH8JULVVZY4WTdkF7tV9Ys6wLL1rubZnCMstOhNHueU5bLCrnRuDhKPDM4g6sw4Bel5Gzqg==}
+
+  '@jridgewell/remapping@2.3.5':
+    resolution: {integrity: sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ==}
 
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
@@ -2941,6 +2947,11 @@ packages:
     resolution: {integrity: sha512-rInDH6lCNiEyn3+hH8KVGFdbjc099j47+OSgbMrfDYX1CmXLfdKd7qi6IfcWj2wFxvSVkuI46M+wPGYfEOEj6g==}
     engines: {node: '>= 18'}
 
+  sonda@0.10.0:
+    resolution: {integrity: sha512-Mg6YWl8QOD9Yf8wV5teUYZiB0P1oy994pmPJmi3Fr7+0RXhBcNY6TUZFa7c3gHKLJfemfoAeV22+PSBXlzuT4g==}
+    engines: {node: '>=20.19 || >=22.12'}
+    hasBin: true
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -3814,6 +3825,11 @@ snapshots:
   '@jridgewell/gen-mapping@0.3.12':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
+      '@jridgewell/trace-mapping': 0.3.29
+
+  '@jridgewell/remapping@2.3.5':
+    dependencies:
+      '@jridgewell/gen-mapping': 0.3.12
       '@jridgewell/trace-mapping': 0.3.29
 
   '@jridgewell/resolve-uri@3.1.2': {}
@@ -6117,6 +6133,11 @@ snapshots:
       is-fullwidth-code-point: 3.0.0
 
   smol-toml@1.4.2: {}
+
+  sonda@0.10.0:
+    dependencies:
+      '@jridgewell/remapping': 2.3.5
+      open: 10.2.0
 
   source-map-js@1.2.1: {}
 
