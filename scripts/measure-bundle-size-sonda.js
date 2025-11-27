@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { init, parse } from "es-module-lexer";
+import madge from "madge";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sdkDir = path.join(__dirname, "../packages/sdk");
@@ -21,31 +21,32 @@ function getChunkSize(report, distPath) {
   return entry?.uncompressed ?? 0;
 }
 
-function getImports(file) {
-  const code = fs.readFileSync(file, "utf8");
-  const [imports] = parse(code);
-
-  return imports.map((i) => {
-    const raw = code.slice(i.s, i.e);
-    return raw.replace(/^['"]|['"]$/g, ""); // remove quotes
+async function collectDependencies(entryFile) {
+  const result = await madge(entryFile, {
+    fileExtensions: ["mjs", "js"],
+    excludeRegExp: [/node_modules/],
+    baseDir: sdkDir,
   });
-}
 
-function collectDependencies(entryFile, visited = new Set()) {
-  if (visited.has(entryFile)) return [];
-  visited.add(entryFile);
-
+  const dependencyObj = result.obj();
+  const visited = new Set();
   const deps = [];
 
-  for (const imp of getImports(entryFile)) {
-    if (!imp.startsWith(".")) continue; // skip node_modules etc.
+  function traverse(file) {
+    if (visited.has(file)) return;
+    visited.add(file);
 
-    const target = path.resolve(path.dirname(entryFile), imp);
-    if (fs.existsSync(target)) {
-      deps.push(target);
-      deps.push(...collectDependencies(target, visited));
+    const fileDeps = dependencyObj[file] || [];
+    for (const dep of fileDeps) {
+      const absolutePath = path.resolve(sdkDir, dep);
+      deps.push(absolutePath);
+      traverse(dep);
     }
   }
+
+  const relativeEntry = path.relative(sdkDir, entryFile);
+  traverse(relativeEntry);
+
   return deps;
 }
 
@@ -58,13 +59,10 @@ async function main() {
 
   const report = JSON.parse(fs.readFileSync(sondaOutput, "utf8"));
 
-  // Initialize es-module-lexer
-  await init;
-
   const entryPath = path.join(sdkDir, "dist/configure/index.mjs");
   const configureSize = getChunkSize(report, "dist/configure/index.mjs");
 
-  const deps = collectDependencies(entryPath);
+  const deps = await collectDependencies(entryPath);
   const depsSize = deps.reduce((sum, dep) => {
     const relativePath = path.relative(sdkDir, dep);
     return sum + getChunkSize(report, relativePath);
