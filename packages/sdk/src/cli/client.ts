@@ -1,3 +1,4 @@
+import { OAuth2Client } from "@badgateway/oauth2-client";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import {
   type Client,
@@ -11,14 +12,27 @@ import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { z } from "zod";
 import { readPackageJson } from "./package-json";
 
-const baseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+export const platformBaseUrl =
+  process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+
+const oauth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
+const oauth2DiscoveryEndpoint =
+  "/.well-known/oauth-authorization-server/oauth2/platform";
+
+export function initOAuth2Client() {
+  return new OAuth2Client({
+    clientId: oauth2ClientId,
+    server: platformBaseUrl,
+    discoveryEndpoint: oauth2DiscoveryEndpoint,
+  });
+}
 
 export type OperatorClient = Client<typeof OperatorService>;
 
 export async function initOperatorClient(accessToken: string) {
   const transport = createConnectTransport({
     httpVersion: "2",
-    baseUrl,
+    baseUrl: platformBaseUrl,
     interceptors: [
       await userAgentInterceptor(),
       await bearerTokenInterceptor(accessToken),
@@ -56,31 +70,6 @@ async function bearerTokenInterceptor(
     req.header.set("Authorization", `Bearer ${accessToken}`);
     return await next(req);
   };
-}
-
-export async function refreshToken(refreshToken: string) {
-  const refreshUrl = new URL("/auth/platform/token/refresh", baseUrl).href;
-  const formData = new URLSearchParams();
-  formData.append("refresh_token", refreshToken);
-  const resp = await fetch(refreshUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": await userAgent(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData,
-  });
-  if (!resp.ok) {
-    throw new Error("Failed to refresh token");
-  }
-  const rawJson = await resp.json();
-
-  const schema = z.object({
-    access_token: z.string(),
-    refresh_token: z.string(),
-    expires_in: z.number(),
-  });
-  return schema.parse(rawJson);
 }
 
 function retryInterceptor(): Interceptor {
@@ -150,6 +139,25 @@ export async function fetchAll<T>(
     pageToken = nextPageToken;
   }
   return items;
+}
+
+export async function fetchUserInfo(accessToken: string) {
+  const userInfoUrl = new URL("/auth/platform/userinfo", platformBaseUrl).href;
+  const resp = await fetch(userInfoUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "User-Agent": await userAgent(),
+    },
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch user info: ${resp.statusText}`);
+  }
+
+  const rawJson = await resp.json();
+  const schema = z.object({
+    email: z.string(),
+  });
+  return schema.parse(rawJson);
 }
 
 // Converting "name:url" patterns to actual Static Website URLs

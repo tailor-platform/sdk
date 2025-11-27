@@ -1,3 +1,4 @@
+import Sonda from "sonda/rolldown";
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
@@ -30,4 +31,13 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
+  sourcemap: true,
+  plugins: [
+    Sonda({
+      open: false,
+      format: "json",
+      filename: "bundle-analysis.json",
+      deep: true,
+    }),
+  ],
 });

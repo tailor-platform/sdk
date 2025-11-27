@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "0.10.2",
+  "version": "0.11.1",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "main": "./dist/configure/index.mjs",
@@ -45,9 +45,11 @@
     "lint:fix": "eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
     "prepublish": "pnpm run build",
-    "postinstall": "node postinstall.mjs"
+    "postinstall": "node postinstall.mjs",
+    "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js"
   },
   "dependencies": {
+    "@badgateway/oauth2-client": "3.3.1",
     "@bufbuild/protobuf": "2.10.0",
     "@connectrpc/connect": "2.1.0",
     "@connectrpc/connect-node": "2.1.0",
@@ -60,10 +62,10 @@
     "consola": "3.4.2",
     "es-toolkit": "1.41.0",
     "inflection": "3.0.2",
-    "is-wsl": "3.1.0",
     "madge": "8.0.0",
     "multiline-ts": "4.0.1",
     "open": "10.2.0",
+    "oxc-parser": "0.98.0",
     "pkg-types": "2.3.0",
     "rolldown": "catalog:",
     "smol-toml": "1.4.2",
@@ -79,12 +81,13 @@
     "@eslint/js": "9.39.1",
     "@tailor-platform/function-types": "0.7.2",
     "@types/madge": "5.0.3",
-    "@types/node": "22.19.0",
+    "@types/node": "22.19.1",
     "eslint": "9.39.1",
     "globals": "16.5.0",
+    "sonda": "0.10.0",
     "tsdown": "0.15.6",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.46.3",
+    "typescript-eslint": "8.47.0",
     "vitest": "4.0.8"
   }
 }

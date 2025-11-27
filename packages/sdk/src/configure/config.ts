@@ -4,6 +4,7 @@ import type { IdPConfig } from "@/configure/services/idp";
 import type { ResolverServiceInput } from "@/configure/services/resolver/types";
 import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
 import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
+import type { WorkflowServiceInput } from "@/configure/services/workflow/types";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
 
 export interface AppConfig<
@@ -25,6 +26,7 @@ export interface AppConfig<
   idp?: Idp;
   auth?: Auth;
   executor?: ExecutorServiceInput;
+  workflow?: WorkflowServiceInput;
   staticWebsites?: StaticWebsites;
 }
 

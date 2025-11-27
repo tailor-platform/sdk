@@ -1,5 +1,42 @@
 # @tailor-platform/sdk
 
+## 0.11.1
+
+### Patch Changes
+
+- [#55](https://github.com/tailor-platform/sdk/pull/55) [`c61651e`](https://github.com/tailor-platform/sdk/commit/c61651ef0f7bf43f4bae7fe3bd75aac539d0c12f) Thanks [@IzumiSy](https://github.com/IzumiSy)! - Fix unportable type error that `createResolver` raises in bundling.
+
+  Bundling files that export the return values of `createResolver` function has been causing `he inferred type of "X" cannot be named without a reference to "Y". This is likely not portable. A type annotation is necessary.` error. It was caused the return type of `Executor` type that is used internally by `createResolver` function is not exported.
+
+- [#58](https://github.com/tailor-platform/sdk/pull/58) [`e2fc8c0`](https://github.com/tailor-platform/sdk/commit/e2fc8c0d3ce38b6270f319879ec05f1da8f9fb6c) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: remove warning message
+
+## 0.11.0
+
+### Minor Changes
+
+- [#50](https://github.com/tailor-platform/sdk/pull/50) [`7c325c7`](https://github.com/tailor-platform/sdk/commit/7c325c7b6fc1d9d07585a960d1b64994eafb7fc4) Thanks [@toiroakr](https://github.com/toiroakr)! - Add workflow service support
+  - Add `createWorkflow()` and `createWorkflowJob()` APIs for orchestrating multiple jobs
+  - Support job dependencies via `deps` array with type-safe access (hyphen names converted to underscores)
+  - Workflow must be default exported, all jobs must be named exports
+
+### Patch Changes
+
+- [#26](https://github.com/tailor-platform/sdk/pull/26) [`7e6701b`](https://github.com/tailor-platform/sdk/commit/7e6701b9d9c8b3df10d4e4e6788aadd28dd69d42) Thanks [@riku99](https://github.com/riku99)! - Add automated bundle size tracking with octocov
+
+## 0.10.4
+
+### Patch Changes
+
+- [#49](https://github.com/tailor-platform/sdk/pull/49) [`8fef369`](https://github.com/tailor-platform/sdk/commit/8fef369ab65ea34d85aef24a38ac3d0124626a41) Thanks [@remiposo](https://github.com/remiposo)! - Use Controlplane OAuth2 client for login/logout
+
+## 0.10.3
+
+### Patch Changes
+
+- [#40](https://github.com/tailor-platform/sdk/pull/40) [`314543f`](https://github.com/tailor-platform/sdk/commit/314543fc8edeefff944f024a52a89142646329b4) Thanks [@IzumiSy](https://github.com/IzumiSy)! - Export types that `db.type` function uses internally.
+
+  This enables users to bundle Tailor DB type definition as an independent package without using forced type assertion using `any`.
+
 ## 0.10.2
 
 ### Patch Changes

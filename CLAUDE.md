@@ -87,26 +87,36 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Execute functions, webhooks, or GraphQL operations
    - Use `getDB()` from generated files to access database with Kysely query builder
 
-4. **Static Websites** (`src/configure/services/staticwebsite/`)
+4. **Workflows** (`src/configure/services/workflow/`)
+   - Orchestrate multiple jobs using `createWorkflow()` and `createWorkflowJob()`
+   - **Important Rules:**
+     - `createWorkflow()` result must be default exported
+     - All jobs must be named exports (including mainJob and jobs used in deps)
+     - Job names must be unique across the entire project
+     - Every workflow must specify a `mainJob`
+   - Jobs can depend on other jobs via `deps` array
+   - Dependent jobs are accessed with hyphens replaced by underscores in body function (e.g., "fetch-customer" → `jobs.fetch_customer()`)
+
+5. **Static Websites** (`src/configure/services/staticwebsite/`)
    - Define static website configurations using `defineStaticWebSite()`
    - Provides type-safe URL references via `.url` and `.callback` properties
    - Use `website.url` in CORS settings for type-safe configuration
    - Static website URLs are resolved at deployment time and injected into configuration
 
-5. **Identity Provider (IdP)** (`src/configure/services/idp/`)
+6. **Identity Provider (IdP)** (`src/configure/services/idp/`)
    - Define Identity Provider configurations using `defineIdp()`
    - Configure authorization rules and OAuth2 clients
    - Use `idp.provider()` method to create BuiltInIdP references for auth configuration
    - Supports multiple clients with automatic client selection
 
-6. **Configuration** (`tailor.config.ts`)
+7. **Configuration** (`tailor.config.ts`)
    - Central configuration using `defineConfig()` for a single application
    - Required fields: `name`
    - Specify component locations with glob patterns
    - Configure generators using `defineGenerators()` - must include `@tailor-platform/kysely-type` for database access
    - Application-level settings: `cors`, `allowedIPAddresses`, `disableIntrospection`
 
-7. **Code Generators**
+8. **Code Generators**
    - `@tailor-platform/kysely-type`: Generates Kysely type definitions and `getDB()` function (required for database access)
    - Configure generators with `defineGenerators()` and specify `distPath` for output files
 
@@ -169,6 +179,7 @@ export default defineConfig({
   idp: [idp],
   auth,
   executor: { files: ["./executors/*.ts"] },
+  workflow: { files: ["./workflows/**/*.ts"] },
   staticWebsites: [website],
 });
 ```
@@ -359,6 +370,43 @@ export default createExecutor({
     kind: "function",
     body: handler,
   },
+});
+```
+
+**Workflow Pattern:**
+
+```typescript
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { getDB } from "generated/tailordb";
+
+// All jobs must be named exports
+export const fetchData = createWorkflowJob({
+  name: "fetch-data",
+  body: async (input: { id: string }) => {
+    const db = getDB("tailordb");
+    return await db
+      .selectFrom("Table")
+      .selectAll()
+      .where("id", "=", input.id)
+      .executeTakeFirst();
+  },
+});
+
+// Jobs with dependencies - also must be named exports
+export const processData = createWorkflowJob({
+  name: "process-data",
+  deps: [fetchData],
+  body: async (input: { id: string }, jobs) => {
+    // Dependent jobs accessed with hyphens replaced by underscores: "fetch-data" -> jobs.fetch_data()
+    const data = await jobs.fetch_data({ id: input.id });
+    return { processed: true, data };
+  },
+});
+
+// Workflow must be default export
+export default createWorkflow({
+  name: "data-processing",
+  mainJob: processData,
 });
 ```
 

@@ -1,10 +1,14 @@
 import { defineCommand } from "citty";
 import { defineApplication } from "@/cli/application";
-import { Bundler, type BundlerConfig } from "@/cli/bundler";
-import { ExecutorLoader } from "@/cli/bundler/executor/loader";
-import { ExecutorTransformer } from "@/cli/bundler/executor/transformer";
-import { ResolverLoader } from "@/cli/bundler/resolver/loader";
-import { CodeTransformer } from "@/cli/bundler/resolver/transformer";
+import {
+  loadAndCollectJobs,
+  printLoadedWorkflows,
+  type CollectedJob,
+  type WorkflowLoadResult,
+} from "@/cli/application/workflow/service";
+import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
+import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
+import { bundleWorkflowJobs } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
@@ -28,11 +32,10 @@ import {
   planStaticWebsite,
 } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
+import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
-import type { Executor } from "@/parser/service/executor";
-import type { Resolver } from "@/parser/service/resolver";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -66,7 +69,14 @@ export async function apply(options?: ApplyOptions) {
   await generateUserTypes(config, configPath);
   const application = defineApplication(config);
 
-  // Build functions
+  // Load files first (before building)
+  // Load workflows first and collect jobs for bundling
+  let workflowResult: WorkflowLoadResult | undefined;
+  if (application.workflowConfig) {
+    workflowResult = await loadAndCollectJobs(application.workflowConfig);
+  }
+
+  // Build functions (using already loaded data)
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
       await buildPipeline(pipeline.namespace, pipeline.config);
@@ -74,6 +84,9 @@ export async function apply(options?: ApplyOptions) {
   }
   if (application.executorService) {
     await buildExecutor(application.executorService.config);
+  }
+  if (workflowResult && workflowResult.jobs.length > 0) {
+    await buildWorkflow(workflowResult.jobs);
   }
   if (buildOnly) return;
 
@@ -88,7 +101,8 @@ export async function apply(options?: ApplyOptions) {
     profile: options?.profile,
   });
 
-  // Load files
+  // Load remaining files and print logs
+  // Order: TailorDB → Resolver → Executor → Workflow
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
   }
@@ -97,6 +111,10 @@ export async function apply(options?: ApplyOptions) {
   }
   if (application.executorService) {
     await application.executorService.loadExecutors();
+  }
+  // Print workflow loading logs last (workflows were already loaded for bundling)
+  if (workflowResult) {
+    printLoadedWorkflows(workflowResult);
   }
   console.log("");
 
@@ -114,6 +132,11 @@ export async function apply(options?: ApplyOptions) {
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
+  const workflow = await planWorkflow(
+    client,
+    workspaceId,
+    workflowResult?.workflows ?? {},
+  );
 
   // Confirm conflicts
   const allConflicts: OwnerConflict[] = [
@@ -175,7 +198,6 @@ export async function apply(options?: ApplyOptions) {
       },
     });
   }
-
   if (dryRun) {
     console.log("Dry run enabled. No changes applied.");
     return;
@@ -189,8 +211,10 @@ export async function apply(options?: ApplyOptions) {
   await applyPipeline(client, pipeline, "create-update");
   await applyApplication(client, app, "create-update");
   await applyExecutor(client, executor, "create-update");
+  await applyWorkflow(client, workflow, "create-update");
 
   // Phase 3: Apply Delete in reverse order
+  await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
   await applyApplication(client, app, "delete");
   await applyPipeline(client, pipeline, "delete");
@@ -203,35 +227,16 @@ export async function apply(options?: ApplyOptions) {
 }
 
 async function buildPipeline(namespace: string, config: FileLoadConfig) {
-  const bundlerConfig: BundlerConfig<Resolver> = {
-    namespace,
-    serviceConfig: config,
-    loader: new ResolverLoader(),
-    transformer: new CodeTransformer(),
-    outputDirs: {
-      preBundle: "resolvers",
-      postBundle: "functions",
-    },
-  };
-  const bundler = new Bundler(bundlerConfig);
-  await bundler.bundle();
+  await bundleResolvers(namespace, config);
 }
 
 async function buildExecutor(config: FileLoadConfig) {
-  const bundlerConfig: BundlerConfig<Executor> = {
-    namespace: "executor",
-    serviceConfig: config,
-    loader: new ExecutorLoader(),
-    transformer: new ExecutorTransformer(),
-    outputDirs: {
-      preBundle: "executors",
-      postBundle: "executors",
-    },
-    shouldProcess: (executor) =>
-      ["function", "jobFunction"].includes(executor.operation.kind),
-  };
-  const bundler = new Bundler(bundlerConfig);
-  await bundler.bundle();
+  await bundleExecutors(config);
+}
+
+async function buildWorkflow(collectedJobs: CollectedJob[]) {
+  // Use the workflow bundler with already collected jobs
+  await bundleWorkflowJobs(collectedJobs);
 }
 
 export const applyCommand = defineCommand({
