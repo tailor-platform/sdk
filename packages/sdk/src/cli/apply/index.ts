@@ -52,6 +52,7 @@ export interface PlanContext {
   client: OperatorClient;
   workspaceId: string;
   application: Readonly<Application>;
+  forRemoval: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete";
@@ -118,7 +119,12 @@ export async function apply(options?: ApplyOptions) {
   console.log("");
 
   // Phase 1: Plan
-  const ctx: PlanContext = { client, workspaceId, application };
+  const ctx: PlanContext = {
+    client,
+    workspaceId,
+    application,
+    forRemoval: false,
+  };
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
   const idp = await planIdP(ctx);

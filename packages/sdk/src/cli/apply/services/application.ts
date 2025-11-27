@@ -84,6 +84,7 @@ export async function planApplication({
   client,
   workspaceId,
   application,
+  forRemoval,
 }: PlanContext) {
   const changeSet: ChangeSet<
     CreateApplication,
@@ -105,6 +106,21 @@ export async function planApplication({
       throw error;
     }
   });
+
+  if (forRemoval) {
+    if (existingApplications.some((app) => app.name === application.name)) {
+      changeSet.deletes.push({
+        name: application.name,
+        request: {
+          workspaceId,
+          applicationName: application.name,
+        },
+      });
+    }
+    changeSet.print();
+    return changeSet;
+  }
+
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
   if (application.authService && application.authService.config) {

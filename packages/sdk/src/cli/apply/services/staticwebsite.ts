@@ -64,6 +64,7 @@ export async function planStaticWebsite({
   client,
   workspaceId,
   application,
+  forRemoval,
 }: PlanContext) {
   const changeSet: ChangeSet<
     CreateStaticWebsite,
@@ -104,7 +105,10 @@ export async function planStaticWebsite({
     }),
   );
 
-  for (const websiteService of application.staticWebsiteServices) {
+  const staticWebsiteServices = forRemoval
+    ? []
+    : application.staticWebsiteServices;
+  for (const websiteService of staticWebsiteServices) {
     const config = websiteService;
     const name = websiteService.name;
     const existing = existingWebsites[name];
