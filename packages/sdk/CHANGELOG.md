@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 0.11.1
+
+### Patch Changes
+
+- [#55](https://github.com/tailor-platform/sdk/pull/55) [`c61651e`](https://github.com/tailor-platform/sdk/commit/c61651ef0f7bf43f4bae7fe3bd75aac539d0c12f) Thanks [@IzumiSy](https://github.com/IzumiSy)! - Fix unportable type error that `createResolver` raises in bundling.
+
+  Bundling files that export the return values of `createResolver` function has been causing `he inferred type of "X" cannot be named without a reference to "Y". This is likely not portable. A type annotation is necessary.` error. It was caused the return type of `Executor` type that is used internally by `createResolver` function is not exported.
+
+- [#58](https://github.com/tailor-platform/sdk/pull/58) [`e2fc8c0`](https://github.com/tailor-platform/sdk/commit/e2fc8c0d3ce38b6270f319879ec05f1da8f9fb6c) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: remove warning message
+
 ## 0.11.0
 
 ### Minor Changes
