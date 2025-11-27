@@ -30,9 +30,14 @@ function isWorkflowJob(value: unknown): boolean {
  *
  * All jobs must be named exports - this ensures consistent bundling behavior.
  */
-export async function collectAllJobs(
-  config: WorkflowServiceConfig,
-): Promise<Array<{ name: string; exportName: string; sourceFile: string }>> {
+export async function collectAllJobs(config: WorkflowServiceConfig): Promise<
+  Array<{
+    name: string;
+    exportName: string;
+    sourceFile: string;
+    deps?: string[];
+  }>
+> {
   if (!config.files || config.files.length === 0) {
     return [];
   }
@@ -116,12 +121,15 @@ export async function collectAllJobs(
     name: string;
     exportName: string;
     sourceFile: string;
+    deps?: string[];
   }> = [];
 
-  for (const jobName of tracedJobs.keys()) {
+  for (const [jobName, job] of tracedJobs) {
     const exportedMetadata = allJobsMap.get(jobName);
     // All jobs are guaranteed to be exported at this point (validated in Step 4)
-    result.push(exportedMetadata!);
+    // Extract dependency names from job.deps (which contains WorkflowJob objects)
+    const depNames = job.deps?.map((dep) => dep.name);
+    result.push({ ...exportedMetadata!, deps: depNames });
   }
 
   return result;

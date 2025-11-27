@@ -36,18 +36,9 @@ export interface WorkflowJob<
 > {
   readonly [WORKFLOW_JOB_BRAND]?: true;
   name: Name;
-  deps?: ExtractJobNames<Deps>;
+  deps?: Deps;
   body: (input: Input, jobs: JobsFromDeps<Deps>) => Output | Promise<Output>;
 }
-
-// Helper to extract job names from deps array
-type ExtractJobNames<Deps extends readonly WorkflowJob<any, any, any, any>[]> =
-  Deps extends readonly [
-    infer D extends WorkflowJob,
-    ...infer R extends WorkflowJob[],
-  ]
-    ? [D["name"], ...ExtractJobNames<R>]
-    : [];
 
 type WorkflowJobBody<
   I,

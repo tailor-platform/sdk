@@ -11,6 +11,7 @@ interface JobInfo {
   name: string;
   exportName: string;
   sourceFile: string;
+  deps?: string[];
 }
 
 /**
@@ -139,15 +140,8 @@ async function bundleSingleJob(
  * Find the dependencies of a specific job
  */
 function findJobDeps(targetJobName: string, allJobs: JobInfo[]): string[] {
-  // Import the job module to get its deps
-  // Since we're in bundling context, we need to check the allJobs for relationships
-  // The deps are tracked in the collectAllJobs function when collecting jobs
-  // For now, we'll collect deps by re-importing the source
-  // This is a simplification - in production, deps should be passed from the loader
-
-  // For this implementation, we return empty and let the entry file handle it
-  // The actual deps are resolved at runtime via the jobs proxy
-  return allJobs.filter((j) => j.name !== targetJobName).map((j) => j.name);
+  const targetJob = allJobs.find((j) => j.name === targetJobName);
+  return targetJob?.deps ?? [];
 }
 
 function generateJobsObject(jobNames: string[]): string {

@@ -3,7 +3,9 @@ import { functionSchema } from "../common";
 
 export const WorkflowJobSchema = z.object({
   name: z.string(),
-  deps: z.array(z.any()).optional(),
+  get deps() {
+    return z.array(WorkflowJobSchema).optional();
+  },
   body: functionSchema,
 });
 
