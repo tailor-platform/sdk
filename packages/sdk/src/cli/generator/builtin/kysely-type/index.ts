@@ -33,7 +33,6 @@ export class KyselyGenerator
 
   async processType(args: {
     type: ParsedTailorDBType;
-    applicationNamespace: string;
     namespace: string;
   }): Promise<KyselyTypeMetadata> {
     return await TypeProcessor.processType(args.type);
@@ -48,7 +47,6 @@ export class KyselyGenerator
   }
 
   async processTailorDBNamespace(args: {
-    applicationNamespace: string;
     namespace: string;
     types: Record<string, KyselyTypeMetadata>;
   }): Promise<KyselyNamespaceMetadata> {
@@ -70,7 +68,7 @@ export class KyselyGenerator
   }
 
   aggregate(args: {
-    inputs: GeneratorInput<KyselyNamespaceMetadata, undefined>[];
+    input: GeneratorInput<KyselyNamespaceMetadata, undefined>;
     executorInputs: undefined[];
     baseDir: string;
   }): GeneratorResult {
@@ -78,11 +76,9 @@ export class KyselyGenerator
 
     const allNamespaceData: KyselyNamespaceMetadata[] = [];
 
-    for (const input of args.inputs) {
-      for (const nsResult of input.tailordb) {
-        if (nsResult.types && nsResult.types.types.length > 0) {
-          allNamespaceData.push(nsResult.types);
-        }
+    for (const nsResult of args.input.tailordb) {
+      if (nsResult.types && nsResult.types.types.length > 0) {
+        allNamespaceData.push(nsResult.types);
       }
     }
 

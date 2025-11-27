@@ -58,7 +58,7 @@ export function createSeedGenerator(options: {
 
     processResolver: (_args) => undefined,
 
-    aggregate: ({ inputs }) => {
+    aggregate: ({ input }) => {
       const entityDependencies: Record<
         /* outputDir */ string,
         Record</* type */ string, /* dependencies */ string[]>
@@ -66,63 +66,61 @@ export function createSeedGenerator(options: {
 
       const files: GeneratorResult["files"] = [];
 
-      for (const input of inputs) {
-        for (const nsResult of input.tailordb) {
-          if (!nsResult.types) continue;
+      for (const nsResult of input.tailordb) {
+        if (!nsResult.types) continue;
 
-          const outputBaseDir = options.distPath;
-          if (!(outputBaseDir in entityDependencies)) {
-            entityDependencies[outputBaseDir] = {};
-          }
+        const outputBaseDir = options.distPath;
+        if (!(outputBaseDir in entityDependencies)) {
+          entityDependencies[outputBaseDir] = {};
+        }
 
-          for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
-            const { gqlIngest, linesDb } = metadata;
+        for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
+          const { gqlIngest, linesDb } = metadata;
 
-            entityDependencies[outputBaseDir][gqlIngest.name] =
-              gqlIngest.dependencies;
+          entityDependencies[outputBaseDir][gqlIngest.name] =
+            gqlIngest.dependencies;
 
-            // Generate GraphQL Ingest files
-            files.push(
-              {
-                path: path.join(
-                  outputBaseDir,
-                  "mappings",
-                  `${gqlIngest.name}.json`,
-                ),
-                content: JSON.stringify(gqlIngest.mapping, null, 2) + "\n",
-              },
-              {
-                path: path.join(outputBaseDir, gqlIngest.mapping.dataFile),
-                content: "",
-                skipIfExists: true,
-              },
-              {
-                path: path.join(outputBaseDir, gqlIngest.mapping.graphqlFile),
-                content: gqlIngest.graphql,
-              },
-            );
+          // Generate GraphQL Ingest files
+          files.push(
+            {
+              path: path.join(
+                outputBaseDir,
+                "mappings",
+                `${gqlIngest.name}.json`,
+              ),
+              content: JSON.stringify(gqlIngest.mapping, null, 2) + "\n",
+            },
+            {
+              path: path.join(outputBaseDir, gqlIngest.mapping.dataFile),
+              content: "",
+              skipIfExists: true,
+            },
+            {
+              path: path.join(outputBaseDir, gqlIngest.mapping.graphqlFile),
+              content: gqlIngest.graphql,
+            },
+          );
 
-            // Generate lines-db schema file
-            const schemaOutputPath = path.join(
-              outputBaseDir,
-              "data",
-              `${linesDb.typeName}.schema.ts`,
-            );
-            const importPath = path.relative(
-              path.dirname(schemaOutputPath),
-              linesDb.importPath,
-            );
-            const normalizedImportPath = importPath
-              .replace(/\.ts$/, "")
-              .startsWith(".")
-              ? importPath.replace(/\.ts$/, "")
-              : `./${importPath.replace(/\.ts$/, "")}`;
+          // Generate lines-db schema file
+          const schemaOutputPath = path.join(
+            outputBaseDir,
+            "data",
+            `${linesDb.typeName}.schema.ts`,
+          );
+          const importPath = path.relative(
+            path.dirname(schemaOutputPath),
+            linesDb.importPath,
+          );
+          const normalizedImportPath = importPath
+            .replace(/\.ts$/, "")
+            .startsWith(".")
+            ? importPath.replace(/\.ts$/, "")
+            : `./${importPath.replace(/\.ts$/, "")}`;
 
-            files.push({
-              path: schemaOutputPath,
-              content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
-            });
-          }
+          files.push({
+            path: schemaOutputPath,
+            content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
+          });
         }
       }
 

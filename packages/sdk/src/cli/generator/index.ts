@@ -223,7 +223,7 @@ export class GenerationManager {
         try {
           results.tailordbResults[namespace][typeName] = await gen.processType({
             type,
-            applicationNamespace: appNamespace,
+            // applicationNamespace: appNamespace,
             namespace,
             source: typeInfo.sourceInfo[typeName],
           });
@@ -246,7 +246,7 @@ export class GenerationManager {
       try {
         results.tailordbNamespaceResults[namespace] =
           await gen.processTailorDBNamespace({
-            applicationNamespace: appNamespace,
+            // applicationNamespace: appNamespace,
             namespace,
             types: results.tailordbResults[namespace],
           });
@@ -280,7 +280,7 @@ export class GenerationManager {
           results.resolverResults[namespace][resolverName] =
             await gen.processResolver({
               resolver,
-              applicationNamespace: appNamespace,
+              // applicationNamespace: appNamespace,
               namespace,
             });
         } catch (error) {
@@ -302,7 +302,7 @@ export class GenerationManager {
       try {
         results.resolverNamespaceResults[namespace] =
           await gen.processResolverNamespace({
-            applicationNamespace: appNamespace,
+            // applicationNamespace: appNamespace,
             namespace,
             resolvers: results.resolverResults[namespace],
           });
@@ -342,10 +342,12 @@ export class GenerationManager {
   }
 
   async aggregate(gen: CodeGenerator) {
-    // Build inputs for each application
-    const inputs: GeneratorInput<any, any>[] = [];
+    let input!: GeneratorInput<any, any>;
 
-    for (const [appNamespace, results] of Object.entries(
+    console.log("🔥");
+    console.log(JSON.stringify(this.generatorResults[gen.id], null, 2));
+
+    for (const [_, results] of Object.entries(
       this.generatorResults[gen.id].application,
     )) {
       const tailordbResults: TailorDBNamespaceResult<any>[] = [];
@@ -371,17 +373,22 @@ export class GenerationManager {
         });
       }
 
-      inputs.push({
-        applicationNamespace: appNamespace,
+      input = {
         tailordb: tailordbResults,
         resolver: resolverResults,
-      });
+      };
+
+      // inputs.push({
+      //   applicationNamespace: appNamespace,
+      //   tailordb: tailordbResults,
+      //   resolver: resolverResults,
+      // });
     }
     // executor: Object.values(results.executorResults),
 
     // Call generator's aggregate method
     const result = await gen.aggregate({
-      inputs,
+      input,
       executorInputs: Object.values(
         this.generatorResults[gen.id].executorResults,
       ),

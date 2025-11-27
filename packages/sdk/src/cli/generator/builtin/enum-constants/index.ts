@@ -38,7 +38,6 @@ export class EnumConstantsGenerator
 
   async processType(args: {
     type: ParsedTailorDBType;
-    applicationNamespace: string;
     namespace: string;
   }): Promise<EnumConstantMetadata> {
     return await EnumProcessor.processType(args.type);
@@ -53,7 +52,6 @@ export class EnumConstantsGenerator
   }
 
   async processTailorDBNamespace(args: {
-    applicationNamespace: string;
     namespace: string;
     types: Record<string, EnumConstantMetadata>;
   }): Promise<EnumNamespaceMetadata> {
@@ -81,7 +79,7 @@ export class EnumConstantsGenerator
   }
 
   aggregate(args: {
-    inputs: GeneratorInput<EnumNamespaceMetadata, undefined>[];
+    input: GeneratorInput<EnumNamespaceMetadata, undefined>;
     executorInputs: undefined[];
     baseDir: string;
   }): GeneratorResult {
@@ -89,11 +87,9 @@ export class EnumConstantsGenerator
 
     const allEnums: EnumDefinition[] = [];
 
-    for (const input of args.inputs) {
-      for (const nsResult of input.tailordb) {
-        if (nsResult.types && nsResult.types.enums.length > 0) {
-          allEnums.push(...nsResult.types.enums);
-        }
+    for (const nsResult of args.input.tailordb) {
+      if (nsResult.types && nsResult.types.enums.length > 0) {
+        allEnums.push(...nsResult.types.enums);
       }
     }
 
