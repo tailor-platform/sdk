@@ -1,4 +1,29 @@
 import { parseSync } from "oxc-parser";
+import type {
+  Program,
+  Expression,
+  AwaitExpression,
+  ImportExpression,
+  CallExpression,
+  ImportDeclaration,
+  VariableDeclaration,
+  ObjectExpression,
+  ObjectPropertyKind,
+  ObjectProperty,
+  StaticMemberExpression,
+  IdentifierReference,
+  ImportSpecifier,
+  ImportDefaultSpecifier,
+  ImportNamespaceSpecifier,
+  ObjectPattern,
+  BindingProperty,
+  ExportNamedDeclaration,
+  ArrowFunctionExpression,
+  Function as FunctionExpression,
+} from "@oxc-project/types";
+
+/** A generic AST node for walking purposes */
+type ASTNode = Record<string, unknown>;
 
 interface JobLocation {
   name: string;
@@ -25,23 +50,33 @@ function isTailorSdkSource(source: string): boolean {
 /**
  * Get the source string from a dynamic import or require call
  */
-function getImportSource(node: any): string | null {
+function getImportSource(node: Expression | null | undefined): string | null {
+  if (!node) return null;
   // await import("@tailor-platform/sdk")
-  if (node?.type === "ImportExpression") {
-    const source = node.source;
-    if (source?.type === "StringLiteral" || source?.type === "Literal") {
+  if (node.type === "ImportExpression") {
+    const importExpr = node as ImportExpression;
+    const source = importExpr.source;
+    if (source.type === "Literal" && typeof source.value === "string") {
       return source.value;
     }
   }
   // require("@tailor-platform/sdk")
-  if (
-    node?.type === "CallExpression" &&
-    node.callee?.type === "Identifier" &&
-    node.callee.name === "require"
-  ) {
-    const arg = node.arguments?.[0];
-    if (arg?.type === "StringLiteral" || arg?.type === "Literal") {
-      return arg.value;
+  if (node.type === "CallExpression") {
+    const callExpr = node as CallExpression;
+    if (
+      callExpr.callee.type === "Identifier" &&
+      callExpr.callee.name === "require"
+    ) {
+      const arg = callExpr.arguments[0];
+      if (
+        arg &&
+        "type" in arg &&
+        arg.type === "Literal" &&
+        "value" in arg &&
+        typeof arg.value === "string"
+      ) {
+        return arg.value;
+      }
     }
   }
   return null;
@@ -50,9 +85,11 @@ function getImportSource(node: any): string | null {
 /**
  * Unwrap AwaitExpression to get the inner expression
  */
-function unwrapAwait(node: any): any {
+function unwrapAwait(
+  node: Expression | null | undefined,
+): Expression | null | undefined {
   if (node?.type === "AwaitExpression") {
-    return node.argument;
+    return (node as AwaitExpression).argument;
   }
   return node;
 }
@@ -61,24 +98,30 @@ function unwrapAwait(node: any): any {
  * Collect all import bindings for createWorkflowJob from @tailor-platform/sdk
  * Returns a Set of local names that refer to createWorkflowJob
  */
-function collectCreateWorkflowJobBindings(program: any): Set<string> {
+function collectCreateWorkflowJobBindings(program: Program): Set<string> {
   const bindings = new Set<string>();
 
-  function walk(node: any): void {
+  function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
 
+    const nodeType = node.type as string | undefined;
+
     // Static imports: import { createWorkflowJob } from "@tailor-platform/sdk"
-    if (node.type === "ImportDeclaration") {
-      const source = node.source?.value;
-      if (source && isTailorSdkSource(source)) {
-        for (const specifier of node.specifiers || []) {
+    if (nodeType === "ImportDeclaration") {
+      const importDecl = node as unknown as ImportDeclaration;
+      const source = importDecl.source?.value;
+      if (typeof source === "string" && isTailorSdkSource(source)) {
+        for (const specifier of importDecl.specifiers || []) {
           // import { createWorkflowJob } from "@tailor-platform/sdk"
           // import { createWorkflowJob as create } from "@tailor-platform/sdk"
           if (specifier.type === "ImportSpecifier") {
+            const importSpec = specifier as ImportSpecifier;
             const imported =
-              specifier.imported?.name || specifier.imported?.value;
+              importSpec.imported.type === "Identifier"
+                ? importSpec.imported.name
+                : (importSpec.imported as { value?: string }).value;
             if (imported === "createWorkflowJob") {
-              bindings.add(specifier.local?.name || imported);
+              bindings.add(importSpec.local?.name || imported);
             }
           }
           // import sdk from "@tailor-platform/sdk" → sdk.createWorkflowJob
@@ -87,8 +130,11 @@ function collectCreateWorkflowJobBindings(program: any): Set<string> {
             specifier.type === "ImportDefaultSpecifier" ||
             specifier.type === "ImportNamespaceSpecifier"
           ) {
+            const spec = specifier as
+              | ImportDefaultSpecifier
+              | ImportNamespaceSpecifier;
             // Store namespace/default with special prefix to track member access
-            bindings.add(`__namespace__:${specifier.local?.name}`);
+            bindings.add(`__namespace__:${spec.local?.name}`);
           }
         }
       }
@@ -99,8 +145,9 @@ function collectCreateWorkflowJobBindings(program: any): Set<string> {
     // const sdk = require("@tailor-platform/sdk")
     // const { createWorkflowJob } = await import("@tailor-platform/sdk")
     // const { createWorkflowJob } = require("@tailor-platform/sdk")
-    if (node.type === "VariableDeclaration") {
-      for (const decl of node.declarations || []) {
+    if (nodeType === "VariableDeclaration") {
+      const varDecl = node as unknown as VariableDeclaration;
+      for (const decl of varDecl.declarations || []) {
         const init = unwrapAwait(decl.init);
         const source = getImportSource(init);
 
@@ -114,12 +161,20 @@ function collectCreateWorkflowJobBindings(program: any): Set<string> {
           // const { createWorkflowJob } = await import(...) / require(...)
           // const { createWorkflowJob: create } = await import(...) / require(...)
           else if (id?.type === "ObjectPattern") {
-            for (const prop of id.properties || []) {
-              if (prop.type === "ObjectProperty" || prop.type === "Property") {
-                const keyName = prop.key?.name || prop.key?.value;
+            const objPattern = id as unknown as ObjectPattern;
+            for (const prop of objPattern.properties || []) {
+              if (prop.type === "Property") {
+                const bindingProp = prop as BindingProperty;
+                const keyName =
+                  bindingProp.key.type === "Identifier"
+                    ? bindingProp.key.name
+                    : (bindingProp.key as { value?: string }).value;
                 if (keyName === "createWorkflowJob") {
-                  const localName = prop.value?.name || keyName;
-                  bindings.add(localName);
+                  const localName =
+                    bindingProp.value.type === "Identifier"
+                      ? bindingProp.value.name
+                      : keyName;
+                  bindings.add(localName ?? "");
                 }
               }
             }
@@ -129,45 +184,51 @@ function collectCreateWorkflowJobBindings(program: any): Set<string> {
     }
 
     for (const key of Object.keys(node)) {
-      const child = node[key];
+      const child = node[key] as unknown;
       if (Array.isArray(child)) {
-        child.forEach((c) => walk(c));
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
       } else if (child && typeof child === "object") {
-        walk(child);
+        walk(child as ASTNode);
       }
     }
   }
 
-  walk(program);
+  walk(program as unknown as ASTNode);
   return bindings;
 }
 
 /**
  * Check if a CallExpression is a createWorkflowJob call
  */
-function isCreateWorkflowJobCall(node: any, bindings: Set<string>): boolean {
+function isCreateWorkflowJobCall(
+  node: ASTNode,
+  bindings: Set<string>,
+): node is ASTNode & { type: "CallExpression" } {
   if (node.type !== "CallExpression") return false;
 
-  const callee = node.callee;
+  const callExpr = node as unknown as CallExpression;
+  const callee = callExpr.callee;
 
   // Direct call: createWorkflowJob(...) or create(...)
-  if (callee?.type === "Identifier") {
-    return bindings.has(callee.name);
+  if (callee.type === "Identifier") {
+    const identifier = callee as IdentifierReference;
+    return bindings.has(identifier.name);
   }
 
   // Member access: sdk.createWorkflowJob(...)
-  if (
-    callee?.type === "StaticMemberExpression" ||
-    callee?.type === "MemberExpression"
-  ) {
-    const object = callee.object;
-    const property = callee.property;
-    if (
-      object?.type === "Identifier" &&
-      bindings.has(`__namespace__:${object.name}`) &&
-      property?.name === "createWorkflowJob"
-    ) {
-      return true;
+  // Note: oxc uses MemberExpression with computed: false for static member access
+  if (callee.type === "MemberExpression") {
+    const memberExpr = callee as unknown as StaticMemberExpression;
+    if (!memberExpr.computed) {
+      const object = memberExpr.object;
+      const property = memberExpr.property;
+      if (
+        object.type === "Identifier" &&
+        bindings.has(`__namespace__:${(object as IdentifierReference).name}`) &&
+        property.name === "createWorkflowJob"
+      ) {
+        return true;
+      }
     }
   }
 
@@ -177,41 +238,58 @@ function isCreateWorkflowJobCall(node: any, bindings: Set<string>): boolean {
 /**
  * Check if a node is a string literal
  */
-function isStringLiteral(node: any): boolean {
-  return node?.type === "StringLiteral" || node?.type === "Literal";
+function isStringLiteral(
+  node: Expression | null | undefined,
+): node is Expression & { type: "Literal"; value: string } {
+  // Note: oxc uses "Literal" for all literals, distinguishing by value type
+  return (
+    node?.type === "Literal" &&
+    typeof (node as { value?: unknown }).value === "string"
+  );
 }
 
 /**
  * Check if a node is a function expression (arrow or regular)
  */
-function isFunctionExpression(node: any): boolean {
+function isFunctionExpression(
+  node: Expression | null | undefined,
+): node is ArrowFunctionExpression | FunctionExpression {
   return (
     node?.type === "ArrowFunctionExpression" ||
     node?.type === "FunctionExpression"
   );
 }
 
+interface FoundProperty {
+  key: ObjectProperty["key"];
+  value: Expression;
+  start: number;
+  end: number;
+}
+
 /**
  * Find a property in an object expression
  */
 function findProperty(
-  properties: any[],
+  properties: ObjectPropertyKind[],
   name: string,
-): { key: any; value: any; start: number; end: number } | null {
+): FoundProperty | null {
   for (const prop of properties) {
-    if (prop.type === "ObjectProperty" || prop.type === "Property") {
+    // Note: oxc uses "Property" for object properties
+    if (prop.type === "Property") {
+      const objProp = prop as ObjectProperty;
       const keyName =
-        prop.key?.type === "Identifier"
-          ? prop.key.name
-          : prop.key?.type === "StringLiteral" || prop.key?.type === "Literal"
-            ? prop.key.value
+        objProp.key.type === "Identifier"
+          ? objProp.key.name
+          : objProp.key.type === "Literal"
+            ? (objProp.key as { value?: string }).value
             : null;
       if (keyName === name) {
         return {
-          key: prop.key,
-          value: prop.value,
-          start: prop.start,
-          end: prop.end,
+          key: objProp.key,
+          value: objProp.value,
+          start: objProp.start,
+          end: objProp.end,
         };
       }
     }
@@ -222,18 +300,25 @@ function findProperty(
 /**
  * Find all workflow jobs by detecting createWorkflowJob calls from @tailor-platform/sdk
  */
-export function findAllJobs(program: any, _sourceText: string): JobLocation[] {
+export function findAllJobs(
+  program: Program,
+  _sourceText: string,
+): JobLocation[] {
   const jobs: JobLocation[] = [];
   const bindings = collectCreateWorkflowJobBindings(program);
 
-  function walk(node: any, parents: any[] = []): void {
+  function walk(
+    node: ASTNode | null | undefined,
+    parents: ASTNode[] = [],
+  ): void {
     if (!node || typeof node !== "object") return;
 
     // Detect createWorkflowJob(...) calls
     if (isCreateWorkflowJobCall(node, bindings)) {
-      const args = node.arguments;
+      const callExpr = node as unknown as CallExpression;
+      const args = callExpr.arguments;
       if (args?.length >= 1 && args[0]?.type === "ObjectExpression") {
-        const configObj = args[0];
+        const configObj = args[0] as ObjectExpression;
         const nameProp = findProperty(configObj.properties, "name");
         const bodyProp = findProperty(configObj.properties, "body");
         const depsProp = findProperty(configObj.properties, "deps");
@@ -252,7 +337,10 @@ export function findAllJobs(program: any, _sourceText: string): JobLocation[] {
               parent.type === "ExportNamedDeclaration" ||
               parent.type === "VariableDeclaration"
             ) {
-              statementRange = { start: parent.start, end: parent.end };
+              statementRange = {
+                start: parent.start as number,
+                end: parent.end as number,
+              };
               break;
             }
           }
@@ -275,16 +363,16 @@ export function findAllJobs(program: any, _sourceText: string): JobLocation[] {
 
     const newParents = [...parents, node];
     for (const key of Object.keys(node)) {
-      const child = node[key];
+      const child = node[key] as unknown;
       if (Array.isArray(child)) {
-        child.forEach((c) => walk(c, newParents));
+        child.forEach((c: unknown) => walk(c as ASTNode | null, newParents));
       } else if (child && typeof child === "object") {
-        walk(child, newParents);
+        walk(child as ASTNode, newParents);
       }
     }
   }
 
-  walk(program);
+  walk(program as unknown as ASTNode);
   return jobs;
 }
 
@@ -342,22 +430,25 @@ function findStatementEnd(source: string, position: number): number {
  * Returns a map of export name to statement range
  */
 function findVariableDeclarationsByName(
-  program: any,
+  program: Program,
 ): Map<string, { start: number; end: number }> {
   const declarations = new Map<string, { start: number; end: number }>();
 
-  function walk(node: any): void {
+  function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
+
+    const nodeType = node.type as string | undefined;
 
     // Handle variable declarations: const job1 = ...
     // Only set if not already set (ExportNamedDeclaration is processed first and sets the outer range)
-    if (node.type === "VariableDeclaration") {
-      for (const decl of node.declarations || []) {
+    if (nodeType === "VariableDeclaration") {
+      const varDecl = node as unknown as VariableDeclaration;
+      for (const decl of varDecl.declarations || []) {
         if (decl.id?.type === "Identifier" && decl.id.name) {
           if (!declarations.has(decl.id.name)) {
             declarations.set(decl.id.name, {
-              start: node.start,
-              end: node.end,
+              start: varDecl.start,
+              end: varDecl.end,
             });
           }
         }
@@ -365,14 +456,16 @@ function findVariableDeclarationsByName(
     }
 
     // Handle export declarations: export const job1 = ...
-    if (node.type === "ExportNamedDeclaration" && node.declaration) {
-      const declaration = node.declaration;
-      if (declaration.type === "VariableDeclaration") {
-        for (const decl of declaration.declarations || []) {
+    if (nodeType === "ExportNamedDeclaration") {
+      const exportDecl = node as unknown as ExportNamedDeclaration;
+      const declaration = exportDecl.declaration;
+      if (declaration?.type === "VariableDeclaration") {
+        const varDecl = declaration as VariableDeclaration;
+        for (const decl of varDecl.declarations || []) {
           if (decl.id?.type === "Identifier" && decl.id.name) {
             declarations.set(decl.id.name, {
-              start: node.start,
-              end: node.end,
+              start: exportDecl.start,
+              end: exportDecl.end,
             });
           }
         }
@@ -380,16 +473,16 @@ function findVariableDeclarationsByName(
     }
 
     for (const key of Object.keys(node)) {
-      const child = node[key];
+      const child = node[key] as unknown;
       if (Array.isArray(child)) {
-        child.forEach((c) => walk(c));
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
       } else if (child && typeof child === "object") {
-        walk(child);
+        walk(child as ASTNode);
       }
     }
   }
 
-  walk(program);
+  walk(program as unknown as ASTNode);
   return declarations;
 }
 
