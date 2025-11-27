@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type Application } from "@/cli/application";
 import { getDistDir } from "@/configure/config";
 import { type ApplyPhase } from "..";
 import { type OperatorClient, fetchAll } from "../../client";
@@ -123,7 +122,7 @@ export function collectJobNamesFromWorkflow(workflow: Workflow): Set<string> {
 export async function planWorkflow(
   client: OperatorClient,
   workspaceId: string,
-  application: Readonly<Application>,
+  workflows: Record<string, Workflow>,
 ) {
   const changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow> =
     new ChangeSet("Workflows");
@@ -153,8 +152,6 @@ export async function planWorkflow(
   // Load all available scripts once
   const allScripts = await loadWorkflowScripts();
 
-  // Use already loaded workflows (loaded by loadAndCollectJobs in apply)
-  const workflows = application.workflowService?.getWorkflows() ?? {};
   for (const workflow of Object.values(workflows)) {
     // Get only the jobs needed for this specific workflow
     const requiredJobNames = collectJobNamesFromWorkflow(workflow);

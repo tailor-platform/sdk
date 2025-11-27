@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { styleText } from "node:util";
 import { defineCommand } from "citty";
 import { defineApplication, type Application } from "@/cli/application";
+import { loadAndCollectJobs } from "@/cli/application/workflow/service";
 import { loadConfig } from "@/cli/config-loader";
 import {
   type CodeGenerator,
@@ -124,7 +125,9 @@ export class GenerationManager {
     });
 
     // Workflow services
-    await this.application.workflowService?.loadAndCollectJobs();
+    if (this.application.workflowConfig) {
+      await loadAndCollectJobs(this.application.workflowConfig);
+    }
 
     await this.processGenerators();
   }

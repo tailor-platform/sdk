@@ -1,5 +1,11 @@
 import { defineCommand } from "citty";
 import { defineApplication } from "@/cli/application";
+import {
+  loadAndCollectJobs,
+  printLoadedWorkflows,
+  type CollectedJob,
+  type WorkflowLoadResult,
+} from "@/cli/application/workflow/service";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
 import { bundleWorkflowJobs } from "@/cli/bundler/workflow/workflow-bundler";
@@ -29,7 +35,6 @@ import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
-import type { CollectedJob } from "@/cli/application/workflow/service";
 import type { OperatorClient } from "@/cli/client";
 
 export interface ApplyOptions {
@@ -65,10 +70,9 @@ export async function apply(options?: ApplyOptions) {
 
   // Load files first (before building)
   // Load workflows first and collect jobs for bundling
-  let collectedJobs: CollectedJob[] = [];
-  if (application.workflowService) {
-    const { jobs } = await application.workflowService.loadAndCollectJobs();
-    collectedJobs = jobs;
+  let workflowResult: WorkflowLoadResult | undefined;
+  if (application.workflowConfig) {
+    workflowResult = await loadAndCollectJobs(application.workflowConfig);
   }
 
   // Build functions (using already loaded data)
@@ -80,8 +84,8 @@ export async function apply(options?: ApplyOptions) {
   if (application.executorService) {
     await buildExecutor(application.executorService.config);
   }
-  if (collectedJobs.length > 0) {
-    await buildWorkflow(collectedJobs);
+  if (workflowResult && workflowResult.jobs.length > 0) {
+    await buildWorkflow(workflowResult.jobs);
   }
   if (buildOnly) return;
 
@@ -108,7 +112,9 @@ export async function apply(options?: ApplyOptions) {
     await application.executorService.loadExecutors();
   }
   // Print workflow loading logs last (workflows were already loaded for bundling)
-  application.workflowService?.printLoadedWorkflows();
+  if (workflowResult) {
+    printLoadedWorkflows(workflowResult);
+  }
   console.log("");
 
   // Phase 1: Plan
@@ -120,7 +126,11 @@ export async function apply(options?: ApplyOptions) {
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
-  const workflow = await planWorkflow(client, workspaceId, application);
+  const workflow = await planWorkflow(
+    client,
+    workspaceId,
+    workflowResult?.workflows ?? {},
+  );
 
   // Confirm conflicts
   const allConflicts: OwnerConflict[] = [
