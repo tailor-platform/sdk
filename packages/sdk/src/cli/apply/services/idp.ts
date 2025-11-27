@@ -128,8 +128,9 @@ export async function planIdP({
   client,
   workspaceId,
   application,
+  forRemoval,
 }: PlanContext) {
-  const idps = application.idpServices;
+  const idps = forRemoval ? [] : application.idpServices;
   const {
     changeSet: serviceChangeSet,
     conflicts,

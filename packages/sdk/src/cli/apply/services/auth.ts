@@ -248,9 +248,10 @@ export async function planAuth({
   client,
   workspaceId,
   application,
+  forRemoval,
 }: PlanContext) {
   const auths: Readonly<AuthService>[] = [];
-  if (application.authService) {
+  if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();
     auths.push(application.authService);
   }

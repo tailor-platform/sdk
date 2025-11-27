@@ -123,15 +123,18 @@ export async function planTailorDB({
   client,
   workspaceId,
   application,
+  forRemoval,
 }: PlanContext) {
   const tailordbs: TailorDBService[] = [];
-  for (const tailordb of application.tailorDBServices) {
-    await tailordb.loadTypes();
-    tailordbs.push(tailordb);
+  if (!forRemoval) {
+    for (const tailordb of application.tailorDBServices) {
+      await tailordb.loadTypes();
+      tailordbs.push(tailordb);
+    }
   }
-  const executors = Object.values(
-    (await application.executorService?.loadExecutors()) ?? {},
-  );
+  const executors = forRemoval
+    ? []
+    : Object.values((await application.executorService?.loadExecutors()) ?? {});
 
   const {
     changeSet: serviceChangeSet,

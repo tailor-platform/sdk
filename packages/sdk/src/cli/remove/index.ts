@@ -1,16 +1,25 @@
-import { styleText } from "node:util";
-import chalk from "chalk";
 import { defineCommand } from "citty";
 import { consola } from "consola";
+import ml from "multiline-ts";
+import { defineApplication } from "@/cli/application";
+import { type PlanContext } from "@/cli/apply";
+import {
+  applyApplication,
+  planApplication,
+} from "@/cli/apply/services/application";
+import { applyAuth, planAuth } from "@/cli/apply/services/auth";
+import { applyExecutor, planExecutor } from "@/cli/apply/services/executor";
+import { applyIdP, planIdP } from "@/cli/apply/services/idp";
+import { applyPipeline, planPipeline } from "@/cli/apply/services/resolver";
+import {
+  applyStaticWebsite,
+  planStaticWebsite,
+} from "@/cli/apply/services/staticwebsite";
+import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig } from "@/cli/config-loader";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
-import {
-  collectResourcesToRemove,
-  type ResourceToRemove,
-} from "./services/collector";
-import { removeResources } from "./services/remover";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -37,66 +46,54 @@ export async function remove(options?: RemoveOptions) {
     profile: options?.profile,
   });
 
-  console.log(
-    `\nSearching for resources managed by application ${chalk.bold(`"${appName}"`)}...\n`,
-  );
+  console.log(`Planning removal of resources managed by "${appName}"...\n`);
 
-  // Collect all resources to remove
-  const resources = await collectResourcesToRemove(
+  // Create application context
+  const application = defineApplication(config);
+
+  // Plan all resources with forRemoval=true
+  const ctx: PlanContext = {
     client,
     workspaceId,
-    appName,
-  );
-
-  if (resources.length === 0) {
-    consola.info("No resources found to remove.");
-    return;
-  }
-
-  // Display resources to be removed
-  printResourcesToRemove(resources);
+    application,
+    forRemoval: true,
+  };
+  const tailorDB = await planTailorDB(ctx);
+  const staticWebsite = await planStaticWebsite(ctx);
+  const idp = await planIdP(ctx);
+  const auth = await planAuth(ctx);
+  const pipeline = await planPipeline(ctx);
+  const app = await planApplication(ctx);
+  const executor = await planExecutor(ctx);
 
   // Confirm deletion
   if (!yes) {
     const confirmed = await consola.prompt(
-      chalk.yellow(
-        `\nAre you sure you want to remove all ${resources.length} resources?`,
-      ),
+      "Are you sure you want to remove all resources?",
       { type: "confirm", initial: false },
     );
     if (!confirmed) {
-      consola.info("Remove cancelled.");
-      return;
+      throw new Error(ml`
+        Remove cancelled. No resources were deleted.
+        To override, run again and confirm, or use --yes flag.
+      `);
     }
   } else {
-    consola.success("Removing resources (--yes flag specified)...");
+    consola.success("Removing all resources (--yes flag specified)...");
   }
 
-  // Remove resources
-  await removeResources(client, workspaceId, resources);
+  // Apply deletions in reverse order of dependencies
+  await applyExecutor(client, executor, "delete");
+  await applyApplication(client, app, "delete");
+  await applyPipeline(client, pipeline, "delete");
+  await applyAuth(client, auth, "delete");
+  await applyIdP(client, idp, "delete");
+  await applyStaticWebsite(client, staticWebsite, "delete");
+  await applyTailorDB(client, tailorDB, "delete");
 
-  console.log(
-    `\n${styleText("green", "✓")} Successfully removed all resources managed by "${appName}".`,
+  consola.success(
+    `Successfully removed all resources managed by "${appName}".`,
   );
-}
-
-function printResourcesToRemove(resources: ResourceToRemove[]) {
-  console.log(styleText("bold", "Resources to be removed:"));
-
-  // Group by type for better display
-  const grouped = new Map<string, string[]>();
-  for (const resource of resources) {
-    const list = grouped.get(resource.type) ?? [];
-    list.push(resource.name);
-    grouped.set(resource.type, list);
-  }
-
-  for (const [type, names] of grouped) {
-    console.log(`\n  ${styleText("cyan", type)}:`);
-    for (const name of names) {
-      console.log(styleText("red", `    - ${name}`));
-    }
-  }
 }
 
 export const removeCommand = defineCommand({

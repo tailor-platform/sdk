@@ -94,15 +94,18 @@ export async function planPipeline({
   client,
   workspaceId,
   application,
+  forRemoval,
 }: PlanContext) {
   const pipelines: Readonly<ResolverService>[] = [];
-  for (const pipeline of application.resolverServices) {
-    await pipeline.loadResolvers();
-    pipelines.push(pipeline);
+  if (!forRemoval) {
+    for (const pipeline of application.resolverServices) {
+      await pipeline.loadResolvers();
+      pipelines.push(pipeline);
+    }
   }
-  const executors = Object.values(
-    (await application.executorService?.loadExecutors()) ?? {},
-  );
+  const executors = forRemoval
+    ? []
+    : Object.values((await application.executorService?.loadExecutors()) ?? {});
 
   const {
     changeSet: serviceChangeSet,

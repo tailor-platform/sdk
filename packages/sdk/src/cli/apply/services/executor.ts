@@ -78,6 +78,7 @@ export async function planExecutor({
   client,
   workspaceId,
   application,
+  forRemoval,
 }: PlanContext) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
     new ChangeSet("Executors");
@@ -112,7 +113,9 @@ export async function planExecutor({
     }),
   );
 
-  const executors = (await application.executorService?.loadExecutors()) ?? {};
+  const executors = forRemoval
+    ? {}
+    : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest(
