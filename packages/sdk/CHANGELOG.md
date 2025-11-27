@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.10.4
+
+### Patch Changes
+
+- [#49](https://github.com/tailor-platform/sdk/pull/49) [`8fef369`](https://github.com/tailor-platform/sdk/commit/8fef369ab65ea34d85aef24a38ac3d0124626a41) Thanks [@remiposo](https://github.com/remiposo)! - Use Controlplane OAuth2 client for login/logout
+
 ## 0.10.3
 
 ### Patch Changes
