@@ -205,7 +205,6 @@ async function loadWorkflowScripts(): Promise<Map<string, string>> {
   // Load all job scripts from workflow-jobs directory
   const jobsDir = path.join(getDistDir(), "workflow-jobs");
   if (!fs.existsSync(jobsDir)) {
-    console.warn(`Warning: workflow-jobs directory not found at ${jobsDir}`);
     return scripts;
   }
 
