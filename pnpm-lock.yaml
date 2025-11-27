@@ -94,8 +94,8 @@ importers:
         specifier: 16.12.0
         version: 16.12.0
       graphql-request:
-        specifier: 7.3.1
-        version: 7.3.1(graphql@16.12.0)
+        specifier: 7.3.4
+        version: 7.3.4(graphql@16.12.0)
       tsx:
         specifier: 4.20.6
         version: 4.20.6
@@ -226,8 +226,8 @@ importers:
         specifier: 9.39.1
         version: 9.39.1(jiti@2.5.1)
       graphql-request:
-        specifier: 7.3.1
-        version: 7.3.1(graphql@16.12.0)
+        specifier: 7.3.4
+        version: 7.3.4(graphql@16.12.0)
       prettier:
         specifier: 3.6.2
         version: 3.6.2
@@ -2158,8 +2158,8 @@ packages:
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
-  graphql-request@7.3.1:
-    resolution: {integrity: sha512-GdinBsBVYrWzwEvOlzadrV5j8mdOc9ZT8In9QyRIZaxbhkTL08j35yNbPp96jAacYzjeD/hKKy2E2RGI7c7Yug==}
+  graphql-request@7.3.4:
+    resolution: {integrity: sha512-kbpP5dw9hHIL5jN/2VS2JU0/Sc1hlsj7zrYBKSDiYd5iG8QfX7P79u26ZBi84eAijsqYVZEpLvCCwEzVxscWhg==}
     peerDependencies:
       graphql: 14 - 16
 
@@ -3922,7 +3922,7 @@ snapshots:
     dependencies:
       commander: 14.0.2
       csv-parser: 3.2.0
-      graphql-request: 7.3.1(graphql@16.12.0)
+      graphql-request: 7.3.4(graphql@16.12.0)
       js-yaml: 4.1.0
     transitivePeerDependencies:
       - graphql
@@ -5368,7 +5368,7 @@ snapshots:
 
   graphemer@1.4.0: {}
 
-  graphql-request@7.3.1(graphql@16.12.0):
+  graphql-request@7.3.4(graphql@16.12.0):
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.12.0)
       graphql: 16.12.0
