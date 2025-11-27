@@ -51,7 +51,7 @@
   "dependencies": {
     "@badgateway/oauth2-client": "3.3.1",
     "@bufbuild/protobuf": "2.10.1",
-    "@connectrpc/connect": "2.1.0",
+    "@connectrpc/connect": "2.1.1",
     "@connectrpc/connect-node": "2.1.0",
     "@standard-schema/spec": "1.0.0",
     "@urql/core": "5.2.0",
