@@ -9,7 +9,7 @@ import { transformWorkflowSource } from "./ast-transformer";
 
 interface JobInfo {
   name: string;
-  exportName?: string; // undefined if accessed via workflow.mainJob
+  exportName: string;
   sourceFile: string;
 }
 
@@ -65,49 +65,30 @@ export class WorkflowBundler {
     const depsJobNames = this.findJobDeps(job.name);
     const jobsObject = this.generateJobsObject(depsJobNames);
 
-    // Step 2: Create entry file that imports from the original source
+    // Step 2: Create entry file that imports job by named export
     const entryPath = path.join(entryDir, `${job.name}.js`);
     const absoluteSourcePath = path.resolve(job.sourceFile).replace(/\\/g, "/");
 
-    // Generate entry content based on whether the job is exported or accessed via workflow
-    let entryContent: string;
-    if (job.exportName) {
-      // Job is exported - import directly by name
-      entryContent = ml /* js */ `
-        import { ${job.exportName} } from "${absoluteSourcePath}";
+    const entryContent = ml /* js */ `
+      import { ${job.exportName} } from "${absoluteSourcePath}";
 
-        const jobs = {
-          ${jobsObject}
-        };
+      const jobs = {
+        ${jobsObject}
+      };
 
-        globalThis.main = async (input) => {
-          return await ${job.exportName}.body(input, jobs);
-        };
-      `;
-    } else {
-      // Job is not exported - access via workflow.mainJob (default export)
-      entryContent = ml /* js */ `
-        import workflow from "${absoluteSourcePath}";
-
-        const jobs = {
-          ${jobsObject}
-        };
-
-        globalThis.main = async (input) => {
-          return await workflow.mainJob.body(input, jobs);
-        };
-      `;
-    }
+      globalThis.main = async (input) => {
+        return await ${job.exportName}.body(input, jobs);
+      };
+    `;
     fs.writeFileSync(entryPath, entryContent);
 
     // Step 3: Bundle with a transform plugin that removes deps from target job
     const outputPath = path.join(outputDir, `${job.name}.js`);
 
     // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
-    // Filter out undefined exportNames (jobs accessed via workflow.mainJob)
     const otherJobExportNames = this.allJobs
-      .filter((j) => j.name !== job.name && j.exportName !== undefined)
-      .map((j) => j.exportName) as string[];
+      .filter((j) => j.name !== job.name)
+      .map((j) => j.exportName);
 
     // Create transform plugin to remove deps from target job and other job declarations
     const transformPlugin: rolldown.Plugin = {

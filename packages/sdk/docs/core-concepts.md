@@ -502,3 +502,115 @@ Context varies based on trigger type:
 - `resolverName`: Name of the resolver
 - `result`: Resolver's return value (when execution succeeds)
 - `error`: Error object (when execution fails)
+
+### Workflow Concepts
+
+Define Workflows in files matching glob patterns specified in `tailor.config.ts`. Workflows orchestrate multiple jobs that can depend on each other.
+
+#### Workflow Rules
+
+**Important**: All workflow components must follow these rules:
+
+| Rule                                           | Required | Description                                         |
+| ---------------------------------------------- | -------- | --------------------------------------------------- |
+| `createWorkflow` result must be default export | Yes      | Workflow files must export the workflow as default  |
+| All jobs must be named exports                 | Yes      | Every job used in a workflow must be a named export |
+| Job names must be unique                       | Yes      | Job names must be unique across the entire project  |
+| `mainJob` is required                          | Yes      | Every workflow must specify a `mainJob`             |
+| Jobs in `deps` must be job objects             | Yes      | Pass job objects, not strings                       |
+
+#### Workflow Job Definition
+
+Define workflow jobs using `createWorkflowJob`:
+
+```typescript
+import { createWorkflowJob } from "@tailor-platform/sdk";
+import { getDB } from "../generated/tailordb";
+
+// All jobs must be named exports
+export const fetchCustomer = createWorkflowJob({
+  name: "fetch-customer",
+  body: async (input: { customerId: string }) => {
+    const db = getDB("tailordb");
+    const customer = await db
+      .selectFrom("Customer")
+      .selectAll()
+      .where("id", "=", input.customerId)
+      .executeTakeFirst();
+    return customer;
+  },
+});
+```
+
+#### Job Dependencies
+
+Jobs can depend on other jobs using the `deps` array. Dependent jobs are accessible via the second argument of `body` function with camelCase names:
+
+```typescript
+import { createWorkflowJob } from "@tailor-platform/sdk";
+import { fetchCustomer } from "./jobs/fetch-customer";
+import { sendNotification } from "./jobs/send-notification";
+
+// All jobs must be named exports - including jobs with dependencies
+export const processOrder = createWorkflowJob({
+  name: "process-order",
+  deps: [fetchCustomer, sendNotification],
+  body: async (input: { orderId: string; customerId: string }, jobs) => {
+    // Access dependent jobs via camelCase names
+    // "fetch-customer" -> jobs.fetchCustomer()
+    // "send-notification" -> jobs.sendNotification()
+    const customer = await jobs.fetchCustomer({ customerId: input.customerId });
+
+    const notification = await jobs.sendNotification({
+      message: `Order ${input.orderId} is being processed`,
+      recipient: customer.email,
+    });
+
+    return {
+      orderId: input.orderId,
+      customerEmail: customer.email,
+      notificationSent: notification.sent,
+    };
+  },
+});
+```
+
+#### Workflow Definition
+
+Define a workflow using `createWorkflow` and export it as default:
+
+```typescript
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { fetchCustomer } from "./jobs/fetch-customer";
+import { sendNotification } from "./jobs/send-notification";
+
+// Jobs must be named exports
+export const processOrder = createWorkflowJob({
+  name: "process-order",
+  deps: [fetchCustomer, sendNotification],
+  body: async (input, jobs) => {
+    // ... job logic
+  },
+});
+
+// Workflow must be default export
+export default createWorkflow({
+  name: "order-processing",
+  mainJob: processOrder,
+});
+```
+
+#### File Organization
+
+Recommended file structure for workflows:
+
+```
+workflows/
+├── jobs/
+│   ├── fetch-customer.ts    # export const fetchCustomer = createWorkflowJob(...)
+│   └── send-notification.ts # export const sendNotification = createWorkflowJob(...)
+└── order-processing.ts      # export const processOrder = createWorkflowJob(...)
+                             # export default createWorkflow(...)
+```
+
+All jobs can be in a single file or split across multiple files, as long as they are named exports.

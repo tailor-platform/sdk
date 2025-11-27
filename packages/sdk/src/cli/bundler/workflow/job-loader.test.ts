@@ -123,14 +123,14 @@ describe("WorkflowJobLoader", () => {
       expect(result.find((j) => j.name === "process-data")).toBeDefined();
     });
 
-    it("should handle internal jobs (not exported but used via deps)", async () => {
+    it("should throw error when job is used via deps but not exported", async () => {
       const workflowFile = path.join(tempDir, "workflow-with-internal.ts");
       fs.writeFileSync(
         workflowFile,
         `
         import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
-        // Internal job - not exported
+        // Internal job - not exported (this should cause an error)
         const internalJob = createWorkflowJob({
           name: "internal-job",
           body: () => "internal",
@@ -154,15 +154,95 @@ describe("WorkflowJobLoader", () => {
         files: [path.join(tempDir, "*.ts")],
       };
 
-      // Should not throw error - internal jobs are valid
+      // Should throw error - all jobs must be named exports
+      await expect(WorkflowJobLoader.collectAllJobs(config)).rejects.toThrow(
+        /The following workflow jobs are used but not exported/,
+      );
+      await expect(WorkflowJobLoader.collectAllJobs(config)).rejects.toThrow(
+        /"internal-job"/,
+      );
+    });
+
+    it("should handle shared job referenced by multiple workflows", async () => {
+      // Create a shared job file
+      const sharedJobFile = path.join(tempDir, "shared-job.ts");
+      fs.writeFileSync(
+        sharedJobFile,
+        `
+        import { createWorkflowJob } from "@tailor-platform/sdk";
+
+        export const sharedJob = createWorkflowJob({
+          name: "shared-job",
+          body: () => "shared result",
+        });
+      `,
+      );
+
+      // Create first workflow that uses the shared job
+      const workflow1File = path.join(tempDir, "workflow1.ts");
+      fs.writeFileSync(
+        workflow1File,
+        `
+        import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+        import { sharedJob } from "./shared-job";
+
+        export const workflow1Main = createWorkflowJob({
+          name: "workflow1-main",
+          deps: [sharedJob],
+          body: async (input, jobs) => {
+            const result = await jobs.sharedJob();
+            return { workflow: 1, result };
+          },
+        });
+
+        export default createWorkflow({
+          name: "workflow-1",
+          mainJob: workflow1Main,
+        });
+      `,
+      );
+
+      // Create second workflow that also uses the shared job
+      const workflow2File = path.join(tempDir, "workflow2.ts");
+      fs.writeFileSync(
+        workflow2File,
+        `
+        import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+        import { sharedJob } from "./shared-job";
+
+        export const workflow2Main = createWorkflowJob({
+          name: "workflow2-main",
+          deps: [sharedJob],
+          body: async (input, jobs) => {
+            const result = await jobs.sharedJob();
+            return { workflow: 2, result };
+          },
+        });
+
+        export default createWorkflow({
+          name: "workflow-2",
+          mainJob: workflow2Main,
+        });
+      `,
+      );
+
+      const config: WorkflowServiceConfig = {
+        files: [path.join(tempDir, "*.ts")],
+      };
+
+      // Should not throw error - shared jobs are valid
       const result = await WorkflowJobLoader.collectAllJobs(config);
 
-      // main-job should be returned (it's exported and used)
-      expect(result.find((j) => j.name === "main-job")).toBeDefined();
+      // All three jobs should be included
+      expect(result.find((j) => j.name === "shared-job")).toBeDefined();
+      expect(result.find((j) => j.name === "workflow1-main")).toBeDefined();
+      expect(result.find((j) => j.name === "workflow2-main")).toBeDefined();
 
-      // internal-job should NOT be in result (not exported, so can't be bundled as entry point)
-      // but it should not cause an error either
-      expect(result.find((j) => j.name === "internal-job")).toBeUndefined();
+      // shared-job should appear only once (no duplicates)
+      const sharedJobCount = result.filter(
+        (j) => j.name === "shared-job",
+      ).length;
+      expect(sharedJobCount).toBe(1);
     });
   });
 });

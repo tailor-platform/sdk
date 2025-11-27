@@ -28,20 +28,15 @@ export class WorkflowJobLoader implements ILoader<WorkflowJob> {
   constructor(private exportName?: string) {}
 
   /**
-   * Job metadata returned from collectAllJobs
-   * - If exportName is defined: job is exported and can be imported directly
-   * - If exportName is undefined: job is accessed via workflow.mainJob
-   */
-  static readonly JobMetadata: unique symbol = Symbol("JobMetadata");
-
-  /**
    * Collect all jobs from workflow configuration
    * This method collects all jobs from files matching the glob pattern,
-   * then traces dependencies from mainJob to validate and filter
+   * then traces dependencies from mainJob to validate and filter.
+   *
+   * All jobs must be named exports - this ensures consistent bundling behavior.
    */
   static async collectAllJobs(
     config: WorkflowServiceConfig,
-  ): Promise<Array<{ name: string; exportName?: string; sourceFile: string }>> {
+  ): Promise<Array<{ name: string; exportName: string; sourceFile: string }>> {
     if (!config.files || config.files.length === 0) {
       return [];
     }
@@ -93,28 +88,24 @@ export class WorkflowJobLoader implements ILoader<WorkflowJob> {
       this.traceJobDependenciesWithObjects(workflow.mainJob, tracedJobs);
     }
 
-    // Step 4: Build mainJob -> workflow source mapping
-    // This allows us to access non-exported mainJobs via workflow.mainJob
-    const mainJobSourceMap = new Map<string, string>();
-    for (const { workflow, sourceFile } of workflowsWithSource) {
-      mainJobSourceMap.set(workflow.mainJob.name, sourceFile);
-    }
-
-    // Step 5: Identify jobs that are used but not exported
-    const internalJobs: string[] = [];
+    // Step 4: Validate all traced jobs are exported
+    const notExportedJobs: string[] = [];
     for (const jobName of tracedJobs.keys()) {
-      if (!allJobsMap.has(jobName) && !mainJobSourceMap.has(jobName)) {
-        // Job is neither exported nor a mainJob - it's a dependency-only job
-        internalJobs.push(jobName);
+      if (!allJobsMap.has(jobName)) {
+        notExportedJobs.push(jobName);
       }
     }
 
-    if (internalJobs.length > 0) {
-      console.log(
-        `ℹ️  Internal jobs (included via deps): ${internalJobs.join(", ")}`,
+    if (notExportedJobs.length > 0) {
+      throw new Error(
+        `The following workflow jobs are used but not exported:\n` +
+          notExportedJobs.map((name) => `  - "${name}"`).join("\n") +
+          `\n\nAll workflow jobs must be named exports. Example:\n` +
+          `  export const myJob = createWorkflowJob({ name: "my-job", ... });`,
       );
     }
 
+    // Step 5: Warn about unused jobs
     const unusedJobs = Array.from(allJobsMap.keys()).filter(
       (jobName) => !tracedJobs.has(jobName),
     );
@@ -124,30 +115,17 @@ export class WorkflowJobLoader implements ILoader<WorkflowJob> {
       );
     }
 
-    // Step 6: Build result - include mainJobs even if not exported
+    // Step 6: Build result from traced jobs
     const result: Array<{
       name: string;
-      exportName?: string;
+      exportName: string;
       sourceFile: string;
     }> = [];
 
     for (const jobName of tracedJobs.keys()) {
       const exportedMetadata = allJobsMap.get(jobName);
-      if (exportedMetadata) {
-        // Job is exported - include with exportName
-        result.push(exportedMetadata);
-      } else {
-        // Job is not exported - check if it's a mainJob (can be accessed via workflow)
-        const workflowSourceFile = mainJobSourceMap.get(jobName);
-        if (workflowSourceFile) {
-          result.push({
-            name: jobName,
-            exportName: undefined, // Will be accessed via workflow.mainJob
-            sourceFile: workflowSourceFile,
-          });
-        }
-        // If not a mainJob either, it's an internal dep - no need to bundle separately
-      }
+      // All jobs are guaranteed to be exported at this point (validated in Step 4)
+      result.push(exportedMetadata!);
     }
 
     return result;
