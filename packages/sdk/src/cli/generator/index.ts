@@ -162,41 +162,41 @@ export class GenerationManager {
         executorResults: {},
       };
 
-      // Process each application
-      for (const [appNamespace, appData] of Object.entries(this.applications)) {
-        this.generatorResults[gen.id].application[appNamespace] = {
-          tailordbResults: {},
-          resolverResults: {},
-          tailordbNamespaceResults: {},
-          resolverNamespaceResults: {},
-        };
+      const appNamespace = this.application.name;
+      const appData = this.applications[appNamespace];
 
-        for (const [namespace, types] of Object.entries(
-          appData.tailordbNamespaces,
-        )) {
-          await this.processTailorDBNamespace(
-            gen,
-            appNamespace,
-            namespace,
-            types,
-          );
-        }
+      this.generatorResults[gen.id].application[appNamespace] = {
+        tailordbResults: {},
+        resolverResults: {},
+        tailordbNamespaceResults: {},
+        resolverNamespaceResults: {},
+      };
 
-        // Process Resolver namespaces
-        for (const [namespace, resolvers] of Object.entries(
-          appData.resolverNamespaces,
-        )) {
-          await this.processResolverNamespace(
-            gen,
-            appNamespace,
-            namespace,
-            resolvers,
-          );
-        }
-
-        // Process Executors
-        await this.processExecutors(gen);
+      for (const [namespace, types] of Object.entries(
+        appData.tailordbNamespaces,
+      )) {
+        await this.processTailorDBNamespace(
+          gen,
+          appNamespace,
+          namespace,
+          types,
+        );
       }
+
+      // Process Resolver namespaces
+      for (const [namespace, resolvers] of Object.entries(
+        appData.resolverNamespaces,
+      )) {
+        await this.processResolverNamespace(
+          gen,
+          appNamespace,
+          namespace,
+          resolvers,
+        );
+      }
+
+      // Process Executors
+      await this.processExecutors(gen);
 
       // Aggregate all results
       await this.aggregate(gen);
@@ -338,47 +338,44 @@ export class GenerationManager {
   }
 
   async aggregate(gen: CodeGenerator) {
-    let input!: GeneratorInput<any, any>;
+    const input: GeneratorInput<any, any> = {
+      tailordb: [],
+      resolver: [],
+    };
 
+    console.log("🔥");
     console.log(JSON.stringify(this.generatorResults[gen.id], null, 2));
+    console.log(this.application.name);
 
-    for (const [_, results] of Object.entries(
-      this.generatorResults[gen.id].application,
+    const results =
+      this.generatorResults[gen.id].application[this.application.name];
+
+    const tailordbResults: TailorDBNamespaceResult<any>[] = [];
+    const resolverResults: ResolverNamespaceResult<any>[] = [];
+
+    // Collect TailorDB namespace results
+    for (const [namespace, types] of Object.entries(
+      results.tailordbNamespaceResults,
     )) {
-      const tailordbResults: TailorDBNamespaceResult<any>[] = [];
-      const resolverResults: ResolverNamespaceResult<any>[] = [];
-
-      // Collect TailorDB namespace results
-      for (const [namespace, types] of Object.entries(
-        results.tailordbNamespaceResults,
-      )) {
-        tailordbResults.push({
-          namespace,
-          types,
-        });
-      }
-
-      // Collect Resolver namespace results
-      for (const [namespace, resolvers] of Object.entries(
-        results.resolverNamespaceResults,
-      )) {
-        resolverResults.push({
-          namespace,
-          resolvers,
-        });
-      }
-
-      input = {
-        tailordb: tailordbResults,
-        resolver: resolverResults,
-      };
-
-      // inputs.push({
-      //   applicationNamespace: appNamespace,
-      //   tailordb: tailordbResults,
-      //   resolver: resolverResults,
-      // });
+      tailordbResults.push({
+        namespace,
+        types,
+      });
     }
+
+    // Collect Resolver namespace results
+    for (const [namespace, resolvers] of Object.entries(
+      results.resolverNamespaceResults,
+    )) {
+      resolverResults.push({
+        namespace,
+        resolvers,
+      });
+    }
+
+    input.tailordb = tailordbResults;
+    input.resolver = resolverResults;
+
     // executor: Object.values(results.executorResults),
 
     // Call generator's aggregate method
