@@ -30,7 +30,7 @@
     "date-fns": "4.1.0"
   },
   "devDependencies": {
-    "@connectrpc/connect": "2.1.0",
+    "@connectrpc/connect": "2.1.1",
     "@connectrpc/connect-node": "2.1.0",
     "@jackchuka/gql-ingest": "2.0.2",
     "@tailor-platform/function-kysely-tailordb": "0.1.3",

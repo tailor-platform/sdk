@@ -70,11 +70,11 @@ importers:
         version: 4.1.0
     devDependencies:
       '@connectrpc/connect':
-        specifier: 2.1.0
-        version: 2.1.0(@bufbuild/protobuf@2.10.1)
+        specifier: 2.1.1
+        version: 2.1.1(@bufbuild/protobuf@2.10.1)
       '@connectrpc/connect-node':
         specifier: 2.1.0
-        version: 2.1.0(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.10.1))
+        version: 2.1.0(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.1))
       '@jackchuka/gql-ingest':
         specifier: 2.0.2
         version: 2.0.2(graphql@16.12.0)
@@ -250,11 +250,11 @@ importers:
         specifier: 2.10.1
         version: 2.10.1
       '@connectrpc/connect':
-        specifier: 2.1.0
-        version: 2.1.0(@bufbuild/protobuf@2.10.1)
+        specifier: 2.1.1
+        version: 2.1.1(@bufbuild/protobuf@2.10.1)
       '@connectrpc/connect-node':
         specifier: 2.1.0
-        version: 2.1.0(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.10.1))
+        version: 2.1.0(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.1))
       '@standard-schema/spec':
         specifier: 1.0.0
         version: 1.0.0
@@ -365,8 +365,8 @@ importers:
         specifier: 2.10.1
         version: 2.10.1
       '@connectrpc/connect':
-        specifier: 2.1.0
-        version: 2.1.0(@bufbuild/protobuf@2.10.1)
+        specifier: 2.1.1
+        version: 2.1.1(@bufbuild/protobuf@2.10.1)
 
 packages:
 
@@ -496,8 +496,8 @@ packages:
       '@bufbuild/protobuf': ^2.7.0
       '@connectrpc/connect': 2.1.0
 
-  '@connectrpc/connect@2.1.0':
-    resolution: {integrity: sha512-xhiwnYlJNHzmFsRw+iSPIwXR/xweTvTw8x5HiwWp10sbVtd4OpOXbRgE7V58xs1EC17fzusF1f5uOAy24OkBuA==}
+  '@connectrpc/connect@2.1.1':
+    resolution: {integrity: sha512-JzhkaTvM73m2K1URT6tv53k2RwngSmCXLZJgK580qNQOXRzZRR/BCMfZw3h+90JpnG6XksP5bYT+cz0rpUzUWQ==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.7.0
 
@@ -3741,12 +3741,12 @@ snapshots:
       picocolors: 1.1.1
       sisteransi: 1.0.5
 
-  '@connectrpc/connect-node@2.1.0(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.10.1))':
+  '@connectrpc/connect-node@2.1.0(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.1))':
     dependencies:
       '@bufbuild/protobuf': 2.10.1
-      '@connectrpc/connect': 2.1.0(@bufbuild/protobuf@2.10.1)
+      '@connectrpc/connect': 2.1.1(@bufbuild/protobuf@2.10.1)
 
-  '@connectrpc/connect@2.1.0(@bufbuild/protobuf@2.10.1)':
+  '@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.1)':
     dependencies:
       '@bufbuild/protobuf': 2.10.1
 
