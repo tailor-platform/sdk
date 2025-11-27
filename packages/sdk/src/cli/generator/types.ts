@@ -39,10 +39,9 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
     CodeGeneratorBase,
     "processType" | "processResolver" | "processExecutor" | "aggregate"
   > {
-  // Individual processing (receives application, service type, and namespace information)
+  // Individual processing (receives service type and namespace information)
   processType(args: {
     type: ParsedTailorDBType;
-    // applicationNamespace: string;
     namespace: string;
     source: {
       filePath: string;
@@ -52,7 +51,6 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
 
   processResolver(args: {
     resolver: Resolver;
-    // applicationNamespace: string;
     namespace: string;
   }): R | Promise<R>;
 
@@ -60,13 +58,11 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
 
   // Aggregation processing per namespace (optional, per service type)
   processTailorDBNamespace?(args: {
-    // applicationNamespace: string;
     namespace: string;
     types: Record<string, T>;
   }): Ts | Promise<Ts>;
 
   processResolverNamespace?(args: {
-    // applicationNamespace: string;
     namespace: string;
     resolvers: Record<string, R>;
   }): Rs | Promise<Rs>;

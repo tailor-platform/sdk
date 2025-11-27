@@ -223,7 +223,6 @@ export class GenerationManager {
         try {
           results.tailordbResults[namespace][typeName] = await gen.processType({
             type,
-            // applicationNamespace: appNamespace,
             namespace,
             source: typeInfo.sourceInfo[typeName],
           });
@@ -246,7 +245,6 @@ export class GenerationManager {
       try {
         results.tailordbNamespaceResults[namespace] =
           await gen.processTailorDBNamespace({
-            // applicationNamespace: appNamespace,
             namespace,
             types: results.tailordbResults[namespace],
           });
@@ -280,7 +278,6 @@ export class GenerationManager {
           results.resolverResults[namespace][resolverName] =
             await gen.processResolver({
               resolver,
-              // applicationNamespace: appNamespace,
               namespace,
             });
         } catch (error) {
@@ -302,7 +299,6 @@ export class GenerationManager {
       try {
         results.resolverNamespaceResults[namespace] =
           await gen.processResolverNamespace({
-            // applicationNamespace: appNamespace,
             namespace,
             resolvers: results.resolverResults[namespace],
           });
@@ -344,7 +340,6 @@ export class GenerationManager {
   async aggregate(gen: CodeGenerator) {
     let input!: GeneratorInput<any, any>;
 
-    console.log("🔥");
     console.log(JSON.stringify(this.generatorResults[gen.id], null, 2));
 
     for (const [_, results] of Object.entries(
