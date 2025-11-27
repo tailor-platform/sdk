@@ -98,7 +98,8 @@ export async function loadAndCollectJobs(
       `The following workflow jobs are used but not exported:\n` +
         notExportedJobs.map((name) => `  - "${name}"`).join("\n") +
         `\n\nAll workflow jobs must be named exports. Example:\n` +
-        `  export const myJob = createWorkflowJob({ name: "my-job", ... });`,
+        `  export const myJob = createWorkflowJob({ name: "my-job", ... });\n\n` +
+        `Also ensure that files containing job exports are included in the workflow.files glob pattern.`,
     );
   }
 
