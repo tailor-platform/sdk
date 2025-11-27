@@ -1,5 +1,18 @@
 # @tailor-platform/sdk
 
+## 0.11.0
+
+### Minor Changes
+
+- [#50](https://github.com/tailor-platform/sdk/pull/50) [`7c325c7`](https://github.com/tailor-platform/sdk/commit/7c325c7b6fc1d9d07585a960d1b64994eafb7fc4) Thanks [@toiroakr](https://github.com/toiroakr)! - Add workflow service support
+  - Add `createWorkflow()` and `createWorkflowJob()` APIs for orchestrating multiple jobs
+  - Support job dependencies via `deps` array with type-safe access (hyphen names converted to underscores)
+  - Workflow must be default exported, all jobs must be named exports
+
+### Patch Changes
+
+- [#26](https://github.com/tailor-platform/sdk/pull/26) [`7e6701b`](https://github.com/tailor-platform/sdk/commit/7e6701b9d9c8b3df10d4e4e6788aadd28dd69d42) Thanks [@riku99](https://github.com/riku99)! - Add automated bundle size tracking with octocov
+
 ## 0.10.4
 
 ### Patch Changes
