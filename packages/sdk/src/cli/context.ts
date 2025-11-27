@@ -6,7 +6,7 @@ import { consola } from "consola";
 import ml from "multiline-ts";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import { refreshToken } from "./client";
+import { initOAuth2Client } from "./client";
 
 const pfConfigSchema = z.object({
   version: z.literal(1),
@@ -227,16 +227,19 @@ export async function fetchLatestToken(
     return tokens.access_token;
   }
 
-  const resp = await refreshToken(tokens.refresh_token);
-  const newExpiresAt = new Date();
-  newExpiresAt.setSeconds(newExpiresAt.getSeconds() + resp.expires_in);
+  const client = initOAuth2Client();
+  const resp = await client.refreshToken({
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    expiresAt: Date.parse(tokens.token_expires_at),
+  });
   config.users[user] = {
-    access_token: resp.access_token,
-    refresh_token: resp.refresh_token,
-    token_expires_at: newExpiresAt.toISOString(),
+    access_token: resp.accessToken,
+    refresh_token: resp.refreshToken!,
+    token_expires_at: new Date(resp.expiresAt!).toISOString(),
   };
   writePlatformConfig(config);
-  return resp.access_token;
+  return resp.accessToken;
 }
 
 // Load config path from command options or environment variables.
