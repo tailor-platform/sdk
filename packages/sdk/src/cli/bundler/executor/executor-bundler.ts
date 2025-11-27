@@ -61,10 +61,8 @@ export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
   }
 
   const outputDir = path.resolve(getDistDir(), "executors");
-  const entryDir = path.resolve(getDistDir(), "executor-entry");
 
   fs.mkdirSync(outputDir, { recursive: true });
-  fs.mkdirSync(entryDir, { recursive: true });
 
   let tsconfig: string | undefined;
   try {
@@ -76,7 +74,7 @@ export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
   // Process each executor
   await Promise.all(
     executors.map((executor) =>
-      bundleSingleExecutor(executor, entryDir, outputDir, tsconfig),
+      bundleSingleExecutor(executor, outputDir, tsconfig),
     ),
   );
 
@@ -85,12 +83,11 @@ export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
 
 async function bundleSingleExecutor(
   executor: ExecutorInfo,
-  entryDir: string,
   outputDir: string,
   tsconfig: string | undefined,
 ): Promise<void> {
   // Step 1: Create entry file that imports and extracts operation.body
-  const entryPath = path.join(entryDir, `${executor.name}.js`);
+  const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
   const absoluteSourcePath = path
     .resolve(executor.sourceFile)
     .replace(/\\/g, "/");

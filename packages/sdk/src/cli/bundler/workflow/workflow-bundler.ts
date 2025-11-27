@@ -31,10 +31,8 @@ export async function bundleWorkflowJobs(allJobs: JobInfo[]): Promise<void> {
   console.log(`Found ${allJobs.length} files for service "workflow-job"`);
 
   const outputDir = path.resolve(getDistDir(), "workflow-jobs");
-  const entryDir = path.resolve(getDistDir(), "workflow-jobs-entry");
 
   fs.mkdirSync(outputDir, { recursive: true });
-  fs.mkdirSync(entryDir, { recursive: true });
 
   let tsconfig: string | undefined;
   try {
@@ -45,9 +43,7 @@ export async function bundleWorkflowJobs(allJobs: JobInfo[]): Promise<void> {
 
   // Process each job
   await Promise.all(
-    allJobs.map((job) =>
-      bundleSingleJob(job, allJobs, entryDir, outputDir, tsconfig),
-    ),
+    allJobs.map((job) => bundleSingleJob(job, allJobs, outputDir, tsconfig)),
   );
 
   console.log('Successfully bundled files for service "workflow-job"');
@@ -56,7 +52,6 @@ export async function bundleWorkflowJobs(allJobs: JobInfo[]): Promise<void> {
 async function bundleSingleJob(
   job: JobInfo,
   allJobs: JobInfo[],
-  entryDir: string,
   outputDir: string,
   tsconfig: string | undefined,
 ): Promise<void> {
@@ -65,7 +60,7 @@ async function bundleSingleJob(
   const jobsObject = generateJobsObject(depsJobNames);
 
   // Step 2: Create entry file that imports job by named export
-  const entryPath = path.join(entryDir, `${job.name}.js`);
+  const entryPath = path.join(outputDir, `${job.name}.entry.js`);
   const absoluteSourcePath = path.resolve(job.sourceFile).replace(/\\/g, "/");
 
   const entryContent = ml /* js */ `

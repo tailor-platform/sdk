@@ -50,11 +50,9 @@ export async function bundleResolvers(
     });
   }
 
-  const outputDir = path.resolve(getDistDir(), "functions");
-  const entryDir = path.resolve(getDistDir(), "resolver-entry");
+  const outputDir = path.resolve(getDistDir(), "resolvers");
 
   fs.mkdirSync(outputDir, { recursive: true });
-  fs.mkdirSync(entryDir, { recursive: true });
 
   let tsconfig: string | undefined;
   try {
@@ -66,7 +64,7 @@ export async function bundleResolvers(
   // Process each resolver
   await Promise.all(
     resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, entryDir, outputDir, tsconfig),
+      bundleSingleResolver(resolver, outputDir, tsconfig),
     ),
   );
 
@@ -75,12 +73,11 @@ export async function bundleResolvers(
 
 async function bundleSingleResolver(
   resolver: ResolverInfo,
-  entryDir: string,
   outputDir: string,
   tsconfig: string | undefined,
 ): Promise<void> {
   // Step 1: Create entry file that imports from the original source
-  const entryPath = path.join(entryDir, `${resolver.name}__body.js`);
+  const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
   const absoluteSourcePath = path
     .resolve(resolver.sourceFile)
     .replace(/\\/g, "/");
@@ -116,7 +113,7 @@ async function bundleSingleResolver(
   fs.writeFileSync(entryPath, entryContent);
 
   // Step 2: Bundle with tree-shaking
-  const outputPath = path.join(outputDir, `${resolver.name}__body.js`);
+  const outputPath = path.join(outputDir, `${resolver.name}.js`);
 
   await rolldown.build(
     rolldown.defineConfig({
