@@ -8,7 +8,6 @@ import {
   parsePATFormat,
   patFormatArgs,
   printCreatedToken,
-  validatePATName,
 } from "./transform";
 
 export const updateCommand = defineCommand({
@@ -32,7 +31,6 @@ export const updateCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    validatePATName(args.name);
     const format = parsePATFormat(args.format);
     const config = readPlatformConfig();
 

@@ -3,22 +3,6 @@ import ml from "multiline-ts";
 import { z } from "zod";
 import type { PersonalAccessToken } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
-// Server validation pattern: ^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$
-// This requires minimum 3 characters (start + middle(1-61) + end)
-const PAT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
-
-export function validatePATName(name: string): void {
-  if (!PAT_NAME_PATTERN.test(name)) {
-    throw new Error(ml`
-      Token name "${name}" is invalid.
-      Name must:
-        - Be 3-63 characters long
-        - Start and end with a lowercase letter or number
-        - Only contain lowercase letters, numbers, and hyphens
-    `);
-  }
-}
-
 export interface PersonalAccessTokenInfo {
   name: string;
   scopes: string[];
