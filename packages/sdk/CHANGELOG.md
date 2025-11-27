@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 0.11.2
+
+### Patch Changes
+
+- [#59](https://github.com/tailor-platform/sdk/pull/59) [`c1e926d`](https://github.com/tailor-platform/sdk/commit/c1e926d61c8d2f73b36133f8b8c67f7617455d80) Thanks [@remiposo](https://github.com/remiposo)! - Added the remove command
+
+  Added the remove command to delete all managed resources.
+
+  ```bash
+  tailor-sdk remove [options]
+  ```
+
+  **Options:**
+  - `-w, --workspace-id` - ID of the workspace to remove resources from
+  - `-p, --profile` - Workspace profile to use
+  - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+  - `-y, --yes` - Skip confirmation prompt
+
 ## 0.11.1
 
 ### Patch Changes
