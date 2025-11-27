@@ -10,6 +10,7 @@ import { logoutCommand } from "./logout";
 import { machineuserCommand } from "./machineuser";
 import { readPackageJson } from "./package-json";
 import { profileCommand } from "./profile";
+import { removeCommand } from "./remove";
 import { showCommand } from "./show";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
@@ -35,6 +36,7 @@ const mainCommand = defineCommand({
     logout: logoutCommand,
     machineuser: machineuserCommand,
     profile: profileCommand,
+    remove: removeCommand,
     show: showCommand,
     tailordb: tailordbCommand,
     user: userCommand,
