@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 0.10.3
+
+### Patch Changes
+
+- [#40](https://github.com/tailor-platform/sdk/pull/40) [`314543f`](https://github.com/tailor-platform/sdk/commit/314543fc8edeefff944f024a52a89142646329b4) Thanks [@IzumiSy](https://github.com/IzumiSy)! - Export types that `db.type` function uses internally.
+
+  This enables users to bundle Tailor DB type definition as an independent package without using forced type assertion using `any`.
+
 ## 0.10.2
 
 ### Patch Changes
