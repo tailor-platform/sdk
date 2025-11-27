@@ -1,6 +1,9 @@
 export * from "./auth";
 export {
   db,
+  type TailorDBType,
+  type TailorDBField,
+  type TailorDBInstance,
   type PermissionCondition,
   type TailorTypePermission,
   type TailorTypeGqlPermission,
