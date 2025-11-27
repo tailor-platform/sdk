@@ -41,7 +41,7 @@ interface Replacement {
 }
 
 /**
- * Check if a module source is from @tailor-platform/sdk (including subpaths)
+ * Check if a module source is from \@tailor-platform/sdk (including subpaths)
  */
 function isTailorSdkSource(source: string): boolean {
   return /^@tailor-platform\/sdk(\/|$)/.test(source);
@@ -95,7 +95,7 @@ function unwrapAwait(
 }
 
 /**
- * Collect all import bindings for createWorkflowJob from @tailor-platform/sdk
+ * Collect all import bindings for createWorkflowJob from \@tailor-platform/sdk
  * Returns a Set of local names that refer to createWorkflowJob
  */
 function collectCreateWorkflowJobBindings(program: Program): Set<string> {
@@ -298,7 +298,7 @@ function findProperty(
 }
 
 /**
- * Find all workflow jobs by detecting createWorkflowJob calls from @tailor-platform/sdk
+ * Find all workflow jobs by detecting createWorkflowJob calls from \@tailor-platform/sdk
  */
 export function findAllJobs(
   program: Program,
