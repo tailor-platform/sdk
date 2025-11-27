@@ -9,7 +9,7 @@ import { fetchUserInfo, initOAuth2Client } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
 
 const redirectPort = 8085;
-const redirectUri = `http://tailorctl.tailor.tech:${redirectPort}/callback`;
+const redirectUri = `http://localhost:${redirectPort}/callback`;
 
 function randomState() {
   return crypto.randomBytes(32).toString("base64url");

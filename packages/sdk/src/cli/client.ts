@@ -15,15 +15,15 @@ import { readPackageJson } from "./package-json";
 export const platformBaseUrl =
   process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
-const oauth2ClientId = "cpoc_6X8NTyohCX1PMRilxSsmJ9CVh8ZNmH5B";
+const oauth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint =
   "/.well-known/oauth-authorization-server/oauth2/platform";
 
 export function initOAuth2Client() {
   return new OAuth2Client({
+    clientId: oauth2ClientId,
     server: platformBaseUrl,
     discoveryEndpoint: oauth2DiscoveryEndpoint,
-    clientId: oauth2ClientId,
   });
 }
 
