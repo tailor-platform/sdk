@@ -71,6 +71,21 @@ tailor-sdk apply [options]
 - `-d, --dryRun` - Run the command without making any changes
 - `-y, --yes` - Skip confirmation prompt
 
+### remove
+
+Remove all resources managed by the application from the workspace.
+
+```bash
+tailor-sdk remove [options]
+```
+
+**Options:**
+
+- `-w, --workspace-id` - ID of the workspace to remove resources from
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-y, --yes` - Skip confirmation prompt
+
 ### show
 
 Show information about the deployed application.
