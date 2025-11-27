@@ -107,17 +107,16 @@ export async function planApplication({
     }
   });
 
-  if (
-    forRemoval &&
-    existingApplications.some((app) => app.name === application.name)
-  ) {
-    changeSet.deletes.push({
-      name: application.name,
-      request: {
-        workspaceId,
-        applicationName: application.name,
-      },
-    });
+  if (forRemoval) {
+    if (existingApplications.some((app) => app.name === application.name)) {
+      changeSet.deletes.push({
+        name: application.name,
+        request: {
+          workspaceId,
+          applicationName: application.name,
+        },
+      });
+    }
     changeSet.print();
     return changeSet;
   }

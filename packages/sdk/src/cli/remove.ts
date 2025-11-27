@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import { defineApplication } from "@/cli/application";
+import { type Application, defineApplication } from "@/cli/application";
 import { type PlanContext } from "@/cli/apply";
 import {
   applyApplication,
@@ -17,25 +17,17 @@ import {
 } from "@/cli/apply/services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig } from "@/cli/config-loader";
-import { commonArgs, withCommonArgs } from "../args";
-import { initOperatorClient } from "../client";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+import { commonArgs, withCommonArgs } from "./args";
+import { initOperatorClient, type OperatorClient } from "./client";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "./context";
 
 export interface RemoveOptions {
   workspaceId?: string;
   profile?: string;
   configPath?: string;
-  yes?: boolean;
 }
 
-export async function remove(options?: RemoveOptions) {
-  // Load and validate options
-  const configPath = loadConfigPath(options?.configPath);
-  const { config } = await loadConfig(configPath);
-  const yes = options?.yes ?? false;
-  const appName = config.name;
-
-  // Initialize client
+async function loadOptions(options?: RemoveOptions) {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options?.profile,
@@ -45,12 +37,22 @@ export async function remove(options?: RemoveOptions) {
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });
-
-  console.log(`Planning removal of resources managed by "${appName}"...\n`);
-
-  // Create application context
+  const configPath = loadConfigPath(options?.configPath);
+  const { config } = await loadConfig(configPath);
   const application = defineApplication(config);
+  return {
+    client,
+    workspaceId,
+    application,
+  };
+}
 
+async function execRemove(
+  client: OperatorClient,
+  workspaceId: string,
+  application: Application,
+  confirm?: () => Promise<void>,
+) {
   // Plan all resources with forRemoval=true
   const ctx: PlanContext = {
     client,
@@ -66,20 +68,21 @@ export async function remove(options?: RemoveOptions) {
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
 
+  if (
+    tailorDB.changeSet.service.deletes.length === 0 &&
+    staticWebsite.changeSet.deletes.length === 0 &&
+    idp.changeSet.service.deletes.length === 0 &&
+    auth.changeSet.service.deletes.length === 0 &&
+    pipeline.changeSet.service.deletes.length === 0 &&
+    app.deletes.length === 0 &&
+    executor.changeSet.deletes.length === 0
+  ) {
+    return;
+  }
+
   // Confirm deletion
-  if (!yes) {
-    const confirmed = await consola.prompt(
-      "Are you sure you want to remove all resources?",
-      { type: "confirm", initial: false },
-    );
-    if (!confirmed) {
-      throw new Error(ml`
-        Remove cancelled. No resources were deleted.
-        To override, run again and confirm, or use --yes flag.
-      `);
-    }
-  } else {
-    consola.success("Removing all resources (--yes flag specified)...");
+  if (confirm) {
+    await confirm();
   }
 
   // Apply deletions in reverse order of dependencies
@@ -90,10 +93,11 @@ export async function remove(options?: RemoveOptions) {
   await applyIdP(client, idp, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
   await applyTailorDB(client, tailorDB, "delete");
+}
 
-  consola.success(
-    `Successfully removed all resources managed by "${appName}".`,
-  );
+export async function remove(options?: RemoveOptions): Promise<void> {
+  const { client, workspaceId, application } = await loadOptions(options);
+  await execRemove(client, workspaceId, application);
 }
 
 export const removeCommand = defineCommand({
@@ -105,12 +109,12 @@ export const removeCommand = defineCommand({
     ...commonArgs,
     "workspace-id": {
       type: "string",
-      description: "ID of the workspace to remove resources from",
+      description: "Workspace ID",
       alias: "w",
     },
     profile: {
       type: "string",
-      description: "Workspace profile to use",
+      description: "Workspace profile",
       alias: "p",
     },
     config: {
@@ -121,16 +125,41 @@ export const removeCommand = defineCommand({
     },
     yes: {
       type: "boolean",
-      description: "Skip all confirmation prompts",
+      description: "Skip confirmation prompt",
       alias: "y",
+      default: false,
     },
   },
   run: withCommonArgs(async (args) => {
-    await remove({
+    const { client, workspaceId, application } = await loadOptions({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      yes: args.yes,
     });
+
+    console.log(
+      `Planning removal of resources managed by "${application.name}"...\n`,
+    );
+
+    await execRemove(client, workspaceId, application, async () => {
+      if (!args.yes) {
+        const confirmed = await consola.prompt(
+          "Are you sure you want to remove all resources?",
+          { type: "confirm", initial: false },
+        );
+        if (!confirmed) {
+          throw new Error(ml`
+        Remove cancelled. No resources were deleted.
+        To override, run again and confirm, or use --yes flag.
+      `);
+        }
+      } else {
+        consola.success("Removing all resources (--yes flag specified)...");
+      }
+    });
+
+    consola.success(
+      `Successfully removed all resources managed by "${application.name}".`,
+    );
   }),
 });

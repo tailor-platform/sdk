@@ -15,6 +15,7 @@ export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
 
 export { show, type ShowOptions, type ApplicationInfo } from "./show";
+export { remove, type RemoveOptions } from "./remove";
 export {
   workspaceCreate,
   type WorkspaceCreateOptions,
