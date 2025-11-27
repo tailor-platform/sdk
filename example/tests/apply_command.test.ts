@@ -13,30 +13,45 @@ describe("pnpm apply command integration tests", () => {
   const expectedGeneratedFilesWithContent = ["db.ts"] as const;
   const expectedGeneratedFiles = [
     "db.ts",
-    "executor_steps/user-created.js",
+    // Executor bundler creates entry files (.entry.js) in same directory as output files
+    "executors/user-created.entry.js",
     "executors/user-created.js",
     "executors/user-created.js.map",
-    "executors/user-created.transformed.js",
-    "functions/add__body.js",
-    "functions/add__body.js.map",
-    "functions/env__body.js",
-    "functions/env__body.js.map",
-    "functions/passThrough__body.js",
-    "functions/passThrough__body.js.map",
-    "functions/showUserInfo__body.js",
-    "functions/showUserInfo__body.js.map",
-    "functions/stepChain__body.js",
-    "functions/stepChain__body.js.map",
+    // Resolver bundler creates entry files (.entry.js) in same directory as output files
+    "resolvers/add.entry.js",
     "resolvers/add.js",
-    "resolvers/add.transformed.js",
+    "resolvers/add.js.map",
+    "resolvers/env.entry.js",
     "resolvers/env.js",
-    "resolvers/env.transformed.js",
+    "resolvers/env.js.map",
+    "resolvers/passThrough.entry.js",
     "resolvers/passThrough.js",
-    "resolvers/passThrough.transformed.js",
+    "resolvers/passThrough.js.map",
+    "resolvers/showUserInfo.entry.js",
     "resolvers/showUserInfo.js",
-    "resolvers/showUserInfo.transformed.js",
+    "resolvers/showUserInfo.js.map",
+    "resolvers/stepChain.entry.js",
     "resolvers/stepChain.js",
-    "resolvers/stepChain.transformed.js",
+    "resolvers/stepChain.js.map",
+    // Workflow bundler creates entry files (.entry.js) in same directory as output files
+    "workflow-jobs/check-inventory.entry.js",
+    "workflow-jobs/check-inventory.js",
+    "workflow-jobs/check-inventory.js.map",
+    "workflow-jobs/fetch-customer.entry.js",
+    "workflow-jobs/fetch-customer.js",
+    "workflow-jobs/fetch-customer.js.map",
+    "workflow-jobs/process-order.entry.js",
+    "workflow-jobs/process-order.js",
+    "workflow-jobs/process-order.js.map",
+    "workflow-jobs/process-payment.entry.js",
+    "workflow-jobs/process-payment.js",
+    "workflow-jobs/process-payment.js.map",
+    "workflow-jobs/send-notification.entry.js",
+    "workflow-jobs/send-notification.js",
+    "workflow-jobs/send-notification.js.map",
+    "workflow-jobs/validate-order.entry.js",
+    "workflow-jobs/validate-order.js",
+    "workflow-jobs/validate-order.js.map",
   ] as const;
 
   const collectGeneratedFiles = (rootDir: string): string[] => {
@@ -97,6 +112,14 @@ describe("pnpm apply command integration tests", () => {
           query: string,
           params?: unknown[],
         ): Promise<{ rows: unknown[] }> | { rows: unknown[] };
+      };
+    };
+    tailor?: {
+      workflow: {
+        triggerJobFunction: (
+          jobName: string,
+          args: unknown,
+        ) => Promise<unknown>;
       };
     };
   };
@@ -185,9 +208,16 @@ describe("pnpm apply command integration tests", () => {
     const sizeBuffer = 1024 * 10; // 10KB
     const maxSizes: Record<string, number> = {
       "executors/user-created.js": 162223 + sizeBuffer,
-      "functions/add__body.js": 4504 + sizeBuffer,
-      "functions/showUserInfo__body.js": 4588 + sizeBuffer,
-      "functions/stepChain__body.js": 176907 + sizeBuffer,
+      "resolvers/add.js": 4504 + sizeBuffer,
+      "resolvers/showUserInfo.js": 4588 + sizeBuffer,
+      "resolvers/stepChain.js": 176907 + sizeBuffer,
+      // workflow-jobs: Kysely jobs (~160KB), date-fns jobs (~28KB), simple jobs (~9KB)
+      "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 160819 + sizeBuffer,
+      "workflow-jobs/process-order.js": 8755 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 160816 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 28162 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 8554 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {
@@ -203,15 +233,15 @@ describe("pnpm apply command integration tests", () => {
   });
 
   describe("validation", () => {
-    test("functions/add__body.js validates input correctly - valid values", async () => {
-      const main = await importActualMain("functions/add__body.js");
+    test("resolvers/add.js validates input correctly - valid values", async () => {
+      const main = await importActualMain("resolvers/add.js");
 
       // Valid values: both a and b are >= 0 and < 10
       await expect(main({ input: { a: 4, b: 6 } })).resolves.not.toThrow();
     });
 
-    test("functions/add__body.js validates input correctly - negative value throws error with correct message", async () => {
-      const main = await importActualMain("functions/add__body.js");
+    test("resolvers/add.js validates input correctly - negative value throws error with correct message", async () => {
+      const main = await importActualMain("resolvers/add.js");
 
       // Invalid: a is negative (fails validation: value >= 0)
       await expect(main({ input: { a: -1, b: 5 } })).rejects.toThrow(
@@ -219,8 +249,8 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/add__body.js validates input correctly - value >= 10 throws error with correct message", async () => {
-      const main = await importActualMain("functions/add__body.js");
+    test("resolvers/add.js validates input correctly - value >= 10 throws error with correct message", async () => {
+      const main = await importActualMain("resolvers/add.js");
 
       // Invalid: a is >= 10 (fails validation: value < 10)
       await expect(main({ input: { a: 10, b: 5 } })).rejects.toThrow(
@@ -228,8 +258,8 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/add__body.js validates input correctly - b negative throws error with correct message", async () => {
-      const main = await importActualMain("functions/add__body.js");
+    test("resolvers/add.js validates input correctly - b negative throws error with correct message", async () => {
+      const main = await importActualMain("resolvers/add.js");
 
       // Invalid: b is negative
       await expect(main({ input: { a: 5, b: -2 } })).rejects.toThrow(
@@ -237,8 +267,8 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/add__body.js validates input correctly - b >= 10 throws error with correct message", async () => {
-      const main = await importActualMain("functions/add__body.js");
+    test("resolvers/add.js validates input correctly - b >= 10 throws error with correct message", async () => {
+      const main = await importActualMain("resolvers/add.js");
 
       // Invalid: b is >= 10
       await expect(main({ input: { a: 5, b: 15 } })).rejects.toThrow(
@@ -246,8 +276,8 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/add__body.js validates input correctly - multiple fields with errors show all errors", async () => {
-      const main = await importActualMain("functions/add__body.js");
+    test("resolvers/add.js validates input correctly - multiple fields with errors show all errors", async () => {
+      const main = await importActualMain("resolvers/add.js");
 
       // Invalid: both a and b are negative
       await expect(main({ input: { a: -1, b: -2 } })).rejects.toThrow(
@@ -259,8 +289,8 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/add__body.js validates input correctly - multiple validation errors per field", async () => {
-      const main = await importActualMain("functions/add__body.js");
+    test("resolvers/add.js validates input correctly - multiple validation errors per field", async () => {
+      const main = await importActualMain("resolvers/add.js");
 
       // Invalid: both a and b are >= 10
       await expect(main({ input: { a: 10, b: 15 } })).rejects.toThrow(
@@ -272,7 +302,7 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/stepChain__body.js validates nested fields - valid values", async () => {
+    test("resolvers/stepChain.js validates nested fields - valid values", async () => {
       setupTailordbMock((query) => {
         if (typeof query === "string") {
           const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
@@ -283,7 +313,7 @@ describe("pnpm apply command integration tests", () => {
         return [];
       });
 
-      const main = await importActualMain("functions/stepChain__body.js");
+      const main = await importActualMain("resolvers/stepChain.js");
 
       // Valid nested values: first and last names are both >= 2 characters
       await expect(
@@ -303,8 +333,8 @@ describe("pnpm apply command integration tests", () => {
       ).resolves.not.toThrow();
     });
 
-    test("functions/stepChain__body.js validates nested fields - invalid first name", async () => {
-      const main = await importActualMain("functions/stepChain__body.js");
+    test("resolvers/stepChain.js validates nested fields - invalid first name", async () => {
+      const main = await importActualMain("resolvers/stepChain.js");
 
       // Invalid: first name is too short (< 2 characters)
       await expect(
@@ -326,8 +356,8 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/stepChain__body.js validates nested fields - invalid last name", async () => {
-      const main = await importActualMain("functions/stepChain__body.js");
+    test("resolvers/stepChain.js validates nested fields - invalid last name", async () => {
+      const main = await importActualMain("resolvers/stepChain.js");
 
       // Invalid: last name is too short (< 2 characters)
       await expect(
@@ -349,8 +379,8 @@ describe("pnpm apply command integration tests", () => {
       );
     });
 
-    test("functions/stepChain__body.js validates nested fields - multiple nested fields invalid", async () => {
-      const main = await importActualMain("functions/stepChain__body.js");
+    test("resolvers/stepChain.js validates nested fields - multiple nested fields invalid", async () => {
+      const main = await importActualMain("resolvers/stepChain.js");
 
       // Invalid: both first and last names are too short
       await expect(
@@ -379,14 +409,14 @@ describe("pnpm apply command integration tests", () => {
 
   describe("globalThis.main test", () => {
     describe("resolvers", () => {
-      test("functions/add__body.js returns the sum of inputs", async () => {
-        const main = await importActualMain("functions/add__body.js");
+      test("resolvers/add.js returns the sum of inputs", async () => {
+        const main = await importActualMain("resolvers/add.js");
         const result = await main({ input: { a: 4, b: 6 } });
         expect(result).toEqual(10);
       });
 
-      test("functions/showUserInfo__body.js returns user information", async () => {
-        const main = await importActualMain("functions/showUserInfo__body.js");
+      test("resolvers/showUserInfo.js returns user information", async () => {
+        const main = await importActualMain("resolvers/showUserInfo.js");
         const payload = {
           user: {
             id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
@@ -404,7 +434,7 @@ describe("pnpm apply command integration tests", () => {
         });
       });
 
-      test("functions/stepChain__body.js returns result with summary", async () => {
+      test("resolvers/stepChain.js returns result with summary", async () => {
         setupTailordbMock((query) => {
           if (typeof query === "string") {
             const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
@@ -422,7 +452,7 @@ describe("pnpm apply command integration tests", () => {
           return [];
         });
 
-        const main = await importActualMain("functions/stepChain__body.js");
+        const main = await importActualMain("resolvers/stepChain.js");
         const result = await main({
           input: {
             user: {
@@ -474,6 +504,103 @@ describe("pnpm apply command integration tests", () => {
           { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
         ]);
         expect(createdClients).toMatchObject([{ namespace: "tailordb" }]);
+      });
+    });
+
+    describe("workflow-jobs", () => {
+      type JobHandler = (
+        jobName: string,
+        args: unknown,
+      ) => Promise<unknown> | unknown;
+
+      const setupWorkflowMock = (
+        handler: JobHandler,
+      ): { triggeredJobs: { jobName: string; args: unknown }[] } => {
+        const triggeredJobs: { jobName: string; args: unknown }[] = [];
+
+        GlobalThis.tailor = {
+          workflow: {
+            triggerJobFunction: async (jobName: string, args: unknown) => {
+              triggeredJobs.push({ jobName, args });
+              return handler(jobName, args);
+            },
+          },
+        } as typeof GlobalThis.tailor;
+
+        return { triggeredJobs };
+      };
+
+      test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
+        const { triggeredJobs } = setupWorkflowMock((jobName, args) => {
+          if (jobName === "fetch-customer") {
+            const { customerId } = args as { customerId: string };
+            return { id: customerId, email: "customer@example.com" };
+          }
+          if (jobName === "send-notification") {
+            return { sent: true, timestamp: "2025-01-01 12:00:00" };
+          }
+          return null;
+        });
+
+        const main = await importActualMain("workflow-jobs/process-order.js");
+        const result = await main({
+          orderId: "order-123",
+          customerId: "customer-456",
+        });
+
+        expect(result).toEqual({
+          orderId: "order-123",
+          customerId: "customer-456",
+          customerEmail: "customer@example.com",
+          notificationSent: true,
+          processedAt: "2025-01-01 12:00:00",
+        });
+
+        expect(triggeredJobs).toEqual([
+          { jobName: "fetch-customer", args: { customerId: "customer-456" } },
+          {
+            jobName: "send-notification",
+            args: {
+              message: "Your order order-123 is being processed",
+              recipient: "customer@example.com",
+            },
+          },
+        ]);
+      });
+
+      test("workflow-jobs/process-order.js throws error when customer not found", async () => {
+        setupWorkflowMock((jobName) => {
+          if (jobName === "fetch-customer") {
+            return null; // Customer not found
+          }
+          return null;
+        });
+
+        const main = await importActualMain("workflow-jobs/process-order.js");
+
+        await expect(
+          main({
+            orderId: "order-123",
+            customerId: "non-existent",
+          }),
+        ).rejects.toThrow("Customer non-existent not found");
+      });
+
+      test("workflow-jobs/send-notification.js executes correctly", async () => {
+        const main = await importActualMain(
+          "workflow-jobs/send-notification.js",
+        );
+        const result = await main({
+          message: "Test message",
+          recipient: "test@example.com",
+        });
+
+        expect(result).toMatchObject({
+          sent: true,
+          timestamp: expect.stringMatching(
+            /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+          ),
+        });
       });
     });
   });

@@ -10,5 +10,6 @@ export {
 } from "./tailordb";
 export * from "./resolver";
 export * from "./executor";
+export * from "./workflow";
 export * from "./staticwebsite";
 export * from "./idp";

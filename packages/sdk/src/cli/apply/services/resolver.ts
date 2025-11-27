@@ -381,8 +381,8 @@ function processResolver(
   // Read body function code
   const functionPath = path.join(
     getDistDir(),
-    "functions",
-    `${resolver.name}__body.js`,
+    "resolvers",
+    `${resolver.name}.js`,
   );
   let functionCode = "";
   try {

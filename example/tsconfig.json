@@ -8,5 +8,11 @@
     "types": ["node", "@tailor-platform/function-types"]
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "generated-perf", "scripts/perf"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "generated-perf",
+    "scripts/perf",
+    "tests/fixtures"
+  ]
 }

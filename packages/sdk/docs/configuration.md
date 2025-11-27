@@ -41,6 +41,9 @@ export default defineConfig({
   executor: {
     files: ["executors/**/*.ts"],
   },
+  workflow: {
+    files: ["workflows/**/*.ts"],
+  },
 });
 ```
 
@@ -161,3 +164,20 @@ body: ({ newRecord, env }) => {
   console.log(`Environment: ${env.bar}, User: ${newRecord.name}`);
 };
 ```
+
+### Workflow Service
+
+Configure Workflow service by specifying glob patterns for workflow files:
+
+```typescript
+export default defineConfig({
+  workflow: {
+    files: ["workflows/**/*.ts"],
+    ignores: ["workflows/**/*.draft.ts"],
+  },
+});
+```
+
+**files**: Glob patterns to match workflow files. Required.
+
+**ignores**: Glob patterns to exclude files. Optional.
