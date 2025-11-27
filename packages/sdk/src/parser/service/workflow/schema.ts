@@ -11,5 +11,5 @@ export const WorkflowJobSchema = z.object({
 
 export const WorkflowSchema = z.object({
   name: z.string(),
-  mainJob: z.lazy(() => WorkflowJobSchema),
+  mainJob: WorkflowJobSchema,
 });
