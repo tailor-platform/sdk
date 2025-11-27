@@ -2,7 +2,7 @@ import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
 import type { ExecutorInput } from "@/parser/service/executor/types";
 
-type Executor<Args, O extends Operation<Args>> = Omit<
+export type Executor<Args, O extends Operation<Args>> = Omit<
   ExecutorInput,
   "trigger" | "operation"
 > & {
@@ -12,7 +12,7 @@ type Executor<Args, O extends Operation<Args>> = Omit<
 
 export function createExecutor<Args, O extends Operation<Args>>(
   config: Executor<Args, O>,
-) {
+): Executor<Args, O> {
   if (config.operation.kind === "graphql") {
     config.operation.query = config.operation.query.toString();
   }
