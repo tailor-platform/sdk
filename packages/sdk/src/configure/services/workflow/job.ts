@@ -1,11 +1,19 @@
-import type { CamelCase } from "type-fest";
-
 /**
  * Symbol used to brand WorkflowJob objects created by createWorkflowJob.
  * This enables reliable runtime detection of workflow jobs regardless of
  * how they were imported or assigned (variable reassignment, destructuring, etc.)
  */
 export const WORKFLOW_JOB_BRAND = Symbol.for("tailor:workflow-job");
+
+/**
+ * Replace hyphens and spaces with underscores in a string type.
+ * This matches the runtime behavior of `jobName.replace(/[-\s]/g, "_")`.
+ */
+type ReplaceWithUnderscore<S extends string> = S extends `${infer A}-${infer B}`
+  ? ReplaceWithUnderscore<`${A}_${B}`>
+  : S extends `${infer A} ${infer B}`
+    ? ReplaceWithUnderscore<`${A}_${B}`>
+    : S;
 
 type JobsFromDeps<
   Deps extends readonly WorkflowJob<any, any, any, any>[],
@@ -18,7 +26,7 @@ type JobsFromDeps<
     ? JobsFromDeps<Rest, Set> // Skip duplicate jobs
     : First extends WorkflowJob<infer N, infer I, infer O, infer NestedDeps>
       ? {
-          [K in CamelCase<N>]: [I] extends [undefined]
+          [K in ReplaceWithUnderscore<N>]: [I] extends [undefined]
             ? () => Promise<O>
             : (input: I) => Promise<O>;
         } & (NestedDeps extends []

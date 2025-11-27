@@ -24,8 +24,8 @@ export const validate_order = createWorkflowJob({
   deps: [check_inventory, process_payment],
   body: async (input: { orderId: string }, jobs) => {
     console.log("Order ID:", input.orderId);
-    const inventoryResult = await jobs.checkInventory();
-    const paymentResult = await jobs.processPayment();
+    const inventoryResult = await jobs.check_inventory();
+    const paymentResult = await jobs.process_payment();
     return { inventoryResult, paymentResult };
   },
 });

@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { styleText } from "node:util";
-import { camelize } from "inflection";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -155,8 +154,8 @@ function generateJobsObject(jobNames: string[]): string {
   }
   return jobNames
     .map((jobName) => {
-      const camelCaseName = camelize(jobName.replace(/-/g, "_"), true);
-      return `"${camelCaseName}": (args) => tailor.workflow.triggerJobFunction("${jobName}", args)`;
+      const snakeCaseName = jobName.replace(/[-\s]/g, "_");
+      return `"${snakeCaseName}": (args) => tailor.workflow.triggerJobFunction("${jobName}", args)`;
     })
     .join(",\n        ");
 }

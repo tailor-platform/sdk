@@ -95,7 +95,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
      - Job names must be unique across the entire project
      - Every workflow must specify a `mainJob`
    - Jobs can depend on other jobs via `deps` array
-   - Dependent jobs are accessed via camelCase names in body function (e.g., "fetch-customer" → `jobs.fetchCustomer()`)
+   - Dependent jobs are accessed with hyphens replaced by underscores in body function (e.g., "fetch-customer" → `jobs.fetch_customer()`)
 
 5. **Static Websites** (`src/configure/services/staticwebsite/`)
    - Define static website configurations using `defineStaticWebSite()`
@@ -397,8 +397,8 @@ export const processData = createWorkflowJob({
   name: "process-data",
   deps: [fetchData],
   body: async (input: { id: string }, jobs) => {
-    // Dependent jobs accessed via camelCase: "fetch-data" -> jobs.fetchData()
-    const data = await jobs.fetchData({ id: input.id });
+    // Dependent jobs accessed with hyphens replaced by underscores: "fetch-data" -> jobs.fetch_data()
+    const data = await jobs.fetch_data({ id: input.id });
     return { processed: true, data };
   },
 });

@@ -544,7 +544,7 @@ export const fetchCustomer = createWorkflowJob({
 
 #### Job Dependencies
 
-Jobs can depend on other jobs using the `deps` array. Dependent jobs are accessible via the second argument of `body` function with camelCase names:
+Jobs can depend on other jobs using the `deps` array. Dependent jobs are accessible via the second argument of `body` function with hyphens replaced by underscores:
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -556,12 +556,14 @@ export const processOrder = createWorkflowJob({
   name: "process-order",
   deps: [fetchCustomer, sendNotification],
   body: async (input: { orderId: string; customerId: string }, jobs) => {
-    // Access dependent jobs via camelCase names
-    // "fetch-customer" -> jobs.fetchCustomer()
-    // "send-notification" -> jobs.sendNotification()
-    const customer = await jobs.fetchCustomer({ customerId: input.customerId });
+    // Access dependent jobs with hyphens replaced by underscores
+    // "fetch-customer" -> jobs.fetch_customer()
+    // "send-notification" -> jobs.send_notification()
+    const customer = await jobs.fetch_customer({
+      customerId: input.customerId,
+    });
 
-    const notification = await jobs.sendNotification({
+    const notification = await jobs.send_notification({
       message: `Order ${input.orderId} is being processed`,
       recipient: customer.email,
     });

@@ -9,14 +9,16 @@ export const processOrder = createWorkflowJob({
   deps: [fetchCustomer, sendNotification],
   body: async (input: { orderId: string; customerId: string }, jobs) => {
     // Fetch customer information
-    const customer = await jobs.fetchCustomer({ customerId: input.customerId });
+    const customer = await jobs.fetch_customer({
+      customerId: input.customerId,
+    });
 
     if (!customer) {
       throw new Error(`Customer ${input.customerId} not found`);
     }
 
     // Send notification to customer
-    const notification = await jobs.sendNotification({
+    const notification = await jobs.send_notification({
       message: `Your order ${input.orderId} is being processed`,
       recipient: customer.email,
     });
