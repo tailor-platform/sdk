@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { WorkflowJobLoader } from "./job-loader";
+import { collectAllJobs } from "./job-loader";
 import type { WorkflowServiceConfig } from "@/configure/services/workflow/types";
 
-describe("WorkflowJobLoader", () => {
+describe("collectAllJobs", () => {
   let tempDir: string;
 
   beforeEach(() => {
@@ -22,15 +22,14 @@ describe("WorkflowJobLoader", () => {
     vi.restoreAllMocks();
   });
 
-  describe("collectAllJobs", () => {
-    it("should detect duplicate job names and throw error", async () => {
-      // Create two files with the same job name
-      const file1 = path.join(tempDir, "job1.ts");
-      const file2 = path.join(tempDir, "job2.ts");
+  it("should detect duplicate job names and throw error", async () => {
+    // Create two files with the same job name
+    const file1 = path.join(tempDir, "job1.ts");
+    const file2 = path.join(tempDir, "job2.ts");
 
-      fs.writeFileSync(
-        file1,
-        `
+    fs.writeFileSync(
+      file1,
+      `
         import { createWorkflowJob } from "@tailor-platform/sdk";
 
         export const myJob = createWorkflowJob({
@@ -38,11 +37,11 @@ describe("WorkflowJobLoader", () => {
           body: () => "first",
         });
       `,
-      );
+    );
 
-      fs.writeFileSync(
-        file2,
-        `
+    fs.writeFileSync(
+      file2,
+      `
         import { createWorkflowJob } from "@tailor-platform/sdk";
 
         export const anotherJob = createWorkflowJob({
@@ -50,39 +49,39 @@ describe("WorkflowJobLoader", () => {
           body: () => "second",
         });
       `,
-      );
+    );
 
-      const config: WorkflowServiceConfig = {
-        files: [path.join(tempDir, "*.ts")],
-      };
+    const config: WorkflowServiceConfig = {
+      files: [path.join(tempDir, "*.ts")],
+    };
 
-      await expect(WorkflowJobLoader.collectAllJobs(config)).rejects.toThrow(
-        /Duplicate job name "duplicate-name"/,
-      );
-    });
+    await expect(collectAllJobs(config)).rejects.toThrow(
+      /Duplicate job name "duplicate-name"/,
+    );
+  });
 
-    it("should return empty array when no files configured", async () => {
-      const config: WorkflowServiceConfig = {
-        files: [],
-      };
+  it("should return empty array when no files configured", async () => {
+    const config: WorkflowServiceConfig = {
+      files: [],
+    };
 
-      const result = await WorkflowJobLoader.collectAllJobs(config);
-      expect(result).toEqual([]);
-    });
+    const result = await collectAllJobs(config);
+    expect(result).toEqual([]);
+  });
 
-    it("should return empty array when files is undefined", async () => {
-      const config = {} as WorkflowServiceConfig;
+  it("should return empty array when files is undefined", async () => {
+    const config = {} as WorkflowServiceConfig;
 
-      const result = await WorkflowJobLoader.collectAllJobs(config);
-      expect(result).toEqual([]);
-    });
+    const result = await collectAllJobs(config);
+    expect(result).toEqual([]);
+  });
 
-    it("should extract jobs from workflow files using AST detection", async () => {
-      // Create a workflow file (contains createWorkflow)
-      const workflowFile = path.join(tempDir, "my-workflow.ts");
-      fs.writeFileSync(
-        workflowFile,
-        `
+  it("should extract jobs from workflow files using AST detection", async () => {
+    // Create a workflow file (contains createWorkflow)
+    const workflowFile = path.join(tempDir, "my-workflow.ts");
+    fs.writeFileSync(
+      workflowFile,
+      `
         import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
         export const processData = createWorkflowJob({
@@ -95,13 +94,13 @@ describe("WorkflowJobLoader", () => {
           mainJob: processData,
         });
       `,
-      );
+    );
 
-      // Create a standalone job file (no createWorkflow)
-      const jobFile = path.join(tempDir, "standalone-job.ts");
-      fs.writeFileSync(
-        jobFile,
-        `
+    // Create a standalone job file (no createWorkflow)
+    const jobFile = path.join(tempDir, "standalone-job.ts");
+    fs.writeFileSync(
+      jobFile,
+      `
         import { createWorkflowJob } from "@tailor-platform/sdk";
 
         export const unusedJob = createWorkflowJob({
@@ -109,25 +108,25 @@ describe("WorkflowJobLoader", () => {
           body: () => "unused",
         });
       `,
-      );
+    );
 
-      const config: WorkflowServiceConfig = {
-        files: [path.join(tempDir, "*.ts")],
-      };
+    const config: WorkflowServiceConfig = {
+      files: [path.join(tempDir, "*.ts")],
+    };
 
-      // Note: This test verifies the AST detection is used.
-      // The workflow file should be detected by createWorkflow call, not filename.
-      const result = await WorkflowJobLoader.collectAllJobs(config);
+    // Note: This test verifies the AST detection is used.
+    // The workflow file should be detected by createWorkflow call, not filename.
+    const result = await collectAllJobs(config);
 
-      // process-data should be included as it's used by the workflow
-      expect(result.find((j) => j.name === "process-data")).toBeDefined();
-    });
+    // process-data should be included as it's used by the workflow
+    expect(result.find((j) => j.name === "process-data")).toBeDefined();
+  });
 
-    it("should throw error when job is used via deps but not exported", async () => {
-      const workflowFile = path.join(tempDir, "workflow-with-internal.ts");
-      fs.writeFileSync(
-        workflowFile,
-        `
+  it("should throw error when job is used via deps but not exported", async () => {
+    const workflowFile = path.join(tempDir, "workflow-with-internal.ts");
+    fs.writeFileSync(
+      workflowFile,
+      `
         import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
         // Internal job - not exported (this should cause an error)
@@ -148,27 +147,25 @@ describe("WorkflowJobLoader", () => {
           mainJob: mainJob,
         });
       `,
-      );
+    );
 
-      const config: WorkflowServiceConfig = {
-        files: [path.join(tempDir, "*.ts")],
-      };
+    const config: WorkflowServiceConfig = {
+      files: [path.join(tempDir, "*.ts")],
+    };
 
-      // Should throw error - all jobs must be named exports
-      await expect(WorkflowJobLoader.collectAllJobs(config)).rejects.toThrow(
-        /The following workflow jobs are used but not exported/,
-      );
-      await expect(WorkflowJobLoader.collectAllJobs(config)).rejects.toThrow(
-        /"internal-job"/,
-      );
-    });
+    // Should throw error - all jobs must be named exports
+    await expect(collectAllJobs(config)).rejects.toThrow(
+      /The following workflow jobs are used but not exported/,
+    );
+    await expect(collectAllJobs(config)).rejects.toThrow(/"internal-job"/);
+  });
 
-    it("should handle shared job referenced by multiple workflows", async () => {
-      // Create a shared job file
-      const sharedJobFile = path.join(tempDir, "shared-job.ts");
-      fs.writeFileSync(
-        sharedJobFile,
-        `
+  it("should handle shared job referenced by multiple workflows", async () => {
+    // Create a shared job file
+    const sharedJobFile = path.join(tempDir, "shared-job.ts");
+    fs.writeFileSync(
+      sharedJobFile,
+      `
         import { createWorkflowJob } from "@tailor-platform/sdk";
 
         export const sharedJob = createWorkflowJob({
@@ -176,13 +173,13 @@ describe("WorkflowJobLoader", () => {
           body: () => "shared result",
         });
       `,
-      );
+    );
 
-      // Create first workflow that uses the shared job
-      const workflow1File = path.join(tempDir, "workflow1.ts");
-      fs.writeFileSync(
-        workflow1File,
-        `
+    // Create first workflow that uses the shared job
+    const workflow1File = path.join(tempDir, "workflow1.ts");
+    fs.writeFileSync(
+      workflow1File,
+      `
         import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
         import { sharedJob } from "./shared-job";
 
@@ -200,13 +197,13 @@ describe("WorkflowJobLoader", () => {
           mainJob: workflow1Main,
         });
       `,
-      );
+    );
 
-      // Create second workflow that also uses the shared job
-      const workflow2File = path.join(tempDir, "workflow2.ts");
-      fs.writeFileSync(
-        workflow2File,
-        `
+    // Create second workflow that also uses the shared job
+    const workflow2File = path.join(tempDir, "workflow2.ts");
+    fs.writeFileSync(
+      workflow2File,
+      `
         import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
         import { sharedJob } from "./shared-job";
 
@@ -224,25 +221,22 @@ describe("WorkflowJobLoader", () => {
           mainJob: workflow2Main,
         });
       `,
-      );
+    );
 
-      const config: WorkflowServiceConfig = {
-        files: [path.join(tempDir, "*.ts")],
-      };
+    const config: WorkflowServiceConfig = {
+      files: [path.join(tempDir, "*.ts")],
+    };
 
-      // Should not throw error - shared jobs are valid
-      const result = await WorkflowJobLoader.collectAllJobs(config);
+    // Should not throw error - shared jobs are valid
+    const result = await collectAllJobs(config);
 
-      // All three jobs should be included
-      expect(result.find((j) => j.name === "shared-job")).toBeDefined();
-      expect(result.find((j) => j.name === "workflow1-main")).toBeDefined();
-      expect(result.find((j) => j.name === "workflow2-main")).toBeDefined();
+    // All three jobs should be included
+    expect(result.find((j) => j.name === "shared-job")).toBeDefined();
+    expect(result.find((j) => j.name === "workflow1-main")).toBeDefined();
+    expect(result.find((j) => j.name === "workflow2-main")).toBeDefined();
 
-      // shared-job should appear only once (no duplicates)
-      const sharedJobCount = result.filter(
-        (j) => j.name === "shared-job",
-      ).length;
-      expect(sharedJobCount).toBe(1);
-    });
+    // shared-job should appear only once (no duplicates)
+    const sharedJobCount = result.filter((j) => j.name === "shared-job").length;
+    expect(sharedJobCount).toBe(1);
   });
 });

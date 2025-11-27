@@ -1,9 +1,9 @@
 import { defineCommand } from "citty";
 import { defineApplication } from "@/cli/application";
-import { ExecutorBundler } from "@/cli/bundler/executor/executor-bundler";
-import { ResolverBundler } from "@/cli/bundler/resolver/resolver-bundler";
-import { WorkflowJobLoader } from "@/cli/bundler/workflow/job-loader";
-import { WorkflowBundler } from "@/cli/bundler/workflow/workflow-bundler";
+import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
+import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
+import { collectAllJobs } from "@/cli/bundler/workflow/job-loader";
+import { bundleWorkflowJobs } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
@@ -201,22 +201,19 @@ export async function apply(options?: ApplyOptions) {
 }
 
 async function buildPipeline(namespace: string, config: FileLoadConfig) {
-  const bundler = new ResolverBundler(namespace, config);
-  await bundler.bundle();
+  await bundleResolvers(namespace, config);
 }
 
 async function buildExecutor(config: FileLoadConfig) {
-  const bundler = new ExecutorBundler(config);
-  await bundler.bundle();
+  await bundleExecutors(config);
 }
 
 async function buildWorkflow(config: WorkflowServiceConfig) {
   // Collect all jobs from workflow files and job files using the loader
-  const allJobs = await WorkflowJobLoader.collectAllJobs(config);
+  const allJobs = await collectAllJobs(config);
 
-  // Use the new simplified workflow bundler
-  const bundler = new WorkflowBundler(allJobs);
-  await bundler.bundle();
+  // Use the workflow bundler
+  await bundleWorkflowJobs(allJobs);
 }
 
 export const applyCommand = defineCommand({
