@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { styleText } from "node:util";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -30,21 +31,32 @@ export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
     );
   }
 
-  console.log(`Found ${files.length} files for service "executor"`);
+  console.log("");
+  console.log(
+    "Bundling",
+    styleText("cyanBright", files.length.toString()),
+    "files for",
+    styleText("cyan", '"executor"'),
+  );
 
   // Load all executors and filter to function/jobFunction only
   const executors: ExecutorInfo[] = [];
   for (const file of files) {
     const executor = await loadExecutor(file);
     if (!executor) {
-      console.log(`Skipping file ${file} as it could not be loaded`);
+      console.log(
+        styleText("dim", `  Skipping: ${file} (could not be loaded)`),
+      );
       continue;
     }
 
     // Only bundle function and jobFunction executors
     if (!["function", "jobFunction"].includes(executor.operation.kind)) {
       console.log(
-        `Skipping executor ${executor.name} as it is not a function/jobFunction executor`,
+        styleText(
+          "dim",
+          `  Skipping: ${executor.name} (not a function executor)`,
+        ),
       );
       continue;
     }
@@ -56,7 +68,7 @@ export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
   }
 
   if (executors.length === 0) {
-    console.log("No function/jobFunction executors to bundle");
+    console.log(styleText("dim", "  No function executors to bundle"));
     return;
   }
 
@@ -78,7 +90,7 @@ export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
     ),
   );
 
-  console.log('Successfully bundled files for service "executor"');
+  console.log(styleText("green", "Bundled"), styleText("cyan", '"executor"'));
 }
 
 async function bundleSingleExecutor(

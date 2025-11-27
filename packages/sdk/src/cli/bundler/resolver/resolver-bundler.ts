@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { styleText } from "node:util";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -34,14 +35,22 @@ export async function bundleResolvers(
     );
   }
 
-  console.log(`Found ${files.length} files for service "${namespace}"`);
+  console.log("");
+  console.log(
+    "Bundling",
+    styleText("cyanBright", files.length.toString()),
+    "files for",
+    styleText("cyan", `"${namespace}"`),
+  );
 
   // Load all resolvers to get their names
   const resolvers: ResolverInfo[] = [];
   for (const file of files) {
     const resolver = await loadResolver(file);
     if (!resolver) {
-      console.log(`Skipping file ${file} as it could not be loaded`);
+      console.log(
+        styleText("dim", `  Skipping: ${file} (could not be loaded)`),
+      );
       continue;
     }
     resolvers.push({
@@ -68,7 +77,10 @@ export async function bundleResolvers(
     ),
   );
 
-  console.log(`Successfully bundled files for service "${namespace}"`);
+  console.log(
+    styleText("green", "Bundled"),
+    styleText("cyan", `"${namespace}"`),
+  );
 }
 
 async function bundleSingleResolver(

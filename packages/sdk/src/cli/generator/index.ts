@@ -124,7 +124,7 @@ export class GenerationManager {
     });
 
     // Workflow services
-    await this.application.workflowService?.loadWorkflows();
+    await this.application.workflowService?.loadAndCollectJobs();
 
     await this.processGenerators();
   }

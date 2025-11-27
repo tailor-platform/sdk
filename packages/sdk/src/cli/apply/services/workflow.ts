@@ -153,7 +153,8 @@ export async function planWorkflow(
   // Load all available scripts once
   const allScripts = await loadWorkflowScripts();
 
-  const workflows = (await application.workflowService?.loadWorkflows()) ?? {};
+  // Use already loaded workflows (loaded by loadAndCollectJobs in apply)
+  const workflows = application.workflowService?.getWorkflows() ?? {};
   for (const workflow of Object.values(workflows)) {
     // Get only the jobs needed for this specific workflow
     const requiredJobNames = collectJobNamesFromWorkflow(workflow);

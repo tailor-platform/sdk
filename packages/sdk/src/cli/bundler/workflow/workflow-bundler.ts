@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { styleText } from "node:util";
 import { camelize } from "inflection";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
@@ -24,11 +25,17 @@ interface JobInfo {
  */
 export async function bundleWorkflowJobs(allJobs: JobInfo[]): Promise<void> {
   if (allJobs.length === 0) {
-    console.log("No workflow jobs to bundle");
+    console.log(styleText("dim", "No workflow jobs to bundle"));
     return;
   }
 
-  console.log(`Found ${allJobs.length} files for service "workflow-job"`);
+  console.log("");
+  console.log(
+    "Bundling",
+    styleText("cyanBright", allJobs.length.toString()),
+    "files for",
+    styleText("cyan", '"workflow-job"'),
+  );
 
   const outputDir = path.resolve(getDistDir(), "workflow-jobs");
 
@@ -46,7 +53,10 @@ export async function bundleWorkflowJobs(allJobs: JobInfo[]): Promise<void> {
     allJobs.map((job) => bundleSingleJob(job, allJobs, outputDir, tsconfig)),
   );
 
-  console.log('Successfully bundled files for service "workflow-job"');
+  console.log(
+    styleText("green", "Bundled"),
+    styleText("cyan", '"workflow-job"'),
+  );
 }
 
 async function bundleSingleJob(

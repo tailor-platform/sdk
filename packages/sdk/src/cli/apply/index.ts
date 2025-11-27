@@ -2,7 +2,6 @@ import { defineCommand } from "citty";
 import { defineApplication } from "@/cli/application";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
-import { collectAllJobs } from "@/cli/bundler/workflow/job-loader";
 import { bundleWorkflowJobs } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
@@ -30,8 +29,8 @@ import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
+import type { CollectedJob } from "@/cli/application/workflow/service";
 import type { OperatorClient } from "@/cli/client";
-import type { WorkflowServiceConfig } from "@/configure/services/workflow/types";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -64,7 +63,15 @@ export async function apply(options?: ApplyOptions) {
   await generateUserTypes(config, configPath);
   const application = defineApplication(config);
 
-  // Build functions
+  // Load files first (before building)
+  // Load workflows first and collect jobs for bundling
+  let collectedJobs: CollectedJob[] = [];
+  if (application.workflowService) {
+    const { jobs } = await application.workflowService.loadAndCollectJobs();
+    collectedJobs = jobs;
+  }
+
+  // Build functions (using already loaded data)
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
       await buildPipeline(pipeline.namespace, pipeline.config);
@@ -73,8 +80,8 @@ export async function apply(options?: ApplyOptions) {
   if (application.executorService) {
     await buildExecutor(application.executorService.config);
   }
-  if (application.workflowService) {
-    await buildWorkflow(application.workflowService.config);
+  if (collectedJobs.length > 0) {
+    await buildWorkflow(collectedJobs);
   }
   if (buildOnly) return;
 
@@ -89,7 +96,8 @@ export async function apply(options?: ApplyOptions) {
     profile: options?.profile,
   });
 
-  // Load files
+  // Load remaining files and print logs
+  // Order: TailorDB → Resolver → Executor → Workflow
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
   }
@@ -99,6 +107,8 @@ export async function apply(options?: ApplyOptions) {
   if (application.executorService) {
     await application.executorService.loadExecutors();
   }
+  // Print workflow loading logs last (workflows were already loaded for bundling)
+  application.workflowService?.printLoadedWorkflows();
   console.log("");
 
   // Phase 1: Plan
@@ -208,12 +218,9 @@ async function buildExecutor(config: FileLoadConfig) {
   await bundleExecutors(config);
 }
 
-async function buildWorkflow(config: WorkflowServiceConfig) {
-  // Collect all jobs from workflow files and job files using the loader
-  const allJobs = await collectAllJobs(config);
-
-  // Use the workflow bundler
-  await bundleWorkflowJobs(allJobs);
+async function buildWorkflow(collectedJobs: CollectedJob[]) {
+  // Use the workflow bundler with already collected jobs
+  await bundleWorkflowJobs(collectedJobs);
 }
 
 export const applyCommand = defineCommand({
