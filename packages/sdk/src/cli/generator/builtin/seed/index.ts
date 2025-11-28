@@ -6,6 +6,10 @@ import {
 } from "@/cli/generator/types";
 import { processGqlIngest } from "./gql-ingest-processor";
 import {
+  processIdpUser,
+  generateIdpUserSchemaFile,
+} from "./idp-user-processor";
+import {
   processLinesDb,
   generateLinesDbSchemaFile,
 } from "./lines-db-processor";
@@ -131,6 +135,49 @@ export function createSeedGenerator(options: {
           files.push({
             path: schemaOutputPath,
             content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
+          });
+        }
+      }
+
+      // Generate IdP user files if BuiltInIdP is configured
+      if (input.auth) {
+        const idpUser = processIdpUser(input.auth);
+        if (idpUser) {
+          const outputBaseDir = options.distPath;
+          if (!(outputBaseDir in entityDependencies)) {
+            entityDependencies[outputBaseDir] = {};
+          }
+
+          // Add _User to entityDependencies
+          entityDependencies[outputBaseDir][idpUser.name] =
+            idpUser.dependencies;
+
+          // Generate GraphQL mutation file
+          files.push({
+            path: path.join(outputBaseDir, idpUser.mapping.graphqlFile),
+            content: idpUser.graphql,
+          });
+
+          // Generate mapping file
+          files.push({
+            path: path.join(outputBaseDir, "mappings", `${idpUser.name}.json`),
+            content: JSON.stringify(idpUser.mapping, null, 2) + "\n",
+          });
+
+          // Generate empty JSONL data file
+          files.push({
+            path: path.join(outputBaseDir, idpUser.mapping.dataFile),
+            content: "",
+            skipIfExists: true,
+          });
+
+          // Generate schema file with foreign key
+          files.push({
+            path: path.join(outputBaseDir, "data", `${idpUser.name}.schema.ts`),
+            content: generateIdpUserSchemaFile(
+              idpUser.schema.usernameField,
+              idpUser.schema.userTypeName,
+            ),
           });
         }
       }

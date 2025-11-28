@@ -10,3 +10,4 @@ entityDependencies:
   User: []
   UserSetting: [User]
   Event: []
+  _User: [User]
