@@ -14,6 +14,7 @@ import { removeCommand } from "./remove";
 import { showCommand } from "./show";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
+import { vaultCommand } from "./vault";
 import { workspaceCommand } from "./workspace";
 
 register("tsx", import.meta.url, { data: {} });
@@ -41,6 +42,7 @@ const mainCommand = defineCommand({
     tailordb: tailordbCommand,
     user: userCommand,
     workspace: workspaceCommand,
+    vault: vaultCommand,
   },
 });
 

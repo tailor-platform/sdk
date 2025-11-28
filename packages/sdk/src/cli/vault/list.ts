@@ -1,0 +1,92 @@
+import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { defineCommand } from "citty";
+import {
+  commonArgs,
+  formatArgs,
+  parseFormat,
+  printWithFormat,
+  withCommonArgs,
+} from "../args";
+import { fetchAll, initOperatorClient } from "../client";
+import { loadAccessToken, loadWorkspaceId } from "../context";
+import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
+
+export interface VaultListOptions {
+  workspaceId?: string;
+  profile?: string;
+}
+
+export interface VaultInfo {
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function vaultInfo(vault: SecretManagerVault): VaultInfo {
+  return {
+    name: vault.name,
+    createdAt: vault.createTime
+      ? timestampDate(vault.createTime).toISOString()
+      : "N/A",
+    updatedAt: vault.updateTime
+      ? timestampDate(vault.updateTime).toISOString()
+      : "N/A",
+  };
+}
+
+export async function vaultList(
+  options?: VaultListOptions,
+): Promise<VaultInfo[]> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options?.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options?.workspaceId,
+    profile: options?.profile,
+  });
+
+  const vaults = await fetchAll(async (pageToken) => {
+    const { vaults, nextPageToken } = await client.listSecretManagerVaults({
+      workspaceId,
+      pageToken,
+    });
+    return [vaults, nextPageToken];
+  });
+
+  console.log(vaults);
+
+  return vaults.map(vaultInfo);
+}
+
+export const listCommand = defineCommand({
+  meta: {
+    name: "list",
+    description: "List Secret Manager vaults",
+  },
+  args: {
+    ...commonArgs,
+    ...formatArgs,
+    "workspace-id": {
+      type: "string",
+      description: "Workspace ID",
+      alias: "w",
+    },
+    profile: {
+      type: "string",
+      description: "Workspace profile",
+      alias: "p",
+    },
+  },
+  run: withCommonArgs(async (args) => {
+    const format = parseFormat(args.format);
+
+    const vaults = await vaultList({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+    });
+
+    printWithFormat(vaults, format);
+  }),
+});
