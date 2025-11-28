@@ -6,6 +6,8 @@ export const user = db
     role: db.enum("USER", "ADMIN"),
     ...db.fields.timestamps(),
   })
+  // NOTE: This permits all operations for simplicity.
+  // In production, configure proper permissions based on your requirements.
   .permission({
     create: [{ conditions: [], permit: true }],
     read: [{ conditions: [], permit: true }],
