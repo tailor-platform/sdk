@@ -10,6 +10,7 @@ export default defineConfig([
     "tests/fixtures/",
     "generated-perf",
     "scripts/perf",
+    "seed",
   ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,

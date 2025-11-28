@@ -15,7 +15,7 @@
     "test:e2e": "vitest --project e2e",
     "seed:validate": "lines-db validate ./seed/data",
     "seed:truncate": "tailor-sdk tailordb truncate -a",
-    "seed": "./seed/exec.sh",
+    "seed": "node ./seed/exec.mjs",
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix --quiet",

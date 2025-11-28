@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import ml from "multiline-ts";
 import {
   type CodeGenerator,
   type GeneratorResult,
@@ -18,18 +19,28 @@ export const SeedGeneratorID = "@tailor-platform/seed";
  * Combines GraphQL Ingest and lines-db schema generation.
  */
 /**
- * Generates the exec.sh script content
+ * Generates the exec.mjs script content (Node.js executable)
  */
 function generateExecScript(
   machineUserName: string,
   configDir: string,
 ): string {
-  return /* sh */ `#!/usr/bin/env bash
+  return ml /* js */ `
+    import { execSync } from "node:child_process";
 
-ENDPOINT="$(pnpm exec tailor-sdk show -f json | jq -r '.url' || true)/query"
-HEADER="{ \\"Authorization\\": \\"Bearer $(pnpm exec tailor-sdk machineuser token "${machineUserName}" -f json | jq -r '.access_token' || true)\\" }"
-gql-ingest -c ${configDir} -e "\${ENDPOINT}" --headers "\${HEADER}"
-`;
+    function run(command) {
+      return execSync(command, { encoding: "utf-8" }).trim();
+    }
+
+    const showOutput = JSON.parse(run("pnpm exec tailor-sdk show -f json"));
+    const endpoint = \`\${showOutput.url}/query\`;
+
+    const tokenOutput = JSON.parse(run("pnpm exec tailor-sdk machineuser token ${machineUserName} -f json"));
+    const headers = JSON.stringify({ Authorization: \`Bearer \${tokenOutput.access_token}\` });
+
+    execSync(\`gql-ingest -c ${configDir} -e "\${endpoint}" --headers '\${headers}'\`, { stdio: "inherit" });
+
+    `;
 }
 
 export function createSeedGenerator(options: {
@@ -137,15 +148,14 @@ export function createSeedGenerator(options: {
 `,
         });
 
-        // Generate exec.sh if machineUserName is provided
+        // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
           files.push({
-            path: path.join(outputDir, "exec.sh"),
+            path: path.join(outputDir, "exec.mjs"),
             content: generateExecScript(
               options.machineUserName,
               path.basename(outputDir),
             ),
-            executable: true,
           });
         }
       }
