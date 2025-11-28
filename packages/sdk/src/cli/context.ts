@@ -245,11 +245,13 @@ export async function fetchLatestToken(
 // Load config path from command options or environment variables.
 // Priority: opts/config > env/config > default("tailor.config.ts")
 export function loadConfigPath(configPath?: string): string {
+  let relativePath;
   if (configPath) {
-    return configPath;
+    relativePath = configPath;
+  } else if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
+    relativePath = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
+  } else {
+    relativePath = "tailor.config.ts";
   }
-  if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
-    return process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
-  }
-  return "tailor.config.ts";
+  return path.resolve(process.cwd(), relativePath);
 }

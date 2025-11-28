@@ -30,6 +30,7 @@ export class Application {
   constructor(
     public readonly name: string,
     public readonly config: AppConfig,
+    private configPath: string,
   ) {
     this._env = config.env || {};
   }
@@ -85,7 +86,11 @@ export class Application {
 
     for (const [namespace, serviceConfig] of Object.entries(config)) {
       if (!("external" in serviceConfig)) {
-        const tailorDB = new TailorDBService(namespace, serviceConfig);
+        const tailorDB = new TailorDBService(
+          namespace,
+          serviceConfig,
+          this.configPath,
+        );
         this._tailorDBServices.push(tailorDB);
       }
       this.addSubgraph("tailordb", namespace);
@@ -99,7 +104,11 @@ export class Application {
 
     for (const [namespace, serviceConfig] of Object.entries(config)) {
       if (!("external" in serviceConfig)) {
-        const resolverService = new ResolverService(namespace, serviceConfig);
+        const resolverService = new ResolverService(
+          namespace,
+          serviceConfig,
+          this.configPath,
+        );
         this._resolverServices.push(resolverService);
       }
       this.addSubgraph("pipeline", namespace);
@@ -142,7 +151,7 @@ export class Application {
     if (!config) {
       return;
     }
-    this._executorService = new ExecutorService(config);
+    this._executorService = new ExecutorService(config, this.configPath);
   }
 
   defineWorkflow(config?: WorkflowServiceConfig) {
@@ -167,8 +176,8 @@ export class Application {
   }
 }
 
-export function defineApplication(config: AppConfig) {
-  const app = new Application(config.name, config);
+export function defineApplication(config: AppConfig, configPath: string) {
+  const app = new Application(config.name, config, configPath);
   app.defineTailorDB(config.db);
   app.defineResolver(config.resolver);
   app.defineIdp(config.idp);

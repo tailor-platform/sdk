@@ -112,7 +112,11 @@ describe("GenerationManager", () => {
       auth: { namespace: "test-auth" },
     } as any;
 
-    manager = new GenerationManager(mockConfig, [new TestGenerator()] as any);
+    manager = new GenerationManager(
+      mockConfig,
+      [new TestGenerator()] as any,
+      process.cwd(),
+    );
   });
 
   afterEach(() => {
@@ -148,6 +152,7 @@ describe("GenerationManager", () => {
       const managerWithKysely = new GenerationManager(
         mockConfig as any,
         [kyselyGen] as any,
+        process.cwd(),
       );
       expect(
         (managerWithKysely as any).generators.some(
@@ -172,7 +177,11 @@ describe("GenerationManager", () => {
         ...mockConfig,
         name: "multi-app",
       };
-      const multiAppManager = new GenerationManager(multiAppConfig, []);
+      const multiAppManager = new GenerationManager(
+        multiAppConfig,
+        [],
+        process.cwd(),
+      );
 
       await multiAppManager.generate(false);
       expect(multiAppManager.application.applications.length).toBeGreaterThan(
@@ -186,7 +195,11 @@ describe("GenerationManager", () => {
       const types = {
         testType: db.type("TestType", {}),
       };
-      const service = new TailorDBService("test-namespace", { files: [] });
+      const service = new TailorDBService(
+        "test-namespace",
+        { files: [] },
+        process.cwd(),
+      );
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
@@ -268,7 +281,11 @@ describe("GenerationManager", () => {
       const types = {
         testType: db.type("TestType", {}),
       };
-      const service = new TailorDBService("test-namespace", { files: [] });
+      const service = new TailorDBService(
+        "test-namespace",
+        { files: [] },
+        process.cwd(),
+      );
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
@@ -356,7 +373,11 @@ describe("GenerationManager", () => {
         type3: db.type("Type3", {}),
       };
 
-      const service = new TailorDBService("test-namespace", { files: [] });
+      const service = new TailorDBService(
+        "test-namespace",
+        { files: [] },
+        process.cwd(),
+      );
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
@@ -403,7 +424,11 @@ describe("GenerationManager", () => {
         TestType: db.type("TestType", {}),
       };
 
-      const service = new TailorDBService("test-namespace", { files: [] });
+      const service = new TailorDBService(
+        "test-namespace",
+        { files: [] },
+        process.cwd(),
+      );
       service["rawTypes"]["test.ts"] = types;
       // Manually set typeSourceInfo since we're not using loadTypesForFile
       service["typeSourceInfo"]["TestType"] = {
@@ -707,7 +732,7 @@ describe("generate function", () => {
   });
 
   it("creates and executes GenerationManager", async () => {
-    const manager = new GenerationManager(mockConfig, []);
+    const manager = new GenerationManager(mockConfig, [], process.cwd());
     await expect(manager.generate(false)).resolves.not.toThrow();
   });
 
@@ -715,7 +740,7 @@ describe("generate function", () => {
     const watchSpy = vi.fn();
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
-    const manager = new GenerationManager(mockConfig, []);
+    const manager = new GenerationManager(mockConfig, [], process.cwd());
     await manager.generate(false);
     await manager.watch();
 
@@ -726,7 +751,7 @@ describe("generate function", () => {
     const watchSpy = vi.fn();
     vi.spyOn(GenerationManager.prototype, "watch").mockImplementation(watchSpy);
 
-    const manager = new GenerationManager(mockConfig, []);
+    const manager = new GenerationManager(mockConfig, [], process.cwd());
     await manager.generate(false);
 
     expect(watchSpy).not.toHaveBeenCalled();
@@ -835,7 +860,11 @@ describe("Integration Tests", () => {
                   );
                 });
 
-              const service = new TailorDBService(namespace, { files: [] });
+              const service = new TailorDBService(
+                namespace,
+                { files: [] },
+                process.cwd(),
+              );
               service["rawTypes"]["test.ts"] = types;
               service["parseTypes"]();
 

@@ -8,7 +8,10 @@ import { type Executor, ExecutorSchema } from "@/parser/service/executor";
 export class ExecutorService {
   private executors: Record<string, Executor> = {};
 
-  constructor(public readonly config: ExecutorServiceConfig) {}
+  constructor(
+    public readonly config: ExecutorServiceConfig,
+    private configPath: string,
+  ) {}
 
   async loadExecutors() {
     if (Object.keys(this.executors).length > 0) {
@@ -18,7 +21,10 @@ export class ExecutorService {
       return;
     }
 
-    const executorFiles = loadFilesWithIgnores(this.config);
+    const executorFiles = loadFilesWithIgnores(
+      this.config,
+      path.dirname(this.configPath),
+    );
 
     console.log("");
     console.log(

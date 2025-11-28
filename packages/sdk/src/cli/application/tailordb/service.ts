@@ -22,6 +22,7 @@ export class TailorDBService {
   constructor(
     public readonly namespace: string,
     public readonly config: TailorDBServiceConfig,
+    private configPath: string,
   ) {}
 
   getTypes() {
@@ -41,7 +42,10 @@ export class TailorDBService {
       return;
     }
 
-    const typeFiles = loadFilesWithIgnores(this.config);
+    const typeFiles = loadFilesWithIgnores(
+      this.config,
+      path.dirname(this.configPath),
+    );
 
     console.log("");
     console.log(

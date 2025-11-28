@@ -13,7 +13,7 @@ import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import {
@@ -59,31 +59,33 @@ export type ApplyPhase = "create-update" | "delete";
 
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
-  const configPath = loadConfigPath(options?.configPath);
-  const { config } = await loadConfig(configPath);
+  const { config, configPath } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? false;
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
-  const application = defineApplication(config);
+  const application = defineApplication(config, configPath);
 
   // Load files first (before building)
   // Load workflows first and collect jobs for bundling
   let workflowResult: WorkflowLoadResult | undefined;
   if (application.workflowConfig) {
-    workflowResult = await loadAndCollectJobs(application.workflowConfig);
+    workflowResult = await loadAndCollectJobs(
+      application.workflowConfig,
+      configPath,
+    );
   }
 
   // Build functions (using already loaded data)
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
-      await buildPipeline(pipeline.namespace, pipeline.config);
+      await buildPipeline(pipeline.namespace, pipeline.config, configPath);
     }
   }
   if (application.executorService) {
-    await buildExecutor(application.executorService.config);
+    await buildExecutor(application.executorService.config, configPath);
   }
   if (workflowResult && workflowResult.jobs.length > 0) {
     await buildWorkflow(workflowResult.jobs);
@@ -226,12 +228,16 @@ export async function apply(options?: ApplyOptions) {
   console.log("Successfully applied changes.");
 }
 
-async function buildPipeline(namespace: string, config: FileLoadConfig) {
-  await bundleResolvers(namespace, config);
+async function buildPipeline(
+  namespace: string,
+  config: FileLoadConfig,
+  configPath: string,
+) {
+  await bundleResolvers(namespace, config, configPath);
 }
 
-async function buildExecutor(config: FileLoadConfig) {
-  await bundleExecutors(config);
+async function buildExecutor(config: FileLoadConfig, configPath: string) {
+  await bundleExecutors(config, configPath);
 }
 
 async function buildWorkflow(collectedJobs: CollectedJob[]) {

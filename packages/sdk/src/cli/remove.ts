@@ -19,7 +19,7 @@ import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig } from "@/cli/config-loader";
 import { commonArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "./context";
+import { loadAccessToken, loadWorkspaceId } from "./context";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -37,9 +37,8 @@ async function loadOptions(options?: RemoveOptions) {
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });
-  const configPath = loadConfigPath(options?.configPath);
-  const { config } = await loadConfig(configPath);
-  const application = defineApplication(config);
+  const { config, configPath } = await loadConfig(options?.configPath);
+  const application = defineApplication(config, configPath);
   return {
     client,
     workspaceId,

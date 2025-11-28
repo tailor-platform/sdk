@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   createGeneratorConfigSchema,
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
+import { loadConfigPath } from "./context";
 import {
   EnumConstantsGenerator,
   EnumConstantsGeneratorID,
@@ -46,10 +46,12 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
 export const GeneratorConfigSchema =
   createGeneratorConfigSchema(builtinGenerators);
 
-export async function loadConfig(
-  configPath: string,
-): Promise<{ config: AppConfig; generators: Generator[] }> {
-  const resolvedPath = path.resolve(process.cwd(), configPath);
+export async function loadConfig(configPath?: string): Promise<{
+  config: AppConfig;
+  generators: Generator[];
+  configPath: string;
+}> {
+  const resolvedPath = loadConfigPath(configPath);
 
   if (!fs.existsSync(resolvedPath)) {
     throw new Error(`Configuration file not found: ${configPath}`);
@@ -85,5 +87,6 @@ export async function loadConfig(
   return {
     config: configModule.default as AppConfig,
     generators: allGenerators,
+    configPath: resolvedPath,
   };
 }

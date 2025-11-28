@@ -27,8 +27,9 @@ interface ResolverInfo {
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
+  configPath: string,
 ): Promise<void> {
-  const files = loadFilesWithIgnores(config);
+  const files = loadFilesWithIgnores(config, path.dirname(configPath));
   if (files.length === 0) {
     throw new Error(
       `No files found matching pattern: ${config.files?.join(", ")}`,

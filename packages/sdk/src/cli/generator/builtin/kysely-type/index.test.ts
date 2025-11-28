@@ -6,7 +6,7 @@ import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
-  const service = new TailorDBService("test", { files: [] });
+  const service = new TailorDBService("test", { files: [] }, process.cwd());
   service["rawTypes"]["test.ts"] = { [type.name]: type };
   service["parseTypes"]();
   return service.getTypes()[type.name];

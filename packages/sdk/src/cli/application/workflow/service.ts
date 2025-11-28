@@ -31,6 +31,7 @@ export interface WorkflowLoadResult {
  */
 export async function loadAndCollectJobs(
   config: WorkflowServiceConfig,
+  configPath: string,
 ): Promise<WorkflowLoadResult> {
   const workflows: Record<string, Workflow> = {};
   const workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
@@ -47,7 +48,7 @@ export async function loadAndCollectJobs(
     };
   }
 
-  const workflowFiles = loadFilesWithIgnores(config);
+  const workflowFiles = loadFilesWithIgnores(config, path.dirname(configPath));
   const fileCount = workflowFiles.length;
 
   // Maps for collecting data

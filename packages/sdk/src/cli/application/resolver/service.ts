@@ -11,6 +11,7 @@ export class ResolverService {
   constructor(
     public readonly namespace: string,
     public readonly config: ResolverServiceConfig,
+    private configPath: string,
   ) {}
 
   async loadResolvers(): Promise<void> {
@@ -21,7 +22,10 @@ export class ResolverService {
       return;
     }
 
-    const resolverFiles = loadFilesWithIgnores(this.config);
+    const resolverFiles = loadFilesWithIgnores(
+      this.config,
+      path.dirname(this.configPath),
+    );
 
     console.log("");
     console.log(

@@ -23,8 +23,11 @@ interface ExecutorInfo {
  * 1. Creates entry file that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
  */
-export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
-  const files = loadFilesWithIgnores(config);
+export async function bundleExecutors(
+  config: FileLoadConfig,
+  configPath: string,
+): Promise<void> {
+  const files = loadFilesWithIgnores(config, path.dirname(configPath));
   if (files.length === 0) {
     throw new Error(
       `No files found matching pattern: ${config.files?.join(", ")}`,

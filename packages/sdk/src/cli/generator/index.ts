@@ -17,7 +17,6 @@ import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { commonArgs, withCommonArgs } from "../args";
-import { loadConfigPath } from "../context";
 import { DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
@@ -43,9 +42,9 @@ export class GenerationManager {
   constructor(
     config: AppConfig,
     private generators: Generator[] = [],
-    private configPath?: string,
+    private configPath: string,
   ) {
-    this.application = defineApplication(config);
+    this.application = defineApplication(config, configPath);
     this.baseDir = path.join(getDistDir(), "generated");
     fs.mkdirSync(this.baseDir, { recursive: true });
   }
@@ -533,8 +532,9 @@ export class GenerationManager {
 
 export async function generate(options?: GenerateOptions) {
   // Load and validate options
-  const configPath = loadConfigPath(options?.configPath);
-  const { config, generators } = await loadConfig(configPath);
+  const { config, generators, configPath } = await loadConfig(
+    options?.configPath,
+  );
   const watch = options?.watch ?? false;
 
   // Generate user types from loaded config
