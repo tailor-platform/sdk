@@ -65,7 +65,6 @@ describe("KyselyGenerator integration tests", () => {
     it("processType method correctly processes basic TailorDBType", async () => {
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(mockBasicType),
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
 
@@ -94,7 +93,6 @@ describe("KyselyGenerator integration tests", () => {
     it("correctly maps enum type to Kysely type", async () => {
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(mockEnumType),
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
 
@@ -109,7 +107,6 @@ describe("KyselyGenerator integration tests", () => {
     it("correctly processes nested object type", async () => {
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(mockNestedType),
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
 
@@ -133,7 +130,6 @@ describe("KyselyGenerator integration tests", () => {
 
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(testType),
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
 
@@ -152,7 +148,6 @@ describe("KyselyGenerator integration tests", () => {
 
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(arrayType),
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
 
@@ -191,7 +186,6 @@ describe("KyselyGenerator integration tests", () => {
       };
 
       const result = await kyselyGenerator.processTailorDBNamespace({
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
         types: typeMetadata,
       });
@@ -209,7 +203,6 @@ describe("KyselyGenerator integration tests", () => {
 
     it("returns metadata with empty types array for empty type definitions", async () => {
       const result = await kyselyGenerator.processTailorDBNamespace({
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
         types: {},
       });
@@ -242,20 +235,17 @@ describe("KyselyGenerator integration tests", () => {
         usedUtilityTypes: { Timestamp: false, Serial: false },
       };
 
-      const inputs = [
-        {
-          applicationNamespace: "test-app",
-          tailordb: [
-            {
-              namespace: "test-namespace",
-              types: processedTypes,
-            },
-          ],
-          resolver: [],
-        },
-      ];
+      const input = {
+        tailordb: [
+          {
+            namespace: "test-namespace",
+            types: processedTypes,
+          },
+        ],
+        resolver: [],
+      };
       const result = kyselyGenerator.aggregate({
-        inputs: inputs,
+        input: input,
         executorInputs: [],
         baseDir: "/test",
       });
@@ -278,35 +268,29 @@ describe("KyselyGenerator integration tests", () => {
       const types = {
         User: await kyselyGenerator.processType({
           type: parseTailorDBType(mockBasicType),
-          applicationNamespace: "test-app",
           namespace: "test-namespace",
         }),
         Status: await kyselyGenerator.processType({
           type: parseTailorDBType(mockEnumType),
-          applicationNamespace: "test-app",
           namespace: "test-namespace",
         }),
       };
 
       const processedTypes = await kyselyGenerator.processTailorDBNamespace({
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
         types: types,
       });
-      const inputs = [
-        {
-          applicationNamespace: "test-app",
-          tailordb: [
-            {
-              namespace: "test-namespace",
-              types: processedTypes,
-            },
-          ],
-          resolver: [],
-        },
-      ];
+      const input = {
+        tailordb: [
+          {
+            namespace: "test-namespace",
+            types: processedTypes,
+          },
+        ],
+        resolver: [],
+      };
       const result = kyselyGenerator.aggregate({
-        inputs: inputs,
+        input: input,
         executorInputs: [],
         baseDir: "/test",
       });
@@ -337,7 +321,6 @@ describe("KyselyGenerator integration tests", () => {
       await expect(
         kyselyGenerator.processType({
           type: invalidType,
-          applicationNamespace: "test-app",
           namespace: "test-namespace",
         }),
       ).rejects.toThrow();
@@ -350,7 +333,6 @@ describe("KyselyGenerator integration tests", () => {
 
       const result = await kyselyGenerator.processType({
         type: parseTailorDBType(unknownType),
-        applicationNamespace: "test-app",
         namespace: "test-namespace",
       });
 
@@ -390,19 +372,16 @@ describe("KyselyGenerator integration tests", () => {
         usedUtilityTypes: { Timestamp: true, Serial: false },
       };
 
-      const inputs = [
-        {
-          applicationNamespace: "test-app",
-          tailordb: [
-            { namespace: "tailordb", types: tailordbTypes },
-            { namespace: "analytics", types: analyticsTypes },
-          ],
-          resolver: [],
-        },
-      ];
+      const input = {
+        tailordb: [
+          { namespace: "tailordb", types: tailordbTypes },
+          { namespace: "analytics", types: analyticsTypes },
+        ],
+        resolver: [],
+      };
 
       const result = kyselyGenerator.aggregate({
-        inputs,
+        input,
         executorInputs: [],
         baseDir: "/test",
       });
@@ -437,16 +416,13 @@ describe("KyselyGenerator integration tests", () => {
         usedUtilityTypes: { Timestamp: false, Serial: false },
       };
 
-      const inputs = [
-        {
-          applicationNamespace: "test-app",
-          tailordb: [{ namespace: "test", types }],
-          resolver: [],
-        },
-      ];
+      const input = {
+        tailordb: [{ namespace: "test", types }],
+        resolver: [],
+      };
 
       const result = kyselyGenerator.aggregate({
-        inputs,
+        input,
         executorInputs: [],
         baseDir: "/test",
       });
