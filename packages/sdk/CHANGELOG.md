@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.11.3
+
+### Patch Changes
+
+- [#75](https://github.com/tailor-platform/sdk/pull/75) [`d05e581`](https://github.com/tailor-platform/sdk/commit/d05e58142c3741c35a731ec1fe770a24d7aa3377) Thanks [@riku99](https://github.com/riku99)! - Fix build script to work on Windows by adding cross-env
+
 ## 0.11.2
 
 ### Patch Changes
