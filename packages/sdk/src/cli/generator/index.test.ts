@@ -40,18 +40,13 @@ class TestGenerator {
 
   async processType(args: {
     type: TailorDBType;
-    applicationNamespace: string;
     namespace: string;
     source: { filePath: string; exportName: string };
   }) {
     return { name: args.type.name, processed: true, source: args.source };
   }
 
-  async processResolver(args: {
-    resolver: Resolver;
-    applicationNamespace: string;
-    namespace: string;
-  }) {
+  async processResolver(args: { resolver: Resolver; namespace: string }) {
     return { name: args.resolver.name, processed: true };
   }
 
@@ -60,7 +55,6 @@ class TestGenerator {
   }
 
   async processTailorDBNamespace(args: {
-    applicationNamespace: string;
     namespace: string;
     types: Record<string, any>;
   }) {
@@ -68,7 +62,6 @@ class TestGenerator {
   }
 
   async processResolverNamespace(args: {
-    applicationNamespace: string;
     namespace: string;
     resolvers: Record<string, any>;
   }) {
@@ -76,7 +69,7 @@ class TestGenerator {
   }
 
   async aggregate(args: {
-    inputs: any[];
+    input: any;
     executorInputs: any[];
     baseDir: string;
   }) {
@@ -84,7 +77,7 @@ class TestGenerator {
       files: [
         {
           path: path.join(args.baseDir, "test-output.txt"),
-          content: `Inputs: ${JSON.stringify(args.inputs)}`,
+          content: `Input: ${JSON.stringify(args.input)}`,
         },
       ],
     };
@@ -168,25 +161,23 @@ describe("GenerationManager", () => {
 
       // Generators are configured but may be 0 if actual type files do not exist
       expect(manager.generators.length).toBeGreaterThan(0);
-      // applications will be empty if actual files do not exist
-      expect(manager.applications).toBeDefined();
+      // services will be empty if actual files do not exist
+      expect(manager.services).toBeDefined();
     });
 
-    it("processes multiple applications", async () => {
-      const multiAppConfig = {
+    it("processes single application", async () => {
+      const singleAppConfig = {
         ...mockConfig,
-        name: "multi-app",
+        name: "single-app",
       };
-      const multiAppManager = new GenerationManager(
-        multiAppConfig,
+      const singleAppManager: any = new GenerationManager(
+        singleAppConfig,
         [],
         process.cwd(),
       );
 
-      await multiAppManager.generate(false);
-      expect(multiAppManager.application.applications.length).toBeGreaterThan(
-        0,
-      );
+      await singleAppManager.generate(false);
+      expect(singleAppManager.services).toBeDefined();
     });
   });
 
@@ -203,26 +194,25 @@ describe("GenerationManager", () => {
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
-      manager.applications = {
-        "test-app": {
-          tailordbNamespaces: {
-            "test-namespace": {
-              types: service.getTypes(),
-              sourceInfo: service.getTypeSourceInfo(),
-            },
-          },
-          resolverNamespaces: {
-            "test-namespace": {
-              testResolver: createResolver({
-                name: "testResolver",
-                operation: "query",
-                // input removed
-                body: () => ({ string: "" }),
-                output: t.object({ string: t.string() }),
-              }),
-            },
+      manager.services = {
+        tailordb: {
+          "test-namespace": {
+            types: service.getTypes(),
+            sourceInfo: service.getTypeSourceInfo(),
           },
         },
+        resolver: {
+          "test-namespace": {
+            testResolver: createResolver({
+              name: "testResolver",
+              operation: "query",
+              // input removed
+              body: () => ({ string: "" }),
+              output: t.object({ string: t.string() }),
+            }),
+          },
+        },
+        executor: {},
       };
     });
 
@@ -289,26 +279,25 @@ describe("GenerationManager", () => {
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
-      manager.applications = {
-        "test-app": {
-          tailordbNamespaces: {
-            "test-namespace": {
-              types: service.getTypes(),
-              sourceInfo: service.getTypeSourceInfo(),
-            },
-          },
-          resolverNamespaces: {
-            "test-namespace": {
-              testResolver: createResolver({
-                name: "testResolver",
-                operation: "query",
-                // input removed
-                body: () => ({ string: "" }),
-                output: t.object({ string: t.string() }),
-              }),
-            },
+      manager.services = {
+        tailordb: {
+          "test-namespace": {
+            types: service.getTypes(),
+            sourceInfo: service.getTypeSourceInfo(),
           },
         },
+        resolver: {
+          "test-namespace": {
+            testResolver: createResolver({
+              name: "testResolver",
+              operation: "query",
+              // input removed
+              body: () => ({ string: "" }),
+              output: t.object({ string: t.string() }),
+            }),
+          },
+        },
+        executor: {},
       };
     });
 
@@ -352,14 +341,10 @@ describe("GenerationManager", () => {
       testGenerator = new TestGenerator();
       manager.generatorResults = {
         [testGenerator.id]: {
-          application: {
-            "test-app": {
-              tailordbResults: {},
-              resolverResults: {},
-              tailordbNamespaceResults: {},
-              resolverNamespaceResults: {},
-            },
-          },
+          tailordbResults: {},
+          resolverResults: {},
+          tailordbNamespaceResults: {},
+          resolverNamespaceResults: {},
           executorResults: {},
         },
       };
@@ -381,40 +366,50 @@ describe("GenerationManager", () => {
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
-      await manager.processTailorDBNamespace(
-        testGenerator,
-        "test-app",
-        "test-namespace",
-        {
-          types: service.getTypes(),
-          sourceInfo: service.getTypeSourceInfo(),
-        },
-      );
+      // Initialize generatorResults
+      manager.generatorResults[testGenerator.id] = {
+        tailordbResults: {},
+        resolverResults: {},
+        tailordbNamespaceResults: {},
+        resolverNamespaceResults: {},
+        executorResults: {},
+      };
+
+      await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
+        types: service.getTypes(),
+        sourceInfo: service.getTypeSourceInfo(),
+      });
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
       expect(
-        manager.generatorResults[testGenerator.id].application["test-app"]
-          .tailordbResults["test-namespace"],
+        manager.generatorResults[testGenerator.id].tailordbResults[
+          "test-namespace"
+        ],
       ).toBeDefined();
       expect(
         Object.keys(
-          manager.generatorResults[testGenerator.id].application["test-app"]
-            .tailordbResults["test-namespace"],
+          manager.generatorResults[testGenerator.id].tailordbResults[
+            "test-namespace"
+          ],
         ),
       ).toHaveLength(3);
     });
 
     it("does not error with empty types", async () => {
+      // Initialize generatorResults
+      manager.generatorResults[testGenerator.id] = {
+        tailordbResults: {},
+        resolverResults: {},
+        tailordbNamespaceResults: {},
+        resolverNamespaceResults: {},
+        executorResults: {},
+      };
+
       await expect(
-        manager.processTailorDBNamespace(
-          testGenerator,
-          "test-app",
-          "test-namespace",
-          {
-            types: {},
-            sourceInfo: {},
-          },
-        ),
+        manager.processTailorDBNamespace(testGenerator, "test-namespace", {
+          types: {},
+          sourceInfo: {},
+        }),
       ).resolves.not.toThrow();
     });
 
@@ -437,20 +432,23 @@ describe("GenerationManager", () => {
       };
       service["parseTypes"]();
 
-      await manager.processTailorDBNamespace(
-        testGenerator,
-        "test-app",
-        "test-namespace",
-        {
-          types: service.getTypes(),
-          sourceInfo: service.getTypeSourceInfo(),
-        },
-      );
+      // Initialize generatorResults
+      manager.generatorResults[testGenerator.id] = {
+        tailordbResults: {},
+        resolverResults: {},
+        tailordbNamespaceResults: {},
+        resolverNamespaceResults: {},
+        executorResults: {},
+      };
+
+      await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
+        types: service.getTypes(),
+        sourceInfo: service.getTypeSourceInfo(),
+      });
 
       expect(processTypeSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: expect.any(Object),
-          applicationNamespace: "test-app",
           namespace: "test-namespace",
           source: expect.objectContaining({
             filePath: "test.ts",
@@ -468,14 +466,10 @@ describe("GenerationManager", () => {
       testGenerator = new TestGenerator();
       manager.generatorResults = {
         [testGenerator.id]: {
-          application: {
-            "test-app": {
-              tailordbResults: {},
-              resolverResults: {},
-              tailordbNamespaceResults: {},
-              resolverNamespaceResults: {},
-            },
-          },
+          tailordbResults: {},
+          resolverResults: {},
+          tailordbNamespaceResults: {},
+          resolverNamespaceResults: {},
           executorResults: {},
         },
       };
@@ -502,20 +496,21 @@ describe("GenerationManager", () => {
 
       await manager.processResolverNamespace(
         testGenerator,
-        "test-app",
         "test-namespace",
         resolvers,
       );
 
       expect(processResolverSpy).toHaveBeenCalledTimes(2);
       expect(
-        manager.generatorResults[testGenerator.id].application["test-app"]
-          .resolverResults["test-namespace"],
+        manager.generatorResults[testGenerator.id].resolverResults[
+          "test-namespace"
+        ],
       ).toBeDefined();
       expect(
         Object.keys(
-          manager.generatorResults[testGenerator.id].application["test-app"]
-            .resolverResults["test-namespace"],
+          manager.generatorResults[testGenerator.id].resolverResults[
+            "test-namespace"
+          ],
         ),
       ).toHaveLength(2);
     });
@@ -528,17 +523,13 @@ describe("GenerationManager", () => {
       testGenerator = new TestGenerator();
       manager.generatorResults = {
         [testGenerator.id]: {
-          application: {
-            "test-app": {
-              tailordbResults: {},
-              resolverResults: {},
-              tailordbNamespaceResults: {
-                "test-namespace": { types: "processed" },
-              },
-              resolverNamespaceResults: {
-                "test-namespace": { resolvers: "processed" },
-              },
-            },
+          tailordbResults: {},
+          resolverResults: {},
+          tailordbNamespaceResults: {
+            "test-namespace": { types: "processed" },
+          },
+          resolverNamespaceResults: {
+            "test-namespace": { resolvers: "processed" },
           },
           executorResults: {},
         },
@@ -551,23 +542,20 @@ describe("GenerationManager", () => {
       await manager.aggregate(testGenerator);
 
       expect(aggregateSpy).toHaveBeenCalledWith({
-        inputs: [
-          {
-            applicationNamespace: "test-app",
-            tailordb: [
-              {
-                namespace: "test-namespace",
-                types: { types: "processed" },
-              },
-            ],
-            resolver: [
-              {
-                namespace: "test-namespace",
-                resolvers: { resolvers: "processed" },
-              },
-            ],
-          },
-        ],
+        input: {
+          tailordb: [
+            {
+              namespace: "test-namespace",
+              types: { types: "processed" },
+            },
+          ],
+          resolver: [
+            {
+              namespace: "test-namespace",
+              resolvers: { resolvers: "processed" },
+            },
+          ],
+        },
         executorInputs: [],
         baseDir: expect.stringContaining(testGenerator.id),
       });
@@ -597,14 +585,10 @@ describe("GenerationManager", () => {
 
       manager.generatorResults = {
         [multiFileGenerator.id]: {
-          application: {
-            "test-app": {
-              tailordbResults: {},
-              resolverResults: {},
-              tailordbNamespaceResults: {},
-              resolverNamespaceResults: {},
-            },
-          },
+          tailordbResults: {},
+          resolverResults: {},
+          tailordbNamespaceResults: {},
+          resolverNamespaceResults: {},
           executorResults: {},
         },
       };
@@ -631,14 +615,10 @@ describe("GenerationManager", () => {
 
       manager.generatorResults = {
         [errorGenerator.id]: {
-          application: {
-            "test-app": {
-              tailordbResults: {},
-              resolverResults: {},
-              tailordbNamespaceResults: {},
-              resolverNamespaceResults: {},
-            },
-          },
+          tailordbResults: {},
+          resolverResults: {},
+          tailordbNamespaceResults: {},
+          resolverNamespaceResults: {},
           executorResults: {},
         },
       };
@@ -680,22 +660,22 @@ describe("GenerationManager", () => {
             await watcher.addWatchGroup("Config", [(this as any).configPath]);
           }
 
-          for (const app of (this as any).application.applications) {
-            for (const db of app.tailorDBServices) {
-              const dbNamespace = db.namespace;
-              await watcher?.addWatchGroup(
-                `TailorDB/${dbNamespace}`,
-                db.config.files,
-              );
-            }
+          const app = (this as any).application;
 
-            for (const resolverService of app.resolverServices) {
-              const resolverNamespace = resolverService.namespace;
-              await watcher?.addWatchGroup(
-                `Resolver/${resolverNamespace}`,
-                resolverService["config"].files,
-              );
-            }
+          for (const db of app.tailorDBServices) {
+            const dbNamespace = db.namespace;
+            await watcher?.addWatchGroup(
+              `TailorDB/${dbNamespace}`,
+              db.config.files,
+            );
+          }
+
+          for (const resolverService of app.resolverServices) {
+            const resolverNamespace = resolverService.namespace;
+            await watcher?.addWatchGroup(
+              `Resolver/${resolverNamespace}`,
+              resolverService["config"].files,
+            );
           }
 
           // Instead of await new Promise(() => {}), resolve immediately for tests
@@ -832,64 +812,61 @@ describe("Integration Tests", () => {
       const GenerationManager = (indexModule as any).GenerationManager;
       const manager = new GenerationManager(fullConfig, largeGenerators);
 
-      // Create large applications structure
-      manager.applications = {};
+      // Create large application data structure
+      manager.services = {
+        tailordb: {},
+        resolver: {},
+        executor: {},
+      };
+
+      // Add multiple namespaces
       Array(10)
         .fill(0)
-        .forEach((_, appIdx) => {
-          const appName = `test-app-${appIdx}`;
-          manager.applications[appName] = {
-            tailordbNamespaces: {},
-            resolverNamespaces: {},
+        .forEach((_, nsIdx) => {
+          const namespace = `namespace-${nsIdx}`;
+
+          // Add types to namespace
+          const types: Record<string, TailorDBType> = {};
+          Array(50)
+            .fill(0)
+            .forEach((_, typeIdx) => {
+              types[`Type${nsIdx}_${typeIdx}`] = db.type(
+                `Type${nsIdx}_${typeIdx}`,
+                {},
+              );
+            });
+
+          const service = new TailorDBService(
+            namespace,
+            { files: [] },
+            process.cwd(),
+          );
+          service["rawTypes"]["test.ts"] = types;
+          service["parseTypes"]();
+
+          manager.services.tailordb[namespace] = {
+            types: service.getTypes(),
+            sourceInfo: service.getTypeSourceInfo(),
           };
 
-          // Add multiple namespaces per app
+          // Add resolvers to namespace
+          manager.services.resolver[namespace] = {};
           Array(10)
             .fill(0)
-            .forEach((_, nsIdx) => {
-              const namespace = `namespace-${nsIdx}`;
-
-              // Add types to namespace
-              const types: Record<string, TailorDBType> = {};
-              Array(50)
-                .fill(0)
-                .forEach((_, typeIdx) => {
-                  types[`Type${appIdx}_${nsIdx}_${typeIdx}`] = db.type(
-                    `Type${appIdx}_${nsIdx}_${typeIdx}`,
-                    {},
-                  );
-                });
-
-              const service = new TailorDBService(
-                namespace,
-                { files: [] },
-                process.cwd(),
-              );
-              service["rawTypes"]["test.ts"] = types;
-              service["parseTypes"]();
-
-              manager.applications[appName].tailordbNamespaces[namespace] =
-                service.getTypes();
-
-              // Add resolvers to namespace
-              manager.applications[appName].resolverNamespaces[namespace] = {};
-              Array(10)
-                .fill(0)
-                .forEach((_, resolverIdx) => {
-                  manager.applications[appName].resolverNamespaces[namespace][
-                    `resolver${appIdx}_${nsIdx}_${resolverIdx}`
-                  ] = createResolver({
-                    name: `resolver${appIdx}_${nsIdx}_${resolverIdx}`,
-                    operation: "query",
-                    // input removed
-                    body: () => ({ string: "" }),
-                    output: t.object({ string: t.string() }),
-                  });
-                });
+            .forEach((_, resolverIdx) => {
+              manager.services.resolver[namespace][
+                `resolver${nsIdx}_${resolverIdx}`
+              ] = createResolver({
+                name: `resolver${nsIdx}_${resolverIdx}`,
+                operation: "query",
+                // input removed
+                body: () => ({ string: "" }),
+                output: t.object({ string: t.string() }),
+              });
             });
         });
 
-      await expect(manager.generate({ watch: false })).resolves.not.toThrow();
+      await expect(manager.generate(false)).resolves.not.toThrow();
     });
   });
 });

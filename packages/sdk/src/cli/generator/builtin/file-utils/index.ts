@@ -28,7 +28,6 @@ export class FileUtilsGenerator
 
   async processType(args: {
     type: ParsedTailorDBType;
-    applicationNamespace: string;
     namespace: string;
   }): Promise<FileUtilMetadata> {
     return await FileProcessor.processType(args.type);
@@ -43,7 +42,6 @@ export class FileUtilsGenerator
   }
 
   async processTailorDBNamespace(args: {
-    applicationNamespace: string;
     namespace: string;
     types: Record<string, FileUtilMetadata>;
   }): Promise<string> {
@@ -74,7 +72,7 @@ export class FileUtilsGenerator
   }
 
   aggregate(args: {
-    inputs: GeneratorInput<string, undefined>[];
+    input: GeneratorInput<string, undefined>;
     executorInputs: undefined[];
     baseDir: string;
   }): GeneratorResult {
@@ -83,17 +81,16 @@ export class FileUtilsGenerator
     // Collect all namespace metadata
     const allNamespaceData: { namespace: string; types: FileUtilMetadata[] }[] =
       [];
-    for (const input of args.inputs) {
-      for (const nsResult of input.tailordb) {
-        if (nsResult.types) {
-          try {
-            const parsed = JSON.parse(nsResult.types);
-            if (parsed.namespace && parsed.types) {
-              allNamespaceData.push(parsed);
-            }
-          } catch {
-            // Ignore invalid JSON (should not happen)
+
+    for (const nsResult of args.input.tailordb) {
+      if (nsResult.types) {
+        try {
+          const parsed = JSON.parse(nsResult.types);
+          if (parsed.namespace && parsed.types) {
+            allNamespaceData.push(parsed);
           }
+        } catch {
+          // Ignore invalid JSON (should not happen)
         }
       }
     }
