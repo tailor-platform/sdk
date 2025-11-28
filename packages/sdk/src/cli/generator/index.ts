@@ -344,6 +344,7 @@ export class GenerationManager {
     const input = {
       tailordb: tailordbResults,
       resolver: resolverResults,
+      auth: this.getAuthInput(),
     };
 
     // Call generator's aggregate method

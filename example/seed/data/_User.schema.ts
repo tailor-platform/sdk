@@ -13,6 +13,7 @@ const hook = <T>(data: unknown) => data as T;
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),
   {
+    primaryKey: "name",
     indexes: [
       { name: "_user_name_unique_idx", columns: ["name"], unique: true },
     ],
