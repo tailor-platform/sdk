@@ -28,6 +28,7 @@ const templateHints: Record<string, string | undefined> = {
   "hello-world": "Initial project to get started with Tailor Platform SDK",
   "inventory-management": "Simple inventory management system",
   testing: "Testing guide for Tailor Platform SDK",
+  "multi-application": "Multi-application setup with shared databases",
 };
 
 const validateName = (name: string) => {
