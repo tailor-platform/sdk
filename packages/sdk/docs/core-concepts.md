@@ -511,13 +511,13 @@ Define Workflows in files matching glob patterns specified in `tailor.config.ts`
 
 **Important**: All workflow components must follow these rules:
 
-| Rule                                           | Required | Description                                         |
-| ---------------------------------------------- | -------- | --------------------------------------------------- |
-| `createWorkflow` result must be default export | Yes      | Workflow files must export the workflow as default  |
-| All jobs must be named exports                 | Yes      | Every job used in a workflow must be a named export |
-| Job names must be unique                       | Yes      | Job names must be unique across the entire project  |
-| `mainJob` is required                          | Yes      | Every workflow must specify a `mainJob`             |
-| Jobs in `deps` must be job objects             | Yes      | Pass job objects, not strings                       |
+| Rule                                           | Description                                         |
+| ---------------------------------------------- | --------------------------------------------------- |
+| `createWorkflow` result must be default export | Workflow files must export the workflow as default  |
+| All jobs must be named exports                 | Every job used in a workflow must be a named export |
+| Job names must be unique                       | Job names must be unique across the entire project  |
+| `mainJob` is required                          | Every workflow must specify a `mainJob`             |
+| Jobs in `deps` must be job objects             | Pass job objects, not strings                       |
 
 #### Workflow Job Definition
 
