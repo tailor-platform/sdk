@@ -7,7 +7,6 @@ import { defineApplication, type Application } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
 import {
   type CodeGenerator,
-  type GeneratorInput,
   type TailorDBNamespaceResult,
   type ResolverNamespaceResult,
 } from "@/cli/generator/types";
@@ -297,11 +296,6 @@ export class GenerationManager {
   }
 
   async aggregate(gen: CodeGenerator) {
-    const input: GeneratorInput<any, any> = {
-      tailordb: [],
-      resolver: [],
-    };
-
     const results = this.generatorResults[gen.id];
 
     const tailordbResults: TailorDBNamespaceResult<any>[] = [];
@@ -326,9 +320,10 @@ export class GenerationManager {
         resolvers,
       });
     }
-
-    input.tailordb = tailordbResults;
-    input.resolver = resolverResults;
+    const input = {
+      tailordb: tailordbResults,
+      resolver: resolverResults,
+    };
 
     // Call generator's aggregate method
     const result = await gen.aggregate({
