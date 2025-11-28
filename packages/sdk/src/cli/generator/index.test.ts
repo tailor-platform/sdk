@@ -156,8 +156,8 @@ describe("GenerationManager", () => {
 
       // Generators are configured but may be 0 if actual type files do not exist
       expect(manager.generators.length).toBeGreaterThan(0);
-      // applicationData will be empty if actual files do not exist
-      expect(manager.applicationData).toBeDefined();
+      // services will be empty if actual files do not exist
+      expect(manager.services).toBeDefined();
     });
 
     it("processes single application", async () => {
@@ -168,7 +168,7 @@ describe("GenerationManager", () => {
       const singleAppManager: any = new GenerationManager(singleAppConfig, []);
 
       await singleAppManager.generate(false);
-      expect(singleAppManager.applicationData).toBeDefined();
+      expect(singleAppManager.services).toBeDefined();
     });
   });
 
@@ -181,14 +181,14 @@ describe("GenerationManager", () => {
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
-      manager.applicationData = {
-        tailordbNamespaces: {
+      manager.services = {
+        tailordb: {
           "test-namespace": {
             types: service.getTypes(),
             sourceInfo: service.getTypeSourceInfo(),
           },
         },
-        resolverNamespaces: {
+        resolver: {
           "test-namespace": {
             testResolver: createResolver({
               name: "testResolver",
@@ -199,6 +199,7 @@ describe("GenerationManager", () => {
             }),
           },
         },
+        executor: {},
       };
     });
 
@@ -261,14 +262,14 @@ describe("GenerationManager", () => {
       service["rawTypes"]["test.ts"] = types;
       service["parseTypes"]();
 
-      manager.applicationData = {
-        tailordbNamespaces: {
+      manager.services = {
+        tailordb: {
           "test-namespace": {
             types: service.getTypes(),
             sourceInfo: service.getTypeSourceInfo(),
           },
         },
-        resolverNamespaces: {
+        resolver: {
           "test-namespace": {
             testResolver: createResolver({
               name: "testResolver",
@@ -279,6 +280,7 @@ describe("GenerationManager", () => {
             }),
           },
         },
+        executor: {},
       };
     });
 
@@ -786,9 +788,10 @@ describe("Integration Tests", () => {
       const manager = new GenerationManager(fullConfig, largeGenerators);
 
       // Create large application data structure
-      manager.applicationData = {
-        tailordbNamespaces: {},
-        resolverNamespaces: {},
+      manager.services = {
+        tailordb: {},
+        resolver: {},
+        executor: {},
       };
 
       // Add multiple namespaces
@@ -812,17 +815,17 @@ describe("Integration Tests", () => {
           service["rawTypes"]["test.ts"] = types;
           service["parseTypes"]();
 
-          manager.applicationData.tailordbNamespaces[namespace] = {
+          manager.services.tailordb[namespace] = {
             types: service.getTypes(),
             sourceInfo: service.getTypeSourceInfo(),
           };
 
           // Add resolvers to namespace
-          manager.applicationData.resolverNamespaces[namespace] = {};
+          manager.services.resolver[namespace] = {};
           Array(10)
             .fill(0)
             .forEach((_, resolverIdx) => {
-              manager.applicationData.resolverNamespaces[namespace][
+              manager.services.resolver[namespace][
                 `resolver${nsIdx}_${resolverIdx}`
               ] = createResolver({
                 name: `resolver${nsIdx}_${resolverIdx}`,

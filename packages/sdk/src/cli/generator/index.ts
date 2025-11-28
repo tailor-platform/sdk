@@ -30,14 +30,11 @@ interface TypeInfo {
 }
 export class GenerationManager {
   public readonly application: Application;
-  private applicationData: {
-    tailordbNamespaces: Record<string, TypeInfo>;
-    resolverNamespaces: Record<string, Record<string, Resolver>>;
-  } = {
-    tailordbNamespaces: {},
-    resolverNamespaces: {},
-  };
-  private executors: Record<string, Executor> = {};
+  private services: {
+    tailordb: Record<string, TypeInfo>;
+    resolver: Record<string, Record<string, Resolver>>;
+    executor: Record<string, Executor>;
+  } = { tailordb: {}, resolver: {}, executor: {} };
   private readonly baseDir;
 
   constructor(
@@ -65,7 +62,7 @@ export class GenerationManager {
       const namespace = db.namespace;
       try {
         await db.loadTypes();
-        this.applicationData.tailordbNamespaces[namespace] = {
+        this.services.tailordb[namespace] = {
           types: db.getTypes(),
           sourceInfo: db.getTypeSourceInfo(),
         };
@@ -86,11 +83,10 @@ export class GenerationManager {
       const namespace = resolverService.namespace;
       try {
         await resolverService.loadResolvers();
-        this.applicationData.resolverNamespaces[namespace] = {};
+        this.services.resolver[namespace] = {};
         Object.entries(resolverService.getResolvers()).forEach(
           ([_, resolver]) => {
-            this.applicationData.resolverNamespaces[namespace][resolver.name] =
-              resolver;
+            this.services.resolver[namespace][resolver.name] = resolver;
           },
         );
       } catch (error) {
@@ -113,7 +109,7 @@ export class GenerationManager {
     // Executor services
     const executors = await this.application.executorService?.loadExecutors();
     Object.entries(executors ?? {}).forEach(([filePath, executor]) => {
-      this.executors[filePath] = executor as Executor;
+      this.services.executor[filePath] = executor as Executor;
     });
 
     await this.processGenerators();
@@ -153,15 +149,13 @@ export class GenerationManager {
         executorResults: {},
       };
 
-      for (const [namespace, types] of Object.entries(
-        this.applicationData.tailordbNamespaces,
-      )) {
+      for (const [namespace, types] of Object.entries(this.services.tailordb)) {
         await this.processTailorDBNamespace(gen, namespace, types);
       }
 
       // Process Resolver namespaces
       for (const [namespace, resolvers] of Object.entries(
-        this.applicationData.resolverNamespaces,
+        this.services.resolver,
       )) {
         await this.processResolverNamespace(gen, namespace, resolvers);
       }
@@ -284,19 +278,21 @@ export class GenerationManager {
 
     // Process individual executors
     await Promise.allSettled(
-      Object.entries(this.executors).map(async ([executorId, executor]) => {
-        try {
-          results.executorResults[executorId] =
-            await gen.processExecutor(executor);
-        } catch (error) {
-          console.error(
-            styleText("red", `Error processing executor`),
-            styleText("redBright", executor.name),
-            styleText("red", `with generator ${gen.id}`),
-          );
-          console.error(error);
-        }
-      }),
+      Object.entries(this.services.executor).map(
+        async ([executorId, executor]) => {
+          try {
+            results.executorResults[executorId] =
+              await gen.processExecutor(executor);
+          } catch (error) {
+            console.error(
+              styleText("red", `Error processing executor`),
+              styleText("redBright", executor.name),
+              styleText("red", `with generator ${gen.id}`),
+            );
+            console.error(error);
+          }
+        },
+      ),
     );
   }
 
