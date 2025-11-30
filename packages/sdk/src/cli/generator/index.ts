@@ -9,6 +9,7 @@ import {
   type CodeGenerator,
   type TailorDBNamespaceResult,
   type ResolverNamespaceResult,
+  type GeneratorAuthInput,
 } from "@/cli/generator/types";
 import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir, type AppConfig } from "@/configure/config";
@@ -295,6 +296,26 @@ export class GenerationManager {
     );
   }
 
+  private getAuthInput(): GeneratorAuthInput | undefined {
+    const authService = this.application.authService;
+    if (!authService) return undefined;
+
+    const config = authService.config;
+    return {
+      name: config.name,
+      userProfile: authService.userProfile
+        ? {
+            typeName: authService.userProfile.type.name,
+            namespace: authService.userProfile.namespace,
+            usernameField: authService.userProfile.usernameField,
+          }
+        : undefined,
+      machineUsers: config.machineUsers,
+      oauth2Clients: config.oauth2Clients,
+      idProvider: config.idProvider,
+    };
+  }
+
   async aggregate(gen: CodeGenerator) {
     const results = this.generatorResults[gen.id];
 
@@ -323,6 +344,7 @@ export class GenerationManager {
     const input = {
       tailordb: tailordbResults,
       resolver: resolverResults,
+      auth: this.getAuthInput(),
     };
 
     // Call generator's aggregate method

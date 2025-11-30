@@ -85,8 +85,8 @@ importers:
         specifier: 0.7.2
         version: 0.7.2
       '@toiroakr/lines-db':
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.6.1
+        version: 0.6.1
       '@types/node':
         specifier: 22.19.1
         version: 22.19.1
@@ -1297,8 +1297,8 @@ packages:
   '@tailor-platform/function-types@0.7.2':
     resolution: {integrity: sha512-Eg8Bk5QmDeQq8LMXjqlai1d1dDF4krXoeujOCUv3hpoVObwVPTiPIf/hHSemsG1jmp/9tythHA6xInKOgVGLMQ==}
 
-  '@toiroakr/lines-db@0.6.0':
-    resolution: {integrity: sha512-4AEo/KmyyrWPaq59vMhASIgBZ3DTpwTwrrzxN/x+oFFeeRlTpKYeu178x9myw1xTq0aZgn4368NtNKJC0ee7Xw==}
+  '@toiroakr/lines-db@0.6.1':
+    resolution: {integrity: sha512-MHBrNHI6HH5njHafG15ZDCOlp2ubQB+4cHGqqk7x1n6ujXqAgZGP5FKt+9SB8JQJUDxfeaTkkdaEwtb6oIdjYw==}
     hasBin: true
     peerDependencies:
       valibot: '>=1.0.0'
@@ -4384,7 +4384,7 @@ snapshots:
 
   '@tailor-platform/function-types@0.7.2': {}
 
-  '@toiroakr/lines-db@0.6.0':
+  '@toiroakr/lines-db@0.6.1':
     dependencies:
       '@standard-schema/spec': 1.0.0
       commander: 14.0.2

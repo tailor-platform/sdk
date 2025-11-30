@@ -530,6 +530,7 @@ describe("GenerationManager", () => {
               resolvers: { resolvers: "processed" },
             },
           ],
+          auth: expect.anything(),
         },
         executorInputs: [],
         baseDir: expect.stringContaining(testGenerator.id),
