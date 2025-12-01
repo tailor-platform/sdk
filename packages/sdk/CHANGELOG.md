@@ -1,5 +1,20 @@
 # @tailor-platform/sdk
 
+## 0.12.0
+
+### Minor Changes
+
+- [#86](https://github.com/tailor-platform/sdk/pull/86) [`20a816e`](https://github.com/tailor-platform/sdk/commit/20a816e149c1ff14a7f505accf69216da6d5e245) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve seed generator with Windows compatibility and IdP user support
+  - Generate `exec.mjs` instead of `exec.sh` for cross-platform compatibility
+  - Add IdP user seed generation (`_User` entity) when `BuiltInIdP` is configured
+    - Generates `_User.schema.ts`, `_User.graphql`, `_User.json` mapping files
+    - Includes foreign key to user profile type and unique index on `name` field
+    - Automatically sets dependency order (User → \_User)
+
+### Patch Changes
+
+- [#70](https://github.com/tailor-platform/sdk/pull/70) [`94e2f1c`](https://github.com/tailor-platform/sdk/commit/94e2f1cf9036bd69c6f691c6536841a693afe616) Thanks [@riku99](https://github.com/riku99)! - Simplify generator architecture to single-application model
+
 ## 0.11.3
 
 ### Patch Changes

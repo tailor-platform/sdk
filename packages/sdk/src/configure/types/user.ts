@@ -37,7 +37,8 @@ export type TailorUser = {
    * For unauthenticated users, this will be null.
    */
   attributes: InferredAttributeMap | null;
-  /** A list of the user's attributes.
+  /**
+   * A list of the user's attributes.
    * For unauthenticated users, this will be an empty array.
    */
   attributeList: InferredAttributeList;

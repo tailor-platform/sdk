@@ -1,6 +1,10 @@
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import type { CodeGeneratorBase } from "@/parser/generator-config";
+import type {
+  IdProviderConfig,
+  OAuth2Client,
+} from "@/parser/service/auth/types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 interface GeneratedFile {
@@ -27,11 +31,24 @@ export interface ResolverNamespaceResult<R> {
   resolvers: R;
 }
 
+// Auth configuration for generators
+export interface GeneratorAuthInput {
+  name: string;
+  userProfile?: {
+    typeName: string;
+    namespace: string;
+    usernameField: string;
+  };
+  machineUsers?: Record<string, { attributes: Record<string, unknown> }>;
+  oauth2Clients?: Record<string, OAuth2Client>;
+  idProvider?: IdProviderConfig;
+}
+
 // Generator input for each application
 export interface GeneratorInput<T, R> {
-  applicationNamespace: string;
   tailordb: TailorDBNamespaceResult<T>[];
   resolver: ResolverNamespaceResult<R>[];
+  auth?: GeneratorAuthInput;
 }
 
 // CodeGenerator interface implements the base type from parser
@@ -40,10 +57,9 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
     CodeGeneratorBase,
     "processType" | "processResolver" | "processExecutor" | "aggregate"
   > {
-  // Individual processing (receives application, service type, and namespace information)
+  // Individual processing (receives service type and namespace information)
   processType(args: {
     type: ParsedTailorDBType;
-    applicationNamespace: string;
     namespace: string;
     source: {
       filePath: string;
@@ -53,7 +69,6 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
 
   processResolver(args: {
     resolver: Resolver;
-    applicationNamespace: string;
     namespace: string;
   }): R | Promise<R>;
 
@@ -61,20 +76,18 @@ export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
 
   // Aggregation processing per namespace (optional, per service type)
   processTailorDBNamespace?(args: {
-    applicationNamespace: string;
     namespace: string;
     types: Record<string, T>;
   }): Ts | Promise<Ts>;
 
   processResolverNamespace?(args: {
-    applicationNamespace: string;
     namespace: string;
     resolvers: Record<string, R>;
   }): Rs | Promise<Rs>;
 
   // Final aggregation processing - receives result array for each application
   aggregate(args: {
-    inputs: GeneratorInput<Ts, Rs>[];
+    input: GeneratorInput<Ts, Rs>;
     executorInputs: E[];
     baseDir: string;
   }): GeneratorResult | Promise<GeneratorResult>;

@@ -15,10 +15,30 @@ concurrency:
 
 jobs:
   apply:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+            name: Linux
+            slug: linux
+          - os: windows-latest
+            shell: pwsh
+            name: Windows (PowerShell)
+            slug: win-pwsh
+          - os: windows-latest
+            shell: cmd
+            name: Windows (CMD)
+            slug: win-cmd
+    runs-on: ${{ matrix.os }}
+    name: Apply (${{ matrix.name }})
     permissions:
       contents: read
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     steps:
       - name: checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -33,17 +53,18 @@ jobs:
 
       - name: Create workspace
         working-directory: example
-        run: |
-          WORKSPACE_JSON=$(pnpm tailor-sdk workspace create \
-            --name "sdk-ci-${{ github.run_id }}" \
-            --region asia-northeast \
-            --format json)
-          WORKSPACE_ID=$(echo "$WORKSPACE_JSON" | jq -r '.id')
-          echo "TAILOR_PLATFORM_WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
+        run: pnpm tailor-sdk workspace create --name "sdk-ci-${{ github.run_id }}-${{ matrix.slug }}" --region asia-northeast --format json > workspace.json
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
-      - name: Apply workspace
+      - name: Set workspace ID
+        working-directory: example
+        shell: bash
+        run: |
+          WORKSPACE_ID=$(jq -r '.id' workspace.json)
+          echo "TAILOR_PLATFORM_WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
+
+      - name: Generate
         working-directory: example
         run: pnpm run generate
         env:
@@ -58,7 +79,6 @@ jobs:
       - name: Seed data
         working-directory: example
         run: |
-          pnpm run seed:validate
           pnpm run seed
           pnpm run seed:truncate -y
         env:
@@ -71,11 +91,8 @@ jobs:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Destroy workspace
-        if: ${{ always() }}
+        if: always()
         working-directory: example
-        run: |
-          pnpm tailor-sdk workspace delete \
-            --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" \
-            --yes
+        run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}

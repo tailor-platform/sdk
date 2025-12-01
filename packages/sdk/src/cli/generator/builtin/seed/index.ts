@@ -1,9 +1,14 @@
 import * as path from "node:path";
+import ml from "multiline-ts";
 import {
   type CodeGenerator,
   type GeneratorResult,
 } from "@/cli/generator/types";
 import { processGqlIngest } from "./gql-ingest-processor";
+import {
+  processIdpUser,
+  generateIdpUserSchemaFile,
+} from "./idp-user-processor";
 import {
   processLinesDb,
   generateLinesDbSchemaFile,
@@ -18,18 +23,40 @@ export const SeedGeneratorID = "@tailor-platform/seed";
  * Combines GraphQL Ingest and lines-db schema generation.
  */
 /**
- * Generates the exec.sh script content
+ * Generates the exec.mjs script content (Node.js executable)
  */
 function generateExecScript(
   machineUserName: string,
   configDir: string,
 ): string {
-  return /* sh */ `#!/usr/bin/env bash
+  return ml /* js */ `
+    import { execSync } from "node:child_process";
+    import { show, machineUserToken } from "@tailor-platform/sdk/cli";
 
-ENDPOINT="$(pnpm exec tailor-sdk show -f json | jq -r '.url' || true)/query"
-HEADER="{ \\"Authorization\\": \\"Bearer $(pnpm exec tailor-sdk machineuser token "${machineUserName}" -f json | jq -r '.access_token' || true)\\" }"
-gql-ingest -c ${configDir} -e "\${ENDPOINT}" --headers "\${HEADER}"
-`;
+    console.log("Starting seed data generation...");
+
+    const appInfo = await show();
+    const endpoint = \`\${appInfo.url}/query\`;
+
+    const tokenInfo = await machineUserToken({ name: "${machineUserName}" });
+    const headers = JSON.stringify({ Authorization: \`Bearer \${tokenInfo.accessToken}\` });
+
+    // Build command with platform-specific quoting
+    const headersArg = process.platform === "win32"
+      ? \`"\${headers.replace(/"/g, '\\\\"')}"\`  // Windows: escape " as \\"
+      : \`'\${headers}'\`;                        // Unix: use single quotes
+
+    const cmd = \`npx gql-ingest -c ${configDir} -e "\${endpoint}" --headers \${headersArg}\`;
+    console.log("Running:", cmd);
+
+    try {
+      execSync(cmd, { stdio: "inherit" });
+    } catch (error) {
+      console.error("Seed failed with exit code:", error.status);
+      process.exit(error.status ?? 1);
+    }
+
+    `;
 }
 
 export function createSeedGenerator(options: {
@@ -58,7 +85,7 @@ export function createSeedGenerator(options: {
 
     processResolver: (_args) => undefined,
 
-    aggregate: ({ inputs }) => {
+    aggregate: ({ input }) => {
       const entityDependencies: Record<
         /* outputDir */ string,
         Record</* type */ string, /* dependencies */ string[]>
@@ -66,63 +93,104 @@ export function createSeedGenerator(options: {
 
       const files: GeneratorResult["files"] = [];
 
-      for (const input of inputs) {
-        for (const nsResult of input.tailordb) {
-          if (!nsResult.types) continue;
+      for (const nsResult of input.tailordb) {
+        if (!nsResult.types) continue;
 
+        const outputBaseDir = options.distPath;
+        if (!(outputBaseDir in entityDependencies)) {
+          entityDependencies[outputBaseDir] = {};
+        }
+
+        for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
+          const { gqlIngest, linesDb } = metadata;
+
+          entityDependencies[outputBaseDir][gqlIngest.name] =
+            gqlIngest.dependencies;
+
+          // Generate GraphQL Ingest files
+          files.push(
+            {
+              path: path.join(
+                outputBaseDir,
+                "mappings",
+                `${gqlIngest.name}.json`,
+              ),
+              content: JSON.stringify(gqlIngest.mapping, null, 2) + "\n",
+            },
+            {
+              path: path.join(outputBaseDir, gqlIngest.mapping.dataFile),
+              content: "",
+              skipIfExists: true,
+            },
+            {
+              path: path.join(outputBaseDir, gqlIngest.mapping.graphqlFile),
+              content: gqlIngest.graphql,
+            },
+          );
+
+          // Generate lines-db schema file
+          const schemaOutputPath = path.join(
+            outputBaseDir,
+            "data",
+            `${linesDb.typeName}.schema.ts`,
+          );
+          const importPath = path.relative(
+            path.dirname(schemaOutputPath),
+            linesDb.importPath,
+          );
+          const normalizedImportPath = importPath
+            .replace(/\.ts$/, "")
+            .startsWith(".")
+            ? importPath.replace(/\.ts$/, "")
+            : `./${importPath.replace(/\.ts$/, "")}`;
+
+          files.push({
+            path: schemaOutputPath,
+            content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
+          });
+        }
+      }
+
+      // Generate IdP user files if BuiltInIdP is configured
+      if (input.auth) {
+        const idpUser = processIdpUser(input.auth);
+        if (idpUser) {
           const outputBaseDir = options.distPath;
           if (!(outputBaseDir in entityDependencies)) {
             entityDependencies[outputBaseDir] = {};
           }
 
-          for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
-            const { gqlIngest, linesDb } = metadata;
+          // Add _User to entityDependencies
+          entityDependencies[outputBaseDir][idpUser.name] =
+            idpUser.dependencies;
 
-            entityDependencies[outputBaseDir][gqlIngest.name] =
-              gqlIngest.dependencies;
+          // Generate GraphQL mutation file
+          files.push({
+            path: path.join(outputBaseDir, idpUser.mapping.graphqlFile),
+            content: idpUser.graphql,
+          });
 
-            // Generate GraphQL Ingest files
-            files.push(
-              {
-                path: path.join(
-                  outputBaseDir,
-                  "mappings",
-                  `${gqlIngest.name}.json`,
-                ),
-                content: JSON.stringify(gqlIngest.mapping, null, 2) + "\n",
-              },
-              {
-                path: path.join(outputBaseDir, gqlIngest.mapping.dataFile),
-                content: "",
-                skipIfExists: true,
-              },
-              {
-                path: path.join(outputBaseDir, gqlIngest.mapping.graphqlFile),
-                content: gqlIngest.graphql,
-              },
-            );
+          // Generate mapping file
+          files.push({
+            path: path.join(outputBaseDir, "mappings", `${idpUser.name}.json`),
+            content: JSON.stringify(idpUser.mapping, null, 2) + "\n",
+          });
 
-            // Generate lines-db schema file
-            const schemaOutputPath = path.join(
-              outputBaseDir,
-              "data",
-              `${linesDb.typeName}.schema.ts`,
-            );
-            const importPath = path.relative(
-              path.dirname(schemaOutputPath),
-              linesDb.importPath,
-            );
-            const normalizedImportPath = importPath
-              .replace(/\.ts$/, "")
-              .startsWith(".")
-              ? importPath.replace(/\.ts$/, "")
-              : `./${importPath.replace(/\.ts$/, "")}`;
+          // Generate empty JSONL data file
+          files.push({
+            path: path.join(outputBaseDir, idpUser.mapping.dataFile),
+            content: "",
+            skipIfExists: true,
+          });
 
-            files.push({
-              path: schemaOutputPath,
-              content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
-            });
-          }
+          // Generate schema file with foreign key
+          files.push({
+            path: path.join(outputBaseDir, "data", `${idpUser.name}.schema.ts`),
+            content: generateIdpUserSchemaFile(
+              idpUser.schema.usernameField,
+              idpUser.schema.userTypeName,
+            ),
+          });
         }
       }
 
@@ -139,15 +207,14 @@ export function createSeedGenerator(options: {
 `,
         });
 
-        // Generate exec.sh if machineUserName is provided
+        // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
           files.push({
-            path: path.join(outputDir, "exec.sh"),
+            path: path.join(outputDir, "exec.mjs"),
             content: generateExecScript(
               options.machineUserName,
               path.basename(outputDir),
             ),
-            executable: true,
           });
         }
       }

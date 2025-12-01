@@ -3,6 +3,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import importPlugin from "eslint-plugin-import";
+import jsdoc from "eslint-plugin-jsdoc";
 
 export default defineConfig([
   globalIgnores(["dist/"]),
@@ -10,6 +11,20 @@ export default defineConfig([
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
   importPlugin.flatConfigs.typescript,
+  jsdoc.configs["flat/recommended"],
+  {
+    rules: {
+      "jsdoc/require-param-type": "off",
+      "jsdoc/require-returns-type": "off",
+      "jsdoc/tag-lines": "off",
+      "jsdoc/check-param-names": "error",
+      // TODO: Enable these rules after fixing all issues
+      // or apply rules per folder
+      "jsdoc/require-jsdoc": ["off", { publicOnly: true }],
+      "jsdoc/require-param": "off",
+      "jsdoc/require-returns": "off",
+    },
+  },
   {
     languageOptions: {
       parserOptions: {
