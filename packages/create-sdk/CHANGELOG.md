@@ -1,5 +1,13 @@
 # @tailor-platform/create-sdk
 
+## 0.12.3
+
+### Patch Changes
+
+- [#101](https://github.com/tailor-platform/sdk/pull/101) [`029bd30`](https://github.com/tailor-platform/sdk/commit/029bd30b7c12ba9b69d7c61357da7bd312b72dad) Thanks [@remiposo](https://github.com/remiposo)! - Include .gitignore when running with npm
+
+  Fixed an issue where .gitignore was renamed to .npmignore when running with npm.
+
 ## 0.12.2
 
 ## 0.12.1
