@@ -30,10 +30,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### CLI Commands
 
+See [packages/sdk/docs/cli-reference.md](packages/sdk/docs/cli-reference.md) for the full CLI reference.
+
+Common commands:
+
 - `pnpm exec tailor-sdk init <project-name>` - Initialize new project
 - `pnpm exec tailor-sdk generate` - Generate code (types, SDL, bundled functions)
-- `pnpm exec tailor-sdk generate --watch` - Watch mode for regeneration
 - `pnpm exec tailor-sdk apply` - Deploy to Tailor Platform
+- `pnpm exec tailor-sdk show` - Show applied application information
 
 ## Architecture Overview
 

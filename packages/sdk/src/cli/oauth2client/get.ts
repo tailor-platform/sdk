@@ -1,0 +1,108 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import { defineCommand } from "citty";
+import {
+  commonArgs,
+  formatArgs,
+  parseFormat,
+  printWithFormat,
+  withCommonArgs,
+} from "../args";
+import { initOperatorClient } from "../client";
+import { loadConfig } from "../config-loader";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+import {
+  type OAuth2ClientCredentials,
+  toOAuth2ClientCredentials,
+} from "./transform";
+
+export interface OAuth2ClientGetOptions {
+  name: string;
+  workspaceId?: string;
+  profile?: string;
+  configPath?: string;
+}
+
+export async function oauth2ClientGet(
+  options: OAuth2ClientGetOptions,
+): Promise<OAuth2ClientCredentials> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+  const configPath = loadConfigPath(options.configPath);
+
+  const { config } = await loadConfig(configPath);
+  const { application } = await client.getApplication({
+    workspaceId,
+    applicationName: config.name,
+  });
+  if (!application?.authNamespace) {
+    throw new Error(
+      `Application ${config.name} does not have an auth configuration.`,
+    );
+  }
+
+  try {
+    const { oauth2Client } = await client.getAuthOAuth2Client({
+      workspaceId,
+      namespaceName: application.authNamespace,
+      name: options.name,
+    });
+
+    return toOAuth2ClientCredentials(oauth2Client!);
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.NotFound) {
+      throw new Error(`OAuth2 client '${options.name}' not found.`);
+    }
+    throw error;
+  }
+}
+
+export const getCommand = defineCommand({
+  meta: {
+    name: "get",
+    description: "Get OAuth2 client credentials",
+  },
+  args: {
+    ...commonArgs,
+    ...formatArgs,
+    name: {
+      type: "positional",
+      description: "OAuth2 client name",
+      required: true,
+    },
+    "workspace-id": {
+      type: "string",
+      description: "Workspace ID",
+      alias: "w",
+    },
+    profile: {
+      type: "string",
+      description: "Workspace profile",
+      alias: "p",
+    },
+    config: {
+      type: "string",
+      description: "Path to SDK config file",
+      alias: "c",
+      default: "tailor.config.ts",
+    },
+  },
+  run: withCommonArgs(async (args) => {
+    const format = parseFormat(args.format);
+
+    const credentials = await oauth2ClientGet({
+      name: args.name,
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      configPath: args.config,
+    });
+
+    printWithFormat(credentials, format);
+  }),
+});

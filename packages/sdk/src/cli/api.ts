@@ -41,3 +41,15 @@ export {
   type MachineUserTokenOptions,
   type MachineUserTokenInfo,
 } from "./machineuser/token";
+export {
+  oauth2ClientGet,
+  type OAuth2ClientGetOptions,
+} from "./oauth2client/get";
+export {
+  oauth2ClientList,
+  type OAuth2ClientListOptions,
+} from "./oauth2client/list";
+export type {
+  OAuth2ClientInfo,
+  OAuth2ClientCredentials,
+} from "./oauth2client/transform";
