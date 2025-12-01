@@ -1,4 +1,9 @@
 // CLI API exports for programmatic usage
+import { register } from "node:module";
+
+// Register tsx to handle TypeScript files when using CLI API programmatically
+register("tsx", import.meta.url, { data: {} });
+
 export { apply } from "./apply/index";
 export type { ApplyOptions } from "./apply/index";
 export { generate } from "./generator/index";
@@ -36,3 +41,15 @@ export {
   type MachineUserTokenOptions,
   type MachineUserTokenInfo,
 } from "./machineuser/token";
+export {
+  oauth2ClientGet,
+  type OAuth2ClientGetOptions,
+} from "./oauth2client/get";
+export {
+  oauth2ClientList,
+  type OAuth2ClientListOptions,
+} from "./oauth2client/list";
+export type {
+  OAuth2ClientInfo,
+  OAuth2ClientCredentials,
+} from "./oauth2client/transform";

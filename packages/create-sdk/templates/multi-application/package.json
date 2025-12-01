@@ -1,0 +1,24 @@
+{
+  "name": "multi-application",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "pnpm run deploy:user && pnpm run deploy:admin",
+    "deploy:user": "tailor-sdk apply -c apps/user/tailor.config.ts",
+    "deploy:admin": "tailor-sdk apply -c apps/admin/tailor.config.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint --cache .",
+    "lint:fix": "eslint --cache --fix .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@tailor-platform/sdk": "workspace:^",
+    "@types/node": "22.19.1",
+    "eslint": "9.39.1",
+    "prettier": "3.7.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.48.0"
+  }
+}

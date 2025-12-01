@@ -16,7 +16,7 @@ export default defineConfig({
     banner: (chunk) => {
       const deps = chunk.fileName.split("/").length;
       if (chunk.fileName.endsWith(".d.mts")) {
-        return `/// <reference path="./${"../".repeat(deps - 1)}plugin-generated.d.ts" />\n`;
+        return `/// <reference path="./${"../".repeat(deps - 1)}user-defined.d.ts" />\n`;
       }
       return "";
     },

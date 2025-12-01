@@ -1,6 +1,10 @@
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import type { CodeGeneratorBase } from "@/parser/generator-config";
+import type {
+  IdProviderConfig,
+  OAuth2Client,
+} from "@/parser/service/auth/types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 interface GeneratedFile {
@@ -27,10 +31,24 @@ export interface ResolverNamespaceResult<R> {
   resolvers: R;
 }
 
+// Auth configuration for generators
+export interface GeneratorAuthInput {
+  name: string;
+  userProfile?: {
+    typeName: string;
+    namespace: string;
+    usernameField: string;
+  };
+  machineUsers?: Record<string, { attributes: Record<string, unknown> }>;
+  oauth2Clients?: Record<string, OAuth2Client>;
+  idProvider?: IdProviderConfig;
+}
+
 // Generator input for each application
 export interface GeneratorInput<T, R> {
   tailordb: TailorDBNamespaceResult<T>[];
   resolver: ResolverNamespaceResult<R>[];
+  auth?: GeneratorAuthInput;
 }
 
 // CodeGenerator interface implements the base type from parser

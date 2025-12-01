@@ -8,6 +8,13 @@
   "dependencyDashboardApproval": false,
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@connectrpc/*"],
+      "groupName": "@connectrpc"
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",

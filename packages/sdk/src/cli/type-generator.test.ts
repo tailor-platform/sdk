@@ -50,8 +50,7 @@ describe("generateTypeDefinition", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("// This file is auto-generated");
-    expect(result).toContain("declare global {");
-    expect(result).toContain("namespace TailorSDK {");
+    expect(result).toContain('declare module "@tailor-platform/sdk"');
     expect(result).toContain("export {};");
   });
 

@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/create-sdk",
-  "version": "0.11.3",
+  "version": "0.12.2",
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
   "type": "module",
@@ -38,6 +38,6 @@
     "eslint": "9.39.1",
     "tsdown": "0.15.6",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.47.0"
+    "typescript-eslint": "8.48.0"
   }
 }

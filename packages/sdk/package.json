@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "0.11.3",
+  "version": "0.12.2",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "main": "./dist/configure/index.mjs",
@@ -60,7 +60,7 @@
     "citty": "0.1.6",
     "confbox": "0.2.2",
     "consola": "3.4.2",
-    "es-toolkit": "1.41.0",
+    "es-toolkit": "1.42.0",
     "inflection": "3.0.2",
     "madge": "8.0.0",
     "multiline-ts": "4.0.1",
@@ -68,7 +68,6 @@
     "oxc-parser": "0.98.0",
     "pkg-types": "2.3.0",
     "rolldown": "catalog:",
-    "smol-toml": "1.4.2",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.20.6",
@@ -82,14 +81,14 @@
     "@tailor-platform/function-types": "0.7.2",
     "@types/madge": "5.0.3",
     "@types/node": "22.19.1",
-    "cross-env": "^10.1.0",
+    "cross-env": "10.1.0",
     "eslint": "9.39.1",
-    "eslint-plugin-jsdoc": "^61.4.1",
+    "eslint-plugin-jsdoc": "61.4.1",
     "globals": "16.5.0",
     "sonda": "0.10.0",
     "tsdown": "0.15.6",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.47.0",
-    "vitest": "4.0.13"
+    "typescript-eslint": "8.48.0",
+    "vitest": "4.0.14"
   }
 }

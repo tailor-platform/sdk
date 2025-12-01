@@ -499,6 +499,71 @@ tailor-sdk machineuser token <name> [options]
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-f, --format` - Output format: `table` or `json` (default: `table`)
 
+### oauth2client
+
+Manage OAuth2 clients in your Tailor Platform application.
+
+```bash
+tailor-sdk oauth2client <subcommand> [options]
+```
+
+#### oauth2client list
+
+List all OAuth2 clients in the application.
+
+```bash
+tailor-sdk oauth2client list [options]
+```
+
+**Options:**
+
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
+
+**Output:**
+
+Returns a list of OAuth2 clients with the following fields:
+
+- `name` - Client name
+- `description` - Client description
+- `clientId` - OAuth2 client ID
+- `grantTypes` - Supported grant types (e.g., `authorization_code`, `refresh_token`)
+- `redirectUris` - Registered redirect URIs
+- `createdAt` - Creation timestamp
+
+#### oauth2client get
+
+Get OAuth2 client credentials (including client secret).
+
+```bash
+tailor-sdk oauth2client get <name> [options]
+```
+
+**Arguments:**
+
+- `name` - OAuth2 client name (required)
+
+**Options:**
+
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
+
+**Output:**
+
+Returns the OAuth2 client credentials with the following fields:
+
+- `name` - Client name
+- `description` - Client description
+- `clientId` - OAuth2 client ID
+- `clientSecret` - OAuth2 client secret
+- `grantTypes` - Supported grant types
+- `redirectUris` - Registered redirect URIs
+- `createdAt` - Creation timestamp
+
 ### secret
 
 Manage Secret Manager vaults and secrets.

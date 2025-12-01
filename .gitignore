@@ -34,6 +34,6 @@ coverage/
 # Tailor Platform SDK
 **/.tailor-sdk/**
 .turbo
-plugin-generated.d.ts
+user-defined.d.ts
 
 .mcp.json

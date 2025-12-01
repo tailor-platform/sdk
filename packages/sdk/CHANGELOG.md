@@ -1,5 +1,53 @@
 # @tailor-platform/sdk
 
+## 0.12.2
+
+### Patch Changes
+
+- [#99](https://github.com/tailor-platform/sdk/pull/99) [`f3f2f5a`](https://github.com/tailor-platform/sdk/commit/f3f2f5aeb30dd69477d49e1e2bb78cd237eafe7b) Thanks [@remiposo](https://github.com/remiposo)! - Allow setting self relationship with keyOnly
+
+  Fixed an issue where apply failed with the following configuration:
+
+  ```typescript
+  db.type("Node", {
+    childId: db.uuid().relation({
+      type: "keyOnly",
+      toward: { type: "self" },
+    }),
+  });
+  ```
+
+## 0.12.1
+
+### Patch Changes
+
+- [#94](https://github.com/tailor-platform/sdk/pull/94) [`7262efa`](https://github.com/tailor-platform/sdk/commit/7262efa4a4783e10003b0b46208e7ae22043cdc9) Thanks [@remiposo](https://github.com/remiposo)! - Added oauth2client commands
+
+  Added commands to retrieve OAuth2 client credentials (clientId and clientSecret) after deployment.
+  For security, clientSecret is only shown in the `get` command.
+
+  ```sh
+  tailor-sdk oauth2client list
+  tailor-sdk oauth2client get <name>
+  ```
+
+- [#95](https://github.com/tailor-platform/sdk/pull/95) [`e394176`](https://github.com/tailor-platform/sdk/commit/e3941762da3a5aca68ab63f214c32c4f6fd6a582) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: improve user-defined types
+
+## 0.12.0
+
+### Minor Changes
+
+- [#86](https://github.com/tailor-platform/sdk/pull/86) [`20a816e`](https://github.com/tailor-platform/sdk/commit/20a816e149c1ff14a7f505accf69216da6d5e245) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve seed generator with Windows compatibility and IdP user support
+  - Generate `exec.mjs` instead of `exec.sh` for cross-platform compatibility
+  - Add IdP user seed generation (`_User` entity) when `BuiltInIdP` is configured
+    - Generates `_User.schema.ts`, `_User.graphql`, `_User.json` mapping files
+    - Includes foreign key to user profile type and unique index on `name` field
+    - Automatically sets dependency order (User → \_User)
+
+### Patch Changes
+
+- [#70](https://github.com/tailor-platform/sdk/pull/70) [`94e2f1c`](https://github.com/tailor-platform/sdk/commit/94e2f1cf9036bd69c6f691c6536841a693afe616) Thanks [@riku99](https://github.com/riku99)! - Simplify generator architecture to single-application model
+
 ## 0.11.3
 
 ### Patch Changes
