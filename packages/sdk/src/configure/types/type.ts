@@ -29,7 +29,8 @@ export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   const Output = any,
   M extends FieldMetadata = FieldMetadata,
-> implements TailorFieldInput {
+> implements TailorFieldInput
+{
   protected _metadata: M;
   public readonly _defined: Defined = undefined as unknown as Defined;
   public readonly _output = undefined as Output;

@@ -1,3 +1,5 @@
+import type { TailorEnv } from "@/configure/types/env";
+
 /**
  * Symbol used to brand WorkflowJob objects created by createWorkflowJob.
  * This enables reliable runtime detection of workflow jobs regardless of
@@ -36,6 +38,16 @@ type JobsFromDeps<
       : JobsFromDeps<Rest, Set>
   : object;
 
+/**
+ * Context object passed as the second argument to workflow job body functions.
+ */
+export type WorkflowJobContext<
+  Deps extends readonly WorkflowJob<any, any, any, any>[],
+> = {
+  jobs: JobsFromDeps<Deps>;
+  env: TailorEnv;
+};
+
 export interface WorkflowJob<
   Name extends string = string,
   Input = any,
@@ -45,14 +57,17 @@ export interface WorkflowJob<
   readonly [WORKFLOW_JOB_BRAND]?: true;
   name: Name;
   deps?: Deps;
-  body: (input: Input, jobs: JobsFromDeps<Deps>) => Output | Promise<Output>;
+  body: (
+    input: Input,
+    context: WorkflowJobContext<Deps>,
+  ) => Output | Promise<Output>;
 }
 
 type WorkflowJobBody<
   I,
   O,
   Deps extends readonly WorkflowJob<any, any, any, any>[],
-> = (input: I, jobs: JobsFromDeps<Deps>) => O | Promise<O>;
+> = (input: I, context: WorkflowJobContext<Deps>) => O | Promise<O>;
 
 interface CreateWorkflowJobFunction {
   <

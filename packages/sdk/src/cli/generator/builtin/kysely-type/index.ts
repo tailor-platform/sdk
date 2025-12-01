@@ -12,13 +12,16 @@ export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 /**
  * Main entry point for the Kysely type generation system.
  */
-export class KyselyGenerator implements CodeGenerator<
-  KyselyTypeMetadata,
-  undefined,
-  undefined,
-  KyselyNamespaceMetadata,
-  undefined
-> {
+export class KyselyGenerator
+  implements
+    CodeGenerator<
+      KyselyTypeMetadata,
+      undefined,
+      undefined,
+      KyselyNamespaceMetadata,
+      undefined
+    >
+{
   readonly id = KyselyGeneratorID;
   readonly description = "Generates Kysely type definitions for TailorDB types";
 

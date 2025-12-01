@@ -21,8 +21,9 @@ type OutputType<O> =
 
 export function createResolver<
   Input extends Record<string, TailorField<any>> | undefined = undefined,
-  Output extends TailorField<any> | Record<string, TailorField<any>> =
-    TailorField<any>,
+  Output extends
+    | TailorField<any>
+    | Record<string, TailorField<any>> = TailorField<any>,
 >(
   config: Omit<ResolverInput, "input" | "output" | "body"> &
     Readonly<{

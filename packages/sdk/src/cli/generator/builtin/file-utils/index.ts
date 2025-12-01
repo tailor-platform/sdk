@@ -12,13 +12,10 @@ export const FileUtilsGeneratorID = "@tailor-platform/file-utils";
 /**
  * Generator for file utility functions from TailorDB type definitions.
  */
-export class FileUtilsGenerator implements CodeGenerator<
-  FileUtilMetadata,
-  undefined,
-  undefined,
-  string,
-  undefined
-> {
+export class FileUtilsGenerator
+  implements
+    CodeGenerator<FileUtilMetadata, undefined, undefined, string, undefined>
+{
   readonly id = FileUtilsGeneratorID;
   readonly description =
     "Generates TypeWithFiles interface from TailorDB type definitions";
