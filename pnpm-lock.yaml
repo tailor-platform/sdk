@@ -325,8 +325,8 @@ importers:
         specifier: 1.0.0-beta.41
         version: 1.0.0-beta.41
       smol-toml:
-        specifier: 1.4.2
-        version: 1.4.2
+        specifier: 1.5.2
+        version: 1.5.2
       table:
         specifier: 6.9.0
         version: 6.9.0
@@ -3135,8 +3135,8 @@ packages:
     resolution: {integrity: sha512-qMCMfhY040cVHT43K9BFygqYbUPFZKHOg7K73mtTWJRb8pyP3fzf4Ixd5SzdEJQ6MRUg/WBnOLxghZtKKurENQ==}
     engines: {node: '>=10'}
 
-  smol-toml@1.4.2:
-    resolution: {integrity: sha512-rInDH6lCNiEyn3+hH8KVGFdbjc099j47+OSgbMrfDYX1CmXLfdKd7qi6IfcWj2wFxvSVkuI46M+wPGYfEOEj6g==}
+  smol-toml@1.5.2:
+    resolution: {integrity: sha512-QlaZEqcAH3/RtNyet1IPIYPsEWAaYyXXv1Krsi+1L/QHppjX4Ifm8MQsBISz9vE8cHicIq3clogsheili5vhaQ==}
     engines: {node: '>= 18'}
 
   sonda@0.10.0:
@@ -6464,7 +6464,7 @@ snapshots:
       astral-regex: 2.0.0
       is-fullwidth-code-point: 3.0.0
 
-  smol-toml@1.4.2: {}
+  smol-toml@1.5.2: {}
 
   sonda@0.10.0:
     dependencies:
