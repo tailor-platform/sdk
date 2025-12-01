@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { resolve } from "node:path";
 import {
   readFileSync,
   writeFileSync,
@@ -8,6 +7,7 @@ import {
   existsSync,
   copyFileSync,
 } from "node:fs";
+import { resolve } from "node:path";
 
 // Get SDK version or URL from environment variable or package.json
 const sdkVersionOrUrl = process.env.TAILOR_SDK_VERSION;
