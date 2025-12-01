@@ -18,6 +18,9 @@ export {
   TailorField,
   type TailorUser,
   unauthenticatedTailorUser,
+  type AttributeMap,
+  type AttributeList,
+  type Env,
 } from "@/configure/types";
 
 export * from "@/configure/services";

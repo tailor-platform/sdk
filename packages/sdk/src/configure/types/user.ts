@@ -1,22 +1,18 @@
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace TailorSDK {
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-    interface AttributeMap {}
-    interface AttributeList {
-      __tuple?: []; // Marker for tuple type
-    }
-  }
+// Interfaces for module augmentation
+// Users can extend these via: declare module "@tailor-platform/sdk" { interface AttributeMap { ... } }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AttributeMap {}
+export interface AttributeList {
+  __tuple?: []; // Marker for tuple type
 }
 
-export type InferredAttributeMap = keyof TailorSDK.AttributeMap extends never
+export type InferredAttributeMap = keyof AttributeMap extends never
   ? Record<string, string | string[] | boolean | boolean[] | undefined>
-  : TailorSDK.AttributeMap;
+  : AttributeMap;
 
-export type InferredAttributeList =
-  TailorSDK.AttributeList["__tuple"] extends []
-    ? string[]
-    : TailorSDK.AttributeList["__tuple"];
+export type InferredAttributeList = AttributeList["__tuple"] extends []
+  ? string[]
+  : AttributeList["__tuple"];
 
 /** Represents a user in the Tailor platform. */
 export type TailorUser = {
