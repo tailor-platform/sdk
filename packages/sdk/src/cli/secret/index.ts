@@ -1,5 +1,7 @@
 import { defineCommand, runCommand } from "citty";
 import { createSecretCommand } from "./create";
+import { deleteSecretCommand } from "./delete";
+import { listSecretCommand } from "./list";
 import { updateSecretCommand } from "./update";
 import { vaultCommand } from "./vault";
 
@@ -10,6 +12,8 @@ export const secretCommand = defineCommand({
   },
   subCommands: {
     create: createSecretCommand,
+    delete: deleteSecretCommand,
+    list: listSecretCommand,
     update: updateSecretCommand,
     vault: vaultCommand,
   },
