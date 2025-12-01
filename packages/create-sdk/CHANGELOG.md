@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 0.12.1
+
+### Patch Changes
+
+- [#79](https://github.com/tailor-platform/sdk/pull/79) [`f68247d`](https://github.com/tailor-platform/sdk/commit/f68247deded52ee8687fdf750e5321f7a8c8da4e) Thanks [@remiposo](https://github.com/remiposo)! - Added the multi-application template
+
 ## 0.12.0
 
 ## 0.11.3
