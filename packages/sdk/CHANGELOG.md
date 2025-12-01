@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 0.12.1
+
+### Patch Changes
+
+- [#94](https://github.com/tailor-platform/sdk/pull/94) [`7262efa`](https://github.com/tailor-platform/sdk/commit/7262efa4a4783e10003b0b46208e7ae22043cdc9) Thanks [@remiposo](https://github.com/remiposo)! - Added oauth2client commands
+
+  Added commands to retrieve OAuth2 client credentials (clientId and clientSecret) after deployment.
+  For security, clientSecret is only shown in the `get` command.
+
+  ```sh
+  tailor-sdk oauth2client list
+  tailor-sdk oauth2client get <name>
+  ```
+
+- [#95](https://github.com/tailor-platform/sdk/pull/95) [`e394176`](https://github.com/tailor-platform/sdk/commit/e3941762da3a5aca68ab63f214c32c4f6fd6a582) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: improve user-defined types
+
 ## 0.12.0
 
 ### Minor Changes
