@@ -179,11 +179,11 @@ export function resolveTypeDefinitionPath(configPath: string): string {
       "@tailor-platform",
       "sdk",
       "dist",
-      "plugin-generated.d.ts",
+      "user-defined.d.ts",
     );
   }
 
-  return path.join(packageDir, "dist", "plugin-generated.d.ts");
+  return path.join(packageDir, "dist", "user-defined.d.ts");
 }
 
 export async function generateUserTypes(
