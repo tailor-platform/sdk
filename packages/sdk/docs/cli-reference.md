@@ -498,3 +498,123 @@ tailor-sdk machineuser token <name> [options]
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-f, --format` - Output format: `table` or `json` (default: `table`)
+
+### secret
+
+Manage Secret Manager vaults and secrets.
+
+```bash
+tailor-sdk secret <subcommand> [options]
+```
+
+#### secret vault
+
+Manage Secret Manager vaults.
+
+```bash
+tailor-sdk secret vault <subcommand> [options]
+```
+
+##### secret vault create
+
+Create a new Secret Manager vault.
+
+```bash
+tailor-sdk secret vault create [options]
+```
+
+**Options:**
+
+- `-n, --name` - Vault name (required)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+
+##### secret vault delete
+
+Delete a Secret Manager vault.
+
+```bash
+tailor-sdk secret vault delete [options]
+```
+
+**Options:**
+
+- `-n, --name` - Vault name (required)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+
+##### secret vault list
+
+List all Secret Manager vaults in the workspace.
+
+```bash
+tailor-sdk secret vault list [options]
+```
+
+**Options:**
+
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
+
+#### secret create
+
+Create a secret in a vault.
+
+```bash
+tailor-sdk secret create [options]
+```
+
+**Options:**
+
+- `--vault-name` - Vault name (required)
+- `-n, --name` - Secret name (required)
+- `-v, --value` - Secret value (required)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+
+#### secret update
+
+Update a secret in a vault.
+
+```bash
+tailor-sdk secret update [options]
+```
+
+**Options:**
+
+- `--vault-name` - Vault name (required)
+- `-n, --name` - Secret name (required)
+- `-v, --value` - New secret value (required)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+
+#### secret list
+
+List all secrets in a vault.
+
+```bash
+tailor-sdk secret list [options]
+```
+
+**Options:**
+
+- `--vault-name` - Vault name (required)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-f, --format` - Output format: `table` or `json` (default: `table`)
+
+#### secret delete
+
+Delete a secret in a vault.
+
+```bash
+tailor-sdk secret delete [options]
+```
+
+**Options:**
+
+- `--vault-name` - Vault name (required)
+- `-n, --name` - Secret name (required)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
