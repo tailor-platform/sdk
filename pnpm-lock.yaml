@@ -201,6 +201,30 @@ importers:
         specifier: 8.48.0
         version: 8.48.0(eslint@9.39.1(jiti@2.5.1))(typescript@5.9.3)
 
+  packages/create-sdk/templates/multi-application:
+    devDependencies:
+      '@eslint/js':
+        specifier: 9.39.1
+        version: 9.39.1
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../../../sdk
+      '@types/node':
+        specifier: 22.19.1
+        version: 22.19.1
+      eslint:
+        specifier: 9.39.1
+        version: 9.39.1(jiti@2.5.1)
+      prettier:
+        specifier: 3.6.2
+        version: 3.6.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.48.0
+        version: 8.48.0(eslint@9.39.1(jiti@2.5.1))(typescript@5.9.3)
+
   packages/create-sdk/templates/testing:
     dependencies:
       '@tailor-platform/function-kysely-tailordb':
