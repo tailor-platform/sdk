@@ -52,11 +52,16 @@ export interface GeneratorInput<T, R> {
 }
 
 // CodeGenerator interface implements the base type from parser
-export interface CodeGenerator<T = any, R = any, E = any, Ts = any, Rs = any>
-  extends Omit<
-    CodeGeneratorBase,
-    "processType" | "processResolver" | "processExecutor" | "aggregate"
-  > {
+export interface CodeGenerator<
+  T = any,
+  R = any,
+  E = any,
+  Ts = any,
+  Rs = any,
+> extends Omit<
+  CodeGeneratorBase,
+  "processType" | "processResolver" | "processExecutor" | "aggregate"
+> {
   // Individual processing (receives service type and namespace information)
   processType(args: {
     type: ParsedTailorDBType;

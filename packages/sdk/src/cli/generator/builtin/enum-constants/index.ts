@@ -16,16 +16,13 @@ export const EnumConstantsGeneratorID = "@tailor-platform/enum-constants";
 /**
  * Generator for enum constants from TailorDB type definitions.
  */
-export class EnumConstantsGenerator
-  implements
-    CodeGenerator<
-      EnumConstantMetadata,
-      undefined,
-      undefined,
-      EnumNamespaceMetadata,
-      undefined
-    >
-{
+export class EnumConstantsGenerator implements CodeGenerator<
+  EnumConstantMetadata,
+  undefined,
+  undefined,
+  EnumNamespaceMetadata,
+  undefined
+> {
   readonly id = EnumConstantsGeneratorID;
   readonly description =
     "Generates enum constants from TailorDB type definitions";
