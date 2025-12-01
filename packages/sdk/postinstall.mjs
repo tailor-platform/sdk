@@ -22,9 +22,9 @@ async function install() {
 
   console.log("🔧 Initializing Tailor Platform SDK type definitions...");
 
-  // Create plugin-generated.d.ts in the dist directory
+  // Create user-defined.d.ts in the dist directory
   const distDir = resolve(__dirname, "dist");
-  const pluginTypesPath = resolve(distDir, "plugin-generated.d.ts");
+  const pluginTypesPath = resolve(distDir, "user-defined.d.ts");
 
   // Check if dist directory exists
   if (!existsSync(distDir)) {
