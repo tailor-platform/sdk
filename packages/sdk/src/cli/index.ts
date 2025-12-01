@@ -11,10 +11,10 @@ import { machineuserCommand } from "./machineuser";
 import { readPackageJson } from "./package-json";
 import { profileCommand } from "./profile";
 import { removeCommand } from "./remove";
+import { secretCommand } from "./secret";
 import { showCommand } from "./show";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
-import { vaultCommand } from "./vault";
 import { workspaceCommand } from "./workspace";
 
 register("tsx", import.meta.url, { data: {} });
@@ -40,9 +40,9 @@ const mainCommand = defineCommand({
     remove: removeCommand,
     show: showCommand,
     tailordb: tailordbCommand,
+    secret: secretCommand,
     user: userCommand,
     workspace: workspaceCommand,
-    vault: vaultCommand,
   },
 });
 

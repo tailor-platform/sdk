@@ -6,9 +6,9 @@ import {
   parseFormat,
   printWithFormat,
   withCommonArgs,
-} from "../args";
-import { fetchAll, initOperatorClient } from "../client";
-import { loadAccessToken, loadWorkspaceId } from "../context";
+} from "../../args";
+import { fetchAll, initOperatorClient } from "../../client";
+import { loadAccessToken, loadWorkspaceId } from "../../context";
 import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface VaultListOptions {
@@ -54,8 +54,6 @@ export async function vaultList(
     });
     return [vaults, nextPageToken];
   });
-
-  console.log(vaults);
 
   return vaults.map(vaultInfo);
 }
