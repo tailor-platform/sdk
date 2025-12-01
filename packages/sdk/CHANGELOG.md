@@ -1,5 +1,22 @@
 # @tailor-platform/sdk
 
+## 0.12.2
+
+### Patch Changes
+
+- [#99](https://github.com/tailor-platform/sdk/pull/99) [`f3f2f5a`](https://github.com/tailor-platform/sdk/commit/f3f2f5aeb30dd69477d49e1e2bb78cd237eafe7b) Thanks [@remiposo](https://github.com/remiposo)! - Allow setting self relationship with keyOnly
+
+  Fixed an issue where apply failed with the following configuration:
+
+  ```typescript
+  db.type("Node", {
+    childId: db.uuid().relation({
+      type: "keyOnly",
+      toward: { type: "self" },
+    }),
+  });
+  ```
+
 ## 0.12.1
 
 ### Patch Changes
