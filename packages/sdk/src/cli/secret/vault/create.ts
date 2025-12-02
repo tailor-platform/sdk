@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "../../args";
@@ -38,10 +39,17 @@ export const createCommand = defineCommand({
       profile: args.profile,
     });
 
-    await client.createSecretManagerVault({
-      workspaceId,
-      secretmanagerVaultName: args.name,
-    });
+    try {
+      await client.createSecretManagerVault({
+        workspaceId,
+        secretmanagerVaultName: args.name,
+      });
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
+        throw new Error(`Vault "${args.name}" already exists.`);
+      }
+      throw error;
+    }
 
     consola.success(`Vault: ${args.name} created`);
   }),

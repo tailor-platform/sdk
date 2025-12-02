@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "../../args";
@@ -38,10 +39,17 @@ export const deleteCommand = defineCommand({
       profile: args.profile,
     });
 
-    await client.deleteSecretManagerVault({
-      workspaceId,
-      secretmanagerVaultName: args.name,
-    });
+    try {
+      await client.deleteSecretManagerVault({
+        workspaceId,
+        secretmanagerVaultName: args.name,
+      });
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        throw new Error(`Vault "${args.name}" not found.`);
+      }
+      throw error;
+    }
 
     consola.success(`Vault: ${args.name} deleted`);
   }),

@@ -1,4 +1,5 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import {
   commonArgs,
@@ -87,12 +88,18 @@ export const listSecretCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     const format = parseFormat(args.format);
 
-    const secrets = await secretList({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      vaultName: args["vault-name"],
-    });
-
-    printWithFormat(secrets, format);
+    try {
+      const secrets = await secretList({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        vaultName: args["vault-name"],
+      });
+      printWithFormat(secrets, format);
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        throw new Error(`Vault "${args["vault-name"]}" not found.`);
+      }
+      throw error;
+    }
   }),
 });
