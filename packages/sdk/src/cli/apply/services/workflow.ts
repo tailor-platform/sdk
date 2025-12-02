@@ -3,14 +3,19 @@ import * as path from "node:path";
 import { getDistDir } from "@/configure/config";
 import { type ApplyPhase } from "..";
 import { type OperatorClient, fetchAll } from "../../client";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Workflow, WorkflowJob } from "@/parser/service/workflow";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyWorkflow(
   client: OperatorClient,
-  changeSet: Awaited<ReturnType<typeof planWorkflow>>,
+  result: Awaited<ReturnType<typeof planWorkflow>>,
   phase: ApplyPhase = "create-update",
 ) {
+  const { changeSet } = result;
   if (phase === "create-update") {
     // Create workflows and their job functions
     await Promise.all(
@@ -35,6 +40,7 @@ export async function applyWorkflow(
           mainJobFunctionName: create.workflow.mainJob.name,
           jobFunctions: jobFunctions,
         });
+        await client.setMetadata(create.metaRequest);
       }),
     );
 
@@ -61,6 +67,7 @@ export async function applyWorkflow(
           mainJobFunctionName: update.workflow.mainJob.name,
           jobFunctions: jobFunctions,
         });
+        await client.setMetadata(update.metaRequest);
       }),
     );
   } else if (phase === "delete") {
@@ -81,6 +88,7 @@ type CreateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   scripts: Map<string, string>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateWorkflow = {
@@ -88,6 +96,7 @@ type UpdateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   scripts: Map<string, string>;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type DeleteWorkflow = {
@@ -119,35 +128,45 @@ export function collectJobNamesFromWorkflow(workflow: Workflow): Set<string> {
   return jobNames;
 }
 
+function trn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
+}
+
 export async function planWorkflow(
   client: OperatorClient,
   workspaceId: string,
+  appName: string,
   workflows: Record<string, Workflow>,
 ) {
   const changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow> =
     new ChangeSet("Workflows");
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
+  const resourceOwners = new Set<string>();
 
   // Fetch existing workflows from API
-  const existingWorkflows = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken) => {
     const response = await client.listWorkflows({
       workspaceId,
       pageToken,
-      pageSize: 100,
-      pageDirection: 0, // FORWARD
     });
     return [
       response.workflows.map((w) => ({ id: w.id, name: w.name })),
       response.nextPageToken,
     ];
   });
-
-  const existingWorkflowMap = new Map<string, { id: string; name: string }>();
-  existingWorkflows.forEach((workflow) => {
-    existingWorkflowMap.set(workflow.name, {
-      id: workflow.id,
-      name: workflow.name,
-    });
-  });
+  const existingWorkflows: WithLabel<(typeof withoutLabel)[number]> = {};
+  await Promise.all(
+    withoutLabel.map(async (resource) => {
+      const { metadata } = await client.getMetadata({
+        trn: trn(workspaceId, resource.name),
+      });
+      existingWorkflows[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
+      };
+    }),
+  );
 
   // Load all available scripts once
   const allScripts = await loadWorkflowScripts();
@@ -168,35 +187,61 @@ export async function planWorkflow(
       }
     }
 
-    const existing = existingWorkflowMap.get(workflow.name);
+    const existing = existingWorkflows[workflow.name];
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, workflow.name),
+      appName,
+    );
     if (existing) {
+      if (!existing.label) {
+        unmanaged.push({
+          resourceType: "Workflow",
+          resourceName: workflow.name,
+        });
+      } else if (existing.label !== appName) {
+        conflicts.push({
+          resourceType: "Workflow",
+          resourceName: workflow.name,
+          currentOwner: existing.label,
+        });
+      }
+
       changeSet.updates.push({
         name: workflow.name,
         workspaceId,
         workflow,
         scripts,
+        metaRequest,
       });
-      existingWorkflowMap.delete(workflow.name);
+      delete existingWorkflows[workflow.name];
     } else {
       changeSet.creates.push({
         name: workflow.name,
         workspaceId,
         workflow,
         scripts,
+        metaRequest,
       });
     }
   }
 
-  existingWorkflowMap.forEach((existing) => {
-    changeSet.deletes.push({
-      name: existing.name,
-      workspaceId,
-      workflowId: existing.id,
-    });
+  Object.values(existingWorkflows).forEach((existing) => {
+    const label = existing?.label;
+    if (label && label !== appName) {
+      resourceOwners.add(label);
+    }
+    // Only delete workflows managed by this application
+    if (label === appName) {
+      changeSet.deletes.push({
+        name: existing!.resource.name,
+        workspaceId,
+        workflowId: existing!.resource.id,
+      });
+    }
   });
 
   changeSet.print();
-  return changeSet;
+  return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
 async function loadWorkflowScripts(): Promise<Map<string, string>> {

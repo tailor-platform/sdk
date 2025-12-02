@@ -135,6 +135,7 @@ export async function apply(options?: ApplyOptions) {
   const workflow = await planWorkflow(
     client,
     workspaceId,
+    application.name,
     workflowResult?.workflows ?? {},
   );
 
@@ -146,6 +147,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.conflicts,
     ...pipeline.conflicts,
     ...executor.conflicts,
+    ...workflow.conflicts,
   ];
   await confirmOwnerConflict(allConflicts, application.name, yes);
   // Confirm unmanaged resources
@@ -156,6 +158,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.unmanaged,
     ...pipeline.unmanaged,
     ...executor.unmanaged,
+    ...workflow.unmanaged,
   ];
   await confirmUnmanagedResources(allUnmanaged, application.name, yes);
   // Confirm important deletions
@@ -184,6 +187,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.resourceOwners,
     ...pipeline.resourceOwners,
     ...executor.resourceOwners,
+    ...workflow.resourceOwners,
   ]);
   const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
   const emptyApps = [...conflictOwners].filter(
