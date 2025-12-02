@@ -13,7 +13,7 @@ import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import {
@@ -59,8 +59,7 @@ export type ApplyPhase = "create-update" | "delete";
 
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
-  const configPath = loadConfigPath(options?.configPath);
-  const { config } = await loadConfig(configPath);
+  const { config, configPath } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? false;

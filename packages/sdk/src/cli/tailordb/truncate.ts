@@ -3,7 +3,7 @@ import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 
 export interface TruncateOptions {
   workspaceId?: string;
@@ -49,10 +49,7 @@ async function truncateNamespace(
   consola.success(`Truncated all types in namespace "${namespaceName}"`);
 }
 
-async function getAllNamespaces(
-  workspaceId: string,
-  configPath: string,
-): Promise<string[]> {
+async function getAllNamespaces(configPath?: string): Promise<string[]> {
   const { config } = await loadConfig(configPath);
   const namespaces = new Set<string>();
 
@@ -70,9 +67,9 @@ async function getTypeNamespace(
   workspaceId: string,
   typeName: string,
   client: Awaited<ReturnType<typeof initOperatorClient>>,
-  configPath: string,
+  configPath?: string,
 ): Promise<string | null> {
-  const namespaces = await getAllNamespaces(workspaceId, configPath);
+  const namespaces = await getAllNamespaces(configPath);
 
   // Try to find the type in each namespace
   for (const namespace of namespaces) {
@@ -123,11 +120,8 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
     );
   }
 
-  // Load config path - always required to ensure we only truncate managed namespaces
-  const configPath = loadConfigPath(options?.configPath);
-
   // Validate config and get namespaces before confirmation
-  const namespaces = await getAllNamespaces(workspaceId, configPath);
+  const namespaces = await getAllNamespaces(options?.configPath);
 
   // Handle --all flag
   if (hasAll) {
@@ -200,7 +194,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
         workspaceId,
         typeName,
         client,
-        configPath,
+        options.configPath,
       );
 
       if (namespace) {
