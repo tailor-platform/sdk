@@ -3,9 +3,5 @@
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface Env {}
 
-export type InferredEnv = keyof Env extends never
-  ? Record<string, string>
-  : Env;
-
 /** Represents environment variables in the Tailor platform. */
-export type TailorEnv = InferredEnv;
+export type TailorEnv = keyof Env extends never ? Record<string, string> : Env;
