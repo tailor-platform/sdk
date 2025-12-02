@@ -590,7 +590,7 @@ tailor-sdk secret vault create [options]
 
 **Options:**
 
-- `-n, --name` - Vault name (required)
+- `--name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 
@@ -604,7 +604,7 @@ tailor-sdk secret vault delete [options]
 
 **Options:**
 
-- `-n, --name` - Vault name (required)
+- `--name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 
@@ -633,8 +633,8 @@ tailor-sdk secret create [options]
 **Options:**
 
 - `--vault-name` - Vault name (required)
-- `-n, --name` - Secret name (required)
-- `-v, --value` - Secret value (required)
+- `--name` - Secret name (required)
+- `--value` - Secret value (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 
@@ -649,8 +649,8 @@ tailor-sdk secret update [options]
 **Options:**
 
 - `--vault-name` - Vault name (required)
-- `-n, --name` - Secret name (required)
-- `-v, --value` - New secret value (required)
+- `--name` - Secret name (required)
+- `--value` - New secret value (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 
@@ -680,6 +680,6 @@ tailor-sdk secret delete [options]
 **Options:**
 
 - `--vault-name` - Vault name (required)
-- `-n, --name` - Secret name (required)
+- `--name` - Secret name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
