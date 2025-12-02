@@ -593,6 +593,7 @@ tailor-sdk secret vault create [options]
 - `--name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
+- `-y, --yes` - Skip confirmation prompt
 
 ##### secret vault delete
 
@@ -683,3 +684,4 @@ tailor-sdk secret delete [options]
 - `--name` - Secret name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
+- `-y, --yes` - Skip confirmation prompt
