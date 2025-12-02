@@ -8,43 +8,9 @@ import type { TailorEnv } from "@/configure/types/env";
 export const WORKFLOW_JOB_BRAND = Symbol.for("tailor:workflow-job");
 
 /**
- * Replace hyphens and spaces with underscores in a string type.
- * This matches the runtime behavior of `jobName.replace(/[-\s]/g, "_")`.
- */
-type ReplaceWithUnderscore<S extends string> = S extends `${infer A}-${infer B}`
-  ? ReplaceWithUnderscore<`${A}_${B}`>
-  : S extends `${infer A} ${infer B}`
-    ? ReplaceWithUnderscore<`${A}_${B}`>
-    : S;
-
-type JobsFromDeps<
-  Deps extends readonly WorkflowJob<any, any, any, any>[],
-  Set extends string = never,
-> = Deps extends [
-  infer First extends WorkflowJob<any, any, any, any>,
-  ...infer Rest extends readonly WorkflowJob<any, any, any, any>[],
-]
-  ? First["name"] extends Set
-    ? JobsFromDeps<Rest, Set> // Skip duplicate jobs
-    : First extends WorkflowJob<infer N, infer I, infer O, infer NestedDeps>
-      ? {
-          [K in ReplaceWithUnderscore<N>]: [I] extends [undefined]
-            ? () => Promise<O>
-            : (input: I) => Promise<O>;
-        } & (NestedDeps extends []
-          ? object
-          : JobsFromDeps<NestedDeps, Set | N>) &
-          JobsFromDeps<Rest, Set | N>
-      : JobsFromDeps<Rest, Set>
-  : object;
-
-/**
  * Context object passed as the second argument to workflow job body functions.
  */
-export type WorkflowJobContext<
-  Deps extends readonly WorkflowJob<any, any, any, any>[],
-> = {
-  jobs: JobsFromDeps<Deps>;
+export type WorkflowJobContext = {
   env: TailorEnv;
 };
 
@@ -52,72 +18,38 @@ export interface WorkflowJob<
   Name extends string = string,
   Input = any,
   Output = any,
-  Deps extends readonly [...WorkflowJob<any, any, any, any>[]] = [],
 > {
   readonly [WORKFLOW_JOB_BRAND]?: true;
   name: Name;
-  deps?: Deps;
-  body: (
-    input: Input,
-    context: WorkflowJobContext<Deps>,
-  ) => Output | Promise<Output>;
+  /**
+   * Trigger this job with the given input.
+   * At runtime, this is a placeholder that calls the body function.
+   * During bundling, calls to .trigger() are transformed to
+   * tailor.workflow.triggerJobFunction("<job-name>", args).
+   */
+  trigger: [Input] extends [undefined]
+    ? () => Promise<Awaited<Output>>
+    : (input: Input) => Promise<Awaited<Output>>;
+  body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
-type WorkflowJobBody<
-  I,
-  O,
-  Deps extends readonly WorkflowJob<any, any, any, any>[],
-> = (input: I, context: WorkflowJobContext<Deps>) => O | Promise<O>;
+type WorkflowJobBody<I, O> = (
+  input: I,
+  context: WorkflowJobContext,
+) => O | Promise<O>;
 
-interface CreateWorkflowJobFunction {
-  <
-    const Deps extends readonly [...WorkflowJob<any, any, any, any>[]] = [],
-    const Name extends string = string,
-    const Body extends WorkflowJobBody<any, any, Deps> = WorkflowJobBody<
-      any,
-      any,
-      Deps
-    >,
-  >(
-    config: Deps extends readonly [any, ...any[]]
-      ? {
-          readonly name: Name;
-          readonly deps: Deps;
-          readonly body: Body;
-        }
-      : {
-          readonly name: Name;
-          readonly deps?: never;
-          readonly body: Body;
-        },
-  ): WorkflowJob<Name, Parameters<Body>[0], ReturnType<Body>, Deps>;
-}
-
-export const createWorkflowJob: CreateWorkflowJobFunction = function <
-  const Deps extends readonly [...WorkflowJob<any, any, any, any>[]] = [],
-  const Name extends string = string,
-  const Body extends WorkflowJobBody<any, any, Deps> = WorkflowJobBody<
-    any,
-    any,
-    Deps
-  >,
->(
-  config: Deps extends readonly [any, ...any[]]
-    ? {
-        readonly name: Name;
-        readonly deps: Deps;
-        readonly body: Body;
-      }
-    : {
-        readonly name: Name;
-        readonly deps?: never;
-        readonly body: Body;
-      },
-) {
+export const createWorkflowJob = <
+  const Name extends string,
+  const Body extends WorkflowJobBody<any, any>,
+>(config: {
+  readonly name: Name;
+  readonly body: Body;
+}): WorkflowJob<Name, Parameters<Body>[0], ReturnType<Body>> => {
   return {
     [WORKFLOW_JOB_BRAND]: true,
     name: config.name,
-    deps: (config as any).deps,
+    // trigger is a placeholder - transformed to triggerJobFunction at bundle time
+    trigger: config.body as any,
     body: config.body,
-  } as WorkflowJob<Name, Parameters<Body>[0], ReturnType<Body>, Deps>;
+  } as WorkflowJob<Name, Parameters<Body>[0], ReturnType<Body>>;
 };
