@@ -27,6 +27,12 @@ export const deleteCommand = defineCommand({
       description: "Vault name",
       required: true,
     },
+    yes: {
+      type: "boolean",
+      description: "Skip confirmation prompt",
+      alias: "y",
+      default: false,
+    },
   },
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({
@@ -38,6 +44,17 @@ export const deleteCommand = defineCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
+
+    if (!args.yes) {
+      const confirmation = await consola.prompt(
+        `Enter the vault name to confirm deletion ("${args.name}"): `,
+        { type: "text" },
+      );
+      if (confirmation !== args.name) {
+        consola.info("Vault deletion cancelled.");
+        return;
+      }
+    }
 
     try {
       await client.deleteSecretManagerVault({
