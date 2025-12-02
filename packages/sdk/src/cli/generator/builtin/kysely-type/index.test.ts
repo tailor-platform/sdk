@@ -312,7 +312,6 @@ describe("KyselyGenerator integration tests", () => {
         name: "Invalid",
         fields: null, // Invalid field
         options: {},
-        referenced: [],
         metadata: {} as any,
         hooks: {} as any,
         _output: {} as any,
