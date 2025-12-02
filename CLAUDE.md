@@ -570,7 +570,9 @@ import type { MySchema } from "./schema";
 export type MyType = z.output<typeof MySchema>;
 
 // All other types that depend on schema types
-export type MyOtherType = { /* ... */ };
+export type MyOtherType = {
+  /* ... */
+};
 ```
 
 ```typescript
