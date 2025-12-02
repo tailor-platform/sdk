@@ -6,6 +6,7 @@ import {
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
+import { loadConfigPath } from "./context";
 import {
   EnumConstantsGenerator,
   EnumConstantsGeneratorID,
@@ -47,9 +48,9 @@ export const GeneratorConfigSchema =
   createGeneratorConfigSchema(builtinGenerators);
 
 export async function loadConfig(
-  configPath: string,
-): Promise<{ config: AppConfig; generators: Generator[] }> {
-  const resolvedPath = path.resolve(process.cwd(), configPath);
+  configPath?: string,
+): Promise<{ config: AppConfig; generators: Generator[]; configPath: string }> {
+  const resolvedPath = path.resolve(process.cwd(), loadConfigPath(configPath));
 
   if (!fs.existsSync(resolvedPath)) {
     throw new Error(`Configuration file not found: ${configPath}`);
@@ -85,5 +86,6 @@ export async function loadConfig(
   return {
     config: configModule.default as AppConfig,
     generators: allGenerators,
+    configPath: resolvedPath,
   };
 }
