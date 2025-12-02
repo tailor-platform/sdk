@@ -5,7 +5,7 @@
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { PageDirection } from "./resource_pb";
-import type { IdPClient, IdPService, IdPUserAuthPolicy } from "./idp_resource_pb";
+import type { IdPClient, IdPLang, IdPService, IdPUserAuthPolicy } from "./idp_resource_pb";
 
 /**
  * Describes the file tailor/v1/idp.proto.
@@ -92,6 +92,13 @@ export declare type CreateIdPServiceRequest = Message<"tailor.v1.CreateIdPServic
    * @generated from field: tailor.v1.IdPUserAuthPolicy user_auth_policy = 4;
    */
   userAuthPolicy?: IdPUserAuthPolicy;
+
+  /**
+   * lang is the IETF BCP 47 language subtag.
+   *
+   * @generated from field: tailor.v1.IdPLang lang = 5;
+   */
+  lang: IdPLang;
 };
 
 /**
@@ -139,6 +146,13 @@ export declare type UpdateIdPServiceRequest = Message<"tailor.v1.UpdateIdPServic
    * @generated from field: tailor.v1.IdPUserAuthPolicy user_auth_policy = 4;
    */
   userAuthPolicy?: IdPUserAuthPolicy;
+
+  /**
+   * lang is the IETF BCP 47 language subtag.
+   *
+   * @generated from field: tailor.v1.IdPLang lang = 5;
+   */
+  lang: IdPLang;
 };
 
 /**

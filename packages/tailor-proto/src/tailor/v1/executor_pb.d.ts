@@ -3,7 +3,7 @@
 /* eslint-disable */
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import type { Message } from "@bufbuild/protobuf";
+import type { JsonObject, Message } from "@bufbuild/protobuf";
 import type { ExecutorExecutor, ExecutorIncomingWebhook, ExecutorJob, ExecutorJobAttempt } from "./executor_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 
@@ -477,4 +477,42 @@ export declare type GetExecutorIncomingWebhookResponse = Message<"tailor.v1.GetE
  * Use `create(GetExecutorIncomingWebhookResponseSchema)` to create a new message.
  */
 export declare const GetExecutorIncomingWebhookResponseSchema: GenMessage<GetExecutorIncomingWebhookResponse>;
+
+/**
+ * @generated from message tailor.v1.TriggerExecutorRequest
+ */
+export declare type TriggerExecutorRequest = Message<"tailor.v1.TriggerExecutorRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string executor_name = 2;
+   */
+  executorName: string;
+
+  /**
+   * @generated from field: google.protobuf.Struct payload = 3;
+   */
+  payload?: JsonObject;
+};
+
+/**
+ * Describes the message tailor.v1.TriggerExecutorRequest.
+ * Use `create(TriggerExecutorRequestSchema)` to create a new message.
+ */
+export declare const TriggerExecutorRequestSchema: GenMessage<TriggerExecutorRequest>;
+
+/**
+ * @generated from message tailor.v1.TriggerExecutorResponse
+ */
+export declare type TriggerExecutorResponse = Message<"tailor.v1.TriggerExecutorResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.TriggerExecutorResponse.
+ * Use `create(TriggerExecutorResponseSchema)` to create a new message.
+ */
+export declare const TriggerExecutorResponseSchema: GenMessage<TriggerExecutorResponse>;
 

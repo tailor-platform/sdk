@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const IdPLangSchema = z.enum(["en", "ja"]);
+
 export const IdPSchema = z
   .object({
     name: z.string(),
@@ -9,5 +11,6 @@ export const IdPSchema = z
       z.object({ cel: z.string() }),
     ]),
     clients: z.array(z.string()),
+    lang: IdPLangSchema.optional(),
   })
   .brand("IdPConfig");

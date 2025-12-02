@@ -2,7 +2,7 @@
 // @generated from file tailor/v1/idp_resource.proto (package tailor.v1, syntax proto3)
 /* eslint-disable */
 
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/codegenv2";
 import { file_google_api_field_behavior } from "../../google/api/field_behavior_pb";
 import { file_tailor_v1_resource } from "./resource_pb";
 
@@ -10,7 +10,7 @@ import { file_tailor_v1_resource } from "./resource_pb";
  * Describes the file tailor/v1/idp_resource.proto.
  */
 export const file_tailor_v1_idp_resource = /*@__PURE__*/
-  fileDesc("Chx0YWlsb3IvdjEvaWRwX3Jlc291cmNlLnByb3RvEgl0YWlsb3IudjEinwEKCklkUFNlcnZpY2USJwoJbmFtZXNwYWNlGAEgASgLMhQudGFpbG9yLnYxLk5hbWVzcGFjZRIVCg1hdXRob3JpemF0aW9uGAIgASgJEhkKDHByb3ZpZGVyX3VybBgDIAEoCUID4EEDEjYKEHVzZXJfYXV0aF9wb2xpY3kYBCABKAsyHC50YWlsb3IudjEuSWRQVXNlckF1dGhQb2xpY3kiTQoJSWRQQ2xpZW50EgwKBG5hbWUYASABKAkSFgoJY2xpZW50X2lkGAIgASgJQgPgQQMSGgoNY2xpZW50X3NlY3JldBgDIAEoCUID4EEDIjUKEUlkUFVzZXJBdXRoUG9saWN5EiAKGHVzZV9ub25fZW1haWxfaWRlbnRpZmllchgBIAEoCGIGcHJvdG8z", [file_google_api_field_behavior, file_tailor_v1_resource]);
+  fileDesc("Chx0YWlsb3IvdjEvaWRwX3Jlc291cmNlLnByb3RvEgl0YWlsb3IudjEiwQEKCklkUFNlcnZpY2USJwoJbmFtZXNwYWNlGAEgASgLMhQudGFpbG9yLnYxLk5hbWVzcGFjZRIVCg1hdXRob3JpemF0aW9uGAIgASgJEhkKDHByb3ZpZGVyX3VybBgDIAEoCUID4EEDEjYKEHVzZXJfYXV0aF9wb2xpY3kYBCABKAsyHC50YWlsb3IudjEuSWRQVXNlckF1dGhQb2xpY3kSIAoEbGFuZxgFIAEoDjISLnRhaWxvci52MS5JZFBMYW5nIk0KCUlkUENsaWVudBIMCgRuYW1lGAEgASgJEhYKCWNsaWVudF9pZBgCIAEoCUID4EEDEhoKDWNsaWVudF9zZWNyZXQYAyABKAlCA+BBAyI1ChFJZFBVc2VyQXV0aFBvbGljeRIgChh1c2Vfbm9uX2VtYWlsX2lkZW50aWZpZXIYASABKAgqSAoHSWRQTGFuZxIZChVJRF9QX0xBTkdfVU5TUEVDSUZJRUQQABIQCgxJRF9QX0xBTkdfRU4QARIQCgxJRF9QX0xBTkdfSkEQAmIGcHJvdG8z", [file_google_api_field_behavior, file_tailor_v1_resource]);
 
 /**
  * Describes the message tailor.v1.IdPService.
@@ -32,4 +32,18 @@ export const IdPClientSchema = /*@__PURE__*/
  */
 export const IdPUserAuthPolicySchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_idp_resource, 2);
+
+/**
+ * Describes the enum tailor.v1.IdPLang.
+ */
+export const IdPLangSchema = /*@__PURE__*/
+  enumDesc(file_tailor_v1_idp_resource, 0);
+
+/**
+ * IdPLang represents the IETF BCP 47 language subtag.
+ *
+ * @generated from enum tailor.v1.IdPLang
+ */
+export const IdPLang = /*@__PURE__*/
+  tsEnum(IdPLangSchema);
 
