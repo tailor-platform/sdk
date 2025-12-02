@@ -19,7 +19,7 @@ const job1 = createWorkflowJob({
 const job2 = createWorkflowJob({
   name: "job-two",
   deps: [job1],
-  body: async (input, jobs) => {
+  body: async (input, { jobs }) => {
     return await jobs.jobOne();
   }
 });
@@ -385,7 +385,7 @@ const job1 = createWorkflowJob({
 const job2 = createWorkflowJob({
   name: "job-two",
   deps: [job1],
-  body: async (input, jobs) => {
+  body: async (input, { jobs }) => {
     return await jobs.jobOne();
   }
 });
@@ -415,7 +415,7 @@ const heavyJob = createWorkflowJob({
 const mainJob = createWorkflowJob({
   name: "main-job",
   deps: [heavyJob],
-  body: async (input, jobs) => {
+  body: async (input, { jobs }) => {
     return { result: "main" };
   }
 });

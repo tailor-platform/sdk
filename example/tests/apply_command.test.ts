@@ -602,6 +602,28 @@ describe("pnpm apply command integration tests", () => {
           ),
         });
       });
+
+      test("workflow-jobs entry files contain env variables from config", () => {
+        // Verify that env variables from tailor.config.ts are embedded in entry files
+        // The config has: env: { foo: 1, bar: "hello", baz: true }
+        const entryFiles = [
+          "workflow-jobs/fetch-customer.entry.js",
+          "workflow-jobs/process-order.entry.js",
+          "workflow-jobs/send-notification.entry.js",
+        ];
+
+        for (const file of entryFiles) {
+          const content = fs.readFileSync(path.join(actualDir, file), "utf-8");
+
+          // Check that env is defined with correct values
+          expect(content).toContain(
+            'const env = {"foo":1,"bar":"hello","baz":true}',
+          );
+
+          // Check that body is called with { jobs, env } object
+          expect(content).toMatch(/\.body\(input, \{ jobs, env \}\)/);
+        }
+      });
     });
   });
 });

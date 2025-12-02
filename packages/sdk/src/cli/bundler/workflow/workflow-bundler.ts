@@ -22,7 +22,10 @@ interface JobInfo {
  * 2. Creates entry file
  * 3. Bundles in a single step with tree-shaking
  */
-export async function bundleWorkflowJobs(allJobs: JobInfo[]): Promise<void> {
+export async function bundleWorkflowJobs(
+  allJobs: JobInfo[],
+  env: Record<string, string | number | boolean> = {},
+): Promise<void> {
   if (allJobs.length === 0) {
     console.log(styleText("dim", "No workflow jobs to bundle"));
     return;
@@ -49,7 +52,9 @@ export async function bundleWorkflowJobs(allJobs: JobInfo[]): Promise<void> {
 
   // Process each job
   await Promise.all(
-    allJobs.map((job) => bundleSingleJob(job, allJobs, outputDir, tsconfig)),
+    allJobs.map((job) =>
+      bundleSingleJob(job, allJobs, outputDir, tsconfig, env),
+    ),
   );
 
   console.log(
@@ -63,6 +68,7 @@ async function bundleSingleJob(
   allJobs: JobInfo[],
   outputDir: string,
   tsconfig: string | undefined,
+  env: Record<string, string | number | boolean>,
 ): Promise<void> {
   // Step 1: Find deps for this job to create the jobs proxy object
   const depsJobNames = findJobDeps(job.name, allJobs);
@@ -79,8 +85,10 @@ async function bundleSingleJob(
       ${jobsObject}
     };
 
+    const env = ${JSON.stringify(env)};
+
     globalThis.main = async (input) => {
-      return await ${job.exportName}.body(input, jobs);
+      return await ${job.exportName}.body(input, { jobs, env });
     };
   `;
   fs.writeFileSync(entryPath, entryContent);
