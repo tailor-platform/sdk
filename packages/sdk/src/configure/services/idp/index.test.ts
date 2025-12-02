@@ -45,4 +45,26 @@ describe("defineIdp", () => {
     });
     expect(idp3.authorization).toEqual({ cel: 'user.id == "test"' });
   });
+
+  it("should preserve lang config", () => {
+    const idpEn = defineIdp("idp-en", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      lang: "en",
+    });
+    expect(idpEn.lang).toBe("en");
+
+    const idpJa = defineIdp("idp-ja", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      lang: "ja",
+    });
+    expect(idpJa.lang).toBe("ja");
+
+    const idpNoLang = defineIdp("idp-no-lang", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoLang.lang).toBeUndefined();
+  });
 });

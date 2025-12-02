@@ -7,7 +7,8 @@ import {
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { type IdP } from "@/parser/service/idp";
+import { IdPLang } from "@tailor-proto/tailor/v1/idp_resource_pb";
+import { type IdP, type IdPLang as IdPLangInput } from "@/parser/service/idp";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
@@ -241,6 +242,8 @@ async function planServices(
         break;
     }
 
+    const lang = convertLang(idp.lang);
+
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -261,6 +264,7 @@ async function planServices(
           workspaceId,
           namespaceName,
           authorization,
+          lang,
         },
         metaRequest,
       });
@@ -272,6 +276,7 @@ async function planServices(
           workspaceId,
           namespaceName,
           authorization,
+          lang,
         },
         metaRequest,
       });
@@ -396,4 +401,15 @@ async function planClients(
     });
   }
   return changeSet;
+}
+
+function convertLang(lang: IdPLangInput | undefined): IdPLang {
+  switch (lang) {
+    case "en":
+      return IdPLang.EN;
+    case "ja":
+      return IdPLang.JA;
+    default:
+      return IdPLang.UNSPECIFIED;
+  }
 }
