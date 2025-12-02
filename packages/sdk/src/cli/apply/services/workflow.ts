@@ -210,14 +210,8 @@ async function loadWorkflowScripts(): Promise<Map<string, string>> {
 
   const files = fs.readdirSync(jobsDir);
   for (const file of files) {
-    // Only load final bundled .js files (not .base.js, .transformed.js, .entry.js, or .map files)
-    if (
-      file.endsWith(".js") &&
-      !file.endsWith(".base.js") &&
-      !file.endsWith(".transformed.js") &&
-      !file.endsWith(".entry.js") &&
-      !file.endsWith(".map")
-    ) {
+    // Only load final bundled .js files (e.g., "jobname.js", not "jobname.base.js")
+    if (/^[^.]+\.js$/.test(file)) {
       const jobName = file.replace(/\.js$/, "");
       const scriptPath = path.join(jobsDir, file);
       const script = fs.readFileSync(scriptPath, "utf-8");
