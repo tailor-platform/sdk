@@ -21,10 +21,11 @@ export const check_inventory = createWorkflowJob({
 
 export const validate_order = createWorkflowJob({
   name: "validate-order",
-  body: async (input: { orderId: string }) => {
+  deps: [check_inventory, process_payment],
+  body: async (input: { orderId: string }, jobs) => {
     console.log("Order ID:", input.orderId);
-    const inventoryResult = await check_inventory.trigger();
-    const paymentResult = await process_payment.trigger();
+    const inventoryResult = await jobs.check_inventory();
+    const paymentResult = await jobs.process_payment();
     return { inventoryResult, paymentResult };
   },
 });
