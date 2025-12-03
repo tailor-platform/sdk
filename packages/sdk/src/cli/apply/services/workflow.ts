@@ -4,7 +4,7 @@ import { getDistDir } from "@/configure/config";
 import { type ApplyPhase } from "..";
 import { type OperatorClient, fetchAll } from "../../client";
 import { ChangeSet } from ".";
-import type { Workflow, WorkflowJob } from "@/parser/service/workflow";
+import type { Workflow } from "@/parser/service/workflow";
 
 export async function applyWorkflow(
   client: OperatorClient,
@@ -12,57 +12,28 @@ export async function applyWorkflow(
   phase: ApplyPhase = "create-update",
 ) {
   if (phase === "create-update") {
-    // Create workflows and their job functions
-    await Promise.all(
-      changeSet.creates.map(async (create) => {
-        // Create job functions first
-        const jobFunctions: { [key: string]: bigint } = {};
-        for (const [jobName, script] of create.scripts.entries()) {
-          const response = await client.createWorkflowJobFunction({
-            workspaceId: create.workspaceId,
-            jobFunctionName: jobName,
-            script: script,
-          });
-          if (response.jobFunction) {
-            jobFunctions[jobName] = response.jobFunction.version;
-          }
-        }
+    // Register all job functions once (shared across all workflows)
+    const jobFunctionVersions = await registerJobFunctions(client, changeSet);
 
-        // Create workflow with job function versions
-        await client.createWorkflow({
+    // Create and update workflows in parallel
+    await Promise.all([
+      ...changeSet.creates.map((create) =>
+        client.createWorkflow({
           workspaceId: create.workspaceId,
           workflowName: create.workflow.name,
           mainJobFunctionName: create.workflow.mainJob.name,
-          jobFunctions: jobFunctions,
-        });
-      }),
-    );
-
-    // Update workflows and their job functions
-    await Promise.all(
-      changeSet.updates.map(async (update) => {
-        // Update or create job functions
-        const jobFunctions: { [key: string]: bigint } = {};
-        for (const [jobName, script] of update.scripts.entries()) {
-          const response = await client.updateWorkflowJobFunction({
-            workspaceId: update.workspaceId,
-            jobFunctionName: jobName,
-            script: script,
-          });
-          if (response.jobFunction) {
-            jobFunctions[jobName] = response.jobFunction.version;
-          }
-        }
-
-        // Update workflow with job function versions
-        await client.updateWorkflow({
+          jobFunctions: jobFunctionVersions,
+        }),
+      ),
+      ...changeSet.updates.map((update) =>
+        client.updateWorkflow({
           workspaceId: update.workspaceId,
           workflowName: update.workflow.name,
           mainJobFunctionName: update.workflow.mainJob.name,
-          jobFunctions: jobFunctions,
-        });
-      }),
-    );
+          jobFunctions: jobFunctionVersions,
+        }),
+      ),
+    ]);
   } else if (phase === "delete") {
     // Delete workflows
     await Promise.all(
@@ -74,6 +45,55 @@ export async function applyWorkflow(
       ),
     );
   }
+}
+
+/**
+ * Register all job functions once, returns a map of job name to version.
+ * Uses update for existing workflows, create for new workflows.
+ */
+async function registerJobFunctions(
+  client: OperatorClient,
+  changeSet: Awaited<ReturnType<typeof planWorkflow>>,
+): Promise<{ [key: string]: bigint }> {
+  const jobFunctionVersions: { [key: string]: bigint } = {};
+
+  // Get scripts from the first workflow (all workflows share the same scripts)
+  const firstWorkflow = changeSet.creates[0] || changeSet.updates[0];
+  if (!firstWorkflow) {
+    return jobFunctionVersions;
+  }
+
+  const { workspaceId, scripts } = firstWorkflow;
+
+  // Determine if we should use create or update based on whether any workflows exist
+  const hasExistingWorkflows = changeSet.updates.length > 0;
+
+  // Register all job functions in parallel
+  const results = await Promise.all(
+    Array.from(scripts.entries()).map(async ([jobName, script]) => {
+      const response = hasExistingWorkflows
+        ? await client.updateWorkflowJobFunction({
+            workspaceId,
+            jobFunctionName: jobName,
+            script,
+          })
+        : await client.createWorkflowJobFunction({
+            workspaceId,
+            jobFunctionName: jobName,
+            script,
+          });
+
+      return { jobName, version: response.jobFunction?.version };
+    }),
+  );
+
+  for (const { jobName, version } of results) {
+    if (version) {
+      jobFunctionVersions[jobName] = version;
+    }
+  }
+
+  return jobFunctionVersions;
 }
 
 type CreateWorkflow = {
@@ -95,29 +115,6 @@ type DeleteWorkflow = {
   workspaceId: string;
   workflowId: string;
 };
-
-/**
- * Recursively collect all job names from a workflow's mainJob and its dependencies
- */
-export function collectJobNamesFromWorkflow(workflow: Workflow): Set<string> {
-  const jobNames = new Set<string>();
-
-  const collectFromJob = (job: WorkflowJob) => {
-    if (!job || jobNames.has(job.name)) {
-      return;
-    }
-    jobNames.add(job.name);
-
-    if (job.deps && Array.isArray(job.deps)) {
-      for (const dep of job.deps) {
-        collectFromJob(dep);
-      }
-    }
-  };
-
-  collectFromJob(workflow.mainJob);
-  return jobNames;
-}
 
 export async function planWorkflow(
   client: OperatorClient,
@@ -150,31 +147,17 @@ export async function planWorkflow(
   });
 
   // Load all available scripts once
+  // Dependencies are now detected at bundle time via AST, so we use all available scripts
   const allScripts = await loadWorkflowScripts();
 
   for (const workflow of Object.values(workflows)) {
-    // Get only the jobs needed for this specific workflow
-    const requiredJobNames = collectJobNamesFromWorkflow(workflow);
-    const scripts = new Map<string, string>();
-
-    for (const jobName of requiredJobNames) {
-      const script = allScripts.get(jobName);
-      if (script) {
-        scripts.set(jobName, script);
-      } else {
-        console.warn(
-          `Warning: Script for job "${jobName}" not found in workflow "${workflow.name}"`,
-        );
-      }
-    }
-
     const existing = existingWorkflowMap.get(workflow.name);
     if (existing) {
       changeSet.updates.push({
         name: workflow.name,
         workspaceId,
         workflow,
-        scripts,
+        scripts: allScripts,
       });
       existingWorkflowMap.delete(workflow.name);
     } else {
@@ -182,7 +165,7 @@ export async function planWorkflow(
         name: workflow.name,
         workspaceId,
         workflow,
-        scripts,
+        scripts: allScripts,
       });
     }
   }
