@@ -621,7 +621,7 @@ describe("pnpm apply command integration tests", () => {
           );
 
           // Check that body is called with { jobs, env } object
-          expect(content).toMatch(/\.body\(input, \{ jobs, env \}\)/);
+          expect(content).toMatch(/\.body\(input, \{ env \}\)/);
         }
       });
     });
