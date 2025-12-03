@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": major
+"@tailor-platform/sdk": minor
 ---
 
 Streamline workflow job function registration and trigger handling
