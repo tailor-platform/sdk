@@ -49,6 +49,7 @@ import {
   trnPrefix,
   type WithLabel,
 } from "./label";
+import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-script-guard";
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -441,6 +442,13 @@ function generateTailorDBTypeManifest(
     .forEach((fieldName) => {
       const fieldConfig = type.fields[fieldName].config;
       const fieldType = fieldConfig.type;
+
+      ensureNoExternalVariablesInFieldScripts(
+        type.name,
+        fieldName,
+        fieldConfig,
+      );
+
       const fieldEntry: MessageInitShape<
         typeof TailorDBType_FieldConfigSchema
       > = {
