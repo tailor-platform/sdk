@@ -15,29 +15,25 @@ export async function applyWorkflow(
     // Register all job functions once (shared across all workflows)
     const jobFunctionVersions = await registerJobFunctions(client, changeSet);
 
-    // Create workflows with registered job function versions
-    await Promise.all(
-      changeSet.creates.map(async (create) => {
-        await client.createWorkflow({
+    // Create and update workflows in parallel
+    await Promise.all([
+      ...changeSet.creates.map((create) =>
+        client.createWorkflow({
           workspaceId: create.workspaceId,
           workflowName: create.workflow.name,
           mainJobFunctionName: create.workflow.mainJob.name,
           jobFunctions: jobFunctionVersions,
-        });
-      }),
-    );
-
-    // Update workflows with registered job function versions
-    await Promise.all(
-      changeSet.updates.map(async (update) => {
-        await client.updateWorkflow({
+        }),
+      ),
+      ...changeSet.updates.map((update) =>
+        client.updateWorkflow({
           workspaceId: update.workspaceId,
           workflowName: update.workflow.name,
           mainJobFunctionName: update.workflow.mainJob.name,
           jobFunctions: jobFunctionVersions,
-        });
-      }),
-    );
+        }),
+      ),
+    ]);
   } else if (phase === "delete") {
     // Delete workflows
     await Promise.all(
@@ -72,21 +68,28 @@ async function registerJobFunctions(
   // Determine if we should use create or update based on whether any workflows exist
   const hasExistingWorkflows = changeSet.updates.length > 0;
 
-  for (const [jobName, script] of scripts.entries()) {
-    const response = hasExistingWorkflows
-      ? await client.updateWorkflowJobFunction({
-          workspaceId,
-          jobFunctionName: jobName,
-          script,
-        })
-      : await client.createWorkflowJobFunction({
-          workspaceId,
-          jobFunctionName: jobName,
-          script,
-        });
+  // Register all job functions in parallel
+  const results = await Promise.all(
+    Array.from(scripts.entries()).map(async ([jobName, script]) => {
+      const response = hasExistingWorkflows
+        ? await client.updateWorkflowJobFunction({
+            workspaceId,
+            jobFunctionName: jobName,
+            script,
+          })
+        : await client.createWorkflowJobFunction({
+            workspaceId,
+            jobFunctionName: jobName,
+            script,
+          });
 
-    if (response.jobFunction) {
-      jobFunctionVersions[jobName] = response.jobFunction.version;
+      return { jobName, version: response.jobFunction?.version };
+    }),
+  );
+
+  for (const { jobName, version } of results) {
+    if (version) {
+      jobFunctionVersions[jobName] = version;
     }
   }
 

@@ -37,7 +37,7 @@ export async function bundleWorkflowJobs(
   }
 
   // Filter to only used jobs (mainJobs + their dependencies)
-  const usedJobs = filterUsedJobs(allJobs, mainJobNames);
+  const usedJobs = await filterUsedJobs(allJobs, mainJobNames);
 
   console.log("");
   console.log(
@@ -81,7 +81,10 @@ export async function bundleWorkflowJobs(
  * - It's a mainJob of a workflow
  * - It's called via .trigger() from another used job (transitively)
  */
-function filterUsedJobs(allJobs: JobInfo[], mainJobNames: string[]): JobInfo[] {
+async function filterUsedJobs(
+  allJobs: JobInfo[],
+  mainJobNames: string[],
+): Promise<JobInfo[]> {
   if (allJobs.length === 0 || mainJobNames.length === 0) {
     return [];
   }
@@ -104,53 +107,69 @@ function filterUsedJobs(allJobs: JobInfo[], mainJobNames: string[]): JobInfo[] {
   // Maps job name -> set of job names it triggers
   const dependencies = new Map<string, Set<string>>();
 
-  for (const [sourceFile, jobs] of jobsBySourceFile) {
-    try {
-      const source = fs.readFileSync(sourceFile, "utf-8");
-      const { program } = parseSync("input.ts", source);
+  // Process all source files in parallel
+  const fileResults = await Promise.all(
+    Array.from(jobsBySourceFile.entries()).map(async ([sourceFile, jobs]) => {
+      try {
+        const source = await fs.promises.readFile(sourceFile, "utf-8");
+        const { program } = parseSync("input.ts", source);
 
-      // Find all jobs in this file to get body ranges
-      const detectedJobs = findAllJobs(program, source);
-      const localExportNameToJobName = new Map<string, string>();
-      for (const detected of detectedJobs) {
-        if (detected.exportName) {
-          localExportNameToJobName.set(detected.exportName, detected.name);
-        }
-      }
-
-      // Detect trigger calls
-      const triggerCalls = detectTriggerCalls(program, source);
-
-      // For each job in this file, find which triggers are inside its body
-      for (const job of jobs) {
-        const detectedJob = detectedJobs.find((d) => d.name === job.name);
-        if (!detectedJob) continue;
-
-        const jobDeps = new Set<string>();
-
-        for (const call of triggerCalls) {
-          // Check if this trigger call is inside the job's body
-          if (
-            detectedJob.bodyValueRange &&
-            call.callRange.start >= detectedJob.bodyValueRange.start &&
-            call.callRange.end <= detectedJob.bodyValueRange.end
-          ) {
-            // Look up the job name from the identifier
-            const triggeredJobName =
-              localExportNameToJobName.get(call.identifierName) ||
-              exportNameToJobName.get(call.identifierName);
-            if (triggeredJobName) {
-              jobDeps.add(triggeredJobName);
-            }
+        // Find all jobs in this file to get body ranges
+        const detectedJobs = findAllJobs(program, source);
+        const localExportNameToJobName = new Map<string, string>();
+        for (const detected of detectedJobs) {
+          if (detected.exportName) {
+            localExportNameToJobName.set(detected.exportName, detected.name);
           }
         }
 
-        if (jobDeps.size > 0) {
-          dependencies.set(job.name, jobDeps);
+        // Detect trigger calls
+        const triggerCalls = detectTriggerCalls(program, source);
+
+        // For each job in this file, find which triggers are inside its body
+        const jobDependencies: Array<{ jobName: string; deps: Set<string> }> =
+          [];
+
+        for (const job of jobs) {
+          const detectedJob = detectedJobs.find((d) => d.name === job.name);
+          if (!detectedJob) continue;
+
+          const jobDeps = new Set<string>();
+
+          for (const call of triggerCalls) {
+            // Check if this trigger call is inside the job's body
+            if (
+              detectedJob.bodyValueRange &&
+              call.callRange.start >= detectedJob.bodyValueRange.start &&
+              call.callRange.end <= detectedJob.bodyValueRange.end
+            ) {
+              // Look up the job name from the identifier
+              const triggeredJobName =
+                localExportNameToJobName.get(call.identifierName) ||
+                exportNameToJobName.get(call.identifierName);
+              if (triggeredJobName) {
+                jobDeps.add(triggeredJobName);
+              }
+            }
+          }
+
+          if (jobDeps.size > 0) {
+            jobDependencies.push({ jobName: job.name, deps: jobDeps });
+          }
         }
+
+        return jobDependencies;
+      } catch {
+        // If we can't parse a file, assume no dependencies from it
+        return [];
       }
-    } catch {
-      // If we can't parse a file, assume no dependencies from it
+    }),
+  );
+
+  // Merge results into dependencies map
+  for (const jobDependencies of fileResults) {
+    for (const { jobName, deps } of jobDependencies) {
+      dependencies.set(jobName, deps);
     }
   }
 
