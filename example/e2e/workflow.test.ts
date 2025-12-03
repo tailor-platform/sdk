@@ -101,23 +101,5 @@ describe("controlplane", async () => {
       expect(sendNotification).toBeDefined();
       expect(sendNotification?.script).toBeTruthy();
     });
-
-    test("job function script contains env variables", async () => {
-      // Get the job function by name (returns the latest version)
-      const { jobFunction } = await client.getWorkflowJobFunctionByName({
-        workspaceId,
-        jobFunctionName: "process-order",
-      });
-
-      expect(jobFunction).toBeDefined();
-      expect(jobFunction?.script).toBeTruthy();
-
-      // Verify that env variables from tailor.config.ts are embedded in the script
-      // The config has: env: { foo: 1, bar: "hello", baz: true }
-      // After minification, the format may vary (e.g., foo:1 or "foo":1)
-      expect(jobFunction?.script).toMatch(/foo[`"']?:1/);
-      expect(jobFunction?.script).toMatch(/bar[`"']?:[`"']?hello[`"']?/);
-      expect(jobFunction?.script).toMatch(/baz[`"']?:!0|baz[`"']?:true/);
-    });
   });
 });
