@@ -48,8 +48,8 @@ export const createWorkflowJob = <
   return {
     [WORKFLOW_JOB_BRAND]: true,
     name: config.name,
-    // trigger is a placeholder - transformed to triggerJobFunction at bundle time
-    trigger: config.body as any,
+    trigger: async (args?: unknown) =>
+      await tailor.workflow.triggerJobFunction(config.name, args),
     body: config.body,
   } as WorkflowJob<Name, Parameters<Body>[0], ReturnType<Body>>;
 };
