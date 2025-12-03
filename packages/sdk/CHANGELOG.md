@@ -1,5 +1,36 @@
 # @tailor-platform/sdk
 
+## 0.12.4
+
+### Patch Changes
+
+- [#107](https://github.com/tailor-platform/sdk/pull/107) [`66fd5b5`](https://github.com/tailor-platform/sdk/commit/66fd5b5e507c6fd7f802e25819ec1e9896b43d80) Thanks [@remiposo](https://github.com/remiposo)! - Manage workflow resources with labels
+
+  Added labels to workflow resources just like other resources. This is a small breaking change for users already using workflows (a confirmation will occur), but since workflow itself is still a preview feature, we believe this is acceptable.
+
+- [#109](https://github.com/tailor-platform/sdk/pull/109) [`2223025`](https://github.com/tailor-platform/sdk/commit/22230255d463ce76c709f8c441c9ca16e581b6e3) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support `lang` for idp
+
+- [#110](https://github.com/tailor-platform/sdk/pull/110) [`5de725c`](https://github.com/tailor-platform/sdk/commit/5de725ce459788ead266930338c922ebd59123ed) Thanks [@remiposo](https://github.com/remiposo)! - Removed unused referenced field
+
+## 0.12.3
+
+## 0.12.2
+
+### Patch Changes
+
+- [#99](https://github.com/tailor-platform/sdk/pull/99) [`f3f2f5a`](https://github.com/tailor-platform/sdk/commit/f3f2f5aeb30dd69477d49e1e2bb78cd237eafe7b) Thanks [@remiposo](https://github.com/remiposo)! - Allow setting self relationship with keyOnly
+
+  Fixed an issue where apply failed with the following configuration:
+
+  ```typescript
+  db.type("Node", {
+    childId: db.uuid().relation({
+      type: "keyOnly",
+      toward: { type: "self" },
+    }),
+  });
+  ```
+
 ## 0.12.1
 
 ### Patch Changes

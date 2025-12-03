@@ -12,6 +12,7 @@ import { oauth2clientCommand } from "./oauth2client";
 import { readPackageJson } from "./package-json";
 import { profileCommand } from "./profile";
 import { removeCommand } from "./remove";
+import { secretCommand } from "./secret";
 import { showCommand } from "./show";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
@@ -41,6 +42,7 @@ const mainCommand = defineCommand({
     remove: removeCommand,
     show: showCommand,
     tailordb: tailordbCommand,
+    secret: secretCommand,
     user: userCommand,
     workspace: workspaceCommand,
   },

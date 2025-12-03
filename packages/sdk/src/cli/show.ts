@@ -9,7 +9,7 @@ import {
 } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "./context";
+import { loadAccessToken, loadWorkspaceId } from "./context";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {
@@ -59,10 +59,9 @@ export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });
-  const configPath = loadConfigPath(options?.configPath);
 
   // Get application
-  const { config } = await loadConfig(configPath);
+  const { config } = await loadConfig(options?.configPath);
   const resp = await client.getApplication({
     workspaceId,
     applicationName: config.name,

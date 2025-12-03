@@ -59,7 +59,7 @@ jobs:
       - name: Build create-sdk with pkg.pr.new SDK
         run: |
           export TAILOR_SDK_VERSION="${{ needs.publish-sdk.outputs.sdk_url }}"
-          node packages/create-sdk/scripts/set-sdk-version.js
+          node packages/create-sdk/scripts/prepare-templates.js
           pnpm --filter @tailor-platform/create-sdk build
 
       - name: Publish create-sdk to pkg.pr.new

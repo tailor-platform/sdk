@@ -1,5 +1,6 @@
 import eslint from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
+import importPlugin from "eslint-plugin-import";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -29,6 +30,21 @@ export default defineConfig([
       globals: {
         ...globals.node,
       },
+    },
+  },
+  importPlugin.flatConfigs.recommended,
+  importPlugin.flatConfigs.typescript,
+  {
+    rules: {
+      "import/no-unresolved": "off",
+      "import/order": [
+        "error",
+        {
+          alphabetize: {
+            order: "asc",
+          },
+        },
+      ],
     },
   },
 ]);

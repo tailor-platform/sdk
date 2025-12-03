@@ -13,7 +13,7 @@ import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import {
@@ -59,8 +59,7 @@ export type ApplyPhase = "create-update" | "delete";
 
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
-  const configPath = loadConfigPath(options?.configPath);
-  const { config } = await loadConfig(configPath);
+  const { config, configPath } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? false;
@@ -138,6 +137,7 @@ export async function apply(options?: ApplyOptions) {
   const workflow = await planWorkflow(
     client,
     workspaceId,
+    application.name,
     workflowResult?.workflows ?? {},
   );
 
@@ -149,6 +149,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.conflicts,
     ...pipeline.conflicts,
     ...executor.conflicts,
+    ...workflow.conflicts,
   ];
   await confirmOwnerConflict(allConflicts, application.name, yes);
   // Confirm unmanaged resources
@@ -159,6 +160,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.unmanaged,
     ...pipeline.unmanaged,
     ...executor.unmanaged,
+    ...workflow.unmanaged,
   ];
   await confirmUnmanagedResources(allUnmanaged, application.name, yes);
   // Confirm important deletions
@@ -187,6 +189,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.resourceOwners,
     ...pipeline.resourceOwners,
     ...executor.resourceOwners,
+    ...workflow.resourceOwners,
   ]);
   const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
   const emptyApps = [...conflictOwners].filter(

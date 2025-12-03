@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/create-sdk",
-  "version": "0.12.1",
+  "version": "0.12.4",
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
   "type": "module",
@@ -13,7 +13,6 @@
   "files": [
     "dist",
     "templates",
-    "templates/*/.gitignore",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -23,7 +22,7 @@
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
     "typecheck": "tsc --noEmit",
-    "prepublish": "node scripts/set-sdk-version.js && pnpm run build"
+    "prepublish": "node scripts/prepare-templates.js && pnpm run build"
   },
   "dependencies": {
     "@clack/prompts": "0.11.0",

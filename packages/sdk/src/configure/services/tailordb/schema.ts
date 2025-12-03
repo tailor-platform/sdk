@@ -61,7 +61,7 @@ interface RelationConfig<S extends RelationType, T extends TailorDBType> {
 
 // Special config variant for self-referencing relations
 type RelationSelfConfig = {
-  type: "oneToOne" | "1-1" | "manyToOne" | "n-1" | "N-1" | "keyOnly";
+  type: RelationType;
   toward: {
     type: "self";
     as?: string;
@@ -71,6 +71,7 @@ type RelationSelfConfig = {
 };
 
 interface PendingSelfRelation {
+  type: RelationType;
   as?: string;
   key: string;
   backward: string;
@@ -238,31 +239,29 @@ export class TailorDBField<
     const key = config.toward.key ?? "id";
     const backward = config.backward ?? "";
 
-    if (!isRelationSelfConfig(config)) {
-      this._metadata.foreignKeyType = config.toward.type.name;
-      this._metadata.foreignKeyField = key;
-    }
-    if (config.type === "keyOnly") {
-      return this;
-    }
-
     if (isRelationSelfConfig(config)) {
       // Defer resolving the self reference until the type is constructed
       this._pendingSelfRelation = {
+        type: config.type,
         as: config.toward.as,
         key,
         backward,
       };
-    } else {
-      const forward = config.toward.as;
-
-      this._ref = {
-        type: config.toward.type,
-        nameMap: [forward, backward],
-        key,
-      };
+      return this;
     }
 
+    this._metadata.foreignKeyType = config.toward.type.name;
+    this._metadata.foreignKeyField = key;
+    if (config.type === "keyOnly") {
+      return this;
+    }
+
+    const forward = config.toward.as;
+    this._ref = {
+      type: config.toward.type,
+      nameMap: [forward, backward],
+      key,
+    };
     this._metadata.relation = true;
     return this;
   }
@@ -493,8 +492,6 @@ export class TailorDBType<
 > {
   public readonly _output = null as unknown as InferFieldsOutput<Fields>;
   public _description?: string;
-  public readonly referenced: Record<string, [TailorDBType<any, any>, string]> =
-    {};
   private _settings: TypeFeatures = {};
   private _indexes: IndexDef<this>[] = [];
   private _permissions: Permissions = {};
@@ -525,6 +522,12 @@ export class TailorDBType<
       };
       const pending = f._pendingSelfRelation;
       if (pending) {
+        f._metadata.foreignKeyType = this.name;
+        f._metadata.foreignKeyField = pending.key;
+        if (pending.type === "keyOnly") {
+          return this;
+        }
+
         const forward = pending.as ?? fieldName.replace(/(ID|Id|id)$/u, "");
         // Type conversion for manipulating private _ref.
         f._ref = {
@@ -532,23 +535,6 @@ export class TailorDBType<
           nameMap: [forward, pending.backward],
           key: pending.key,
         };
-        f._metadata.foreignKeyType = this.name;
-        f._metadata.foreignKeyField = pending.key;
-      }
-    });
-
-    Object.entries(this.fields).forEach(([fieldName, field]) => {
-      if (field.reference && field.reference !== undefined) {
-        const ref = field.reference;
-        if (ref.type) {
-          const backwardFieldName = ref.nameMap?.[1]; // Get backward field name from nameMap
-
-          // Store backward reference with the field name (can be undefined)
-          // The actual backward field name will be generated in the CLI layer
-          if (backwardFieldName !== undefined) {
-            ref.type.referenced[backwardFieldName] = [this, fieldName];
-          }
-        }
       }
     });
   }

@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "0.12.1",
+  "version": "0.12.4",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "main": "./dist/configure/index.mjs",
@@ -68,7 +68,6 @@
     "oxc-parser": "0.98.0",
     "pkg-types": "2.3.0",
     "rolldown": "catalog:",
-    "smol-toml": "1.4.2",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.20.6",

@@ -177,6 +177,12 @@ export declare type ExecutorTargetConfig = Message<"tailor.v1.ExecutorTargetConf
      */
     value: ExecutorTargetFunctionConfig;
     case: "function";
+  } | {
+    /**
+     * @generated from field: tailor.v1.ExecutorTargetWorkflowConfig workflow = 5;
+     */
+    value: ExecutorTargetWorkflowConfig;
+    case: "workflow";
   } | { case: undefined; value?: undefined };
 };
 
@@ -311,6 +317,32 @@ export declare type ExecutorTargetFunctionConfig = Message<"tailor.v1.ExecutorTa
  * Use `create(ExecutorTargetFunctionConfigSchema)` to create a new message.
  */
 export declare const ExecutorTargetFunctionConfigSchema: GenMessage<ExecutorTargetFunctionConfig>;
+
+/**
+ * @generated from message tailor.v1.ExecutorTargetWorkflowConfig
+ */
+export declare type ExecutorTargetWorkflowConfig = Message<"tailor.v1.ExecutorTargetWorkflowConfig"> & {
+  /**
+   * @generated from field: string workflow_name = 1;
+   */
+  workflowName: string;
+
+  /**
+   * @generated from field: tailor.v1.Script variables = 2;
+   */
+  variables?: Script;
+
+  /**
+   * @generated from field: tailor.v1.AuthInvoker invoker = 3;
+   */
+  invoker?: AuthInvoker;
+};
+
+/**
+ * Describes the message tailor.v1.ExecutorTargetWorkflowConfig.
+ * Use `create(ExecutorTargetWorkflowConfigSchema)` to create a new message.
+ */
+export declare const ExecutorTargetWorkflowConfigSchema: GenMessage<ExecutorTargetWorkflowConfig>;
 
 /**
  * @generated from message tailor.v1.ExecutorJob
@@ -508,6 +540,11 @@ export enum ExecutorTargetType {
    * @generated from enum value: EXECUTOR_TARGET_TYPE_JOB_FUNCTION = 4;
    */
   JOB_FUNCTION = 4,
+
+  /**
+   * @generated from enum value: EXECUTOR_TARGET_TYPE_WORKFLOW = 5;
+   */
+  WORKFLOW = 5,
 }
 
 /**

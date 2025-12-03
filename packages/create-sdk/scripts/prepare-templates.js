@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
+import {
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  existsSync,
+  copyFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
-import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 
 // Get SDK version or URL from environment variable or package.json
 const sdkVersionOrUrl = process.env.TAILOR_SDK_VERSION;
@@ -46,6 +52,17 @@ for (const template of templates) {
 
   writeFileSync(packageJsonPath, JSON.stringify(content, null, 2) + "\n");
   console.log(`Updated ${template}/package.json to use SDK: ${version}`);
+}
+
+// Copy .gitignore to __dot__gitignore
+// refs: https://github.com/npm/cli/issues/5756
+for (const template of templates) {
+  const gitignorePath = resolve(templatesDir, template, ".gitignore");
+  const dotGitignorePath = resolve(templatesDir, template, "__dot__gitignore");
+  if (existsSync(gitignorePath)) {
+    copyFileSync(gitignorePath, dotGitignorePath);
+    console.log(`Copied ${template}/.gitignore to __dot__gitignore`);
+  }
 }
 
 console.log("Done!");

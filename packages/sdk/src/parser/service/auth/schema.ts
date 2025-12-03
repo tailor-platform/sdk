@@ -154,7 +154,6 @@ const UserProfileSchema = z.object({
   // FIXME: improve TailorDBInstance schema validation
   type: z.object({
     name: z.string(),
-    referenced: z.any(),
     fields: z.any(),
     metadata: z.any(),
     hooks: z.any(),

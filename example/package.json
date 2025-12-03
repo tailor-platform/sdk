@@ -38,7 +38,7 @@
     "@toiroakr/lines-db": "0.6.1",
     "@types/node": "22.19.1",
     "graphql": "16.12.0",
-    "graphql-request": "7.3.4",
+    "graphql-request": "7.3.5",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
     "vitest": "4.0.14"

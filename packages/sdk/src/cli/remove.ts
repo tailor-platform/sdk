@@ -17,9 +17,10 @@ import {
 } from "@/cli/apply/services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig } from "@/cli/config-loader";
+import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
 import { commonArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "./context";
+import { loadAccessToken, loadWorkspaceId } from "./context";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -37,8 +38,7 @@ async function loadOptions(options?: RemoveOptions) {
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });
-  const configPath = loadConfigPath(options?.configPath);
-  const { config } = await loadConfig(configPath);
+  const { config } = await loadConfig(options?.configPath);
   const application = defineApplication(config);
   return {
     client,
@@ -67,6 +67,12 @@ async function execRemove(
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
+  const workflow = await planWorkflow(
+    client,
+    workspaceId,
+    application.name,
+    {},
+  );
 
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&
@@ -75,7 +81,8 @@ async function execRemove(
     auth.changeSet.service.deletes.length === 0 &&
     pipeline.changeSet.service.deletes.length === 0 &&
     app.deletes.length === 0 &&
-    executor.changeSet.deletes.length === 0
+    executor.changeSet.deletes.length === 0 &&
+    workflow.changeSet.deletes.length === 0
   ) {
     return;
   }
@@ -86,6 +93,7 @@ async function execRemove(
   }
 
   // Apply deletions in reverse order of dependencies
+  await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
   await applyApplication(client, app, "delete");
   await applyPipeline(client, pipeline, "delete");

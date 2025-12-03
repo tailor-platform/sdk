@@ -39,11 +39,11 @@ importers:
         specifier: 1.13.6
         version: 1.13.6
       pkg-pr-new:
-        specifier: 0.0.60
-        version: 0.0.60
+        specifier: 0.0.61
+        version: 0.0.61
       prettier:
-        specifier: 3.7.1
-        version: 3.7.1
+        specifier: 3.7.3
+        version: 3.7.3
       tsx:
         specifier: 4.20.6
         version: 4.20.6
@@ -94,8 +94,8 @@ importers:
         specifier: 16.12.0
         version: 16.12.0
       graphql-request:
-        specifier: 7.3.4
-        version: 7.3.4(graphql@16.12.0)
+        specifier: 7.3.5
+        version: 7.3.5(graphql@16.12.0)
       tsx:
         specifier: 4.20.6
         version: 4.20.6
@@ -158,8 +158,8 @@ importers:
         specifier: 9.39.1
         version: 9.39.1(jiti@2.5.1)
       prettier:
-        specifier: 3.7.1
-        version: 3.7.1
+        specifier: 3.7.3
+        version: 3.7.3
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -192,8 +192,8 @@ importers:
         specifier: 9.39.1
         version: 9.39.1(jiti@2.5.1)
       prettier:
-        specifier: 3.7.1
-        version: 3.7.1
+        specifier: 3.7.3
+        version: 3.7.3
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -216,8 +216,8 @@ importers:
         specifier: 9.39.1
         version: 9.39.1(jiti@2.5.1)
       prettier:
-        specifier: 3.7.1
-        version: 3.7.1
+        specifier: 3.7.3
+        version: 3.7.3
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -250,11 +250,11 @@ importers:
         specifier: 9.39.1
         version: 9.39.1(jiti@2.5.1)
       graphql-request:
-        specifier: 7.3.4
-        version: 7.3.4(graphql@16.12.0)
+        specifier: 7.3.5
+        version: 7.3.5(graphql@16.12.0)
       prettier:
-        specifier: 3.7.1
-        version: 3.7.1
+        specifier: 3.7.3
+        version: 3.7.3
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -324,9 +324,6 @@ importers:
       rolldown:
         specifier: 1.0.0-beta.41
         version: 1.0.0-beta.41
-      smol-toml:
-        specifier: 1.4.2
-        version: 1.4.2
       table:
         specifier: 6.9.0
         version: 6.9.0
@@ -2222,8 +2219,8 @@ packages:
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
-  graphql-request@7.3.4:
-    resolution: {integrity: sha512-kbpP5dw9hHIL5jN/2VS2JU0/Sc1hlsj7zrYBKSDiYd5iG8QfX7P79u26ZBi84eAijsqYVZEpLvCCwEzVxscWhg==}
+  graphql-request@7.3.5:
+    resolution: {integrity: sha512-yrikPPBQFrHTCEw+Nr89vcKkhSOaKk1a4i1aoK0q2pJp0TkkH+HxJXKeVDqzHSYAEoFoNqKmNuqda1tubgaGZQ==}
     peerDependencies:
       graphql: 14 - 16
 
@@ -2861,8 +2858,8 @@ packages:
     resolution: {integrity: sha512-uB80kBFb/tfd68bVleG9T5GGsGPjJrLAUpR5PZIrhBnIaRTQRjqdJSsIKkOP6OAIFbj7GOrcudc5pNjZ+geV2g==}
     engines: {node: '>=6'}
 
-  pkg-pr-new@0.0.60:
-    resolution: {integrity: sha512-eblxPNSgv0AO18OrfpHq+YrNHfEqeePWWvlKkPvcHByddGsGDOK25z41C1RDjZ+K8zUHDk5IGN+6n0WZa4T2Pg==}
+  pkg-pr-new@0.0.61:
+    resolution: {integrity: sha512-HhhnABq+3rznUi+B2yzjq/0vvoBuoOEv4FsERR+Dkv/+d1npXji8RR2n7MDedu2hBrv3pp/txa81uihbvaiFbg==}
     hasBin: true
 
   pkg-types@1.3.1:
@@ -2903,8 +2900,8 @@ packages:
     engines: {node: '>=10.13.0'}
     hasBin: true
 
-  prettier@3.7.1:
-    resolution: {integrity: sha512-RWKXE4qB3u5Z6yz7omJkjWwmTfLdcbv44jUVHC5NpfXwFGzvpQM798FGv/6WNK879tc+Cn0AAyherCl1KjbyZQ==}
+  prettier@3.7.3:
+    resolution: {integrity: sha512-QgODejq9K3OzoBbuyobZlUhznP5SKwPqp+6Q6xw6o8gnhr4O85L2U915iM2IDcfF2NPXVaM9zlo9tdwipnYwzg==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -3134,10 +3131,6 @@ packages:
   slice-ansi@4.0.0:
     resolution: {integrity: sha512-qMCMfhY040cVHT43K9BFygqYbUPFZKHOg7K73mtTWJRb8pyP3fzf4Ixd5SzdEJQ6MRUg/WBnOLxghZtKKurENQ==}
     engines: {node: '>=10'}
-
-  smol-toml@1.4.2:
-    resolution: {integrity: sha512-rInDH6lCNiEyn3+hH8KVGFdbjc099j47+OSgbMrfDYX1CmXLfdKd7qi6IfcWj2wFxvSVkuI46M+wPGYfEOEj6g==}
-    engines: {node: '>= 18'}
 
   sonda@0.10.0:
     resolution: {integrity: sha512-Mg6YWl8QOD9Yf8wV5teUYZiB0P1oy994pmPJmi3Fr7+0RXhBcNY6TUZFa7c3gHKLJfemfoAeV22+PSBXlzuT4g==}
@@ -4034,7 +4027,7 @@ snapshots:
     dependencies:
       commander: 14.0.2
       csv-parser: 3.2.0
-      graphql-request: 7.3.4(graphql@16.12.0)
+      graphql-request: 7.3.5(graphql@16.12.0)
       js-yaml: 4.1.1
     transitivePeerDependencies:
       - graphql
@@ -5510,7 +5503,7 @@ snapshots:
 
   graphemer@1.4.0: {}
 
-  graphql-request@7.3.4(graphql@16.12.0):
+  graphql-request@7.3.5(graphql@16.12.0):
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.12.0)
       graphql: 16.12.0
@@ -6116,7 +6109,7 @@ snapshots:
 
   pify@4.0.1: {}
 
-  pkg-pr-new@0.0.60:
+  pkg-pr-new@0.0.61:
     dependencies:
       '@actions/core': 1.11.1
       '@jsdevtools/ez-spawn': 3.0.4
@@ -6180,7 +6173,7 @@ snapshots:
 
   prettier@2.8.8: {}
 
-  prettier@3.7.1: {}
+  prettier@3.7.3: {}
 
   pretty-ms@7.0.1:
     dependencies:
@@ -6463,8 +6456,6 @@ snapshots:
       ansi-styles: 4.3.0
       astral-regex: 2.0.0
       is-fullwidth-code-point: 3.0.0
-
-  smol-toml@1.4.2: {}
 
   sonda@0.10.0:
     dependencies:
