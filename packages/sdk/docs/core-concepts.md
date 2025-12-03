@@ -555,7 +555,7 @@ import { sendNotification } from "./jobs/send-notification";
 export const processOrder = createWorkflowJob({
   name: "process-order",
   deps: [fetchCustomer, sendNotification],
-  body: async (input: { orderId: string; customerId: string }, { jobs }) => {
+  body: async (input: { orderId: string; customerId: string }, jobs) => {
     // Access dependent jobs with hyphens replaced by underscores
     // "fetch-customer" -> jobs.fetch_customer()
     // "send-notification" -> jobs.send_notification()
@@ -590,7 +590,7 @@ import { sendNotification } from "./jobs/send-notification";
 export const processOrder = createWorkflowJob({
   name: "process-order",
   deps: [fetchCustomer, sendNotification],
-  body: async (input, { jobs }) => {
+  body: async (input, jobs) => {
     // ... job logic
   },
 });
