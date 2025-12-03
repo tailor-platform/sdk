@@ -1,5 +1,71 @@
 # @tailor-platform/sdk
 
+## 0.13.0
+
+### Minor Changes
+
+- [#121](https://github.com/tailor-platform/sdk/pull/121) [`bc7a3e9`](https://github.com/tailor-platform/sdk/commit/bc7a3e96b4805e75fcb153220d286abaced26368) Thanks [@toiroakr](https://github.com/toiroakr)! - Streamline workflow job function registration and trigger handling
+
+  **Breaking Changes:**
+  - Removed `deps` property from `createWorkflowJob()` - jobs no longer declare dependencies explicitly
+  - Removed `jobs` object from `WorkflowJobContext` - use `.trigger()` method instead
+  - Changed the way workflow jobs call other jobs: from `jobs.job_name()` to `otherJob.trigger()`
+
+  **Migration Guide:**
+
+  Before:
+
+  ```typescript
+  export const fetchCustomer = createWorkflowJob({
+    name: "fetch-customer",
+    body: async (input: { customerId: string }) => {
+      // fetch logic
+    },
+  });
+
+  export const processOrder = createWorkflowJob({
+    name: "process-order",
+    deps: [fetchCustomer],
+    body: async (input, { jobs }) => {
+      const customer = await jobs.fetch_customer({
+        customerId: input.customerId,
+      });
+      return { customer };
+    },
+  });
+  ```
+
+  After:
+
+  ```typescript
+  export const fetchCustomer = createWorkflowJob({
+    name: "fetch-customer",
+    body: async (input: { customerId: string }) => {
+      // fetch logic
+    },
+  });
+
+  export const processOrder = createWorkflowJob({
+    name: "process-order",
+    body: async (input, { env }) => {
+      const customer = await fetchCustomer.trigger({
+        customerId: input.customerId,
+      });
+      return { customer };
+    },
+  });
+  ```
+
+  **Key Changes:**
+  - Dependencies are now automatically detected via AST analysis of `.trigger()` calls at bundle time
+  - The `.trigger()` method is transformed to `tailor.workflow.triggerJobFunction()` during bundling
+  - Job function registration is optimized - all job functions are registered once and shared across workflows
+  - Unused jobs (not reachable from any mainJob via trigger calls) are automatically excluded from bundles
+
+### Patch Changes
+
+- [#102](https://github.com/tailor-platform/sdk/pull/102) [`ac99d85`](https://github.com/tailor-platform/sdk/commit/ac99d8506693e27512a3ff59c5c8e4fda63b4695) Thanks [@riku99](https://github.com/riku99)! - Add CLI commands for managing Secret Manager vaults and secrets
+
 ## 0.12.4
 
 ### Patch Changes
