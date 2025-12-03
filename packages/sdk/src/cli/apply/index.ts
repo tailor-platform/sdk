@@ -85,7 +85,10 @@ export async function apply(options?: ApplyOptions) {
     await buildExecutor(application.executorService.config);
   }
   if (workflowResult && workflowResult.jobs.length > 0) {
-    await buildWorkflow(workflowResult.jobs);
+    const mainJobNames = workflowResult.workflowSources.map(
+      (ws) => ws.workflow.mainJob.name,
+    );
+    await buildWorkflow(workflowResult.jobs, mainJobNames, application.env);
   }
   if (buildOnly) return;
 
@@ -237,9 +240,13 @@ async function buildExecutor(config: FileLoadConfig) {
   await bundleExecutors(config);
 }
 
-async function buildWorkflow(collectedJobs: CollectedJob[]) {
+async function buildWorkflow(
+  collectedJobs: CollectedJob[],
+  mainJobNames: string[],
+  env: Record<string, string | number | boolean>,
+) {
   // Use the workflow bundler with already collected jobs
-  await bundleWorkflowJobs(collectedJobs);
+  await bundleWorkflowJobs(collectedJobs, mainJobNames, env);
 }
 
 export const applyCommand = defineCommand({
