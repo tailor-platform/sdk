@@ -27,17 +27,11 @@ type ASTNode = Record<string, unknown>;
 
 interface JobLocation {
   name: string;
-  exportName?: string;
   nameRange: { start: number; end: number };
+  depsRange?: { start: number; end: number };
   bodyValueRange: { start: number; end: number };
   // Range of the entire variable declaration statement (for removal)
   statementRange?: { start: number; end: number };
-}
-
-interface TriggerCall {
-  identifierName: string;
-  callRange: { start: number; end: number };
-  argsText: string;
 }
 
 interface Replacement {
@@ -327,6 +321,7 @@ export function findAllJobs(
         const configObj = args[0] as ObjectExpression;
         const nameProp = findProperty(configObj.properties, "name");
         const bodyProp = findProperty(configObj.properties, "body");
+        const depsProp = findProperty(configObj.properties, "deps");
 
         if (
           nameProp &&
@@ -334,21 +329,10 @@ export function findAllJobs(
           bodyProp &&
           isFunctionExpression(bodyProp.value)
         ) {
-          // Find the outermost enclosing statement and export name
-          // Iterate from closest parent (end of array) to farthest (start of array)
+          // Find the outermost enclosing statement
           let statementRange: { start: number; end: number } | undefined;
-          let exportName: string | undefined;
-          for (let i = parents.length - 1; i >= 0; i--) {
+          for (let i = 0; i < parents.length; i++) {
             const parent = parents[i];
-            if (parent.type === "VariableDeclarator") {
-              const declarator = parent as unknown as {
-                id?: { type?: string; name?: string };
-              };
-              if (declarator.id?.type === "Identifier") {
-                exportName = declarator.id.name;
-              }
-            }
-            // Keep track of the outermost statement (ExportNamedDeclaration > VariableDeclaration)
             if (
               parent.type === "ExportNamedDeclaration" ||
               parent.type === "VariableDeclaration"
@@ -357,14 +341,16 @@ export function findAllJobs(
                 start: parent.start as number,
                 end: parent.end as number,
               };
-              // Don't break - continue to find ExportNamedDeclaration if it exists
+              break;
             }
           }
 
           jobs.push({
             name: nameProp.value.value,
-            exportName,
             nameRange: { start: nameProp.start, end: nameProp.end },
+            depsRange: depsProp
+              ? { start: depsProp.start, end: depsProp.end }
+              : undefined,
             bodyValueRange: {
               start: bodyProp.value.start,
               end: bodyProp.value.end,
@@ -407,6 +393,20 @@ function applyReplacements(
 }
 
 /**
+ * Find the end position including trailing comma
+ */
+function findTrailingCommaEnd(source: string, position: number): number {
+  let i = position;
+  while (i < source.length) {
+    const char = source[i];
+    if (char === ",") return i + 1;
+    if (!/\s/.test(char)) break;
+    i++;
+  }
+  return position;
+}
+
+/**
  * Find the end of a statement including any trailing newline
  */
 function findStatementEnd(source: string, position: number): number {
@@ -423,88 +423,6 @@ function findStatementEnd(source: string, position: number): number {
     i++;
   }
   return i;
-}
-
-/**
- * Detect all .trigger() calls in the source code
- * Returns information about each trigger call for transformation
- */
-export function detectTriggerCalls(
-  program: Program,
-  sourceText: string,
-): TriggerCall[] {
-  const calls: TriggerCall[] = [];
-
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
-
-    // Detect pattern: identifier.trigger(args)
-    if (node.type === "CallExpression") {
-      const callExpr = node as unknown as CallExpression;
-      const callee = callExpr.callee;
-
-      if (callee.type === "MemberExpression") {
-        const memberExpr = callee as unknown as StaticMemberExpression;
-        if (
-          !memberExpr.computed &&
-          memberExpr.object.type === "Identifier" &&
-          memberExpr.property.name === "trigger"
-        ) {
-          const identifierName = (memberExpr.object as IdentifierReference)
-            .name;
-
-          // Extract arguments text
-          let argsText = "";
-          if (callExpr.arguments.length > 0) {
-            const firstArg = callExpr.arguments[0];
-            const lastArg = callExpr.arguments[callExpr.arguments.length - 1];
-            if (
-              firstArg &&
-              lastArg &&
-              "start" in firstArg &&
-              "end" in lastArg
-            ) {
-              argsText = sourceText.slice(
-                firstArg.start as number,
-                lastArg.end as number,
-              );
-            }
-          }
-
-          calls.push({
-            identifierName,
-            callRange: { start: callExpr.start, end: callExpr.end },
-            argsText,
-          });
-        }
-      }
-    }
-
-    for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program as unknown as ASTNode);
-  return calls;
-}
-
-/**
- * Build a map from export name to job name from detected jobs
- */
-export function buildJobNameMap(jobs: JobLocation[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const job of jobs) {
-    if (job.exportName) {
-      map.set(job.exportName, job.name);
-    }
-  }
-  return map;
 }
 
 /**
@@ -570,113 +488,89 @@ function findVariableDeclarationsByName(
 
 /**
  * Transform workflow source code
- * - Transform .trigger() calls to tailor.workflow.triggerJobFunction()
+ * - Target job: remove deps
  * - Other jobs: remove entire variable declaration
  *
  * @param source - The source code to transform
  * @param targetJobName - The name of the target job (from job config)
  * @param targetJobExportName - The export name of the target job (optional, for enhanced detection)
  * @param otherJobExportNames - Export names of other jobs to remove (optional, for enhanced detection)
- * @param allJobsMap - Map from export name to job name for trigger transformation (optional)
  */
 export function transformWorkflowSource(
   source: string,
   targetJobName: string,
   targetJobExportName?: string,
   otherJobExportNames?: string[],
-  allJobsMap?: Map<string, string>,
 ): string {
   // Use .ts extension to properly parse TypeScript code
   const { program } = parseSync("input.ts", source);
 
-  // Find all jobs using AST detection
+  // Find all jobs using AST detection (for deps removal and fallback)
   const detectedJobs = findAllJobs(program, source);
-
-  // Build job name map from detected jobs if not provided
-  const jobNameMap = allJobsMap ?? buildJobNameMap(detectedJobs);
 
   // Find all variable declarations for export name-based removal
   const allDeclarations = findVariableDeclarationsByName(program);
 
-  // Detect all .trigger() calls
-  const triggerCalls = detectTriggerCalls(program, source);
-
   const replacements: Replacement[] = [];
-  const removedRanges: Array<{ start: number; end: number }> = [];
+  const removedRanges = new Set<string>();
 
-  // Helper to check if a position is inside any removed range
-  const isInsideRemovedRange = (pos: number) => {
-    return removedRanges.some((r) => pos >= r.start && pos < r.end);
+  // Helper to track removed ranges (avoid duplicate removals)
+  const markRemoved = (start: number, end: number) => {
+    removedRanges.add(`${start}-${end}`);
+  };
+  const isRemoved = (start: number, end: number) => {
+    return removedRanges.has(`${start}-${end}`);
   };
 
-  // Helper to track removed ranges (avoid duplicate/overlapping removals)
-  // Use start position only for comparison since end position may vary due to findStatementEnd
-  const isAlreadyMarkedForRemoval = (start: number) => {
-    return removedRanges.some((r) => r.start === start);
-  };
-
-  // Step 1: First, collect all ranges that will be removed (other job declarations)
-  // This must happen before trigger transformation to know which trigger calls to skip
+  // Step 1: Process AST-detected jobs
   for (const job of detectedJobs) {
     if (job.name === targetJobName) {
-      continue;
-    }
-
-    if (
-      job.statementRange &&
-      !isAlreadyMarkedForRemoval(job.statementRange.start)
-    ) {
-      const endPos = findStatementEnd(source, job.statementRange.end);
-      removedRanges.push({ start: job.statementRange.start, end: endPos });
-      replacements.push({
-        start: job.statementRange.start,
-        end: endPos,
-        text: "",
-      });
-    } else if (!job.statementRange) {
-      // Fallback: replace body with empty function if we can't find the statement
-      replacements.push({
-        start: job.bodyValueRange.start,
-        end: job.bodyValueRange.end,
-        text: "() => {}",
-      });
+      // Target job: remove deps
+      if (job.depsRange) {
+        replacements.push({
+          start: job.depsRange.start,
+          end: findTrailingCommaEnd(source, job.depsRange.end),
+          text: "",
+        });
+      }
+    } else {
+      // Other jobs: remove entire variable declaration
+      if (
+        job.statementRange &&
+        !isRemoved(job.statementRange.start, job.statementRange.end)
+      ) {
+        replacements.push({
+          start: job.statementRange.start,
+          end: findStatementEnd(source, job.statementRange.end),
+          text: "",
+        });
+        markRemoved(job.statementRange.start, job.statementRange.end);
+      } else if (!job.statementRange) {
+        // Fallback: replace body with empty function if we can't find the statement
+        replacements.push({
+          start: job.bodyValueRange.start,
+          end: job.bodyValueRange.end,
+          text: "() => {}",
+        });
+      }
     }
   }
 
   // Step 2: Remove other jobs by export name (catches jobs missed by AST detection)
   if (otherJobExportNames) {
     for (const exportName of otherJobExportNames) {
+      // Skip the target job's export name
       if (exportName === targetJobExportName) continue;
 
       const declRange = allDeclarations.get(exportName);
-      if (declRange && !isAlreadyMarkedForRemoval(declRange.start)) {
-        const endPos = findStatementEnd(source, declRange.end);
-        removedRanges.push({ start: declRange.start, end: endPos });
+      if (declRange && !isRemoved(declRange.start, declRange.end)) {
         replacements.push({
           start: declRange.start,
-          end: endPos,
+          end: findStatementEnd(source, declRange.end),
           text: "",
         });
+        markRemoved(declRange.start, declRange.end);
       }
-    }
-  }
-
-  // Step 3: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
-  // Only transform trigger calls that are NOT inside ranges being removed
-  for (const call of triggerCalls) {
-    // Skip trigger calls inside removed job declarations
-    if (isInsideRemovedRange(call.callRange.start)) {
-      continue;
-    }
-
-    const jobName = jobNameMap.get(call.identifierName);
-    if (jobName) {
-      const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
-      replacements.push({
-        start: call.callRange.start,
-        end: call.callRange.end,
-        text: transformedCall,
-      });
     }
   }
 
