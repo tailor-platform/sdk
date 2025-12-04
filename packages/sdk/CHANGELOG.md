@@ -1,5 +1,24 @@
 # @tailor-platform/sdk
 
+## 0.14.0
+
+### Minor Changes
+
+- [#124](https://github.com/tailor-platform/sdk/pull/124) [`6d96fdb`](https://github.com/tailor-platform/sdk/commit/6d96fdbbecc225e9906b9c0b2225a733dd8fc4d8) Thanks [@toiroakr](https://github.com/toiroakr)! - Add workflow trigger functionality
+  - Add `trigger` method to `Workflow` type that allows triggering workflows from resolvers and executors
+  - Support `authInvoker` option for authentication when triggering workflows
+
+  **Breaking Changes**
+  - AuthInvoker field names changed:
+    - `authName` → `namespace`
+    - `machineUser` → `machineUserName`
+    - This affects both `auth.invoker()` return value and direct object usage in executor's `authInvoker` option
+  - Executor operation field renamed:
+    - `invoker` → `authInvoker`
+  - SecretValue field names changed:
+    - `VaultName` → `vaultName`
+    - `SecretKey` → `secretKey`
+
 ## 0.13.0
 
 ### Minor Changes
