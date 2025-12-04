@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { styleText } from "node:util";
 import { parseSync } from "oxc-parser";
 import {
   loadFilesWithIgnores,
@@ -77,7 +78,9 @@ export async function buildTriggerContext(
         jobNameMap.set(exportName, jobName);
       }
     } catch {
-      // If we can't parse a file, skip it
+      console.warn(
+        styleText("yellow", `Warning: Failed to process workflow file ${file}`),
+      );
       continue;
     }
   }

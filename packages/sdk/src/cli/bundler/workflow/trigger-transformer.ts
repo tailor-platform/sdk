@@ -3,7 +3,6 @@ import {
   type ASTNode,
   type Replacement,
   applyReplacements,
-  findProperty,
   resolvePath,
 } from "./ast-utils";
 import { detectDefaultImports } from "./workflow-detector";
@@ -16,13 +15,61 @@ import type {
   IdentifierReference,
 } from "@oxc-project/types";
 
+interface AuthInvokerInfo {
+  isShorthand: boolean;
+  valueText: string;
+}
+
 interface ExtendedTriggerCall {
   kind: "job" | "workflow";
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
-  // For workflow triggers, the config object text (second argument)
-  configText?: string;
+  // For workflow triggers, extracted authInvoker info from config
+  authInvoker?: AuthInvokerInfo;
+}
+
+/**
+ * Extract authInvoker info from a config object expression
+ * Returns the authInvoker value text and whether it's a shorthand property
+ */
+function extractAuthInvokerInfo(
+  configArg: unknown,
+  sourceText: string,
+): AuthInvokerInfo | undefined {
+  if (!configArg || typeof configArg !== "object") return undefined;
+
+  const arg = configArg as { type?: string };
+  if (arg.type !== "ObjectExpression") return undefined;
+
+  const objExpr = configArg as ObjectExpression;
+
+  // Find authInvoker property
+  for (const prop of objExpr.properties) {
+    if (prop.type !== "Property") continue;
+
+    const objProp = prop as ObjectProperty;
+    const keyName =
+      objProp.key.type === "Identifier"
+        ? objProp.key.name
+        : objProp.key.type === "Literal"
+          ? (objProp.key as { value?: string }).value
+          : null;
+
+    if (keyName === "authInvoker") {
+      if (objProp.shorthand) {
+        return { isShorthand: true, valueText: "authInvoker" };
+      }
+      // Extract value text directly from source
+      const valueText = sourceText.slice(
+        objProp.value.start,
+        objProp.value.end,
+      );
+      return { isShorthand: false, valueText };
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -86,17 +133,15 @@ function detectExtendedTriggerCalls(
           if (isWorkflow && argCount >= 2) {
             // Workflow trigger requires 2 arguments (args, config)
             const secondArg = callExpr.arguments[1];
-            if (secondArg && "start" in secondArg && "end" in secondArg) {
-              const configText = sourceText.slice(
-                secondArg.start as number,
-                secondArg.end as number,
-              );
+            // Extract authInvoker directly from the config object
+            const authInvoker = extractAuthInvokerInfo(secondArg, sourceText);
+            if (authInvoker) {
               calls.push({
                 kind: "workflow",
                 identifierName,
                 callRange: { start: callExpr.start, end: callExpr.end },
                 argsText,
-                configText,
+                authInvoker,
               });
             }
           } else if (isJob) {
@@ -124,45 +169,6 @@ function detectExtendedTriggerCalls(
 
   walk(program as unknown as ASTNode);
   return calls;
-}
-
-/**
- * Extract authInvoker expression from config AST node
- * Returns the expression text for the authInvoker, handling shorthand properties
- */
-function extractAuthInvokerFromAST(
-  configArg: unknown,
-  sourceText: string,
-): string | null {
-  if (!configArg || typeof configArg !== "object") return null;
-
-  const arg = configArg as { type?: string; start?: number; end?: number };
-  if (arg.type !== "ObjectExpression") return null;
-
-  const objExpr = configArg as ObjectExpression;
-  const authInvokerProp = findProperty(objExpr.properties, "authInvoker");
-  if (!authInvokerProp) return null;
-
-  // Check for shorthand property: { authInvoker }
-  const prop = objExpr.properties.find((p) => {
-    if (p.type !== "Property") return false;
-    const objProp = p as ObjectProperty;
-    const keyName =
-      objProp.key.type === "Identifier"
-        ? objProp.key.name
-        : (objProp.key as { value?: string }).value;
-    return keyName === "authInvoker";
-  }) as ObjectProperty | undefined;
-
-  if (prop && prop.shorthand) {
-    return "authInvoker";
-  }
-
-  // Extract the value expression text directly from source
-  // Adjust for the wrapping parenthesis we added when parsing
-  const valueStart = authInvokerProp.value.start - 1;
-  const valueEnd = authInvokerProp.value.end - 1;
-  return sourceText.slice(valueStart, valueEnd);
 }
 
 /**
@@ -221,37 +227,21 @@ export function transformFunctionTriggers(
   const replacements: Replacement[] = [];
 
   for (const call of triggerCalls) {
-    if (call.kind === "workflow" && call.configText) {
+    if (call.kind === "workflow" && call.authInvoker) {
       // Workflow trigger - get workflow name from map
       const workflowName = localWorkflowNameMap.get(call.identifierName);
       if (workflowName) {
-        // Re-parse just the config object to get accurate positions
-        const { program: configProgram } = parseSync(
-          "config.ts",
-          `(${call.configText})`,
-        );
-        const configStmt = configProgram.body[0];
-        if (configStmt?.type === "ExpressionStatement") {
-          const expr = (
-            configStmt as unknown as { expression: { expression?: unknown } }
-          ).expression;
-          const configObj =
-            (expr as { expression?: unknown }).expression || expr;
-
-          const authInvokerExpr = extractAuthInvokerFromAST(
-            configObj,
-            call.configText,
-          );
-          if (authInvokerExpr) {
-            // Transform to tailor.workflow.triggerWorkflow
-            const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
-            replacements.push({
-              start: call.callRange.start,
-              end: call.callRange.end,
-              text: transformedCall,
-            });
-          }
-        }
+        // Use authInvoker info extracted during detection
+        const authInvokerExpr = call.authInvoker.isShorthand
+          ? "authInvoker"
+          : call.authInvoker.valueText;
+        // Transform to tailor.workflow.triggerWorkflow
+        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
+        replacements.push({
+          start: call.callRange.start,
+          end: call.callRange.end,
+          text: transformedCall,
+        });
       }
     } else if (call.kind === "job") {
       // Job trigger - get job name from map
