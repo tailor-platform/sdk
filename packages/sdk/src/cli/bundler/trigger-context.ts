@@ -5,13 +5,12 @@ import {
   loadFilesWithIgnores,
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
+import { findAllJobs, buildJobNameMap } from "./workflow/job-detector";
+import { transformFunctionTriggers } from "./workflow/trigger-transformer";
 import {
-  findAllJobs,
   findAllWorkflows,
-  buildJobNameMap,
   buildWorkflowNameMap,
-  transformFunctionTriggers,
-} from "./workflow/ast-transformer";
+} from "./workflow/workflow-detector";
 import type { Plugin } from "rolldown";
 
 /**

@@ -1,0 +1,272 @@
+import { parseSync } from "oxc-parser";
+import {
+  type ASTNode,
+  type Replacement,
+  applyReplacements,
+  findProperty,
+  resolvePath,
+} from "./ast-utils";
+import { detectDefaultImports } from "./workflow-detector";
+import type {
+  Program,
+  CallExpression,
+  ObjectExpression,
+  ObjectProperty,
+  StaticMemberExpression,
+  IdentifierReference,
+} from "@oxc-project/types";
+
+interface ExtendedTriggerCall {
+  kind: "job" | "workflow";
+  identifierName: string;
+  callRange: { start: number; end: number };
+  argsText: string;
+  // For workflow triggers, the config object text (second argument)
+  configText?: string;
+}
+
+/**
+ * Detect .trigger() calls for known workflows and jobs
+ * Only detects calls where the identifier is in workflowNames or jobNames
+ *
+ * @param program - The parsed AST program
+ * @param sourceText - The source code text
+ * @param workflowNames - Set of known workflow identifier names
+ * @param jobNames - Set of known job identifier names
+ */
+function detectExtendedTriggerCalls(
+  program: Program,
+  sourceText: string,
+  workflowNames: Set<string>,
+  jobNames: Set<string>,
+): ExtendedTriggerCall[] {
+  const calls: ExtendedTriggerCall[] = [];
+
+  function walk(node: ASTNode | null | undefined): void {
+    if (!node || typeof node !== "object") return;
+
+    // Detect pattern: identifier.trigger(args) or identifier.trigger(args, config)
+    if (node.type === "CallExpression") {
+      const callExpr = node as unknown as CallExpression;
+      const callee = callExpr.callee;
+
+      if (callee.type === "MemberExpression") {
+        const memberExpr = callee as unknown as StaticMemberExpression;
+        if (
+          !memberExpr.computed &&
+          memberExpr.object.type === "Identifier" &&
+          memberExpr.property.name === "trigger"
+        ) {
+          const identifierName = (memberExpr.object as IdentifierReference)
+            .name;
+
+          // Only process if this is a known workflow or job
+          const isWorkflow = workflowNames.has(identifierName);
+          const isJob = jobNames.has(identifierName);
+          if (!isWorkflow && !isJob) {
+            // Skip unknown identifiers to prevent false positives
+            return;
+          }
+
+          const argCount = callExpr.arguments.length;
+
+          // Extract first argument text
+          let argsText = "";
+          if (argCount > 0) {
+            const firstArg = callExpr.arguments[0];
+            if (firstArg && "start" in firstArg && "end" in firstArg) {
+              argsText = sourceText.slice(
+                firstArg.start as number,
+                firstArg.end as number,
+              );
+            }
+          }
+
+          // Determine kind based on known identifier type
+          if (isWorkflow && argCount >= 2) {
+            // Workflow trigger requires 2 arguments (args, config)
+            const secondArg = callExpr.arguments[1];
+            if (secondArg && "start" in secondArg && "end" in secondArg) {
+              const configText = sourceText.slice(
+                secondArg.start as number,
+                secondArg.end as number,
+              );
+              calls.push({
+                kind: "workflow",
+                identifierName,
+                callRange: { start: callExpr.start, end: callExpr.end },
+                argsText,
+                configText,
+              });
+            }
+          } else if (isJob) {
+            // Job trigger (0-1 arguments)
+            calls.push({
+              kind: "job",
+              identifierName,
+              callRange: { start: callExpr.start, end: callExpr.end },
+              argsText,
+            });
+          }
+        }
+      }
+    }
+
+    for (const key of Object.keys(node)) {
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode);
+      }
+    }
+  }
+
+  walk(program as unknown as ASTNode);
+  return calls;
+}
+
+/**
+ * Extract authInvoker expression from config AST node
+ * Returns the expression text for the authInvoker, handling shorthand properties
+ */
+function extractAuthInvokerFromAST(
+  configArg: unknown,
+  sourceText: string,
+): string | null {
+  if (!configArg || typeof configArg !== "object") return null;
+
+  const arg = configArg as { type?: string; start?: number; end?: number };
+  if (arg.type !== "ObjectExpression") return null;
+
+  const objExpr = configArg as ObjectExpression;
+  const authInvokerProp = findProperty(objExpr.properties, "authInvoker");
+  if (!authInvokerProp) return null;
+
+  // Check for shorthand property: { authInvoker }
+  const prop = objExpr.properties.find((p) => {
+    if (p.type !== "Property") return false;
+    const objProp = p as ObjectProperty;
+    const keyName =
+      objProp.key.type === "Identifier"
+        ? objProp.key.name
+        : (objProp.key as { value?: string }).value;
+    return keyName === "authInvoker";
+  }) as ObjectProperty | undefined;
+
+  if (prop && prop.shorthand) {
+    return "authInvoker";
+  }
+
+  // Extract the value expression text directly from source
+  // Adjust for the wrapping parenthesis we added when parsing
+  const valueStart = authInvokerProp.value.start - 1;
+  const valueEnd = authInvokerProp.value.end - 1;
+  return sourceText.slice(valueStart, valueEnd);
+}
+
+/**
+ * Transform trigger calls for resolver/executor/workflow functions
+ * Handles both job.trigger() and workflow.trigger() calls
+ *
+ * @param source - The source code to transform
+ * @param workflowNameMap - Map from variable name to workflow name
+ * @param jobNameMap - Map from variable name to job name
+ * @param workflowFileMap - Map from file path (without extension) to workflow name for default exports
+ * @param currentFilePath - Path of the current file being transformed (for resolving relative imports)
+ */
+export function transformFunctionTriggers(
+  source: string,
+  workflowNameMap: Map<string, string>,
+  jobNameMap: Map<string, string>,
+  workflowFileMap?: Map<string, string>,
+  currentFilePath?: string,
+): string {
+  const { program } = parseSync("input.ts", source);
+
+  // Build a map from local identifier name to workflow name
+  // This includes both named exports (from workflowNameMap) and default imports (resolved via workflowFileMap)
+  const localWorkflowNameMap = new Map(workflowNameMap);
+
+  if (workflowFileMap && currentFilePath) {
+    // Detect default imports and resolve them to workflow names
+    const defaultImports = detectDefaultImports(program);
+    const currentDir = currentFilePath.replace(/[/\\][^/\\]+$/, "");
+
+    for (const [localName, importSource] of defaultImports) {
+      // Skip non-relative imports
+      if (!importSource.startsWith(".")) continue;
+
+      // Resolve the import path relative to the current file
+      const resolvedPath = resolvePath(currentDir, importSource);
+      const workflowName = workflowFileMap.get(resolvedPath);
+      if (workflowName) {
+        localWorkflowNameMap.set(localName, workflowName);
+      }
+    }
+  }
+
+  // Build sets of known workflow and job identifier names for filtering
+  const workflowNames = new Set(localWorkflowNameMap.keys());
+  const jobNames = new Set(jobNameMap.keys());
+
+  // Detect trigger calls only for known workflows and jobs
+  const triggerCalls = detectExtendedTriggerCalls(
+    program,
+    source,
+    workflowNames,
+    jobNames,
+  );
+
+  const replacements: Replacement[] = [];
+
+  for (const call of triggerCalls) {
+    if (call.kind === "workflow" && call.configText) {
+      // Workflow trigger - get workflow name from map
+      const workflowName = localWorkflowNameMap.get(call.identifierName);
+      if (workflowName) {
+        // Re-parse just the config object to get accurate positions
+        const { program: configProgram } = parseSync(
+          "config.ts",
+          `(${call.configText})`,
+        );
+        const configStmt = configProgram.body[0];
+        if (configStmt?.type === "ExpressionStatement") {
+          const expr = (
+            configStmt as unknown as { expression: { expression?: unknown } }
+          ).expression;
+          const configObj =
+            (expr as { expression?: unknown }).expression || expr;
+
+          const authInvokerExpr = extractAuthInvokerFromAST(
+            configObj,
+            call.configText,
+          );
+          if (authInvokerExpr) {
+            // Transform to tailor.workflow.triggerWorkflow
+            const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
+            replacements.push({
+              start: call.callRange.start,
+              end: call.callRange.end,
+              text: transformedCall,
+            });
+          }
+        }
+      }
+    } else if (call.kind === "job") {
+      // Job trigger - get job name from map
+      const jobName = jobNameMap.get(call.identifierName);
+      if (jobName) {
+        // Transform to tailor.workflow.triggerJobFunction
+        const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
+        replacements.push({
+          start: call.callRange.start,
+          end: call.callRange.end,
+          text: transformedCall,
+        });
+      }
+    }
+  }
+
+  return applyReplacements(source, replacements);
+}

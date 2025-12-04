@@ -6,12 +6,9 @@ import { parseSync } from "oxc-parser";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/configure/config";
-import {
-  detectTriggerCalls,
-  findAllJobs,
-  transformFunctionTriggers,
-  transformWorkflowSource,
-} from "./ast-transformer";
+import { detectTriggerCalls, findAllJobs } from "./job-detector";
+import { transformWorkflowSource } from "./source-transformer";
+import { transformFunctionTriggers } from "./trigger-transformer";
 import type { TriggerContext } from "../trigger-context";
 
 interface JobInfo {

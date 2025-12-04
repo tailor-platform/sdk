@@ -2,13 +2,12 @@ import { parseSync } from "oxc-parser";
 import { describe, expect, it } from "vitest";
 import {
   findAllJobs,
-  transformWorkflowSource,
   detectTriggerCalls,
   buildJobNameMap,
-  findAllWorkflows,
-  buildWorkflowNameMap,
-  transformFunctionTriggers,
-} from "./ast-transformer";
+} from "./job-detector";
+import { transformWorkflowSource } from "./source-transformer";
+import { transformFunctionTriggers } from "./trigger-transformer";
+import { findAllWorkflows, buildWorkflowNameMap } from "./workflow-detector";
 
 // Note: parseSync is imported here for unit tests of findAllJobs
 // transformWorkflowSource uses it internally
