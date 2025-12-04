@@ -16,7 +16,7 @@ const idp = defineIdp("my-idp", {
   clients: ["default-idp-client"],
 });
 
-const auth = defineAuth("my-auth", {
+export const auth = defineAuth("my-auth", {
   userProfile: {
     type: user,
     usernameField: "email",

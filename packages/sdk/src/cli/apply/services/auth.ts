@@ -587,14 +587,14 @@ function protoIdPConfig(
                 : { rawMetadata: idpConfig.rawMetadata! }),
               ...(idpConfig.spCertBase64 && {
                 spCertBase64: {
-                  vaultName: idpConfig.spCertBase64.VaultName,
-                  secretKey: idpConfig.spCertBase64.SecretKey,
+                  vaultName: idpConfig.spCertBase64.vaultName,
+                  secretKey: idpConfig.spCertBase64.secretKey,
                 },
               }),
               ...(idpConfig.spKeyBase64 && {
                 spKeyBase64: {
-                  vaultName: idpConfig.spKeyBase64.VaultName,
-                  secretKey: idpConfig.spKeyBase64.SecretKey,
+                  vaultName: idpConfig.spKeyBase64.vaultName,
+                  secretKey: idpConfig.spKeyBase64.secretKey,
                 },
               }),
             },
@@ -611,8 +611,8 @@ function protoIdPConfig(
             value: {
               clientIdKey: idpConfig.clientID,
               clientSecretKey: {
-                vaultName: idpConfig.clientSecret.VaultName,
-                secretKey: idpConfig.clientSecret.SecretKey,
+                vaultName: idpConfig.clientSecret.vaultName,
+                secretKey: idpConfig.clientSecret.secretKey,
               },
               providerUrl: idpConfig.providerURL,
               issuerUrl: idpConfig.issuerURL,
@@ -1295,8 +1295,8 @@ function protoSCIMConfig(
     authorizationConfig: {
       case: "bearerSecret",
       value: {
-        vaultName: scimConfig.authorization.bearerSecret?.VaultName,
-        secretKey: scimConfig.authorization.bearerSecret?.SecretKey,
+        vaultName: scimConfig.authorization.bearerSecret?.vaultName,
+        secretKey: scimConfig.authorization.bearerSecret?.secretKey,
       },
     },
   };

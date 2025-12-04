@@ -1,5 +1,6 @@
 import { type TailorDBInstance } from "../tailordb/schema";
 import type {
+  AuthInvoker as ParserAuthInvoker,
   AuthServiceInput,
   UserAttributeListKey,
   UserAttributeMap,
@@ -31,6 +32,18 @@ export type {
   AuthServiceInput,
 } from "@/parser/service/auth/types";
 
+/**
+ * Invoker type compatible with tailor.v1.AuthInvoker
+ * - namespace: auth service name
+ * - machineUserName: machine user name
+ */
+export type AuthInvoker<M extends string> = Omit<
+  ParserAuthInvoker,
+  "machineUserName"
+> & {
+  machineUserName: M;
+};
+
 export function defineAuth<
   const Name extends string,
   const User extends TailorDBInstance,
@@ -45,7 +58,7 @@ export function defineAuth<
     ...config,
     name,
     invoker<M extends MachineUserNames>(machineUser: M) {
-      return { authName: name, machineUser } as const;
+      return { namespace: name, machineUserName: machineUser } as const;
     },
   } as const satisfies AuthServiceInput<
     User,
@@ -54,9 +67,7 @@ export function defineAuth<
     MachineUserNames
   > & {
     name: string;
-    invoker<M extends MachineUserNames>(
-      machineUser: M,
-    ): { authName: string; machineUser: M };
+    invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
   };
 
   return result as typeof result & AuthDefinitionBrand;

@@ -9,7 +9,9 @@ import {
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
 import { getDistDir } from "@/configure/config";
+import { transformFunctionTriggers } from "../workflow/ast-transformer";
 import { loadResolver } from "./loader";
+import type { TriggerContext } from "../common/trigger-context";
 
 interface ResolverInfo {
   name: string;
@@ -27,6 +29,7 @@ interface ResolverInfo {
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
+  triggerContext?: TriggerContext,
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
@@ -73,7 +76,7 @@ export async function bundleResolvers(
   // Process each resolver
   await Promise.all(
     resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, outputDir, tsconfig),
+      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext),
     ),
   );
 
@@ -87,6 +90,7 @@ async function bundleSingleResolver(
   resolver: ResolverInfo,
   outputDir: string,
   tsconfig: string | undefined,
+  triggerContext?: TriggerContext,
 ): Promise<void> {
   // Step 1: Create entry file that imports from the original source
   const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
@@ -127,6 +131,36 @@ async function bundleSingleResolver(
   // Step 2: Bundle with tree-shaking
   const outputPath = path.join(outputDir, `${resolver.name}.js`);
 
+  // Create transform plugin for trigger calls if context is provided
+  const plugins: rolldown.Plugin[] = [];
+  if (triggerContext) {
+    const transformPlugin: rolldown.Plugin = {
+      name: "trigger-transform",
+      transform: {
+        filter: {
+          id: {
+            include: [/\.ts$/, /\.js$/],
+          },
+        },
+        handler(code, id) {
+          // Only transform source files that contain trigger calls
+          if (!code.includes(".trigger(")) {
+            return null;
+          }
+          const transformed = transformFunctionTriggers(
+            code,
+            triggerContext.workflowNameMap,
+            triggerContext.jobNameMap,
+            triggerContext.workflowFileMap,
+            id,
+          );
+          return { code: transformed };
+        },
+      },
+    };
+    plugins.push(transformPlugin);
+  }
+
   await rolldown.build(
     rolldown.defineConfig({
       input: entryPath,
@@ -138,6 +172,7 @@ async function bundleSingleResolver(
         inlineDynamicImports: true,
       },
       tsconfig,
+      plugins,
       treeshake: {
         moduleSideEffects: false,
         annotations: true,

@@ -9,7 +9,9 @@ import {
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
 import { getDistDir } from "@/configure/config";
+import { transformFunctionTriggers } from "../workflow/ast-transformer";
 import { loadExecutor } from "./loader";
+import type { TriggerContext } from "../common/trigger-context";
 
 interface ExecutorInfo {
   name: string;
@@ -23,7 +25,10 @@ interface ExecutorInfo {
  * 1. Creates entry file that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
  */
-export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
+export async function bundleExecutors(
+  config: FileLoadConfig,
+  triggerContext?: TriggerContext,
+): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
     throw new Error(
@@ -86,7 +91,7 @@ export async function bundleExecutors(config: FileLoadConfig): Promise<void> {
   // Process each executor
   await Promise.all(
     executors.map((executor) =>
-      bundleSingleExecutor(executor, outputDir, tsconfig),
+      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext),
     ),
   );
 
@@ -97,6 +102,7 @@ async function bundleSingleExecutor(
   executor: ExecutorInfo,
   outputDir: string,
   tsconfig: string | undefined,
+  triggerContext?: TriggerContext,
 ): Promise<void> {
   // Step 1: Create entry file that imports and extracts operation.body
   const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
@@ -116,6 +122,36 @@ async function bundleSingleExecutor(
   // Step 2: Bundle with tree-shaking
   const outputPath = path.join(outputDir, `${executor.name}.js`);
 
+  // Create transform plugin for trigger calls if context is provided
+  const plugins: rolldown.Plugin[] = [];
+  if (triggerContext) {
+    const transformPlugin: rolldown.Plugin = {
+      name: "trigger-transform",
+      transform: {
+        filter: {
+          id: {
+            include: [/\.ts$/, /\.js$/],
+          },
+        },
+        handler(code, id) {
+          // Only transform source files that contain trigger calls
+          if (!code.includes(".trigger(")) {
+            return null;
+          }
+          const transformed = transformFunctionTriggers(
+            code,
+            triggerContext.workflowNameMap,
+            triggerContext.jobNameMap,
+            triggerContext.workflowFileMap,
+            id,
+          );
+          return { code: transformed };
+        },
+      },
+    };
+    plugins.push(transformPlugin);
+  }
+
   await rolldown.build(
     rolldown.defineConfig({
       input: entryPath,
@@ -127,6 +163,7 @@ async function bundleSingleExecutor(
         inlineDynamicImports: true,
       },
       tsconfig,
+      plugins,
       treeshake: {
         moduleSideEffects: false,
         annotations: true,

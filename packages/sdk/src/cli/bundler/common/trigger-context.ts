@@ -1,0 +1,85 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { parseSync } from "oxc-parser";
+import {
+  loadFilesWithIgnores,
+  type FileLoadConfig,
+} from "@/cli/application/file-loader";
+import {
+  findAllJobs,
+  findAllWorkflows,
+  buildJobNameMap,
+  buildWorkflowNameMap,
+} from "../workflow/ast-transformer";
+
+/**
+ * Context for trigger transformation
+ * Maps variable names to workflow/job names
+ */
+export interface TriggerContext {
+  workflowNameMap: Map<string, string>;
+  jobNameMap: Map<string, string>;
+  /** Maps file path (without extension) to workflow name for default exports */
+  workflowFileMap: Map<string, string>;
+}
+
+/**
+ * Normalize a file path by removing extension and resolving to absolute path
+ */
+function normalizeFilePath(filePath: string): string {
+  const absolutePath = path.resolve(filePath);
+  const ext = path.extname(absolutePath);
+  return absolutePath.slice(0, -ext.length);
+}
+
+/**
+ * Build trigger context from workflow configuration
+ * Scans workflow files to collect workflow and job mappings
+ */
+export async function buildTriggerContext(
+  workflowConfig: FileLoadConfig | undefined,
+): Promise<TriggerContext> {
+  const workflowNameMap = new Map<string, string>();
+  const jobNameMap = new Map<string, string>();
+  const workflowFileMap = new Map<string, string>();
+
+  if (!workflowConfig) {
+    return { workflowNameMap, jobNameMap, workflowFileMap };
+  }
+
+  const workflowFiles = loadFilesWithIgnores(workflowConfig);
+
+  for (const file of workflowFiles) {
+    try {
+      const source = await fs.promises.readFile(file, "utf-8");
+      const { program } = parseSync("input.ts", source);
+
+      // Detect workflows
+      const workflows = findAllWorkflows(program, source);
+      const workflowMap = buildWorkflowNameMap(workflows);
+      for (const [exportName, workflowName] of workflowMap) {
+        workflowNameMap.set(exportName, workflowName);
+      }
+
+      // Also track default exported workflows by file path
+      for (const workflow of workflows) {
+        if (workflow.isDefaultExport) {
+          const normalizedPath = normalizeFilePath(file);
+          workflowFileMap.set(normalizedPath, workflow.name);
+        }
+      }
+
+      // Detect jobs
+      const jobs = findAllJobs(program, source);
+      const jobMap = buildJobNameMap(jobs);
+      for (const [exportName, jobName] of jobMap) {
+        jobNameMap.set(exportName, jobName);
+      }
+    } catch {
+      // If we can't parse a file, skip it
+      continue;
+    }
+  }
+
+  return { workflowNameMap, jobNameMap, workflowFileMap };
+}

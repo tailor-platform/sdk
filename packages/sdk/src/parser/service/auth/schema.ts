@@ -1,10 +1,14 @@
 import { z } from "zod";
 import type { ValueOperand } from "./types";
 
-// FIXME: SecretValue should be defined by zod schema
+export const AuthInvokerSchema = z.object({
+  namespace: z.string(),
+  machineUserName: z.string(),
+});
+
 const secretValueSchema = z.object({
-  VaultName: z.string(),
-  SecretKey: z.string(),
+  vaultName: z.string(),
+  secretKey: z.string(),
 });
 
 const samlBaseSchema = z.object({

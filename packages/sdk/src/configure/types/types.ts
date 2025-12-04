@@ -2,8 +2,8 @@ import { type AllowedValue } from "./field";
 import type { FieldValidateInput } from "./validation";
 
 export interface SecretValue {
-  VaultName: string;
-  SecretKey: string;
+  vaultName: string;
+  secretKey: string;
 }
 
 export type TailorFieldType =

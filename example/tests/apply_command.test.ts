@@ -33,6 +33,9 @@ describe("pnpm apply command integration tests", () => {
     "resolvers/stepChain.entry.js",
     "resolvers/stepChain.js",
     "resolvers/stepChain.js.map",
+    "resolvers/triggerOrderProcessing.entry.js",
+    "resolvers/triggerOrderProcessing.js",
+    "resolvers/triggerOrderProcessing.js.map",
     // Workflow bundler creates entry files (.entry.js) in same directory as output files
     "workflow-jobs/check-inventory.entry.js",
     "workflow-jobs/check-inventory.js",
@@ -211,6 +214,8 @@ describe("pnpm apply command integration tests", () => {
       "resolvers/add.js": 4504 + sizeBuffer,
       "resolvers/showUserInfo.js": 4588 + sizeBuffer,
       "resolvers/stepChain.js": 176907 + sizeBuffer,
+      // triggerOrderProcessing: imports auth from tailor.config (~14KB)
+      "resolvers/triggerOrderProcessing.js": 14022 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~160KB), date-fns jobs (~28KB), simple jobs (~9KB)
       "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
       "workflow-jobs/fetch-customer.js": 160819 + sizeBuffer,

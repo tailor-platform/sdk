@@ -9,8 +9,10 @@ import { getDistDir } from "@/configure/config";
 import {
   detectTriggerCalls,
   findAllJobs,
+  transformFunctionTriggers,
   transformWorkflowSource,
 } from "./ast-transformer";
+import type { TriggerContext } from "../common/trigger-context";
 
 interface JobInfo {
   name: string;
@@ -30,6 +32,7 @@ export async function bundleWorkflowJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
+  triggerContext?: TriggerContext,
 ): Promise<void> {
   if (allJobs.length === 0) {
     console.log(styleText("dim", "No workflow jobs to bundle"));
@@ -65,7 +68,7 @@ export async function bundleWorkflowJobs(
   // Process each job
   await Promise.all(
     usedJobs.map((job) =>
-      bundleSingleJob(job, usedJobs, outputDir, tsconfig, env),
+      bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext),
     ),
   );
 
@@ -204,6 +207,7 @@ async function bundleSingleJob(
   outputDir: string,
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
+  triggerContext?: TriggerContext,
 ): Promise<void> {
   // Step 1: Create entry file that imports job by named export
   const entryPath = path.join(outputDir, `${job.name}.entry.js`);
@@ -243,21 +247,36 @@ async function bundleSingleJob(
           include: [/\.ts$/, /\.js$/],
         },
       },
-      handler(code) {
+      handler(code, id) {
         // Only transform source files that contain workflow jobs or trigger calls
         if (
           !code.includes("createWorkflowJob") &&
+          !code.includes("createWorkflow") &&
           !code.includes(".trigger(")
         ) {
           return null;
         }
-        const transformed = transformWorkflowSource(
+
+        // First, apply existing workflow source transformation (removes other jobs, transforms job.trigger)
+        let transformed = transformWorkflowSource(
           code,
           job.name,
           job.exportName,
           otherJobExportNames,
           allJobsMap,
         );
+
+        // Then, apply workflow.trigger transformation if context is provided
+        if (triggerContext && transformed.includes(".trigger(")) {
+          transformed = transformFunctionTriggers(
+            transformed,
+            triggerContext.workflowNameMap,
+            triggerContext.jobNameMap,
+            triggerContext.workflowFileMap,
+            id,
+          );
+        }
+
         return { code: transformed };
       },
     },

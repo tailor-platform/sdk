@@ -6,6 +6,10 @@ import {
   type CollectedJob,
   type WorkflowLoadResult,
 } from "@/cli/application/workflow/service";
+import {
+  buildTriggerContext,
+  type TriggerContext,
+} from "@/cli/bundler/common/trigger-context";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
 import { bundleWorkflowJobs } from "@/cli/bundler/workflow/workflow-bundler";
@@ -75,20 +79,28 @@ export async function apply(options?: ApplyOptions) {
     workflowResult = await loadAndCollectJobs(application.workflowConfig);
   }
 
+  // Build trigger context for workflow/job trigger transformation
+  const triggerContext = await buildTriggerContext(application.workflowConfig);
+
   // Build functions (using already loaded data)
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
-      await buildPipeline(pipeline.namespace, pipeline.config);
+      await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
     }
   }
   if (application.executorService) {
-    await buildExecutor(application.executorService.config);
+    await buildExecutor(application.executorService.config, triggerContext);
   }
   if (workflowResult && workflowResult.jobs.length > 0) {
     const mainJobNames = workflowResult.workflowSources.map(
       (ws) => ws.workflow.mainJob.name,
     );
-    await buildWorkflow(workflowResult.jobs, mainJobNames, application.env);
+    await buildWorkflow(
+      workflowResult.jobs,
+      mainJobNames,
+      application.env,
+      triggerContext,
+    );
   }
   if (buildOnly) return;
 
@@ -232,21 +244,29 @@ export async function apply(options?: ApplyOptions) {
   console.log("Successfully applied changes.");
 }
 
-async function buildPipeline(namespace: string, config: FileLoadConfig) {
-  await bundleResolvers(namespace, config);
+async function buildPipeline(
+  namespace: string,
+  config: FileLoadConfig,
+  triggerContext?: TriggerContext,
+) {
+  await bundleResolvers(namespace, config, triggerContext);
 }
 
-async function buildExecutor(config: FileLoadConfig) {
-  await bundleExecutors(config);
+async function buildExecutor(
+  config: FileLoadConfig,
+  triggerContext?: TriggerContext,
+) {
+  await bundleExecutors(config, triggerContext);
 }
 
 async function buildWorkflow(
   collectedJobs: CollectedJob[],
   mainJobNames: string[],
   env: Record<string, string | number | boolean>,
+  triggerContext?: TriggerContext,
 ) {
   // Use the workflow bundler with already collected jobs
-  await bundleWorkflowJobs(collectedJobs, mainJobNames, env);
+  await bundleWorkflowJobs(collectedJobs, mainJobNames, env, triggerContext);
 }
 
 export const applyCommand = defineCommand({
