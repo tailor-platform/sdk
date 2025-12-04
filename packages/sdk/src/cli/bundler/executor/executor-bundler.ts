@@ -9,9 +9,11 @@ import {
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
 import { getDistDir } from "@/configure/config";
-import { transformFunctionTriggers } from "../workflow/ast-transformer";
+import {
+  createTriggerTransformPlugin,
+  type TriggerContext,
+} from "../trigger-context";
 import { loadExecutor } from "./loader";
-import type { TriggerContext } from "../trigger-context";
 
 interface ExecutorInfo {
   name: string;
@@ -122,35 +124,8 @@ async function bundleSingleExecutor(
   // Step 2: Bundle with tree-shaking
   const outputPath = path.join(outputDir, `${executor.name}.js`);
 
-  // Create transform plugin for trigger calls if context is provided
-  const plugins: rolldown.Plugin[] = [];
-  if (triggerContext) {
-    const transformPlugin: rolldown.Plugin = {
-      name: "trigger-transform",
-      transform: {
-        filter: {
-          id: {
-            include: [/\.ts$/, /\.js$/],
-          },
-        },
-        handler(code, id) {
-          // Only transform source files that contain trigger calls
-          if (!code.includes(".trigger(")) {
-            return null;
-          }
-          const transformed = transformFunctionTriggers(
-            code,
-            triggerContext.workflowNameMap,
-            triggerContext.jobNameMap,
-            triggerContext.workflowFileMap,
-            id,
-          );
-          return { code: transformed };
-        },
-      },
-    };
-    plugins.push(transformPlugin);
-  }
+  const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+  const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
 
   await rolldown.build(
     rolldown.defineConfig({

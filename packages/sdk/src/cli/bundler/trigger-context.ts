@@ -10,7 +10,9 @@ import {
   findAllWorkflows,
   buildJobNameMap,
   buildWorkflowNameMap,
+  transformFunctionTriggers,
 } from "./workflow/ast-transformer";
+import type { Plugin } from "rolldown";
 
 /**
  * Context for trigger transformation
@@ -82,4 +84,41 @@ export async function buildTriggerContext(
   }
 
   return { workflowNameMap, jobNameMap, workflowFileMap };
+}
+
+/**
+ * Create a rolldown plugin for transforming trigger calls
+ * Returns undefined if no trigger context is provided
+ */
+export function createTriggerTransformPlugin(
+  triggerContext: TriggerContext | undefined,
+): Plugin | undefined {
+  if (!triggerContext) {
+    return undefined;
+  }
+
+  return {
+    name: "trigger-transform",
+    transform: {
+      filter: {
+        id: {
+          include: [/\.ts$/, /\.js$/],
+        },
+      },
+      handler(code, id) {
+        // Only transform source files that contain trigger calls
+        if (!code.includes(".trigger(")) {
+          return null;
+        }
+        const transformed = transformFunctionTriggers(
+          code,
+          triggerContext.workflowNameMap,
+          triggerContext.jobNameMap,
+          triggerContext.workflowFileMap,
+          id,
+        );
+        return { code: transformed };
+      },
+    },
+  };
 }
