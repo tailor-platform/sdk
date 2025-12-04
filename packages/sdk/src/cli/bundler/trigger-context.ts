@@ -10,7 +10,7 @@ import {
   findAllWorkflows,
   buildJobNameMap,
   buildWorkflowNameMap,
-} from "../workflow/ast-transformer";
+} from "./workflow/ast-transformer";
 
 /**
  * Context for trigger transformation

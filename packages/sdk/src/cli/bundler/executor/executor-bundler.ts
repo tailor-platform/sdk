@@ -11,7 +11,7 @@ import {
 import { getDistDir } from "@/configure/config";
 import { transformFunctionTriggers } from "../workflow/ast-transformer";
 import { loadExecutor } from "./loader";
-import type { TriggerContext } from "../common/trigger-context";
+import type { TriggerContext } from "../trigger-context";
 
 interface ExecutorInfo {
   name: string;

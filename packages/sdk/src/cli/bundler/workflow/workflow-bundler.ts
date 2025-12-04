@@ -12,7 +12,7 @@ import {
   transformFunctionTriggers,
   transformWorkflowSource,
 } from "./ast-transformer";
-import type { TriggerContext } from "../common/trigger-context";
+import type { TriggerContext } from "../trigger-context";
 
 interface JobInfo {
   name: string;

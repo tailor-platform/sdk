@@ -6,12 +6,12 @@ import {
   type CollectedJob,
   type WorkflowLoadResult,
 } from "@/cli/application/workflow/service";
+import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
+import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
 import {
   buildTriggerContext,
   type TriggerContext,
-} from "@/cli/bundler/common/trigger-context";
-import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
-import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
+} from "@/cli/bundler/trigger-context";
 import { bundleWorkflowJobs } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
