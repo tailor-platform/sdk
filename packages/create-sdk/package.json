@@ -27,7 +27,7 @@
   "dependencies": {
     "@clack/prompts": "0.11.0",
     "citty": "0.1.6",
-    "execa": "9.6.0",
+    "execa": "9.6.1",
     "picocolors": "1.1.1",
     "pkg-types": "2.3.0"
   },
