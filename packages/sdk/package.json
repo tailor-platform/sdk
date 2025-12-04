@@ -85,7 +85,7 @@
     "eslint": "9.39.1",
     "eslint-plugin-jsdoc": "61.4.1",
     "globals": "16.5.0",
-    "sonda": "0.10.0",
+    "sonda": "0.10.1",
     "tsdown": "0.15.6",
     "typescript": "5.9.3",
     "typescript-eslint": "8.48.0",

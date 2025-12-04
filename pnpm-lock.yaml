@@ -371,8 +371,8 @@ importers:
         specifier: 16.5.0
         version: 16.5.0
       sonda:
-        specifier: 0.10.0
-        version: 0.10.0
+        specifier: 0.10.1
+        version: 0.10.1
       tsdown:
         specifier: 0.15.6
         version: 0.15.6(oxc-resolver@11.7.1)(typescript@5.9.3)
@@ -3132,8 +3132,8 @@ packages:
     resolution: {integrity: sha512-qMCMfhY040cVHT43K9BFygqYbUPFZKHOg7K73mtTWJRb8pyP3fzf4Ixd5SzdEJQ6MRUg/WBnOLxghZtKKurENQ==}
     engines: {node: '>=10'}
 
-  sonda@0.10.0:
-    resolution: {integrity: sha512-Mg6YWl8QOD9Yf8wV5teUYZiB0P1oy994pmPJmi3Fr7+0RXhBcNY6TUZFa7c3gHKLJfemfoAeV22+PSBXlzuT4g==}
+  sonda@0.10.1:
+    resolution: {integrity: sha512-nXlQEVsw7833XADV94MXW9EKwLxn4S1U7oSUEgKCQeU4dt0CwYvEFcyRjhjM0Ae2taxsJ9HnFrtw8Eb40/rX4w==}
     engines: {node: '>=20.19 || >=22.12'}
     hasBin: true
 
@@ -6457,7 +6457,7 @@ snapshots:
       astral-regex: 2.0.0
       is-fullwidth-code-point: 3.0.0
 
-  sonda@0.10.0:
+  sonda@0.10.1:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       open: 10.2.0
