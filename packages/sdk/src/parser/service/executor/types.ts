@@ -3,7 +3,6 @@ import type {
   FunctionOperationSchema,
   GqlOperationSchema,
   IncomingWebhookTriggerSchema,
-  InvokerSchema,
   OperationSchema,
   RecordTriggerSchema,
   ResolverExecutedTriggerSchema,
@@ -12,8 +11,6 @@ import type {
   WebhookOperationSchema,
 } from "./schema";
 import type { z } from "zod";
-
-export type Invoker = z.infer<typeof InvokerSchema>;
 
 export type RecordTrigger = z.infer<typeof RecordTriggerSchema>;
 export type ResolverExecutedTrigger = z.infer<

@@ -9,6 +9,10 @@ import {
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
 import { getDistDir } from "@/configure/config";
+import {
+  createTriggerTransformPlugin,
+  type TriggerContext,
+} from "../trigger-context";
 import { loadResolver } from "./loader";
 
 interface ResolverInfo {
@@ -27,6 +31,7 @@ interface ResolverInfo {
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
+  triggerContext?: TriggerContext,
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
@@ -73,7 +78,7 @@ export async function bundleResolvers(
   // Process each resolver
   await Promise.all(
     resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, outputDir, tsconfig),
+      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext),
     ),
   );
 
@@ -87,6 +92,7 @@ async function bundleSingleResolver(
   resolver: ResolverInfo,
   outputDir: string,
   tsconfig: string | undefined,
+  triggerContext?: TriggerContext,
 ): Promise<void> {
   // Step 1: Create entry file that imports from the original source
   const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
@@ -127,6 +133,9 @@ async function bundleSingleResolver(
   // Step 2: Bundle with tree-shaking
   const outputPath = path.join(outputDir, `${resolver.name}.js`);
 
+  const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+  const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+
   await rolldown.build(
     rolldown.defineConfig({
       input: entryPath,
@@ -138,6 +147,7 @@ async function bundleSingleResolver(
         inlineDynamicImports: true,
       },
       tsconfig,
+      plugins,
       treeshake: {
         moduleSideEffects: false,
         annotations: true,

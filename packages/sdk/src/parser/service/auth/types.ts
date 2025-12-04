@@ -1,5 +1,6 @@
 import type {
   AuthConfigSchema,
+  AuthInvokerSchema,
   BuiltinIdPSchema,
   IDTokenSchema,
   IdProviderSchema,
@@ -19,6 +20,8 @@ import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
 import type { output } from "@/configure/types/helpers";
 import type { IsAny } from "type-fest";
 import type { z } from "zod";
+
+export type AuthInvoker = z.output<typeof AuthInvokerSchema>;
 
 // Types derived from zod schemas
 export type OIDC = z.output<typeof OIDCSchema>;

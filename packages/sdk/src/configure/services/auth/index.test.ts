@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, expectTypeOf } from "vitest";
 import { db } from "../tailordb/schema";
-import { defineAuth } from "./index";
+import { defineAuth, type AuthInvoker } from "./index";
+import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 const userType = db.type("User", {
   email: db.string().unique(),
@@ -71,12 +72,12 @@ describe("defineAuth", () => {
     });
 
     const invoker = authConfig.invoker("admin");
-    expect(invoker.authName).toBe("test-service");
-    expect(invoker.machineUser).toBe("admin");
+    expect(invoker.namespace).toBe("test-service");
+    expect(invoker.machineUserName).toBe("admin");
 
     const workerInvoker = authConfig.invoker("worker");
-    expect(workerInvoker.authName).toBe("test-service");
-    expect(workerInvoker.machineUser).toBe("worker");
+    expect(workerInvoker.namespace).toBe("test-service");
+    expect(workerInvoker.machineUserName).toBe("worker");
   });
 
   it("creates minimal auth configuration", () => {
@@ -132,6 +133,75 @@ describe("defineAuth", () => {
 
       type ExtractedName = typeof _authConfig.name;
       expectTypeOf<ExtractedName>().toEqualTypeOf<"typed-auth">();
+    });
+  });
+
+  describe("AuthInvoker type compatibility with tailor-proto", () => {
+    it("AuthInvoker has namespace field compatible with proto", () => {
+      // Verify the field name matches tailor.v1.AuthInvoker
+      type HasNamespace =
+        AuthInvoker<string> extends { namespace: string } ? true : false;
+      expectTypeOf<HasNamespace>().toEqualTypeOf<true>();
+
+      // Verify proto type has the same field
+      type ProtoHasNamespace = ProtoAuthInvoker extends { namespace: string }
+        ? true
+        : false;
+      expectTypeOf<ProtoHasNamespace>().toEqualTypeOf<true>();
+    });
+
+    it("AuthInvoker has machineUserName field compatible with proto", () => {
+      // Verify the field name matches tailor.v1.AuthInvoker
+      type HasMachineUserName =
+        AuthInvoker<string> extends {
+          machineUserName: string;
+        }
+          ? true
+          : false;
+      expectTypeOf<HasMachineUserName>().toEqualTypeOf<true>();
+
+      // Verify proto type has the same field
+      type ProtoHasMachineUserName = ProtoAuthInvoker extends {
+        machineUserName: string;
+      }
+        ? true
+        : false;
+      expectTypeOf<ProtoHasMachineUserName>().toEqualTypeOf<true>();
+    });
+
+    it("AuthInvoker is assignable to proto AuthInvoker fields", () => {
+      // This ensures that our AuthInvoker can be used where proto AuthInvoker is expected
+      // (checking the common properties)
+      type IsCompatible =
+        AuthInvoker<string> extends Pick<
+          ProtoAuthInvoker,
+          "namespace" | "machineUserName"
+        >
+          ? true
+          : false;
+      expectTypeOf<IsCompatible>().toEqualTypeOf<true>();
+    });
+
+    it("invoker() returns AuthInvoker compatible object", () => {
+      const authConfig = defineAuth("test-auth", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+        },
+        machineUsers: {
+          admin: {},
+        },
+      });
+
+      const invoker = authConfig.invoker("admin");
+
+      // Verify at runtime that the object has the correct field names
+      expect(invoker).toHaveProperty("namespace");
+      expect(invoker).toHaveProperty("machineUserName");
+
+      // Verify it does NOT have the old field names
+      expect(invoker).not.toHaveProperty("authName");
+      expect(invoker).not.toHaveProperty("machineUser");
     });
   });
 });
