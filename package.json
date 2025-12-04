@@ -33,7 +33,7 @@
     "lefthook": "1.13.6",
     "pkg-pr-new": "0.0.61",
     "prettier": "3.7.3",
-    "tsx": "4.20.6",
+    "tsx": "4.21.0",
     "turbo": "2.6.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.48.0"
