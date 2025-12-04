@@ -77,9 +77,14 @@ export async function buildTriggerContext(
       for (const [exportName, jobName] of jobMap) {
         jobNameMap.set(exportName, jobName);
       }
-    } catch {
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       console.warn(
-        styleText("yellow", `Warning: Failed to process workflow file ${file}`),
+        styleText(
+          "yellow",
+          `Warning: Failed to process workflow file ${file}: ${errorMessage}`,
+        ),
       );
       continue;
     }
