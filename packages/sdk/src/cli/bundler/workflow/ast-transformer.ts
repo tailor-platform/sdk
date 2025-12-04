@@ -795,12 +795,19 @@ interface ExtendedTriggerCall {
 }
 
 /**
- * Detect all .trigger() calls in the source code with extended information
- * Distinguishes between job triggers (0-1 args) and workflow triggers (2 args)
+ * Detect .trigger() calls for known workflows and jobs
+ * Only detects calls where the identifier is in workflowNames or jobNames
+ *
+ * @param program - The parsed AST program
+ * @param sourceText - The source code text
+ * @param workflowNames - Set of known workflow identifier names
+ * @param jobNames - Set of known job identifier names
  */
 function detectExtendedTriggerCalls(
   program: Program,
   sourceText: string,
+  workflowNames: Set<string>,
+  jobNames: Set<string>,
 ): ExtendedTriggerCall[] {
   const calls: ExtendedTriggerCall[] = [];
 
@@ -822,6 +829,14 @@ function detectExtendedTriggerCalls(
           const identifierName = (memberExpr.object as IdentifierReference)
             .name;
 
+          // Only process if this is a known workflow or job
+          const isWorkflow = workflowNames.has(identifierName);
+          const isJob = jobNames.has(identifierName);
+          if (!isWorkflow && !isJob) {
+            // Skip unknown identifiers to prevent false positives
+            return;
+          }
+
           const argCount = callExpr.arguments.length;
 
           // Extract first argument text
@@ -836,8 +851,9 @@ function detectExtendedTriggerCalls(
             }
           }
 
-          // Check if this is a workflow trigger (2 arguments with config object)
-          if (argCount >= 2) {
+          // Determine kind based on known identifier type
+          if (isWorkflow && argCount >= 2) {
+            // Workflow trigger requires 2 arguments (args, config)
             const secondArg = callExpr.arguments[1];
             if (secondArg && "start" in secondArg && "end" in secondArg) {
               const configText = sourceText.slice(
@@ -852,7 +868,7 @@ function detectExtendedTriggerCalls(
                 configText,
               });
             }
-          } else {
+          } else if (isJob) {
             // Job trigger (0-1 arguments)
             calls.push({
               kind: "job",
@@ -1021,40 +1037,50 @@ export function transformFunctionTriggers(
     }
   }
 
-  // Detect all trigger calls with extended information
-  const triggerCalls = detectExtendedTriggerCalls(program, source);
+  // Build sets of known workflow and job identifier names for filtering
+  const workflowNames = new Set(localWorkflowNameMap.keys());
+  const jobNames = new Set(jobNameMap.keys());
+
+  // Detect trigger calls only for known workflows and jobs
+  const triggerCalls = detectExtendedTriggerCalls(
+    program,
+    source,
+    workflowNames,
+    jobNames,
+  );
 
   const replacements: Replacement[] = [];
 
   for (const call of triggerCalls) {
-    // Check if this is a workflow trigger
-    const workflowName = localWorkflowNameMap.get(call.identifierName);
-    if (workflowName && call.kind === "workflow" && call.configText) {
-      // Extract authInvoker expression from config
-      const authInvokerExpr = extractAuthInvokerExpression(call.configText);
-      if (authInvokerExpr) {
-        // Transform to tailor.workflow.triggerWorkflow
-        // The authInvoker object is already AuthInvoker compatible (has namespace and machineUserName fields)
-        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
+    if (call.kind === "workflow" && call.configText) {
+      // Workflow trigger - get workflow name from map
+      const workflowName = localWorkflowNameMap.get(call.identifierName);
+      if (workflowName) {
+        // Extract authInvoker expression from config
+        const authInvokerExpr = extractAuthInvokerExpression(call.configText);
+        if (authInvokerExpr) {
+          // Transform to tailor.workflow.triggerWorkflow
+          // The authInvoker object is already AuthInvoker compatible (has namespace and machineUserName fields)
+          const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
+          replacements.push({
+            start: call.callRange.start,
+            end: call.callRange.end,
+            text: transformedCall,
+          });
+        }
+      }
+    } else if (call.kind === "job") {
+      // Job trigger - get job name from map
+      const jobName = jobNameMap.get(call.identifierName);
+      if (jobName) {
+        // Transform to tailor.workflow.triggerJobFunction
+        const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
         replacements.push({
           start: call.callRange.start,
           end: call.callRange.end,
           text: transformedCall,
         });
-        continue;
       }
-    }
-
-    // Check if this is a job trigger
-    const jobName = jobNameMap.get(call.identifierName);
-    if (jobName) {
-      // Transform to tailor.workflow.triggerJobFunction
-      const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
-      replacements.push({
-        start: call.callRange.start,
-        end: call.callRange.end,
-        text: transformedCall,
-      });
     }
   }
 
