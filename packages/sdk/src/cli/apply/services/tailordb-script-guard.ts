@@ -4,8 +4,19 @@ import type { OperatorFieldConfig } from "@/configure/types/operator";
 import type {
   Program,
   ArrowFunctionExpression,
-  Function as FunctionExpression,
+  Function as OxcFunction,
+  VariableDeclarator,
+  IdentifierReference,
+  BindingIdentifier,
+  ObjectPattern,
+  BindingProperty,
+  ArrayPattern,
+  AssignmentPattern,
+  BindingRestElement,
+  Class as OxcClass,
 } from "@oxc-project/types";
+
+type FunctionExpression = OxcFunction;
 
 type ASTNode = Record<string, unknown> & { type?: string };
 
@@ -183,18 +194,24 @@ function collectFunctionBindings(
     // Variable declarations
     // Local variables are represented as VariableDeclarator nodes
     if (type === "VariableDeclarator") {
-      console.log("😊 VariableDeclarato node");
-      console.log(JSON.stringify(node, null, 2));
-      const id = node.id as ASTNode | undefined;
-      if (id) collectBindingsFromPattern(id, localNames);
+      const declarator = node as unknown as VariableDeclarator;
+      const id = declarator.id;
+      if (id) collectBindingsFromPattern(id as unknown as ASTNode, localNames);
     }
     // Named function / class declarations
-    if (
-      (type === "FunctionDeclaration" || type === "ClassDeclaration") &&
-      (node as any).id &&
-      (node as any).id.type === "Identifier"
-    ) {
-      localNames.add((node as any).id.name as string);
+    if (type === "FunctionDeclaration") {
+      const func = node as unknown as OxcFunction;
+      const id = func.id;
+      if (id && id.type === "Identifier") {
+        localNames.add(id.name);
+      }
+    }
+    if (type === "ClassDeclaration") {
+      const clazz = node as unknown as OxcClass;
+      const id = clazz.id;
+      if (id && id.type === "Identifier") {
+        localNames.add(id.name);
+      }
     }
   });
 }
@@ -213,7 +230,8 @@ function collectExternalIdentifierReferences(
 
   traverse(bodyNode, (node) => {
     if (node.type === "Identifier") {
-      const name = (node as any).name as string;
+      const identifier = node as unknown as IdentifierReference;
+      const name = identifier.name;
       if (!name) return;
       if (localNames.has(name)) return;
       if (allowedGlobalIdentifiers.has(name)) return;
@@ -230,57 +248,66 @@ function collectBindingsFromPattern(
   names: Set<string>,
 ): void {
   switch (pattern.type) {
-    case "BindingIdentifier":
+    case "BindingIdentifier": {
+      const bindingId = pattern as unknown as BindingIdentifier;
+      if (bindingId.name) names.add(bindingId.name);
+      break;
+    }
     case "Identifier": {
-      const name = (pattern as any).name as string | undefined;
-      if (name) names.add(name);
+      const identifier = pattern as unknown as IdentifierReference;
+      if (identifier.name) names.add(identifier.name);
       break;
     }
     // ({value}) => {...} -> {"type": "ObjectPattern, "properties": [{type: "Property", value: {"type": "Identifier", name: "value"}}]}
     case "ObjectPattern": {
-      const properties = (pattern as any).properties as ASTNode[] | undefined;
+      const objectPattern = pattern as unknown as ObjectPattern;
+      const properties = objectPattern.properties as
+        | (BindingProperty | BindingRestElement)[]
+        | undefined;
       for (const prop of properties ?? []) {
-        if (prop.type === "BindingProperty") {
-          const value = (prop as any).value as ASTNode | undefined;
-          if (value) collectBindingsFromPattern(value, names);
-        }
-
         if (prop.type === "Property") {
-          // Destructuring parameter pattern: { value }
-          const value = (prop as any).value as ASTNode | undefined;
-          if (value) collectBindingsFromPattern(value, names);
+          const bindingProp = prop as BindingProperty;
+          const value = bindingProp.value;
+          if (value)
+            collectBindingsFromPattern(value as unknown as ASTNode, names);
         }
 
         if (prop.type === "RestElement") {
-          const arg = (prop as any).argument as ASTNode | undefined;
-          if (arg) collectBindingsFromPattern(arg, names);
+          const rest = prop as BindingRestElement;
+          const arg = rest.argument;
+          if (arg) collectBindingsFromPattern(arg as unknown as ASTNode, names);
         }
       }
       break;
     }
     case "ArrayPattern": {
-      const elements = (pattern as any).elements as
-        | (ASTNode | null)[]
+      const arrayPattern = pattern as unknown as ArrayPattern;
+      const elements = arrayPattern.elements as
+        | (
+            | AssignmentPattern
+            | BindingIdentifier
+            | ObjectPattern
+            | ArrayPattern
+            | BindingRestElement
+            | null
+          )[]
         | undefined;
       for (const elem of elements ?? []) {
         if (!elem) continue;
-        if (elem.type === "SpreadElement") {
-          const arg = (elem as any).argument as ASTNode | undefined;
-          if (arg) collectBindingsFromPattern(arg, names);
-        } else {
-          collectBindingsFromPattern(elem, names);
-        }
+        collectBindingsFromPattern(elem as unknown as ASTNode, names);
       }
       break;
     }
     case "AssignmentPattern": {
-      const left = (pattern as any).left as ASTNode | undefined;
-      if (left) collectBindingsFromPattern(left, names);
+      const assignment = pattern as unknown as AssignmentPattern;
+      const left = assignment.left;
+      if (left) collectBindingsFromPattern(left as unknown as ASTNode, names);
       break;
     }
     case "RestElement": {
-      const arg = (pattern as any).argument as ASTNode | undefined;
-      if (arg) collectBindingsFromPattern(arg, names);
+      const rest = pattern as unknown as BindingRestElement;
+      const arg = rest.argument;
+      if (arg) collectBindingsFromPattern(arg as unknown as ASTNode, names);
       break;
     }
     default:
