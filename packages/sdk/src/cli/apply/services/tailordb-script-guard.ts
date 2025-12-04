@@ -1,3 +1,4 @@
+import { writeFileSync } from "fs";
 import { parseSync } from "oxc-parser";
 import type { OperatorFieldConfig } from "@/configure/types/operator";
 import type {
@@ -7,6 +8,9 @@ import type {
 } from "@oxc-project/types";
 
 type ASTNode = Record<string, unknown> & { type?: string };
+
+// Only arrow functions or function expressions are treated as script entry points
+const functionTypes = ["ArrowFunctionExpression", "FunctionExpression"];
 
 const allowedGlobalIdentifiers = new Set<string>([
   // Common built-ins
@@ -75,7 +79,7 @@ function checkScriptForExternalVariables(
 ): void {
   if (!expr.trim()) return;
 
-  console.log("expr");
+  console.log("🔥 expr");
   console.log(expr);
 
   let program: Program;
@@ -91,13 +95,15 @@ function checkScriptForExternalVariables(
   const fn = findFirstFunction(program);
   console.log("fn");
   console.log(JSON.stringify(fn, null, 2));
+
   if (!fn) {
-    // If there's no function expression, nothing to validate.
     return;
   }
 
   const localNames = new Set<string>();
   collectFunctionBindings(fn, localNames);
+  console.log("💕localNames");
+  console.log(JSON.stringify([...localNames], null, 2));
 
   const externalNames = collectExternalIdentifierReferences(fn, localNames);
   if (externalNames.size === 0) return;
@@ -114,11 +120,22 @@ function findFirstFunction(
 ): ArrowFunctionExpression | FunctionExpression | null {
   let found: ArrowFunctionExpression | FunctionExpression | null = null;
 
+  try {
+    writeFileSync("./ast-program.json", JSON.stringify(program, null, 2));
+    console.log("✅ write success");
+  } catch (error) {
+    console.log("❌ parse error");
+    console.log(String(error));
+  }
+
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object" || found) return;
 
+    console.log("✨ walk node type");
+    console.log(JSON.stringify(node.type, null, 2));
+
     const type = node.type;
-    if (type === "ArrowFunctionExpression" || type === "FunctionExpression") {
+    if (type && functionTypes.includes(type)) {
       found = node as unknown as ArrowFunctionExpression | FunctionExpression;
       return;
     }
@@ -142,6 +159,7 @@ function findFirstFunction(
   return found;
 }
 
+// Collect parameters, local variables, and named function/class declarations within the function
 function collectFunctionBindings(
   fn: ArrowFunctionExpression | FunctionExpression,
   localNames: Set<string>,
@@ -163,8 +181,11 @@ function collectFunctionBindings(
   traverse(bodyNode, (node) => {
     const type = node.type;
     // Variable declarations
+    // Local variables are represented as VariableDeclarator nodes
     if (type === "VariableDeclarator") {
-      const id = (node as any).id as ASTNode | undefined;
+      console.log("😊 VariableDeclarato node");
+      console.log(JSON.stringify(node, null, 2));
+      const id = node.id as ASTNode | undefined;
       if (id) collectBindingsFromPattern(id, localNames);
     }
     // Named function / class declarations
@@ -203,6 +224,7 @@ function collectExternalIdentifierReferences(
   return external;
 }
 
+// Extract binding names from parameter patterns and declaration nodes in the body
 function collectBindingsFromPattern(
   pattern: ASTNode,
   names: Set<string>,
@@ -214,17 +236,22 @@ function collectBindingsFromPattern(
       if (name) names.add(name);
       break;
     }
+    // ({value}) => {...} -> {"type": "ObjectPattern, "properties": [{type: "Property", value: {"type": "Identifier", name: "value"}}]}
     case "ObjectPattern": {
       const properties = (pattern as any).properties as ASTNode[] | undefined;
       for (const prop of properties ?? []) {
         if (prop.type === "BindingProperty") {
           const value = (prop as any).value as ASTNode | undefined;
           if (value) collectBindingsFromPattern(value, names);
-        } else if (prop.type === "Property") {
+        }
+
+        if (prop.type === "Property") {
           // Destructuring parameter pattern: { value }
           const value = (prop as any).value as ASTNode | undefined;
           if (value) collectBindingsFromPattern(value, names);
-        } else if (prop.type === "RestElement") {
+        }
+
+        if (prop.type === "RestElement") {
           const arg = (prop as any).argument as ASTNode | undefined;
           if (arg) collectBindingsFromPattern(arg, names);
         }
