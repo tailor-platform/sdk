@@ -1,0 +1,210 @@
+{
+  "type": "Program",
+  "body": [
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "CallExpression",
+        "callee": {
+          "type": "ParenthesizedExpression",
+          "expression": {
+            "type": "ArrowFunctionExpression",
+            "expression": false,
+            "async": false,
+            "typeParameters": null,
+            "params": [
+              {
+                "type": "ObjectPattern",
+                "decorators": [],
+                "properties": [
+                  {
+                    "type": "Property",
+                    "kind": "init",
+                    "key": {
+                      "type": "Identifier",
+                      "decorators": [],
+                      "name": "value",
+                      "optional": false,
+                      "typeAnnotation": null,
+                      "start": 4,
+                      "end": 9
+                    },
+                    "value": {
+                      "type": "Identifier",
+                      "decorators": [],
+                      "name": "value",
+                      "optional": false,
+                      "typeAnnotation": null,
+                      "start": 4,
+                      "end": 9
+                    },
+                    "method": false,
+                    "shorthand": true,
+                    "computed": false,
+                    "optional": false,
+                    "start": 4,
+                    "end": 9
+                  }
+                ],
+                "optional": false,
+                "typeAnnotation": null,
+                "start": 2,
+                "end": 11
+              }
+            ],
+            "returnType": null,
+            "body": {
+              "type": "BlockStatement",
+              "body": [
+                {
+                  "type": "ReturnStatement",
+                  "argument": {
+                    "type": "CallExpression",
+                    "callee": {
+                      "type": "Identifier",
+                      "decorators": [],
+                      "name": "formatEmail",
+                      "optional": false,
+                      "typeAnnotation": null,
+                      "start": 41,
+                      "end": 52
+                    },
+                    "typeArguments": null,
+                    "arguments": [
+                      {
+                        "type": "Identifier",
+                        "decorators": [],
+                        "name": "value",
+                        "optional": false,
+                        "typeAnnotation": null,
+                        "start": 53,
+                        "end": 58
+                      }
+                    ],
+                    "optional": false,
+                    "start": 41,
+                    "end": 59
+                  },
+                  "start": 34,
+                  "end": 60
+                }
+              ],
+              "start": 16,
+              "end": 76
+            },
+            "id": null,
+            "generator": false,
+            "start": 1,
+            "end": 76
+          },
+          "start": 0,
+          "end": 77
+        },
+        "typeArguments": null,
+        "arguments": [
+          {
+            "type": "ObjectExpression",
+            "properties": [
+              {
+                "type": "Property",
+                "kind": "init",
+                "key": {
+                  "type": "Identifier",
+                  "decorators": [],
+                  "name": "value",
+                  "optional": false,
+                  "typeAnnotation": null,
+                  "start": 80,
+                  "end": 85
+                },
+                "value": {
+                  "type": "Identifier",
+                  "decorators": [],
+                  "name": "_value",
+                  "optional": false,
+                  "typeAnnotation": null,
+                  "start": 87,
+                  "end": 93
+                },
+                "method": false,
+                "shorthand": false,
+                "computed": false,
+                "optional": false,
+                "start": 80,
+                "end": 93
+              },
+              {
+                "type": "Property",
+                "kind": "init",
+                "key": {
+                  "type": "Identifier",
+                  "decorators": [],
+                  "name": "data",
+                  "optional": false,
+                  "typeAnnotation": null,
+                  "start": 95,
+                  "end": 99
+                },
+                "value": {
+                  "type": "Identifier",
+                  "decorators": [],
+                  "name": "_data",
+                  "optional": false,
+                  "typeAnnotation": null,
+                  "start": 101,
+                  "end": 106
+                },
+                "method": false,
+                "shorthand": false,
+                "computed": false,
+                "optional": false,
+                "start": 95,
+                "end": 106
+              },
+              {
+                "type": "Property",
+                "kind": "init",
+                "key": {
+                  "type": "Identifier",
+                  "decorators": [],
+                  "name": "user",
+                  "optional": false,
+                  "typeAnnotation": null,
+                  "start": 108,
+                  "end": 112
+                },
+                "value": {
+                  "type": "Identifier",
+                  "decorators": [],
+                  "name": "_user",
+                  "optional": false,
+                  "typeAnnotation": null,
+                  "start": 114,
+                  "end": 119
+                },
+                "method": false,
+                "shorthand": false,
+                "computed": false,
+                "optional": false,
+                "start": 108,
+                "end": 119
+              }
+            ],
+            "start": 78,
+            "end": 121
+          }
+        ],
+        "optional": false,
+        "start": 0,
+        "end": 122
+      },
+      "directive": null,
+      "start": 0,
+      "end": 122
+    }
+  ],
+  "sourceType": "module",
+  "hashbang": null,
+  "start": 0,
+  "end": 122
+}

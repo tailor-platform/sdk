@@ -90,9 +90,6 @@ function checkScriptForExternalVariables(
 ): void {
   if (!expr.trim()) return;
 
-  console.log("🔥 expr");
-  console.log(expr);
-
   let program: Program;
   try {
     ({ program } = parseSync("tailordb-script.ts", expr));
@@ -104,8 +101,6 @@ function checkScriptForExternalVariables(
   }
 
   const fn = findFirstFunction(program);
-  console.log("fn");
-  console.log(JSON.stringify(fn, null, 2));
 
   if (!fn) {
     return;
@@ -113,8 +108,6 @@ function checkScriptForExternalVariables(
 
   const localNames = new Set<string>();
   collectFunctionBindings(fn, localNames);
-  console.log("💕localNames");
-  console.log(JSON.stringify([...localNames], null, 2));
 
   const externalNames = collectExternalIdentifierReferences(fn, localNames);
   if (externalNames.size === 0) return;
@@ -133,7 +126,6 @@ function findFirstFunction(
 
   try {
     writeFileSync("./ast-program.json", JSON.stringify(program, null, 2));
-    console.log("✅ write success");
   } catch (error) {
     console.log("❌ parse error");
     console.log(String(error));
@@ -141,9 +133,6 @@ function findFirstFunction(
 
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object" || found) return;
-
-    console.log("✨ walk node type");
-    console.log(JSON.stringify(node.type, null, 2));
 
     const type = node.type;
     if (type && functionTypes.includes(type)) {
@@ -228,8 +217,17 @@ function collectExternalIdentifierReferences(
       : null;
   if (!bodyNode) return external;
 
-  traverse(bodyNode, (node) => {
+  traverse(bodyNode, (node, parent, parentKey) => {
     if (node.type === "Identifier") {
+      // Ignore identifiers used as property names in member expressions (e.g. data.fallback, user.id)
+      if (
+        parent &&
+        parent.type === "MemberExpression" &&
+        parentKey === "property"
+      ) {
+        return;
+      }
+
       const identifier = node as unknown as IdentifierReference;
       const name = identifier.name;
       if (!name) return;
@@ -258,7 +256,6 @@ function collectBindingsFromPattern(
       if (identifier.name) names.add(identifier.name);
       break;
     }
-    // ({value}) => {...} -> {"type": "ObjectPattern, "properties": [{type: "Property", value: {"type": "Identifier", name: "value"}}]}
     case "ObjectPattern": {
       const objectPattern = pattern as unknown as ObjectPattern;
       const properties = objectPattern.properties as
@@ -315,8 +312,17 @@ function collectBindingsFromPattern(
   }
 }
 
-function traverse(node: ASTNode, visitor: (node: ASTNode) => void): void {
-  visitor(node);
+function traverse(
+  node: ASTNode,
+  visitor: (
+    node: ASTNode,
+    parent: ASTNode | null,
+    parentKey: string | null,
+  ) => void,
+  parent: ASTNode | null = null,
+  parentKey: string | null = null,
+): void {
+  visitor(node, parent, parentKey);
 
   for (const key of Object.keys(node)) {
     if (key === "parent") continue;
@@ -326,11 +332,11 @@ function traverse(node: ASTNode, visitor: (node: ASTNode) => void): void {
     if (Array.isArray(value)) {
       for (const child of value) {
         if (child && typeof child === "object") {
-          traverse(child as ASTNode, visitor);
+          traverse(child as ASTNode, visitor, node, key);
         }
       }
     } else if (value && typeof value === "object") {
-      traverse(value as ASTNode, visitor);
+      traverse(value as ASTNode, visitor, node, key);
     }
   }
 }

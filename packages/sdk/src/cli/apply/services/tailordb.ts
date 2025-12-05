@@ -49,7 +49,7 @@ import {
   trnPrefix,
   type WithLabel,
 } from "./label";
-import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-script-guard";
+import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
