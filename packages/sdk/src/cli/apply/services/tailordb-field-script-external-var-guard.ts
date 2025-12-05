@@ -1,4 +1,3 @@
-import { writeFileSync } from "fs";
 import { parseSync } from "oxc-parser";
 import type { OperatorFieldConfig } from "@/configure/types/operator";
 import type {
@@ -123,13 +122,6 @@ function findFirstFunction(
   program: Program,
 ): ArrowFunctionExpression | FunctionExpression | null {
   let found: ArrowFunctionExpression | FunctionExpression | null = null;
-
-  try {
-    writeFileSync("./ast-program.json", JSON.stringify(program, null, 2));
-  } catch (error) {
-    console.log("❌ parse error");
-    console.log(String(error));
-  }
 
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object" || found) return;
