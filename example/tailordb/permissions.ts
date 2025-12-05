@@ -9,6 +9,7 @@ const defaultMachineUser = [
   "=",
   "MANAGER",
 ] as const satisfies PermissionCondition;
+
 const loggedIn = [
   { user: "_loggedIn" },
   "=",
@@ -34,3 +35,19 @@ export const defaultGqlPermission: TailorTypeGqlPermission = [
     permit: true,
   },
 ];
+
+/**
+ * For development or testing, if you want to allow all access (unsafe),
+ * you can use the following example instead of the default permissions
+ * defined above. Do not use this in production environments.
+ *
+ * Example:
+ *
+ * import {
+ *   unsafeAllowAllTypePermission,
+ *   unsafeAllowAllGqlPermission,
+ * } from "@tailor-platform/sdk";
+ *
+ * export const defaultPermission = unsafeAllowAllTypePermission;
+ * export const defaultGqlPermission = unsafeAllowAllGqlPermission;
+ */
