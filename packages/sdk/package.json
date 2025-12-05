@@ -70,7 +70,7 @@
     "rolldown": "catalog:",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
-    "tsx": "4.20.6",
+    "tsx": "4.21.0",
     "type-fest": "5.2.0",
     "uuid": "13.0.0",
     "xdg-basedir": "5.1.0",
