@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.14.1
+
+### Patch Changes
+
+- [#122](https://github.com/tailor-platform/sdk/pull/122) [`d3d2796`](https://github.com/tailor-platform/sdk/commit/d3d279611ff14b504b1e79e11160b51f664fa622) Thanks [@renovate](https://github.com/apps/renovate)! - Update deps
+
 ## 0.14.0
 
 ### Minor Changes
