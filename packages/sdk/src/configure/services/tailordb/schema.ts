@@ -89,6 +89,19 @@ interface ReferenceConfig<T extends TailorDBType<any, any>> {
   nameMap: [string | undefined, string];
 }
 
+const convertFnToExpr = (
+  fn: NonNullable<Hook<any, any>["create"] | Hook<any, any>["update"]>,
+) => {
+  const src = fn.toString().trim();
+
+  const normalized =
+    src.startsWith("create") || src.startsWith("update")
+      ? `function ${src}`
+      : src;
+
+  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+};
+
 export class TailorDBField<
   const Defined extends DefinedDBFieldMetadata,
   const Output,
@@ -136,16 +149,12 @@ export class TailorDBField<
         ? {
             create: this._metadata.hooks.create
               ? {
-                  expr: `(${this._metadata.hooks.create
-                    .toString()
-                    .trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+                  expr: convertFnToExpr(this._metadata.hooks.create),
                 }
               : undefined,
             update: this._metadata.hooks.update
               ? {
-                  expr: `(${this._metadata.hooks.update
-                    .toString()
-                    .trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+                  expr: convertFnToExpr(this._metadata.hooks.update),
                 }
               : undefined,
           }
