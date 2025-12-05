@@ -32,6 +32,8 @@ jobs:
         with:
           app-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
           private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Create Release PR
         id: changesets
