@@ -9,7 +9,6 @@ const defaultMachineUser = [
   "=",
   "MANAGER",
 ] as const satisfies PermissionCondition;
-
 const loggedIn = [
   { user: "_loggedIn" },
   "=",
