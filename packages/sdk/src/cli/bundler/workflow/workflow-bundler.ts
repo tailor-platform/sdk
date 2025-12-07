@@ -17,6 +17,11 @@ interface JobInfo {
   sourceFile: string;
 }
 
+export interface BundleWorkflowJobsResult {
+  /** Maps mainJobName -> list of all job names it depends on (including itself) */
+  mainJobDeps: Record<string, string[]>;
+}
+
 /**
  * Bundle workflow jobs
  *
@@ -24,20 +29,22 @@ interface JobInfo {
  * 1. Detects which jobs are actually used (mainJobs + their dependencies)
  * 2. Uses a transform plugin to transform trigger calls during bundling
  * 3. Creates entry file and bundles with tree-shaking
+ *
+ * Returns metadata about which jobs each workflow uses.
  */
 export async function bundleWorkflowJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
   triggerContext?: TriggerContext,
-): Promise<void> {
+): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     console.log(styleText("dim", "No workflow jobs to bundle"));
-    return;
+    return { mainJobDeps: {} };
   }
 
-  // Filter to only used jobs (mainJobs + their dependencies)
-  const usedJobs = await filterUsedJobs(allJobs, mainJobNames);
+  // Filter to only used jobs and get per-mainJob dependencies
+  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames);
 
   console.log("");
   console.log(
@@ -73,6 +80,13 @@ export async function bundleWorkflowJobs(
     styleText("green", "Bundled"),
     styleText("cyan", '"workflow-job"'),
   );
+
+  return { mainJobDeps };
+}
+
+interface FilterUsedJobsResult {
+  usedJobs: JobInfo[];
+  mainJobDeps: Record<string, string[]>;
 }
 
 /**
@@ -80,13 +94,15 @@ export async function bundleWorkflowJobs(
  * A job is "used" if:
  * - It's a mainJob of a workflow
  * - It's called via .trigger() from another used job (transitively)
+ *
+ * Also returns a map of mainJob -> all jobs it depends on (for metadata).
  */
 async function filterUsedJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
-): Promise<JobInfo[]> {
+): Promise<FilterUsedJobsResult> {
   if (allJobs.length === 0 || mainJobNames.length === 0) {
-    return [];
+    return { usedJobs: [], mainJobDeps: {} };
   }
 
   // Build maps for lookups
@@ -173,29 +189,38 @@ async function filterUsedJobs(
     }
   }
 
-  // Find all used jobs starting from mainJobs
+  // Collect all used jobs and per-mainJob dependencies
   const usedJobNames = new Set<string>();
+  const mainJobDeps: Record<string, string[]> = {};
 
-  function markUsed(jobName: string) {
-    if (usedJobNames.has(jobName)) return;
-    usedJobNames.add(jobName);
+  function collectDeps(jobName: string, collected: Set<string>) {
+    if (collected.has(jobName)) return;
+    collected.add(jobName);
 
-    // Recursively mark dependencies as used
+    // Recursively collect dependencies
     const deps = dependencies.get(jobName);
     if (deps) {
       for (const dep of deps) {
-        markUsed(dep);
+        collectDeps(dep, collected);
       }
     }
   }
 
-  // Start from mainJobs
+  // For each mainJob, collect all its dependencies
   for (const mainJobName of mainJobNames) {
-    markUsed(mainJobName);
+    const depsForMainJob = new Set<string>();
+    collectDeps(mainJobName, depsForMainJob);
+    mainJobDeps[mainJobName] = Array.from(depsForMainJob);
+
+    // Add to global used jobs
+    for (const dep of depsForMainJob) {
+      usedJobNames.add(dep);
+    }
   }
 
   // Filter to only used jobs
-  return allJobs.filter((job) => usedJobNames.has(job.name));
+  const usedJobs = allJobs.filter((job) => usedJobNames.has(job.name));
+  return { usedJobs, mainJobDeps };
 }
 
 async function bundleSingleJob(

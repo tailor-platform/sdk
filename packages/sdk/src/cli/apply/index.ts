@@ -12,7 +12,10 @@ import {
   buildTriggerContext,
   type TriggerContext,
 } from "@/cli/bundler/trigger-context";
-import { bundleWorkflowJobs } from "@/cli/bundler/workflow/workflow-bundler";
+import {
+  bundleWorkflowJobs,
+  type BundleWorkflowJobsResult,
+} from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
@@ -91,11 +94,12 @@ export async function apply(options?: ApplyOptions) {
   if (application.executorService) {
     await buildExecutor(application.executorService.config, triggerContext);
   }
+  let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
     const mainJobNames = workflowResult.workflowSources.map(
       (ws) => ws.workflow.mainJob.name,
     );
-    await buildWorkflow(
+    workflowBuildResult = await buildWorkflow(
       workflowResult.jobs,
       mainJobNames,
       application.env,
@@ -151,6 +155,7 @@ export async function apply(options?: ApplyOptions) {
     workspaceId,
     application.name,
     workflowResult?.workflows ?? {},
+    workflowBuildResult?.mainJobDeps ?? {},
   );
 
   // Confirm conflicts
@@ -264,9 +269,9 @@ async function buildWorkflow(
   mainJobNames: string[],
   env: Record<string, string | number | boolean>,
   triggerContext?: TriggerContext,
-) {
+): Promise<BundleWorkflowJobsResult> {
   // Use the workflow bundler with already collected jobs
-  await bundleWorkflowJobs(collectedJobs, mainJobNames, env, triggerContext);
+  return bundleWorkflowJobs(collectedJobs, mainJobNames, env, triggerContext);
 }
 
 export const applyCommand = defineCommand({

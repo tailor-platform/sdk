@@ -72,6 +72,7 @@ async function execRemove(
     workspaceId,
     application.name,
     {},
+    {},
   );
 
   if (
