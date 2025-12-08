@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { styleText } from "node:util";
 import * as inflection from "inflection";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { ensureNoExternalVariablesInFieldScripts } from "@/cli/application/tailordb/tailordb-field-script-external-var-guard-with-lint";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type {
@@ -139,6 +140,12 @@ export class TailorDBService {
     for (const [fieldName, fieldDef] of Object.entries(type.fields)) {
       const fieldConfig = schema.fields?.[fieldName];
       if (!fieldConfig) continue;
+
+      ensureNoExternalVariablesInFieldScripts(
+        type.name,
+        fieldName,
+        fieldConfig,
+      );
 
       const parsedField: ParsedField = { name: fieldName, config: fieldConfig };
 

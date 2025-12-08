@@ -1,0 +1,115 @@
+import { Linter } from "eslint";
+import * as globals from "globals";
+import type { OperatorFieldConfig } from "@/configure/types/operator";
+
+interface ScriptContext {
+  typeName: string;
+  fieldName: string;
+  kind: "validate" | "hook.create" | "hook.update";
+}
+
+// ESLint Linter instance (reused for performance)
+const linter = new Linter();
+
+// TailorDB script runtime variables (injected at runtime)
+const tailordbRuntimeGlobals: Linter.Globals = {
+  _value: "readonly",
+  _data: "readonly",
+  _user: "readonly",
+  // Tailor runtime provides `user` when evaluating scripts via tailorUserMap
+  user: "readonly",
+};
+
+// ESLint configuration for detecting undefined variables
+const eslintConfig: Linter.Config = {
+  languageOptions: {
+    ecmaVersion: 2022,
+    sourceType: "module",
+    globals: {
+      // ES built-in globals (Math, JSON, Array, Object, etc.)
+      ...globals.builtin,
+      // Additional globals available in TailorDB runtime
+      console: "readonly",
+      ...tailordbRuntimeGlobals,
+    },
+  },
+  rules: {
+    "no-undef": "error",
+  },
+};
+
+export function ensureNoExternalVariablesInScript(
+  expr: string,
+  ctx: ScriptContext,
+): void {
+  if (!expr.trim()) return;
+
+  // Use ESLint's parser directly on the given expression.
+  let messages: Linter.LintMessage[];
+  try {
+    messages = linter.verify(expr, eslintConfig, {
+      filename: "tailordb-script.js",
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to parse TailorDB ${ctx.kind} script for ${ctx.typeName}.${ctx.fieldName}: ${String(error)}`,
+    );
+  }
+
+  // Filter for no-undef errors only
+  const undefErrors = messages.filter((m) => m.ruleId === "no-undef");
+
+  if (undefErrors.length === 0) return;
+
+  // Extract variable names from error messages
+  const externalNames = new Set<string>();
+  for (const err of undefErrors) {
+    // ESLint no-undef message format: "'varName' is not defined."
+    const match = err.message.match(/'([^']+)' is not defined/);
+    if (match) {
+      externalNames.add(match[1]);
+    }
+  }
+
+  if (externalNames.size === 0) return;
+
+  const namesList = [...externalNames].sort().join(", ");
+  throw new Error(
+    `TailorDB ${ctx.kind} for ${ctx.typeName}.${ctx.fieldName} captures external variables (${namesList}). ` +
+      "Hooks and validators must not reference variables outside their own parameters and local declarations.",
+  );
+}
+
+export function ensureNoExternalVariablesInFieldScripts(
+  typeName: string,
+  fieldName: string,
+  fieldConfig: OperatorFieldConfig,
+): void {
+  // Validate scripts
+  for (const validateConfig of fieldConfig.validate ?? []) {
+    const expr = validateConfig.script?.expr;
+    if (expr) {
+      ensureNoExternalVariablesInScript(expr, {
+        typeName,
+        fieldName,
+        kind: "validate",
+      });
+    }
+  }
+
+  // Hook scripts (create/update)
+  if (fieldConfig.hooks?.create?.expr) {
+    ensureNoExternalVariablesInScript(fieldConfig.hooks.create.expr, {
+      typeName,
+      fieldName,
+      kind: "hook.create",
+    });
+  }
+  if (fieldConfig.hooks?.update?.expr) {
+    ensureNoExternalVariablesInScript(fieldConfig.hooks.update.expr, {
+      typeName,
+      fieldName,
+      kind: "hook.update",
+    });
+  }
+}
