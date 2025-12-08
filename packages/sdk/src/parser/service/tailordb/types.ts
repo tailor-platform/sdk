@@ -1,5 +1,48 @@
 import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
 
+// Script expression used in hooks and validators
+export interface Script {
+  expr: string;
+}
+
+// Enum value definition
+export interface EnumValue {
+  value: string;
+  description?: string;
+}
+
+interface OperatorValidateConfig {
+  script: Script;
+  errorMessage: string;
+}
+
+interface OperatorFieldHook {
+  create?: Script;
+  update?: Script;
+}
+
+export interface OperatorFieldConfig {
+  type: string;
+  required?: boolean;
+  description?: string;
+  allowedValues?: EnumValue[];
+  array?: boolean;
+  index?: boolean;
+  unique?: boolean;
+  vector?: boolean;
+  foreignKey?: boolean;
+  foreignKeyType?: string;
+  foreignKeyField?: string;
+  validate?: OperatorValidateConfig[];
+  hooks?: OperatorFieldHook;
+  serial?: {
+    start: number;
+    maxValue?: number;
+    format?: string;
+  };
+  fields?: Record<string, OperatorFieldConfig>;
+}
+
 /**
  * Parsed and normalized TailorDB field information
  */

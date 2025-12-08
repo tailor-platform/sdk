@@ -1,4 +1,4 @@
-import { type OperatorFieldConfig } from "@/configure/types/operator";
+import { type OperatorFieldConfig } from "@/parser/service/tailordb/types";
 import { type Permissions } from "./permission";
 
 export interface TailorDBTypeConfig {

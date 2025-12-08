@@ -4,7 +4,7 @@ import {
   type AllowedValues,
   type AllowedValuesOutput,
 } from "@/configure/types/field";
-import { type OperatorFieldConfig } from "@/configure/types/operator";
+import { type OperatorFieldConfig } from "@/parser/service/tailordb/types";
 import { TailorField } from "@/configure/types/type";
 import {
   type FieldOptions,

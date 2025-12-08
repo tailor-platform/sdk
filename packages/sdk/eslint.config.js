@@ -144,6 +144,15 @@ export default defineConfig([
           ],
         },
       ],
+      // Disallow re-exporting types from other modules - types.ts should define its own types
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ExportNamedDeclaration[source]",
+          message:
+            "Re-exporting from other modules is not allowed in types.ts. Define types directly instead.",
+        },
+      ],
     },
   },
   // {
