@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard-with-lint";
+import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import type { OperatorFieldConfig } from "@/configure/types/operator";
 
 function makeFieldConfig(
@@ -11,7 +11,7 @@ function makeFieldConfig(
   };
 }
 
-describe("ensureNoExternalVariablesInFieldScripts (lint-based)", () => {
+describe("ensureNoExternalVariablesInFieldScripts", () => {
   describe("validate scripts", () => {
     it("allows validate script that does not capture external variables", () => {
       const fieldConfig = makeFieldConfig({
