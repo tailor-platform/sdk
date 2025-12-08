@@ -4,6 +4,8 @@ export {
   type TailorDBType,
   type TailorDBField,
   type TailorDBInstance,
+  unsafeAllowAllTypePermission,
+  unsafeAllowAllGqlPermission,
   type PermissionCondition,
   type TailorTypePermission,
   type TailorTypeGqlPermission,
