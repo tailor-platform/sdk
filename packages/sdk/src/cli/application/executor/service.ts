@@ -27,9 +27,11 @@ export class ExecutorService {
       "executor files",
     );
 
-    for (const executorFile of executorFiles) {
-      await this.loadExecutorForFile(executorFile);
-    }
+    await Promise.all(
+      executorFiles.map((executorFile) =>
+        this.loadExecutorForFile(executorFile),
+      ),
+    );
     return this.executors;
   }
 
@@ -52,6 +54,7 @@ export class ExecutorService {
           styleText("cyan", relativePath),
         );
         this.executors[executorFile] = result.data;
+        return result.data;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);
@@ -62,7 +65,7 @@ export class ExecutorService {
       console.error(error);
       throw error;
     }
-    return this.executors[executorFile];
+    return undefined;
   }
 
   getExecutors() {

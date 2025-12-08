@@ -31,9 +31,11 @@ export class ResolverService {
       styleText("cyanBright", `"${this.namespace}"`),
     );
 
-    for (const resolverFile of resolverFiles) {
-      await this.loadResolverForFile(resolverFile);
-    }
+    await Promise.all(
+      resolverFiles.map((resolverFile) =>
+        this.loadResolverForFile(resolverFile),
+      ),
+    );
   }
 
   async loadResolverForFile(resolverFile: string, timestamp?: Date) {
@@ -55,6 +57,7 @@ export class ResolverService {
           styleText("cyan", relativePath),
         );
         this.resolvers[resolverFile] = result.data;
+        return result.data;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), resolverFile);
@@ -65,7 +68,7 @@ export class ResolverService {
       console.error(error);
       throw error;
     }
-    return this.resolvers[resolverFile];
+    return undefined;
   }
 
   getResolvers(): Record<string, Resolver> {
