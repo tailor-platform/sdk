@@ -66,7 +66,6 @@
     "multiline-ts": "4.0.1",
     "open": "10.2.0",
     "oxc-parser": "0.98.0",
-    "oxc-transform": "^0.101.0",
     "pkg-types": "2.3.0",
     "rolldown": "catalog:",
     "table": "6.9.0",

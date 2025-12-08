@@ -441,7 +441,6 @@ function generateTailorDBTypeManifest(
     .forEach((fieldName) => {
       const fieldConfig = type.fields[fieldName].config;
       const fieldType = fieldConfig.type;
-
       const fieldEntry: MessageInitShape<
         typeof TailorDBType_FieldConfigSchema
       > = {
