@@ -400,7 +400,7 @@ export const fetchData = createWorkflowJob({
 export const processData = createWorkflowJob({
   name: "process-data",
   deps: [fetchData],
-  body: async (input: { id: string }, jobs) => {
+  body: async (input: { id: string }, { jobs }) => {
     // Dependent jobs accessed with hyphens replaced by underscores: "fetch-data" -> jobs.fetch_data()
     const data = await jobs.fetch_data({ id: input.id });
     return { processed: true, data };
@@ -570,7 +570,9 @@ import type { MySchema } from "./schema";
 export type MyType = z.output<typeof MySchema>;
 
 // All other types that depend on schema types
-export type MyOtherType = { /* ... */ };
+export type MyOtherType = {
+  /* ... */
+};
 ```
 
 ```typescript

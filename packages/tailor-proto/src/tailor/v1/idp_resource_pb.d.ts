@@ -2,7 +2,7 @@
 // @generated from file tailor/v1/idp_resource.proto (package tailor.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Namespace } from "./resource_pb";
 
@@ -34,6 +34,13 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
    * @generated from field: tailor.v1.IdPUserAuthPolicy user_auth_policy = 4;
    */
   userAuthPolicy?: IdPUserAuthPolicy;
+
+  /**
+   * lang is the IETF BCP 47 language subtag.
+   *
+   * @generated from field: tailor.v1.IdPLang lang = 5;
+   */
+  lang: IdPLang;
 };
 
 /**
@@ -83,4 +90,31 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
  * Use `create(IdPUserAuthPolicySchema)` to create a new message.
  */
 export declare const IdPUserAuthPolicySchema: GenMessage<IdPUserAuthPolicy>;
+
+/**
+ * IdPLang represents the IETF BCP 47 language subtag.
+ *
+ * @generated from enum tailor.v1.IdPLang
+ */
+export enum IdPLang {
+  /**
+   * @generated from enum value: ID_P_LANG_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ID_P_LANG_EN = 1;
+   */
+  EN = 1,
+
+  /**
+   * @generated from enum value: ID_P_LANG_JA = 2;
+   */
+  JA = 2,
+}
+
+/**
+ * Describes the enum tailor.v1.IdPLang.
+ */
+export declare const IdPLangSchema: GenEnum<IdPLang>;
 

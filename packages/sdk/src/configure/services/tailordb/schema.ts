@@ -89,6 +89,19 @@ interface ReferenceConfig<T extends TailorDBType<any, any>> {
   nameMap: [string | undefined, string];
 }
 
+const convertFnToExpr = (
+  fn: NonNullable<Hook<any, any>["create"] | Hook<any, any>["update"]>,
+) => {
+  const src = fn.toString().trim();
+
+  const normalized =
+    src.startsWith("create") || src.startsWith("update")
+      ? `function ${src}`
+      : src;
+
+  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+};
+
 export class TailorDBField<
   const Defined extends DefinedDBFieldMetadata,
   const Output,
@@ -136,16 +149,12 @@ export class TailorDBField<
         ? {
             create: this._metadata.hooks.create
               ? {
-                  expr: `(${this._metadata.hooks.create
-                    .toString()
-                    .trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+                  expr: convertFnToExpr(this._metadata.hooks.create),
                 }
               : undefined,
             update: this._metadata.hooks.update
               ? {
-                  expr: `(${this._metadata.hooks.update
-                    .toString()
-                    .trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+                  expr: convertFnToExpr(this._metadata.hooks.update),
                 }
               : undefined,
           }
@@ -492,8 +501,6 @@ export class TailorDBType<
 > {
   public readonly _output = null as unknown as InferFieldsOutput<Fields>;
   public _description?: string;
-  public readonly referenced: Record<string, [TailorDBType<any, any>, string]> =
-    {};
   private _settings: TypeFeatures = {};
   private _indexes: IndexDef<this>[] = [];
   private _permissions: Permissions = {};
@@ -537,21 +544,6 @@ export class TailorDBType<
           nameMap: [forward, pending.backward],
           key: pending.key,
         };
-      }
-    });
-
-    Object.entries(this.fields).forEach(([fieldName, field]) => {
-      if (field.reference && field.reference !== undefined) {
-        const ref = field.reference;
-        if (ref.type) {
-          const backwardFieldName = ref.nameMap?.[1]; // Get backward field name from nameMap
-
-          // Store backward reference with the field name (can be undefined)
-          // The actual backward field name will be generated in the CLI layer
-          if (backwardFieldName !== undefined) {
-            ref.type.referenced[backwardFieldName] = [this, fieldName];
-          }
-        }
       }
     });
   }

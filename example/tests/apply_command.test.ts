@@ -33,6 +33,9 @@ describe("pnpm apply command integration tests", () => {
     "resolvers/stepChain.entry.js",
     "resolvers/stepChain.js",
     "resolvers/stepChain.js.map",
+    "resolvers/triggerOrderProcessing.entry.js",
+    "resolvers/triggerOrderProcessing.js",
+    "resolvers/triggerOrderProcessing.js.map",
     // Workflow bundler creates entry files (.entry.js) in same directory as output files
     "workflow-jobs/check-inventory.entry.js",
     "workflow-jobs/check-inventory.js",
@@ -211,6 +214,8 @@ describe("pnpm apply command integration tests", () => {
       "resolvers/add.js": 4504 + sizeBuffer,
       "resolvers/showUserInfo.js": 4588 + sizeBuffer,
       "resolvers/stepChain.js": 176907 + sizeBuffer,
+      // triggerOrderProcessing: imports auth from tailor.config (~14KB)
+      "resolvers/triggerOrderProcessing.js": 14022 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~160KB), date-fns jobs (~28KB), simple jobs (~9KB)
       "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
       "workflow-jobs/fetch-customer.js": 160819 + sizeBuffer,
@@ -601,6 +606,28 @@ describe("pnpm apply command integration tests", () => {
             /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
           ),
         });
+      });
+
+      test("workflow-jobs entry files contain env variables from config", () => {
+        // Verify that env variables from tailor.config.ts are embedded in entry files
+        // The config has: env: { foo: 1, bar: "hello", baz: true }
+        const entryFiles = [
+          "workflow-jobs/fetch-customer.entry.js",
+          "workflow-jobs/process-order.entry.js",
+          "workflow-jobs/send-notification.entry.js",
+        ];
+
+        for (const file of entryFiles) {
+          const content = fs.readFileSync(path.join(actualDir, file), "utf-8");
+
+          // Check that env is defined with correct values
+          expect(content).toContain(
+            'const env = {"foo":1,"bar":"hello","baz":true}',
+          );
+
+          // Check that body is called with { jobs, env } object
+          expect(content).toMatch(/\.body\(input, \{ env \}\)/);
+        }
       });
     });
   });

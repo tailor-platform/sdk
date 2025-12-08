@@ -9,7 +9,7 @@ import {
 } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "../context";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 import {
   type OAuth2ClientCredentials,
   toOAuth2ClientCredentials,
@@ -34,9 +34,8 @@ export async function oauth2ClientGet(
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
-  const configPath = loadConfigPath(options.configPath);
 
-  const { config } = await loadConfig(configPath);
+  const { config } = await loadConfig(options.configPath);
   const { application } = await client.getApplication({
     workspaceId,
     applicationName: config.name,

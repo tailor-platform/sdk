@@ -1,10 +1,6 @@
 import { z } from "zod";
+import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
-
-export const InvokerSchema = z.object({
-  authName: z.string(),
-  machineUser: z.string(),
-});
 
 export const RecordTriggerSchema = z.object({
   kind: z.enum(["recordCreated", "recordUpdated", "recordDeleted"]),
@@ -38,7 +34,7 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
 export const FunctionOperationSchema = z.object({
   kind: z.enum(["function", "jobFunction"]),
   body: functionSchema,
-  invoker: InvokerSchema.optional(),
+  authInvoker: AuthInvokerSchema.optional(),
 });
 
 export const GqlOperationSchema = z.object({
@@ -46,7 +42,7 @@ export const GqlOperationSchema = z.object({
   appName: z.string().optional(),
   query: z.string(),
   variables: functionSchema.optional(),
-  invoker: InvokerSchema.optional(),
+  authInvoker: AuthInvokerSchema.optional(),
 });
 
 export const WebhookOperationSchema = z.object({

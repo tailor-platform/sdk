@@ -270,3 +270,28 @@ export function normalizeActionPermission(
     permit: conditionArrayPermit ? "allow" : "deny",
   };
 }
+
+/**
+ * Grants full record-level access without any conditions.
+ *
+ * Unsafe and intended only for local development, prototyping, or tests.
+ * Do not use this in production environments, as it effectively disables
+ * authorization checks.
+ */
+export const unsafeAllowAllTypePermission: TailorTypePermission = {
+  create: [{ conditions: [], permit: true }],
+  read: [{ conditions: [], permit: true }],
+  update: [{ conditions: [], permit: true }],
+  delete: [{ conditions: [], permit: true }],
+};
+
+/**
+ * Grants full GraphQL access (all actions) without any conditions.
+ *
+ * Unsafe and intended only for local development, prototyping, or tests.
+ * Do not use this in production environments, as it effectively disables
+ * authorization checks.
+ */
+export const unsafeAllowAllGqlPermission: TailorTypeGqlPermission = [
+  { conditions: [], actions: "all", permit: true },
+];

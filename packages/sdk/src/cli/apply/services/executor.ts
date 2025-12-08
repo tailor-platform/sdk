@@ -319,12 +319,7 @@ function protoExecutor(
                   expr: `(${target.variables.toString()})(args)`,
                 }
               : undefined,
-            invoker: target.invoker
-              ? {
-                  namespace: target.invoker.authName,
-                  machineUserName: target.invoker.machineUser,
-                }
-              : undefined,
+            invoker: target.authInvoker ?? undefined,
           },
         },
       };
@@ -352,12 +347,7 @@ function protoExecutor(
             variables: {
               expr: `({ ...args, appNamespace: args.namespaceName, env: ${JSON.stringify(env)} })`,
             },
-            invoker: target.invoker
-              ? {
-                  namespace: target.invoker.authName,
-                  machineUserName: target.invoker.machineUser,
-                }
-              : undefined,
+            invoker: target.authInvoker ?? undefined,
           },
         },
       };

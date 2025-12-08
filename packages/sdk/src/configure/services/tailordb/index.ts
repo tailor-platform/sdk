@@ -1,7 +1,9 @@
 export { db, type TailorDBType, type TailorDBField } from "./schema";
 export type { TailorDBInstance } from "./schema";
-export type {
-  TailorTypePermission,
-  TailorTypeGqlPermission,
-  PermissionCondition,
+export {
+  unsafeAllowAllTypePermission,
+  unsafeAllowAllGqlPermission,
+  type TailorTypePermission,
+  type TailorTypeGqlPermission,
+  type PermissionCondition,
 } from "./permission";

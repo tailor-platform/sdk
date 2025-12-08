@@ -1,5 +1,102 @@
 # @tailor-platform/sdk
 
+## 0.14.0
+
+### Minor Changes
+
+- [#124](https://github.com/tailor-platform/sdk/pull/124) [`6d96fdb`](https://github.com/tailor-platform/sdk/commit/6d96fdbbecc225e9906b9c0b2225a733dd8fc4d8) Thanks [@toiroakr](https://github.com/toiroakr)! - Add workflow trigger functionality
+  - Add `trigger` method to `Workflow` type that allows triggering workflows from resolvers and executors
+  - Support `authInvoker` option for authentication when triggering workflows
+
+  **Breaking Changes**
+  - AuthInvoker field names changed:
+    - `authName` → `namespace`
+    - `machineUser` → `machineUserName`
+    - This affects both `auth.invoker()` return value and direct object usage in executor's `authInvoker` option
+  - Executor operation field renamed:
+    - `invoker` → `authInvoker`
+  - SecretValue field names changed:
+    - `VaultName` → `vaultName`
+    - `SecretKey` → `secretKey`
+
+## 0.13.0
+
+### Minor Changes
+
+- [#121](https://github.com/tailor-platform/sdk/pull/121) [`bc7a3e9`](https://github.com/tailor-platform/sdk/commit/bc7a3e96b4805e75fcb153220d286abaced26368) Thanks [@toiroakr](https://github.com/toiroakr)! - Streamline workflow job function registration and trigger handling
+
+  **Breaking Changes:**
+  - Removed `deps` property from `createWorkflowJob()` - jobs no longer declare dependencies explicitly
+  - Removed `jobs` object from `WorkflowJobContext` - use `.trigger()` method instead
+  - Changed the way workflow jobs call other jobs: from `jobs.job_name()` to `otherJob.trigger()`
+
+  **Migration Guide:**
+
+  Before:
+
+  ```typescript
+  export const fetchCustomer = createWorkflowJob({
+    name: "fetch-customer",
+    body: async (input: { customerId: string }) => {
+      // fetch logic
+    },
+  });
+
+  export const processOrder = createWorkflowJob({
+    name: "process-order",
+    deps: [fetchCustomer],
+    body: async (input, { jobs }) => {
+      const customer = await jobs.fetch_customer({
+        customerId: input.customerId,
+      });
+      return { customer };
+    },
+  });
+  ```
+
+  After:
+
+  ```typescript
+  export const fetchCustomer = createWorkflowJob({
+    name: "fetch-customer",
+    body: async (input: { customerId: string }) => {
+      // fetch logic
+    },
+  });
+
+  export const processOrder = createWorkflowJob({
+    name: "process-order",
+    body: async (input, { env }) => {
+      const customer = await fetchCustomer.trigger({
+        customerId: input.customerId,
+      });
+      return { customer };
+    },
+  });
+  ```
+
+  **Key Changes:**
+  - Dependencies are now automatically detected via AST analysis of `.trigger()` calls at bundle time
+  - The `.trigger()` method is transformed to `tailor.workflow.triggerJobFunction()` during bundling
+  - Job function registration is optimized - all job functions are registered once and shared across workflows
+  - Unused jobs (not reachable from any mainJob via trigger calls) are automatically excluded from bundles
+
+### Patch Changes
+
+- [#102](https://github.com/tailor-platform/sdk/pull/102) [`ac99d85`](https://github.com/tailor-platform/sdk/commit/ac99d8506693e27512a3ff59c5c8e4fda63b4695) Thanks [@riku99](https://github.com/riku99)! - Add CLI commands for managing Secret Manager vaults and secrets
+
+## 0.12.4
+
+### Patch Changes
+
+- [#107](https://github.com/tailor-platform/sdk/pull/107) [`66fd5b5`](https://github.com/tailor-platform/sdk/commit/66fd5b5e507c6fd7f802e25819ec1e9896b43d80) Thanks [@remiposo](https://github.com/remiposo)! - Manage workflow resources with labels
+
+  Added labels to workflow resources just like other resources. This is a small breaking change for users already using workflows (a confirmation will occur), but since workflow itself is still a preview feature, we believe this is acceptable.
+
+- [#109](https://github.com/tailor-platform/sdk/pull/109) [`2223025`](https://github.com/tailor-platform/sdk/commit/22230255d463ce76c709f8c441c9ca16e581b6e3) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support `lang` for idp
+
+- [#110](https://github.com/tailor-platform/sdk/pull/110) [`5de725c`](https://github.com/tailor-platform/sdk/commit/5de725ce459788ead266930338c922ebd59123ed) Thanks [@remiposo](https://github.com/remiposo)! - Removed unused referenced field
+
 ## 0.12.3
 
 ## 0.12.2

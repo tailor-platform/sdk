@@ -735,10 +735,6 @@ describe("TailorDBType self relation tests", () => {
     expect(dependsRef.nameMap[0]).toBe("dependsOn");
     expect(TestType.fields.dependId.metadata.unique).toBe(true);
 
-    // backward is registered in the referenced map
-    expect(TestType.referenced.children).toEqual([TestType, "parentID"]);
-    expect(TestType.referenced.dependedBy).toEqual([TestType, "dependId"]);
-
     // Foreign key metadata is set with its own type name
     expect(TestType.fields.parentID.metadata.foreignKeyType).toBe("TestType");
     expect(TestType.fields.parentID.metadata.foreignKeyField).toBe("id");
