@@ -51,15 +51,20 @@ export class TailorDBService {
       styleText("cyanBright", `"${this.namespace}"`),
     );
 
-    for (const typeFile of typeFiles) {
-      await this.loadTypesForFile(typeFile);
-    }
+    await Promise.all(typeFiles.map((typeFile) => this.loadTypeFile(typeFile)));
     this.parseTypes();
     return this.types;
   }
 
   async loadTypesForFile(typeFile: string, timestamp?: Date) {
+    const result = await this.loadTypeFile(typeFile, timestamp);
+    this.parseTypes();
+    return result;
+  }
+
+  private async loadTypeFile(typeFile: string, timestamp?: Date) {
     this.rawTypes[typeFile] = {};
+    const loadedTypes: Record<string, TailorDBType> = {};
     try {
       const baseUrl = pathToFileURL(typeFile).href;
       const moduleSpecifier =
@@ -90,6 +95,7 @@ export class TailorDBService {
             styleText("cyan", relativePath),
           );
           this.rawTypes[typeFile][exportedValue.name] = exportedValue;
+          loadedTypes[exportedValue.name] = exportedValue;
           // Store source info mapping
           this.typeSourceInfo[exportedValue.name] = {
             filePath: typeFile,
@@ -106,8 +112,7 @@ export class TailorDBService {
       console.error(error);
       throw error;
     }
-    this.parseTypes();
-    return this.rawTypes[typeFile];
+    return loadedTypes;
   }
 
   private parseTypes() {

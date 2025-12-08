@@ -52,10 +52,15 @@ export async function loadAndCollectJobs(
     { name: string; exportName: string; sourceFile: string }
   >();
 
-  // Load all files and collect jobs and workflows
-  for (const workflowFile of workflowFiles) {
-    const { jobs, workflow } = await loadFileContent(workflowFile);
+  // Load all files in parallel and collect jobs and workflows
+  const loadResults = await Promise.all(
+    workflowFiles.map(async (workflowFile) => {
+      const { jobs, workflow } = await loadFileContent(workflowFile);
+      return { workflowFile, jobs, workflow };
+    }),
+  );
 
+  for (const { workflowFile, jobs, workflow } of loadResults) {
     if (workflow) {
       workflowSources.push({ workflow, sourceFile: workflowFile });
       workflows[workflowFile] = workflow;
