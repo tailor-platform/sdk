@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 0.14.1
+
+### Patch Changes
+
+- [#130](https://github.com/tailor-platform/sdk/pull/130) [`78a2332`](https://github.com/tailor-platform/sdk/commit/78a2332162cf05a4c88e88556b65a1b6aebb12c2) Thanks [@riku99](https://github.com/riku99)! - Added unsafe "allow all" TailorDB permissions
+
+- [#138](https://github.com/tailor-platform/sdk/pull/138) [`762dffd`](https://github.com/tailor-platform/sdk/commit/762dffd3c1fc9a7ec9709ba4655d531e4f6f24ce) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: enhance workflow job bundling and dependency tracking
+
+- [#132](https://github.com/tailor-platform/sdk/pull/132) [`c87ee91`](https://github.com/tailor-platform/sdk/commit/c87ee9171797c1d6048cdab80cbbcd491e6dd0f3) Thanks [@riku99](https://github.com/riku99)! - Fix TailorDB hooks script generation to support method-style functions
+
 ## 0.14.0
 
 ### Minor Changes
