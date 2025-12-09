@@ -240,9 +240,9 @@ async function bundleSingleJob(
 
     const env = ${JSON.stringify(env)};
 
-    globalThis.main = async (input) => {
+    export async function main(input) {
       return await ${job.exportName}.body(input, { env });
-    };
+    }
   `;
   fs.writeFileSync(entryPath, entryContent);
 
