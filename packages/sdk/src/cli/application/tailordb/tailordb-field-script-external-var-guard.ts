@@ -56,14 +56,11 @@ export function ensureNoExternalVariablesInScript(
     );
   }
 
-  // Filter for no-undef errors only
-  const undefErrors = messages.filter((m) => m.ruleId === "no-undef");
-
-  if (undefErrors.length === 0) return;
+  if (messages.length === 0) return;
 
   // Extract variable names from error messages
   const externalNames = new Set<string>();
-  for (const err of undefErrors) {
+  for (const err of messages) {
     // ESLint no-undef message format: "'varName' is not defined."
     const match = err.message.match(/'([^']+)' is not defined/);
     if (match) {
