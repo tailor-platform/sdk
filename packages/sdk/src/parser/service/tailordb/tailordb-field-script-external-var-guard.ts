@@ -1,6 +1,6 @@
 import { Linter } from "eslint";
 import * as globals from "globals";
-import type { OperatorFieldConfig } from "@/configure/types/operator";
+import type { ParsedField } from "./types";
 
 interface ScriptContext {
   typeName: string;
@@ -44,7 +44,6 @@ export function ensureNoExternalVariablesInScript(
 ): void {
   if (!expr.trim()) return;
 
-  // Use ESLint's parser directly on the given expression.
   let messages: Linter.LintMessage[];
   try {
     messages = linter.verify(expr, eslintConfig, {
@@ -58,10 +57,8 @@ export function ensureNoExternalVariablesInScript(
 
   if (messages.length === 0) return;
 
-  // Extract variable names from error messages
   const externalNames = new Set<string>();
   for (const err of messages) {
-    // ESLint no-undef message format: "'varName' is not defined."
     const match = err.message.match(/'([^']+)' is not defined/);
     if (match) {
       externalNames.add(match[1]);
@@ -77,12 +74,13 @@ export function ensureNoExternalVariablesInScript(
   );
 }
 
+type TailorDBFieldConfig = ParsedField["config"];
+
 export function ensureNoExternalVariablesInFieldScripts(
   typeName: string,
   fieldName: string,
-  fieldConfig: OperatorFieldConfig,
+  fieldConfig: TailorDBFieldConfig,
 ): void {
-  // Validate scripts
   for (const validateConfig of fieldConfig.validate ?? []) {
     const expr = validateConfig.script?.expr;
     if (expr) {
@@ -94,7 +92,6 @@ export function ensureNoExternalVariablesInFieldScripts(
     }
   }
 
-  // Hook scripts (create/update)
   if (fieldConfig.hooks?.create?.expr) {
     ensureNoExternalVariablesInScript(fieldConfig.hooks.create.expr, {
       typeName,

@@ -3,9 +3,9 @@ import { pathToFileURL } from "node:url";
 import { styleText } from "node:util";
 import * as inflection from "inflection";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
-import { ensureNoExternalVariablesInFieldScripts } from "@/cli/application/tailordb/tailordb-field-script-external-var-guard";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { type TailorDBServiceConfig } from "@/configure/services/tailordb/types";
+import { ensureNoExternalVariablesInFieldScripts } from "@/parser/service/tailordb/tailordb-field-script-external-var-guard";
 import type {
   ParsedTailorDBType,
   ParsedField,
