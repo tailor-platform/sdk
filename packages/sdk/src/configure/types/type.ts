@@ -391,7 +391,6 @@ function _enum<const V extends AllowedValues>(
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   values: V,
   options: Opt,
-  // ...args: [...V, Opt]
 ): TailorField<
   { type: "enum"; array: Opt extends { array: true } ? true : false },
   FieldOutput<AllowedValuesOutput<V>, Opt>
@@ -399,18 +398,7 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
 function _enum(
   values: AllowedValues,
   options?: FieldOptions,
-  // ...args: (AllowedValues[number] | FieldOptions)[]
 ): TailorField<{ type: "enum"; array: boolean }, any> {
-  // let values: AllowedValues;
-  // let options: FieldOptions | undefined;
-  // const lastArg = args[args.length - 1];
-  // if (typeof lastArg === "object" && !("value" in lastArg)) {
-  //   values = args.slice(0, -1) as AllowedValues;
-  //   options = lastArg;
-  // } else {
-  //   values = args as AllowedValues;
-  //   options = undefined;
-  // }
   return createField("enum", options, undefined, values);
 }
 
