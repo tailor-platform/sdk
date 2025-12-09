@@ -95,11 +95,12 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Orchestrate multiple jobs using `createWorkflow()` and `createWorkflowJob()`
    - **Important Rules:**
      - `createWorkflow()` result must be default exported
-     - All jobs must be named exports (including mainJob and jobs used in deps)
+     - All jobs must be named exports (including mainJob and triggered jobs)
      - Job names must be unique across the entire project
      - Every workflow must specify a `mainJob`
-   - Jobs can depend on other jobs via `deps` array
-   - Dependent jobs are accessed with hyphens replaced by underscores in body function (e.g., "fetch-customer" → `jobs.fetch_customer()`)
+   - Trigger other jobs using `.trigger()` method (e.g., `fetchCustomer.trigger({ id })`)
+   - `.trigger()` is synchronous on server - do NOT use await with it
+   - Use `getDB()` from generated files to access database with Kysely query builder
 
 5. **Static Websites** (`src/configure/services/staticwebsite/`)
    - Define static website configurations using `defineStaticWebSite()`
@@ -396,13 +397,12 @@ export const fetchData = createWorkflowJob({
   },
 });
 
-// Jobs with dependencies - also must be named exports
+// Jobs that trigger other jobs - also must be named exports
 export const processData = createWorkflowJob({
   name: "process-data",
-  deps: [fetchData],
-  body: async (input: { id: string }, { jobs }) => {
-    // Dependent jobs accessed with hyphens replaced by underscores: "fetch-data" -> jobs.fetch_data()
-    const data = await jobs.fetch_data({ id: input.id });
+  body: (input: { id: string }) => {
+    // Use .trigger() to call other jobs (synchronous on server, do NOT await)
+    const data = fetchData.trigger({ id: input.id });
     return { processed: true, data };
   },
 });

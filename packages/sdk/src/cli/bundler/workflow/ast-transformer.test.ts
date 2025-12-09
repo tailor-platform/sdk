@@ -587,6 +587,68 @@ const simpleJob = createWorkflowJob({
       // no changes
       expect(result).toContain('"simple"');
     });
+
+    it("removes createWorkflow default export", () => {
+      const source = `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const check_inventory = createWorkflowJob({
+  name: "check-inventory",
+  body: () => "inventory checked"
+});
+
+export const validate_order = createWorkflowJob({
+  name: "validate-order",
+  body: (input) => {
+    const inventoryResult = check_inventory.trigger();
+    return { inventoryResult };
+  }
+});
+
+export default createWorkflow({
+  name: "sample-workflow",
+  mainJob: validate_order,
+});
+`;
+      // When bundling check-inventory job
+      const result = transformWorkflowSource(source, "check-inventory");
+
+      // check-inventory should remain
+      expect(result).toContain("check-inventory");
+      expect(result).toContain("inventory checked");
+
+      // validate_order should be removed
+      expect(result).not.toContain("validate-order");
+
+      // createWorkflow default export should be removed
+      expect(result).not.toContain("export default");
+      expect(result).not.toContain("sample-workflow");
+    });
+
+    it("removes createWorkflow with identifier reference default export", () => {
+      const source = `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: () => "main"
+});
+
+const workflow = createWorkflow({
+  name: "my-workflow",
+  mainJob,
+});
+
+export default workflow;
+`;
+      const result = transformWorkflowSource(source, "main-job");
+
+      // mainJob should remain
+      expect(result).toContain("main-job");
+
+      // workflow identifier default export should be removed
+      expect(result).not.toContain("export default");
+    });
   });
 });
 
@@ -866,6 +928,98 @@ async function processOrder(orderId: string) {
       expect(result).toContain(
         'tailor.workflow.triggerWorkflow("order-processing"',
       );
+    });
+  });
+
+  describe("await removal for job triggers", () => {
+    it("removes await keyword when transforming job.trigger() calls", () => {
+      const source = `
+const customer = await fetchCustomer.trigger({ customerId: "123" });
+console.log(customer);
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+      );
+
+      // Should NOT have await before triggerJobFunction since it's synchronous
+      expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
+      // Should have the function call without await
+      expect(result).toContain(
+        'const customer = tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
+      );
+    });
+
+    it("removes await keyword for multiple job.trigger() calls", () => {
+      const source = `
+const customer = await fetchCustomer.trigger({ customerId: "123" });
+const notification = await sendNotification.trigger({ message: "Hello" });
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([
+        ["fetchCustomer", "fetch-customer"],
+        ["sendNotification", "send-notification"],
+      ]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+      );
+
+      // Should NOT have await
+      expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
+      // Both calls should be transformed
+      expect(result).toContain(
+        'tailor.workflow.triggerJobFunction("fetch-customer"',
+      );
+      expect(result).toContain(
+        'tailor.workflow.triggerJobFunction("send-notification"',
+      );
+    });
+
+    it("does not remove await for workflow.trigger() calls (async)", () => {
+      const source = `
+const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoker });
+`;
+      const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+      );
+
+      // Workflow trigger is async, so await should remain (not removed)
+      // The transformation replaces only the call expression, not the await
+      expect(result).toContain(
+        'await tailor.workflow.triggerWorkflow("order-processing"',
+      );
+    });
+
+    it("handles job.trigger() without await correctly", () => {
+      const source = `
+const customer = fetchCustomer.trigger({ customerId: "123" });
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+      );
+
+      // Should transform normally without adding await
+      expect(result).toContain(
+        'const customer = tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
+      );
+      expect(result).not.toContain("await");
     });
   });
 });

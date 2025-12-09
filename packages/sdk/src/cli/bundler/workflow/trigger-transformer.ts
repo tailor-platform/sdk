@@ -13,6 +13,7 @@ import type {
   ObjectProperty,
   StaticMemberExpression,
   IdentifierReference,
+  AwaitExpression,
 } from "@oxc-project/types";
 
 interface AuthInvokerInfo {
@@ -27,6 +28,10 @@ interface ExtendedTriggerCall {
   argsText: string;
   // For workflow triggers, extracted authInvoker info from config
   authInvoker?: AuthInvokerInfo;
+  // If true, the call is wrapped in an await expression that should be removed
+  hasAwait?: boolean;
+  // The range including the await keyword (if present)
+  fullRange?: { start: number; end: number };
 }
 
 /**
@@ -89,7 +94,10 @@ function detectExtendedTriggerCalls(
 ): ExtendedTriggerCall[] {
   const calls: ExtendedTriggerCall[] = [];
 
-  function walk(node: ASTNode | null | undefined): void {
+  function walk(
+    node: ASTNode | null | undefined,
+    parent: ASTNode | null = null,
+  ): void {
     if (!node || typeof node !== "object") return;
 
     // Detect pattern: identifier.trigger(args) or identifier.trigger(args, config)
@@ -129,6 +137,13 @@ function detectExtendedTriggerCalls(
             }
           }
 
+          // Check if this call is wrapped in an await expression
+          // For job triggers, we need to remove the await since triggerJobFunction is synchronous
+          const hasAwait = parent?.type === "AwaitExpression";
+          const awaitExpr = hasAwait
+            ? (parent as unknown as AwaitExpression)
+            : null;
+
           // Determine kind based on known identifier type
           if (isWorkflow && argCount >= 2) {
             // Workflow trigger requires 2 arguments (args, config)
@@ -142,15 +157,22 @@ function detectExtendedTriggerCalls(
                 callRange: { start: callExpr.start, end: callExpr.end },
                 argsText,
                 authInvoker,
+                // workflow.trigger uses async triggerWorkflow, so keep await
+                hasAwait: false,
               });
             }
           } else if (isJob) {
             // Job trigger (0-1 arguments)
+            // triggerJobFunction is synchronous, so we need to remove await
             calls.push({
               kind: "job",
               identifierName,
               callRange: { start: callExpr.start, end: callExpr.end },
               argsText,
+              hasAwait,
+              fullRange: awaitExpr
+                ? { start: awaitExpr.start, end: awaitExpr.end }
+                : undefined,
             });
           }
         }
@@ -160,9 +182,9 @@ function detectExtendedTriggerCalls(
     for (const key of Object.keys(node)) {
       const child = node[key] as unknown;
       if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
+        child.forEach((c: unknown) => walk(c as ASTNode | null, node));
       } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
+        walk(child as ASTNode, node);
       }
     }
   }
@@ -248,10 +270,16 @@ export function transformFunctionTriggers(
       const jobName = jobNameMap.get(call.identifierName);
       if (jobName) {
         // Transform to tailor.workflow.triggerJobFunction
+        // triggerJobFunction is synchronous, so we remove await if present
         const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
+
+        // If the call was wrapped in await, replace the entire await expression
+        // Otherwise just replace the call
+        const range =
+          call.hasAwait && call.fullRange ? call.fullRange : call.callRange;
         replacements.push({
-          start: call.callRange.start,
-          end: call.callRange.end,
+          start: range.start,
+          end: range.end,
           text: transformedCall,
         });
       }

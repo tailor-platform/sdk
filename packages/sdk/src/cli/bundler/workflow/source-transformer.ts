@@ -10,10 +10,12 @@ import {
   buildJobNameMap,
   detectTriggerCalls,
 } from "./job-detector";
+import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
 import type {
   Program,
   VariableDeclaration,
   ExportNamedDeclaration,
+  ExportDefaultDeclaration,
 } from "@oxc-project/types";
 
 /**
@@ -75,6 +77,42 @@ function findVariableDeclarationsByName(
 
   walk(program as unknown as ASTNode);
   return declarations;
+}
+
+/**
+ * Find createWorkflow default export declarations
+ * Returns the range of the export statement to remove
+ */
+function findWorkflowDefaultExport(
+  program: Program,
+): { start: number; end: number } | null {
+  const bindings = collectSdkBindings(program, "createWorkflow");
+
+  for (const statement of program.body) {
+    if (statement.type === "ExportDefaultDeclaration") {
+      const exportDecl = statement as ExportDefaultDeclaration;
+      const declaration = exportDecl.declaration;
+
+      // Check for direct createWorkflow call: export default createWorkflow({...})
+      if (
+        isSdkFunctionCall(
+          declaration as unknown as ASTNode,
+          bindings,
+          "createWorkflow",
+        )
+      ) {
+        return { start: exportDecl.start, end: exportDecl.end };
+      }
+
+      // Check for variable reference that was assigned from createWorkflow
+      // This handles: const wf = createWorkflow({...}); export default wf;
+      if (declaration.type === "Identifier") {
+        return { start: exportDecl.start, end: exportDecl.end };
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -170,8 +208,21 @@ export function transformWorkflowSource(
     }
   }
 
-  // Step 3: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
+  // Step 3: Remove createWorkflow default export (not needed in job bundles)
+  const workflowExport = findWorkflowDefaultExport(program);
+  if (workflowExport && !isAlreadyMarkedForRemoval(workflowExport.start)) {
+    const endPos = findStatementEnd(source, workflowExport.end);
+    removedRanges.push({ start: workflowExport.start, end: endPos });
+    replacements.push({
+      start: workflowExport.start,
+      end: endPos,
+      text: "",
+    });
+  }
+
+  // Step 4: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
   // Only transform trigger calls that are NOT inside ranges being removed
+  // Also remove await keyword since triggerJobFunction is synchronous
   for (const call of triggerCalls) {
     // Skip trigger calls inside removed job declarations
     if (isInsideRemovedRange(call.callRange.start)) {
@@ -180,10 +231,12 @@ export function transformWorkflowSource(
 
     const jobName = jobNameMap.get(call.identifierName);
     if (jobName) {
+      // Transform to tailor.workflow.triggerJobFunction
+      // triggerJobFunction is synchronous, so we use fullRange to remove await if present
       const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
       replacements.push({
-        start: call.callRange.start,
-        end: call.callRange.end,
+        start: call.fullRange.start,
+        end: call.fullRange.end,
         text: transformedCall,
       });
     }
