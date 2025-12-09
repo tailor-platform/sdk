@@ -4,6 +4,7 @@
   "globalPassThroughEnv": [
     "TAILOR_PLATFORM_TOKEN",
     "TAILOR_PLATFORM_WORKSPACE_ID",
+    "TAILOR_PLATFORM_PROFILE",
     "TAILOR_PLATFORM_SDK_TYPE_PATH"
   ],
   "tasks": {
