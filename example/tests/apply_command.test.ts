@@ -177,9 +177,10 @@ describe("pnpm apply command integration tests", () => {
       resetGlobals();
       const fileUrl = pathToFileURL(path.join(baseDir, relativePath));
       fileUrl.searchParams.set("v", `${Date.now()}-${Math.random()}`);
-      await import(fileUrl.href);
-      expect(typeof GlobalThis.main).toBe("function");
-      return GlobalThis.main!;
+      const module = await import(fileUrl.href);
+      const main = module.main ?? GlobalThis.main;
+      expect(typeof main).toBe("function");
+      return main;
     };
 
   const importActualMain = createImportMain(actualDir);
