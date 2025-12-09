@@ -9,7 +9,7 @@ export const order = db
       .string({ optional: true })
       .description("Description of the order"),
     orderDate: db.datetime().description("Date of the order"),
-    orderType: db.enum("PURCHASE", "SALES").description("Type of the order"),
+    orderType: db.enum(["PURCHASE", "SALES"]).description("Type of the order"),
     contactId: db
       .uuid()
       .description("Contact associated with the order")

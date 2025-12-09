@@ -19,10 +19,12 @@ export const invoice = db
     }),
     status: db
       .enum(
-        { value: "draft", description: "Draft invoice" },
-        "sent",
-        { value: "paid", description: "Paid invoice" },
-        { value: "cancelled", description: "Cancelled invoice" },
+        [
+          { value: "draft", description: "Draft invoice" },
+          "sent",
+          { value: "paid", description: "Paid invoice" },
+          { value: "cancelled", description: "Cancelled invoice" },
+        ],
         { optional: true },
       )
       .description("Invoice status"),

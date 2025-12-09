@@ -4,7 +4,7 @@ import { user } from "./user";
 
 export const userSetting = db
   .type("UserSetting", {
-    language: db.enum("jp", "en"),
+    language: db.enum(["jp", "en"]),
     userID: db.uuid().relation({
       type: "1-1",
       toward: { type: user },

@@ -113,8 +113,8 @@ describe("createResolver", () => {
 
     test("resolver with enum fields", () => {
       const inputType = {
-        role: t.enum("ADMIN", "USER"),
-        status: t.enum("ACTIVE", "INACTIVE", { optional: true }),
+        role: t.enum(["ADMIN", "USER"]),
+        status: t.enum(["ACTIVE", "INACTIVE"], { optional: true }),
       };
 
       createResolver({
@@ -301,7 +301,7 @@ describe("createResolver", () => {
               },
               { array: true },
             ),
-            status: t.enum("PENDING", "COMPLETED", "CANCELLED"),
+            status: t.enum(["PENDING", "COMPLETED", "CANCELLED"]),
           },
           { array: true },
         ),
@@ -359,7 +359,7 @@ describe("createResolver", () => {
 
     test("enum with array", () => {
       const inputType = {
-        roles: t.enum("ADMIN", "USER", "GUEST", { array: true }),
+        roles: t.enum(["ADMIN", "USER", "GUEST"], { array: true }),
       };
 
       createResolver({

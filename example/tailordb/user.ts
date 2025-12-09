@@ -7,7 +7,7 @@ export const user = db
     email: db.string().unique(),
     status: db.string({ optional: true }),
     department: db.string({ optional: true }),
-    role: db.enum("MANAGER", "STAFF"),
+    role: db.enum(["MANAGER", "STAFF"]),
     ...db.fields.timestamps(),
   })
   .files({

@@ -25,15 +25,13 @@ const mockBasicType = db.type("User", {
 });
 
 const mockEnumType = db.type("Status", {
-  status: db.enum(
+  status: db.enum([
     { value: "active" },
     { value: "inactive" },
     { value: "pending" },
-  ),
+  ]),
   priority: db.enum(
-    { value: "high" },
-    { value: "medium" },
-    { value: "low" },
+    [{ value: "high" }, { value: "medium" }, { value: "low" }],
     { optional: true },
   ),
 });

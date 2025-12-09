@@ -46,8 +46,8 @@ describe("EnumConstantsGenerator", () => {
   describe("enum collection", () => {
     it("should collect top-level enum fields", async () => {
       const type = db.type("User", {
-        role: db.enum("ADMIN", "USER"),
-        status: db.enum("ACTIVE", "INACTIVE", { optional: true }),
+        role: db.enum(["ADMIN", "USER"]),
+        status: db.enum(["ACTIVE", "INACTIVE"], { optional: true }),
       });
 
       const result = await EnumProcessor.processType(parseTailorDBType(type));
@@ -71,7 +71,7 @@ describe("EnumConstantsGenerator", () => {
           {
             id: db.uuid(),
             name: db.string(),
-            type: db.enum("text", "image"),
+            type: db.enum(["text", "image"]),
           },
           { array: true },
         ),
@@ -100,11 +100,11 @@ describe("EnumConstantsGenerator", () => {
 
     it("should collect enum values with descriptions", async () => {
       const type = db.type("Invoice", {
-        status: db.enum(
+        status: db.enum([
           { value: "draft", description: "Draft invoice" },
           { value: "sent", description: "Sent invoice" },
           "paid",
-        ),
+        ]),
       });
 
       const result = await EnumProcessor.processType(parseTailorDBType(type));

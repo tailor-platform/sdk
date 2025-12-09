@@ -17,7 +17,7 @@ export default createResolver({
       id: t.string().description("User ID"),
       type: t.string().description("User type"),
       workspaceId: t.string().description("Workspace ID"),
-      role: t.enum("MANAGER", "STAFF").description("User role"),
+      role: t.enum(["MANAGER", "STAFF"]).description("User role"),
     })
     .description("User information"),
 });

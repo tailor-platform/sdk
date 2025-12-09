@@ -7,7 +7,7 @@ import {
 export const user = db
   .type("User", {
     name: db.string().unique(),
-    role: db.enum("USER", "ADMIN"),
+    role: db.enum(["USER", "ADMIN"]),
     ...db.fields.timestamps(),
   })
   // NOTE: This permits all operations for simplicity.
