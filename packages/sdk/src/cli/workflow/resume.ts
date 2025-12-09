@@ -1,0 +1,121 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import { defineCommand } from "citty";
+import {
+  commonArgs,
+  formatArgs,
+  parseFormat,
+  printWithFormat,
+  withCommonArgs,
+} from "../args";
+import { initOperatorClient } from "../client";
+import { loadAccessToken, loadWorkspaceId } from "../context";
+import { parseDuration, waitForExecution } from "./start";
+import {
+  type WorkflowExecutionInfo,
+  type WorkflowResumeResult,
+} from "./transform";
+
+export interface WorkflowResumeOptions {
+  executionId: string;
+  workspaceId?: string;
+  profile?: string;
+  wait?: boolean;
+  interval?: number;
+  format: "table" | "json";
+}
+
+export async function workflowResume(
+  options: WorkflowResumeOptions,
+): Promise<WorkflowResumeResult | WorkflowExecutionInfo> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+
+  try {
+    const { executionId } = await client.testResumeWorkflow({
+      workspaceId,
+      executionId: options.executionId,
+    });
+
+    if (!options.wait) {
+      return { executionId };
+    }
+
+    return await waitForExecution({
+      client,
+      workspaceId,
+      executionId,
+      interval: options.interval ?? 3000,
+      format: options.format,
+    });
+  } catch (error) {
+    if (error instanceof ConnectError) {
+      if (error.code === Code.NotFound) {
+        throw new Error(`Execution '${options.executionId}' not found.`);
+      }
+      if (error.code === Code.FailedPrecondition) {
+        throw new Error(
+          `Execution '${options.executionId}' is not in a resumable state.`,
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+export const resumeCommand = defineCommand({
+  meta: {
+    name: "resume",
+    description: "Resume a failed workflow execution",
+  },
+  args: {
+    ...commonArgs,
+    ...formatArgs,
+    executionId: {
+      type: "positional",
+      description: "Failed execution ID",
+      required: true,
+    },
+    "workspace-id": {
+      type: "string",
+      description: "Workspace ID",
+      alias: "w",
+    },
+    profile: {
+      type: "string",
+      description: "Workspace profile",
+      alias: "p",
+    },
+    wait: {
+      type: "boolean",
+      description: "Wait for execution to complete after resuming",
+      default: false,
+    },
+    interval: {
+      type: "string",
+      description: "Polling interval when using --wait",
+      default: "3s",
+    },
+  },
+  run: withCommonArgs(async (args) => {
+    const format = parseFormat(args.format);
+    const interval = parseDuration(args.interval);
+
+    const result = await workflowResume({
+      executionId: args.executionId,
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      wait: args.wait,
+      interval,
+      format,
+    });
+
+    printWithFormat(result, format);
+  }),
+});
