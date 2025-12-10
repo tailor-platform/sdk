@@ -9,5 +9,12 @@ export default async ({ newRecord }: { newRecord: t.infer<typeof user> }) => {
     .selectAll()
     .where("id", "=", newRecord.id)
     .executeTakeFirst();
-  console.log(`New user created: ${record?.name} (${record?.email})`);
+
+  await db
+    .insertInto("UserLog")
+    .values({
+      userID: newRecord.id,
+      message: `User created: ${record?.name} (${record?.email})`,
+    })
+    .execute();
 };
