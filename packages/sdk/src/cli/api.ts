@@ -71,3 +71,4 @@ export type {
   WorkflowStartResult,
   WorkflowResumeResult,
 } from "./workflow/transform";
+export { loadAccessToken, loadWorkspaceId } from "./context";
