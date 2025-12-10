@@ -61,6 +61,7 @@ export class TailorField<
   static create<
     const TType extends TailorFieldType,
     const TOptions extends FieldOptions,
+    const R = TailorToTs[TType],
   >(
     type: TType,
     options?: TOptions,
@@ -69,7 +70,7 @@ export class TailorField<
   ) {
     return new TailorField<
       { type: TType; array: TOptions extends { array: true } ? true : false },
-      FieldOutput<TailorToTs[TType], TOptions>
+      FieldOutput<R, TOptions>
     >(type, options, fields, values);
   }
 
@@ -382,24 +383,19 @@ function time<const Opt extends FieldOptions>(options?: Opt) {
   return createField("time", options);
 }
 
-function _enum<const V extends AllowedValues>(
-  values: V,
-): TailorField<
-  { type: "enum"; array: false },
-  FieldOutput<AllowedValuesOutput<V>, { optional: false; array: false }>
->;
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   values: V,
-  options: Opt,
+  options?: Opt,
 ): TailorField<
-  { type: "enum"; array: Opt extends { array: true } ? true : false },
+  { type: "enum"; array: boolean },
   FieldOutput<AllowedValuesOutput<V>, Opt>
->;
-function _enum(
-  values: AllowedValues,
-  options?: FieldOptions,
-): TailorField<{ type: "enum"; array: boolean }, any> {
-  return createField("enum", options, undefined, values);
+> {
+  return createField<"enum", Opt, AllowedValuesOutput<V>>(
+    "enum",
+    options,
+    undefined,
+    values,
+  );
 }
 
 function object<
