@@ -106,7 +106,6 @@ describe("pnpm apply command integration tests", () => {
   type QueryResolver = (query: string, params: unknown[]) => unknown[];
 
   const GlobalThis = globalThis as {
-    main?: MainFunction;
     tailordb?: {
       Client: new (config: { namespace?: string }) => {
         connect(): Promise<void> | void;
@@ -119,16 +118,10 @@ describe("pnpm apply command integration tests", () => {
     };
     tailor?: {
       workflow: {
-        triggerJobFunction: (
-          jobName: string,
-          args: unknown,
-        ) => Promise<unknown>;
+        // triggerJobFunction is synchronous on the server side
+        triggerJobFunction: (jobName: string, args: unknown) => unknown;
       };
     };
-  };
-
-  const resetGlobals = () => {
-    delete GlobalThis.main;
   };
 
   const setupTailordbMock = (
@@ -176,12 +169,12 @@ describe("pnpm apply command integration tests", () => {
   const createImportMain =
     (baseDir: string) =>
     async (relativePath: string): Promise<MainFunction> => {
-      resetGlobals();
       const fileUrl = pathToFileURL(path.join(baseDir, relativePath));
       fileUrl.searchParams.set("v", `${Date.now()}-${Math.random()}`);
-      await import(fileUrl.href);
-      expect(typeof GlobalThis.main).toBe("function");
-      return GlobalThis.main!;
+      const module = await import(fileUrl.href);
+      const main = module.main;
+      expect(typeof main).toBe("function");
+      return main;
     };
 
   const importActualMain = createImportMain(actualDir);
@@ -220,7 +213,7 @@ describe("pnpm apply command integration tests", () => {
       "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
       "workflow-jobs/fetch-customer.js": 160819 + sizeBuffer,
       "workflow-jobs/process-order.js": 8755 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 160816 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 160729 + sizeBuffer,
       "workflow-jobs/send-notification.js": 28162 + sizeBuffer,
       "workflow-jobs/validate-order.js": 8554 + sizeBuffer,
     };
@@ -507,16 +500,18 @@ describe("pnpm apply command integration tests", () => {
         expect(result).toBeUndefined();
         expect(executedQueries).toEqual([
           { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
+          {
+            query:
+              'insert into "UserLog" ("userID", "message") values ($1, $2)',
+            params: ["user-1", "User created: undefined (undefined)"],
+          },
         ]);
         expect(createdClients).toMatchObject([{ namespace: "tailordb" }]);
       });
     });
 
     describe("workflow-jobs", () => {
-      type JobHandler = (
-        jobName: string,
-        args: unknown,
-      ) => Promise<unknown> | unknown;
+      type JobHandler = (jobName: string, args: unknown) => unknown;
 
       const setupWorkflowMock = (
         handler: JobHandler,
@@ -525,7 +520,9 @@ describe("pnpm apply command integration tests", () => {
 
         GlobalThis.tailor = {
           workflow: {
-            triggerJobFunction: async (jobName: string, args: unknown) => {
+            // triggerJobFunction is synchronous on the server side
+            // It either returns the result directly or calls Deno.exit() for suspension
+            triggerJobFunction: (jobName: string, args: unknown) => {
               triggeredJobs.push({ jobName, args });
               return handler(jobName, args);
             },
@@ -628,6 +625,35 @@ describe("pnpm apply command integration tests", () => {
           // Check that body is called with { jobs, env } object
           expect(content).toMatch(/\.body\(input, \{ env \}\)/);
         }
+      });
+
+      test("workflow-jobs/validate-order.js triggers check-inventory job", async () => {
+        const { triggeredJobs } = setupWorkflowMock((jobName) => {
+          if (jobName === "check-inventory") {
+            return formatExpectation; // Returns formatted date
+          }
+          return null;
+        });
+
+        const main = await importActualMain("workflow-jobs/validate-order.js");
+        const result = await main({ orderId: "order-789" });
+
+        expect(result).toEqual({
+          inventoryResult: formatExpectation,
+          paymentResult: null,
+        });
+
+        expect(triggeredJobs).toEqual([
+          { jobName: "check-inventory", args: undefined },
+          { jobName: "process-payment", args: undefined },
+        ]);
+      });
+
+      test("workflow-jobs/check-inventory.js returns formatted date", async () => {
+        const main = await importActualMain("workflow-jobs/check-inventory.js");
+        const result = await main({});
+
+        expect(result).toBe(formatExpectation);
       });
     });
   });

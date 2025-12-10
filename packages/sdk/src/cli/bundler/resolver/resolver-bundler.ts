@@ -126,7 +126,7 @@ async function bundleSingleResolver(
       return _internalResolver.body(context);
     };
 
-    globalThis.main = $tailor_resolver_body;
+    export { $tailor_resolver_body as main };
   `;
   fs.writeFileSync(entryPath, entryContent);
 

@@ -16,6 +16,7 @@ import { secretCommand } from "./secret";
 import { showCommand } from "./show";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
+import { workflowCommand } from "./workflow";
 import { workspaceCommand } from "./workspace";
 
 register("tsx", import.meta.url, { data: {} });
@@ -44,6 +45,7 @@ const mainCommand = defineCommand({
     tailordb: tailordbCommand,
     secret: secretCommand,
     user: userCommand,
+    workflow: workflowCommand,
     workspace: workspaceCommand,
   },
 });

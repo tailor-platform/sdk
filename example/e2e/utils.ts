@@ -1,19 +1,21 @@
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
-import { createClient, Interceptor } from "@connectrpc/connect";
+import { createClient, type Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { GraphQLClient } from "graphql-request";
+import { inject } from "vitest";
 
 export function createOperatorClient() {
   const baseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
-  const workspaceId = process.env.TAILOR_PLATFORM_WORKSPACE_ID;
-  if (!workspaceId) {
-    throw new Error("TAILOR_PLATFORM_WORKSPACE_ID is not defined");
-  }
+  const workspaceId = inject("workspaceId");
+  const platformToken = inject("platformToken");
 
   const transport = createConnectTransport({
     httpVersion: "2",
     baseUrl,
-    interceptors: [userAgentInterceptor(), bearerTokenInterceptor()],
+    interceptors: [
+      userAgentInterceptor(),
+      bearerTokenInterceptor(platformToken),
+    ],
   });
   return [createClient(OperatorService, transport), workspaceId] as const;
 }
@@ -29,12 +31,7 @@ function userAgentInterceptor(): Interceptor {
   };
 }
 
-function bearerTokenInterceptor(): Interceptor {
-  const token = process.env.TAILOR_PLATFORM_TOKEN;
-  if (!token) {
-    throw new Error("TAILOR_PLATFORM_TOKEN is not defined");
-  }
-
+function bearerTokenInterceptor(token: string): Interceptor {
   return (next) => async (req) => {
     if (req.stream) {
       return await next(req);
@@ -51,7 +48,6 @@ export function createGraphQLClient(appUrl: string, token: string) {
     headers: {
       Authorization: `Bearer ${token}`,
     },
-    // Prevent throwing errors on GraphQL errors.
     errorPolicy: "all",
   });
 }

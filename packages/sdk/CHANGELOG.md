@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 0.14.3
+
+### Patch Changes
+
+- [#149](https://github.com/tailor-platform/sdk/pull/149) [`eb904c7`](https://github.com/tailor-platform/sdk/commit/eb904c7f81f2ed29f1bb5e82b05ec9f90e974a4d) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: remove globalThis.main
+
+## 0.14.2
+
+### Patch Changes
+
+- [#146](https://github.com/tailor-platform/sdk/pull/146) [`0197d09`](https://github.com/tailor-platform/sdk/commit/0197d09cd9bd65d3d6981d99a58b352e0cf43754) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: workflow bundle bug
+
+- [#147](https://github.com/tailor-platform/sdk/pull/147) [`2d2feed`](https://github.com/tailor-platform/sdk/commit/2d2feedce031bdf321707506a597a98ae863236d) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(cli): add workflow command
+
+- [#129](https://github.com/tailor-platform/sdk/pull/129) [`b8a2fa0`](https://github.com/tailor-platform/sdk/commit/b8a2fa098016b2e053afdb3b517114d46369657f) Thanks [@riku99](https://github.com/riku99)! - Add a lint-based guard for TailorDB field hooks/validate scripts that detects references to non-local variables/functions and fails apply when such external dependencies are present.
+
 ## 0.14.1
 
 ### Patch Changes

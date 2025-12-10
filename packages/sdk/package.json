@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "0.14.1",
+  "version": "0.14.3",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "main": "./dist/configure/index.mjs",
@@ -65,6 +65,7 @@
     "madge": "8.0.0",
     "multiline-ts": "4.0.1",
     "open": "10.2.0",
+    "ora": "^9.0.0",
     "oxc-parser": "0.98.0",
     "pkg-types": "2.3.0",
     "rolldown": "catalog:",
