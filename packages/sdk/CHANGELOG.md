@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.15.0
+
+### Minor Changes
+
+- [#145](https://github.com/tailor-platform/sdk/pull/145) [`8e4de4e`](https://github.com/tailor-platform/sdk/commit/8e4de4efa4e46117869ad32082cc5b54be2250f8) Thanks [@riku99](https://github.com/riku99)! - feat!: Change db/t enum arguments from variadic to array
+
 ## 0.14.3
 
 ### Patch Changes
