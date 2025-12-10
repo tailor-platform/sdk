@@ -184,7 +184,7 @@ export class TailorDBField<
   static create<
     const T extends TailorFieldType,
     const TOptions extends FieldOptions,
-    const R = TailorToTs[T],
+    const OutputBase = TailorToTs[T],
   >(
     type: T,
     options?: TOptions,
@@ -193,7 +193,7 @@ export class TailorDBField<
   ) {
     return new TailorDBField<
       { type: T; array: TOptions extends { array: true } ? true : false },
-      FieldOutput<R, TOptions>
+      FieldOutput<OutputBase, TOptions>
     >(type, options, fields, values);
   }
 
@@ -461,7 +461,7 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   values: V,
   options?: Opt,
 ): TailorDBField<
-  { type: "enum"; array: boolean },
+  { type: "enum"; array: Opt extends { array: true } ? true : false },
   FieldOutput<AllowedValuesOutput<V>, Opt>
 > {
   return createField<"enum", Opt, AllowedValuesOutput<V>>(
