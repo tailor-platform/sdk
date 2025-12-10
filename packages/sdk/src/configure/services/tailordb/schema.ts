@@ -184,6 +184,7 @@ export class TailorDBField<
   static create<
     const T extends TailorFieldType,
     const TOptions extends FieldOptions,
+    const OutputBase = TailorToTs[T],
   >(
     type: T,
     options?: TOptions,
@@ -192,7 +193,7 @@ export class TailorDBField<
   ) {
     return new TailorDBField<
       { type: T; array: TOptions extends { array: true } ? true : false },
-      FieldOutput<TailorToTs[T], TOptions>
+      FieldOutput<OutputBase, TOptions>
     >(type, options, fields, values);
   }
 
@@ -456,32 +457,19 @@ function time<const Opt extends FieldOptions>(options?: Opt) {
   return createField("time", options);
 }
 
-function _enum<const V extends AllowedValues>(
-  ...values: V
-): TailorDBField<
-  { type: "enum"; array: false },
-  FieldOutput<AllowedValuesOutput<V>, { optional: false; array: false }>
->;
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
-  ...args: [...V, Opt]
+  values: V,
+  options?: Opt,
 ): TailorDBField<
   { type: "enum"; array: Opt extends { array: true } ? true : false },
   FieldOutput<AllowedValuesOutput<V>, Opt>
->;
-function _enum(
-  ...args: (AllowedValues[number] | FieldOptions)[]
-): TailorDBField<{ type: "enum"; array: boolean }, any> {
-  let values: AllowedValues;
-  let options: FieldOptions | undefined;
-  const lastArg = args[args.length - 1];
-  if (typeof lastArg === "object" && !("value" in lastArg)) {
-    values = args.slice(0, -1) as AllowedValues;
-    options = lastArg;
-  } else {
-    values = args as AllowedValues;
-    options = undefined;
-  }
-  return createField("enum", options, undefined, values);
+> {
+  return createField<"enum", Opt, AllowedValuesOutput<V>>(
+    "enum",
+    options,
+    undefined,
+    values,
+  );
 }
 
 function object<

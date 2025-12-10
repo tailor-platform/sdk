@@ -135,7 +135,7 @@ describe("TailorField array option tests", () => {
 
 describe("TailorField enum field tests", () => {
   it("set enum field by passing string", () => {
-    const enumField = t.enum("active", "inactive", "pending");
+    const enumField = t.enum(["active", "inactive", "pending"]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "active" | "inactive" | "pending"
     >();
@@ -147,11 +147,11 @@ describe("TailorField enum field tests", () => {
   });
 
   it("set enum field by passing object", () => {
-    const enumField = t.enum(
+    const enumField = t.enum([
       { value: "small", description: "Small size" },
       { value: "medium" },
       { value: "large", description: "Large size" },
-    );
+    ]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "small" | "medium" | "large"
     >();
@@ -163,11 +163,11 @@ describe("TailorField enum field tests", () => {
   });
 
   it("set enum field by mixing string and object", () => {
-    const enumField = t.enum(
+    const enumField = t.enum([
       "red",
       { value: "green", description: "Green color" },
       "blue",
-    );
+    ]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "red" | "green" | "blue"
     >();
@@ -180,14 +180,14 @@ describe("TailorField enum field tests", () => {
 
   it("setting enum without values causes type error", () => {
     // @ts-expect-error AllowedValues requires at least one value
-    t.enum();
+    t.enum([]);
     // @ts-expect-error AllowedValues requires at least one value
-    t.enum({ optional: true });
+    t.enum([], { optional: true });
   });
 
   it("optional enum() works correctly", () => {
     const _optionalEnumType = t.object({
-      priority: t.enum("high", "medium", "low", { optional: true }),
+      priority: t.enum(["high", "medium", "low"], { optional: true }),
     });
     expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
       priority?: "high" | "medium" | "low" | null;
@@ -196,7 +196,7 @@ describe("TailorField enum field tests", () => {
 
   it("enum array works correctly", () => {
     const _enumArrayType = t.object({
-      categories: t.enum("a", "b", "c", { array: true }),
+      categories: t.enum(["a", "b", "c"], { array: true }),
     });
     expectTypeOf<output<typeof _enumArrayType>>().toEqualTypeOf<{
       categories: ("a" | "b" | "c")[];
@@ -213,7 +213,7 @@ describe("TailorType composite type tests", () => {
       age: t.int({ optional: true }),
       isActive: t.bool(),
       tags: t.string({ array: true }),
-      role: t.enum("admin", "user", "guest"),
+      role: t.enum(["admin", "user", "guest"]),
     });
     expectTypeOf<output<typeof _complexType>>().toEqualTypeOf<{
       id: string;
@@ -424,8 +424,8 @@ describe("t.object tests", () => {
     const _objectType = t.object({
       config: t.object({
         name: t.string(),
-        status: t.enum("active", "inactive"),
-        priority: t.enum("high", "medium", "low", { optional: true }),
+        status: t.enum(["active", "inactive"]),
+        priority: t.enum(["high", "medium", "low"], { optional: true }),
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{

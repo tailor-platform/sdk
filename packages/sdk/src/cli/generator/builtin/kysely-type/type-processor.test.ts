@@ -97,12 +97,10 @@ describe("Kysely TypeProcessor", () => {
   describe("enum types", () => {
     it("should handle enum types", async () => {
       const type = db.type("User", {
-        role: db.enum({ value: "admin" }, { value: "user" }),
-        status: db.enum(
-          { value: "active" },
-          { value: "inactive" },
-          { optional: true },
-        ),
+        role: db.enum([{ value: "admin" }, { value: "user" }]),
+        status: db.enum([{ value: "active" }, { value: "inactive" }], {
+          optional: true,
+        }),
       });
 
       const result = await TypeProcessor.processType(parseTailorDBType(type));

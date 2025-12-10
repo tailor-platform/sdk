@@ -3,7 +3,7 @@ import { t } from "./type";
 
 describe("typeName method type safety", () => {
   it("should allow typeName on enum types", () => {
-    const enumField = t.enum("active", "inactive");
+    const enumField = t.enum(["active", "inactive"]);
     const withTypeName = enumField.typeName("CustomEnum");
 
     expectTypeOf(withTypeName).not.toBeNever();
@@ -68,7 +68,7 @@ describe("typeName method type safety", () => {
 
   it("should allow chaining description and typeName on enum", () => {
     const enumField = t
-      .enum("active", "inactive")
+      .enum(["active", "inactive"])
       .description("Status enum")
       .typeName("StatusEnum");
 
@@ -87,7 +87,7 @@ describe("typeName method type safety", () => {
   });
 
   it("should NOT allow calling typeName twice", () => {
-    const enumField = t.enum("active", "inactive").typeName("FirstName");
+    const enumField = t.enum(["active", "inactive"]).typeName("FirstName");
     // @ts-expect-error - typeName should not be callable twice
     enumField.typeName("SecondName");
   });

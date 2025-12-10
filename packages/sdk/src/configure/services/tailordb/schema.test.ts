@@ -154,7 +154,7 @@ describe("TailorDBField array option tests", () => {
 
 describe("TailorDBField enum field tests", () => {
   it("set enum field by passing string", () => {
-    const enumField = db.enum("active", "inactive", "pending");
+    const enumField = db.enum(["active", "inactive", "pending"]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "active" | "inactive" | "pending"
     >();
@@ -166,11 +166,11 @@ describe("TailorDBField enum field tests", () => {
   });
 
   it("set enum field by passing object", () => {
-    const enumField = db.enum(
+    const enumField = db.enum([
       { value: "small", description: "Small size" },
       { value: "medium" },
       { value: "large", description: "Large size" },
-    );
+    ]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "small" | "medium" | "large"
     >();
@@ -182,11 +182,11 @@ describe("TailorDBField enum field tests", () => {
   });
 
   it("set enum field by mixing string and object", () => {
-    const enumField = db.enum(
+    const enumField = db.enum([
       "red",
       { value: "green", description: "Green color" },
       "blue",
-    );
+    ]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
       "red" | "green" | "blue"
     >();
@@ -199,14 +199,14 @@ describe("TailorDBField enum field tests", () => {
 
   it("setting enum without values causes type error", () => {
     // @ts-expect-error AllowedValues requires at least one value
-    db.enum();
+    db.enum([]);
     // @ts-expect-error AllowedValues requires at least one value
-    db.enum({ optional: true });
+    db.enum([], { optional: true });
   });
 
   it("optional enum() works correctly", () => {
     const _optionalEnumType = db.type("Test", {
-      priority: db.enum("high", "medium", "low", { optional: true }),
+      priority: db.enum(["high", "medium", "low"], { optional: true }),
     });
     expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
       id: string;
@@ -216,7 +216,7 @@ describe("TailorDBField enum field tests", () => {
 
   it("enum array works correctly", () => {
     const _enumArrayType = db.type("Test", {
-      categories: db.enum("a", "b", "c", { array: true }),
+      categories: db.enum(["a", "b", "c"], { array: true }),
     });
     expectTypeOf<output<typeof _enumArrayType>>().toEqualTypeOf<{
       id: string;
@@ -615,7 +615,7 @@ describe("TailorDBType composite type tests", () => {
       age: db.int({ optional: true }),
       isActive: db.bool(),
       tags: db.string({ array: true }),
-      role: db.enum("admin", "user", "guest"),
+      role: db.enum(["admin", "user", "guest"]),
       score: db.float(),
       birthDate: db.date(),
       lastLogin: db.datetime({ optional: true }),
@@ -828,7 +828,7 @@ describe("TailorDBType plural form tests", () => {
   it("plural form with special characters can also be set", () => {
     const _deviceType = db.type(["Device", "Device's"], {
       name: db.string(),
-      status: db.enum("active", "inactive"),
+      status: db.enum(["active", "inactive"]),
     });
 
     expect(_deviceType.metadata.schema?.settings?.pluralForm).toBe("Device's");
@@ -1215,7 +1215,7 @@ describe("db.object tests", () => {
       product: db.object({
         name: db.string(),
         price: db.float(),
-        category: db.enum("electronics", "books", "clothing"),
+        category: db.enum(["electronics", "books", "clothing"]),
         weight: db.float({ optional: true }),
       }),
     });
