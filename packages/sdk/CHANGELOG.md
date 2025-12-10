@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.14.3
+
+### Patch Changes
+
+- [#149](https://github.com/tailor-platform/sdk/pull/149) [`eb904c7`](https://github.com/tailor-platform/sdk/commit/eb904c7f81f2ed29f1bb5e82b05ec9f90e974a4d) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: remove globalThis.main
+
 ## 0.14.2
 
 ### Patch Changes
