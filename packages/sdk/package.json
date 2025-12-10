@@ -72,7 +72,7 @@
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.21.0",
-    "type-fest": "5.2.0",
+    "type-fest": "5.3.1",
     "uuid": "13.0.0",
     "xdg-basedir": "5.1.0",
     "zod": "4.1.13"
