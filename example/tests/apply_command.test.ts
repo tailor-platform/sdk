@@ -506,6 +506,11 @@ describe("pnpm apply command integration tests", () => {
         expect(result).toBeUndefined();
         expect(executedQueries).toEqual([
           { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
+          {
+            query:
+              'insert into "UserLog" ("userID", "message") values ($1, $2)',
+            params: ["user-1", "User created: undefined (undefined)"],
+          },
         ]);
         expect(createdClients).toMatchObject([{ namespace: "tailordb" }]);
       });

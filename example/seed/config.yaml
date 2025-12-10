@@ -8,6 +8,7 @@ entityDependencies:
   Selfie: []
   Supplier: []
   User: []
+  UserLog: [User]
   UserSetting: [User]
   Event: []
   _User: [User]

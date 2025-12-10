@@ -123,6 +123,14 @@ export interface Namespace {
       updatedAt: Timestamp | null;
     }
 
+    UserLog: {
+      id: Generated<string>;
+      userID: string;
+      message: string;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
     UserSetting: {
       id: Generated<string>;
       language: "jp" | "en";

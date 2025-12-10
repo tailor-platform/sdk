@@ -117,7 +117,7 @@ async function bundleSingleExecutor(
 
     const __executor_function = _internalExecutor.operation.body;
 
-    globalThis.main = __executor_function;
+    export { __executor_function as main };
   `;
   fs.writeFileSync(entryPath, entryContent);
 
