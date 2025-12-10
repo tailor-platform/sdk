@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": patch
+"@tailor-platform/sdk": minor
 ---
 
-Change db/t enum arguments from variadic to array
+feat!: Change db/t enum arguments from variadic to array
