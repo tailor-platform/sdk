@@ -43,14 +43,6 @@ export interface WorkflowExecutionInfo {
   finishedAt: string;
 }
 
-export interface WorkflowStartResult {
-  executionId: string;
-}
-
-export interface WorkflowResumeResult {
-  executionId: string;
-}
-
 export function workflowExecutionStatusToString(
   status: WorkflowExecution_Status,
 ): string {
