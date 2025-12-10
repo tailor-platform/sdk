@@ -1,5 +1,4 @@
 import { create } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   Condition_Operator,
   ConditionSchema,
@@ -40,7 +39,6 @@ export interface WorkflowExecutionGetOptions {
   executionId: string;
   workspaceId?: string;
   profile?: string;
-  wait?: boolean;
   interval?: number;
   logs?: boolean;
 }
@@ -57,6 +55,11 @@ export interface WorkflowExecutionDetailInfo extends WorkflowExecutionInfo {
     logs?: string;
     result?: string;
   })[];
+}
+
+export interface WorkflowExecutionGetResult {
+  execution: WorkflowExecutionDetailInfo;
+  wait: () => Promise<WorkflowExecutionDetailInfo>;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -167,7 +170,7 @@ export async function workflowExecutionsList(
 
 export async function workflowExecutionGet(
   options: WorkflowExecutionGetOptions,
-): Promise<WorkflowExecutionDetailInfo> {
+): Promise<WorkflowExecutionGetResult> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -242,71 +245,43 @@ export async function workflowExecutionGet(
     return result;
   }
 
-  try {
-    if (!options.wait) {
-      return await fetchExecutionWithLogs(
-        options.executionId,
-        options.logs ?? false,
-      );
-    }
-
+  async function waitForCompletion(): Promise<WorkflowExecutionDetailInfo> {
     const interval = options.interval ?? 3000;
-    let lastStatus: WorkflowExecution_Status | undefined;
-    const spinner = ora().start("Waiting...");
 
-    try {
-      while (true) {
-        const { execution } = await client.getWorkflowExecution({
-          workspaceId,
-          executionId: options.executionId,
-        });
+    while (true) {
+      const { execution } = await client.getWorkflowExecution({
+        workspaceId,
+        executionId: options.executionId,
+      });
 
-        if (!execution) {
-          spinner.fail(`Execution '${options.executionId}' not found.`);
-          throw new Error(`Execution '${options.executionId}' not found.`);
-        }
-
-        const now = formatTime(new Date());
-        const coloredStatus = colorizeStatus(execution.status);
-
-        // Show status change (persist previous line)
-        if (execution.status !== lastStatus) {
-          spinner.stop();
-          consola.info(`Status: ${coloredStatus}`);
-          spinner.start(`Polling...`);
-          lastStatus = execution.status;
-        }
-
-        spinner.text = `Polling... (${now})`;
-
-        // Terminal states
-        if (
-          execution.status === WorkflowExecution_Status.SUCCESS ||
-          execution.status === WorkflowExecution_Status.FAILED
-        ) {
-          if (execution.status === WorkflowExecution_Status.SUCCESS) {
-            spinner.succeed(`Completed: ${coloredStatus}`);
-          } else {
-            spinner.fail(`Completed: ${coloredStatus}`);
-          }
-          return await fetchExecutionWithLogs(
-            options.executionId,
-            options.logs ?? false,
-          );
-        }
-
-        await sleep(interval);
+      if (!execution) {
+        throw new Error(`Execution '${options.executionId}' not found.`);
       }
-    } catch (error) {
-      spinner.stop();
-      throw error;
+
+      // Terminal states
+      if (
+        execution.status === WorkflowExecution_Status.SUCCESS ||
+        execution.status === WorkflowExecution_Status.FAILED
+      ) {
+        return await fetchExecutionWithLogs(
+          options.executionId,
+          options.logs ?? false,
+        );
+      }
+
+      await sleep(interval);
     }
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Execution '${options.executionId}' not found.`);
-    }
-    throw error;
   }
+
+  const execution = await fetchExecutionWithLogs(
+    options.executionId,
+    options.logs ?? false,
+  );
+
+  return {
+    execution,
+    wait: waitForCompletion,
+  };
 }
 
 function parseDuration(duration: string): number {
@@ -327,6 +302,39 @@ function parseDuration(duration: string): number {
       return value * 60 * 1000;
     default:
       throw new Error(`Unknown duration unit: ${unit}`);
+  }
+}
+
+async function waitWithSpinner(
+  waitFn: () => Promise<WorkflowExecutionDetailInfo>,
+  interval: number,
+  format: "table" | "json",
+): Promise<WorkflowExecutionDetailInfo> {
+  const spinner = format !== "json" ? ora().start("Waiting...") : null;
+
+  const updateInterval = setInterval(() => {
+    if (spinner) {
+      const now = formatTime(new Date());
+      spinner.text = `Polling... (${now})`;
+    }
+  }, interval);
+
+  try {
+    const result = await waitFn();
+    const coloredStatus = colorizeStatus(
+      WorkflowExecution_Status[
+        result.status as keyof typeof WorkflowExecution_Status
+      ],
+    );
+    if (result.status === "SUCCESS") {
+      spinner?.succeed(`Completed: ${coloredStatus}`);
+    } else {
+      spinner?.fail(`Completed: ${coloredStatus}`);
+    }
+    return result;
+  } finally {
+    clearInterval(updateInterval);
+    spinner?.stop();
   }
 }
 
@@ -428,18 +436,26 @@ export const executionsCommand = defineCommand({
 
     if (args.executionId) {
       const interval = parseDuration(args.interval);
-      const execution = await workflowExecutionGet({
+      const { execution, wait } = await workflowExecutionGet({
         executionId: args.executionId,
         workspaceId: args["workspace-id"],
         profile: args.profile,
-        wait: args.wait,
         interval,
         logs: args.logs,
       });
+
+      if (format !== "json") {
+        consola.info(`Execution ID: ${execution.id}`);
+      }
+
+      const result = args.wait
+        ? await waitWithSpinner(wait, interval, format)
+        : execution;
+
       if (args.logs && format === "table") {
-        printExecutionWithLogs(execution);
+        printExecutionWithLogs(result);
       } else {
-        printWithFormat(execution, format);
+        printWithFormat(result, format);
       }
     } else {
       const executions = await workflowExecutionsList({

@@ -21,21 +21,19 @@ import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import {
   type WorkflowExecutionInfo,
-  type WorkflowStartResult,
   toWorkflowExecutionInfo,
 } from "./transform";
 import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import type { Jsonifiable } from "type-fest";
 
 export interface WorkflowStartOptions {
   nameOrId: string;
   machineUser: string;
-  arg?: string;
+  arg?: Jsonifiable;
   workspaceId?: string;
   profile?: string;
   configPath?: string;
-  wait?: boolean;
   interval?: number;
-  format: "table" | "json";
 }
 
 const UUID_REGEX =
@@ -212,9 +210,14 @@ async function resolveWorkflowId(
   return workflow.id;
 }
 
+export interface WorkflowStartResultWithWait {
+  executionId: string;
+  wait: () => Promise<WorkflowExecutionInfo>;
+}
+
 export async function workflowStart(
   options: WorkflowStartOptions,
-): Promise<WorkflowStartResult | WorkflowExecutionInfo> {
+): Promise<WorkflowStartResultWithWait> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -248,25 +251,32 @@ export async function workflowStart(
       machineUserName: options.machineUser,
     });
 
+    const arg =
+      options.arg === undefined
+        ? undefined
+        : typeof options.arg === "string"
+          ? options.arg
+          : JSON.stringify(options.arg);
+
     const { executionId } = await client.testStartWorkflow({
       workspaceId,
       workflowId,
       authInvoker,
-      arg: options.arg,
+      arg,
     });
 
-    if (!options.wait) {
-      return { executionId };
-    }
-
-    return await waitForExecution({
-      client,
-      workspaceId,
+    return {
       executionId,
-      interval: options.interval ?? 3000,
-      format: options.format,
-      trackJobs: true,
-    });
+      wait: () =>
+        waitForExecution({
+          client,
+          workspaceId,
+          executionId,
+          interval: options.interval ?? 3000,
+          format: "json",
+          trackJobs: true,
+        }),
+    };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       throw new Error(`Workflow '${options.nameOrId}' not found.`);
@@ -330,18 +340,25 @@ export const startCommand = defineCommand({
     const format = parseFormat(args.format);
     const interval = parseDuration(args.interval);
 
-    const result = await workflowStart({
+    const { executionId, wait } = await workflowStart({
       nameOrId: args.nameOrId,
       machineUser: args.machineuser,
       arg: args.arg,
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      wait: args.wait,
       interval,
-      format,
     });
 
-    printWithFormat(result, format);
+    if (format !== "json") {
+      consola.info(`Execution ID: ${executionId}`);
+    }
+
+    if (args.wait) {
+      const result = await wait();
+      printWithFormat(result, format);
+    } else {
+      printWithFormat({ executionId }, format);
+    }
   }),
 });

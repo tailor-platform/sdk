@@ -55,20 +55,27 @@ export type {
 } from "./oauth2client/transform";
 export { workflowList, type WorkflowListOptions } from "./workflow/list";
 export { workflowGet, type WorkflowGetOptions } from "./workflow/get";
-export { workflowStart, type WorkflowStartOptions } from "./workflow/start";
+export {
+  workflowStart,
+  type WorkflowStartOptions,
+  type WorkflowStartResultWithWait,
+} from "./workflow/start";
 export {
   workflowExecutionsList,
   workflowExecutionGet,
   type WorkflowExecutionsListOptions,
   type WorkflowExecutionGetOptions,
+  type WorkflowExecutionGetResult,
 } from "./workflow/executions";
-export { workflowResume, type WorkflowResumeOptions } from "./workflow/resume";
+export {
+  workflowResume,
+  type WorkflowResumeOptions,
+  type WorkflowResumeResultWithWait,
+} from "./workflow/resume";
 export type {
   WorkflowListInfo,
   WorkflowInfo,
   WorkflowExecutionInfo,
   WorkflowJobExecutionInfo,
-  WorkflowStartResult,
-  WorkflowResumeResult,
 } from "./workflow/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";

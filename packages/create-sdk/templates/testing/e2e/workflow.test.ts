@@ -7,14 +7,15 @@ describe.concurrent("workflow", () => {
     "simple-calculation: execute workflow and verify success",
     { timeout: 120000 },
     async () => {
-      const result = await workflowStart({
+      const { executionId, wait } = await workflowStart({
         nameOrId: "simple-calculation",
         machineUser: "admin",
-        arg: JSON.stringify({ a: 2, b: 3 }),
-        wait: true,
-        format: "json",
+        arg: { a: 2, b: 3 },
       });
 
+      console.log(`[simple-calculation] Execution ID: ${executionId}`);
+
+      const result = await wait();
       expect(result).toMatchObject({
         workflowName: "simple-calculation",
         status: "SUCCESS",
@@ -29,18 +30,19 @@ describe.concurrent("workflow", () => {
       const uuid = randomUUID();
       const testEmail = `workflow-test-${uuid}@example.com`;
 
-      const result = await workflowStart({
+      const { executionId, wait } = await workflowStart({
         nameOrId: "user-profile-sync",
         machineUser: "admin",
-        arg: JSON.stringify({
+        arg: {
           name: "workflow-test-user",
           email: testEmail,
           age: 25,
-        }),
-        wait: true,
-        format: "json",
+        },
       });
 
+      console.log(`[user-profile-sync] Execution ID: ${executionId}`);
+
+      const result = await wait();
       expect(result).toMatchObject({
         workflowName: "user-profile-sync",
         status: "SUCCESS",
