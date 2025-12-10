@@ -4,14 +4,24 @@ import { getDB, type DB, type Namespace } from "../generated/db";
 
 type User = Selectable<Namespace["main-db"]["User"]>;
 
+export interface UserProfile {
+  name: string;
+  email: string;
+  age: number;
+}
+
+export interface SyncResult {
+  created: boolean;
+  profile: UserProfile;
+}
+
 export interface DbOperations {
   getUser: (email: string) => Promise<User | undefined>;
-  createUser: (input: {
-    name: string;
-    email: string;
-    age: number;
-  }) => Promise<User>;
-  updateUser: (user: User) => Promise<void>;
+  createUser: (input: UserProfile) => Promise<User>;
+  updateUser: (
+    email: string,
+    input: Omit<UserProfile, "email">,
+  ) => Promise<void>;
 }
 
 function createDbOperations(db: DB<"main-db">): DbOperations {
@@ -23,48 +33,57 @@ function createDbOperations(db: DB<"main-db">): DbOperations {
         .selectAll()
         .executeTakeFirst();
     },
-    createUser: async (input: { name: string; email: string; age: number }) => {
+    createUser: async (input: UserProfile) => {
       return await db
         .insertInto("User")
         .values(input)
         .returning(["id", "name", "email", "age", "createdAt", "updatedAt"])
         .executeTakeFirstOrThrow();
     },
-    updateUser: async (user: User) => {
+    updateUser: async (email: string, input: Omit<UserProfile, "email">) => {
       await db
         .updateTable("User")
-        .set({ name: user.name, age: user.age })
-        .where("email", "=", user.email)
+        .set({ name: input.name, age: input.age })
+        .where("email", "=", email)
         .execute();
     },
   };
 }
 
-export async function incrementUserAge(
-  input: { name: string; email: string; age: number },
+export async function syncUserProfile(
+  input: UserProfile,
   dbOperations: DbOperations,
-) {
-  let user = await dbOperations.getUser(input.email);
-  user ??= await dbOperations.createUser(input);
+): Promise<SyncResult> {
+  const existingUser = await dbOperations.getUser(input.email);
 
-  const oldAge = user.age;
-  const newAge = user.age + 1;
+  if (existingUser) {
+    await dbOperations.updateUser(input.email, {
+      name: input.name,
+      age: input.age,
+    });
+    return {
+      created: false,
+      profile: { name: input.name, email: input.email, age: input.age },
+    };
+  }
 
-  await dbOperations.updateUser({ ...user, age: newAge });
-
-  return { oldAge, newAge };
+  const newUser = await dbOperations.createUser(input);
+  return {
+    created: true,
+    profile: { name: newUser.name, email: newUser.email, age: newUser.age },
+  };
 }
 
-export const incrementAge = createWorkflowJob({
-  name: "increment-age",
-  body: async (input: { name: string; email: string; age: number }) => {
+export const syncProfile = createWorkflowJob({
+  name: "sync-profile",
+  body: async (input: UserProfile): Promise<SyncResult> => {
     const db = getDB("main-db");
     const dbOperations = createDbOperations(db);
-    return await incrementUserAge(input, dbOperations);
+    return await syncUserProfile(input, dbOperations);
   },
 });
 
 export default createWorkflow({
-  name: "user-age-workflow",
-  mainJob: incrementAge,
+  name: "user-profile-sync",
+  mainJob: syncProfile,
 });

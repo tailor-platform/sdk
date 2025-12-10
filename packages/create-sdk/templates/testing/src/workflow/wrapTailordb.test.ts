@@ -1,37 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
-import { type DbOperations, incrementUserAge } from "./wrapTailordb";
+import { type DbOperations, syncUserProfile } from "./wrapTailordb";
 
-describe("incrementUserAge workflow", () => {
-  test("increments existing user age by 1", async () => {
-    const dbOperations = {
-      getUser: vi.fn().mockResolvedValue({
-        email: "test@example.com",
-        name: "Test",
-        age: 30,
-      }),
-      createUser: vi.fn(),
-      updateUser: vi.fn(),
-    } satisfies DbOperations;
-
-    const result = await incrementUserAge(
-      { name: "Test", email: "test@example.com", age: 25 },
-      dbOperations,
-    );
-
-    expect(result).toEqual({ oldAge: 30, newAge: 31 });
-    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
-      "test@example.com",
-    );
-    expect(dbOperations.createUser).not.toHaveBeenCalled();
-    expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        email: "test@example.com",
-        age: 31,
-      }),
-    );
-  });
-
-  test("creates user and increments age when user not found", async () => {
+describe("syncUserProfile workflow", () => {
+  test("creates new user when not found", async () => {
     const createdUser = {
       id: "new-user-id",
       email: "new@example.com",
@@ -46,12 +17,15 @@ describe("incrementUserAge workflow", () => {
       updateUser: vi.fn(),
     } satisfies DbOperations;
 
-    const result = await incrementUserAge(
+    const result = await syncUserProfile(
       { name: "New User", email: "new@example.com", age: 25 },
       dbOperations,
     );
 
-    expect(result).toEqual({ oldAge: 25, newAge: 26 });
+    expect(result).toEqual({
+      created: true,
+      profile: { name: "New User", email: "new@example.com", age: 25 },
+    });
     expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
       "new@example.com",
     );
@@ -60,11 +34,40 @@ describe("incrementUserAge workflow", () => {
       email: "new@example.com",
       age: 25,
     });
+    expect(dbOperations.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("updates existing user when found", async () => {
+    const existingUser = {
+      id: "existing-user-id",
+      email: "existing@example.com",
+      name: "Old Name",
+      age: 30,
+      createdAt: new Date(),
+      updatedAt: null,
+    };
+    const dbOperations = {
+      getUser: vi.fn().mockResolvedValue(existingUser),
+      createUser: vi.fn(),
+      updateUser: vi.fn(),
+    } satisfies DbOperations;
+
+    const result = await syncUserProfile(
+      { name: "Updated Name", email: "existing@example.com", age: 31 },
+      dbOperations,
+    );
+
+    expect(result).toEqual({
+      created: false,
+      profile: { name: "Updated Name", email: "existing@example.com", age: 31 },
+    });
+    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
+      "existing@example.com",
+    );
+    expect(dbOperations.createUser).not.toHaveBeenCalled();
     expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        email: "new@example.com",
-        age: 26,
-      }),
+      "existing@example.com",
+      { name: "Updated Name", age: 31 },
     );
   });
 });

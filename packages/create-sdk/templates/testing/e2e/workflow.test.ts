@@ -23,14 +23,14 @@ describe.concurrent("workflow", () => {
   );
 
   test(
-    "user-age-workflow: execute workflow and verify success",
+    "user-profile-sync: execute workflow and verify success",
     { timeout: 120000 },
     async () => {
       const uuid = randomUUID();
       const testEmail = `workflow-test-${uuid}@example.com`;
 
       const result = await workflowStart({
-        nameOrId: "user-age-workflow",
+        nameOrId: "user-profile-sync",
         machineUser: "admin",
         arg: JSON.stringify({
           name: "workflow-test-user",
@@ -42,7 +42,7 @@ describe.concurrent("workflow", () => {
       });
 
       expect(result).toMatchObject({
-        workflowName: "user-age-workflow",
+        workflowName: "user-profile-sync",
         status: "SUCCESS",
       });
     },
