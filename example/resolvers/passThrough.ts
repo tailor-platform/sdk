@@ -1,5 +1,4 @@
 import { createResolver, t } from "@tailor-platform/sdk";
-import { format } from "date-fns";
 import { nestedProfile } from "../tailordb/nested";
 
 const inputFields = {
@@ -17,7 +16,7 @@ export default createResolver({
   body: ({ input }) => ({
     ...input.input,
     id: input.id ?? crypto.randomUUID(),
-    createdAt: format(new Date(), "yyyy-MM-dd HH:mm:ss"),
+    createdAt: new Date(),
   }),
   output: nestedProfile.fields,
 });

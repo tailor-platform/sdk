@@ -69,13 +69,13 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  it("datetime field outputs string type correctly", () => {
+  it("datetime field outputs string | Date type correctly", () => {
     const _datetimeType = db.type("Test", {
       timestamp: db.datetime(),
     });
     expectTypeOf<output<typeof _datetimeType>>().toMatchObjectType<{
       id: string;
-      timestamp: string;
+      timestamp: string | Date;
     }>();
   });
 
@@ -588,8 +588,8 @@ describe("TailorDBType withTimestamps option tests", () => {
     expectTypeOf<output<typeof _noTimestampType>>().toEqualTypeOf<{
       id: string;
       name: string;
-      createdAt: string;
-      updatedAt?: string | null;
+      createdAt: string | Date;
+      updatedAt?: string | Date | null;
     }>();
   });
 
@@ -601,8 +601,8 @@ describe("TailorDBType withTimestamps option tests", () => {
     expectTypeOf<output<typeof _timestampType>>().toEqualTypeOf<{
       id: string;
       name: string;
-      createdAt: string;
-      updatedAt?: string | null;
+      createdAt: string | Date;
+      updatedAt?: string | Date | null;
     }>();
   });
 });
@@ -631,7 +631,7 @@ describe("TailorDBType composite type tests", () => {
       role: "admin" | "user" | "guest";
       score: number;
       birthDate: string;
-      lastLogin?: string | null;
+      lastLogin?: string | Date | null;
       closingTime: string;
     }>();
   });
@@ -817,8 +817,8 @@ describe("TailorDBType plural form tests", () => {
       id: string;
       title: string;
       content?: string | null;
-      createdAt: string;
-      updatedAt?: string | null;
+      createdAt: string | Date;
+      updatedAt?: string | Date | null;
     }>();
 
     expect(_postType.name).toBe("Post");

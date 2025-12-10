@@ -41,9 +41,9 @@ export const customer = db.type("Customer", {
   ...db.fields.timestamps(),
   // or
   // createdAt: db.datetime({ optional: true, assertNonNull: true })
-  //   .hooks({ create: () => new Date().toISOString() }),
+  //   .hooks({ create: () => new Date() }),
   // updatedAt: db.datetime({ optional: true })
-  //   .hooks({ update: () => new Date().toISOString() }),
+  //   .hooks({ update: () => new Date() }),
 });
 
 export type Customer = t.infer<typeof customer>;

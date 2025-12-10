@@ -145,8 +145,8 @@ const userProfile = db.type("UserProfile", {
 
 ```typescript
 db.datetime().hooks({
-  create: ({ value }) => new Date().toISOString(),
-  update: ({ value }) => new Date().toISOString(),
+  create: () => new Date(),
+  update: () => new Date(),
 });
 ```
 
@@ -449,7 +449,7 @@ createExecutor({
     },
     body: ({ newRecord }) => ({
       id: newRecord.id,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(),
       data: newRecord,
     }),
   },
