@@ -2,9 +2,16 @@ import { createWorkflowJob, createWorkflow } from "@tailor-platform/sdk";
 import type { Selectable } from "kysely";
 import { getDB, type DB, type Namespace } from "../generated/db";
 
+type User = Selectable<Namespace["main-db"]["User"]>;
+
 export interface DbOperations {
-  getUser: (email: string) => Promise<Selectable<Namespace["main-db"]["User"]>>;
-  updateUser: (user: Selectable<Namespace["main-db"]["User"]>) => Promise<void>;
+  getUser: (email: string) => Promise<User | undefined>;
+  createUser: (input: {
+    name: string;
+    email: string;
+    age: number;
+  }) => Promise<User>;
+  updateUser: (user: User) => Promise<void>;
 }
 
 function createDbOperations(db: DB<"main-db">): DbOperations {
@@ -14,9 +21,16 @@ function createDbOperations(db: DB<"main-db">): DbOperations {
         .selectFrom("User")
         .where("email", "=", email)
         .selectAll()
+        .executeTakeFirst();
+    },
+    createUser: async (input: { name: string; email: string; age: number }) => {
+      return await db
+        .insertInto("User")
+        .values(input)
+        .returning(["id", "name", "email", "age", "createdAt", "updatedAt"])
         .executeTakeFirstOrThrow();
     },
-    updateUser: async (user: Selectable<Namespace["main-db"]["User"]>) => {
+    updateUser: async (user: User) => {
       await db
         .updateTable("User")
         .set({ name: user.name, age: user.age })
@@ -27,10 +41,14 @@ function createDbOperations(db: DB<"main-db">): DbOperations {
 }
 
 export async function incrementUserAge(
-  email: string,
+  input: { name: string; email: string; age: number },
   dbOperations: DbOperations,
 ) {
-  const user = await dbOperations.getUser(email);
+  let user = await dbOperations.getUser(input.email);
+  if (!user) {
+    user = await dbOperations.createUser(input);
+  }
+
   const oldAge = user.age;
   const newAge = user.age + 1;
 
@@ -41,10 +59,10 @@ export async function incrementUserAge(
 
 export const incrementAge = createWorkflowJob({
   name: "increment-age",
-  body: async (input: { email: string }) => {
+  body: async (input: { name: string; email: string; age: number }) => {
     const db = getDB("main-db");
     const dbOperations = createDbOperations(db);
-    return await incrementUserAge(input.email, dbOperations);
+    return await incrementUserAge(input, dbOperations);
   },
 });
 
