@@ -45,9 +45,7 @@ export async function incrementUserAge(
   dbOperations: DbOperations,
 ) {
   let user = await dbOperations.getUser(input.email);
-  if (!user) {
-    user = await dbOperations.createUser(input);
-  }
+  user ??= await dbOperations.createUser(input);
 
   const oldAge = user.age;
   const newAge = user.age + 1;
