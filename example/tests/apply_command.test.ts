@@ -106,7 +106,6 @@ describe("pnpm apply command integration tests", () => {
   type QueryResolver = (query: string, params: unknown[]) => unknown[];
 
   const GlobalThis = globalThis as {
-    main?: MainFunction;
     tailordb?: {
       Client: new (config: { namespace?: string }) => {
         connect(): Promise<void> | void;
@@ -123,10 +122,6 @@ describe("pnpm apply command integration tests", () => {
         triggerJobFunction: (jobName: string, args: unknown) => unknown;
       };
     };
-  };
-
-  const resetGlobals = () => {
-    delete GlobalThis.main;
   };
 
   const setupTailordbMock = (
@@ -174,11 +169,10 @@ describe("pnpm apply command integration tests", () => {
   const createImportMain =
     (baseDir: string) =>
     async (relativePath: string): Promise<MainFunction> => {
-      resetGlobals();
       const fileUrl = pathToFileURL(path.join(baseDir, relativePath));
       fileUrl.searchParams.set("v", `${Date.now()}-${Math.random()}`);
       const module = await import(fileUrl.href);
-      const main = module.main ?? GlobalThis.main;
+      const main = module.main;
       expect(typeof main).toBe("function");
       return main;
     };
