@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/create-sdk": patch
+"@tailor-platform/create-sdk": minor
 ---
 
-feat: add workflow test
+feat!: add workflow test
