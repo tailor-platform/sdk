@@ -1,5 +1,16 @@
 # @tailor-platform/sdk
 
+## 0.15.1
+
+### Patch Changes
+
+- [#155](https://github.com/tailor-platform/sdk/pull/155) [`a65171a`](https://github.com/tailor-platform/sdk/commit/a65171af65109c08023a6b1a42683645c4e2675e) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add type constraints to workflow job body functions
+  - Input type: Must be JSON-compatible (no Date/toJSON objects). Interfaces are now supported.
+  - Output type: Allows Jsonifiable values (including Date with toJSON), undefined, and void
+  - Trigger return type: Returns `Jsonify<Output>` - Date becomes string after JSON serialization
+  - Added `JsonCompatible<T>` helper type to support TypeScript interfaces as input types
+  - TailorDB timestamp fields now return `Date` objects instead of ISO strings
+
 ## 0.15.0
 
 ### Minor Changes
