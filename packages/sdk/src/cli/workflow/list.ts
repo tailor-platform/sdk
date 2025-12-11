@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { table } from "table";
-import { commonArgs, formatArgs, parseFormat, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, parseFormat, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
@@ -41,7 +41,7 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -54,7 +54,7 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     const workflows = await workflowList({
       workspaceId: args["workspace-id"],

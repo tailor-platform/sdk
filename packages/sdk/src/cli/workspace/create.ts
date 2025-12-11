@@ -3,7 +3,7 @@ import { consola } from "consola";
 import { validate as validateUuid } from "uuid";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -78,7 +78,7 @@ export const createCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     name: {
       type: "string",
       description: "Workspace name",
@@ -110,7 +110,7 @@ export const createCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Validate CLI specific args
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     // Execute workspace create logic
     const workspace = await workspaceCreate({

@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -82,7 +82,7 @@ export const tokenCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -107,7 +107,7 @@ export const tokenCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Validate CLI specific args
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     // Execute machineuser token logic
     const token = await machineUserToken({

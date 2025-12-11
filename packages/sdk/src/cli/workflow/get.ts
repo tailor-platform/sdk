@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -72,7 +72,8 @@ export const getCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
+    ...jsonArgs,
     nameOrId: {
       type: "positional",
       description: "Workflow name or ID",
@@ -90,7 +91,7 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     const workflow = await workflowGet({
       nameOrId: args.nameOrId,

@@ -3,7 +3,7 @@ import { consola } from "consola";
 import ml from "multiline-ts";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -18,11 +18,11 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
     // Validate args
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     const config = readPlatformConfig();
 

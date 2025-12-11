@@ -303,6 +303,9 @@ importers:
       es-toolkit:
         specifier: 1.42.0
         version: 1.42.0
+      humanize-duration:
+        specifier: 3.32.1
+        version: 3.32.1
       inflection:
         specifier: 3.0.2
         version: 3.0.2
@@ -2448,6 +2451,9 @@ packages:
   human-signals@8.0.1:
     resolution: {integrity: sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ==}
     engines: {node: '>=18.18.0'}
+
+  humanize-duration@3.32.1:
+    resolution: {integrity: sha512-inh5wue5XdfObhu/IGEMiA1nUXigSGcaKNemcbLRKa7jXYGDZXr3LoT9pTIzq2hPEbld7w/qv9h+ikWGz8fL1g==}
 
   iconv-lite@0.7.0:
     resolution: {integrity: sha512-cf6L2Ds3h57VVmkZe+Pn+5APsT7FpqJtEhhieDCvrE2MK5Qk9MyffgQyuxQTm6BChfeZNtcOLHp9IcWRVcIcBQ==}
@@ -5872,6 +5878,8 @@ snapshots:
   human-id@4.1.1: {}
 
   human-signals@8.0.1: {}
+
+  humanize-duration@3.32.1: {}
 
   iconv-lite@0.7.0:
     dependencies:

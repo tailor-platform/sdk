@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -76,7 +76,7 @@ export const resumeCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     executionId: {
       type: "positional",
       description: "Failed execution ID",
@@ -104,7 +104,7 @@ export const resumeCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
     const interval = parseDuration(args.interval);
 
     const result = await workflowResume({

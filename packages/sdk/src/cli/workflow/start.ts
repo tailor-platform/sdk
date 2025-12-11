@@ -11,7 +11,7 @@ import { default as consola } from "consola";
 import ora from "ora";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -282,7 +282,8 @@ export const startCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
+    ...jsonArgs,
     nameOrId: {
       type: "positional",
       description: "Workflow name or ID",
@@ -327,7 +328,7 @@ export const startCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
     const interval = parseDuration(args.interval);
 
     const result = await workflowStart({

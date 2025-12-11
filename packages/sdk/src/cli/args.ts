@@ -2,7 +2,6 @@ import * as path from "node:path";
 import { loadEnvFile } from "node:process";
 import { consola } from "consola";
 import { table, getBorderCharacters } from "table";
-import { z } from "zod";
 import type { ParsedArgs } from "citty";
 
 export const commonArgs = {
@@ -44,30 +43,21 @@ export const withCommonArgs =
     process.exit(0);
   };
 
-const formatSchema = z.enum(["table", "json"]);
-
-export const formatArgs = {
-  format: {
-    type: "string",
-    description: `Output format (${formatSchema.options.join(", ")})`,
-    alias: "f",
-    default: "table",
+export const jsonArgs = {
+  json: {
+    type: "boolean",
+    description: "Output as JSON",
+    default: false,
   },
 } as const;
 
-export function parseFormat(format: string) {
-  const parsed = formatSchema.safeParse(format);
-  if (!parsed.success) {
-    throw new Error(
-      `Format "${format}" is invalid. Must be one of: ${formatSchema.options.join(", ")}`,
-    );
-  }
-  return parsed.data;
+export function parseFormat(jsonFlag: boolean | undefined) {
+  return jsonFlag ? ("json" as const) : ("table" as const);
 }
 
 export function printWithFormat(
   data: object | object[],
-  format: z.output<typeof formatSchema>,
+  format: "table" | "json",
 ) {
   switch (format) {
     case "table": {

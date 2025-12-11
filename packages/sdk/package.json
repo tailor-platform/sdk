@@ -62,6 +62,7 @@
     "consola": "3.4.2",
     "es-toolkit": "1.42.0",
     "inflection": "3.0.2",
+    "humanize-duration": "3.32.1",
     "madge": "8.0.0",
     "multiline-ts": "4.0.1",
     "open": "10.2.0",

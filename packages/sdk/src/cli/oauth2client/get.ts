@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -69,7 +69,8 @@ export const getCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
+    ...jsonArgs,
     name: {
       type: "positional",
       description: "OAuth2 client name",
@@ -93,7 +94,7 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     const credentials = await oauth2ClientGet({
       name: args.name,

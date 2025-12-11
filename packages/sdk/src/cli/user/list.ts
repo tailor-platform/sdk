@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import { commonArgs, formatArgs, parseFormat, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, parseFormat, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
 
 export const listCommand = defineCommand({
@@ -12,11 +12,11 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
     // Validate args
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     const config = readPlatformConfig();
 

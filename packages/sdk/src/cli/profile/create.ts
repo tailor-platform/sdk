@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -22,7 +22,7 @@ export const createCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     name: {
       type: "positional",
       description: "Profile name",
@@ -43,7 +43,7 @@ export const createCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Validate args
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     const config = readPlatformConfig();
 

@@ -14,7 +14,7 @@ import ora from "ora";
 import { table } from "table";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -381,7 +381,7 @@ export const executionsCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     executionId: {
       type: "positional",
       description: "Execution ID (if provided, shows details)",
@@ -424,7 +424,7 @@ export const executionsCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     if (args.executionId) {
       const interval = parseDuration(args.interval);

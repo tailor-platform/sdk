@@ -2,7 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
 import {
   commonArgs,
-  formatArgs,
+  jsonArgs,
   parseFormat,
   printWithFormat,
   withCommonArgs,
@@ -86,7 +86,7 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -106,7 +106,7 @@ export const listCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Validate CLI specific args
-    const format = parseFormat(args.format);
+    const format = parseFormat(args.json);
 
     // Execute machineuser list logic
     const machineUsers = await machineUserList({
