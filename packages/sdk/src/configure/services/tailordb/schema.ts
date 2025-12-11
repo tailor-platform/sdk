@@ -770,10 +770,10 @@ export const db = {
   fields: {
     timestamps: () => ({
       createdAt: datetime()
-        .hooks({ create: () => new Date().toISOString() })
+        .hooks({ create: () => new Date() })
         .description("Record creation timestamp"),
       updatedAt: datetime({ optional: true })
-        .hooks({ update: () => new Date().toISOString() })
+        .hooks({ update: () => new Date() })
         .description("Record last update timestamp"),
     }),
   },

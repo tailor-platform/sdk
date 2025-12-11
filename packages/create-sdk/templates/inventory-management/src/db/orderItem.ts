@@ -22,7 +22,7 @@ export const orderItem = db
       .description("Unit price of the product")
       .validate(({ value }) => value >= 0),
     totalPrice: db
-      .float({ optional: true, assertNonNull: true })
+      .float({ optional: true })
       .description("Total price of the order item"),
     ...db.fields.timestamps(),
   })

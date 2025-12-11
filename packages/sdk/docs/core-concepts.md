@@ -51,15 +51,6 @@ db.string({ array: true });
 db.string({ optional: true, array: true });
 ```
 
-The `assertNonNull` option creates a field that doesn't allow null in TypeScript types but does allow null in TailorDB. This is useful for fields like createdAt where non-null values are set through hooks:
-
-```typescript
-db.string({ optional: true, assertNonNull: true }).hooks({
-  create: () => "created value",
-  update: () => "updated value",
-});
-```
-
 #### Field Modifiers
 
 **Description** - Add a description to field:
@@ -145,8 +136,8 @@ const userProfile = db.type("UserProfile", {
 
 ```typescript
 db.datetime().hooks({
-  create: ({ value }) => new Date().toISOString(),
-  update: ({ value }) => new Date().toISOString(),
+  create: () => new Date(),
+  update: () => new Date(),
 });
 ```
 
@@ -449,7 +440,7 @@ createExecutor({
     },
     body: ({ newRecord }) => ({
       id: newRecord.id,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(),
       data: newRecord,
     }),
   },

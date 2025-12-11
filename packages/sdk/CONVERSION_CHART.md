@@ -40,10 +40,8 @@ export const customer = db.type("Customer", {
   phone: db.string({ optional: true }),
   ...db.fields.timestamps(),
   // or
-  // createdAt: db.datetime({ optional: true, assertNonNull: true })
-  //   .hooks({ create: () => new Date().toISOString() }),
-  // updatedAt: db.datetime({ optional: true })
-  //   .hooks({ update: () => new Date().toISOString() }),
+  // createdAt: db.datetime().hooks({ create: () => new Date() }),
+  // updatedAt: db.datetime({ optional: true }).hooks({ update: () => new Date() }),
 });
 
 export type Customer = t.infer<typeof customer>;

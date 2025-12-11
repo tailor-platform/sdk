@@ -13,7 +13,7 @@ export const generateReport = createWorkflowJob({
     return {
       totalOrders: orders.length,
       totalInvoices: invoices.length,
-      reportGeneratedAt: new Date().toISOString(),
+      reportGeneratedAt: new Date(),
     };
   },
 });

@@ -18,7 +18,7 @@ export const archiveData = createWorkflowJob({
 
     return {
       archivedCount: oldOrders.length,
-      archivedAt: new Date().toISOString(),
+      archivedAt: new Date(),
     };
   },
 });
