@@ -99,7 +99,7 @@ tailor-sdk show [options]
 - `-w, --workspace-id` - ID of the workspace to show the application from
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 ### login
 
@@ -140,7 +140,7 @@ tailor-sdk workspace create [options]
 - `-d, --delete-protection` - Enable delete protection for the workspace
 - `-o, --organization-id` - Organization ID to associate the workspace with
 - `-f, --folder-id` - Folder ID to associate the workspace with
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### workspace list
 
@@ -152,7 +152,8 @@ tailor-sdk workspace list [options]
 
 **Options:**
 
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
+- `--limit <number>` - Maximum number of workspaces to list (positive integer)
 
 #### workspace delete
 
@@ -191,7 +192,7 @@ tailor-sdk profile create <name> [options]
 
 - `-u, --user` - User email (required)
 - `-w, --workspace-id` - Workspace ID (required)
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### profile list
 
@@ -203,7 +204,7 @@ tailor-sdk profile list [options]
 
 **Options:**
 
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### profile update
 
@@ -221,7 +222,7 @@ tailor-sdk profile update <name> [options]
 
 - `-u, --user` - New user email
 - `-w, --workspace-id` - New workspace ID
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### profile delete
 
@@ -261,7 +262,7 @@ tailor-sdk user list [options]
 
 **Options:**
 
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### user use
 
@@ -295,7 +296,7 @@ tailor-sdk user pat list [options]
 
 **Options:**
 
-- `-f, --format` - Output format: `text` or `json` (default: `text`)
+- `--json` - Output as JSON instead of text
 
 **Output (default):**
 
@@ -304,7 +305,7 @@ tailor-sdk user pat list [options]
  token-name-2: read
 ```
 
-**Output (`--format json`):**
+**Output (`--json`):**
 
 ```json
 [
@@ -328,7 +329,7 @@ tailor-sdk user pat create <name> [options]
 **Options:**
 
 - `-w, --write` - Grant write permission (default: read-only)
-- `-f, --format` - Output format: `text` or `json` (default: `text`)
+- `--json` - Output as JSON instead of text
 
 **Output (default):**
 
@@ -342,7 +343,7 @@ scopes: read/write
 Please save this token in a secure location. You won't be able to see it again.
 ```
 
-**Output (`--format json`):**
+**Output (`--json`):**
 
 ```json
 { "name": "token-name", "scopes": ["read", "write"], "token": "eyJhbGc..." }
@@ -375,7 +376,7 @@ tailor-sdk user pat update <name> [options]
 **Options:**
 
 - `-w, --write` - Grant write permission (if not specified, keeps read-only)
-- `-f, --format` - Output format: `text` or `json` (default: `text`)
+- `--json` - Output as JSON instead of text
 
 **Output (default):**
 
@@ -389,7 +390,7 @@ scopes: read/write
 Please save this token in a secure location. You won't be able to see it again.
 ```
 
-**Output (`--format json`):**
+**Output (`--json`):**
 
 ```json
 {
@@ -478,7 +479,7 @@ tailor-sdk machineuser list [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### machineuser token
 
@@ -497,7 +498,7 @@ tailor-sdk machineuser token <name> [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 ### oauth2client
 
@@ -520,7 +521,7 @@ tailor-sdk oauth2client list [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 **Output:**
 
@@ -550,7 +551,7 @@ tailor-sdk oauth2client get <name> [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 **Output:**
 
@@ -621,7 +622,7 @@ tailor-sdk secret vault list [options]
 
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### secret create
 
@@ -668,7 +669,7 @@ tailor-sdk secret list [options]
 - `--vault-name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
-- `-f, --format` - Output format: `table` or `json` (default: `table`)
+- `--json` - Output as JSON instead of table
 
 #### secret delete
 
