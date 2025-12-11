@@ -61,10 +61,6 @@ export function humanizeRelativeTime(isoString: string): string {
   const diffMs = Date.now() - date.getTime();
 
   if (diffMs <= 0) {
-    return isoString;
-  }
-
-  if (diffMs < 60 * 1000) {
     return "just now";
   }
 
@@ -76,8 +72,8 @@ export function humanizeRelativeTime(isoString: string): string {
   return `${humanized} ago`;
 }
 
-export function parseFormat(jsonFlag: boolean | undefined) {
-  return jsonFlag ? ("json" as const) : ("table" as const);
+export function parseFormat(jsonFlag?: boolean): "table" | "json" {
+  return jsonFlag ? "json" : "table";
 }
 
 export function printWithFormat(

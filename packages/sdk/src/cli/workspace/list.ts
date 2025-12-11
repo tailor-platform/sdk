@@ -19,6 +19,7 @@ export async function workspaceList(
   options?: WorkspaceListOptions,
 ): Promise<WorkspaceInfo[]> {
   const limit = options?.limit;
+  const hasLimit = limit !== undefined;
 
   // Load and validate options
   const accessToken = await loadAccessToken();
@@ -33,11 +34,11 @@ export async function workspaceList(
   // and stop once we have collected enough or the server has no more pages.
 
   while (true) {
-    if (limit !== undefined && results.length >= limit) {
+    if (hasLimit && results.length >= limit!) {
       break;
     }
 
-    const remaining = limit !== undefined ? limit - results.length : undefined;
+    const remaining = hasLimit ? limit! - results.length : undefined;
     const pageSize =
       remaining !== undefined && remaining > 0 ? remaining : undefined;
 
@@ -82,9 +83,9 @@ export const listCommand = defineCommand({
 
     // Parse and validate limit
     let limit: number | undefined;
-    if (args.limit !== undefined) {
-      const parsed = Number.parseInt(String(args.limit), 10);
-      if (Number.isNaN(parsed) || parsed <= 0) {
+    if (args.limit != null) {
+      const parsed = Number(args.limit);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
         throw new Error(
           `--limit must be a positive integer, got "${args.limit}".`,
         );
