@@ -95,15 +95,14 @@ export const listCommand = defineCommand({
     // Execute workspace list logic
     const workspaces = await workspaceList({ limit });
 
-    // Transform only for table output; keep raw data for JSON
-    const tableWorkspaces = workspaces.map(
-      ({ updatedAt: _, createdAt, ...rest }) => ({
-        ...rest,
-        createdAt: humanizeRelativeTime(createdAt),
-      }),
-    );
+    const formattedWorkspaces =
+      format === "table"
+        ? workspaces.map(({ updatedAt: _, createdAt, ...rest }) => ({
+            ...rest,
+            createdAt: humanizeRelativeTime(createdAt),
+          }))
+        : workspaces;
 
-    // Show workspaces info
-    printWithFormat(format === "table" ? tableWorkspaces : workspaces, format);
+    printWithFormat(formattedWorkspaces, format);
   }),
 });

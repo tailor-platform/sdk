@@ -77,7 +77,6 @@ export const showCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
-    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",

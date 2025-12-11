@@ -73,7 +73,6 @@ export const getCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
-    ...jsonArgs,
     nameOrId: {
       type: "positional",
       description: "Workflow name or ID",

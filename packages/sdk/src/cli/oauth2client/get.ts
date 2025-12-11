@@ -70,7 +70,6 @@ export const getCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
-    ...jsonArgs,
     name: {
       type: "positional",
       description: "OAuth2 client name",
