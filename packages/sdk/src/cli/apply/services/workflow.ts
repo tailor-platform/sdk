@@ -82,7 +82,7 @@ function filterJobFunctionVersions(
 /**
  * Register job functions used by any workflow.
  * Only registers jobs that are actually used (based on usedJobNames in changeSet).
- * Uses update for existing workflows, create for new workflows.
+ * Uses create for new jobs and update for existing jobs.
  */
 async function registerJobFunctions(
   client: OperatorClient,
@@ -106,10 +106,18 @@ async function registerJobFunctions(
     }
   }
 
-  // Determine if we should use create or update based on whether any workflows exist
-  const hasExistingWorkflows = changeSet.updates.length > 0;
+  // Fetch existing job function names
+  const existingJobNames = await fetchAll(async (pageToken) => {
+    const response = await client.listWorkflowJobFunctions({
+      workspaceId,
+      pageToken,
+    });
+    return [response.jobFunctions.map((j) => j.name), response.nextPageToken];
+  });
+  const existingJobNamesSet = new Set(existingJobNames);
 
-  // Register only used job functions in parallel
+  // Register job functions in parallel
+  // Use create for new jobs, update for existing jobs
   const results = await Promise.all(
     Array.from(allUsedJobNames).map(async (jobName) => {
       const script = scripts.get(jobName);
@@ -120,7 +128,8 @@ async function registerJobFunctions(
         );
       }
 
-      const response = hasExistingWorkflows
+      const isExisting = existingJobNamesSet.has(jobName);
+      const response = isExisting
         ? await client.updateWorkflowJobFunction({
             workspaceId,
             jobFunctionName: jobName,
@@ -131,7 +140,6 @@ async function registerJobFunctions(
             jobFunctionName: jobName,
             script,
           });
-
       return { jobName, version: response.jobFunction?.version };
     }),
   );
