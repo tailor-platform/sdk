@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.16.0
+
+### Minor Changes
+
+- [#157](https://github.com/tailor-platform/sdk/pull/157) [`0677519`](https://github.com/tailor-platform/sdk/commit/06775196274dc451b60e675a2859160e2a98eae1) Thanks [@toiroakr](https://github.com/toiroakr)! - fix!: rename body to requestBody in webhook executor
+
 ## 0.15.1
 
 ### Patch Changes
