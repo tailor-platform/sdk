@@ -10,3 +10,4 @@ You can also view the documentation on [our website](https://docs.tailor.tech/re
 - [App Configuration](./docs/configuration.md)
 - [Core Concepts](./docs/core-concepts.md)
 - [CLI Reference](./docs/cli-reference.md)
+- [Testing Guide](./docs/testing.md)

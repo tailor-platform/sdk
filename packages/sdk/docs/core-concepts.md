@@ -8,18 +8,18 @@ Define TailorDB Types in files matching glob patterns specified in `tailor.confi
 
 Define TailorDB Fields using methods like `db.string()`, `db.int()`, etc. All TailorDB Field types are supported:
 
-| Method          | TailorDB | TypeScript |
-| --------------- | -------- | ---------- |
-| `db.string()`   | String   | string     |
-| `db.int()`      | Integer  | number     |
-| `db.float()`    | Float    | number     |
-| `db.bool()`     | Boolean  | boolean    |
-| `db.date()`     | Date     | string     |
-| `db.datetime()` | DateTime | string     |
-| `db.time()`     | Time     | string     |
-| `db.uuid()`     | UUID     | string     |
-| `db.enum()`     | Enum     | string     |
-| `db.object()`   | Nested   | object     |
+| Method          | TailorDB | TypeScript     |
+| --------------- | -------- | -------------- |
+| `db.string()`   | String   | string         |
+| `db.int()`      | Integer  | number         |
+| `db.float()`    | Float    | number         |
+| `db.bool()`     | Boolean  | boolean        |
+| `db.date()`     | Date     | string         |
+| `db.datetime()` | DateTime | string \| Date |
+| `db.time()`     | Time     | string         |
+| `db.uuid()`     | UUID     | string         |
+| `db.enum()`     | Enum     | string         |
+| `db.object()`   | Nested   | object         |
 
 **Enum fields** - specify allowed values as arguments:
 
@@ -438,7 +438,7 @@ createExecutor({
       "Content-Type": "application/json",
       "X-API-Key": { vault: "api-keys", key: "external-api" },
     },
-    body: ({ newRecord }) => ({
+    requestBody: ({ newRecord }) => ({
       id: newRecord.id,
       timestamp: new Date(),
       data: newRecord,
