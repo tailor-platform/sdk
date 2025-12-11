@@ -61,8 +61,8 @@
     "confbox": "0.2.2",
     "consola": "3.4.2",
     "es-toolkit": "1.42.0",
-    "inflection": "3.0.2",
     "humanize-duration": "3.32.1",
+    "inflection": "3.0.2",
     "madge": "8.0.0",
     "multiline-ts": "4.0.1",
     "open": "10.2.0",
@@ -81,6 +81,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.1",
     "@tailor-platform/function-types": "0.7.2",
+    "@types/humanize-duration": "^3.27.4",
     "@types/madge": "5.0.3",
     "@types/node": "22.19.1",
     "cross-env": "10.1.0",
