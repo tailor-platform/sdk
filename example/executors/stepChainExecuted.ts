@@ -20,7 +20,7 @@ export default createExecutor({
       "Content-Type": "application/json",
       Authorization: { vault: "my-vault", key: "my-secret" },
     },
-    body: ({ result }) => ({
+    requestBody: ({ result }) => ({
       orderId: result!.result.summary[0],
       customerID: result!.result.summary[1],
       totalPrice: result!.result.summary[2],

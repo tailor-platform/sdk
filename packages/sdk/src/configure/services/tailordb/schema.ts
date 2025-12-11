@@ -89,16 +89,35 @@ interface ReferenceConfig<T extends TailorDBType<any, any>> {
   nameMap: [string | undefined, string];
 }
 
+/**
+ * Convert a function to a string representation.
+ * Handles method shorthand syntax (e.g., `create() { ... }`) by converting it to
+ * a function expression (e.g., `function create() { ... }`).
+ *
+ * TODO: This function should be moved to the parser module.
+ * The same function exists in `src/cli/apply/services/executor.ts`.
+ * These should be unified into a common utility in the parser layer.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+const stringifyFunction = (fn: Function): string => {
+  const src = fn.toString().trim();
+  // Method shorthand pattern: methodName(...) { ... }
+  // Needs to be converted to: function methodName(...) { ... }
+  if (
+    /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(src) &&
+    !src.startsWith("function") &&
+    !src.startsWith("(") &&
+    !src.includes("=>")
+  ) {
+    return `function ${src}`;
+  }
+  return src;
+};
+
 const convertFnToExpr = (
   fn: NonNullable<Hook<any, any>["create"] | Hook<any, any>["update"]>,
 ) => {
-  const src = fn.toString().trim();
-
-  const normalized =
-    src.startsWith("create") || src.startsWith("update")
-      ? `function ${src}`
-      : src;
-
+  const normalized = stringifyFunction(fn);
   return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
 };
 

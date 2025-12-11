@@ -24,6 +24,31 @@ import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor, Trigger } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
+/**
+ * Convert a function to a string representation.
+ * Handles method shorthand syntax (e.g., `requestBody() { ... }`) by converting it to
+ * a function expression (e.g., `function requestBody() { ... }`).
+ *
+ * TODO: This function should be moved to the parser module.
+ * The same function exists in `src/configure/services/tailordb/schema.ts`.
+ * These should be unified into a common utility in the parser layer.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+const stringifyFunction = (fn: Function): string => {
+  const src = fn.toString().trim();
+  // Method shorthand pattern: methodName(...) { ... }
+  // Needs to be converted to: function methodName(...) { ... }
+  if (
+    /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(src) &&
+    !src.startsWith("function") &&
+    !src.startsWith("(") &&
+    !src.includes("=>")
+  ) {
+    return `function ${src}`;
+  }
+  return src;
+};
+
 export async function applyExecutor(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planExecutor>>,
@@ -218,7 +243,7 @@ function protoExecutor(
                 /* js */ `args.typeName === "${trigger.typeName}"`,
                 ...(trigger.condition
                   ? [
-                      /* js */ `(${trigger.condition.toString()})({ ...args, appNamespace: args.namespaceName })`,
+                      /* js */ `(${stringifyFunction(trigger.condition)})({ ...args, appNamespace: args.namespaceName })`,
                     ]
                   : []),
               ].join(" && "),
@@ -239,7 +264,7 @@ function protoExecutor(
                 /* js */ `args.resolverName === "${trigger.resolverName}"`,
                 ...(trigger.condition
                   ? [
-                      /* js */ `(${trigger.condition.toString()})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })`,
+                      /* js */ `(${stringifyFunction(trigger.condition)})({ ...args, appNamespace: args.namespaceName, result: args.succeeded?.result, error: args.failed?.error })`,
                     ]
                   : []),
               ].join(" && "),
@@ -272,7 +297,7 @@ function protoExecutor(
           case: "webhook",
           value: {
             url: {
-              expr: `(${target.url.toString()})(args)`,
+              expr: `(${stringifyFunction(target.url)})(args)`,
             },
             headers: target.headers
               ? Object.entries(target.headers).map(([key, v]) => {
@@ -296,9 +321,9 @@ function protoExecutor(
                   return { key, value };
                 })
               : undefined,
-            body: target.body
+            body: target.requestBody
               ? {
-                  expr: `(${target.body.toString()})(args)`,
+                  expr: `(${stringifyFunction(target.requestBody)})(args)`,
                 }
               : undefined,
           },
@@ -316,7 +341,7 @@ function protoExecutor(
             query: target.query,
             variables: target.variables
               ? {
-                  expr: `(${target.variables.toString()})(args)`,
+                  expr: `(${stringifyFunction(target.variables)})(args)`,
                 }
               : undefined,
             invoker: target.authInvoker ?? undefined,
