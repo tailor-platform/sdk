@@ -57,10 +57,18 @@ export const WebhookOperationSchema = z.object({
     .optional(),
 });
 
+export const WorkflowOperationSchema = z.object({
+  kind: z.literal("workflow"),
+  workflowName: z.string(),
+  args: z.union([z.record(z.string(), z.unknown()), functionSchema]).optional(),
+  authInvoker: AuthInvokerSchema.optional(),
+});
+
 export const OperationSchema = z.discriminatedUnion("kind", [
   FunctionOperationSchema,
   GqlOperationSchema,
   WebhookOperationSchema,
+  WorkflowOperationSchema,
 ]);
 
 export const ExecutorSchema = z.object({

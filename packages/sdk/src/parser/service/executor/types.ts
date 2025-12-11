@@ -9,6 +9,7 @@ import type {
   ScheduleTriggerSchema,
   TriggerSchema,
   WebhookOperationSchema,
+  WorkflowOperationSchema,
 } from "./schema";
 import type { z } from "zod";
 
@@ -26,6 +27,7 @@ export type Trigger = z.infer<typeof TriggerSchema>;
 export type FunctionOperation = z.infer<typeof FunctionOperationSchema>;
 export type GqlOperation = z.infer<typeof GqlOperationSchema>;
 export type WebhookOperation = z.infer<typeof WebhookOperationSchema>;
+export type WorkflowOperation = z.infer<typeof WorkflowOperationSchema>;
 export type Operation = z.infer<typeof OperationSchema>;
 
 export type Executor = z.infer<typeof ExecutorSchema>;

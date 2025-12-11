@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, test } from "vitest";
 import { t } from "@/configure/types";
 import { createResolver } from "../resolver";
 import { db } from "../tailordb";
+import { createWorkflow, createWorkflowJob } from "../workflow";
 import { createExecutor } from "./executor";
 import {
   recordCreatedTrigger,
@@ -681,6 +682,135 @@ describe("webhookTarget", () => {
           "Content-Type": "application/json",
           Authorization: { vault: "my-vault", key: "my-secret" },
         },
+      },
+    });
+  });
+});
+
+describe("workflowTarget", () => {
+  const testJob = createWorkflowJob({
+    name: "test-job",
+    body: (input: { orderId: string }) => ({ processed: input.orderId }),
+  });
+
+  const testWorkflow = createWorkflow({
+    name: "test-workflow",
+    mainJob: testJob,
+  });
+
+  test("can specify workflow target with static args", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: { orderId: "test-id" },
+      },
+    });
+    expect(executor.operation.kind).toBe("workflow");
+    expect(
+      (executor.operation as unknown as { workflowName: string }).workflowName,
+    ).toBe("test-workflow");
+  });
+
+  test("args can be a function", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: Record<string, string>;
+      }>(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: (triggerArgs) => ({ orderId: triggerArgs.body.id }),
+      },
+    });
+  });
+
+  test("args function receives trigger args", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: (args) => {
+          expectTypeOf(args).toExtend<{
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+          return { orderId: args.body.id };
+        },
+      },
+    });
+  });
+
+  test("args type must match workflow mainJob input", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        // @ts-expect-error - args doesn't match mainJob input type
+        args: { wrongField: "value" },
+      },
+    });
+  });
+
+  test("args function must return workflow mainJob input type", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: Record<string, string>;
+      }>(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        // @ts-expect-error - function return type doesn't match mainJob input
+        args: (args) => ({ wrongField: args.body.id }),
+      },
+    });
+  });
+
+  test("can specify authInvoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: { orderId: "test-id" },
+        authInvoker: { namespace: "my-auth", machineUserName: "admin" },
+      },
+    });
+  });
+
+  test("can omit args for workflow with undefined input", () => {
+    const noInputJob = createWorkflowJob({
+      name: "no-input-job",
+      body: () => ({ result: "done" }),
+    });
+
+    const noInputWorkflow = createWorkflow({
+      name: "no-input-workflow",
+      mainJob: noInputJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: noInputWorkflow,
       },
     });
   });
