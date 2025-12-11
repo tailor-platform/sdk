@@ -57,12 +57,12 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  it("datetime field outputs string type correctly", () => {
+  it("datetime field outputs string | Date type correctly", () => {
     const _datetimeType = t.object({
       createdAt: t.datetime(),
     });
     expectTypeOf<output<typeof _datetimeType>>().toEqualTypeOf<{
-      createdAt: string;
+      createdAt: string | Date;
     }>();
   });
 

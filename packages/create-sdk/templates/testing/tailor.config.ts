@@ -15,6 +15,7 @@ export default defineConfig({
   }),
   db: { "main-db": { files: ["./src/db/*.ts"] } },
   resolver: { "main-resolver": { files: ["./src/resolver/*.ts"] } },
+  workflow: { files: ["./src/workflow/*.ts"] },
 });
 
 export const generators = defineGenerators([

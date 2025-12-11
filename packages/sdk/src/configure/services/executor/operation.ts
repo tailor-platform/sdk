@@ -267,10 +267,10 @@ type RequestHeader =
 
 export type WebhookOperation<Args> = Omit<
   ParserWebhookOperation,
-  "url" | "body" | "headers"
+  "url" | "requestBody" | "headers"
 > & {
   url: (args: Args) => string;
-  body?: (args: Args) => Record<string, unknown>;
+  requestBody?: (args: Args) => Record<string, unknown>;
   headers?: {
     [key in RequestHeader]?: string | { vault: string; key: string };
   };

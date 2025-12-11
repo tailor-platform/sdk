@@ -10,23 +10,23 @@ import {
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { parseDuration, waitForExecution } from "./start";
-import {
-  type WorkflowExecutionInfo,
-  type WorkflowResumeResult,
-} from "./transform";
+import { type WorkflowExecutionInfo } from "./transform";
 
 export interface WorkflowResumeOptions {
   executionId: string;
   workspaceId?: string;
   profile?: string;
-  wait?: boolean;
   interval?: number;
-  format: "table" | "json";
+}
+
+export interface WorkflowResumeResultWithWait {
+  executionId: string;
+  wait: () => Promise<WorkflowExecutionInfo>;
 }
 
 export async function workflowResume(
   options: WorkflowResumeOptions,
-): Promise<WorkflowResumeResult | WorkflowExecutionInfo> {
+): Promise<WorkflowResumeResultWithWait> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -43,17 +43,17 @@ export async function workflowResume(
       executionId: options.executionId,
     });
 
-    if (!options.wait) {
-      return { executionId };
-    }
-
-    return await waitForExecution({
-      client,
-      workspaceId,
+    return {
       executionId,
-      interval: options.interval ?? 3000,
-      format: options.format,
-    });
+      wait: () =>
+        waitForExecution({
+          client,
+          workspaceId,
+          executionId,
+          interval: options.interval ?? 3000,
+          format: "json",
+        }),
+    };
   } catch (error) {
     if (error instanceof ConnectError) {
       if (error.code === Code.NotFound) {
@@ -107,15 +107,23 @@ export const resumeCommand = defineCommand({
     const format = parseFormat(args.json);
     const interval = parseDuration(args.interval);
 
-    const result = await workflowResume({
+    const { executionId, wait } = await workflowResume({
       executionId: args.executionId,
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      wait: args.wait,
       interval,
-      format,
     });
 
-    printWithFormat(result, format);
+    if (format !== "json") {
+      const { default: consola } = await import("consola");
+      consola.info(`Execution ID: ${executionId}`);
+    }
+
+    if (args.wait) {
+      const result = await wait();
+      printWithFormat(result, format);
+    } else {
+      printWithFormat({ executionId }, format);
+    }
   }),
 });

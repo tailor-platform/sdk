@@ -48,7 +48,7 @@ export const GqlOperationSchema = z.object({
 export const WebhookOperationSchema = z.object({
   kind: z.literal("webhook"),
   url: functionSchema,
-  body: functionSchema.optional(),
+  requestBody: functionSchema.optional(),
   headers: z
     .record(
       z.string(),

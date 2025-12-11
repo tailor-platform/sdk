@@ -1,5 +1,13 @@
 # @tailor-platform/create-sdk
 
+## 0.15.1
+
+## 0.15.0
+
+### Minor Changes
+
+- [#151](https://github.com/tailor-platform/sdk/pull/151) [`b2b26b4`](https://github.com/tailor-platform/sdk/commit/b2b26b4affc4b8b97b193d7421d1a5455f23a331) Thanks [@toiroakr](https://github.com/toiroakr)! - feat!: add workflow test
+
 ## 0.14.3
 
 ## 0.14.2
