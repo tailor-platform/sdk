@@ -2,8 +2,8 @@ import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
 import sampleWorkflow from "../workflows/sample";
 
 export default createExecutor({
-  name: "user-created",
-  description: "Triggered when a new user is created",
+  name: "daily-workflow",
+  description: "Scheduled workflow executor",
   trigger: scheduleTrigger({
     cron: "0 12 * * *",
     timezone: "Asia/Tokyo",
