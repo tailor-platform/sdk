@@ -42,7 +42,12 @@ export const listCommand = defineCommand({
     // Execute workspace list logic
     const workspaces = await workspaceList();
 
+    // Hide updatedAt field from table output
+    const displayWorkspaces = workspaces.map(
+      ({ updatedAt: _, ...rest }) => rest,
+    );
+
     // Show workspaces info
-    printWithFormat(workspaces, format);
+    printWithFormat(displayWorkspaces, format);
   }),
 });

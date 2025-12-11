@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { loadEnvFile } from "node:process";
 import { consola } from "consola";
-import { table } from "table";
+import { table, getBorderCharacters } from "table";
 import { z } from "zod";
 import type { ParsedArgs } from "citty";
 
@@ -72,15 +72,36 @@ export function printWithFormat(
   switch (format) {
     case "table": {
       if (Array.isArray(data)) {
-        data.forEach((item) => {
-          const t = table(Object.entries(item), {
-            singleLine: true,
-          });
-          process.stdout.write(t);
+        if (data.length === 0) {
+          break;
+        }
+
+        const headers = Array.from(
+          new Set(data.flatMap((item) => Object.keys(item))),
+        );
+
+        const rows = data.map((item) =>
+          headers.map((header) => {
+            const value = (item as Record<string, unknown>)[header];
+            if (value === null || value === undefined) {
+              return "";
+            }
+            return String(value);
+          }),
+        );
+
+        const t = table([headers, ...rows], {
+          border: getBorderCharacters("norc"),
+          drawHorizontalLine: (lineIndex, rowCount) => {
+            // 0: top border, 1: after header row, rowCount: bottom border
+            return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
+          },
         });
+        process.stdout.write(t);
       } else {
         const t = table(Object.entries(data), {
           singleLine: true,
+          border: getBorderCharacters("norc"),
         });
         process.stdout.write(t);
       }
