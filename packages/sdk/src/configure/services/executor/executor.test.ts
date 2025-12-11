@@ -640,7 +640,7 @@ describe("webhookTarget", () => {
       operation: {
         kind: "webhook",
         url: () => "https://example.com/webhook",
-        body: (args) => {
+        requestBody: (args) => {
           expectTypeOf(args).toExtend<{
             body: { id: string };
             headers: { "x-custom-header": string };
@@ -655,7 +655,7 @@ describe("webhookTarget", () => {
     });
   });
 
-  test("can not return invalid type from body", () => {
+  test("can not return invalid type from requestBody", () => {
     createExecutor({
       name: "test",
       trigger: incomingWebhookTrigger(),
@@ -663,7 +663,7 @@ describe("webhookTarget", () => {
         kind: "webhook",
         url: () => "https://example.com/webhook",
         // @ts-expect-error invalid return type
-        body: () => {
+        requestBody: () => {
           return 123;
         },
       },
