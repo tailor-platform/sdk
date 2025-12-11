@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { loadEnvFile } from "node:process";
 import { consola } from "consola";
+import humanizeDuration from "humanize-duration";
 import { table, getBorderCharacters } from "table";
 import type { ParsedArgs } from "citty";
 
@@ -51,6 +52,30 @@ export const jsonArgs = {
   },
 } as const;
 
+export function humanizeRelativeTime(isoString: string): string {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    return isoString;
+  }
+
+  const diffMs = Date.now() - date.getTime();
+
+  if (diffMs <= 0) {
+    return isoString;
+  }
+
+  if (diffMs < 60 * 1000) {
+    return "just now";
+  }
+
+  const humanized = humanizeDuration(diffMs, {
+    largest: 1,
+    round: true,
+  });
+
+  return `${humanized} ago`;
+}
+
 export function parseFormat(jsonFlag: boolean | undefined) {
   return jsonFlag ? ("json" as const) : ("table" as const);
 }
@@ -75,6 +100,12 @@ export function printWithFormat(
             const value = (item as Record<string, unknown>)[header];
             if (value === null || value === undefined) {
               return "";
+            }
+            if (
+              (header === "createdAt" || header === "updatedAt") &&
+              typeof value === "string"
+            ) {
+              return humanizeRelativeTime(value);
             }
             return String(value);
           }),

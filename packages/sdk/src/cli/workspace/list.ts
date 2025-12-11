@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
-import humanizeDuration from "humanize-duration";
 import {
   commonArgs,
+  humanizeRelativeTime,
   jsonArgs,
   parseFormat,
   printWithFormat,
@@ -10,30 +10,6 @@ import {
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
-
-const humanizeCreatedAt = (createdAt: string): string => {
-  const createdDate = new Date(createdAt);
-  if (Number.isNaN(createdDate.getTime())) {
-    return createdAt;
-  }
-
-  const diffMs = Date.now() - createdDate.getTime();
-
-  if (diffMs <= 0) {
-    return createdAt;
-  }
-
-  if (diffMs < 60 * 1000) {
-    return "just now";
-  }
-
-  const humanized = humanizeDuration(diffMs, {
-    largest: 1,
-    round: true,
-  });
-
-  return `${humanized} ago`;
-};
 
 export async function workspaceList(): Promise<WorkspaceInfo[]> {
   // Load and validate options
@@ -71,7 +47,7 @@ export const listCommand = defineCommand({
     const tableWorkspaces = workspaces.map(
       ({ updatedAt: _, createdAt, ...rest }) => ({
         ...rest,
-        createdAt: humanizeCreatedAt(createdAt),
+        createdAt: humanizeRelativeTime(createdAt),
       }),
     );
 
