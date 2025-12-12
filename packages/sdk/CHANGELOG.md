@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 0.16.1
+
+### Patch Changes
+
+- [#160](https://github.com/tailor-platform/sdk/pull/160) [`1406523`](https://github.com/tailor-platform/sdk/commit/14065237e5f0b05cf898c0fff196e1eb599fb96f) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: correctly determine create/update for workflow job functions
+
+  Previously, the SDK used `hasExistingWorkflows` (based on workflow updates) to decide whether to use `createWorkflowJobFunction` or `updateWorkflowJobFunction`. This caused errors when renaming job functions, as renamed jobs were incorrectly sent to the update API which requires the job to already exist.
+
+  Now the SDK fetches the actual list of existing job function names via `listWorkflowJobFunctions` API and correctly uses:
+  - `createWorkflowJobFunction` for new job names (including renamed jobs)
+  - `updateWorkflowJobFunction` for existing job names
+
 ## 0.16.0
 
 ### Minor Changes
