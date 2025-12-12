@@ -38,15 +38,9 @@ export class ResolverService {
     );
   }
 
-  async loadResolverForFile(resolverFile: string, timestamp?: Date) {
+  async loadResolverForFile(resolverFile: string) {
     try {
-      const baseUrl = pathToFileURL(resolverFile).href;
-      const moduleSpecifier =
-        timestamp === undefined
-          ? baseUrl
-          : `${baseUrl}?t=${timestamp.getTime()}`;
-
-      const resolverModule = await import(moduleSpecifier);
+      const resolverModule = await import(pathToFileURL(resolverFile).href);
       const result = ResolverSchema.safeParse(resolverModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), resolverFile);

@@ -35,15 +35,9 @@ export class ExecutorService {
     return this.executors;
   }
 
-  async loadExecutorForFile(executorFile: string, timestamp?: Date) {
+  async loadExecutorForFile(executorFile: string) {
     try {
-      const baseUrl = pathToFileURL(executorFile).href;
-      const moduleSpecifier =
-        timestamp === undefined
-          ? baseUrl
-          : `${baseUrl}?t=${timestamp.getTime()}`;
-
-      const executorModule = await import(moduleSpecifier);
+      const executorModule = await import(pathToFileURL(executorFile).href);
       const result = ExecutorSchema.safeParse(executorModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
