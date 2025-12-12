@@ -11,6 +11,6 @@ export default createExecutor({
   operation: {
     kind: "workflow",
     workflow: sampleWorkflow,
-    args: () => ({ orderId: "test-order-id" }),
+    args: () => ({ orderId: "daily-workflow-order" }),
   },
 });
