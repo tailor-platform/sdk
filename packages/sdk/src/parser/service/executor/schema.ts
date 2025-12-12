@@ -63,11 +63,10 @@ export const WorkflowOperationSchema = z.preprocess(
       typeof val === "object" &&
       val !== null &&
       "workflow" in val &&
-      typeof (val as Record<string, unknown>).workflow === "object"
+      typeof val.workflow === "object"
     ) {
-      const { workflow, ...rest } = val as Record<string, unknown>;
-      const workflowObj = workflow as { name: string };
-      return { ...rest, workflowName: workflowObj.name };
+      const { workflow, ...rest } = val as { workflow: { name: string } };
+      return { ...rest, workflowName: workflow.name };
     }
     return val;
   },
