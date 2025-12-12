@@ -57,23 +57,17 @@ export class TailorDBService {
     return this.types;
   }
 
-  async loadTypesForFile(typeFile: string, timestamp?: Date) {
-    const result = await this.loadTypeFile(typeFile, timestamp);
+  async loadTypesForFile(typeFile: string) {
+    const result = await this.loadTypeFile(typeFile);
     this.parseTypes();
     return result;
   }
 
-  private async loadTypeFile(typeFile: string, timestamp?: Date) {
+  private async loadTypeFile(typeFile: string) {
     this.rawTypes[typeFile] = {};
     const loadedTypes: Record<string, TailorDBType> = {};
     try {
-      const baseUrl = pathToFileURL(typeFile).href;
-      const moduleSpecifier =
-        timestamp === undefined
-          ? baseUrl
-          : `${baseUrl}?t=${timestamp.getTime()}`;
-
-      const module = await import(moduleSpecifier);
+      const module = await import(pathToFileURL(typeFile).href);
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];

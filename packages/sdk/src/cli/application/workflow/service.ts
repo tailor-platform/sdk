@@ -130,8 +130,7 @@ async function loadFileContent(filePath: string): Promise<{
   let workflow: Workflow | null = null;
 
   try {
-    const moduleSpecifier = `${pathToFileURL(filePath).href}?t=${Date.now()}`;
-    const module = await import(moduleSpecifier);
+    const module = await import(pathToFileURL(filePath).href);
 
     for (const [exportName, exportValue] of Object.entries(module)) {
       // Check if it's a workflow (default export)
