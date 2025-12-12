@@ -356,16 +356,11 @@ importers:
         specifier: 9.39.1
         version: 9.39.1
       '@tailor-platform/function-types':
-<<<<<<< HEAD
-        specifier: 0.7.2
-        version: 0.7.2
-      '@types/humanize-duration':
-        specifier: ^3.27.4
-        version: 3.27.4
-=======
         specifier: 0.8.0
         version: 0.8.0
->>>>>>> e3bac944eeb1158e71647cfee19a155407628739
+      '@types/humanize-duration':
+        specifier: 3.27.4
+        version: 3.27.4
       '@types/madge':
         specifier: 5.0.3
         version: 5.0.3
