@@ -60,15 +60,16 @@ export const WebhookOperationSchema = z.object({
 export const WorkflowOperationSchema = z.preprocess(
   (val) => {
     if (
-      typeof val === "object" &&
-      val !== null &&
-      "workflow" in val &&
+      val == null ||
+      typeof val !== "object" ||
+      !("workflow" in val) ||
       typeof val.workflow === "object"
     ) {
-      const { workflow, ...rest } = val as { workflow: { name: string } };
-      return { ...rest, workflowName: workflow.name };
+      return val;
     }
-    return val;
+
+    const { workflow, ...rest } = val as { workflow: { name: string } };
+    return { ...rest, workflowName: workflow.name };
   },
   z.object({
     kind: z.literal("workflow"),
