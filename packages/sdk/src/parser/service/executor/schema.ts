@@ -63,7 +63,8 @@ export const WorkflowOperationSchema = z.preprocess(
       val == null ||
       typeof val !== "object" ||
       !("workflow" in val) ||
-      typeof val.workflow === "object"
+      typeof val.workflow !== "object" ||
+      val.workflow === null
     ) {
       return val;
     }
