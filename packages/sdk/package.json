@@ -79,7 +79,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
-    "@tailor-platform/function-types": "0.7.2",
+    "@tailor-platform/function-types": "0.8.0",
     "@types/madge": "5.0.3",
     "@types/node": "22.19.1",
     "cross-env": "10.1.0",
