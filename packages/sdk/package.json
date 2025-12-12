@@ -66,24 +66,24 @@
     "madge": "8.0.0",
     "multiline-ts": "4.0.1",
     "open": "10.2.0",
-    "ora": "^9.0.0",
+    "ora": "9.0.0",
     "oxc-parser": "0.98.0",
     "pkg-types": "2.3.0",
     "rolldown": "catalog:",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.21.0",
-    "type-fest": "5.2.0",
+    "type-fest": "5.3.1",
     "uuid": "13.0.0",
     "xdg-basedir": "5.1.0",
     "zod": "4.1.13"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
-    "@tailor-platform/function-types": "0.7.2",
-    "@types/humanize-duration": "^3.27.4",
+    "@types/humanize-duration": "3.27.4",
+    "@tailor-platform/function-types": "0.8.0",
     "@types/madge": "5.0.3",
-    "@types/node": "22.19.1",
+    "@types/node": "22.19.2",
     "cross-env": "10.1.0",
     "eslint": "9.39.1",
     "eslint-plugin-jsdoc": "61.4.1",
@@ -91,7 +91,7 @@
     "sonda": "0.10.1",
     "tsdown": "0.15.6",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.48.0",
+    "typescript-eslint": "8.49.0",
     "vitest": "4.0.14"
   }
 }
