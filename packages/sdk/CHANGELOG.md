@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 0.16.2
+
+### Patch Changes
+
+- [#170](https://github.com/tailor-platform/sdk/pull/170) [`6c34448`](https://github.com/tailor-platform/sdk/commit/6c344484cc9f4b0a574ec09737ca4e30e3889ad2) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add workflow executor support
+
+  Added `kind: "workflow"` operation to executors, enabling direct workflow execution from schedule triggers or record triggers.
+
+  ```typescript
+  import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
+  import sampleWorkflow from "../workflows/sample";
+
+  export default createExecutor({
+    name: "daily-workflow",
+    trigger: scheduleTrigger({
+      cron: "0 12 * * *",
+      timezone: "Asia/Tokyo",
+    }),
+    operation: {
+      kind: "workflow",
+      workflow: sampleWorkflow,
+      args: () => ({ orderId: "daily-workflow-order" }),
+    },
+  });
+  ```
+
+  - `workflow`: The workflow to execute (default export)
+  - `args`: Arguments to pass to the workflow's mainJob (static value or function)
+  - `authInvoker`: Optional authentication configuration
+
 ## 0.16.1
 
 ### Patch Changes
