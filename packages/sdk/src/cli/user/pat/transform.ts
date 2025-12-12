@@ -1,6 +1,5 @@
 import { PATScope } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import ml from "multiline-ts";
-import { z } from "zod";
 import type { PersonalAccessToken } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 export interface PersonalAccessTokenInfo {
@@ -8,25 +7,10 @@ export interface PersonalAccessTokenInfo {
   scopes: string[];
 }
 
-const patFormatSchema = z.enum(["text", "json"]);
+export type PATOutputFormat = "text" | "json";
 
-export const patFormatArgs = {
-  format: {
-    type: "string",
-    description: `Output format (${patFormatSchema.options.join(", ")})`,
-    alias: "f",
-    default: "text",
-  },
-} as const;
-
-export function parsePATFormat(format: string) {
-  const parsed = patFormatSchema.safeParse(format);
-  if (!parsed.success) {
-    throw new Error(
-      `Format "${format}" is invalid. Must be one of: ${patFormatSchema.options.join(", ")}`,
-    );
-  }
-  return parsed.data;
+export function parsePATFormat(jsonFlag?: boolean): PATOutputFormat {
+  return jsonFlag ? "json" : "text";
 }
 
 function patScopeToString(scope: PATScope): string {

@@ -1,12 +1,11 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import { commonArgs, withCommonArgs } from "../../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
 import {
   parsePATFormat,
-  patFormatArgs,
   transformPersonalAccessToken,
   type PersonalAccessTokenInfo,
 } from "./transform";
@@ -18,10 +17,10 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...patFormatArgs,
+    ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
-    const format = parsePATFormat(args.format);
+    const format = parsePATFormat(args.json);
     const config = readPlatformConfig();
 
     if (!config.current_user) {
