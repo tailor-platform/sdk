@@ -378,6 +378,24 @@ function protoExecutor(
       };
       break;
     }
+    case "workflow": {
+      targetType = ExecutorTargetType.WORKFLOW;
+      targetConfig = {
+        config: {
+          case: "workflow",
+          value: {
+            workflowName: target.workflowName,
+            variables: target.args
+              ? typeof target.args === "function"
+                ? { expr: `(${stringifyFunction(target.args)})(args)` }
+                : { expr: JSON.stringify(target.args) }
+              : undefined,
+            invoker: target.authInvoker ?? undefined,
+          },
+        },
+      };
+      break;
+    }
     default:
       throw new Error(`Unknown target: ${target satisfies never}`);
   }
