@@ -68,6 +68,7 @@ async function collectFiles(
   currentDir = "",
 ): Promise<string[]> {
   const dirPath = path.join(rootDir, currentDir);
+
   const entries = await fs.promises.readdir(dirPath, {
     withFileTypes: true,
   });
@@ -102,9 +103,7 @@ async function uploadSingleFile(
   const filePath = relativePath.split(path.sep).join("/"); // posix
   const contentType = detectContentType(filePath);
 
-  const readStream = fs.createReadStream(absPath, {
-    highWaterMark: 64 * 1024,
-  });
+  const readStream = fs.createReadStream(absPath);
 
   async function* requestStream(): AsyncIterable<
     MessageInitShape<typeof UploadFileRequestSchema>
@@ -141,7 +140,6 @@ function detectContentType(filePath: string): string {
     case ".htm":
       return "text/html";
     case ".js":
-      return "text/javascript";
     case ".mjs":
     case ".cjs":
       return "text/javascript";

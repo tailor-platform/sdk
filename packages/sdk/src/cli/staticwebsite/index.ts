@@ -9,7 +9,4 @@ export const staticwebsiteCommand = defineCommand({
   subCommands: {
     deploy: deployStaticWebsiteCommand,
   },
-  async run() {
-    // await runCommand(listStaticWebsiteCommand, {rawArgs: []})
-  },
 });
