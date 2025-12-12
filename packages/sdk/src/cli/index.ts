@@ -14,6 +14,7 @@ import { profileCommand } from "./profile";
 import { removeCommand } from "./remove";
 import { secretCommand } from "./secret";
 import { showCommand } from "./show";
+import { staticwebsiteCommand } from "./staticwebsite";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
 import { workflowCommand } from "./workflow";
@@ -47,6 +48,7 @@ const mainCommand = defineCommand({
     user: userCommand,
     workflow: workflowCommand,
     workspace: workspaceCommand,
+    staticwebsite: staticwebsiteCommand,
   },
 });
 

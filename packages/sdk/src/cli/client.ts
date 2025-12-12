@@ -45,9 +45,10 @@ export async function initOperatorClient(accessToken: string) {
 async function userAgentInterceptor(): Promise<Interceptor> {
   const ua = await userAgent();
   return (next) => async (req) => {
-    if (req.stream) {
-      return await next(req);
-    }
+    // if (req.stream) {
+    //   req.header.set("User-Agent", ua);
+    //   return await next(req);
+    // }
 
     req.header.set("User-Agent", ua);
     return await next(req);
@@ -63,9 +64,10 @@ async function bearerTokenInterceptor(
   accessToken: string,
 ): Promise<Interceptor> {
   return (next) => async (req) => {
-    if (req.stream) {
-      return await next(req);
-    }
+    // if (req.stream) {
+    //   req.header.set("Authorization", `Bearer ${accessToken}`);
+    //   return await next(req);
+    // }
 
     req.header.set("Authorization", `Bearer ${accessToken}`);
     return await next(req);
