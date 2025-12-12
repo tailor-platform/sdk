@@ -709,9 +709,7 @@ describe("workflowTarget", () => {
       },
     });
     expect(executor.operation.kind).toBe("workflow");
-    expect(
-      (executor.operation as unknown as { workflowName: string }).workflowName,
-    ).toBe("test-workflow");
+    expect(executor.operation.workflow.name).toBe("test-workflow");
   });
 
   test("args can be a function", () => {

@@ -38,17 +38,5 @@ export function createExecutor<
   Args,
   O extends Operation<Args> | { kind: "workflow"; workflow: Workflow },
 >(config: Executor<Args, O>) {
-  if (config.operation.kind === "graphql") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (config.operation as any).query = (
-      config.operation as any
-    ).query.toString();
-  }
-  if (config.operation.kind === "workflow") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (config.operation as any).workflowName = (
-      config.operation as any
-    ).workflow.name;
-  }
   return config;
 }

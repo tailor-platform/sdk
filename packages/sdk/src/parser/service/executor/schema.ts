@@ -40,7 +40,7 @@ export const FunctionOperationSchema = z.object({
 export const GqlOperationSchema = z.object({
   kind: z.literal("graphql"),
   appName: z.string().optional(),
-  query: z.string(),
+  query: z.preprocess((val) => String(val), z.string()),
   variables: functionSchema.optional(),
   authInvoker: AuthInvokerSchema.optional(),
 });
@@ -57,14 +57,31 @@ export const WebhookOperationSchema = z.object({
     .optional(),
 });
 
-export const WorkflowOperationSchema = z.object({
-  kind: z.literal("workflow"),
-  workflowName: z.string(),
-  args: z.union([z.record(z.string(), z.unknown()), functionSchema]).optional(),
-  authInvoker: AuthInvokerSchema.optional(),
-});
+export const WorkflowOperationSchema = z.preprocess(
+  (val) => {
+    if (
+      typeof val === "object" &&
+      val !== null &&
+      "workflow" in val &&
+      typeof (val as Record<string, unknown>).workflow === "object"
+    ) {
+      const { workflow, ...rest } = val as Record<string, unknown>;
+      const workflowObj = workflow as { name: string };
+      return { ...rest, workflowName: workflowObj.name };
+    }
+    return val;
+  },
+  z.object({
+    kind: z.literal("workflow"),
+    workflowName: z.string(),
+    args: z
+      .union([z.record(z.string(), z.unknown()), functionSchema])
+      .optional(),
+    authInvoker: AuthInvokerSchema.optional(),
+  }),
+);
 
-export const OperationSchema = z.discriminatedUnion("kind", [
+export const OperationSchema = z.union([
   FunctionOperationSchema,
   GqlOperationSchema,
   WebhookOperationSchema,
