@@ -33,6 +33,7 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as inflection from "inflection";
+import { fetchTypes } from "@/cli/application/tailordb/repository";
 import { type TailorDBService } from "@/cli/application/tailordb/service";
 import {
   type PermissionOperand,
@@ -319,26 +320,6 @@ async function planTypes(
   const changeSet: ChangeSet<CreateType, UpdateType, DeleteType> =
     new ChangeSet("TailorDB types");
 
-  const fetchTypes = (namespaceName: string) => {
-    return fetchAll(async (pageToken) => {
-      try {
-        const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes(
-          {
-            workspaceId,
-            namespaceName,
-            pageToken,
-          },
-        );
-        return [tailordbTypes, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
-    });
-  };
-
   const executorUsedTypes = new Set<string>();
   for (const executor of executors) {
     if (
@@ -351,7 +332,11 @@ async function planTypes(
   }
 
   for (const tailordb of tailordbs) {
-    const existingTypes = await fetchTypes(tailordb.namespace);
+    const existingTypes = await fetchTypes(
+      client,
+      workspaceId,
+      tailordb.namespace,
+    );
     const existingNameSet = new Set<string>();
     existingTypes.forEach((type) => existingNameSet.add(type.name));
 
@@ -394,7 +379,7 @@ async function planTypes(
     });
   }
   for (const namespaceName of deletedServices) {
-    const existingTypes = await fetchTypes(namespaceName);
+    const existingTypes = await fetchTypes(client, workspaceId, namespaceName);
     existingTypes.forEach((typ) => {
       changeSet.deletes.push({
         name: typ.name,
