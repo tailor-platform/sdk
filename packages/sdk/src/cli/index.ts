@@ -8,6 +8,7 @@ import { initCommand } from "./init";
 import { loginCommand } from "./login";
 import { logoutCommand } from "./logout";
 import { machineuserCommand } from "./machineuser";
+import { migrateCommand } from "./migrate";
 import { oauth2clientCommand } from "./oauth2client";
 import { readPackageJson } from "./package-json";
 import { profileCommand } from "./profile";
@@ -37,6 +38,7 @@ const mainCommand = defineCommand({
     login: loginCommand,
     logout: logoutCommand,
     machineuser: machineuserCommand,
+    migrate: migrateCommand,
     oauth2client: oauth2clientCommand,
     profile: profileCommand,
     remove: removeCommand,

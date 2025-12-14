@@ -1,0 +1,205 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { defineCommand } from "citty";
+import { consola } from "consola";
+import ml from "multiline-ts";
+import { defineApplication } from "@/cli/application";
+import { fetchTypes } from "@/cli/application/tailordb/repository";
+import { initOperatorClient } from "@/cli/client";
+import { loadConfig } from "@/cli/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "@/cli/context";
+import { commonArgs, withCommonArgs } from "../args";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+
+export const createMigrationCommand = defineCommand({
+  meta: {
+    name: "create",
+    description: "Create a new migration file",
+  },
+  args: {
+    ...commonArgs,
+    "workspace-id": {
+      type: "string",
+      description: "Workspace ID",
+      alias: "w",
+    },
+    profile: {
+      type: "string",
+      description: "Workspace profile to use",
+      alias: "p",
+    },
+    config: {
+      type: "string",
+      description: "Path to SDK config file",
+      alias: "c",
+      default: "tailor.config.ts",
+    },
+  },
+  run: withCommonArgs(async (options) => {
+    // Initialize context
+    const workspaceId = loadWorkspaceId({
+      workspaceId: options["workspace-id"],
+      profile: options.profile,
+    });
+    const accessToken = await loadAccessToken({
+      useProfile: true,
+      profile: options.profile,
+    });
+
+    const { config } = await loadConfig(options.config);
+    const application = defineApplication(config);
+
+    for (const tailordb of application.tailorDBServices) {
+      await tailordb.loadTypes();
+    }
+
+    const client = await initOperatorClient(accessToken);
+
+    // Detect constraint changes
+    const allChanges: ConstraintChange[] = [];
+    for (const tailordb of application.tailorDBServices) {
+      const namespace = tailordb.namespace;
+      const existingTypes = await fetchTypes(client, workspaceId, namespace);
+
+      const nextTypes = tailordb.getTypes();
+      allChanges.push(
+        ...detectNullableToNotNullChanges({
+          namespace,
+          existingTypes,
+          nextTypes,
+        }),
+      );
+    }
+
+    if (allChanges.length === 0) {
+      consola.info("No constraint changes detected. Nothing to do.");
+      return;
+    }
+
+    // Generate migration files
+    const now = new Date();
+    const ts = now
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\..+$/, "")
+      .replace("T", "_");
+    const dir = path.join("migrations", `${ts}_name`);
+
+    const upSql = generateMigrationSql(allChanges);
+    const meta = {
+      workspaceId,
+      generatedAt: now.toISOString(),
+      kind: "nullable-to-not-null",
+      changes: allChanges,
+    };
+
+    await writeFiles([
+      { path: path.join(dir, "up.sql"), content: upSql },
+      {
+        path: path.join(dir, "meta.json"),
+        content: JSON.stringify(meta, null, 2) + "\n",
+      },
+    ]);
+
+    consola.info(`Generated migration files under ${dir}`);
+    consola.info(`Detected changes: ${allChanges.length}`);
+  }),
+});
+
+interface ConstraintChange {
+  kind: "nullable-to-not-null";
+  namespace: string;
+  typeName: string;
+  fieldName: string;
+  fieldType: string;
+}
+
+function detectNullableToNotNullChanges(args: {
+  namespace: string;
+  existingTypes: ReadonlyArray<TailorDBType>;
+  nextTypes: Record<string, ParsedTailorDBType>;
+}): ConstraintChange[] {
+  const { namespace, existingTypes, nextTypes } = args;
+  const existingMap = new Map(existingTypes.map((t) => [t.name, t]));
+  const changes: ConstraintChange[] = [];
+
+  for (const [typeName, nextType] of Object.entries(nextTypes)) {
+    const existing = existingMap.get(typeName);
+    if (!existing) continue;
+
+    for (const [fieldName, nextField] of Object.entries(nextType.fields)) {
+      const existingField = existing.schema?.fields[fieldName];
+      if (!existingField) continue;
+
+      const oldRequired = existingField.required;
+      const newRequired = nextField.config.required;
+
+      if (oldRequired === false && newRequired === true) {
+        changes.push({
+          kind: "nullable-to-not-null",
+          namespace,
+          typeName,
+          fieldName,
+          fieldType: nextField.config.type,
+        });
+      }
+    }
+  }
+
+  return changes;
+}
+
+function quoteIdent(ident: string) {
+  return '"' + ident.replace(/"/g, '""') + '"';
+}
+
+function tableName(namespace: string, typeName: string) {
+  // 仮実装: schema=namespace, table=typeName を想定
+  return `${quoteIdent(namespace)}.${quoteIdent(typeName)}`;
+}
+
+function columnName(fieldName: string) {
+  // 仮実装: フィールド名=カラム名
+  return quoteIdent(fieldName);
+}
+
+export function generateMigrationSql(changes: ConstraintChange[]) {
+  const lines: string[] = [];
+  lines.push("-- Generated by tailor-sdk migrate create");
+  lines.push("");
+  lines.push("BEGIN;");
+  lines.push("");
+
+  for (const ch of changes) {
+    const tbl = tableName(ch.namespace, ch.typeName);
+    const col = columnName(ch.fieldName);
+
+    lines.push(
+      ml`-- ${ch.namespace}.${ch.typeName}.${ch.fieldName} (${ch.fieldType}): nullable -> NOT NULL (required)
+-- 1) Inspect how many NULLs exist
+SELECT count(*) AS null_count FROM ${tbl} WHERE ${col} IS NULL;
+
+-- 2) Backfill NULLs (TODO: choose correct value)
+-- UPDATE ${tbl} SET ${col} = <TODO> WHERE ${col} IS NULL;
+
+-- 3) Enforce NOT NULL
+ALTER TABLE ${tbl} ALTER COLUMN ${col} SET NOT NULL;`.trimEnd(),
+    );
+    lines.push("");
+  }
+
+  lines.push("COMMIT;");
+  lines.push("");
+  return lines.join("\n");
+}
+
+export async function writeFiles(files: { path: string; content: string }[]) {
+  for (const file of files) {
+    const absPath = path.isAbsolute(file.path)
+      ? file.path
+      : path.join(process.cwd(), file.path);
+    await fs.mkdir(path.dirname(absPath), { recursive: true });
+    await fs.writeFile(absPath, file.content);
+  }
+}
