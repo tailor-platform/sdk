@@ -4,7 +4,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import {
   type OAuth2ClientCredentials,
   toOAuth2ClientCredentials,
@@ -88,8 +88,6 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.json);
-
     const credentials = await oauth2ClientGet({
       name: args.name,
       workspaceId: args["workspace-id"],
@@ -97,6 +95,6 @@ export const getCommand = defineCommand({
       configPath: args.config,
     });
 
-    printWithFormat(credentials, format);
+    printData(credentials, args.json);
   }),
 });

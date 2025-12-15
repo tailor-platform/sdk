@@ -3,7 +3,7 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { humanizeRelativeTime, parseFormat, printWithFormat } from "../format";
+import { humanizeRelativeTime, printData } from "../format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface WorkspaceListOptions {
@@ -75,9 +75,6 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate CLI specific args
-    const format = parseFormat(args.json);
-
     // Parse and validate limit
     let limit: number | undefined;
     try {
@@ -91,14 +88,13 @@ export const listCommand = defineCommand({
     // Execute workspace list logic
     const workspaces = await workspaceList({ limit });
 
-    const formattedWorkspaces =
-      format === "table"
-        ? workspaces.map(({ updatedAt: _, createdAt, ...rest }) => ({
-            ...rest,
-            createdAt: humanizeRelativeTime(createdAt),
-          }))
-        : workspaces;
+    const formattedWorkspaces = args.json
+      ? workspaces
+      : workspaces.map(({ updatedAt: _, createdAt, ...rest }) => ({
+          ...rest,
+          createdAt: humanizeRelativeTime(createdAt),
+        }));
 
-    printWithFormat(formattedWorkspaces, format);
+    printData(formattedWorkspaces, args.json);
   }),
 });

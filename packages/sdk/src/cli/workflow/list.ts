@@ -3,7 +3,7 @@ import { table } from "table";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { humanizeRelativeTime, parseFormat } from "../format";
+import { humanizeRelativeTime } from "../format";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
 export interface WorkflowListOptions {
@@ -55,14 +55,12 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.json);
-
     const workflows = await workflowList({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
-    if (format === "json") {
+    if (args.json) {
       console.log(JSON.stringify(workflows));
     } else {
       if (workflows.length === 0) {

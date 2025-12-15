@@ -4,7 +4,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import type { MachineUser } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 export interface MachineUserListOptions {
@@ -100,9 +100,6 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate CLI specific args
-    const format = parseFormat(args.json);
-
     // Execute machineuser list logic
     const machineUsers = await machineUserList({
       workspaceId: args["workspace-id"],
@@ -111,6 +108,6 @@ export const listCommand = defineCommand({
     });
 
     // Show machine users info
-    printWithFormat(machineUsers, format);
+    printData(machineUsers, args.json);
   }),
 });

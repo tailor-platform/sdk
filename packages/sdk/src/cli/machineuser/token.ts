@@ -3,7 +3,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 
 export interface MachineUserTokenOptions {
   name: string;
@@ -101,9 +101,6 @@ export const tokenCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate CLI specific args
-    const format = parseFormat(args.json);
-
     // Execute machineuser token logic
     const token = await machineUserToken({
       name: args.name,
@@ -119,6 +116,6 @@ export const tokenCommand = defineCommand({
       token_type: token.tokenType,
       expires_at: token.expiresAt,
     };
-    printWithFormat(tokenInfo, format);
+    printData(tokenInfo, args.json);
   }),
 });

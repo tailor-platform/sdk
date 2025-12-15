@@ -13,7 +13,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import {
   type WorkflowExecutionInfo,
   toWorkflowExecutionInfo,
@@ -332,7 +332,6 @@ export const startCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.json);
     const interval = parseDuration(args.interval);
 
     const { executionId, wait } = await workflowStart({
@@ -345,15 +344,15 @@ export const startCommand = defineCommand({
       interval,
     });
 
-    if (format !== "json") {
+    if (!args.json) {
       consola.info(`Execution ID: ${executionId}`);
     }
 
     if (args.wait) {
       const result = await wait();
-      printWithFormat(result, format);
+      printData(result, args.json);
     } else {
-      printWithFormat({ executionId }, format);
+      printData({ executionId }, args.json);
     }
   }),
 });

@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
-import { parseFormat, printWithFormat } from "../../format";
+import { printData } from "../../format";
 import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface VaultListOptions {
@@ -73,13 +73,11 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.json);
-
     const vaults = await vaultList({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
-    printWithFormat(vaults, format);
+    printData(vaults, args.json);
   }),
 });

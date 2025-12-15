@@ -4,7 +4,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadWorkspaceId } from "./context";
-import { parseFormat, printWithFormat } from "./format";
+import { printData } from "./format";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {
@@ -90,9 +90,6 @@ export const showCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate cli specific args
-    const format = parseFormat(args.json);
-
     // Execute show logic
     const appInfo = await show({
       workspaceId: args["workspace-id"],
@@ -100,7 +97,6 @@ export const showCommand = defineCommand({
       configPath: args.config,
     });
 
-    // Show application
-    printWithFormat(appInfo, format);
+    printData(appInfo, args.json);
   }),
 });

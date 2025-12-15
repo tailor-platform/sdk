@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import { parseDuration, waitForExecution } from "./start";
 import { type WorkflowExecutionInfo } from "./transform";
 
@@ -99,7 +99,6 @@ export const resumeCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.json);
     const interval = parseDuration(args.interval);
 
     const { executionId, wait } = await workflowResume({
@@ -109,16 +108,16 @@ export const resumeCommand = defineCommand({
       interval,
     });
 
-    if (format !== "json") {
+    if (!args.json) {
       const { default: consola } = await import("consola");
       consola.info(`Execution ID: ${executionId}`);
     }
 
     if (args.wait) {
       const result = await wait();
-      printWithFormat(result, format);
+      printData(result, args.json);
     } else {
-      printWithFormat({ executionId }, format);
+      printData({ executionId }, args.json);
     }
   }),
 });

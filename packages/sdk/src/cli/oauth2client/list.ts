@@ -3,7 +3,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
 
 export interface OAuth2ClientListOptions {
@@ -76,14 +76,12 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.json);
-
     const oauth2Clients = await oauth2ClientList({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
     });
 
-    printWithFormat(oauth2Clients, format);
+    printData(oauth2Clients, args.json);
   }),
 });

@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 
 export interface WorkflowGetOptions {
@@ -85,14 +85,12 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.json);
-
     const workflow = await workflowGet({
       nameOrId: args.nameOrId,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
-    printWithFormat(workflow, format);
+    printData(workflow, args.json);
   }),
 });

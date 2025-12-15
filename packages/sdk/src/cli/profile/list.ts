@@ -3,7 +3,7 @@ import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import type { ProfileInfo } from ".";
 
 export const listCommand = defineCommand({
@@ -16,9 +16,6 @@ export const listCommand = defineCommand({
     ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
-    const format = parseFormat(args.json);
-
     const config = readPlatformConfig();
 
     const profiles = Object.entries(config.profiles);
@@ -30,12 +27,11 @@ export const listCommand = defineCommand({
       return;
     }
 
-    // Show profiles info
     const profileInfos: ProfileInfo[] = profiles.map(([name, profile]) => ({
       name,
       user: profile!.user,
       workspaceId: profile!.workspace_id,
     }));
-    printWithFormat(profileInfos, format);
+    printData(profileInfos, args.json);
   }),
 });

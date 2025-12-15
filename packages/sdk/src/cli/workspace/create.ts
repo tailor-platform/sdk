@@ -4,7 +4,7 @@ import { validate as validateUuid } from "uuid";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface WorkspaceCreateOptions {
@@ -104,9 +104,6 @@ export const createCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate CLI specific args
-    const format = parseFormat(args.json);
-
     // Execute workspace create logic
     const workspace = await workspaceCreate({
       name: args.name,
@@ -116,12 +113,10 @@ export const createCommand = defineCommand({
       folderId: args["folder-id"],
     });
 
-    // Show success message for table format
-    if (format === "table") {
+    if (!args.json) {
       consola.success(`Workspace "${args.name}" created successfully.`);
     }
 
-    // Show workspace info
-    printWithFormat(workspace, format);
+    printData(workspace, args.json);
   }),
 });

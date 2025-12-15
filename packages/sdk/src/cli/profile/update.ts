@@ -7,7 +7,7 @@ import {
   readPlatformConfig,
   writePlatformConfig,
 } from "../context";
-import { parseFormat, printWithFormat } from "../format";
+import { printData } from "../format";
 import type { ProfileInfo } from ".";
 
 export const updateCommand = defineCommand({
@@ -35,9 +35,6 @@ export const updateCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
-    const format = parseFormat(args.json);
-
     const config = readPlatformConfig();
 
     // Check if profile exists
@@ -76,7 +73,7 @@ export const updateCommand = defineCommand({
     profile.user = newUser;
     profile.workspace_id = newWorkspaceId;
     writePlatformConfig(config);
-    if (format === "table") {
+    if (!args.json) {
       consola.success(`Profile "${args.name}" updated successfully`);
     }
 
@@ -86,6 +83,6 @@ export const updateCommand = defineCommand({
       user: newUser,
       workspaceId: newWorkspaceId,
     };
-    printWithFormat(profileInfo, format);
+    printData(profileInfo, args.json);
   }),
 });
