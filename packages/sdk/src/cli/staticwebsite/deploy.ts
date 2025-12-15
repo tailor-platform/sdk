@@ -129,7 +129,7 @@ async function uploadSingleFile(
     }
   }
 
-  consola.debug?.(`Uploading ${filePath} (${stat.size} bytes)...`);
+  consola.debug(`Uploading ${filePath} (${stat.size} bytes)...`);
   await client.uploadFile(requestStream());
 }
 
