@@ -34,7 +34,7 @@ npm run deploy -- --workspace-id <your-workspace-id>
 
 ```graphql
 query {
-  hello(input: { name: "sdk" }) {
+  hello(name: "sdk") {
     message
   }
 }
