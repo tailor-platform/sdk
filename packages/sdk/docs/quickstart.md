@@ -98,4 +98,4 @@ Deploy again to see the response.
 - Learn about [TailorDB](./services/tailordb.md) for database schema definition
 - Create custom [Resolvers](./services/resolver.md) with business logic
 - Set up [Executors](./services/executor.md) for event-driven automation
-- Explore [Templates](../../create-sdk/README.md#available-templates) for more examples
+- Explore [Templates](https://github.com/tailor-platform/sdk/tree/main/packages/create-sdk#available-templates) for more examples

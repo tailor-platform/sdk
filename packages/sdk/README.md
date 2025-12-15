@@ -42,7 +42,7 @@ cd my-app
 npm run deploy -- --workspace-id <your-workspace-id>
 ```
 
-See [Available Templates](../create-sdk/README.md#available-templates) for more options.
+See [Available Templates](https://github.com/tailor-platform/sdk/tree/main/packages/create-sdk#available-templates) for more options.
 
 ## Documentation
 
@@ -76,7 +76,7 @@ Full documentation is available at [docs.tailor.tech](https://docs.tailor.tech/r
 
 ### Templates
 
-See [Create Tailor Platform SDK](../create-sdk/README.md) for available project templates.
+See [Create Tailor Platform SDK](https://github.com/tailor-platform/sdk/tree/main/packages/create-sdk) for available project templates.
 
 ## Requirements
 
