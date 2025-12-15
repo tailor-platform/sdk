@@ -48,6 +48,7 @@ async function install() {
       );
       const { config } = await loadConfig(configPath);
       await generateUserTypes(config, configPath);
+      return;
     } catch (error) {
       console.warn("⚠️  Failed to generate types from config:", error.message);
       // Fall through to create empty type definition
