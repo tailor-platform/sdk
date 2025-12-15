@@ -3,7 +3,7 @@ import { deployStaticWebsiteCommand } from "./deploy";
 
 export const staticwebsiteCommand = defineCommand({
   meta: {
-    name: "static-website",
+    name: "staticwebsite",
     description: "Manage static websites",
   },
   subCommands: {
