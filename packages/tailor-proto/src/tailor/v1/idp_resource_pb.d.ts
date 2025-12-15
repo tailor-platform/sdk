@@ -83,6 +83,11 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * @generated from field: bool use_non_email_identifier = 1;
    */
   useNonEmailIdentifier: boolean;
+
+  /**
+   * @generated from field: bool allow_self_password_reset = 2;
+   */
+  allowSelfPasswordReset: boolean;
 };
 
 /**
