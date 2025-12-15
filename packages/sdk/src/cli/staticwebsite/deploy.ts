@@ -95,12 +95,8 @@ async function uploadSingleFile(
   relativePath: string,
 ): Promise<void> {
   const absPath = path.join(rootDir, relativePath);
-  const stat = await fs.promises.stat(absPath);
-  if (!stat.isFile()) {
-    return;
-  }
 
-  const filePath = relativePath.split(path.sep).join("/"); // posix
+  const filePath = relativePath.split(path.sep).join("/");
   const contentType = detectContentType(filePath);
 
   const readStream = fs.createReadStream(absPath);
@@ -129,7 +125,7 @@ async function uploadSingleFile(
     }
   }
 
-  consola.debug(`Uploading ${filePath} (${stat.size} bytes)...`);
+  consola.debug(`Uploading ${filePath}...`);
   await client.uploadFile(requestStream());
 }
 
