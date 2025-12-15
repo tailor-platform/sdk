@@ -1,15 +1,10 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "./args";
+import { commonArgs, jsonArgs, withCommonArgs } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadWorkspaceId } from "./context";
+import { parseFormat, printWithFormat } from "./format";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {

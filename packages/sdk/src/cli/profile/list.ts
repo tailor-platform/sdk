@@ -1,14 +1,9 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 import type { ProfileInfo } from ".";
 
 export const listCommand = defineCommand({

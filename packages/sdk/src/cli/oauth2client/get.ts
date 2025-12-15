@@ -1,15 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 import {
   type OAuth2ClientCredentials,
   toOAuth2ClientCredentials,

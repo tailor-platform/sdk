@@ -1,14 +1,9 @@
 import { defineCommand } from "citty";
 import { table } from "table";
-import {
-  commonArgs,
-  humanizeRelativeTime,
-  jsonArgs,
-  parseFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { humanizeRelativeTime, parseFormat } from "../format";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
 export interface WorkflowListOptions {

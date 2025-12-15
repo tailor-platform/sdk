@@ -2,8 +2,9 @@ import chalk from "chalk";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import { commonArgs, jsonArgs, parseFormat, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
+import { parseFormat } from "../format";
 
 export const listCommand = defineCommand({
   meta: {

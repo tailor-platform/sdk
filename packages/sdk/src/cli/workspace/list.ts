@@ -1,14 +1,8 @@
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  humanizeRelativeTime,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
+import { humanizeRelativeTime, parseFormat, printWithFormat } from "../format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface WorkspaceListOptions {

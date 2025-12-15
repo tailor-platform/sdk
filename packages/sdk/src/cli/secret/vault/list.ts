@@ -1,14 +1,9 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
+import { parseFormat, printWithFormat } from "../../format";
 import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface VaultListOptions {

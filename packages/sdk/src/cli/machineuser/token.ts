@@ -1,14 +1,9 @@
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 
 export interface MachineUserTokenOptions {
   name: string;

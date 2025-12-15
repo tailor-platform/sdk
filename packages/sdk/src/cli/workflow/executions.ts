@@ -11,15 +11,10 @@ import { defineCommand } from "citty";
 import { default as consola } from "consola";
 import ora from "ora";
 import { table } from "table";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,

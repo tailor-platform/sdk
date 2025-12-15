@@ -1,18 +1,13 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import {
   fetchLatestToken,
   readPlatformConfig,
   writePlatformConfig,
 } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 import type { ProfileInfo } from ".";
 
 export const createCommand = defineCommand({

@@ -1,14 +1,9 @@
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
 
 export interface OAuth2ClientListOptions {

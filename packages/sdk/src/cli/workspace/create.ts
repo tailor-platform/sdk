@@ -1,15 +1,10 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { validate as validateUuid } from "uuid";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface WorkspaceCreateOptions {

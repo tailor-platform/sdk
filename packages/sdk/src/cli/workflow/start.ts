@@ -9,16 +9,11 @@ import chalk from "chalk";
 import { defineCommand } from "citty";
 import { default as consola } from "consola";
 import ora from "ora";
-import {
-  commonArgs,
-  jsonArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { parseFormat, printWithFormat } from "../format";
 import {
   type WorkflowExecutionInfo,
   toWorkflowExecutionInfo,
