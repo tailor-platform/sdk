@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.16.3
+
+### Patch Changes
+
+- [#179](https://github.com/tailor-platform/sdk/pull/179) [`2108408`](https://github.com/tailor-platform/sdk/commit/2108408cc9e2befc93e0e0db8ab91ca0c6036222) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support `userAuthPolicy` for idp
+
 ## 0.16.2
 
 ### Patch Changes
