@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
@@ -8,6 +9,8 @@ import { workspaceInfo, type WorkspaceInfo } from "./transform";
 export interface WorkspaceListOptions {
   limit?: number;
 }
+
+const limitSchema = z.coerce.number().int().positive().optional();
 
 export async function workspaceList(
   options?: WorkspaceListOptions,
@@ -77,14 +80,12 @@ export const listCommand = defineCommand({
 
     // Parse and validate limit
     let limit: number | undefined;
-    if (args.limit != null) {
-      const parsed = Number(args.limit);
-      if (!Number.isInteger(parsed) || parsed <= 0) {
-        throw new Error(
-          `--limit must be a positive integer, got "${args.limit}".`,
-        );
-      }
-      limit = parsed;
+    try {
+      limit = limitSchema.parse(args.limit);
+    } catch {
+      throw new Error(
+        `--limit must be a positive integer, got '${args.limit}'`,
+      );
     }
 
     // Execute workspace list logic
