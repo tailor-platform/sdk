@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { defineCommand } from "citty";
 import consola from "consola";
+import { lookup as mimeLookup } from "mime-types";
 import { withCommonArgs, commonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
@@ -97,7 +98,22 @@ async function uploadSingleFile(
   const absPath = path.join(rootDir, relativePath);
 
   const filePath = relativePath.split(path.sep).join("/");
-  const contentType = detectContentType(filePath);
+
+  const mime = mimeLookup(filePath);
+
+  if (!mime) {
+    throw new Error(
+      `Unsupported file type for path "${filePath}". ` +
+        `Please extend MIME handling or exclude this file.`,
+    );
+  }
+  if (mime === "application/octet-stream") {
+    throw new Error(
+      `Content type "application/octet-stream" is not allowed for "${filePath}".`,
+    );
+  }
+
+  const contentType = mime;
 
   const readStream = fs.createReadStream(absPath);
 
@@ -127,43 +143,6 @@ async function uploadSingleFile(
 
   consola.debug(`Uploading ${filePath}...`);
   await client.uploadFile(requestStream());
-}
-
-function detectContentType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  switch (ext) {
-    case ".html":
-    case ".htm":
-      return "text/html";
-    case ".js":
-    case ".mjs":
-    case ".cjs":
-      return "text/javascript";
-    case ".css":
-      return "text/css";
-    case ".json":
-      return "application/json";
-    case ".txt":
-      return "text/plain";
-    case ".woff2":
-      return "font/woff2";
-    case ".png":
-      return "image/png";
-    case ".jpg":
-    case ".jpeg":
-      return "image/jpeg";
-    case ".gif":
-      return "image/gif";
-    case ".svg":
-      return "image/svg+xml";
-    case ".ico":
-      return "image/x-icon";
-    default:
-      throw new Error(
-        `Unsupported file type "${ext}" for path "${filePath}". ` +
-          `Please extend detectContentType() to handle this extension.`,
-      );
-  }
 }
 
 export const deployStaticWebsiteCommand = defineCommand({

@@ -826,3 +826,39 @@ tailor-sdk secret delete [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-y, --yes` - Skip confirmation prompt
+
+### staticwebsite
+
+Manage and deploy static websites.
+
+```bash
+tailor-sdk staticwebsite <subcommand> [options]
+```
+
+#### staticwebsite deploy
+
+Deploy a static website from a local build directory.
+
+```bash
+tailor-sdk staticwebsite deploy [options]
+```
+
+**Options:**
+
+- `-n, --name` - Static website name (required)
+- `-d, --dir` - Path to built static files (e.g. `./out`) (required)
+- `-w, --workspace-id` - ID of the workspace (optional, falls back to `TAILOR_PLATFORM_WORKSPACE_ID` or profile)
+- `-p, --profile` - Workspace profile to use (optional)
+- `-e, --env-file` - Path to an environment file to load before running the command
+- `-v, --verbose` - Enable verbose logging
+
+**Usage Examples:**
+
+```bash
+# Deploy from a local build directory, using workspace ID from environment
+TAILOR_PLATFORM_WORKSPACE_ID=ws_123 \
+tailor-sdk staticwebsite deploy -n my-frontend -d ./out
+
+# Deploy with an explicit workspace ID
+tailor-sdk staticwebsite deploy -w ws_123 -n my-frontend -d ./out
+```
