@@ -60,8 +60,8 @@
     "citty": "0.1.6",
     "confbox": "0.2.2",
     "consola": "3.4.2",
+    "date-fns": "^4.1.0",
     "es-toolkit": "1.42.0",
-    "humanize-duration": "3.32.1",
     "inflection": "3.0.2",
     "madge": "8.0.0",
     "multiline-ts": "4.0.1",
@@ -80,7 +80,6 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
-    "@types/humanize-duration": "3.27.4",
     "@tailor-platform/function-types": "0.8.0",
     "@types/madge": "5.0.3",
     "@types/node": "22.19.2",
