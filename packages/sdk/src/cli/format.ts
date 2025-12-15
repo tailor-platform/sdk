@@ -1,6 +1,8 @@
 import humanizeDuration from "humanize-duration";
 import { getBorderCharacters, table } from "table";
 
+const ONE_MINUTE_MS = 60_000;
+
 export function humanizeRelativeTime(isoString: string): string {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) {
@@ -9,7 +11,7 @@ export function humanizeRelativeTime(isoString: string): string {
 
   const diffMs = Date.now() - date.getTime();
 
-  if (diffMs <= 0) {
+  if (diffMs < ONE_MINUTE_MS) {
     return "just now";
   }
 
