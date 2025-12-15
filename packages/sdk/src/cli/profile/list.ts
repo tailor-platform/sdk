@@ -3,7 +3,7 @@ import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
-import { printData } from "../format";
+import { printData } from "../output";
 import type { ProfileInfo } from ".";
 
 export const listCommand = defineCommand({

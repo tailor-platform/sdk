@@ -7,7 +7,7 @@ import {
   readPlatformConfig,
   writePlatformConfig,
 } from "../context";
-import { printData } from "../format";
+import { printData } from "../output";
 import type { ProfileInfo } from ".";
 
 export const updateCommand = defineCommand({

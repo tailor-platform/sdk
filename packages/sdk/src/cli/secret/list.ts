@@ -4,7 +4,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../output";
 import type { SecretManagerSecret } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface SecretListOptions {

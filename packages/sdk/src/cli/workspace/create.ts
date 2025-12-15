@@ -4,7 +4,7 @@ import { validate as validateUuid } from "uuid";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { printData } from "../format";
+import { printData } from "../output";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface WorkspaceCreateOptions {
