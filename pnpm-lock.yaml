@@ -76,8 +76,8 @@ importers:
         specifier: 2.1.1
         version: 2.1.1(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.1))
       '@jackchuka/gql-ingest':
-        specifier: 2.0.2
-        version: 2.0.2(graphql@16.12.0)
+        specifier: 2.1.0
+        version: 2.1.0(graphql@16.12.0)
       '@tailor-platform/function-kysely-tailordb':
         specifier: 0.1.3
         version: 0.1.3(kysely@0.28.8)
@@ -943,8 +943,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@jackchuka/gql-ingest@2.0.2':
-    resolution: {integrity: sha512-JipmM1f/ZmDtZi8OXcjCv+lcTmeWLbWW2YTeDwk/uWky4IaxiDmHoqWT0z1rKuZhWnoketyfz6myzny9h+hqdQ==}
+  '@jackchuka/gql-ingest@2.1.0':
+    resolution: {integrity: sha512-z1FRs8ZQTolrfJvuJWW6mx0935EGDfn3WehjqG9FFTGVfb0yq3I/I81kEcYEb5/1UrpCzsmhyeM6zt6xd1sbrg==}
     hasBin: true
 
   '@jridgewell/gen-mapping@0.3.12':
@@ -4312,7 +4312,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.19.2
 
-  '@jackchuka/gql-ingest@2.0.2(graphql@16.12.0)':
+  '@jackchuka/gql-ingest@2.1.0(graphql@16.12.0)':
     dependencies:
       commander: 14.0.2
       csv-parser: 3.2.0
