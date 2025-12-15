@@ -243,6 +243,7 @@ async function planServices(
     }
 
     const lang = convertLang(idp.lang);
+    const userAuthPolicy = idp.userAuthPolicy;
 
     if (existing) {
       if (!existing.label) {
@@ -265,6 +266,7 @@ async function planServices(
           namespaceName,
           authorization,
           lang,
+          userAuthPolicy,
         },
         metaRequest,
       });
@@ -277,6 +279,7 @@ async function planServices(
           namespaceName,
           authorization,
           lang,
+          userAuthPolicy,
         },
         metaRequest,
       });
