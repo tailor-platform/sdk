@@ -3,8 +3,8 @@ import { z } from "zod";
 export const IdPLangSchema = z.enum(["en", "ja"]);
 
 export const IdPUserAuthPolicySchema = z.object({
-  useNonEmailIdentifier: z.boolean().optional(),
-  allowSelfPasswordReset: z.boolean().optional(),
+  useNonEmailIdentifier: z.boolean().default(false),
+  allowSelfPasswordReset: z.boolean().default(false),
 });
 
 export const IdPSchema = z
@@ -17,6 +17,8 @@ export const IdPSchema = z
     ]),
     clients: z.array(z.string()),
     lang: IdPLangSchema.optional(),
-    userAuthPolicy: IdPUserAuthPolicySchema.optional(),
+    userAuthPolicy: IdPUserAuthPolicySchema.transform((input) =>
+      IdPUserAuthPolicySchema.parse(input ?? {}),
+    ).optional(),
   })
   .brand("IdPConfig");

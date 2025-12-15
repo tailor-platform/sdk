@@ -243,16 +243,7 @@ async function planServices(
     }
 
     const lang = convertLang(idp.lang);
-    let userAuthPolicy = undefined;
-    if (idp.userAuthPolicy) {
-      // Both fields have default values (false) according to protobuf definition
-      userAuthPolicy = {
-        useNonEmailIdentifier:
-          idp.userAuthPolicy.useNonEmailIdentifier ?? false,
-        allowSelfPasswordReset:
-          idp.userAuthPolicy.allowSelfPasswordReset ?? false,
-      };
-    }
+    const userAuthPolicy = idp.userAuthPolicy;
 
     if (existing) {
       if (!existing.label) {
