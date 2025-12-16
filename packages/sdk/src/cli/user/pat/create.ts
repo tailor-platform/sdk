@@ -28,8 +28,6 @@ export const createCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 
-    console.log(args);
-
     if (!config.current_user) {
       throw new Error(ml`
         No user logged in.
