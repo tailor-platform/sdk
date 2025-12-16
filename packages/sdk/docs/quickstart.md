@@ -1,6 +1,4 @@
-# Tailor Platform SDK
-
-Development kit for building type-safe applications on the Tailor Platform using TypeScript.
+# Quickstart
 
 ## Getting Started
 
@@ -49,7 +47,7 @@ You can now open the GraphQL Playground and execute the `hello` query:
 
 ```graphql
 query {
-  hello(input: { name: "sdk" }) {
+  hello(name: "sdk") {
     message
   }
 }
@@ -94,3 +92,10 @@ export default createResolver({
 ```
 
 Deploy again to see the response.
+
+## Next Steps
+
+- Learn about [TailorDB](./services/tailordb.md) for database schema definition
+- Create custom [Resolvers](./services/resolver.md) with business logic
+- Set up [Executors](./services/executor.md) for event-driven automation
+- Explore [Templates](https://github.com/tailor-platform/sdk/tree/main/packages/create-sdk#available-templates) for more examples

@@ -2,6 +2,17 @@
 
 The SDK uses TypeScript for configuration files. By default, it uses `tailor.config.ts` in the project root. You can specify a different path using the `--config` option.
 
+For service-specific documentation, see:
+
+- [TailorDB](./services/tailordb.md) - Database schema definition
+- [Resolver](./services/resolver.md) - Custom GraphQL resolvers
+- [Executor](./services/executor.md) - Event-driven handlers
+- [Workflow](./services/workflow.md) - Job orchestration
+- [Auth](./services/auth.md) - Authentication and authorization
+- [IdP](./services/idp.md) - Built-in identity provider
+- [Static Website](./services/staticwebsite.md) - Static file hosting
+- [Secret Manager](./services/secret.md) - Secure credential storage
+
 ### Application Settings
 
 ```typescript
@@ -53,7 +64,7 @@ export default defineConfig({
 
 ### Built-in IdP
 
-Configure the Built-in IdP service using `defineIdp()`. The returned IdP object provides type-safe provider references via `idp.provider()` that can be used in Auth service configuration.
+Configure the Built-in IdP service using `defineIdp()`. See [IdP](./services/idp.md) for full documentation.
 
 ```typescript
 import { defineIdp } from "@tailor-platform/sdk";
@@ -68,13 +79,9 @@ export default defineConfig({
 });
 ```
 
-**authorization**: User management permissions (`"insecure"`, `"loggedIn"`, or CEL expression).
-
-**clients**: OAuth client names for the IdP.
-
 ### Auth Service
 
-Configure Auth service using `defineAuth()`:
+Configure Auth service using `defineAuth()`. See [Auth](./services/auth.md) for full documentation.
 
 ```typescript
 import { defineAuth } from "@tailor-platform/sdk";
@@ -86,17 +93,6 @@ const auth = defineAuth("my-auth", {
     usernameField: "email",
     attributes: { role: true },
   },
-  machineUsers: {
-    "admin-machine-user": {
-      attributes: { role: "ADMIN" },
-    },
-  },
-  oauth2Clients: {
-    "my-oauth2-client": {
-      redirectURIs: ["https://example.com/callback"],
-      grantTypes: ["authorization_code", "refresh_token"],
-    },
-  },
   idProvider: idp.provider("my-provider", "my-client"),
 });
 
@@ -105,24 +101,15 @@ export default defineConfig({
 });
 ```
 
-**userProfile**: Maps identities to TailorDB type with username field and attributes.
-
-**machineUsers**: Service accounts with predefined attributes.
-
-**oauth2Clients**: OAuth 2.0 clients with redirect URIs and grant types.
-
-**idProvider**: External identity provider (OIDC, SAML, IDToken, or BuiltInIdP).
-
 ### Static Websites
 
-Configure static website hosting using `defineStaticWebSite()`. The returned website object provides a type-safe `url` property that can be used in CORS settings and OAuth2 redirect URIs.
+Configure static website hosting using `defineStaticWebSite()`. See [Static Website](./services/staticwebsite.md) for full documentation.
 
 ```typescript
 import { defineStaticWebSite } from "@tailor-platform/sdk";
 
 const website = defineStaticWebSite("my-website", {
   description: "My Static Website",
-  allowedIPAddresses: ["192.168.0.0/24"],
 });
 
 export default defineConfig({
@@ -130,13 +117,9 @@ export default defineConfig({
 });
 ```
 
-**description**: Description of the site.
-
-**allowedIPAddresses**: List of IP addresses allowed to access the site in CIDR format.
-
 ### Environment Variables
 
-Define environment variables that can be accessed in resolvers and executors:
+Define environment variables that can be accessed in resolvers, executors, and workflows:
 
 ```typescript
 export default defineConfig({
@@ -163,6 +146,12 @@ body: ({ input, env }) => {
 body: ({ newRecord, env }) => {
   console.log(`Environment: ${env.bar}, User: ${newRecord.name}`);
 };
+
+// In workflow jobs
+body: (input, { env }) => {
+  console.log(`Environment: ${env.bar}`);
+  return { value: env.foo };
+};
 ```
 
 ### Workflow Service
@@ -181,3 +170,18 @@ export default defineConfig({
 **files**: Glob patterns to match workflow files. Required.
 
 **ignores**: Glob patterns to exclude files. Optional.
+
+### Generators
+
+Configure code generators using `defineGenerators()`. Generators must be exported as a named export.
+
+```typescript
+import { defineGenerators } from "@tailor-platform/sdk";
+
+export const generators = defineGenerators(
+  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
+  ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
+);
+```
+
+See [Generators](./generator/index.md) for full documentation.
