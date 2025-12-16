@@ -534,6 +534,7 @@ describe("GenerationManager", () => {
         },
         executorInputs: [],
         baseDir: expect.stringContaining(testGenerator.id),
+        configPath: expect.any(String),
       });
     });
 

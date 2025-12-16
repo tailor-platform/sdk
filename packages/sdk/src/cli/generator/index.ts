@@ -351,6 +351,7 @@ export class GenerationManager {
       input,
       executorInputs: Object.values(results.executorResults),
       baseDir: path.join(this.baseDir, gen.id),
+      configPath: this.configPath ?? "tailor.config.ts",
     });
 
     // Write generated files

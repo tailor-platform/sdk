@@ -78,6 +78,7 @@ export class FileUtilsGenerator implements CodeGenerator<
     input: GeneratorInput<string, undefined>;
     executorInputs: undefined[];
     baseDir: string;
+    configPath: string;
   }): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 

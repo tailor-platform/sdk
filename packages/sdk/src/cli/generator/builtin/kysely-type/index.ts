@@ -68,6 +68,7 @@ export class KyselyGenerator implements CodeGenerator<
     input: GeneratorInput<KyselyNamespaceMetadata, undefined>;
     executorInputs: undefined[];
     baseDir: string;
+    configPath: string;
   }): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
