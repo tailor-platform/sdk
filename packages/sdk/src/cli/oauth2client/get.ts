@@ -1,15 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { printData } from "../format";
 import {
   type OAuth2ClientCredentials,
   toOAuth2ClientCredentials,
@@ -69,7 +64,7 @@ export const getCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     name: {
       type: "positional",
       description: "OAuth2 client name",
@@ -93,8 +88,6 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
-
     const credentials = await oauth2ClientGet({
       name: args.name,
       workspaceId: args["workspace-id"],
@@ -102,6 +95,6 @@ export const getCommand = defineCommand({
       configPath: args.config,
     });
 
-    printWithFormat(credentials, format);
+    printData(credentials, args.json);
   }),
 });

@@ -1,5 +1,53 @@
 # @tailor-platform/sdk
 
+## 0.16.3
+
+### Patch Changes
+
+- [#179](https://github.com/tailor-platform/sdk/pull/179) [`2108408`](https://github.com/tailor-platform/sdk/commit/2108408cc9e2befc93e0e0db8ab91ca0c6036222) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support `userAuthPolicy` for idp
+
+## 0.16.2
+
+### Patch Changes
+
+- [#170](https://github.com/tailor-platform/sdk/pull/170) [`6c34448`](https://github.com/tailor-platform/sdk/commit/6c344484cc9f4b0a574ec09737ca4e30e3889ad2) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add workflow executor support
+
+  Added `kind: "workflow"` operation to executors, enabling direct workflow execution from schedule triggers or record triggers.
+
+  ```typescript
+  import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
+  import sampleWorkflow from "../workflows/sample";
+
+  export default createExecutor({
+    name: "daily-workflow",
+    trigger: scheduleTrigger({
+      cron: "0 12 * * *",
+      timezone: "Asia/Tokyo",
+    }),
+    operation: {
+      kind: "workflow",
+      workflow: sampleWorkflow,
+      args: () => ({ orderId: "daily-workflow-order" }),
+    },
+  });
+  ```
+
+  - `workflow`: The workflow to execute (default export)
+  - `args`: Arguments to pass to the workflow's mainJob (static value or function)
+  - `authInvoker`: Optional authentication configuration
+
+## 0.16.1
+
+### Patch Changes
+
+- [#160](https://github.com/tailor-platform/sdk/pull/160) [`1406523`](https://github.com/tailor-platform/sdk/commit/14065237e5f0b05cf898c0fff196e1eb599fb96f) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: correctly determine create/update for workflow job functions
+
+  Previously, the SDK used `hasExistingWorkflows` (based on workflow updates) to decide whether to use `createWorkflowJobFunction` or `updateWorkflowJobFunction`. This caused errors when renaming job functions, as renamed jobs were incorrectly sent to the update API which requires the job to already exist.
+
+  Now the SDK fetches the actual list of existing job function names via `listWorkflowJobFunctions` API and correctly uses:
+  - `createWorkflowJobFunction` for new job names (including renamed jobs)
+  - `updateWorkflowJobFunction` for existing job names
+
 ## 0.16.0
 
 ### Minor Changes

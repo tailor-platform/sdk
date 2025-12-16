@@ -14,6 +14,10 @@ const website = defineStaticWebSite("my-frontend", {
 const idp = defineIdp("my-idp", {
   authorization: "loggedIn",
   clients: ["default-idp-client"],
+  userAuthPolicy: {
+    useNonEmailIdentifier: false,
+    allowSelfPasswordReset: true,
+  },
 });
 
 export const auth = defineAuth("my-auth", {

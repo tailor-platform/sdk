@@ -67,4 +67,37 @@ describe("defineIdp", () => {
     });
     expect(idpNoLang.lang).toBeUndefined();
   });
+
+  it("should preserve userAuthPolicy config", () => {
+    const idpWithPolicy = defineIdp("idp-with-policy", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        useNonEmailIdentifier: true,
+        allowSelfPasswordReset: true,
+      },
+    });
+    expect(idpWithPolicy.userAuthPolicy?.useNonEmailIdentifier).toBe(true);
+    expect(idpWithPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(true);
+
+    const idpWithPartialPolicy = defineIdp("idp-with-partial-policy", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowSelfPasswordReset: false,
+      },
+    });
+    expect(
+      idpWithPartialPolicy.userAuthPolicy?.useNonEmailIdentifier,
+    ).toBeUndefined();
+    expect(idpWithPartialPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(
+      false,
+    );
+
+    const idpNoPolicy = defineIdp("idp-no-policy", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoPolicy.userAuthPolicy).toBeUndefined();
+  });
 });

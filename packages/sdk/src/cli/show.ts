@@ -1,15 +1,10 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "./args";
+import { commonArgs, jsonArgs, withCommonArgs } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadWorkspaceId } from "./context";
+import { printData } from "./format";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {
@@ -76,7 +71,7 @@ export const showCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -95,9 +90,6 @@ export const showCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate cli specific args
-    const format = parseFormat(args.format);
-
     // Execute show logic
     const appInfo = await show({
       workspaceId: args["workspace-id"],
@@ -105,7 +97,6 @@ export const showCommand = defineCommand({
       configPath: args.config,
     });
 
-    // Show application
-    printWithFormat(appInfo, format);
+    printData(appInfo, args.json);
   }),
 });

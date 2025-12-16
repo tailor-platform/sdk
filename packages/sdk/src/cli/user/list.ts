@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import { commonArgs, formatArgs, parseFormat, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
 
 export const listCommand = defineCommand({
@@ -12,12 +12,9 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
-    const format = parseFormat(args.format);
-
     const config = readPlatformConfig();
 
     const users = Object.keys(config.users);
@@ -29,23 +26,17 @@ export const listCommand = defineCommand({
       return;
     }
 
-    // Show users
-    switch (format) {
-      case "table": {
-        users.forEach((user) => {
-          if (user === config.current_user) {
-            console.log(chalk.green.bold(`${user} (current)`));
-          } else {
-            console.log(user);
-          }
-        });
-        break;
-      }
-      case "json":
-        console.log(JSON.stringify(users));
-        break;
-      default:
-        throw new Error(`Format "${format satisfies never}" is invalid.`);
+    if (args.json) {
+      console.log(JSON.stringify(users));
+      return;
     }
+
+    users.forEach((user) => {
+      if (user === config.current_user) {
+        console.log(chalk.green.bold(`${user} (current)`));
+      } else {
+        console.log(user);
+      }
+    });
   }),
 });

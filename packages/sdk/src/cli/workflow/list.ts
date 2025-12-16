@@ -1,8 +1,9 @@
 import { defineCommand } from "citty";
 import { table } from "table";
-import { commonArgs, formatArgs, parseFormat, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { humanizeRelativeTime } from "../format";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
 export interface WorkflowListOptions {
@@ -41,7 +42,7 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -54,14 +55,12 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
-
     const workflows = await workflowList({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
-    if (format === "json") {
+    if (args.json) {
       console.log(JSON.stringify(workflows));
     } else {
       if (workflows.length === 0) {
@@ -73,7 +72,7 @@ export const listCommand = defineCommand({
         w.name,
         w.mainJob,
         w.jobFunctions.toString(),
-        w.updatedAt,
+        humanizeRelativeTime(w.updatedAt),
       ]);
       process.stdout.write(table([headers, ...rows]));
     }

@@ -1,14 +1,9 @@
 import { defineCommand } from "citty";
 import ml from "multiline-ts";
-import { commonArgs, withCommonArgs } from "../../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
-import {
-  getScopesFromWriteFlag,
-  parsePATFormat,
-  patFormatArgs,
-  printCreatedToken,
-} from "./transform";
+import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
 export const updateCommand = defineCommand({
   meta: {
@@ -17,7 +12,7 @@ export const updateCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...patFormatArgs,
+    ...jsonArgs,
     name: {
       type: "positional",
       description: "Token name",
@@ -31,7 +26,6 @@ export const updateCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parsePATFormat(args.format);
     const config = readPlatformConfig();
 
     if (!config.current_user) {
@@ -64,8 +58,8 @@ export const updateCommand = defineCommand({
       args.name,
       result.accessToken,
       args.write,
-      format,
       "updated",
+      args.json,
     );
   }),
 });

@@ -135,12 +135,14 @@ export declare type AuthIDPConfig_SAMLConfig = Message<"tailor.v1.AuthIDPConfig.
   metadataUrl: string;
 
   /**
-   * @generated from field: tailor.v1.SecretValue sp_cert_base64 = 2;
+   * @generated from field: tailor.v1.SecretValue sp_cert_base64 = 2 [deprecated = true];
+   * @deprecated
    */
   spCertBase64?: SecretValue;
 
   /**
-   * @generated from field: tailor.v1.SecretValue sp_key_base64 = 3;
+   * @generated from field: tailor.v1.SecretValue sp_key_base64 = 3 [deprecated = true];
+   * @deprecated
    */
   spKeyBase64?: SecretValue;
 
@@ -148,6 +150,11 @@ export declare type AuthIDPConfig_SAMLConfig = Message<"tailor.v1.AuthIDPConfig.
    * @generated from field: string raw_metadata = 4;
    */
   rawMetadata: string;
+
+  /**
+   * @generated from field: bool enable_sign_request = 5;
+   */
+  enableSignRequest: boolean;
 };
 
 /**

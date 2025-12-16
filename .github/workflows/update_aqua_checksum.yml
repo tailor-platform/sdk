@@ -1,0 +1,19 @@
+name: update aqua-checksums.json
+
+on:
+  pull_request:
+    paths:
+      - aqua.yaml
+      - aqua-checksums.json
+
+jobs:
+  update-aqua-checksums:
+    uses: aquaproj/update-checksum-workflow/.github/workflows/update-checksum.yaml@d248abb88efce715d50eb324100d9b29a20f7d18 # v1.0.4
+    permissions:
+      contents: read
+    with:
+      aqua_version: v2.55.3
+      prune: true
+    secrets:
+      gh_app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+      gh_app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}

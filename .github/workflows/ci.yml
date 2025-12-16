@@ -31,6 +31,17 @@ jobs:
       - name: Run lint
         run: pnpm lint
 
+      # Ensure no executable files are present
+      # refs: https://github.com/changesets/action/issues/523
+      - name: Check for executable files
+        run: |
+          executable_files=$(git ls-files | while read -r file; do [ -x "$file" ] && echo "$file"; done || true)
+          if [ -n "$executable_files" ]; then
+            echo "Error: Found executable files (changesets/action does not support executable files):"
+            echo "$executable_files"
+            exit 1
+          fi
+
       - name: Check format
         run: pnpm format:check
 

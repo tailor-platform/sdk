@@ -1,8 +1,11 @@
+import type { AuthInvoker } from "@/configure/services/auth";
+import type { Workflow } from "@/configure/services/workflow/workflow";
 import type { TailorEnv } from "@/configure/types/env";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
   WebhookOperation as ParserWebhookOperation,
+  WorkflowOperation as ParserWorkflowOperation,
 } from "@/parser/service/executor/types";
 import type { Client } from "@urql/core";
 
@@ -276,7 +279,23 @@ export type WebhookOperation<Args> = Omit<
   };
 };
 
+/**
+ * Extract mainJob's Input type from Workflow.
+ * Workflow<Job> -> Job is WorkflowJob<Name, Input, Output> -> Input
+ */
+type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
+
+export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
+  ParserWorkflowOperation,
+  "workflowName" | "args" | "authInvoker"
+> & {
+  workflow: W;
+  args?: WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
+  authInvoker?: AuthInvoker<string>;
+};
+
 export type Operation<Args> =
   | FunctionOperation<Args>
   | GqlOperation<Args>
-  | WebhookOperation<Args>;
+  | WebhookOperation<Args>
+  | WorkflowOperation<Args>;

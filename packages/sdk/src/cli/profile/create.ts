@@ -1,18 +1,13 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import {
   fetchLatestToken,
   readPlatformConfig,
   writePlatformConfig,
 } from "../context";
+import { printData } from "../format";
 import type { ProfileInfo } from ".";
 
 export const createCommand = defineCommand({
@@ -22,7 +17,7 @@ export const createCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     name: {
       type: "positional",
       description: "Profile name",
@@ -42,9 +37,6 @@ export const createCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
-    const format = parseFormat(args.format);
-
     const config = readPlatformConfig();
 
     // Check if profile already exists
@@ -76,7 +68,7 @@ export const createCommand = defineCommand({
     };
     writePlatformConfig(config);
 
-    if (format === "table") {
+    if (!args.json) {
       consola.success(`Profile "${args.name}" created successfully.`);
     }
 
@@ -86,6 +78,6 @@ export const createCommand = defineCommand({
       user: args.user,
       workspaceId: args["workspace-id"],
     };
-    printWithFormat(profileInfo, format);
+    printData(profileInfo, args.json);
   }),
 });
