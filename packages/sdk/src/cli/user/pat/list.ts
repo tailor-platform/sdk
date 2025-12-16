@@ -5,7 +5,6 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
 import {
-  parsePATFormat,
   transformPersonalAccessToken,
   type PersonalAccessTokenInfo,
 } from "./transform";
@@ -20,7 +19,7 @@ export const listCommand = defineCommand({
     ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
-    const format = parsePATFormat(args.json);
+    const json = args.json;
     const config = readPlatformConfig();
 
     if (!config.current_user) {
@@ -49,23 +48,23 @@ export const listCommand = defineCommand({
       return;
     }
 
-    if (format === "text") {
-      // Find the longest name for alignment
-      const maxNameLength = Math.max(...pats.map((pat) => pat.name.length));
-
-      // Display as simple list with right-aligned names: "name: scope1/scope2"
-      pats.forEach((pat) => {
-        const info = transformPersonalAccessToken(pat);
-        const paddedName = info.name.padStart(maxNameLength);
-        // Use console.log instead of consola.log to avoid timestamp
-        console.log(`${paddedName}: ${info.scopes.join("/")}`);
-      });
-    } else {
+    if (json) {
       // JSON format with scopes as array
       const patInfos: PersonalAccessTokenInfo[] = pats.map(
         transformPersonalAccessToken,
       );
       console.log(JSON.stringify(patInfos));
+      return;
     }
+
+    // Text format: aligned list "name: scope1/scope2"
+    const maxNameLength = Math.max(...pats.map((pat) => pat.name.length));
+
+    pats.forEach((pat) => {
+      const info = transformPersonalAccessToken(pat);
+      const paddedName = info.name.padStart(maxNameLength);
+      // Use console.log instead of consola.log to avoid timestamp
+      console.log(`${paddedName}: ${info.scopes.join("/")}`);
+    });
   }),
 });

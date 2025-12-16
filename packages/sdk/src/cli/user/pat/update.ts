@@ -3,11 +3,7 @@ import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
-import {
-  getScopesFromWriteFlag,
-  parsePATFormat,
-  printCreatedToken,
-} from "./transform";
+import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
 export const updateCommand = defineCommand({
   meta: {
@@ -30,7 +26,6 @@ export const updateCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parsePATFormat(args.json);
     const config = readPlatformConfig();
 
     if (!config.current_user) {
@@ -63,8 +58,8 @@ export const updateCommand = defineCommand({
       args.name,
       result.accessToken,
       args.write,
-      format,
       "updated",
+      args.json,
     );
   }),
 });

@@ -7,12 +7,6 @@ export interface PersonalAccessTokenInfo {
   scopes: string[];
 }
 
-export type PATOutputFormat = "text" | "json";
-
-export function parsePATFormat(jsonFlag?: boolean): PATOutputFormat {
-  return jsonFlag ? "json" : "text";
-}
-
 function patScopeToString(scope: PATScope): string {
   switch (scope) {
     case PATScope.PAT_SCOPE_READ:
@@ -47,12 +41,20 @@ export function printCreatedToken(
   name: string,
   token: string,
   write: boolean,
-  format: "text" | "json",
   action: "created" | "updated",
+  json?: boolean,
 ): void {
   const scopes = getScopeStringsFromWriteFlag(write);
 
-  if (format === "text") {
+  if (json) {
+    console.log(
+      JSON.stringify({
+        name,
+        scopes,
+        token,
+      }),
+    );
+  } else {
     console.log(ml`
       Personal access token ${action} successfully.
 
@@ -62,13 +64,5 @@ export function printCreatedToken(
 
       Please save this token in a secure location. You won't be able to see it again.
     `);
-  } else {
-    console.log(
-      JSON.stringify({
-        name,
-        scopes,
-        token,
-      }),
-    );
   }
 }

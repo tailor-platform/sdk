@@ -1,10 +1,4 @@
-import {
-  differenceInDays,
-  differenceInHours,
-  differenceInMinutes,
-  differenceInMonths,
-  differenceInYears,
-} from "date-fns";
+import { formatDistanceToNowStrict } from "date-fns";
 import { getBorderCharacters, table } from "table";
 
 export function humanizeRelativeTime(isoString: string): string {
@@ -13,39 +7,7 @@ export function humanizeRelativeTime(isoString: string): string {
     return isoString;
   }
 
-  const now = new Date();
-
-  const minutes = differenceInMinutes(now, date);
-  if (minutes < 1) {
-    return "just now";
-  }
-
-  if (minutes < 60) {
-    const unit = minutes === 1 ? "minute" : "minutes";
-    return `${minutes} ${unit} ago`;
-  }
-
-  const hours = differenceInHours(now, date);
-  if (hours < 24) {
-    const unit = hours === 1 ? "hour" : "hours";
-    return `${hours} ${unit} ago`;
-  }
-
-  const days = differenceInDays(now, date);
-  if (days < 30) {
-    const unit = days === 1 ? "day" : "days";
-    return `${days} ${unit} ago`;
-  }
-
-  const months = differenceInMonths(now, date);
-  if (months < 12) {
-    const unit = months === 1 ? "month" : "months";
-    return `${months} ${unit} ago`;
-  }
-
-  const years = differenceInYears(now, date);
-  const unit = years === 1 ? "year" : "years";
-  return `${years} ${unit} ago`;
+  return formatDistanceToNowStrict(date, { addSuffix: true });
 }
 
 export function printData(data: object | object[], json: boolean = false) {

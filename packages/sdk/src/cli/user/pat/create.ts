@@ -3,11 +3,7 @@ import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
-import {
-  getScopesFromWriteFlag,
-  parsePATFormat,
-  printCreatedToken,
-} from "./transform";
+import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
 export const createCommand = defineCommand({
   meta: {
@@ -30,8 +26,9 @@ export const createCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parsePATFormat(args.json);
     const config = readPlatformConfig();
+
+    console.log(args);
 
     if (!config.current_user) {
       throw new Error(ml`
@@ -57,8 +54,8 @@ export const createCommand = defineCommand({
       args.name,
       result.accessToken,
       args.write,
-      format,
       "created",
+      args.json,
     );
   }),
 });
