@@ -171,6 +171,23 @@ const userProfile = db.type("UserProfile", {
 });
 ```
 
+This generates the following GraphQL types:
+
+```graphql
+type UserProfile {
+  userId: ID!
+  base: User # toward.as: access User from UserProfile
+}
+
+type User {
+  id: ID!
+  profile: UserProfile # backward: access UserProfile from User
+}
+```
+
+- `toward.as` - Customizes the field name for accessing the related type from this type
+- `backward` - Customizes the field name for accessing this type from the related type
+
 ### Hooks
 
 Add hooks to execute functions during data creation or update:
