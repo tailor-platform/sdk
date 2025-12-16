@@ -114,28 +114,3 @@ tailor-sdk secret vault delete --name old-vault --yes
 ```
 
 See [Secret CLI Commands](../cli/secret.md) for full documentation.
-
-## Best Practices
-
-### Vault Organization
-
-Organize vaults by purpose or service:
-
-- `api-keys`: External API credentials
-- `oauth`: OAuth client secrets
-- `internal`: Internal service tokens
-
-### Secret Naming
-
-Use descriptive, consistent names:
-
-- `stripe-secret-key` (not `sk`)
-- `sendgrid-api-key` (not `sg_key`)
-- `database-read-password` (not `db_pwd`)
-
-### Security Considerations
-
-- Never commit secret values to version control
-- Rotate secrets regularly
-- Use separate vaults for different environments when applicable
-- Limit vault access to necessary services only
