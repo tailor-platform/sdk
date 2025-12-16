@@ -856,10 +856,38 @@ tailor-sdk staticwebsite deploy [options]
 **Usage Examples:**
 
 ```bash
-# Deploy from a local build directory, using workspace ID from environment
-TAILOR_PLATFORM_WORKSPACE_ID=ws_123 \
 tailor-sdk staticwebsite deploy -n my-frontend -d ./out
+```
 
-# Deploy with an explicit workspace ID
-tailor-sdk staticwebsite deploy -w ws_123 -n my-frontend -d ./out
+#### staticwebsite show
+
+Show details of a static website.
+
+```bash
+tailor-sdk staticwebsite show [options]
+```
+
+**Options:**
+
+- `-n, --name` - Static website name (required)
+- `-w, --workspace-id` - ID of the workspace (optional, falls back to `TAILOR_PLATFORM_WORKSPACE_ID` or profile)
+- `-p, --profile` - Workspace profile to use (optional)
+- `--json` - Output as JSON
+- `-e, --env-file` - Path to an environment file to load before running the command
+- `-v, --verbose` - Enable verbose logging
+
+**Output:**
+
+Displays information about the static website, including:
+
+- `workspaceId` - Workspace ID
+- `name` - Static website name
+- `description` - Description of the static website
+- `url` - Published URL of the static website
+- `allowedIpAddresses` - Allowed IP addresses
+
+**Usage Examples:**
+
+```bash
+tailor-sdk staticwebsite show -n my-frontend
 ```
