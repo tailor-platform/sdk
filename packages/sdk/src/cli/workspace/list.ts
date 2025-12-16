@@ -3,7 +3,7 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { humanizeRelativeTime, printData } from "../output";
+import { humanizeRelativeTime, printData } from "../format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface WorkspaceListOptions {

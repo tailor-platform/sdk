@@ -14,7 +14,7 @@ import { table } from "table";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../output";
+import { printData } from "../format";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
