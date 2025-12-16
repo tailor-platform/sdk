@@ -114,6 +114,46 @@ createResolver({
 });
 ```
 
+## Input Validation
+
+Add validation rules to input fields using the `validate` method:
+
+```typescript
+createResolver({
+  name: "createUser",
+  operation: "mutation",
+  input: {
+    email: t
+      .string()
+      .validate(
+        ({ value }) => value.includes("@"),
+        [
+          ({ value }) => value.length <= 255,
+          "Email must be 255 characters or less",
+        ],
+      ),
+    age: t.int().validate(({ value }) => value >= 0 && value <= 150),
+  },
+  body: (context) => {
+    // Input is validated before body executes
+    return { email: context.input.email };
+  },
+  output: t.object({ email: t.string() }),
+});
+```
+
+Validation functions receive:
+
+- `value` - The field value being validated
+- `data` - The entire input object
+- `user` - The user performing the operation
+
+You can specify validation as:
+
+- A function returning `boolean` (uses default error message)
+- A tuple of `[function, errorMessage]` for custom error messages
+- Multiple validators (pass multiple arguments to `validate`)
+
 ## Body Function
 
 Define actual resolver logic in the `body` function. Function arguments include:
