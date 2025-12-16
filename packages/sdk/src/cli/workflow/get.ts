@@ -1,14 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { printData } from "../format";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 
 export interface WorkflowGetOptions {
@@ -72,7 +67,7 @@ export const getCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     nameOrId: {
       type: "positional",
       description: "Workflow name or ID",
@@ -90,14 +85,12 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
-
     const workflow = await workflowGet({
       nameOrId: args.nameOrId,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
-    printWithFormat(workflow, format);
+    printData(workflow, args.json);
   }),
 });

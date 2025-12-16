@@ -11,15 +11,10 @@ import { defineCommand } from "citty";
 import { default as consola } from "consola";
 import ora from "ora";
 import { table } from "table";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { printData } from "../format";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
@@ -308,9 +303,9 @@ function parseDuration(duration: string): number {
 async function waitWithSpinner(
   waitFn: () => Promise<WorkflowExecutionDetailInfo>,
   interval: number,
-  format: "table" | "json",
+  json: boolean,
 ): Promise<WorkflowExecutionDetailInfo> {
-  const spinner = format !== "json" ? ora().start("Waiting...") : null;
+  const spinner = !json ? ora().start("Waiting...") : null;
 
   const updateInterval = setInterval(() => {
     if (spinner) {
@@ -389,7 +384,7 @@ export const executionsCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     executionId: {
       type: "positional",
       description: "Execution ID (if provided, shows details)",
@@ -432,8 +427,6 @@ export const executionsCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const format = parseFormat(args.format);
-
     if (args.executionId) {
       const interval = parseDuration(args.interval);
       const { execution, wait } = await workflowExecutionGet({
@@ -444,18 +437,18 @@ export const executionsCommand = defineCommand({
         logs: args.logs,
       });
 
-      if (format !== "json") {
+      if (!args.json) {
         consola.info(`Execution ID: ${execution.id}`);
       }
 
       const result = args.wait
-        ? await waitWithSpinner(wait, interval, format)
+        ? await waitWithSpinner(wait, interval, args.json)
         : execution;
 
-      if (args.logs && format === "table") {
+      if (args.logs && !args.json) {
         printExecutionWithLogs(result);
       } else {
-        printWithFormat(result, format);
+        printData(result, args.json);
       }
     } else {
       const executions = await workflowExecutionsList({
@@ -464,7 +457,7 @@ export const executionsCommand = defineCommand({
         workflowName: args["workflow-name"],
         status: args.status,
       });
-      printWithFormat(executions, format);
+      printData(executions, args.json);
     }
   }),
 });

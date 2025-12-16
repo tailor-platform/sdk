@@ -1,15 +1,10 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { printData } from "../format";
 import type { MachineUser } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 export interface MachineUserListOptions {
@@ -86,7 +81,7 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -105,9 +100,6 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate CLI specific args
-    const format = parseFormat(args.format);
-
     // Execute machineuser list logic
     const machineUsers = await machineUserList({
       workspaceId: args["workspace-id"],
@@ -116,6 +108,6 @@ export const listCommand = defineCommand({
     });
 
     // Show machine users info
-    printWithFormat(machineUsers, format);
+    printData(machineUsers, args.json);
   }),
 });

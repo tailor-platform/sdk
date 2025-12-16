@@ -1,14 +1,9 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import ml from "multiline-ts";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
+import { printData } from "../format";
 import type { ProfileInfo } from ".";
 
 export const listCommand = defineCommand({
@@ -18,12 +13,9 @@ export const listCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
-    // Validate args
-    const format = parseFormat(args.format);
-
     const config = readPlatformConfig();
 
     const profiles = Object.entries(config.profiles);
@@ -35,12 +27,11 @@ export const listCommand = defineCommand({
       return;
     }
 
-    // Show profiles info
     const profileInfos: ProfileInfo[] = profiles.map(([name, profile]) => ({
       name,
       user: profile!.user,
       workspaceId: profile!.workspace_id,
     }));
-    printWithFormat(profileInfos, format);
+    printData(profileInfos, args.json);
   }),
 });

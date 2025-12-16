@@ -1,14 +1,9 @@
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  formatArgs,
-  parseFormat,
-  printWithFormat,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { printData } from "../format";
 
 export interface MachineUserTokenOptions {
   name: string;
@@ -82,7 +77,7 @@ export const tokenCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    ...formatArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -106,9 +101,6 @@ export const tokenCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    // Validate CLI specific args
-    const format = parseFormat(args.format);
-
     // Execute machineuser token logic
     const token = await machineUserToken({
       name: args.name,
@@ -124,6 +116,6 @@ export const tokenCommand = defineCommand({
       token_type: token.tokenType,
       expires_at: token.expiresAt,
     };
-    printWithFormat(tokenInfo, format);
+    printData(tokenInfo, args.json);
   }),
 });
