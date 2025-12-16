@@ -47,6 +47,9 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
             data: data,
             user: unauthenticatedTailorUser,
           });
+          if (hooked[key] instanceof Date) {
+            hooked[key] = hooked[key].toISOString();
+          }
         } else if (data && typeof data === "object") {
           hooked[key] = (data as Record<string, unknown>)[key];
         }
