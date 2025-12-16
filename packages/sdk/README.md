@@ -44,13 +44,9 @@ npm run deploy -- --workspace-id <your-workspace-id>
 
 See [Available Templates](https://github.com/tailor-platform/sdk/tree/main/packages/create-sdk#available-templates) for more options.
 
-## Documentation
+For more details, see the [Quickstart Guide](./docs/quickstart.md).
 
-Full documentation is available at [docs.tailor.tech](https://docs.tailor.tech/reference/tailor-sdk/quickstart).
-
-### Getting Started
-
-- [Quickstart](./docs/quickstart.md) - Create your first application
+## Learn More
 
 ### Configuration
 

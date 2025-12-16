@@ -87,4 +87,4 @@ This tool will:
 
 ## Documentation
 
-For complete SDK documentation, see [docs.tailor.tech](https://docs.tailor.tech/reference/tailor-sdk/quickstart).
+For complete SDK documentation, see the [SDK documentation](https://github.com/tailor-platform/sdk/blob/main/packages/sdk/docs/quickstart.md).
