@@ -170,3 +170,18 @@ export default defineConfig({
 **files**: Glob patterns to match workflow files. Required.
 
 **ignores**: Glob patterns to exclude files. Optional.
+
+### Generators
+
+Configure code generators using `defineGenerators()`. Generators must be exported as a named export.
+
+```typescript
+import { defineGenerators } from "@tailor-platform/sdk";
+
+export const generators = defineGenerators(
+  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
+  ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
+);
+```
+
+See [Generators](./generator/index.md) for full documentation.
