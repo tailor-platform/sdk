@@ -42,13 +42,13 @@ const mainCommand = defineCommand({
     oauth2client: oauth2clientCommand,
     profile: profileCommand,
     remove: removeCommand,
-    show: showCommand,
-    tailordb: tailordbCommand,
     secret: secretCommand,
+    show: showCommand,
+    staticwebsite: staticwebsiteCommand,
+    tailordb: tailordbCommand,
     user: userCommand,
     workflow: workflowCommand,
     workspace: workspaceCommand,
-    staticwebsite: staticwebsiteCommand,
   },
 });
 

@@ -145,7 +145,7 @@ async function uploadSingleFile(
   await client.uploadFile(requestStream());
 }
 
-export const deployStaticWebsiteCommand = defineCommand({
+export const deployCommand = defineCommand({
   meta: {
     name: "deploy",
     description: "Deploy a static website",

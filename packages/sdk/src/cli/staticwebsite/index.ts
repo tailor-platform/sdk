@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { deployStaticWebsiteCommand } from "./deploy";
+import { deployCommand } from "./deploy";
 import { showCommand } from "./show";
 
 export const staticwebsiteCommand = defineCommand({
@@ -9,6 +9,6 @@ export const staticwebsiteCommand = defineCommand({
   },
   subCommands: {
     show: showCommand,
-    deploy: deployStaticWebsiteCommand,
+    deploy: deployCommand,
   },
 });
