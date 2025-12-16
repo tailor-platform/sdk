@@ -95,5 +95,6 @@ export interface CodeGenerator<
     input: GeneratorInput<Ts, Rs>;
     executorInputs: E[];
     baseDir: string;
+    configPath: string;
   }): GeneratorResult | Promise<GeneratorResult>;
 }
