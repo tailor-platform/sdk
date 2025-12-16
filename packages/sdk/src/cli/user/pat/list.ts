@@ -19,7 +19,6 @@ export const listCommand = defineCommand({
     ...jsonArgs,
   },
   run: withCommonArgs(async (args) => {
-    const json = args.json;
     const config = readPlatformConfig();
 
     if (!config.current_user) {
@@ -48,7 +47,7 @@ export const listCommand = defineCommand({
       return;
     }
 
-    if (json) {
+    if (args.json) {
       // JSON format with scopes as array
       const patInfos: PersonalAccessTokenInfo[] = pats.map(
         transformPersonalAccessToken,
