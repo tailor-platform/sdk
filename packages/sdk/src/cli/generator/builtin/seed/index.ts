@@ -212,7 +212,10 @@ export function createSeedGenerator(options: {
 
         // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
-          const relativeConfigPath = path.relative(outputDir, configPath);
+          // Use forward slashes for cross-platform compatibility in the generated script
+          const relativeConfigPath = path
+            .relative(outputDir, configPath)
+            .replaceAll("\\", "/");
           files.push({
             path: path.join(outputDir, "exec.mjs"),
             content: generateExecScript(
