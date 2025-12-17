@@ -1,5 +1,6 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
+import { OAuth2ClientSchema } from "./schema";
 import type { AuthConfigSchema } from "./schema";
 import type { AuthServiceInput } from "./types";
 import type { OptionalKeysOf } from "type-fest";
@@ -123,5 +124,118 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     expectTypeOf<
       MachineUserConfig["attributeList"] & [string, boolean]
     >().toBeNever();
+  });
+});
+
+describe("OAuth2ClientSchema validation", () => {
+  it("accepts valid OAuth2 client configuration", () => {
+    const validClient = {
+      redirectURIs: ["https://example.com/callback"],
+      grantTypes: ["authorization_code", "refresh_token"],
+      description: "Test client",
+      clientType: "confidential",
+    };
+
+    expect(() => OAuth2ClientSchema.parse(validClient)).not.toThrow();
+  });
+
+  it("accepts valid token lifetime values", () => {
+    const clientWithLifetimes = {
+      redirectURIs: ["https://example.com/callback"],
+      accessTokenLifetimeSeconds: 3600,
+      refreshTokenLifetimeSeconds: 86400,
+    };
+
+    const result = OAuth2ClientSchema.parse(clientWithLifetimes);
+    expect(result.accessTokenLifetimeSeconds).toBe(3600);
+    expect(result.refreshTokenLifetimeSeconds).toBe(86400);
+  });
+
+  it("accepts minimum token lifetime values", () => {
+    const clientWithMinLifetimes = {
+      redirectURIs: ["https://example.com/callback"],
+      accessTokenLifetimeSeconds: 60,
+      refreshTokenLifetimeSeconds: 60,
+    };
+
+    const result = OAuth2ClientSchema.parse(clientWithMinLifetimes);
+    expect(result.accessTokenLifetimeSeconds).toBe(60);
+    expect(result.refreshTokenLifetimeSeconds).toBe(60);
+  });
+
+  it("accepts maximum token lifetime values", () => {
+    const clientWithMaxLifetimes = {
+      redirectURIs: ["https://example.com/callback"],
+      accessTokenLifetimeSeconds: 86400, // 1 day
+      refreshTokenLifetimeSeconds: 604800, // 7 days
+    };
+
+    const result = OAuth2ClientSchema.parse(clientWithMaxLifetimes);
+    expect(result.accessTokenLifetimeSeconds).toBe(86400);
+    expect(result.refreshTokenLifetimeSeconds).toBe(604800);
+  });
+
+  it("rejects access token lifetime below minimum", () => {
+    const invalidClient = {
+      redirectURIs: ["https://example.com/callback"],
+      accessTokenLifetimeSeconds: 59,
+    };
+
+    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
+      /Minimum access token lifetime is 60 seconds/,
+    );
+  });
+
+  it("rejects access token lifetime above maximum", () => {
+    const invalidClient = {
+      redirectURIs: ["https://example.com/callback"],
+      accessTokenLifetimeSeconds: 86401,
+    };
+
+    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
+      /Maximum access token lifetime is 1 day/,
+    );
+  });
+
+  it("rejects refresh token lifetime below minimum", () => {
+    const invalidClient = {
+      redirectURIs: ["https://example.com/callback"],
+      refreshTokenLifetimeSeconds: 59,
+    };
+
+    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
+      /Minimum refresh token lifetime is 60 seconds/,
+    );
+  });
+
+  it("rejects refresh token lifetime above maximum", () => {
+    const invalidClient = {
+      redirectURIs: ["https://example.com/callback"],
+      refreshTokenLifetimeSeconds: 604801,
+    };
+
+    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
+      /Maximum refresh token lifetime is 7 days/,
+    );
+  });
+
+  it("rejects non-integer token lifetime values", () => {
+    const invalidClient = {
+      redirectURIs: ["https://example.com/callback"],
+      accessTokenLifetimeSeconds: 3600.5,
+    };
+
+    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow();
+  });
+
+  it("accepts client without token lifetime fields", () => {
+    const clientWithoutLifetimes = {
+      redirectURIs: ["https://example.com/callback"],
+      grantTypes: ["authorization_code", "refresh_token"],
+    };
+
+    const result = OAuth2ClientSchema.parse(clientWithoutLifetimes);
+    expect(result.accessTokenLifetimeSeconds).toBeUndefined();
+    expect(result.refreshTokenLifetimeSeconds).toBeUndefined();
   });
 });

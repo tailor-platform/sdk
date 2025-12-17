@@ -1176,6 +1176,12 @@ function protoOAuth2Client(
         AuthOAuth2Client_ClientType
       >
     )[oauth2Client.clientType ?? "confidential"],
+    accessTokenLifetime: oauth2Client.accessTokenLifetimeSeconds
+      ? { seconds: BigInt(oauth2Client.accessTokenLifetimeSeconds), nanos: 0 }
+      : undefined,
+    refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds
+      ? { seconds: BigInt(oauth2Client.refreshTokenLifetimeSeconds), nanos: 0 }
+      : undefined,
   };
 }
 

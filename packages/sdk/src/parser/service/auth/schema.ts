@@ -87,6 +87,18 @@ export const OAuth2ClientSchema = z.object({
       z.literal("browser"),
     ])
     .optional(),
+  accessTokenLifetimeSeconds: z
+    .number()
+    .int()
+    .min(60, "Minimum access token lifetime is 60 seconds")
+    .max(86400, "Maximum access token lifetime is 1 day (86400 seconds)")
+    .optional(),
+  refreshTokenLifetimeSeconds: z
+    .number()
+    .int()
+    .min(60, "Minimum refresh token lifetime is 60 seconds")
+    .max(604800, "Maximum refresh token lifetime is 7 days (604800 seconds)")
+    .optional(),
 });
 
 export const SCIMAuthorizationSchema = z.object({

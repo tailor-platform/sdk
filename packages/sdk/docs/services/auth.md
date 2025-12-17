@@ -175,6 +175,8 @@ oauth2Clients: {
     ],
     description: "My OAuth2 client",
     grantTypes: ["authorization_code", "refresh_token"],
+    accessTokenLifetimeSeconds: 3600,    // 1 hour (default if not specified)
+    refreshTokenLifetimeSeconds: 604800, // 7 days (default if not specified)
   },
 },
 ```
@@ -187,6 +189,10 @@ oauth2Clients: {
 
 - `authorization_code` - Standard OAuth 2.0 authorization code flow
 - `refresh_token` - Allow refreshing access tokens
+
+**accessTokenLifetimeSeconds**: Optional access token lifetime in seconds. Minimum: 60 seconds, Maximum: 86400 seconds (1 day). If not specified, uses platform default.
+
+**refreshTokenLifetimeSeconds**: Optional refresh token lifetime in seconds. Minimum: 60 seconds, Maximum: 604800 seconds (7 days). If not specified, uses platform default.
 
 Get OAuth2 client credentials using the CLI:
 
