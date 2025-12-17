@@ -14,8 +14,7 @@ const secretValueSchema = z.object({
 const samlBaseSchema = z.object({
   name: z.string(),
   kind: z.literal("SAML"),
-  spCertBase64: secretValueSchema.optional(),
-  spKeyBase64: secretValueSchema.optional(),
+  enableSignRequest: z.boolean().optional(),
 });
 
 export const OIDCSchema = z.object({
