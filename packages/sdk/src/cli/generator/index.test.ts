@@ -56,21 +56,21 @@ class TestGenerator {
 
   async processTailorDBNamespace(args: {
     namespace: string;
-    types: Record<string, any>;
+    types: Record<string, unknown>;
   }) {
     return { processed: true, count: Object.keys(args.types).length };
   }
 
   async processResolverNamespace(args: {
     namespace: string;
-    resolvers: Record<string, any>;
+    resolvers: Record<string, unknown>;
   }) {
     return { processed: true, count: Object.keys(args.resolvers).length };
   }
 
   async aggregate(args: {
     input: any;
-    executorInputs: any[];
+    executorInputs: unknown[];
     baseDir: string;
   }) {
     return {
@@ -141,7 +141,7 @@ describe("GenerationManager", () => {
       const managerWithKysely = new GenerationManager(mockConfig, [kyselyGen]);
       expect(
         (managerWithKysely as any).generators.some(
-          (gen: any) => gen instanceof KyselyGenerator,
+          (gen: unknown) => gen instanceof KyselyGenerator,
         ),
       ).toBe(true);
     });
@@ -757,10 +757,10 @@ describe("Integration Tests", () => {
 
     expect(manager.generators.length).toBe(2);
     expect(
-      manager.generators.some((g: any) => g instanceof TestGenerator),
+      manager.generators.some((g: unknown) => g instanceof TestGenerator),
     ).toBe(true);
     expect(
-      manager.generators.some((g: any) => g instanceof KyselyGenerator),
+      manager.generators.some((g: unknown) => g instanceof KyselyGenerator),
     ).toBe(true);
   });
 
