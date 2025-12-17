@@ -180,7 +180,7 @@ async function uploadSingleFile(
         );
         return;
       }
-      consola.error(`Failed to upload "${filePath}": ${error}`);
+      consola.warn(`Failed to upload "${filePath}": ${error}`);
     }
   }
 
