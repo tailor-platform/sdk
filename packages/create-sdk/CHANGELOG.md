@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 0.17.0
+
+### Patch Changes
+
+- [#182](https://github.com/tailor-platform/sdk/pull/182) [`a74af85`](https://github.com/tailor-platform/sdk/commit/a74af854b796cfdb701a1f8f78dbabcdfbd3fe02) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: Add comprehensive documentation
+
 ## 0.16.3
 
 ## 0.16.2
