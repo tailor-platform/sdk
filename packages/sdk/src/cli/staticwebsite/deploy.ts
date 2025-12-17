@@ -5,7 +5,7 @@ import { defineCommand } from "citty";
 import consola from "consola";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
-import { withCommonArgs, commonArgs } from "../args";
+import { withCommonArgs, commonArgs, jsonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { createProgress } from "../progress";
@@ -33,6 +33,7 @@ async function deployStaticWebsite(
   workspaceId: string,
   name: string,
   distDir: string,
+  showProgress: boolean = true,
 ): Promise<string> {
   consola.info("Creating deployment...");
   const { deploymentId } = await client.createDeployment({
@@ -45,7 +46,13 @@ async function deployStaticWebsite(
   }
 
   consola.info("Uploading files...");
-  await uploadDirectory(client, workspaceId, deploymentId, distDir);
+  await uploadDirectory(
+    client,
+    workspaceId,
+    deploymentId,
+    distDir,
+    showProgress,
+  );
 
   consola.info("Publishing deployment...");
   const { url } = await client.publishDeployment({
@@ -65,6 +72,7 @@ async function uploadDirectory(
   workspaceId: string,
   deploymentId: string,
   rootDir: string,
+  showProgress: boolean,
 ): Promise<void> {
   const files = await collectFiles(rootDir);
   if (files.length === 0) {
@@ -76,7 +84,9 @@ async function uploadDirectory(
   const limit = pLimit(concurrency);
 
   const total = files.length;
-  const progress = createProgress("Uploading files", total);
+  const progress = showProgress
+    ? createProgress("Uploading files", total)
+    : undefined;
 
   await Promise.all(
     files.map((relativePath) =>
@@ -88,12 +98,16 @@ async function uploadDirectory(
           rootDir,
           relativePath,
         );
-        progress.update();
+        if (progress) {
+          progress.update();
+        }
       }),
     ),
   );
 
-  progress.finish();
+  if (progress) {
+    progress.finish();
+  }
 }
 
 async function collectFiles(
@@ -206,6 +220,7 @@ export const deployCommand = defineCommand({
   },
   args: {
     ...commonArgs,
+    ...jsonArgs,
     "workspace-id": {
       type: "string",
       description: "Workspace ID",
@@ -250,13 +265,23 @@ export const deployCommand = defineCommand({
     consola.info(`Deploying static website "${name}" from directory: ${dir}`);
 
     const deployResult = await withTimeout(
-      deployStaticWebsite(client, workspaceId, name, dir),
+      deployStaticWebsite(client, workspaceId, name, dir, !args.json),
       10 * 60_000,
       "Deployment timed out after 10 minutes.",
     );
 
-    consola.success(
-      `Static website "${name}" deployed successfully. URL: ${deployResult}`,
-    );
+    if (args.json) {
+      console.log(
+        JSON.stringify({
+          name,
+          workspaceId,
+          url: deployResult,
+        }),
+      );
+    } else {
+      consola.success(
+        `Static website "${name}" deployed successfully. URL: ${deployResult}`,
+      );
+    }
   }),
 });

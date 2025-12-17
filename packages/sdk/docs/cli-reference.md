@@ -850,6 +850,7 @@ tailor-sdk staticwebsite deploy [options]
 - `-d, --dir` - Path to built static files (e.g. `./out`) (required)
 - `-w, --workspace-id` - ID of the workspace (optional, falls back to `TAILOR_PLATFORM_WORKSPACE_ID` or profile)
 - `-p, --profile` - Workspace profile to use (optional)
+- `--json` - Output as JSON
 - `-e, --env-file` - Path to an environment file to load before running the command
 - `-v, --verbose` - Enable verbose logging
 
