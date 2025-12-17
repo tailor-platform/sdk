@@ -13,10 +13,10 @@ import {
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import {
-  convertTokenLifetimesToDuration,
+  OAuth2ClientSchema,
   type BuiltinIdP,
   type IdProviderConfig,
-  type OAuth2Client,
+  type OAuth2ClientInput,
   type SCIMAttribute,
   type SCIMConfig,
   type SCIMResource,
@@ -1149,17 +1149,15 @@ async function planOAuth2Clients(
 
 function protoOAuth2Client(
   oauth2ClientName: string,
-  oauth2Client: OAuth2Client,
+  oauth2Client: OAuth2ClientInput,
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
-  const tokenLifetimes = convertTokenLifetimesToDuration(
-    oauth2Client.accessTokenLifetimeSeconds,
-    oauth2Client.refreshTokenLifetimeSeconds,
-  );
+  // Parse to transform token lifetimes
+  const parsed = OAuth2ClientSchema.parse(oauth2Client);
 
   return {
     name: oauth2ClientName,
-    description: oauth2Client.description,
-    grantTypes: oauth2Client.grantTypes?.map((grantType) => {
+    description: parsed.description,
+    grantTypes: parsed.grantTypes?.map((grantType) => {
       switch (grantType) {
         case "authorization_code":
           return AuthOAuth2Client_GrantType.AUTHORIZATION_CODE;
@@ -1171,18 +1169,19 @@ function protoOAuth2Client(
           );
       }
     }),
-    redirectUris: oauth2Client.redirectURIs,
+    redirectUris: parsed.redirectURIs,
     clientType: (
       {
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
         public: AuthOAuth2Client_ClientType.PUBLIC,
         browser: AuthOAuth2Client_ClientType.BROWSER,
       } satisfies Record<
-        NonNullable<OAuth2Client["clientType"]>,
+        NonNullable<OAuth2ClientInput["clientType"]>,
         AuthOAuth2Client_ClientType
       >
-    )[oauth2Client.clientType ?? "confidential"],
-    ...tokenLifetimes,
+    )[parsed.clientType ?? "confidential"],
+    accessTokenLifetime: parsed.accessTokenLifetimeSeconds,
+    refreshTokenLifetime: parsed.refreshTokenLifetimeSeconds,
   };
 }
 

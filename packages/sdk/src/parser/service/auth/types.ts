@@ -32,6 +32,9 @@ export type IdProviderConfig = z.output<typeof IdProviderSchema>;
 export type OAuth2ClientGrantType = z.output<
   typeof OAuth2ClientGrantTypeSchema
 >;
+// OAuth2Client input type (before transform) for configure layer
+export type OAuth2ClientInput = z.input<typeof OAuth2ClientSchema>;
+// OAuth2Client output type (after transform) for parser/cli layers
 export type OAuth2Client = z.output<typeof OAuth2ClientSchema>;
 export type SCIMAuthorization = z.output<typeof SCIMAuthorizationSchema>;
 export type SCIMAttributeType = z.output<typeof SCIMAttributeTypeSchema>;
@@ -195,7 +198,26 @@ type MachineUser<
           ? { attributeList?: never }
           : { attributeList: AttributeListToTuple<User, AttributeList> });
 
+// Input type (before parsing) - used by configure layer
 export type AuthServiceInput<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+  AttributeList extends UserAttributeListKey<User>[],
+  MachineUserNames extends string,
+> = {
+  userProfile?: UserProfile<User, AttributeMap, AttributeList>;
+  machineUsers?: Record<
+    MachineUserNames,
+    MachineUser<User, AttributeMap, AttributeList>
+  >;
+  oauth2Clients?: Record<string, OAuth2ClientInput>;
+  idProvider?: IdProviderConfig;
+  scim?: SCIMConfig;
+  tenantProvider?: TenantProviderConfig;
+};
+
+// Output type (after parsing) - used by cli/parser layers
+export type AuthServiceOutput<
   User extends TailorDBInstance,
   AttributeMap extends UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[],

@@ -310,7 +310,8 @@ export class GenerationManager {
           }
         : undefined,
       machineUsers: config.machineUsers,
-      oauth2Clients: config.oauth2Clients,
+      // oauth2Clients uses input type (before parsing)
+      oauth2Clients: config.oauth2Clients as any,
       idProvider: config.idProvider,
     };
   }
