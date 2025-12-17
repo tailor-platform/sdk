@@ -1,5 +1,22 @@
 # @tailor-platform/sdk
 
+## 0.17.0
+
+### Minor Changes
+
+- [#158](https://github.com/tailor-platform/sdk/pull/158) [`cde0a0a`](https://github.com/tailor-platform/sdk/commit/cde0a0a3e1d517e8036f799ce2a0b8958f7e18c4) Thanks [@riku99](https://github.com/riku99)! - CLI changes:
+  - Replace `--format` with `--json` for all list/detail commands. `--format` is no longer supported.
+  - Change default table layout for list output and humanize `createdAt` / `updatedAt` in table format (JSON remains ISO strings).
+  - `workspace list`: hide `updatedAt` in table output and add `--limit=<number>` to cap the number of workspaces shown.
+
+  **Breaking:** Scripts or tooling that relied on `--format` or the previous table layout may need to be updated.
+
+### Patch Changes
+
+- [#197](https://github.com/tailor-platform/sdk/pull/197) [`6c141f0`](https://github.com/tailor-platform/sdk/commit/6c141f0cf23d360f531dec2a39330b3fa755f7e1) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailordb truncate` command argument parsing: `-n` alias now works correctly and multiple type names can be specified as space-separated arguments
+
+- [#191](https://github.com/tailor-platform/sdk/pull/191) [`92f0e99`](https://github.com/tailor-platform/sdk/commit/92f0e99f0bbcdd4616b56157cd2b67a71757fb05) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: createTailorDBHook for Date
+
 ## 0.16.3
 
 ### Patch Changes
