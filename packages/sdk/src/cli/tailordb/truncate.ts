@@ -108,23 +108,16 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
   const hasNamespace = !!options?.namespace;
   const hasAll = !!options?.all;
 
-  // --all is mutually exclusive with other options
-  if (hasAll && (hasTypes || hasNamespace)) {
-    throw new Error(
-      "Cannot specify --all with --namespace or type names. Use --all alone to truncate all tables.",
-    );
-  }
-
-  // Warn if both --namespace and type names are specified (type names take priority)
-  if (hasNamespace && hasTypes) {
-    consola.warn(
-      "Both --namespace and type names specified. Type names will be used (namespace auto-detected).",
-    );
-  }
-
-  if (!hasTypes && !hasNamespace && !hasAll) {
+  // All options are mutually exclusive
+  const optionCount = [hasAll, hasNamespace, hasTypes].filter(Boolean).length;
+  if (optionCount === 0) {
     throw new Error(
       "Please specify one of: --all, --namespace <name>, or type names",
+    );
+  }
+  if (optionCount > 1) {
+    throw new Error(
+      "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
     );
   }
 
@@ -160,8 +153,8 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
     return;
   }
 
-  // Handle --namespace flag (only if no type names specified)
-  if (hasNamespace && !hasTypes && options?.namespace) {
+  // Handle --namespace flag
+  if (hasNamespace && options?.namespace) {
     const namespace = options.namespace;
 
     // Validate namespace exists in config

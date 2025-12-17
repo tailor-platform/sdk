@@ -58,7 +58,7 @@ describe("truncate command", () => {
       await expect(
         truncate({ all: true, namespace: "tailordb", yes: true }),
       ).rejects.toThrow(
-        "Cannot specify --all with --namespace or type names. Use --all alone to truncate all tables.",
+        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
       );
     });
 
@@ -66,21 +66,28 @@ describe("truncate command", () => {
       await expect(
         truncate({ all: true, types: ["User"], yes: true }),
       ).rejects.toThrow(
-        "Cannot specify --all with --namespace or type names. Use --all alone to truncate all tables.",
+        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
       );
     });
 
-    test("warns when both --namespace and type names are specified", async () => {
-      const { consola } = await import("consola");
+    test("throws error when --namespace is specified with type names", async () => {
+      await expect(
+        truncate({ namespace: "tailordb", types: ["User"], yes: true }),
+      ).rejects.toThrow(
+        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
+      );
+    });
 
-      await truncate({
-        namespace: "tailordb",
-        types: ["User"],
-        yes: true,
-      });
-
-      expect(consola.warn).toHaveBeenCalledWith(
-        "Both --namespace and type names specified. Type names will be used (namespace auto-detected).",
+    test("throws error when all three options are specified", async () => {
+      await expect(
+        truncate({
+          all: true,
+          namespace: "tailordb",
+          types: ["User"],
+          yes: true,
+        }),
+      ).rejects.toThrow(
+        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
       );
     });
   });
@@ -207,34 +214,6 @@ describe("truncate command", () => {
       await truncate({ namespace: "tailordb" });
 
       expect(consola.info).toHaveBeenCalledWith("Truncate cancelled.");
-      expect(client.truncateTailorDBTypes).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("type name priority over namespace", () => {
-    test("uses type names when both namespace and types are specified", async () => {
-      const { initOperatorClient } = await import("../client");
-
-      // Reset mock to return User type
-
-      vi.mocked(initOperatorClient).mockResolvedValue({
-        truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
-        truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
-        listTailorDBTypes: vi.fn().mockResolvedValue({
-          tailordbTypes: [{ name: "User" }, { name: "Order" }],
-        }),
-      } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-
-      const client = await initOperatorClient("mock-token");
-
-      await truncate({
-        namespace: "anotherdb",
-        types: ["User"],
-        yes: true,
-      });
-
-      // Should truncate single type (auto-detected namespace), not the entire namespace
-      expect(client.truncateTailorDBType).toHaveBeenCalledTimes(1);
       expect(client.truncateTailorDBTypes).not.toHaveBeenCalled();
     });
   });
