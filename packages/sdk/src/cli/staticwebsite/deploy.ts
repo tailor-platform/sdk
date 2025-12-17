@@ -9,6 +9,7 @@ import { withCommonArgs, commonArgs, jsonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { createProgress } from "../progress";
+import { withTimeout } from "../timeout";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 
@@ -17,15 +18,6 @@ const IGNORED_FILES = new Set([".DS_Store", "thumbs.db", "desktop.ini"]);
 function shouldIgnoreFile(filePath: string) {
   const fileName = path.basename(filePath).toLowerCase();
   return IGNORED_FILES.has(fileName);
-}
-
-async function withTimeout(p: Promise<any>, ms: number, message: string) {
-  return Promise.race([
-    p,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(message)), ms),
-    ),
-  ]);
 }
 
 async function deployStaticWebsite(
@@ -208,6 +200,7 @@ async function uploadSingleFile(
   consola.debug(`Uploading ${filePath}...`);
   await withTimeout(
     uploadWithLogging(),
+    // 2 minutes per file
     2 * 60_000,
     `Upload timed out for "${filePath}"`,
   );
@@ -266,6 +259,7 @@ export const deployCommand = defineCommand({
 
     const deployResult = await withTimeout(
       deployStaticWebsite(client, workspaceId, name, dir, !args.json),
+      // 10 minutes
       10 * 60_000,
       "Deployment timed out after 10 minutes.",
     );
