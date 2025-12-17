@@ -3,7 +3,7 @@ import { type Resolver } from "@/parser/service/resolver";
 import type { CodeGeneratorBase } from "@/parser/generator-config";
 import type {
   IdProviderConfig,
-  OAuth2Client,
+  OAuth2ClientInput,
 } from "@/parser/service/auth/types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
@@ -40,7 +40,7 @@ export interface GeneratorAuthInput {
     usernameField: string;
   };
   machineUsers?: Record<string, { attributes: Record<string, unknown> }>;
-  oauth2Clients?: Record<string, OAuth2Client>;
+  oauth2Clients?: Record<string, OAuth2ClientInput>;
   idProvider?: IdProviderConfig;
 }
 
