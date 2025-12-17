@@ -70,6 +70,7 @@
     "ora": "9.0.0",
     "oxc-parser": "0.98.0",
     "pkg-types": "2.3.0",
+    "p-limit": "4.0.0",
     "rolldown": "catalog:",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",

@@ -3,11 +3,28 @@ import * as path from "path";
 import { defineCommand } from "citty";
 import consola from "consola";
 import { lookup as mimeLookup } from "mime-types";
+import pLimit from "p-limit";
 import { withCommonArgs, commonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
+
+const CHUNK_SIZE = 64 * 1024; // 64KB
+const IGNORED_FILES = new Set([".DS_Store", "thumbs.db", "desktop.ini"]);
+function shouldIgnoreFile(filePath: string) {
+  const fileName = path.basename(filePath).toLowerCase();
+  return IGNORED_FILES.has(fileName);
+}
+
+async function withTimeout(p: Promise<any>, ms: number, message: string) {
+  return Promise.race([
+    p,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms),
+    ),
+  ]);
+}
 
 async function deployStaticWebsite(
   client: OperatorClient,
@@ -53,15 +70,22 @@ async function uploadDirectory(
     return;
   }
 
-  for (const relativePath of files) {
-    await uploadSingleFile(
-      client,
-      workspaceId,
-      deploymentId,
-      rootDir,
-      relativePath,
-    );
-  }
+  const concurrency = 5;
+  const limit = pLimit(concurrency);
+
+  await Promise.all(
+    files.map((relativePath) =>
+      limit(() =>
+        uploadSingleFile(
+          client,
+          workspaceId,
+          deploymentId,
+          rootDir,
+          relativePath,
+        ),
+      ),
+    ),
+  );
 }
 
 async function collectFiles(
@@ -80,7 +104,7 @@ async function collectFiles(
     if (entry.isDirectory()) {
       const sub = await collectFiles(rootDir, rel);
       files.push(...sub);
-    } else if (entry.isFile()) {
+    } else if (entry.isFile() && !shouldIgnoreFile(rel)) {
       files.push(rel);
     }
   }
@@ -115,7 +139,9 @@ async function uploadSingleFile(
 
   const contentType = mime;
 
-  const readStream = fs.createReadStream(absPath);
+  const readStream = fs.createReadStream(absPath, {
+    highWaterMark: CHUNK_SIZE,
+  });
 
   async function* requestStream(): AsyncIterable<
     MessageInitShape<typeof UploadFileRequestSchema>
@@ -142,7 +168,11 @@ async function uploadSingleFile(
   }
 
   consola.debug(`Uploading ${filePath}...`);
-  await client.uploadFile(requestStream());
+  await withTimeout(
+    client.uploadFile(requestStream()),
+    2 * 60_000,
+    `Upload timed out for "${filePath}"`,
+  );
 }
 
 export const deployCommand = defineCommand({
@@ -195,11 +225,10 @@ export const deployCommand = defineCommand({
 
     consola.info(`Deploying static website "${name}" from directory: ${dir}`);
 
-    const deployResult = await deployStaticWebsite(
-      client,
-      workspaceId,
-      name,
-      dir,
+    const deployResult = await withTimeout(
+      deployStaticWebsite(client, workspaceId, name, dir),
+      10 * 60_000,
+      "Deployment timed out after 10 minutes.",
     );
 
     consola.success(
