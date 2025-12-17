@@ -8,6 +8,7 @@ import pLimit from "p-limit";
 import { withCommonArgs, commonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
+import { createProgress } from "../progress";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 
@@ -74,19 +75,25 @@ async function uploadDirectory(
   const concurrency = 5;
   const limit = pLimit(concurrency);
 
+  const total = files.length;
+  const progress = createProgress("Uploading files", total);
+
   await Promise.all(
     files.map((relativePath) =>
-      limit(() =>
-        uploadSingleFile(
+      limit(async () => {
+        await uploadSingleFile(
           client,
           workspaceId,
           deploymentId,
           rootDir,
           relativePath,
-        ),
-      ),
+        );
+        progress.update();
+      }),
     ),
   );
+
+  progress.finish();
 }
 
 async function collectFiles(
@@ -223,7 +230,7 @@ export const deployCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    console.log(
+    consola.info(
       `Deploying static website '${args.name}' from directory '${args.dir}' to workspace '${args["workspace-id"] || "default workspace"}'...`,
     );
     const accessToken = await loadAccessToken({
