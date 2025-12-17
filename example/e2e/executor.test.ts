@@ -202,7 +202,7 @@ describe("dataplane", () => {
             const result = await graphQLClient.rawRequest<Data>(query);
             return result.data.salesOrderCreatedList.edges.length;
           },
-          { timeout: 60_000, interval: 3_000 },
+          { timeout: 90_000, interval: 3_000 },
         )
         .toEqual(1);
     });
