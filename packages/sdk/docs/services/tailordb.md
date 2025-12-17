@@ -47,27 +47,35 @@ db.type("User", "User in the system", {
 
 ## Field Types
 
-| Method          | TailorDB | TypeScript     |
-| --------------- | -------- | -------------- |
-| `db.string()`   | String   | string         |
-| `db.int()`      | Integer  | number         |
-| `db.float()`    | Float    | number         |
-| `db.bool()`     | Boolean  | boolean        |
-| `db.date()`     | Date     | string         |
-| `db.datetime()` | DateTime | string \| Date |
-| `db.time()`     | Time     | string         |
-| `db.uuid()`     | UUID     | string         |
-| `db.enum()`     | Enum     | string         |
-| `db.object()`   | Nested   | object         |
+| Method                          | TailorDB | TypeScript     |
+| ------------------------------- | -------- | -------------- |
+| `db.string()`                   | String   | string         |
+| `db.int()`                      | Integer  | number         |
+| `db.float()`                    | Float    | number         |
+| `db.bool()`                     | Boolean  | boolean        |
+| `db.date()`                     | Date     | string         |
+| `db.datetime()`                 | DateTime | string \| Date |
+| `db.time()`                     | Time     | string         |
+| `db.uuid()`                     | UUID     | string         |
+| [`db.enum()`](#enum-fields)     | Enum     | string         |
+| [`db.object()`](#object-fields) | Nested   | object         |
+
+### Optional and Array Fields
+
+```typescript
+db.string({ optional: true });
+db.string({ array: true });
+db.string({ optional: true, array: true });
+```
 
 ### Enum Fields
 
 ```typescript
-db.enum("red", "green", "blue");
-db.enum(
+db.enum(["red", "green", "blue"]);
+db.enum([
   { value: "active", description: "Active status" },
   { value: "inactive", description: "Inactive status" },
-);
+]);
 ```
 
 ### Object Fields
@@ -78,14 +86,6 @@ db.object({
   city: db.string(),
   country: db.string(),
 });
-```
-
-## Optional and Array Fields
-
-```typescript
-db.string({ optional: true });
-db.string({ array: true });
-db.string({ optional: true, array: true });
 ```
 
 ## Field Modifiers
@@ -285,7 +285,7 @@ Configure Permission and GQLPermission. For details, see the [TailorDB Permissio
 ```typescript
 db.type("User", {
   name: db.string(),
-  role: db.enum("admin", "user").index(),
+  role: db.enum(["admin", "user"]).index(),
 })
   .permission({
     create: [[{ user: "role" }, "=", "admin"]],
