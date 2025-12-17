@@ -104,7 +104,11 @@ async function collectFiles(
     if (entry.isDirectory()) {
       const sub = await collectFiles(rootDir, rel);
       files.push(...sub);
-    } else if (entry.isFile() && !shouldIgnoreFile(rel)) {
+    } else if (
+      entry.isFile() &&
+      !entry.isSymbolicLink() &&
+      !shouldIgnoreFile(rel)
+    ) {
       files.push(rel);
     }
   }
