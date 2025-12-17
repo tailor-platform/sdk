@@ -53,16 +53,29 @@ Maps authenticated identities to a TailorDB type:
 ```typescript
 userProfile: {
   type: user,              // TailorDB type for user records
-  usernameField: "email",  // Field used as username
+  usernameField: "email",  // Field used as username (must be unique)
   attributes: {
     role: true,            // Enable 'role' as a user attribute
   },
 },
 ```
 
+Example TailorDB type for user profile:
+
+```typescript
+// tailordb/user.ts
+import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  email: db.string().unique(), // usernameField must have unique constraint
+  role: db.enum(["admin", "user"]),
+  ...db.fields.timestamps(),
+});
+```
+
 **type**: The TailorDB type that stores user records.
 
-**usernameField**: The field in the TailorDB type used as the username.
+**usernameField**: The field in the TailorDB type used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 
 **attributes**: Specifies which fields from the TailorDB type are used as user attributes. Set to `true` to enable a field. Enabled attributes must be assigned values in all machine user definitions.
 
