@@ -62,6 +62,32 @@ export default defineConfig({
 
 **ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored. If you explicitly specify `ignores`, the default patterns will not be applied. Use `ignores: []` to include all files including test files.
 
+### External Resources
+
+You can reference resources managed by Terraform or other SDK projects to include them in your application's subgraph. External resources are not deployed by this project but can be used for shared access across multiple applications.
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  db: {
+    "shared-db": { external: true },
+  },
+  resolver: {
+    "my-resolver": { external: true },
+  },
+  auth: { name: "shared-auth", external: true },
+  idp: [{ name: "shared-idp", external: true }],
+});
+```
+
+**external**: Set to `true` to reference an external resource. The resource must already exist and be managed by another project (e.g., Terraform or another SDK application).
+
+When using external resources:
+
+- The resource itself is not deployed by this project
+- The resource must be deployed and available before referencing it
+- You can combine external resources with locally-defined resources
+
 ### Built-in IdP
 
 Configure the Built-in IdP service using `defineIdp()`. See [IdP](./services/idp.md) for full documentation.
