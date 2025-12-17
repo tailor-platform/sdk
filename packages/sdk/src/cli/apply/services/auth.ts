@@ -1,5 +1,5 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
-import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import { type DurationSchema, ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   AuthIDPConfig_AuthType,
@@ -1146,10 +1146,35 @@ async function planOAuth2Clients(
   return changeSet;
 }
 
+/**
+ * Converts token lifetime seconds to protobuf Duration objects
+ */
+export function convertTokenLifetimesToDuration(
+  accessTokenLifetimeSeconds?: number,
+  refreshTokenLifetimeSeconds?: number,
+): {
+  accessTokenLifetime?: MessageInitShape<typeof DurationSchema>;
+  refreshTokenLifetime?: MessageInitShape<typeof DurationSchema>;
+} {
+  return {
+    accessTokenLifetime: accessTokenLifetimeSeconds
+      ? { seconds: BigInt(accessTokenLifetimeSeconds), nanos: 0 }
+      : undefined,
+    refreshTokenLifetime: refreshTokenLifetimeSeconds
+      ? { seconds: BigInt(refreshTokenLifetimeSeconds), nanos: 0 }
+      : undefined,
+  };
+}
+
 function protoOAuth2Client(
   oauth2ClientName: string,
   oauth2Client: OAuth2Client,
 ): MessageInitShape<typeof AuthOAuth2ClientSchema> {
+  const tokenLifetimes = convertTokenLifetimesToDuration(
+    oauth2Client.accessTokenLifetimeSeconds,
+    oauth2Client.refreshTokenLifetimeSeconds,
+  );
+
   return {
     name: oauth2ClientName,
     description: oauth2Client.description,
@@ -1176,12 +1201,7 @@ function protoOAuth2Client(
         AuthOAuth2Client_ClientType
       >
     )[oauth2Client.clientType ?? "confidential"],
-    accessTokenLifetime: oauth2Client.accessTokenLifetimeSeconds
-      ? { seconds: BigInt(oauth2Client.accessTokenLifetimeSeconds), nanos: 0 }
-      : undefined,
-    refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds
-      ? { seconds: BigInt(oauth2Client.refreshTokenLifetimeSeconds), nanos: 0 }
-      : undefined,
+    ...tokenLifetimes,
   };
 }
 

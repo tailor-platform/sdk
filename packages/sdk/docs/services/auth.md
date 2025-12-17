@@ -175,8 +175,8 @@ oauth2Clients: {
     ],
     description: "My OAuth2 client",
     grantTypes: ["authorization_code", "refresh_token"],
-    accessTokenLifetimeSeconds: 3600,    // 1 hour (default if not specified)
-    refreshTokenLifetimeSeconds: 604800, // 7 days (default if not specified)
+    accessTokenLifetimeSeconds: 3600,    // 1 hour
+    refreshTokenLifetimeSeconds: 604800, // 7 days
   },
 },
 ```
