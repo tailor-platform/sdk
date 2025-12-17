@@ -108,15 +108,16 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
   const hasNamespace = !!options?.namespace;
   const hasAll = !!options?.all;
 
-  if ([hasTypes, hasNamespace, hasAll].filter(Boolean).length > 1) {
-    throw new Error(
-      "Cannot specify multiple options: choose one of --all, --namespace, or type names",
-    );
-  }
-
-  if (!hasTypes && !hasNamespace && !hasAll) {
+  // All options are mutually exclusive
+  const optionCount = [hasAll, hasNamespace, hasTypes].filter(Boolean).length;
+  if (optionCount === 0) {
     throw new Error(
       "Please specify one of: --all, --namespace <name>, or type names",
+    );
+  }
+  if (optionCount > 1) {
+    throw new Error(
+      "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
     );
   }
 
@@ -252,7 +253,7 @@ export const truncateCommand = defineCommand({
     ...commonArgs,
     types: {
       type: "positional",
-      description: "Type names to truncate (space-separated)",
+      description: "Type names to truncate",
       required: false,
     },
     all: {
@@ -263,7 +264,8 @@ export const truncateCommand = defineCommand({
     },
     namespace: {
       type: "string",
-      description: "Truncate all tables in specified namespace",
+      description:
+        "Namespace to use (if type names are specified, truncates only those types in this namespace)",
       alias: "n",
     },
     yes: {
@@ -290,13 +292,18 @@ export const truncateCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
+    // Get type names from rest arguments (_)
+    const types =
+      args._.length > 0
+        ? args._.map((arg) => String(arg)).filter(Boolean)
+        : undefined;
     await truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
       all: args.all,
       namespace: args.namespace,
-      types: args.types ? args.types.split(/\s+/).filter(Boolean) : undefined,
+      types,
       yes: args.yes,
     });
   }),
