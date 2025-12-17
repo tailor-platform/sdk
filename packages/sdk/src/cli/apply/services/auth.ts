@@ -1,5 +1,5 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
-import { type DurationSchema, ValueSchema } from "@bufbuild/protobuf/wkt";
+import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   AuthIDPConfig_AuthType,
@@ -13,6 +13,16 @@ import {
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import {
+  convertTokenLifetimesToDuration,
+  type BuiltinIdP,
+  type IdProviderConfig,
+  type OAuth2Client,
+  type SCIMAttribute,
+  type SCIMConfig,
+  type SCIMResource,
+  type AuthAttributeValue,
+} from "@/parser/service/auth";
+import {
   fetchAll,
   resolveStaticWebsiteUrls,
   type OperatorClient,
@@ -23,15 +33,6 @@ import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { AuthService } from "@/cli/application/auth/service";
-import type {
-  BuiltinIdP,
-  IdProviderConfig,
-  OAuth2Client,
-  SCIMAttribute,
-  SCIMConfig,
-  SCIMResource,
-  AuthAttributeValue,
-} from "@/parser/service/auth";
 import type {
   CreateAuthIDPConfigRequestSchema,
   CreateAuthMachineUserRequestSchema,
@@ -1144,26 +1145,6 @@ async function planOAuth2Clients(
     });
   }
   return changeSet;
-}
-
-/**
- * Converts token lifetime seconds to protobuf Duration objects
- */
-export function convertTokenLifetimesToDuration(
-  accessTokenLifetimeSeconds?: number,
-  refreshTokenLifetimeSeconds?: number,
-): {
-  accessTokenLifetime?: MessageInitShape<typeof DurationSchema>;
-  refreshTokenLifetime?: MessageInitShape<typeof DurationSchema>;
-} {
-  return {
-    accessTokenLifetime: accessTokenLifetimeSeconds
-      ? { seconds: BigInt(accessTokenLifetimeSeconds), nanos: 0 }
-      : undefined,
-    refreshTokenLifetime: refreshTokenLifetimeSeconds
-      ? { seconds: BigInt(refreshTokenLifetimeSeconds), nanos: 0 }
-      : undefined,
-  };
 }
 
 function protoOAuth2Client(
