@@ -174,7 +174,7 @@ describe("dataplane", () => {
       salesOrderId = createSalesOrderResult.data.createSalesOrder.id;
     });
 
-    test("event created", async () => {
+    test("event created", { timeout: 90_000 }, async () => {
       const query = gql`
         query {
           salesOrderCreatedList(query: { salesOrderID: { eq: "${salesOrderId}" } }) {
@@ -197,13 +197,10 @@ describe("dataplane", () => {
       }
       // Use poll to wait until the event is created.
       await expect
-        .poll(
-          async () => {
-            const result = await graphQLClient.rawRequest<Data>(query);
-            return result.data.salesOrderCreatedList.edges.length;
-          },
-          { timeout: 90_000, interval: 3_000 },
-        )
+        .poll(async () => {
+          const result = await graphQLClient.rawRequest<Data>(query);
+          return result.data.salesOrderCreatedList.edges.length;
+        })
         .toEqual(1);
     });
   });
