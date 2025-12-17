@@ -282,6 +282,8 @@ db.type("User", {
 
 Configure Permission and GQLPermission. For details, see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).
 
+**Important**: Following the secure-by-default principle, all operations are denied if permissions are not configured. You must explicitly grant permissions for each operation (create, read, update, delete).
+
 ```typescript
 db.type("User", {
   name: db.string(),
@@ -302,4 +304,22 @@ db.type("User", {
   ]);
 ```
 
-Following the secure-by-default principle, all operations are denied if permissions are not configured.
+#### Development/Test Helpers
+
+For local development, prototyping, or testing, the SDK provides helper constants that grant full access without conditions:
+
+```typescript
+import {
+  db,
+  unsafeAllowAllTypePermission,
+  unsafeAllowAllGqlPermission,
+} from "@tailor-platform/sdk";
+
+db.type("User", {
+  name: db.string(),
+})
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+```
+
+**Warning**: Do not use `unsafeAllowAllTypePermission` or `unsafeAllowAllGqlPermission` in production environments as they effectively disable authorization checks.
