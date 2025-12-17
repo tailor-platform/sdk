@@ -24,7 +24,7 @@ import type { AppConfig } from "@/configure/config";
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {
   return {
-    writeFile: vi.fn((_, _2, callback: any) => {
+    writeFile: vi.fn((_, _2, callback) => {
       if (typeof callback === "function") callback(null);
     }),
     mkdirSync: vi.fn(() => ""),
@@ -138,10 +138,7 @@ describe("GenerationManager", () => {
         "@tailor-platform/kysely-type",
         { distPath: "types/db.ts" },
       ]);
-      const managerWithKysely = new GenerationManager(
-        mockConfig as any,
-        [kyselyGen] as any,
-      );
+      const managerWithKysely = new GenerationManager(mockConfig, [kyselyGen]);
       expect(
         (managerWithKysely as any).generators.some(
           (gen: any) => gen instanceof KyselyGenerator,
@@ -578,7 +575,7 @@ describe("GenerationManager", () => {
     it("handles file write errors", async () => {
       const writeFileError = new Error("Write permission denied");
       vi.mocked(fs.writeFile).mockImplementationOnce(
-        (_path, _content, callback: any) => {
+        (_path, _content, callback) => {
           callback(writeFileError);
         },
       );
@@ -753,7 +750,7 @@ describe("Integration Tests", () => {
       "@tailor-platform/kysely-type",
       { distPath: "db.ts" },
     ]);
-    const generators = [new TestGenerator(), kyselyGen] as any;
+    const generators = [new TestGenerator(), kyselyGen];
     const manager = new GenerationManager(fullConfig, generators);
 
     await expect(manager.generate({ watch: false })).resolves.not.toThrow();

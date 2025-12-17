@@ -38,13 +38,9 @@ describe("TailorDBType validation functionality", () => {
 
     // Check that validators were set on the fields
 
-    expect((UserType.fields.name as any)._metadata.validate).toEqual([
-      nameValidator,
-    ]);
+    expect(UserType.fields.name.metadata.validate).toEqual([nameValidator]);
 
-    expect((UserType.fields.email as any)._metadata.validate).toEqual([
-      emailValidator,
-    ]);
+    expect(UserType.fields.email.metadata.validate).toEqual([emailValidator]);
   });
 
   it("should work with both field-level and type-level validators", () => {
@@ -62,16 +58,14 @@ describe("TailorDBType validation functionality", () => {
 
     // Field-level validator should still be there
 
-    expect((UserType.fields.name as any)._metadata.validate).toHaveLength(1);
+    expect(UserType.fields.name.metadata.validate).toHaveLength(1);
 
-    expect((UserType.fields.name as any)._metadata.validate[0]).toBeInstanceOf(
+    expect(UserType.fields.name.metadata.validate?.[0]).toBeInstanceOf(
       Function,
     );
 
     // Type-level validator should be set
 
-    expect((UserType.fields.email as any)._metadata.validate).toEqual([
-      emailValidator,
-    ]);
+    expect(UserType.fields.email.metadata.validate).toEqual([emailValidator]);
   });
 });

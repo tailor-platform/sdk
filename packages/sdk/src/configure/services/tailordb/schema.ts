@@ -593,7 +593,7 @@ export class TailorDBType<
 
   hooks(hooks: Hooks<Fields>) {
     Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-      (this.fields[fieldName] as any).hooks(fieldHooks);
+      this.fields[fieldName].hooks(fieldHooks);
     });
     return this;
   }
