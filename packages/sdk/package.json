@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@badgateway/oauth2-client": "3.3.1",
-    "@bufbuild/protobuf": "2.10.1",
+    "@bufbuild/protobuf": "2.10.2",
     "@connectrpc/connect": "2.1.1",
     "@connectrpc/connect-node": "2.1.1",
     "@standard-schema/spec": "1.0.0",
