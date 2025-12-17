@@ -108,9 +108,17 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
   const hasNamespace = !!options?.namespace;
   const hasAll = !!options?.all;
 
-  if ([hasTypes, hasNamespace, hasAll].filter(Boolean).length > 1) {
+  // --all is mutually exclusive with other options
+  if (hasAll && (hasTypes || hasNamespace)) {
     throw new Error(
-      "Cannot specify multiple options: choose one of --all, --namespace, or type names",
+      "Cannot specify --all with --namespace or type names. Use --all alone to truncate all tables.",
+    );
+  }
+
+  // Warn if both --namespace and type names are specified (type names take priority)
+  if (hasNamespace && hasTypes) {
+    consola.warn(
+      "Both --namespace and type names specified. Type names will be used (namespace auto-detected).",
     );
   }
 
@@ -152,8 +160,8 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
     return;
   }
 
-  // Handle --namespace flag
-  if (hasNamespace && options?.namespace) {
+  // Handle --namespace flag (only if no type names specified)
+  if (hasNamespace && !hasTypes && options?.namespace) {
     const namespace = options.namespace;
 
     // Validate namespace exists in config
@@ -252,7 +260,7 @@ export const truncateCommand = defineCommand({
     ...commonArgs,
     types: {
       type: "positional",
-      description: "Type names to truncate (space-separated)",
+      description: "Type names to truncate",
       required: false,
     },
     all: {
@@ -263,7 +271,8 @@ export const truncateCommand = defineCommand({
     },
     namespace: {
       type: "string",
-      description: "Truncate all tables in specified namespace",
+      description:
+        "Namespace to use (if type names are specified, truncates only those types in this namespace)",
       alias: "n",
     },
     yes: {
@@ -290,13 +299,18 @@ export const truncateCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
+    // Get type names from rest arguments (_)
+    const types =
+      args._.length > 0
+        ? args._.map((arg) => String(arg)).filter(Boolean)
+        : undefined;
     await truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
       all: args.all,
       namespace: args.namespace,
-      types: args.types ? args.types.split(/\s+/).filter(Boolean) : undefined,
+      types,
       yes: args.yes,
     });
   }),
