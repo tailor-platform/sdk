@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import consola from "consola";
 import { lookup as mimeLookup } from "mime-types";
@@ -130,15 +131,10 @@ async function uploadSingleFile(
   const mime = mimeLookup(filePath);
 
   if (!mime) {
-    throw new Error(
-      `Unsupported file type for path "${filePath}". ` +
-        `Please extend MIME handling or exclude this file.`,
+    consola.warn(
+      `Skipping "${filePath}": unsupported content type (no mapping found).`,
     );
-  }
-  if (mime === "application/octet-stream") {
-    throw new Error(
-      `Content type "application/octet-stream" is not allowed for "${filePath}".`,
-    );
+    return;
   }
 
   const contentType = mime;
@@ -171,9 +167,26 @@ async function uploadSingleFile(
     }
   }
 
+  async function uploadWithLogging() {
+    try {
+      await client.uploadFile(requestStream());
+    } catch (error) {
+      if (
+        error instanceof ConnectError &&
+        error.code === Code.InvalidArgument
+      ) {
+        consola.warn(
+          `Skipping "${filePath}": server rejected this file as invalid (possibly unsupported content type or size). Details: ${error.message}`,
+        );
+        return;
+      }
+      consola.error(`Failed to upload "${filePath}": ${error}`);
+    }
+  }
+
   consola.debug(`Uploading ${filePath}...`);
   await withTimeout(
-    client.uploadFile(requestStream()),
+    uploadWithLogging(),
     2 * 60_000,
     `Upload timed out for "${filePath}"`,
   );
