@@ -113,4 +113,4 @@ Commands for managing and deploying static websites.
 | Command                                                             | Description                                          |
 | ------------------------------------------------------------------- | ---------------------------------------------------- |
 | [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory |
-| [staticwebsite show](./cli/staticwebsite.md#staticwebsite-show)     | Show details of a static website                     |
+| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a static website                      |

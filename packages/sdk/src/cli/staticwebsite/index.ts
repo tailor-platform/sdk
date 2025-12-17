@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { deployCommand } from "./deploy";
-import { showCommand } from "./show";
+import { getCommand } from "./get";
 
 export const staticwebsiteCommand = defineCommand({
   meta: {
@@ -8,7 +8,7 @@ export const staticwebsiteCommand = defineCommand({
     description: "Manage static websites",
   },
   subCommands: {
-    show: showCommand,
     deploy: deployCommand,
+    get: getCommand,
   },
 });

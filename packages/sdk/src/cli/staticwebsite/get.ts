@@ -5,18 +5,17 @@ import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
 
-export const showCommand = defineCommand({
+export const getCommand = defineCommand({
   meta: {
-    name: "show",
-    description: "Show static website details",
+    name: "get",
+    description: "Get static website details",
   },
   args: {
     ...commonArgs,
     ...jsonArgs,
     name: {
-      type: "string",
+      type: "positional",
       description: "Static website name",
-      alias: "n",
       required: true,
     },
     "workspace-id": {
