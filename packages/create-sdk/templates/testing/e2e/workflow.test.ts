@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, test } from "vitest";
-import { workflowStart } from "@tailor-platform/sdk/cli";
+import { startWorkflow } from "@tailor-platform/sdk/cli";
 
 describe.concurrent("workflow", () => {
   test(
     "simple-calculation: execute workflow and verify success",
     { timeout: 120000 },
     async () => {
-      const { executionId, wait } = await workflowStart({
+      const { executionId, wait } = await startWorkflow({
         nameOrId: "simple-calculation",
         machineUser: "admin",
         arg: { a: 2, b: 3 },
@@ -30,7 +30,7 @@ describe.concurrent("workflow", () => {
       const uuid = randomUUID();
       const testEmail = `workflow-test-${uuid}@example.com`;
 
-      const { executionId, wait } = await workflowStart({
+      const { executionId, wait } = await startWorkflow({
         nameOrId: "user-profile-sync",
         machineUser: "admin",
         arg: {

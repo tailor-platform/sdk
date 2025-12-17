@@ -7,7 +7,7 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
 import type { MachineUser } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
-export interface MachineUserListOptions {
+export interface ListMachineUsersOptions {
   workspaceId?: string;
   profile?: string;
   configPath?: string;
@@ -35,8 +35,8 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
   };
 }
 
-export async function machineUserList(
-  options?: MachineUserListOptions,
+export async function listMachineUsers(
+  options?: ListMachineUsersOptions,
 ): Promise<MachineUserInfo[]> {
   // Load and validate options
   const accessToken = await loadAccessToken({
@@ -101,7 +101,7 @@ export const listCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Execute machineuser list logic
-    const machineUsers = await machineUserList({
+    const machineUsers = await listMachineUsers({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,

@@ -7,7 +7,7 @@ import { loadAccessToken } from "../context";
 import { printData } from "../format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
-export interface WorkspaceCreateOptions {
+export interface CreateWorkspaceOptions {
   name: string;
   region: string;
   deleteProtection?: boolean;
@@ -38,8 +38,8 @@ const validateRegion = async (region: string, client: OperatorClient) => {
   }
 };
 
-export async function workspaceCreate(
-  options: WorkspaceCreateOptions,
+export async function createWorkspace(
+  options: CreateWorkspaceOptions,
 ): Promise<WorkspaceInfo> {
   // Load and validate options
   const accessToken = await loadAccessToken();
@@ -105,7 +105,7 @@ export const createCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Execute workspace create logic
-    const workspace = await workspaceCreate({
+    const workspace = await createWorkspace({
       name: args.name,
       region: args.region,
       deleteProtection: args["delete-protection"],

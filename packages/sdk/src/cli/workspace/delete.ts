@@ -5,11 +5,11 @@ import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 
-export interface WorkspaceDeleteOptions {
+export interface DeleteWorkspaceOptions {
   workspaceId: string;
 }
 
-async function loadOptions(options: WorkspaceDeleteOptions) {
+async function loadOptions(options: DeleteWorkspaceOptions) {
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
   if (!validateUuid(options.workspaceId)) {
@@ -23,8 +23,8 @@ async function loadOptions(options: WorkspaceDeleteOptions) {
   };
 }
 
-export async function workspaceDelete(
-  options: WorkspaceDeleteOptions,
+export async function deleteWorkspace(
+  options: DeleteWorkspaceOptions,
 ): Promise<void> {
   // Load and validate options
   const { client, workspaceId } = await loadOptions(options);
