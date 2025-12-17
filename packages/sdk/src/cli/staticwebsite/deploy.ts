@@ -20,14 +20,18 @@ function shouldIgnoreFile(filePath: string) {
   return IGNORED_FILES.has(fileName);
 }
 
+type DeployResult = {
+  url: string;
+  skippedFiles: string[];
+};
+
 async function deployStaticWebsite(
   client: OperatorClient,
   workspaceId: string,
   name: string,
   distDir: string,
   showProgress: boolean = true,
-): Promise<string> {
-  consola.info("Creating deployment...");
+): Promise<DeployResult> {
   const { deploymentId } = await client.createDeployment({
     workspaceId,
     name,
@@ -37,8 +41,7 @@ async function deployStaticWebsite(
     throw new Error("createDeployment returned empty deploymentId");
   }
 
-  consola.info("Uploading files...");
-  await uploadDirectory(
+  const skippedFiles = await uploadDirectory(
     client,
     workspaceId,
     deploymentId,
@@ -46,7 +49,6 @@ async function deployStaticWebsite(
     showProgress,
   );
 
-  consola.info("Publishing deployment...");
   const { url } = await client.publishDeployment({
     workspaceId,
     deploymentId,
@@ -56,7 +58,7 @@ async function deployStaticWebsite(
     throw new Error("publishDeployment returned empty url");
   }
 
-  return url;
+  return { url, skippedFiles };
 }
 
 async function uploadDirectory(
@@ -65,11 +67,11 @@ async function uploadDirectory(
   deploymentId: string,
   rootDir: string,
   showProgress: boolean,
-): Promise<void> {
+): Promise<string[]> {
   const files = await collectFiles(rootDir);
   if (files.length === 0) {
     consola.warn(`No files found under ${rootDir}`);
-    return;
+    return [];
   }
 
   const concurrency = 5;
@@ -79,6 +81,7 @@ async function uploadDirectory(
   const progress = showProgress
     ? createProgress("Uploading files", total)
     : undefined;
+  const skippedFiles: string[] = [];
 
   await Promise.all(
     files.map((relativePath) =>
@@ -89,6 +92,7 @@ async function uploadDirectory(
           deploymentId,
           rootDir,
           relativePath,
+          skippedFiles,
         );
         if (progress) {
           progress.update();
@@ -100,6 +104,8 @@ async function uploadDirectory(
   if (progress) {
     progress.finish();
   }
+
+  return skippedFiles;
 }
 
 async function collectFiles(
@@ -136,6 +142,7 @@ async function uploadSingleFile(
   deploymentId: string,
   rootDir: string,
   relativePath: string,
+  skippedFiles: string[],
 ): Promise<void> {
   const absPath = path.join(rootDir, relativePath);
 
@@ -144,8 +151,8 @@ async function uploadSingleFile(
   const mime = mimeLookup(filePath);
 
   if (!mime) {
-    consola.warn(
-      `Skipping "${filePath}": unsupported content type (no mapping found).`,
+    skippedFiles.push(
+      `${filePath} (unsupported content type; no MIME mapping found)`,
     );
     return;
   }
@@ -188,22 +195,34 @@ async function uploadSingleFile(
         error instanceof ConnectError &&
         error.code === Code.InvalidArgument
       ) {
-        consola.warn(
-          `Skipping "${filePath}": server rejected this file as invalid (possibly unsupported content type or size). Details: ${error.message}`,
+        skippedFiles.push(
+          `${filePath} (server rejected file as invalid: ${error.message})`,
         );
         return;
       }
-      consola.warn(`Failed to upload "${filePath}": ${error}`);
+      // For non-validation errors, fail the deployment as before.
+      throw error;
     }
   }
 
-  consola.debug(`Uploading ${filePath}...`);
   await withTimeout(
     uploadWithLogging(),
     // 2 minutes per file
     2 * 60_000,
     `Upload timed out for "${filePath}"`,
   );
+}
+
+function logSkippedFiles(skippedFiles: string[]) {
+  if (skippedFiles.length === 0) {
+    return;
+  }
+  console.log(
+    "⚠️WARNING: Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",
+  );
+  for (const file of skippedFiles) {
+    console.log(`  - ${file}`);
+  }
 }
 
 export const deployCommand = defineCommand({
@@ -239,7 +258,7 @@ export const deployCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     consola.info(
-      `Deploying static website '${args.name}' from directory '${args.dir}' to workspace '${args["workspace-id"] || "default workspace"}'...`,
+      `Deploying static website "${args.name}" from directory: ${args.dir}`,
     );
     const accessToken = await loadAccessToken({
       useProfile: true,
@@ -255,9 +274,7 @@ export const deployCommand = defineCommand({
       throw new Error(`Directory not found or not a directory: ${dir}`);
     }
 
-    consola.info(`Deploying static website "${name}" from directory: ${dir}`);
-
-    const deployResult = await withTimeout(
+    const { url, skippedFiles } = await withTimeout(
       deployStaticWebsite(client, workspaceId, name, dir, !args.json),
       // 10 minutes
       10 * 60_000,
@@ -269,13 +286,15 @@ export const deployCommand = defineCommand({
         JSON.stringify({
           name,
           workspaceId,
-          url: deployResult,
+          url,
+          skippedFiles,
         }),
       );
     } else {
       consola.success(
-        `Static website "${name}" deployed successfully. URL: ${deployResult}`,
+        `Static website "${name}" deployed successfully. URL: ${url}`,
       );
+      logSkippedFiles(skippedFiles);
     }
   }),
 });
