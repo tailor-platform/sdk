@@ -108,6 +108,20 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain('role: "admin" | "user";');
       expect(result.typeDef).toContain('status: "active" | "inactive" | null;');
     });
+
+    it("should handle enum array types", async () => {
+      const type = db.type("Article", {
+        categories: db.enum(["tech", "health", "finance"], { array: true }),
+        authors: db.enum(["alice", "bob"], { array: true, optional: true }),
+      });
+
+      const result = await TypeProcessor.processType(parseTailorDBType(type));
+
+      expect(result.typeDef).toContain(
+        'categories: ("tech" | "health" | "finance")[];',
+      );
+      expect(result.typeDef).toContain('authors: ("alice" | "bob")[] | null;');
+    });
   });
 
   describe("nested objects", () => {

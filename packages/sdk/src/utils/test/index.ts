@@ -4,13 +4,13 @@ import type { TailorField } from "@/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 /** Represents an unauthenticated user in the Tailor platform. */
-export const unauthenticatedTailorUser: TailorUser = {
+export const unauthenticatedTailorUser = {
   id: "00000000-0000-0000-0000-000000000000",
   type: "",
   workspaceId: "00000000-0000-0000-0000-000000000000",
   attributes: null,
   attributeList: [],
-} as const;
+} as const satisfies TailorUser;
 
 /**
  * Creates a hook function that processes TailorDB type fields
@@ -47,6 +47,9 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
             data: data,
             user: unauthenticatedTailorUser,
           });
+          if (hooked[key] instanceof Date) {
+            hooked[key] = hooked[key].toISOString();
+          }
         } else if (data && typeof data === "object") {
           hooked[key] = (data as Record<string, unknown>)[key];
         }

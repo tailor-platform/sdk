@@ -246,6 +246,7 @@ describe("KyselyGenerator integration tests", () => {
         input: input,
         executorInputs: [],
         baseDir: "/test",
+        configPath: "tailor.config.ts",
       });
 
       expect(result.files).toHaveLength(1);
@@ -291,6 +292,7 @@ describe("KyselyGenerator integration tests", () => {
         input: input,
         executorInputs: [],
         baseDir: "/test",
+        configPath: "tailor.config.ts",
       });
 
       expect(result.files).toHaveLength(1);
@@ -381,6 +383,7 @@ describe("KyselyGenerator integration tests", () => {
         input,
         executorInputs: [],
         baseDir: "/test",
+        configPath: "tailor.config.ts",
       });
 
       expect(result.files).toHaveLength(1);
@@ -422,6 +425,7 @@ describe("KyselyGenerator integration tests", () => {
         input,
         executorInputs: [],
         baseDir: "/test",
+        configPath: "tailor.config.ts",
       });
 
       const content = result.files[0].content;

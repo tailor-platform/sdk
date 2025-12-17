@@ -7,21 +7,21 @@ import { printData } from "../format";
 import { parseDuration, waitForExecution } from "./start";
 import { type WorkflowExecutionInfo } from "./transform";
 
-export interface WorkflowResumeOptions {
+export interface ResumeWorkflowOptions {
   executionId: string;
   workspaceId?: string;
   profile?: string;
   interval?: number;
 }
 
-export interface WorkflowResumeResultWithWait {
+export interface ResumeWorkflowResultWithWait {
   executionId: string;
   wait: () => Promise<WorkflowExecutionInfo>;
 }
 
-export async function workflowResume(
-  options: WorkflowResumeOptions,
-): Promise<WorkflowResumeResultWithWait> {
+export async function resumeWorkflow(
+  options: ResumeWorkflowOptions,
+): Promise<ResumeWorkflowResultWithWait> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -101,7 +101,7 @@ export const resumeCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     const interval = parseDuration(args.interval);
 
-    const { executionId, wait } = await workflowResume({
+    const { executionId, wait } = await resumeWorkflow({
       executionId: args.executionId,
       workspaceId: args["workspace-id"],
       profile: args.profile,

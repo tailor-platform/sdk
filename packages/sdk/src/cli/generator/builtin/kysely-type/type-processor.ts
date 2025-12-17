@@ -77,7 +77,11 @@ export class TypeProcessor {
 
     let finalType = baseTypeResult.type;
     if (isArray) {
-      finalType = `${baseTypeResult.type}[]`;
+      // Wrap enum types in parentheses before adding array suffix
+      const needsParens = fieldConfig.type === "enum";
+      finalType = needsParens
+        ? `(${baseTypeResult.type})[]`
+        : `${baseTypeResult.type}[]`;
     }
     if (isNullable) {
       finalType = `${finalType} | null`;

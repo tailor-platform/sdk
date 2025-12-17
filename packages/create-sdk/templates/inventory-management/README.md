@@ -34,9 +34,9 @@ npm run deploy -- --workspace-id <your-workspace-id>
 
 ```bash
 # Get Manager's token
-npx tailor-sdk machineuser token inventory-management -m manager
+npx tailor-sdk machineuser token manager --workspace-id <your-workspace-id>
 # Get Staff's token
-npx tailor-sdk machineuser token inventory-management -m staff
+npx tailor-sdk machineuser token staff --workspace-id <your-workspace-id>
 ```
 
 ## Features

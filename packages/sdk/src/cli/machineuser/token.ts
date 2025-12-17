@@ -5,7 +5,7 @@ import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
 
-export interface MachineUserTokenOptions {
+export interface GetMachineUserTokenOptions {
   name: string;
   workspaceId?: string;
   profile?: string;
@@ -18,8 +18,8 @@ export interface MachineUserTokenInfo {
   expiresAt: string;
 }
 
-export async function machineUserToken(
-  options: MachineUserTokenOptions,
+export async function getMachineUserToken(
+  options: GetMachineUserTokenOptions,
 ): Promise<MachineUserTokenInfo> {
   // Load and validate options
   const accessToken = await loadAccessToken({
@@ -102,7 +102,7 @@ export const tokenCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Execute machineuser token logic
-    const token = await machineUserToken({
+    const token = await getMachineUserToken({
       name: args.name,
       workspaceId: args["workspace-id"],
       profile: args.profile,

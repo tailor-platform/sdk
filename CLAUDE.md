@@ -48,10 +48,10 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 ```
 /
 ├── packages/
-│   ├── tailor-sdk/          # Core SDK package
+│   ├── sdk/                 # Core SDK package
 │   │   ├── src/
 │   │   │   ├── configure/   # SDK user-facing APIs (minimal implementation)
-│   │   │   │   ├── services/    # tailordb, resolver, executor, auth, idp, staticwebsite
+│   │   │   │   ├── services/    # tailordb, resolver, executor, workflow, auth, idp, staticwebsite
 │   │   │   │   ├── types/       # Type system and helpers
 │   │   │   │   ├── config.ts
 │   │   │   │   └── application.ts
@@ -65,6 +65,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 │   │   │       ├── apply/       # Deployment API client and services
 │   │   │       └── utils/
 │   │   └── dist/            # Built output
+│   ├── create-sdk/          # Project scaffolding CLI
 │   └── tailor-proto/        # Generated protobuf definitions
 ├── example/                 # Example implementation
 └── turbo.json               # Turbo build orchestration

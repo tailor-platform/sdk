@@ -6,13 +6,13 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { humanizeRelativeTime } from "../format";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
-export interface WorkflowListOptions {
+export interface ListWorkflowsOptions {
   workspaceId?: string;
   profile?: string;
 }
 
-export async function workflowList(
-  options?: WorkflowListOptions,
+export async function listWorkflows(
+  options?: ListWorkflowsOptions,
 ): Promise<WorkflowListInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -55,7 +55,7 @@ export const listCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const workflows = await workflowList({
+    const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

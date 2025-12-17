@@ -79,6 +79,7 @@ export class EnumConstantsGenerator implements CodeGenerator<
     input: GeneratorInput<EnumNamespaceMetadata, undefined>;
     executorInputs: undefined[];
     baseDir: string;
+    configPath: string;
   }): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 

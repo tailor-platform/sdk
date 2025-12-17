@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "0.16.3",
+  "version": "0.17.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "main": "./dist/configure/index.mjs",
@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@badgateway/oauth2-client": "3.3.1",
-    "@bufbuild/protobuf": "2.10.1",
+    "@bufbuild/protobuf": "2.10.2",
     "@connectrpc/connect": "2.1.1",
     "@connectrpc/connect-node": "2.1.1",
     "@standard-schema/spec": "1.0.0",
@@ -60,7 +60,7 @@
     "citty": "0.1.6",
     "confbox": "0.2.2",
     "consola": "3.4.2",
-    "date-fns": "^4.1.0",
+    "date-fns": "4.1.0",
     "es-toolkit": "1.42.0",
     "inflection": "3.0.2",
     "madge": "8.0.0",
@@ -81,13 +81,13 @@
     "zod": "4.1.13"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.1",
+    "@eslint/js": "9.39.2",
     "@tailor-platform/function-types": "0.8.0",
     "@types/madge": "5.0.3",
     "@types/mime-types": "^3.0.1",
-    "@types/node": "22.19.2",
+    "@types/node": "22.19.3",
     "cross-env": "10.1.0",
-    "eslint": "9.39.1",
+    "eslint": "9.39.2",
     "eslint-plugin-jsdoc": "61.5.0",
     "globals": "16.5.0",
     "sonda": "0.10.1",

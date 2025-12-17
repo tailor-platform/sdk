@@ -6,7 +6,7 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 
-export interface WorkflowGetOptions {
+export interface GetWorkflowOptions {
   nameOrId: string;
   workspaceId?: string;
   profile?: string;
@@ -19,8 +19,8 @@ function isUUID(value: string): boolean {
   return UUID_REGEX.test(value);
 }
 
-export async function workflowGet(
-  options: WorkflowGetOptions,
+export async function getWorkflow(
+  options: GetWorkflowOptions,
 ): Promise<WorkflowInfo> {
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -85,7 +85,7 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const workflow = await workflowGet({
+    const workflow = await getWorkflow({
       nameOrId: args.nameOrId,
       workspaceId: args["workspace-id"],
       profile: args.profile,

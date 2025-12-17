@@ -21,7 +21,7 @@ import {
 import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
-export interface WorkflowStartOptions {
+export interface StartWorkflowOptions {
   nameOrId: string;
   machineUser: string;
   arg?: Jsonifiable;
@@ -205,14 +205,14 @@ async function resolveWorkflowId(
   return workflow.id;
 }
 
-export interface WorkflowStartResultWithWait {
+export interface StartWorkflowResultWithWait {
   executionId: string;
   wait: () => Promise<WorkflowExecutionInfo>;
 }
 
-export async function workflowStart(
-  options: WorkflowStartOptions,
-): Promise<WorkflowStartResultWithWait> {
+export async function startWorkflow(
+  options: StartWorkflowOptions,
+): Promise<StartWorkflowResultWithWait> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -334,7 +334,7 @@ export const startCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     const interval = parseDuration(args.interval);
 
-    const { executionId, wait } = await workflowStart({
+    const { executionId, wait } = await startWorkflow({
       nameOrId: args.nameOrId,
       machineUser: args.machineuser,
       arg: args.arg,

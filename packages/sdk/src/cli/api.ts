@@ -22,55 +22,55 @@ export type { Executor } from "@/parser/service/executor";
 export { show, type ShowOptions, type ApplicationInfo } from "./show";
 export { remove, type RemoveOptions } from "./remove";
 export {
-  workspaceCreate,
-  type WorkspaceCreateOptions,
+  createWorkspace,
+  type CreateWorkspaceOptions,
 } from "./workspace/create";
-export { workspaceList } from "./workspace/list";
+export { listWorkspaces, type ListWorkspacesOptions } from "./workspace/list";
 export {
-  workspaceDelete,
-  type WorkspaceDeleteOptions,
+  deleteWorkspace,
+  type DeleteWorkspaceOptions,
 } from "./workspace/delete";
 export type { WorkspaceInfo } from "./workspace/transform";
 export {
-  machineUserList,
-  type MachineUserListOptions,
+  listMachineUsers,
+  type ListMachineUsersOptions,
   type MachineUserInfo,
 } from "./machineuser/list";
 export {
-  machineUserToken,
-  type MachineUserTokenOptions,
+  getMachineUserToken,
+  type GetMachineUserTokenOptions,
   type MachineUserTokenInfo,
 } from "./machineuser/token";
 export {
-  oauth2ClientGet,
-  type OAuth2ClientGetOptions,
+  getOAuth2Client,
+  type GetOAuth2ClientOptions,
 } from "./oauth2client/get";
 export {
-  oauth2ClientList,
-  type OAuth2ClientListOptions,
+  listOAuth2Clients,
+  type ListOAuth2ClientsOptions,
 } from "./oauth2client/list";
 export type {
   OAuth2ClientInfo,
   OAuth2ClientCredentials,
 } from "./oauth2client/transform";
-export { workflowList, type WorkflowListOptions } from "./workflow/list";
-export { workflowGet, type WorkflowGetOptions } from "./workflow/get";
+export { listWorkflows, type ListWorkflowsOptions } from "./workflow/list";
+export { getWorkflow, type GetWorkflowOptions } from "./workflow/get";
 export {
-  workflowStart,
-  type WorkflowStartOptions,
-  type WorkflowStartResultWithWait,
+  startWorkflow,
+  type StartWorkflowOptions,
+  type StartWorkflowResultWithWait,
 } from "./workflow/start";
 export {
-  workflowExecutionsList,
-  workflowExecutionGet,
-  type WorkflowExecutionsListOptions,
-  type WorkflowExecutionGetOptions,
-  type WorkflowExecutionGetResult,
+  listWorkflowExecutions,
+  getWorkflowExecution,
+  type ListWorkflowExecutionsOptions,
+  type GetWorkflowExecutionOptions,
+  type GetWorkflowExecutionResult,
 } from "./workflow/executions";
 export {
-  workflowResume,
-  type WorkflowResumeOptions,
-  type WorkflowResumeResultWithWait,
+  resumeWorkflow,
+  type ResumeWorkflowOptions,
+  type ResumeWorkflowResultWithWait,
 } from "./workflow/resume";
 export type {
   WorkflowListInfo,

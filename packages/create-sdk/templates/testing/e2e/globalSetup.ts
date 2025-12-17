@@ -1,9 +1,9 @@
 import {
   apply,
-  machineUserToken,
+  getMachineUserToken,
   show,
-  workspaceCreate,
-  workspaceDelete,
+  createWorkspace,
+  deleteWorkspace,
   type WorkspaceInfo,
 } from "@tailor-platform/sdk/cli";
 import type { TestProject } from "vitest/node";
@@ -17,9 +17,9 @@ declare module "vitest" {
 
 let createdWorkspace: WorkspaceInfo | null = null;
 
-async function createWorkspace(name: string, region: string) {
+async function setupWorkspace(name: string, region: string) {
   console.log(`Creating workspace "${name}" in region "${region}"...`);
-  const workspace = await workspaceCreate({ name, region });
+  const workspace = await createWorkspace({ name, region });
   console.log(`Workspace "${workspace.name}" created successfully.`);
   return workspace;
 }
@@ -30,9 +30,9 @@ async function deployApplication() {
   console.log("Application deployed successfully.");
 }
 
-async function deleteWorkspace(workspaceId: string) {
+async function cleanupWorkspace(workspaceId: string) {
   console.log("Deleting workspace...");
-  await workspaceDelete({ workspaceId });
+  await deleteWorkspace({ workspaceId });
   console.log("Workspace deleted successfully.");
 }
 
@@ -46,20 +46,20 @@ export async function setup(project: TestProject) {
         "TAILOR_PLATFORM_WORKSPACE_NAME and TAILOR_PLATFORM_WORKSPACE_REGION must be set when CI=true",
       );
     }
-    createdWorkspace = await createWorkspace(workspaceName, workspaceRegion);
+    createdWorkspace = await setupWorkspace(workspaceName, workspaceRegion);
     process.env.TAILOR_PLATFORM_WORKSPACE_ID = createdWorkspace.id;
     await deployApplication();
   }
 
   const app = await show();
-  const tokens = await machineUserToken({ name: "admin" });
+  const tokens = await getMachineUserToken({ name: "admin" });
   project.provide("url", app.url);
   project.provide("token", tokens.accessToken);
 }
 
 export async function teardown() {
   if (createdWorkspace) {
-    await deleteWorkspace(createdWorkspace.id);
+    await cleanupWorkspace(createdWorkspace.id);
     createdWorkspace = null;
   }
 }

@@ -6,14 +6,14 @@ import { loadAccessToken } from "../context";
 import { humanizeRelativeTime, printData } from "../format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
-export interface WorkspaceListOptions {
+export interface ListWorkspacesOptions {
   limit?: number;
 }
 
 const limitSchema = z.coerce.number().int().positive().optional();
 
-export async function workspaceList(
-  options?: WorkspaceListOptions,
+export async function listWorkspaces(
+  options?: ListWorkspacesOptions,
 ): Promise<WorkspaceInfo[]> {
   const limit = options?.limit;
   const hasLimit = limit !== undefined;
@@ -86,7 +86,7 @@ export const listCommand = defineCommand({
     }
 
     // Execute workspace list logic
-    const workspaces = await workspaceList({ limit });
+    const workspaces = await listWorkspaces({ limit });
 
     const formattedWorkspaces = args.json
       ? workspaces
