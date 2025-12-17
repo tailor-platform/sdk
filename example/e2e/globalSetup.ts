@@ -1,7 +1,7 @@
 import {
   loadAccessToken,
   loadWorkspaceId,
-  machineUserToken,
+  getMachineUserToken,
   show,
 } from "@tailor-platform/sdk/cli";
 import type { TestProject } from "vitest/node";
@@ -17,7 +17,7 @@ declare module "vitest" {
 
 export async function setup(project: TestProject) {
   const app = await show();
-  const tokens = await machineUserToken({
+  const tokens = await getMachineUserToken({
     name: "manager-machine-user",
   });
   const workspaceId = loadWorkspaceId();

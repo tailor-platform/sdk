@@ -32,7 +32,7 @@ function generateExecScript(
   return ml /* js */ `
     import { execSync } from "node:child_process";
     import { join } from "node:path";
-    import { show, machineUserToken } from "@tailor-platform/sdk/cli";
+    import { show, getMachineUserToken } from "@tailor-platform/sdk/cli";
 
     const configDir = import.meta.dirname;
     const configPath = join(configDir, "${relativeConfigPath}");
@@ -42,7 +42,7 @@ function generateExecScript(
     const appInfo = await show({ configPath });
     const endpoint = \`\${appInfo.url}/query\`;
 
-    const tokenInfo = await machineUserToken({ name: "${machineUserName}", configPath });
+    const tokenInfo = await getMachineUserToken({ name: "${machineUserName}", configPath });
     const headers = JSON.stringify({ Authorization: \`Bearer \${tokenInfo.accessToken}\` });
 
     const headersArg = process.platform === "win32"

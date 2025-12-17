@@ -10,15 +10,15 @@ import {
   toOAuth2ClientCredentials,
 } from "./transform";
 
-export interface OAuth2ClientGetOptions {
+export interface GetOAuth2ClientOptions {
   name: string;
   workspaceId?: string;
   profile?: string;
   configPath?: string;
 }
 
-export async function oauth2ClientGet(
-  options: OAuth2ClientGetOptions,
+export async function getOAuth2Client(
+  options: GetOAuth2ClientOptions,
 ): Promise<OAuth2ClientCredentials> {
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -88,7 +88,7 @@ export const getCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const credentials = await oauth2ClientGet({
+    const credentials = await getOAuth2Client({
       name: args.name,
       workspaceId: args["workspace-id"],
       profile: args.profile,

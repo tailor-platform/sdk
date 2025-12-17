@@ -23,14 +23,14 @@ import {
 } from "./transform";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
 
-export interface WorkflowExecutionsListOptions {
+export interface ListWorkflowExecutionsOptions {
   workspaceId?: string;
   profile?: string;
   workflowName?: string;
   status?: string;
 }
 
-export interface WorkflowExecutionGetOptions {
+export interface GetWorkflowExecutionOptions {
   executionId: string;
   workspaceId?: string;
   profile?: string;
@@ -52,7 +52,7 @@ export interface WorkflowExecutionDetailInfo extends WorkflowExecutionInfo {
   })[];
 }
 
-export interface WorkflowExecutionGetResult {
+export interface GetWorkflowExecutionResult {
   execution: WorkflowExecutionDetailInfo;
   wait: () => Promise<WorkflowExecutionDetailInfo>;
 }
@@ -103,8 +103,8 @@ function parseStatus(status: string): WorkflowExecution_Status {
   }
 }
 
-export async function workflowExecutionsList(
-  options?: WorkflowExecutionsListOptions,
+export async function listWorkflowExecutions(
+  options?: ListWorkflowExecutionsOptions,
 ): Promise<WorkflowExecutionInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -163,9 +163,9 @@ export async function workflowExecutionsList(
   return executions.map(toWorkflowExecutionInfo);
 }
 
-export async function workflowExecutionGet(
-  options: WorkflowExecutionGetOptions,
-): Promise<WorkflowExecutionGetResult> {
+export async function getWorkflowExecution(
+  options: GetWorkflowExecutionOptions,
+): Promise<GetWorkflowExecutionResult> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -429,7 +429,7 @@ export const executionsCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     if (args.executionId) {
       const interval = parseDuration(args.interval);
-      const { execution, wait } = await workflowExecutionGet({
+      const { execution, wait } = await getWorkflowExecution({
         executionId: args.executionId,
         workspaceId: args["workspace-id"],
         profile: args.profile,
@@ -451,7 +451,7 @@ export const executionsCommand = defineCommand({
         printData(result, args.json);
       }
     } else {
-      const executions = await workflowExecutionsList({
+      const executions = await listWorkflowExecutions({
         workspaceId: args["workspace-id"],
         profile: args.profile,
         workflowName: args["workflow-name"],
