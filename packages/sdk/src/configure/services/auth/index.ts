@@ -16,7 +16,7 @@ export type {
   BuiltinIdP,
   IdProviderConfig,
   OAuth2ClientGrantType,
-  OAuth2Client,
+  OAuth2ClientInput as OAuth2Client,
   SCIMAuthorization,
   SCIMAttributeType,
   SCIMAttribute,

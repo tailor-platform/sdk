@@ -6,7 +6,7 @@ import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2"
 import type { Message } from "@bufbuild/protobuf";
 import type { Namespace } from "./resource_pb";
 import type { SecretValue } from "./secret_manager_resource_pb";
-import type { Timestamp, Value } from "@bufbuild/protobuf/wkt";
+import type { Duration, Timestamp, Value } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/auth_resource.proto.
@@ -133,18 +133,6 @@ export declare type AuthIDPConfig_SAMLConfig = Message<"tailor.v1.AuthIDPConfig.
    * @generated from field: string metadata_url = 1;
    */
   metadataUrl: string;
-
-  /**
-   * @generated from field: tailor.v1.SecretValue sp_cert_base64 = 2 [deprecated = true];
-   * @deprecated
-   */
-  spCertBase64?: SecretValue;
-
-  /**
-   * @generated from field: tailor.v1.SecretValue sp_key_base64 = 3 [deprecated = true];
-   * @deprecated
-   */
-  spKeyBase64?: SecretValue;
 
   /**
    * @generated from field: string raw_metadata = 4;
@@ -949,6 +937,22 @@ export declare type AuthOAuth2Client = Message<"tailor.v1.AuthOAuth2Client"> & {
    * @generated from field: tailor.v1.AuthOAuth2Client.ClientType client_type = 8;
    */
   clientType: AuthOAuth2Client_ClientType;
+
+  /**
+   * Optional access token lifetime. If not set, uses the default lifetime.
+   * Minimum allowed value is 60 seconds, maximum is 1 day (86400 seconds).
+   *
+   * @generated from field: google.protobuf.Duration access_token_lifetime = 9;
+   */
+  accessTokenLifetime?: Duration;
+
+  /**
+   * Optional refresh token lifetime. If not set, uses the default lifetime.
+   * Minimum allowed value is 60 seconds, maximum is 7 days (604800 seconds).
+   *
+   * @generated from field: google.protobuf.Duration refresh_token_lifetime = 10;
+   */
+  refreshTokenLifetime?: Duration;
 };
 
 /**
