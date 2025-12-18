@@ -78,7 +78,7 @@
     "type-fest": "5.3.1",
     "uuid": "13.0.0",
     "xdg-basedir": "5.1.0",
-    "zod": "4.1.13"
+    "zod": "4.2.0"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
