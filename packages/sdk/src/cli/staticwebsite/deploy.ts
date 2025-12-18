@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import consola from "consola";
+import consola, { createConsola } from "consola";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
 import { withCommonArgs, commonArgs, jsonArgs } from "../args";
@@ -11,6 +11,12 @@ import { loadAccessToken } from "../context";
 import { createProgress, withTimeout } from "../progress";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
+
+const noTimeLogger = createConsola({
+  formatOptions: {
+    date: false,
+  },
+});
 
 const CHUNK_SIZE = 64 * 1024; // 64KB
 const IGNORED_FILES = new Set([".DS_Store", "thumbs.db", "desktop.ini"]);
@@ -216,11 +222,11 @@ function logSkippedFiles(skippedFiles: string[]) {
   if (skippedFiles.length === 0) {
     return;
   }
-  console.log(
+  noTimeLogger.log(
     "⚠️WARNING: Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",
   );
   for (const file of skippedFiles) {
-    console.log(`  - ${file}`);
+    noTimeLogger.log(`  - ${file}`);
   }
 }
 
