@@ -173,6 +173,17 @@ describe("defineIdp", () => {
       }),
     ).not.toThrow();
 
+    expect(() =>
+      defineIdp("idp-valid-length-consistency", {
+        authorization: "loggedIn",
+        clients: ["client-1"] as const,
+        userAuthPolicy: {
+          passwordMinLength: 10,
+          passwordMaxLength: 20,
+        },
+      }),
+    ).not.toThrow();
+
     // Invalid ranges should throw during parsing
     // Note: These tests verify the schema validation works,
     // but defineIdp itself doesn't validate - validation happens in parser layer
