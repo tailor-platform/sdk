@@ -1,12 +1,12 @@
 import { defineCommand } from "citty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs, workspaceIdSchema } from "../args";
+import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { logger } from "../utils/logger";
 
 const deleteWorkspaceOptionsSchema = z.object({
-  workspaceId: workspaceIdSchema,
+  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
 });
 
 export type DeleteWorkspaceOptions = z.input<

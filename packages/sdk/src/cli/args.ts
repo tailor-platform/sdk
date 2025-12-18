@@ -16,13 +16,6 @@ export function isUUID(value: string): boolean {
   return z.uuid().safeParse(value).success;
 }
 
-/**
- * Schema for workspace ID validation (UUID format)
- */
-export const workspaceIdSchema = z.uuid({
-  message: "workspace-id must be a valid UUID",
-});
-
 const durationUnits = ["ms", "s", "m"] as const;
 type DurationUnit = (typeof durationUnits)[number];
 

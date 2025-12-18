@@ -5,7 +5,6 @@ import { parseYAML, stringifyYAML, parseTOML } from "confbox";
 import ml from "multiline-ts";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import { workspaceIdSchema } from "./args";
 import { initOAuth2Client } from "./client";
 import { logger } from "./utils/logger";
 
@@ -138,7 +137,7 @@ function fromTailorctlConfig(config: TcConfig): PfConfig {
 }
 
 function validateWorkspaceId(workspaceId: string, source: string): string {
-  const result = workspaceIdSchema.safeParse(workspaceId);
+  const result = z.uuid().safeParse(workspaceId);
   if (!result.success) {
     throw new Error(
       `Invalid workspace ID from ${source}: must be a valid UUID`,
