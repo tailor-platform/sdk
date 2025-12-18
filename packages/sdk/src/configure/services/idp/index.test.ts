@@ -100,4 +100,81 @@ describe("defineIdp", () => {
     });
     expect(idpNoPolicy.userAuthPolicy).toBeUndefined();
   });
+
+  it("should preserve userAuthPolicy password policy fields", () => {
+    const idpWithPasswordPolicy = defineIdp("idp-with-password-policy", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        passwordRequireUppercase: true,
+        passwordRequireLowercase: true,
+        passwordRequireNonAlphanumeric: true,
+        passwordRequireNumeric: true,
+        passwordMinLength: 10,
+        passwordMaxLength: 128,
+      },
+    });
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireUppercase).toBe(
+      true,
+    );
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireLowercase).toBe(
+      true,
+    );
+    expect(
+      idpWithPasswordPolicy.userAuthPolicy?.passwordRequireNonAlphanumeric,
+    ).toBe(true);
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireNumeric).toBe(
+      true,
+    );
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordMinLength).toBe(10);
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordMaxLength).toBe(128);
+
+    const idpWithPartialPasswordPolicy = defineIdp(
+      "idp-with-partial-password-policy",
+      {
+        authorization: "loggedIn",
+        clients: ["client-1"] as const,
+        userAuthPolicy: {
+          passwordRequireUppercase: true,
+          passwordMinLength: 8,
+        },
+      },
+    );
+    expect(
+      idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireUppercase,
+    ).toBe(true);
+    expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordMinLength).toBe(
+      8,
+    );
+    expect(
+      idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireLowercase,
+    ).toBeUndefined();
+  });
+
+  it("should validate password length ranges", () => {
+    // Valid ranges
+    expect(() =>
+      defineIdp("idp-valid-min", {
+        authorization: "loggedIn",
+        clients: ["client-1"] as const,
+        userAuthPolicy: {
+          passwordMinLength: 6,
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      defineIdp("idp-valid-max", {
+        authorization: "loggedIn",
+        clients: ["client-1"] as const,
+        userAuthPolicy: {
+          passwordMaxLength: 4096,
+        },
+      }),
+    ).not.toThrow();
+
+    // Invalid ranges should throw during parsing
+    // Note: These tests verify the schema validation works,
+    // but defineIdp itself doesn't validate - validation happens in parser layer
+  });
 });

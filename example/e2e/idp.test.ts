@@ -16,6 +16,12 @@ describe("control plane", async () => {
     expect(idpService?.userAuthPolicy).toMatchObject({
       useNonEmailIdentifier: false,
       allowSelfPasswordReset: true,
+      passwordRequireUppercase: true,
+      passwordRequireLowercase: true,
+      passwordRequireNonAlphanumeric: true,
+      passwordRequireNumeric: true,
+      passwordMinLength: 8,
+      passwordMaxLength: 128,
     });
   });
 

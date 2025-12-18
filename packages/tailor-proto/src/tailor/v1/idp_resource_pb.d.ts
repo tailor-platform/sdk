@@ -88,6 +88,42 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * @generated from field: bool allow_self_password_reset = 2;
    */
   allowSelfPasswordReset: boolean;
+
+  /**
+   * Password policy fields (stored in Identity Platform, not in DB)
+   *
+   * @generated from field: bool password_require_uppercase = 3;
+   */
+  passwordRequireUppercase: boolean;
+
+  /**
+   * @generated from field: bool password_require_lowercase = 4;
+   */
+  passwordRequireLowercase: boolean;
+
+  /**
+   * @generated from field: bool password_require_non_alphanumeric = 5;
+   */
+  passwordRequireNonAlphanumeric: boolean;
+
+  /**
+   * @generated from field: bool password_require_numeric = 6;
+   */
+  passwordRequireNumeric: boolean;
+
+  /**
+   * password_min_length: valid range is 6-30 (default: 6). When 0 (unset), uses default value 6.
+   *
+   * @generated from field: int32 password_min_length = 7;
+   */
+  passwordMinLength: number;
+
+  /**
+   * password_max_length: valid range is 6-4096 (default: 4096). When 0 (unset), uses default value 4096.
+   *
+   * @generated from field: int32 password_max_length = 8;
+   */
+  passwordMaxLength: number;
 };
 
 /**
