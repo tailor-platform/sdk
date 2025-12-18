@@ -110,7 +110,7 @@ tailor-sdk user pat create <name> [options]
 
 **Options:**
 
-- `-w, --write` - Grant write permission (default: read-only)
+- `-W, --write` - Grant write permission (default: read-only)
 - `-j, --json` - Output as JSON
 
 **Output (default):**
