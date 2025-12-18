@@ -1,22 +1,21 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import {
+  commonArgs,
+  isUUID,
+  jsonArgs,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 
 export interface GetWorkflowOptions {
   nameOrId: string;
   workspaceId?: string;
   profile?: string;
-}
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUUID(value: string): boolean {
-  return UUID_REGEX.test(value);
 }
 
 export async function getWorkflow(
@@ -68,20 +67,11 @@ export const getCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
+    ...workspaceArgs,
     nameOrId: {
       type: "positional",
       description: "Workflow name or ID",
       required: true,
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
     },
   },
   run: withCommonArgs(async (args) => {

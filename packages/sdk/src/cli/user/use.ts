@@ -1,8 +1,8 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig, writePlatformConfig } from "../context";
+import { logger } from "../utils/logger";
 
 export const useCommand = defineCommand({
   meta: {
@@ -32,6 +32,6 @@ export const useCommand = defineCommand({
     config.current_user = args.user;
     writePlatformConfig(config);
 
-    consola.success(`Current user set to "${args.user}" successfully.`);
+    logger.success(`Current user set to "${args.user}" successfully.`);
   }),
 });

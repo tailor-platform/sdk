@@ -1,5 +1,4 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { type Application, defineApplication } from "@/cli/application";
 import { type PlanContext } from "@/cli/apply";
@@ -21,6 +20,7 @@ import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
 import { commonArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
 import { loadAccessToken, loadWorkspaceId } from "./context";
+import { logger } from "./utils/logger";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -146,13 +146,14 @@ export const removeCommand = defineCommand({
       configPath: args.config,
     });
 
-    console.log(
-      `Planning removal of resources managed by "${application.name}"...\n`,
+    logger.info(
+      `Planning removal of resources managed by "${application.name}"...`,
     );
+    logger.newline();
 
     await execRemove(client, workspaceId, application, async () => {
       if (!args.yes) {
-        const confirmed = await consola.prompt(
+        const confirmed = await logger.prompt(
           "Are you sure you want to remove all resources?",
           { type: "confirm", initial: false },
         );
@@ -163,11 +164,11 @@ export const removeCommand = defineCommand({
       `);
         }
       } else {
-        consola.success("Removing all resources (--yes flag specified)...");
+        logger.success("Removing all resources (--yes flag specified)...");
       }
     });
 
-    consola.success(
+    logger.success(
       `Successfully removed all resources managed by "${application.name}".`,
     );
   }),

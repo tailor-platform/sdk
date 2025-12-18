@@ -1,5 +1,7 @@
 import { PATScope } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import ml from "multiline-ts";
+import { printData } from "../../utils/format";
+import { logger } from "../../utils/logger";
 import type { PersonalAccessToken } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 export interface PersonalAccessTokenInfo {
@@ -47,15 +49,9 @@ export function printCreatedToken(
   const scopes = getScopeStringsFromWriteFlag(write);
 
   if (json) {
-    console.log(
-      JSON.stringify({
-        name,
-        scopes,
-        token,
-      }),
-    );
+    printData({ name, scopes, token }, json);
   } else {
-    console.log(ml`
+    logger.log(ml`
       Personal access token ${action} successfully.
 
         name: ${name}

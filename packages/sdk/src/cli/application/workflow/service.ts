@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { styleText } from "node:util";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { logger, styles } from "@/cli/utils/logger";
 import { WORKFLOW_JOB_BRAND } from "@/configure/services/workflow/job";
 import {
   type Workflow,
@@ -97,20 +97,15 @@ export function printLoadedWorkflows(result: WorkflowLoadResult): void {
     return;
   }
 
-  console.log("");
-  console.log(
-    "Found",
-    styleText("cyanBright", result.fileCount.toString()),
-    "workflow files",
+  logger.newline();
+  logger.log(
+    `Found ${styles.highlight(result.fileCount.toString())} workflow files`,
   );
 
   for (const { workflow, sourceFile } of result.workflowSources) {
     const relativePath = path.relative(process.cwd(), sourceFile);
-    console.log(
-      "Workflow:",
-      styleText("greenBright", `"${workflow.name}"`),
-      "loaded from",
-      styleText("cyan", relativePath),
+    logger.log(
+      `Workflow: ${styles.successBright(`"${workflow.name}"`)} loaded from ${styles.path(relativePath)}`,
     );
   }
 }
@@ -156,11 +151,10 @@ async function loadFileContent(filePath: string): Promise<{
     }
   } catch (error) {
     const relativePath = path.relative(process.cwd(), filePath);
-    console.error(
-      styleText("red", "Failed to load workflow from"),
-      styleText("redBright", relativePath),
+    logger.error(
+      `${styles.error("Failed to load workflow from")} ${styles.errorBright(relativePath)}`,
     );
-    console.error(error);
+    logger.error(String(error));
     throw error;
   }
 

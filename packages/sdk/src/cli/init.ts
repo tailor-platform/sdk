@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "./args";
-import { readPackageJson } from "./package-json";
+import { logger } from "./utils/logger";
+import { readPackageJson } from "./utils/package-json";
 
 const detectPackageManager = () => {
   const availablePMs = ["npm", "yarn", "pnpm"];
@@ -41,7 +41,7 @@ export const initCommand = defineCommand({
 
     let packageManager = detectPackageManager();
     if (!packageManager) {
-      consola.warn("⚠️ Could not detect package manager, defaulting to npm");
+      logger.warn("⚠️ Could not detect package manager, defaulting to npm");
       packageManager = "npm";
     }
     const initArgs = [
@@ -51,7 +51,7 @@ export const initCommand = defineCommand({
       ...(packageManager === "npm" ? ["--"] : []),
       ...(args.template ? ["--template", args.template] : []),
     ];
-    consola.log(`Running: ${packageManager} ${initArgs.join(" ")}`);
+    logger.log(`Running: ${packageManager} ${initArgs.join(" ")}`);
 
     spawnSync(packageManager, initArgs, { stdio: "inherit" });
   }),

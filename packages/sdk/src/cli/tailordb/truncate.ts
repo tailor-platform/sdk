@@ -1,9 +1,9 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { logger } from "../utils/logger";
 
 export interface TruncateOptions {
   workspaceId?: string;
@@ -31,7 +31,7 @@ async function truncateSingleType(
     tailordbTypeName: options.typeName,
   });
 
-  consola.success(
+  logger.success(
     `Truncated type "${options.typeName}" in namespace "${options.namespaceName}"`,
   );
 }
@@ -46,7 +46,7 @@ async function truncateNamespace(
     namespaceName,
   });
 
-  consola.success(`Truncated all types in namespace "${namespaceName}"`);
+  logger.success(`Truncated all types in namespace "${namespaceName}"`);
 }
 
 async function getAllNamespaces(configPath?: string): Promise<string[]> {
@@ -127,13 +127,13 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
   // Handle --all flag
   if (hasAll) {
     if (namespaces.length === 0) {
-      consola.warn("No namespaces found in config file.");
+      logger.warn("No namespaces found in config file.");
       return;
     }
 
     if (!options?.yes) {
       const namespaceList = namespaces.join(", ");
-      const confirmation = await consola.prompt(
+      const confirmation = await logger.prompt(
         `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue? (yes/no)`,
         {
           type: "confirm",
@@ -141,7 +141,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
         },
       );
       if (!confirmation) {
-        consola.info("Truncate cancelled.");
+        logger.info("Truncate cancelled.");
         return;
       }
     }
@@ -149,7 +149,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
     for (const namespace of namespaces) {
       await truncateNamespace(workspaceId, namespace, client);
     }
-    consola.success("Truncated all tables in all namespaces");
+    logger.success("Truncated all tables in all namespaces");
     return;
   }
 
@@ -165,7 +165,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
     }
 
     if (!options.yes) {
-      const confirmation = await consola.prompt(
+      const confirmation = await logger.prompt(
         `This will truncate ALL tables in namespace "${namespace}". Continue? (yes/no)`,
         {
           type: "confirm",
@@ -173,7 +173,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
         },
       );
       if (!confirmation) {
-        consola.info("Truncate cancelled.");
+        logger.info("Truncate cancelled.");
         return;
       }
     }
@@ -213,7 +213,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
 
     if (!options.yes) {
       const typeList = typeNames.join(", ");
-      const confirmation = await consola.prompt(
+      const confirmation = await logger.prompt(
         `This will truncate the following types: ${typeList}. Continue? (yes/no)`,
         {
           type: "confirm",
@@ -221,7 +221,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
         },
       );
       if (!confirmation) {
-        consola.info("Truncate cancelled.");
+        logger.info("Truncate cancelled.");
         return;
       }
     }
@@ -264,8 +264,7 @@ export const truncateCommand = defineCommand({
     },
     namespace: {
       type: "string",
-      description:
-        "Namespace to use (if type names are specified, truncates only those types in this namespace)",
+      description: "Truncate all tables in specified namespace",
       alias: "n",
     },
     yes: {
@@ -274,22 +273,7 @@ export const truncateCommand = defineCommand({
       alias: "y",
       default: false,
     },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to tailor config file",
-      default: "tailor.config.ts",
-      alias: "c",
-    },
+    ...deploymentArgs,
   },
   run: withCommonArgs(async (args) => {
     // Get type names from rest arguments (_)

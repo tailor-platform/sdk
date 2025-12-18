@@ -1,9 +1,10 @@
 import { defineCommand } from "citty";
 import { table } from "table";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { humanizeRelativeTime } from "../format";
+import { humanizeRelativeTime, printData } from "../utils/format";
+import { logger } from "../utils/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
 export interface ListWorkflowsOptions {
@@ -43,16 +44,7 @@ export const listCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
+    ...workspaceArgs,
   },
   run: withCommonArgs(async (args) => {
     const workflows = await listWorkflows({
@@ -61,10 +53,10 @@ export const listCommand = defineCommand({
     });
 
     if (args.json) {
-      console.log(JSON.stringify(workflows));
+      printData(workflows, args.json);
     } else {
       if (workflows.length === 0) {
-        console.log("No workflows found.");
+        logger.info("No workflows found.");
         return;
       }
       const headers = ["name", "mainJob", "jobFunctions", "updatedAt"];

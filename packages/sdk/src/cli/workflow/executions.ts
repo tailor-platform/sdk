@@ -6,15 +6,20 @@ import {
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import chalk from "chalk";
 import { defineCommand } from "citty";
-import { default as consola } from "consola";
 import ora from "ora";
 import { table } from "table";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import {
+  commonArgs,
+  jsonArgs,
+  parseDuration,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
+import { styles, logger } from "../utils/logger";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
@@ -69,15 +74,15 @@ function colorizeStatus(status: WorkflowExecution_Status): string {
   const statusText = WorkflowExecution_Status[status];
   switch (status) {
     case WorkflowExecution_Status.PENDING:
-      return chalk.gray(statusText);
+      return styles.dim(statusText);
     case WorkflowExecution_Status.PENDING_RESUME:
-      return chalk.yellow(statusText);
+      return styles.warning(statusText);
     case WorkflowExecution_Status.RUNNING:
-      return chalk.cyan(statusText);
+      return styles.info(statusText);
     case WorkflowExecution_Status.SUCCESS:
-      return chalk.green(statusText);
+      return styles.success(statusText);
     case WorkflowExecution_Status.FAILED:
-      return chalk.red(statusText);
+      return styles.error(statusText);
     default:
       return statusText;
   }
@@ -279,27 +284,6 @@ export async function getWorkflowExecution(
   };
 }
 
-function parseDuration(duration: string): number {
-  const match = duration.match(/^(\d+)(s|ms|m)$/);
-  if (!match) {
-    throw new Error(
-      `Invalid duration format: ${duration}. Use format like '5s', '500ms', or '1m'.`,
-    );
-  }
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  switch (unit) {
-    case "ms":
-      return value;
-    case "s":
-      return value * 1000;
-    case "m":
-      return value * 60 * 1000;
-    default:
-      throw new Error(`Unknown duration unit: ${unit}`);
-  }
-}
-
 async function waitWithSpinner(
   waitFn: () => Promise<WorkflowExecutionDetailInfo>,
   interval: number,
@@ -347,30 +331,30 @@ function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
 
   // Print job details with logs
   if (execution.jobDetails && execution.jobDetails.length > 0) {
-    console.log(chalk.bold("\nJob Executions:"));
+    logger.log(styles.bold("\nJob Executions:"));
     for (const job of execution.jobDetails) {
-      console.log(chalk.cyan(`\n--- ${job.stackedJobName} ---`));
-      console.log(`  Status: ${job.status}`);
-      console.log(`  Started: ${job.startedAt}`);
-      console.log(`  Finished: ${job.finishedAt}`);
+      logger.log(styles.info(`\n--- ${job.stackedJobName} ---`));
+      logger.log(`  Status: ${job.status}`);
+      logger.log(`  Started: ${job.startedAt}`);
+      logger.log(`  Finished: ${job.finishedAt}`);
 
       if (job.logs) {
-        console.log(chalk.yellow("\n  Logs:"));
+        logger.log(styles.warning("\n  Logs:"));
         const logLines = job.logs.split("\n");
         for (const line of logLines) {
-          console.log(`    ${line}`);
+          logger.log(`    ${line}`);
         }
       }
 
       if (job.result) {
-        console.log(chalk.green("\n  Result:"));
+        logger.log(styles.success("\n  Result:"));
         try {
           const parsed = JSON.parse(job.result);
-          console.log(
+          logger.log(
             `    ${JSON.stringify(parsed, null, 2).split("\n").join("\n    ")}`,
           );
         } catch {
-          console.log(`    ${job.result}`);
+          logger.log(`    ${job.result}`);
         }
       }
     }
@@ -385,20 +369,11 @@ export const executionsCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
+    ...workspaceArgs,
     executionId: {
       type: "positional",
       description: "Execution ID (if provided, shows details)",
       required: false,
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
     },
     "workflow-name": {
       type: "string",
@@ -412,6 +387,7 @@ export const executionsCommand = defineCommand({
     },
     wait: {
       type: "boolean",
+      alias: "W",
       description: "Wait for execution to complete (detail mode only)",
       default: false,
     },
@@ -438,7 +414,7 @@ export const executionsCommand = defineCommand({
       });
 
       if (!args.json) {
-        consola.info(`Execution ID: ${execution.id}`);
+        logger.info(`Execution ID: ${execution.id}`, { mode: "stream" });
       }
 
       const result = args.wait

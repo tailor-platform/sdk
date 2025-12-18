@@ -1,10 +1,10 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
 import type { SecretManagerSecret } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface SecretListOptions {
@@ -64,16 +64,7 @@ export const listSecretCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
+    ...workspaceArgs,
     "vault-name": {
       type: "string",
       description: "Vault name",

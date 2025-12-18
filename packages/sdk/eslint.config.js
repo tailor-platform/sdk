@@ -163,6 +163,50 @@ export default defineConfig([
   //   },
   // },
   {
+    files: ["src/cli/**/*.ts"],
+    ignores: ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "node:util",
+              importNames: ["styleText"],
+              message:
+                "Use colors/symbols/logger from '@/cli/utils/logger' instead of styleText for consistent styling.",
+            },
+            {
+              name: "chalk",
+              message:
+                "Use colors/symbols/logger from '@/cli/utils/logger' instead of chalk for consistent styling.",
+            },
+            {
+              name: "consola",
+              message:
+                "Use logger from '@/cli/utils/logger' instead of consola for consistent logging.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/cli/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name=/^(log|error|warn|info|debug)$/]",
+          message:
+            "Use logger from '@/cli/utils/logger' instead of console for consistent logging. Use printData for JSON output.",
+        },
+      ],
+    },
+  },
+  {
     files: ["**/*.test.ts"],
     rules: {
       "no-restricted-syntax": [

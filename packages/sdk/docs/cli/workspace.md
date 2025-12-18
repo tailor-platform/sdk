@@ -25,7 +25,7 @@ tailor-sdk workspace create [options]
 - `-d, --delete-protection` - Enable delete protection for the workspace
 - `-o, --organization-id` - Organization ID to associate the workspace with
 - `-f, --folder-id` - Folder ID to associate the workspace with
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### workspace list
 
@@ -37,8 +37,8 @@ tailor-sdk workspace list [options]
 
 **Options:**
 
-- `--json` - Output as JSON
-- `--limit <number>` - Maximum number of workspaces to list (positive integer)
+- `-j, --json` - Output as JSON
+- `-l, --limit <number>` - Maximum number of workspaces to list (positive integer)
 
 ### workspace delete
 
@@ -77,7 +77,7 @@ tailor-sdk profile create <name> [options]
 
 - `-u, --user` - User email (required)
 - `-w, --workspace-id` - Workspace ID (required)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### profile list
 
@@ -89,7 +89,7 @@ tailor-sdk profile list [options]
 
 **Options:**
 
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### profile update
 
@@ -107,7 +107,7 @@ tailor-sdk profile update <name> [options]
 
 - `-u, --user` - New user email
 - `-w, --workspace-id` - New workspace ID
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### profile delete
 

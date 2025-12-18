@@ -1,25 +1,31 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
-import { validate as validateUuid } from "uuid";
+import { z } from "zod";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
+import { logger } from "../utils/logger";
 
-export interface DeleteWorkspaceOptions {
-  workspaceId: string;
-}
+const deleteWorkspaceOptionsSchema = z.object({
+  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
+});
+
+export type DeleteWorkspaceOptions = z.input<
+  typeof deleteWorkspaceOptionsSchema
+>;
 
 async function loadOptions(options: DeleteWorkspaceOptions) {
+  // Validate options with zod schema
+  const result = deleteWorkspaceOptionsSchema.safeParse(options);
+  if (!result.success) {
+    throw new Error(result.error.issues[0].message);
+  }
+
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
-  if (!validateUuid(options.workspaceId)) {
-    throw new Error(
-      `Workspace ID "${options.workspaceId}" is not a valid UUID.`,
-    );
-  }
+
   return {
     client,
-    workspaceId: options.workspaceId,
+    workspaceId: result.data.workspaceId,
   };
 }
 
@@ -73,14 +79,14 @@ export const deleteCommand = defineCommand({
 
     // Confirm deletion if not forced
     if (!args.yes) {
-      const confirmation = await consola.prompt(
+      const confirmation = await logger.prompt(
         `Enter the workspace name to confirm deletion (${workspace.workspace?.name}):`,
         {
           type: "text",
         },
       );
       if (confirmation !== workspace.workspace?.name) {
-        consola.info("Workspace deletion cancelled.");
+        logger.info("Workspace deletion cancelled.");
         return;
       }
     }
@@ -91,8 +97,6 @@ export const deleteCommand = defineCommand({
     });
 
     // Show success message
-    consola.success(
-      `Workspace "${args["workspace-id"]}" deleted successfully.`,
-    );
+    logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
   }),
 });

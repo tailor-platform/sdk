@@ -1,4 +1,4 @@
-import { readPackageJson } from "@/cli/package-json";
+import { readPackageJson } from "@/cli/utils/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 

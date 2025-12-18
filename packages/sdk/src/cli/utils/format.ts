@@ -12,6 +12,7 @@ export function humanizeRelativeTime(isoString: string): string {
 
 export function printData(data: object | object[], json: boolean = false) {
   if (json) {
+    // eslint-disable-next-line no-restricted-syntax
     console.log(JSON.stringify(data));
     return;
   }

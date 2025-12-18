@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { styleText } from "node:util";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { logger, styles } from "@/cli/utils/logger";
 import { type ExecutorServiceConfig } from "@/configure/services/executor/types";
 import { type Executor, ExecutorSchema } from "@/parser/service/executor";
 
@@ -20,11 +20,9 @@ export class ExecutorService {
 
     const executorFiles = loadFilesWithIgnores(this.config);
 
-    console.log("");
-    console.log(
-      "Found",
-      styleText("cyanBright", executorFiles.length.toString()),
-      "executor files",
+    logger.newline();
+    logger.log(
+      `Found ${styles.highlight(executorFiles.length.toString())} executor files`,
     );
 
     await Promise.all(
@@ -41,22 +39,18 @@ export class ExecutorService {
       const result = ExecutorSchema.safeParse(executorModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
-        console.log(
-          "Executor:",
-          styleText("greenBright", `"${result.data.name}"`),
-          "loaded from",
-          styleText("cyan", relativePath),
+        logger.log(
+          `Executor: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
         this.executors[executorFile] = result.data;
         return result.data;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);
-      console.error(
-        styleText("red", "Failed to load executor from"),
-        styleText("redBright", relativePath),
+      logger.error(
+        `${styles.error("Failed to load executor from")} ${styles.errorBright(relativePath)}`,
       );
-      console.error(error);
+      logger.error(String(error));
       throw error;
     }
     return undefined;

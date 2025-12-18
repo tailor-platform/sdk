@@ -2,21 +2,16 @@ import * as fs from "fs";
 import * as path from "path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { consola, createConsola } from "consola";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
-import { withCommonArgs, commonArgs, jsonArgs } from "../args";
+import { withCommonArgs, commonArgs, jsonArgs, workspaceArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { createProgress, withTimeout } from "../progress";
+import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
+import { createProgress, withTimeout } from "../utils/progress";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
-
-const noTimeLogger = createConsola({
-  formatOptions: {
-    date: false,
-  },
-});
 
 const CHUNK_SIZE = 64 * 1024; // 64KB
 const IGNORED_FILES = new Set([".DS_Store", "thumbs.db", "desktop.ini"]);
@@ -75,7 +70,7 @@ async function uploadDirectory(
 ): Promise<string[]> {
   const files = await collectFiles(rootDir);
   if (files.length === 0) {
-    consola.warn(`No files found under ${rootDir}`);
+    logger.warn(`No files found under ${rootDir}`);
     return [];
   }
 
@@ -222,11 +217,11 @@ function logSkippedFiles(skippedFiles: string[]) {
   if (skippedFiles.length === 0) {
     return;
   }
-  noTimeLogger.log(
-    "⚠️WARNING: Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",
+  logger.warn(
+    "Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",
   );
   for (const file of skippedFiles) {
-    noTimeLogger.log(`  - ${file}`);
+    logger.log(`  - ${file}`);
   }
 }
 
@@ -238,16 +233,7 @@ export const deployCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
+    ...workspaceArgs,
     name: {
       type: "string",
       description: "Static website name",
@@ -262,7 +248,7 @@ export const deployCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    consola.info(
+    logger.info(
       `Deploying static website "${args.name}" from directory: ${args.dir}`,
     );
     const accessToken = await loadAccessToken({
@@ -290,16 +276,9 @@ export const deployCommand = defineCommand({
     );
 
     if (args.json) {
-      console.log(
-        JSON.stringify({
-          name,
-          workspaceId,
-          url,
-          skippedFiles,
-        }),
-      );
+      printData({ name, workspaceId, url, skippedFiles }, true);
     } else {
-      consola.success(
+      logger.success(
         `Static website "${name}" deployed successfully. URL: ${url}`,
       );
       logSkippedFiles(skippedFiles);

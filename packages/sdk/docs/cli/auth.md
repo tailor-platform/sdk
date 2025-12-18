@@ -23,7 +23,7 @@ tailor-sdk machineuser list [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### machineuser token
 
@@ -42,7 +42,7 @@ tailor-sdk machineuser token <name> [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ## oauth2client
 
@@ -65,7 +65,7 @@ tailor-sdk oauth2client list [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 **Output:**
 
@@ -95,7 +95,7 @@ tailor-sdk oauth2client get <name> [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 **Output:**
 

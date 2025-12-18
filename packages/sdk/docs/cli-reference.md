@@ -12,17 +12,44 @@ tailor-sdk <command> [options]
 
 The following options are available for most commands:
 
-- `-e, --env-file` - Specify a custom environment file path
-- `-v, --verbose` - Enable detailed logging output
+| Option           | Short | Description                                         |
+| ---------------- | ----- | --------------------------------------------------- |
+| `--env-file`     | `-e`  | Specify a custom environment file path              |
+| `--verbose`      | `-v`  | Enable verbose logging (show stack traces on error) |
+| `--json`         | `-j`  | Output as JSON (where applicable)                   |
+| `--workspace-id` | `-w`  | Workspace ID (for deployment commands)              |
+| `--profile`      | `-p`  | Workspace profile                                   |
+| `--config`       | `-c`  | Path to SDK config file                             |
+| `--yes`          | `-y`  | Skip confirmation prompts                           |
 
 ## Environment Variables
 
 You can use environment variables to configure workspace and authentication:
 
-- `TAILOR_PLATFORM_WORKSPACE_ID` - Specify workspace ID for the `apply` command
-- `TAILOR_PLATFORM_TOKEN` - Specify authentication token (alternative to using `login`)
-- `TAILOR_PLATFORM_PROFILE` - Specify workspace profile name to use (see [profile commands](./cli/workspace.md#profile))
-- `TAILOR_PLATFORM_SDK_CONFIG_PATH` - Specify path to the SDK config file (alternative to using `--config` option)
+| Variable                          | Description                                         |
+| --------------------------------- | --------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID`    | Workspace ID for deployment commands                |
+| `TAILOR_PLATFORM_TOKEN`           | Authentication token (alternative to `login`)       |
+| `TAILOR_TOKEN`                    | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead |
+| `TAILOR_PLATFORM_PROFILE`         | Workspace profile name                              |
+| `TAILOR_PLATFORM_SDK_CONFIG_PATH` | Path to SDK config file                             |
+
+### Authentication Token Priority
+
+Token resolution follows this priority order:
+
+1. `TAILOR_PLATFORM_TOKEN` environment variable
+2. `TAILOR_TOKEN` environment variable (deprecated)
+3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
+4. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
+
+### Workspace ID Priority
+
+Workspace ID resolution follows this priority order:
+
+1. `--workspace-id` command option
+2. `TAILOR_PLATFORM_WORKSPACE_ID` environment variable
+3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 
 ## Commands
 

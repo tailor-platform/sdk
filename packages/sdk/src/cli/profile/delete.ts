@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig, writePlatformConfig } from "../context";
+import { logger } from "../utils/logger";
 
 export const deleteCommand = defineCommand({
   meta: {
@@ -28,6 +28,6 @@ export const deleteCommand = defineCommand({
     delete config.profiles[args.name];
     writePlatformConfig(config);
 
-    consola.success(`Profile "${args.name}" deleted successfully.`);
+    logger.success(`Profile "${args.name}" deleted successfully.`);
   }),
 });

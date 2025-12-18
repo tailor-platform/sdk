@@ -1,9 +1,9 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
+import { logger } from "../../utils/logger";
 
 export const deleteCommand = defineCommand({
   meta: {
@@ -35,7 +35,7 @@ export const deleteCommand = defineCommand({
       name: args.name,
     });
 
-    consola.success(
+    logger.success(
       `Personal access token "${args.name}" deleted successfully.`,
     );
   }),

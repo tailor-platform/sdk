@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { styleText } from "node:util";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -8,6 +7,7 @@ import {
   loadFilesWithIgnores,
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
+import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import {
   createTriggerTransformPlugin,
@@ -40,12 +40,9 @@ export async function bundleResolvers(
     );
   }
 
-  console.log("");
-  console.log(
-    "Bundling",
-    styleText("cyanBright", files.length.toString()),
-    "files for",
-    styleText("cyan", `"${namespace}"`),
+  logger.newline();
+  logger.log(
+    `Bundling ${styles.highlight(files.length.toString())} files for ${styles.info(`"${namespace}"`)}`,
   );
 
   // Load all resolvers to get their names
@@ -53,9 +50,7 @@ export async function bundleResolvers(
   for (const file of files) {
     const resolver = await loadResolver(file);
     if (!resolver) {
-      console.log(
-        styleText("dim", `  Skipping: ${file} (could not be loaded)`),
-      );
+      logger.debug(`  Skipping: ${file} (could not be loaded)`);
       continue;
     }
     resolvers.push({
@@ -82,10 +77,7 @@ export async function bundleResolvers(
     ),
   );
 
-  console.log(
-    styleText("green", "Bundled"),
-    styleText("cyan", `"${namespace}"`),
-  );
+  logger.log(`${styles.success("Bundled")} ${styles.info(`"${namespace}"`)}`);
 }
 
 async function bundleSingleResolver(

@@ -1,8 +1,8 @@
 import { glob } from "node:fs/promises";
 import * as path from "node:path";
-import { styleText } from "node:util";
 import chokidar from "chokidar";
 import * as madgeModule from "madge";
+import { logger, styles } from "@/cli/utils/logger";
 
 type MadgeLoader = typeof madgeModule;
 
@@ -232,7 +232,7 @@ export class DependencyGraphManager {
     try {
       return this.madgeInstance.circular();
     } catch (error) {
-      console.warn("Failed to detect circular dependencies:", error);
+      logger.warn(`Failed to detect circular dependencies: ${String(error)}`);
       return [];
     }
   }
@@ -368,26 +368,24 @@ class DependencyWatcher {
       });
 
       this.chokidarWatcher.on("add", (filePath: string) => {
-        console.log(styleText("gray", `File added: ${filePath}`));
+        logger.debug(`File added: ${filePath}`);
         this.debounceFileChange("add", filePath);
       });
 
       this.chokidarWatcher.on("change", (filePath: string) => {
-        console.log(styleText("gray", `File changed: ${filePath}`));
+        logger.debug(`File changed: ${filePath}`);
         this.debounceFileChange("change", filePath);
       });
 
       this.chokidarWatcher.on("unlink", (filePath: string) => {
-        console.log(styleText("gray", `File removed: ${filePath}`));
+        logger.debug(`File removed: ${filePath}`);
         this.debounceFileChange("unlink", filePath);
       });
 
       this.chokidarWatcher.on("error", (error: unknown) => {
-        console.error(
-          styleText(
-            "red",
-            `Watcher error: ${error instanceof Error ? error.message : String(error)}`,
-          ),
+        logger.error(
+          `Watcher error: ${error instanceof Error ? error.message : String(error)}`,
+          { mode: "stream" },
         );
         this.handleError(
           new WatcherError(
@@ -423,10 +421,8 @@ class DependencyWatcher {
 
     const files = new Set<string>();
     for (const pattern of patterns) {
-      console.log(
-        styleText("gray", `Watch pattern for`),
-        styleText("gray", groupId + ":"),
-        path.relative(process.cwd(), pattern),
+      logger.log(
+        `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), pattern)}`,
       );
       for await (const file of glob(pattern)) {
         files.add(path.resolve(file));
@@ -519,7 +515,9 @@ class DependencyWatcher {
       const circularDeps =
         this.dependencyGraphManager.findCircularDependencies();
       if (circularDeps.length > 0) {
-        console.warn("Circular dependencies detected:", circularDeps);
+        logger.warn(
+          `Circular dependencies detected: ${JSON.stringify(circularDeps)}`,
+        );
       }
     }
   }
@@ -619,30 +617,20 @@ class DependencyWatcher {
 
       // If any groups are affected, trigger restart instead of calling callbacks
       if (impactResult.affectedGroups.length > 0) {
-        console.log(
-          styleText(
-            "yellow",
-            "File change detected, restarting watch process...",
-          ),
-        );
-        console.log(styleText("cyan", `Changed file: ${absolutePath}`));
-        console.log(
-          styleText(
-            "cyan",
-            `Affected groups: ${impactResult.affectedGroups.join(", ")}`,
-          ),
+        logger.warn("File change detected, restarting watch process...", {
+          mode: "stream",
+        });
+        logger.info(`Changed file: ${absolutePath}`, { mode: "stream" });
+        logger.info(
+          `Affected groups: ${impactResult.affectedGroups.join(", ")}`,
+          { mode: "stream" },
         );
 
         if (this.restartCallback) {
           this.restartCallback();
         }
       } else {
-        console.log(
-          styleText(
-            "gray",
-            `No affected groups found for file: ${absolutePath}`,
-          ),
-        );
+        logger.debug(`No affected groups found for file: ${absolutePath}`);
       }
     } catch (error) {
       this.handleError(
@@ -661,23 +649,15 @@ class DependencyWatcher {
   }
 
   private findAffectedGroups(affectedFiles: string[]): string[] {
-    console.log(
-      styleText(
-        "gray",
-        `Finding affected groups for files: ${affectedFiles.join(", ")}`,
-      ),
+    logger.debug(
+      `Finding affected groups for files: ${affectedFiles.join(", ")}`,
     );
     const affectedGroups = new Set<string>();
 
     for (const [groupId, group] of this.watchGroups) {
       for (const affectedFile of affectedFiles) {
         if (group.files.has(affectedFile)) {
-          console.log(
-            styleText(
-              "gray",
-              `Group ${groupId} is affected by file: ${affectedFile}`,
-            ),
-          );
+          logger.debug(`Group ${groupId} is affected by file: ${affectedFile}`);
           affectedGroups.add(groupId);
           break;
         }
@@ -711,10 +691,9 @@ class DependencyWatcher {
   }
 
   private handleError(error: WatcherError): void {
-    console.error(`[DependencyWatcher] ${error.message}`, {
-      code: error.code,
-      filePath: error.filePath,
-    });
+    logger.error(
+      `[DependencyWatcher] ${error.message} (code: ${error.code}, filePath: ${error.filePath})`,
+    );
 
     if (this.errorCallback) {
       this.errorCallback(error);
@@ -740,10 +719,10 @@ class DependencyWatcher {
     const handleSignal = async () => {
       try {
         await this.stop();
-        console.log("Watcher stopped successfully");
+        logger.info("Watcher stopped successfully");
         process.exit(0);
       } catch (error) {
-        console.error("Error during shutdown:", error);
+        logger.error(`Error during shutdown: ${String(error)}`);
         process.exit(0);
       }
     };

@@ -9,7 +9,6 @@ import { loginCommand } from "./login";
 import { logoutCommand } from "./logout";
 import { machineuserCommand } from "./machineuser";
 import { oauth2clientCommand } from "./oauth2client";
-import { readPackageJson } from "./package-json";
 import { profileCommand } from "./profile";
 import { removeCommand } from "./remove";
 import { secretCommand } from "./secret";
@@ -17,6 +16,7 @@ import { showCommand } from "./show";
 import { staticwebsiteCommand } from "./staticwebsite";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
+import { readPackageJson } from "./utils/package-json";
 import { workflowCommand } from "./workflow";
 import { workspaceCommand } from "./workspace";
 

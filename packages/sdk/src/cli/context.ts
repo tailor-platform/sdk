@@ -2,11 +2,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseYAML, stringifyYAML, parseTOML } from "confbox";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { initOAuth2Client } from "./client";
+import { logger } from "./utils/logger";
 
 const pfConfigSchema = z.object({
   version: z.literal(1),
@@ -43,7 +43,7 @@ export function readPlatformConfig(): PfConfig {
 
   // If platform config doesn't exist, try to read tailorctl config and migrate
   if (!fs.existsSync(configPath)) {
-    consola.warn(
+    logger.warn(
       `Config not found at ${configPath}, migrating from tailorctl config...`,
     );
     const tcConfig = readTailorctlConfig();
@@ -136,20 +136,33 @@ function fromTailorctlConfig(config: TcConfig): PfConfig {
   return { version: 1, users, profiles, current_user: currentUser };
 }
 
+function validateWorkspaceId(workspaceId: string, source: string): string {
+  const result = z.uuid().safeParse(workspaceId);
+  if (!result.success) {
+    throw new Error(
+      `Invalid workspace ID from ${source}: must be a valid UUID`,
+    );
+  }
+  return result.data;
+}
+
 // Load workspace ID from command options, environment variables, or platform config.
 // Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
 export function loadWorkspaceId(opts?: {
   workspaceId?: string;
   profile?: string;
-}) {
+}): string {
   // opts/workspaceId
   if (opts?.workspaceId) {
-    return opts.workspaceId;
+    return validateWorkspaceId(opts.workspaceId, "--workspace-id option");
   }
 
   // env/workspaceId
   if (process.env.TAILOR_PLATFORM_WORKSPACE_ID) {
-    return process.env.TAILOR_PLATFORM_WORKSPACE_ID;
+    return validateWorkspaceId(
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID,
+      "TAILOR_PLATFORM_WORKSPACE_ID environment variable",
+    );
   }
 
   // opts/profile > env/profile
@@ -160,7 +173,7 @@ export function loadWorkspaceId(opts?: {
     if (!wsId) {
       throw new Error(`Profile "${profile}" not found`);
     }
-    return wsId;
+    return validateWorkspaceId(wsId, `profile "${profile}"`);
   }
 
   // error
@@ -171,16 +184,20 @@ export function loadWorkspaceId(opts?: {
 }
 
 // Load access token from command options, environment variables, or platform config.
-// Priority: env/pat > opts/profile > env/profile > config/currentUser > error
+// Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
 export async function loadAccessToken(opts?: {
   useProfile?: boolean;
   profile?: string;
 }) {
-  // env/pat
+  // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
   if (process.env.TAILOR_PLATFORM_TOKEN) {
     return process.env.TAILOR_PLATFORM_TOKEN;
   }
+  // TAILOR_TOKEN is deprecated
   if (process.env.TAILOR_TOKEN) {
+    logger.warn(
+      "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
+    );
     return process.env.TAILOR_TOKEN;
   }
 

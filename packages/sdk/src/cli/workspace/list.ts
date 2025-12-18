@@ -3,7 +3,7 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { humanizeRelativeTime, printData } from "../format";
+import { humanizeRelativeTime, printData } from "../utils/format";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface ListWorkspacesOptions {
@@ -71,6 +71,7 @@ export const listCommand = defineCommand({
     ...jsonArgs,
     limit: {
       type: "string",
+      alias: "l",
       description: "Maximum number of workspaces to list",
     },
   },

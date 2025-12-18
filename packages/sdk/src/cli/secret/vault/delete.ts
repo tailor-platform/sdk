@@ -1,9 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { consola } from "consola";
-import { commonArgs, withCommonArgs } from "../../args";
+import { commonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
+import { logger } from "../../utils/logger";
 
 export const deleteCommand = defineCommand({
   meta: {
@@ -12,16 +12,7 @@ export const deleteCommand = defineCommand({
   },
   args: {
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
+    ...workspaceArgs,
     name: {
       type: "string",
       description: "Vault name",
@@ -46,12 +37,12 @@ export const deleteCommand = defineCommand({
     });
 
     if (!args.yes) {
-      const confirmation = await consola.prompt(
+      const confirmation = await logger.prompt(
         `Enter the vault name to confirm deletion ("${args.name}"): `,
         { type: "text" },
       );
       if (confirmation !== args.name) {
-        consola.info("Vault deletion cancelled.");
+        logger.info("Vault deletion cancelled.");
         return;
       }
     }
@@ -68,6 +59,6 @@ export const deleteCommand = defineCommand({
       throw error;
     }
 
-    consola.success(`Vault: ${args.name} deleted`);
+    logger.success(`Vault: ${args.name} deleted`);
   }),
 });

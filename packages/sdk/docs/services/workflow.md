@@ -161,7 +161,7 @@ tailor-sdk workflow list
 tailor-sdk workflow get <name>
 
 # Start a workflow
-tailor-sdk workflow start <name> -m <machine-user> -g '{"key": "value"}'
+tailor-sdk workflow start <name> -m <machine-user> -a '{"key": "value"}'
 
 # List executions
 tailor-sdk workflow executions
