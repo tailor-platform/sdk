@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 0.18.1
+
+### Patch Changes
+
+- [#174](https://github.com/tailor-platform/sdk/pull/174) [`67483e1`](https://github.com/tailor-platform/sdk/commit/67483e19128b19bb26eea3a99e7f23f304255f14) Thanks [@riku99](https://github.com/riku99)! - Add staticwebsite deploy command to the tailor-sdk CLI for static web hosting
+
+  Add staticwebsite get command to inspect static website details (name, URL, allowed IP addresses, etc.) from the CLI.
+
+  Add staticwebsite list command to list static websites (including workspace ID, URL, and allowed IP address count) from the CLI.
+
 ## 0.18.0
 
 ### Minor Changes
