@@ -22,7 +22,7 @@ tailor-sdk workflow list [options]
 
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### workflow get
 
@@ -40,7 +40,7 @@ tailor-sdk workflow get <nameOrId> [options]
 
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### workflow start
 
@@ -63,7 +63,7 @@ tailor-sdk workflow start <nameOrId> [options]
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-W, --wait` - Wait for execution to complete
 - `--interval` - Polling interval when using --wait (default: `3s`)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 **Usage Examples:**
 
@@ -99,7 +99,7 @@ tailor-sdk workflow executions [executionId] [options]
 - `-W, --wait` - Wait for execution to complete (detail mode only)
 - `--interval` - Polling interval when using --wait (default: `3s`)
 - `--logs` - Display job execution logs (detail mode only)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 **Usage Examples:**
 
@@ -141,4 +141,4 @@ tailor-sdk workflow resume <executionId> [options]
 - `-p, --profile` - Workspace profile to use
 - `-W, --wait` - Wait for execution to complete after resuming
 - `--interval` - Polling interval when using --wait (default: `3s`)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON

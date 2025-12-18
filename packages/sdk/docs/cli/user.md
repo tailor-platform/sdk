@@ -44,7 +44,7 @@ tailor-sdk user list [options]
 
 **Options:**
 
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### user use
 
@@ -78,7 +78,7 @@ tailor-sdk user pat list [options]
 
 **Options:**
 
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 **Output (default):**
 
@@ -87,7 +87,7 @@ tailor-sdk user pat list [options]
  token-name-2: read
 ```
 
-**Output (`--json`):**
+**Output (`-j, --json`):**
 
 ```json
 [
@@ -111,7 +111,7 @@ tailor-sdk user pat create <name> [options]
 **Options:**
 
 - `-w, --write` - Grant write permission (default: read-only)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 **Output (default):**
 
@@ -125,7 +125,7 @@ scopes: read/write
 Please save this token in a secure location. You won't be able to see it again.
 ```
 
-**Output (`--json`):**
+**Output (`-j, --json`):**
 
 ```json
 { "name": "token-name", "scopes": ["read", "write"], "token": "eyJhbGc..." }
@@ -158,7 +158,7 @@ tailor-sdk user pat update <name> [options]
 **Options:**
 
 - `-w, --write` - Grant write permission (if not specified, keeps read-only)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 **Output (default):**
 
@@ -172,7 +172,7 @@ scopes: read/write
 Please save this token in a secure location. You won't be able to see it again.
 ```
 
-**Output (`--json`):**
+**Output (`-j, --json`):**
 
 ```json
 {

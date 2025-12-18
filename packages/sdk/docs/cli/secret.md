@@ -59,7 +59,7 @@ tailor-sdk secret vault list [options]
 
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### secret create
 
@@ -106,7 +106,7 @@ tailor-sdk secret list [options]
 - `--vault-name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ### secret delete
 

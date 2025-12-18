@@ -29,7 +29,7 @@ tailor-sdk generate [options]
 **Options:**
 
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `--watch` - Watch for type/resolver changes and regenerate
+- `-W, --watch` - Watch for type/resolver changes and regenerate
 
 ## apply
 
@@ -75,7 +75,7 @@ tailor-sdk show [options]
 - `-w, --workspace-id` - ID of the workspace to show the application from
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `--json` - Output as JSON
+- `-j, --json` - Output as JSON
 
 ## tailordb
 

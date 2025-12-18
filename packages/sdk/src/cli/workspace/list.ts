@@ -71,6 +71,7 @@ export const listCommand = defineCommand({
     ...jsonArgs,
     limit: {
       type: "string",
+      alias: "l",
       description: "Maximum number of workspaces to list",
     },
   },
