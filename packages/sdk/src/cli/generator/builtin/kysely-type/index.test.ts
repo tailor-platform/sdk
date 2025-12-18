@@ -312,9 +312,9 @@ describe("KyselyGenerator integration tests", () => {
         name: "Invalid",
         fields: null, // Invalid field
         options: {},
-        metadata: {} as any,
-        hooks: {} as any,
-        _output: {} as any,
+        metadata: {},
+        hooks: {},
+        _output: {},
       } as any;
 
       await expect(

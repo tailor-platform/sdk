@@ -24,7 +24,7 @@ import type { AppConfig } from "@/configure/config";
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {
   return {
-    writeFile: vi.fn((_, _2, callback: any) => {
+    writeFile: vi.fn((_, _2, callback) => {
       if (typeof callback === "function") callback(null);
     }),
     mkdirSync: vi.fn(() => ""),
@@ -56,21 +56,21 @@ class TestGenerator {
 
   async processTailorDBNamespace(args: {
     namespace: string;
-    types: Record<string, any>;
+    types: Record<string, unknown>;
   }) {
     return { processed: true, count: Object.keys(args.types).length };
   }
 
   async processResolverNamespace(args: {
     namespace: string;
-    resolvers: Record<string, any>;
+    resolvers: Record<string, unknown>;
   }) {
     return { processed: true, count: Object.keys(args.resolvers).length };
   }
 
   async aggregate(args: {
     input: any;
-    executorInputs: any[];
+    executorInputs: unknown[];
     baseDir: string;
   }) {
     return {
@@ -138,13 +138,10 @@ describe("GenerationManager", () => {
         "@tailor-platform/kysely-type",
         { distPath: "types/db.ts" },
       ]);
-      const managerWithKysely = new GenerationManager(
-        mockConfig as any,
-        [kyselyGen] as any,
-      );
+      const managerWithKysely = new GenerationManager(mockConfig, [kyselyGen]);
       expect(
         (managerWithKysely as any).generators.some(
-          (gen: any) => gen instanceof KyselyGenerator,
+          (gen: unknown) => gen instanceof KyselyGenerator,
         ),
       ).toBe(true);
     });
@@ -578,7 +575,7 @@ describe("GenerationManager", () => {
     it("handles file write errors", async () => {
       const writeFileError = new Error("Write permission denied");
       vi.mocked(fs.writeFile).mockImplementationOnce(
-        (_path, _content, callback: any) => {
+        (_path, _content, callback) => {
           callback(writeFileError);
         },
       );
@@ -753,17 +750,17 @@ describe("Integration Tests", () => {
       "@tailor-platform/kysely-type",
       { distPath: "db.ts" },
     ]);
-    const generators = [new TestGenerator(), kyselyGen] as any;
+    const generators = [new TestGenerator(), kyselyGen];
     const manager = new GenerationManager(fullConfig, generators);
 
     await expect(manager.generate({ watch: false })).resolves.not.toThrow();
 
     expect(manager.generators.length).toBe(2);
     expect(
-      manager.generators.some((g: any) => g instanceof TestGenerator),
+      manager.generators.some((g: unknown) => g instanceof TestGenerator),
     ).toBe(true);
     expect(
-      manager.generators.some((g: any) => g instanceof KyselyGenerator),
+      manager.generators.some((g: unknown) => g instanceof KyselyGenerator),
     ).toBe(true);
   });
 
