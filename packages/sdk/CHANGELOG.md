@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.18.2
+
+### Patch Changes
+
+- [#210](https://github.com/tailor-platform/sdk/pull/210) [`ba0a0cc`](https://github.com/tailor-platform/sdk/commit/ba0a0cc46c5cda564a09d95e32663315818bb4c8) Thanks [@remiposo](https://github.com/remiposo)! - fix: Load workspaceID from env for staticwebsite deploy
+
 ## 0.18.1
 
 ### Patch Changes
