@@ -265,7 +265,7 @@ export const truncateCommand = defineCommand({
     namespace: {
       type: "string",
       description: "Truncate all tables in specified namespace",
-      alias: "N",
+      alias: "n",
     },
     yes: {
       type: "boolean",

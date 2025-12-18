@@ -100,7 +100,7 @@ tailor-sdk tailordb truncate [types...] [options]
 **Options:**
 
 - `-a, --all` - Truncate all tables in all namespaces
-- `-N, --namespace` - Truncate all tables in the specified namespace
+- `-n, --namespace` - Truncate all tables in the specified namespace
 - `-y, --yes` - Skip confirmation prompt
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
