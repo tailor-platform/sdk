@@ -21,10 +21,10 @@ export async function withTimeout<T>(
   ms: number,
   message: string,
 ): Promise<T> {
-  return (await Promise.race([
+  return await Promise.race([
     p,
     setTimeout(ms).then(() => {
       throw new Error(message);
     }),
-  ])) as T;
+  ]);
 }
