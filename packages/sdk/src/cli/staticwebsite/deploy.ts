@@ -260,6 +260,9 @@ export const deployCommand = defineCommand({
       alias: "d",
       required: true,
     },
+    do: {
+      alias: "d",
+    },
   },
   run: withCommonArgs(async (args) => {
     consola.info(
