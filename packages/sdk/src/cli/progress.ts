@@ -13,3 +13,16 @@ export function createProgress(label: string, total: number) {
 
   return { update, finish };
 }
+
+export async function withTimeout<T>(
+  p: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
+  return (await Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms),
+    ),
+  ])) as T;
+}
