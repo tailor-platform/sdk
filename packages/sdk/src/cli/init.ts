@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { defineCommand } from "citty";
 import { commonArgs, withCommonArgs } from "./args";
-import { readPackageJson } from "./package-json";
 import { logger } from "./utils/logger";
+import { readPackageJson } from "./utils/package-json";
 
 const detectPackageManager = () => {
   const availablePMs = ["npm", "yarn", "pnpm"];

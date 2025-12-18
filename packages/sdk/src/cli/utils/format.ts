@@ -1,6 +1,6 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import { getBorderCharacters, table } from "table";
-import { logger } from "./utils/logger";
+import { logger } from "./logger";
 
 export function humanizeRelativeTime(isoString: string): string {
   const date = new Date(isoString);

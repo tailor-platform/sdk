@@ -3,7 +3,7 @@ import { table } from "table";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { humanizeRelativeTime, printData } from "../format";
+import { humanizeRelativeTime, printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 

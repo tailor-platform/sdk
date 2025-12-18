@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";
 

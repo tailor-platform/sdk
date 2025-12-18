@@ -10,8 +10,8 @@ import {
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { z } from "zod";
-import { readPackageJson } from "./package-json";
 import { logger } from "./utils/logger";
+import { readPackageJson } from "./utils/package-json";
 
 export const platformBaseUrl =
   process.env.PLATFORM_URL ?? "https://api.tailor.tech";

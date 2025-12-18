@@ -7,9 +7,9 @@ import pLimit from "p-limit";
 import { withCommonArgs, commonArgs, jsonArgs, workspaceArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
-import { createProgress, withTimeout } from "../progress";
+import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
+import { createProgress, withTimeout } from "../utils/progress";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 

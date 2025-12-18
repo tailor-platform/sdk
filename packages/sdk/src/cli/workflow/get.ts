@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
 import { isUUID } from "../utils/validators";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 

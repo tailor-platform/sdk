@@ -11,7 +11,7 @@ import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
 import { styles, logger } from "../utils/logger";
 import { isUUID } from "../utils/validators";
 import {

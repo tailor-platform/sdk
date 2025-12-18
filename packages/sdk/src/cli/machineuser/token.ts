@@ -3,7 +3,7 @@ import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
 
 export interface GetMachineUserTokenOptions {
   name: string;

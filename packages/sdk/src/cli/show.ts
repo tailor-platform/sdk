@@ -4,7 +4,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadWorkspaceId } from "./context";
-import { printData } from "./format";
+import { printData } from "./utils/format";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {

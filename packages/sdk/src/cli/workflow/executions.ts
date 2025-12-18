@@ -12,7 +12,7 @@ import { table } from "table";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../format";
+import { printData } from "../utils/format";
 import { styles, logger } from "../utils/logger";
 import {
   type WorkflowExecutionInfo,

@@ -1,6 +1,6 @@
 import { PATScope } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import ml from "multiline-ts";
-import { printData } from "../../format";
+import { printData } from "../../utils/format";
 import { logger } from "../../utils/logger";
 import type { PersonalAccessToken } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
