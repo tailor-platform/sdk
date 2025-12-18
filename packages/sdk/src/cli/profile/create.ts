@@ -1,5 +1,4 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import {
@@ -8,6 +7,7 @@ import {
   writePlatformConfig,
 } from "../context";
 import { printData } from "../format";
+import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";
 
 export const createCommand = defineCommand({
@@ -69,7 +69,7 @@ export const createCommand = defineCommand({
     writePlatformConfig(config);
 
     if (!args.json) {
-      consola.success(`Profile "${args.name}" created successfully.`);
+      logger.success(`Profile "${args.name}" created successfully.`);
     }
 
     // Show profile info

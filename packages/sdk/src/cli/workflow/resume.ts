@@ -4,7 +4,8 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
-import { parseDuration, waitForExecution } from "./start";
+import { logger } from "../utils/logger";
+import { parseDuration, waitForExecution, type WaitOptions } from "./start";
 import { type WorkflowExecutionInfo } from "./transform";
 
 export interface ResumeWorkflowOptions {
@@ -16,7 +17,7 @@ export interface ResumeWorkflowOptions {
 
 export interface ResumeWorkflowResultWithWait {
   executionId: string;
-  wait: () => Promise<WorkflowExecutionInfo>;
+  wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
 }
 
 export async function resumeWorkflow(
@@ -40,13 +41,13 @@ export async function resumeWorkflow(
 
     return {
       executionId,
-      wait: () =>
+      wait: (waitOptions?: WaitOptions) =>
         waitForExecution({
           client,
           workspaceId,
           executionId,
           interval: options.interval ?? 3000,
-          format: "json",
+          showProgress: waitOptions?.showProgress,
         }),
     };
   } catch (error) {
@@ -89,6 +90,7 @@ export const resumeCommand = defineCommand({
     },
     wait: {
       type: "boolean",
+      alias: "W",
       description: "Wait for execution to complete after resuming",
       default: false,
     },
@@ -109,12 +111,11 @@ export const resumeCommand = defineCommand({
     });
 
     if (!args.json) {
-      const { default: consola } = await import("consola");
-      consola.info(`Execution ID: ${executionId}`);
+      logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
     }
 
     if (args.wait) {
-      const result = await wait();
+      const result = await wait({ showProgress: !args.json });
       printData(result, args.json);
     } else {
       printData({ executionId }, args.json);

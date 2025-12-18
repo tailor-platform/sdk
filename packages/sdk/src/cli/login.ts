@@ -2,11 +2,11 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import open from "open";
 import { commonArgs, withCommonArgs } from "./args";
 import { fetchUserInfo, initOAuth2Client } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
+import { logger } from "./utils/logger";
 
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
@@ -89,11 +89,11 @@ const startAuthServer = async () => {
         codeVerifier,
       });
 
-      consola.info(`Opening browser for login:\n\n${authorizeUri}\n`);
+      logger.info(`Opening browser for login:\n\n${authorizeUri}\n`);
       try {
         await open(authorizeUri);
       } catch {
-        consola.warn(
+        logger.warn(
           "Failed to open browser automatically. Please open the URL above manually.",
         );
       }
@@ -109,6 +109,6 @@ export const loginCommand = defineCommand({
   args: commonArgs,
   run: withCommonArgs(async () => {
     await startAuthServer();
-    consola.success("Successfully logged in to Tailor Platform.");
+    logger.success("Successfully logged in to Tailor Platform.");
   }),
 });

@@ -4,19 +4,13 @@ import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
+import { isUUID } from "../utils/validators";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 
 export interface GetWorkflowOptions {
   nameOrId: string;
   workspaceId?: string;
   profile?: string;
-}
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUUID(value: string): boolean {
-  return UUID_REGEX.test(value);
 }
 
 export async function getWorkflow(

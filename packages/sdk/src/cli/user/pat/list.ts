@@ -1,9 +1,9 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
+import { logger } from "../../utils/logger";
 import {
   transformPersonalAccessToken,
   type PersonalAccessTokenInfo,
@@ -40,7 +40,7 @@ export const listCommand = defineCommand({
     });
 
     if (pats.length === 0) {
-      consola.info(ml`
+      logger.info(ml`
         No personal access tokens found.
         Please create a token using 'tailor-sdk user pat create' command.
       `);
@@ -62,7 +62,7 @@ export const listCommand = defineCommand({
     pats.forEach((pat) => {
       const info = transformPersonalAccessToken(pat);
       const paddedName = info.name.padStart(maxNameLength);
-      // Use console.log instead of consola.log to avoid timestamp
+      // Use console.log instead of logger.log to avoid timestamp
       console.log(`${paddedName}: ${info.scopes.join("/")}`);
     });
   }),

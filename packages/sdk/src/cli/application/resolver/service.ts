@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { styleText } from "node:util";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { logger, styles } from "@/cli/utils/logger";
 import { type ResolverServiceConfig } from "@/configure/services/resolver/types";
 import { type Resolver, ResolverSchema } from "@/parser/service/resolver";
 
@@ -23,12 +23,12 @@ export class ResolverService {
 
     const resolverFiles = loadFilesWithIgnores(this.config);
 
-    console.log("");
+    logger.newline();
     console.log(
       "Found",
-      styleText("cyanBright", resolverFiles.length.toString()),
+      styles.highlight(resolverFiles.length.toString()),
       "resolver files for service",
-      styleText("cyanBright", `"${this.namespace}"`),
+      styles.highlight(`"${this.namespace}"`),
     );
 
     await Promise.all(
@@ -46,9 +46,9 @@ export class ResolverService {
         const relativePath = path.relative(process.cwd(), resolverFile);
         console.log(
           "Resolver:",
-          styleText("greenBright", `"${result.data.name}"`),
+          styles.successBright(`"${result.data.name}"`),
           "loaded from",
-          styleText("cyan", relativePath),
+          styles.path(relativePath),
         );
         this.resolvers[resolverFile] = result.data;
         return result.data;
@@ -56,8 +56,8 @@ export class ResolverService {
     } catch (error) {
       const relativePath = path.relative(process.cwd(), resolverFile);
       console.error(
-        styleText("red", "Failed to load resolver from"),
-        styleText("redBright", relativePath),
+        styles.error("Failed to load resolver from"),
+        styles.errorBright(relativePath),
       );
       console.error(error);
       throw error;

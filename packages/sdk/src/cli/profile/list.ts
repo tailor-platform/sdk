@@ -1,9 +1,9 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
 import { printData } from "../format";
+import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";
 
 export const listCommand = defineCommand({
@@ -20,7 +20,7 @@ export const listCommand = defineCommand({
 
     const profiles = Object.entries(config.profiles);
     if (profiles.length === 0) {
-      consola.info(ml`
+      logger.info(ml`
         No profiles found.
         Please create a profile first using 'tailor-sdk profile create' command.
       `);

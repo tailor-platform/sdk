@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { styleText } from "node:util";
 import { defineCommand } from "citty";
 import { defineApplication, type Application } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
@@ -12,6 +11,7 @@ import {
   type GeneratorAuthInput,
 } from "@/cli/generator/types";
 import { generateUserTypes } from "@/cli/type-generator";
+import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir, type AppConfig } from "@/configure/config";
 import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
@@ -47,12 +47,12 @@ export class GenerationManager {
   }
 
   async generate(watch: boolean) {
-    console.log("");
+    logger.newline();
     console.log(
       "Generation for application:",
-      styleText("cyanBright", this.application.config.name),
+      styles.highlight(this.application.config.name),
     );
-    console.log("");
+    logger.newline();
 
     // Initialize data structure
     const app = this.application;
@@ -67,8 +67,8 @@ export class GenerationManager {
         };
       } catch (error) {
         console.error(
-          styleText("red", "Error loading types for TailorDB service"),
-          styleText("redBright", namespace),
+          styles.error("Error loading types for TailorDB service"),
+          styles.errorBright(namespace),
         );
         console.error(error);
         if (!watch) {
@@ -90,8 +90,8 @@ export class GenerationManager {
         );
       } catch (error) {
         console.error(
-          styleText("red", "Error loading resolvers for Resolver service"),
-          styleText("redBright", namespace),
+          styles.error("Error loading resolvers for Resolver service"),
+          styles.errorBright(namespace),
         );
         console.error(error);
         if (!watch) {
@@ -166,8 +166,8 @@ export class GenerationManager {
       await this.aggregate(gen);
     } catch (error) {
       console.error(
-        styleText("red", "Error processing generator"),
-        styleText("redBright", gen.id),
+        styles.error("Error processing generator"),
+        styles.errorBright(gen.id),
       );
       console.error(error);
     }
@@ -191,9 +191,9 @@ export class GenerationManager {
           });
         } catch (error) {
           console.error(
-            styleText("red", `Error processing type`),
-            styleText("redBright", typeName),
-            styleText("red", `in ${namespace} with generator ${gen.id}`),
+            styles.error(`Error processing type`),
+            styles.errorBright(typeName),
+            styles.error(`in ${namespace} with generator ${gen.id}`),
           );
           console.error(error);
         }
@@ -210,9 +210,9 @@ export class GenerationManager {
           });
       } catch (error) {
         console.error(
-          styleText("red", `Error processing TailorDB namespace`),
-          styleText("redBright", namespace),
-          styleText("red", `with generator ${gen.id}`),
+          styles.error(`Error processing TailorDB namespace`),
+          styles.errorBright(namespace),
+          styles.error(`with generator ${gen.id}`),
         );
         console.error(error);
       }
@@ -241,9 +241,9 @@ export class GenerationManager {
             });
         } catch (error) {
           console.error(
-            styleText("red", `Error processing resolver`),
-            styleText("redBright", resolverName),
-            styleText("red", `in ${namespace} with generator ${gen.id}`),
+            styles.error(`Error processing resolver`),
+            styles.errorBright(resolverName),
+            styles.error(`in ${namespace} with generator ${gen.id}`),
           );
           console.error(error);
         }
@@ -260,9 +260,9 @@ export class GenerationManager {
           });
       } catch (error) {
         console.error(
-          styleText("red", `Error processing Resolver namespace`),
-          styleText("redBright", namespace),
-          styleText("red", `with generator ${gen.id}`),
+          styles.error(`Error processing Resolver namespace`),
+          styles.errorBright(namespace),
+          styles.error(`with generator ${gen.id}`),
         );
         console.error(error);
       }
@@ -284,9 +284,9 @@ export class GenerationManager {
               await gen.processExecutor(executor);
           } catch (error) {
             console.error(
-              styleText("red", `Error processing executor`),
-              styleText("redBright", executor.name),
-              styleText("red", `with generator ${gen.id}`),
+              styles.error(`Error processing executor`),
+              styles.errorBright(executor.name),
+              styles.error(`with generator ${gen.id}`),
             );
             console.error(error);
           }
@@ -361,9 +361,7 @@ export class GenerationManager {
         return new Promise<void>((resolve, reject) => {
           if (file.skipIfExists && fs.existsSync(file.path)) {
             const relativePath = path.relative(process.cwd(), file.path);
-            console.log(
-              styleText("gray", `${gen.id} | skip existing: ${relativePath}`),
-            );
+            logger.debug(`${gen.id} | skip existing: ${relativePath}`);
             return resolve();
           }
 
@@ -371,8 +369,8 @@ export class GenerationManager {
             if (err) {
               const relativePath = path.relative(process.cwd(), file.path);
               console.error(
-                styleText("red", "Error writing file"),
-                styleText("redBright", relativePath),
+                styles.error("Error writing file"),
+                styles.errorBright(relativePath),
               );
               console.error(err);
               reject(err);
@@ -380,7 +378,7 @@ export class GenerationManager {
               const relativePath = path.relative(process.cwd(), file.path);
               console.log(
                 `${gen.id} | generate:`,
-                styleText("green", relativePath),
+                styles.success(relativePath),
               );
               // Set executable permission if requested
               if (file.executable) {
@@ -391,11 +389,8 @@ export class GenerationManager {
                       file.path,
                     );
                     console.error(
-                      styleText(
-                        "red",
-                        "Error setting executable permission on",
-                      ),
-                      styleText("redBright", relativePath),
+                      styles.error("Error setting executable permission on"),
+                      styles.errorBright(relativePath),
                     );
                     console.error(chmodErr);
                     reject(chmodErr);
@@ -411,7 +406,7 @@ export class GenerationManager {
         });
       }),
     );
-    console.log("");
+    logger.newline();
   }
 
   private watcher: DependencyWatcher | null = null;
@@ -454,11 +449,11 @@ export class GenerationManager {
   }
 
   private async restartWatchProcess() {
-    console.log("");
-    console.log(
-      styleText("yellow", "Restarting watch process to clear module cache..."),
-    );
-    console.log("");
+    logger.newline();
+    logger.warn("Restarting watch process to clear module cache...", {
+      mode: "stream",
+    });
+    logger.newline();
 
     // Clean up watcher first
     if (this.watcher) {
@@ -529,7 +524,6 @@ export const generateCommand = defineCommand({
     watch: {
       type: "boolean",
       description: "Watch for type/resolver changes and regenerate",
-      alias: "w",
       default: false,
     },
   },

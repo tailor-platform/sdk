@@ -1,9 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
+import { logger } from "../../utils/logger";
 
 export const createCommand = defineCommand({
   meta: {
@@ -51,6 +51,6 @@ export const createCommand = defineCommand({
       throw error;
     }
 
-    consola.success(`Vault: ${args.name} created`);
+    logger.success(`Vault: ${args.name} created`);
   }),
 });

@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { styleText } from "node:util";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -8,6 +7,7 @@ import {
   loadFilesWithIgnores,
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
+import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import {
   createTriggerTransformPlugin,
@@ -38,12 +38,12 @@ export async function bundleExecutors(
     );
   }
 
-  console.log("");
+  logger.newline();
   console.log(
     "Bundling",
-    styleText("cyanBright", files.length.toString()),
+    styles.highlight(files.length.toString()),
     "files for",
-    styleText("cyan", '"executor"'),
+    styles.info('"executor"'),
   );
 
   // Load all executors and filter to function/jobFunction only
@@ -51,20 +51,13 @@ export async function bundleExecutors(
   for (const file of files) {
     const executor = await loadExecutor(file);
     if (!executor) {
-      console.log(
-        styleText("dim", `  Skipping: ${file} (could not be loaded)`),
-      );
+      logger.debug(`  Skipping: ${file} (could not be loaded)`);
       continue;
     }
 
     // Only bundle function and jobFunction executors
     if (!["function", "jobFunction"].includes(executor.operation.kind)) {
-      console.log(
-        styleText(
-          "dim",
-          `  Skipping: ${executor.name} (not a function executor)`,
-        ),
-      );
+      logger.debug(`  Skipping: ${executor.name} (not a function executor)`);
       continue;
     }
 
@@ -75,7 +68,7 @@ export async function bundleExecutors(
   }
 
   if (executors.length === 0) {
-    console.log(styleText("dim", "  No function executors to bundle"));
+    logger.debug("  No function executors to bundle");
     return;
   }
 
@@ -97,7 +90,7 @@ export async function bundleExecutors(
     ),
   );
 
-  console.log(styleText("green", "Bundled"), styleText("cyan", '"executor"'));
+  console.log(styles.success("Bundled"), styles.info('"executor"'));
 }
 
 async function bundleSingleExecutor(

@@ -5,15 +5,15 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import chalk from "chalk";
 import { defineCommand } from "citty";
-import { default as consola } from "consola";
 import ora from "ora";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
+import { styles, logger } from "../utils/logger";
+import { isUUID } from "../utils/validators";
 import {
   type WorkflowExecutionInfo,
   toWorkflowExecutionInfo,
@@ -31,13 +31,6 @@ export interface StartWorkflowOptions {
   interval?: number;
 }
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUUID(value: string): boolean {
-  return UUID_REGEX.test(value);
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -50,15 +43,15 @@ function colorizeStatus(status: WorkflowExecution_Status): string {
   const statusText = WorkflowExecution_Status[status];
   switch (status) {
     case WorkflowExecution_Status.PENDING:
-      return chalk.gray(statusText);
+      return styles.dim(statusText);
     case WorkflowExecution_Status.PENDING_RESUME:
-      return chalk.yellow(statusText);
+      return styles.warning(statusText);
     case WorkflowExecution_Status.RUNNING:
-      return chalk.cyan(statusText);
+      return styles.info(statusText);
     case WorkflowExecution_Status.SUCCESS:
-      return chalk.green(statusText);
+      return styles.success(statusText);
     case WorkflowExecution_Status.FAILED:
-      return chalk.red(statusText);
+      return styles.error(statusText);
     default:
       return statusText;
   }
@@ -90,24 +83,25 @@ export interface WaitForExecutionOptions {
   workspaceId: string;
   executionId: string;
   interval: number;
-  format: "table" | "json";
+  showProgress?: boolean;
   trackJobs?: boolean;
 }
 
 export async function waitForExecution(
   options: WaitForExecutionOptions,
 ): Promise<WorkflowExecutionInfo> {
-  const { client, workspaceId, executionId, interval, format, trackJobs } =
-    options;
-
-  // Show execution ID for tracking when waiting
-  if (format !== "json") {
-    consola.info(`Execution ID: ${executionId}`);
-  }
+  const {
+    client,
+    workspaceId,
+    executionId,
+    interval,
+    showProgress,
+    trackJobs,
+  } = options;
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
-  const spinner = format !== "json" ? ora().start("Waiting...") : null;
+  const spinner = showProgress ? ora().start("Waiting...") : null;
 
   try {
     while (true) {
@@ -126,9 +120,9 @@ export async function waitForExecution(
 
       // Show workflow status change (persist previous line)
       if (execution.status !== lastStatus) {
-        if (format !== "json") {
+        if (showProgress) {
           spinner?.stop();
-          consola.info(`Status: ${coloredStatus}`);
+          logger.info(`Status: ${coloredStatus}`, { mode: "stream" });
           spinner?.start(`Polling...`);
         }
         lastStatus = execution.status;
@@ -138,9 +132,11 @@ export async function waitForExecution(
       if (trackJobs && execution.status === WorkflowExecution_Status.RUNNING) {
         const runningJobs = getRunningJobs(execution);
         if (runningJobs && runningJobs !== lastRunningJobs) {
-          if (format !== "json") {
+          if (showProgress) {
             spinner?.stop();
-            consola.info(`Job | ${runningJobs}: ${coloredStatus}`);
+            logger.info(`Job | ${runningJobs}: ${coloredStatus}`, {
+              mode: "stream",
+            });
             spinner?.start(`Polling...`);
           }
           lastRunningJobs = runningJobs;
@@ -205,9 +201,13 @@ async function resolveWorkflowId(
   return workflow.id;
 }
 
+export interface WaitOptions {
+  showProgress?: boolean;
+}
+
 export interface StartWorkflowResultWithWait {
   executionId: string;
-  wait: () => Promise<WorkflowExecutionInfo>;
+  wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
 }
 
 export async function startWorkflow(
@@ -262,13 +262,13 @@ export async function startWorkflow(
 
     return {
       executionId,
-      wait: () =>
+      wait: (waitOptions?: WaitOptions) =>
         waitForExecution({
           client,
           workspaceId,
           executionId,
           interval: options.interval ?? 3000,
-          format: "json",
+          showProgress: waitOptions?.showProgress,
           trackJobs: true,
         }),
     };
@@ -302,7 +302,7 @@ export const startCommand = defineCommand({
     arg: {
       type: "string",
       description: "Workflow argument (JSON string)",
-      alias: "g",
+      alias: "a",
     },
     "workspace-id": {
       type: "string",
@@ -322,6 +322,7 @@ export const startCommand = defineCommand({
     },
     wait: {
       type: "boolean",
+      alias: "W",
       description: "Wait for execution to complete",
       default: false,
     },
@@ -345,11 +346,11 @@ export const startCommand = defineCommand({
     });
 
     if (!args.json) {
-      consola.info(`Execution ID: ${executionId}`);
+      logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
     }
 
     if (args.wait) {
-      const result = await wait();
+      const result = await wait({ showProgress: !args.json });
       printData(result, args.json);
     } else {
       printData({ executionId }, args.json);

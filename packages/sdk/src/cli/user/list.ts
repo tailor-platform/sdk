@@ -1,9 +1,8 @@
-import chalk from "chalk";
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
+import { logger } from "../utils/logger";
 
 export const listCommand = defineCommand({
   meta: {
@@ -19,7 +18,7 @@ export const listCommand = defineCommand({
 
     const users = Object.keys(config.users);
     if (users.length === 0) {
-      consola.info(ml`
+      logger.info(ml`
         No users found.
         Please login first using 'tailor-sdk login' command to register a user.
       `);
@@ -33,9 +32,9 @@ export const listCommand = defineCommand({
 
     users.forEach((user) => {
       if (user === config.current_user) {
-        console.log(chalk.green.bold(`${user} (current)`));
+        logger.success(`${user} (current)`, { mode: "plain" });
       } else {
-        console.log(user);
+        logger.log(user);
       }
     });
   }),

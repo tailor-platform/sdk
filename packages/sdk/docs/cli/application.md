@@ -29,7 +29,7 @@ tailor-sdk generate [options]
 **Options:**
 
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-w, --watch` - Watch for type/resolver changes and regenerate
+- `--watch` - Watch for type/resolver changes and regenerate
 
 ## apply
 
@@ -44,7 +44,7 @@ tailor-sdk apply [options]
 - `-w, --workspace-id` - ID of the workspace to apply the configuration to
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-d, --dryRun` - Run the command without making any changes
+- `-n, --dry-run` - Run the command without making any changes
 - `-y, --yes` - Skip confirmation prompt
 
 ## remove
@@ -100,7 +100,7 @@ tailor-sdk tailordb truncate [types...] [options]
 **Options:**
 
 - `-a, --all` - Truncate all tables in all namespaces
-- `-n, --namespace` - Truncate all tables in the specified namespace
+- `-N, --namespace` - Truncate all tables in the specified namespace
 - `-y, --yes` - Skip confirmation prompt
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use

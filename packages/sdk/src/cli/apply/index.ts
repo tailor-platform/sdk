@@ -21,6 +21,7 @@ import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { logger } from "../utils/logger";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
 import {
@@ -134,7 +135,7 @@ export async function apply(options?: ApplyOptions) {
   if (workflowResult) {
     printLoadedWorkflows(workflowResult);
   }
-  console.log("");
+  logger.newline();
 
   // Phase 1: Plan
   const ctx: PlanContext = {
@@ -297,10 +298,10 @@ export const applyCommand = defineCommand({
       alias: "c",
       default: "tailor.config.ts",
     },
-    dryRun: {
+    "dry-run": {
       type: "boolean",
       description: "Run the command without making any changes",
-      alias: "d",
+      alias: "n",
     },
     yes: {
       type: "boolean",
@@ -313,7 +314,7 @@ export const applyCommand = defineCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      dryRun: args.dryRun,
+      dryRun: args["dry-run"],
       yes: args.yes,
     });
   }),

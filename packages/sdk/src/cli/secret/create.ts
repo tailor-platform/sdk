@@ -1,9 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { logger } from "../utils/logger";
 
 export const createSecretCommand = defineCommand({
   meta: {
@@ -68,7 +68,7 @@ export const createSecretCommand = defineCommand({
       throw error;
     }
 
-    consola.success(
+    logger.success(
       `Secret: ${args.name} created in vault: ${args["vault-name"]}`,
     );
   }),

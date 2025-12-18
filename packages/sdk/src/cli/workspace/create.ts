@@ -1,33 +1,39 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
-import { validate as validateUuid } from "uuid";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { printData } from "../format";
+import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
-export interface CreateWorkspaceOptions {
-  name: string;
-  region: string;
-  deleteProtection?: boolean;
-  organizationId?: string;
-  folderId?: string;
-}
+/**
+ * Schema for workspace creation options
+ * - name: 3-63 chars, lowercase alphanumeric and hyphens, cannot start/end with hyphen
+ * - organizationId, folderId: optional UUIDs
+ */
+const createWorkspaceOptionsSchema = z.object({
+  name: z
+    .string()
+    .min(3, "Name must be at least 3 characters")
+    .max(63, "Name must be at most 63 characters")
+    .regex(
+      /^[a-z0-9-]+$/,
+      "Name can only contain lowercase letters, numbers, and hyphens",
+    )
+    .refine(
+      (n) => !n.startsWith("-") && !n.endsWith("-"),
+      "Name cannot start or end with a hyphen",
+    ),
+  region: z.string(),
+  deleteProtection: z.boolean().optional(),
+  organizationId: z.uuid().optional(),
+  folderId: z.uuid().optional(),
+});
 
-const validateName = (name: string) => {
-  if (name.length < 3 || name.length > 63) {
-    throw new Error(`Name must be between 3 and 63 characters long.`);
-  }
-  if (!/^[a-z0-9-]+$/.test(name)) {
-    throw new Error(
-      "Name can only contain lowercase letters, numbers, and hyphens.",
-    );
-  }
-  if (name.startsWith("-") || name.endsWith("-")) {
-    throw new Error("Name cannot start or end with a hyphen.");
-  }
-};
+export type CreateWorkspaceOptions = z.input<
+  typeof createWorkspaceOptionsSchema
+>;
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
@@ -41,26 +47,25 @@ const validateRegion = async (region: string, client: OperatorClient) => {
 export async function createWorkspace(
   options: CreateWorkspaceOptions,
 ): Promise<WorkspaceInfo> {
-  // Load and validate options
+  // Validate options with zod schema
+  const result = createWorkspaceOptionsSchema.safeParse(options);
+  if (!result.success) {
+    throw new Error(result.error.issues[0].message);
+  }
+  const validated = result.data;
+
+  // Load client and validate region
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
-  validateName(options.name);
-  await validateRegion(options.region, client);
-  const deleteProtection = options.deleteProtection ?? false;
-  if (options.organizationId && !validateUuid(options.organizationId)) {
-    throw new Error(`Organization ID must be a valid UUID.`);
-  }
-  if (options.folderId && !validateUuid(options.folderId)) {
-    throw new Error(`Folder ID must be a valid UUID.`);
-  }
+  await validateRegion(validated.region, client);
 
   // Create workspace
   const resp = await client.createWorkspace({
-    workspaceName: options.name,
-    workspaceRegion: options.region,
-    deleteProtection,
-    organizationId: options.organizationId,
-    folderId: options.folderId,
+    workspaceName: validated.name,
+    workspaceRegion: validated.region,
+    deleteProtection: validated.deleteProtection ?? false,
+    organizationId: validated.organizationId,
+    folderId: validated.folderId,
   });
 
   return workspaceInfo(resp.workspace!);
@@ -78,7 +83,7 @@ export const createCommand = defineCommand({
       type: "string",
       description: "Workspace name",
       required: true,
-      alias: "n",
+      alias: "N",
     },
     region: {
       type: "string",
@@ -89,7 +94,7 @@ export const createCommand = defineCommand({
     "delete-protection": {
       type: "boolean",
       description: "Enable delete protection",
-      alias: "d",
+      alias: "D",
       default: false,
     },
     "organization-id": {
@@ -114,7 +119,7 @@ export const createCommand = defineCommand({
     });
 
     if (!args.json) {
-      consola.success(`Workspace "${args.name}" created successfully.`);
+      logger.success(`Workspace "${args.name}" created successfully.`);
     }
 
     printData(workspace, args.json);

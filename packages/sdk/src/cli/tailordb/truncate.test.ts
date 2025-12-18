@@ -28,14 +28,18 @@ vi.mock("../config-loader", () => ({
   }),
 }));
 
-vi.mock("consola", () => ({
-  consola: {
+vi.mock("../utils/logger", () => ({
+  logger: {
     success: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     prompt: vi.fn().mockResolvedValue(true),
   },
+  styles: {
+    dim: vi.fn((s: string) => s),
+  },
+  symbols: {},
 }));
 
 describe("truncate command", () => {
@@ -189,31 +193,31 @@ describe("truncate command", () => {
 
   describe("confirmation prompt", () => {
     test("prompts for confirmation when --yes is not specified", async () => {
-      const { consola } = await import("consola");
+      const { logger } = await import("../utils/logger");
 
       await truncate({ namespace: "tailordb" });
 
-      expect(consola.prompt).toHaveBeenCalled();
+      expect(logger.prompt).toHaveBeenCalled();
     });
 
     test("skips confirmation when --yes is specified", async () => {
-      const { consola } = await import("consola");
+      const { logger } = await import("../utils/logger");
 
       await truncate({ namespace: "tailordb", yes: true });
 
-      expect(consola.prompt).not.toHaveBeenCalled();
+      expect(logger.prompt).not.toHaveBeenCalled();
     });
 
     test("cancels operation when user declines confirmation", async () => {
-      const { consola } = await import("consola");
+      const { logger } = await import("../utils/logger");
       const { initOperatorClient } = await import("../client");
       const client = await initOperatorClient("mock-token");
 
-      vi.mocked(consola.prompt).mockResolvedValueOnce(false);
+      vi.mocked(logger.prompt).mockResolvedValueOnce(false);
 
       await truncate({ namespace: "tailordb" });
 
-      expect(consola.info).toHaveBeenCalledWith("Truncate cancelled.");
+      expect(logger.info).toHaveBeenCalledWith("Truncate cancelled.");
       expect(client.truncateTailorDBTypes).not.toHaveBeenCalled();
     });
   });

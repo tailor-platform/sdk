@@ -1,8 +1,8 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import { commonArgs, withCommonArgs } from "./args";
 import { initOAuth2Client } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
+import { logger } from "./utils/logger";
 
 export const logoutCommand = defineCommand({
   meta: {
@@ -16,7 +16,7 @@ export const logoutCommand = defineCommand({
       ? pfConfig.users[pfConfig.current_user]
       : undefined;
     if (!tokens) {
-      consola.warn("You are not logged in.");
+      logger.warn("You are not logged in.");
       return;
     }
 
@@ -33,6 +33,6 @@ export const logoutCommand = defineCommand({
     delete pfConfig.users[pfConfig.current_user!];
     pfConfig.current_user = null;
     writePlatformConfig(pfConfig);
-    consola.success("Successfully logged out from Tailor Platform.");
+    logger.success("Successfully logged out from Tailor Platform.");
   }),
 });

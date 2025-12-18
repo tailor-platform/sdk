@@ -1,8 +1,8 @@
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import ml from "multiline-ts";
 import { commonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
+import { logger } from "../utils/logger";
 
 export const currentCommand = defineCommand({
   meta: {
@@ -15,7 +15,7 @@ export const currentCommand = defineCommand({
 
     // Check if current user is set
     if (!config.current_user) {
-      consola.warn(ml`
+      logger.warn(ml`
         Current user not set.
         Please login first using 'tailor-sdk login' command to register a user.
       `);

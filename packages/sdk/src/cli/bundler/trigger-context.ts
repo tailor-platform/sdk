@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { styleText } from "node:util";
 import { parseSync } from "oxc-parser";
 import {
   loadFilesWithIgnores,
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
+import { logger } from "@/cli/utils/logger";
 import { findAllJobs, buildJobNameMap } from "./workflow/job-detector";
 import { transformFunctionTriggers } from "./workflow/trigger-transformer";
 import {
@@ -80,12 +80,9 @@ export async function buildTriggerContext(
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.warn(
-        styleText(
-          "yellow",
-          `Warning: Failed to process workflow file ${file}: ${errorMessage}`,
-        ),
-      );
+      logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {
+        mode: "stream",
+      });
       continue;
     }
   }

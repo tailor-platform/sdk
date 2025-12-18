@@ -59,6 +59,7 @@ export {
   startWorkflow,
   type StartWorkflowOptions,
   type StartWorkflowResultWithWait,
+  type WaitOptions,
 } from "./workflow/start";
 export {
   listWorkflowExecutions,

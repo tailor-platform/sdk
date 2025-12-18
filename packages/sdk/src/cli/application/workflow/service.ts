@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { styleText } from "node:util";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { logger, styles } from "@/cli/utils/logger";
 import { WORKFLOW_JOB_BRAND } from "@/configure/services/workflow/job";
 import {
   type Workflow,
@@ -97,10 +97,10 @@ export function printLoadedWorkflows(result: WorkflowLoadResult): void {
     return;
   }
 
-  console.log("");
+  logger.newline();
   console.log(
     "Found",
-    styleText("cyanBright", result.fileCount.toString()),
+    styles.highlight(result.fileCount.toString()),
     "workflow files",
   );
 
@@ -108,9 +108,9 @@ export function printLoadedWorkflows(result: WorkflowLoadResult): void {
     const relativePath = path.relative(process.cwd(), sourceFile);
     console.log(
       "Workflow:",
-      styleText("greenBright", `"${workflow.name}"`),
+      styles.successBright(`"${workflow.name}"`),
       "loaded from",
-      styleText("cyan", relativePath),
+      styles.path(relativePath),
     );
   }
 }
@@ -157,8 +157,8 @@ async function loadFileContent(filePath: string): Promise<{
   } catch (error) {
     const relativePath = path.relative(process.cwd(), filePath);
     console.error(
-      styleText("red", "Failed to load workflow from"),
-      styleText("redBright", relativePath),
+      styles.error("Failed to load workflow from"),
+      styles.errorBright(relativePath),
     );
     console.error(error);
     throw error;

@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { styleText } from "node:util";
 import ml from "multiline-ts";
 import { parseSync } from "oxc-parser";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -39,19 +39,19 @@ export async function bundleWorkflowJobs(
   triggerContext?: TriggerContext,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
-    console.log(styleText("dim", "No workflow jobs to bundle"));
+    logger.debug("No workflow jobs to bundle");
     return { mainJobDeps: {} };
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
   const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames);
 
-  console.log("");
+  logger.newline();
   console.log(
     "Bundling",
-    styleText("cyanBright", usedJobs.length.toString()),
+    styles.highlight(usedJobs.length.toString()),
     "files for",
-    styleText("cyan", '"workflow-job"'),
+    styles.info('"workflow-job"'),
   );
 
   const outputDir = path.resolve(getDistDir(), "workflow-jobs");
@@ -76,10 +76,7 @@ export async function bundleWorkflowJobs(
     ),
   );
 
-  console.log(
-    styleText("green", "Bundled"),
-    styleText("cyan", '"workflow-job"'),
-  );
+  console.log(styles.success("Bundled"), styles.info('"workflow-job"'));
 
   return { mainJobDeps };
 }

@@ -1,6 +1,5 @@
-import chalk from "chalk";
-import { consola } from "consola";
 import ml from "multiline-ts";
+import { styles, logger } from "../../utils/logger";
 
 export interface OwnerConflict {
   resourceType: string;
@@ -22,32 +21,34 @@ export async function confirmOwnerConflict(
 
   const currentOwners = [...new Set(conflicts.map((c) => c.currentOwner))];
 
-  consola.warn("Application name mismatch detected:");
+  logger.warn("Application name mismatch detected:");
 
   console.log(
-    `  ${chalk.yellow("Current application(s)")}: ${currentOwners.map((o) => chalk.bold(`"${o}"`)).join(", ")}`,
+    `  ${styles.warning("Current application(s)")}: ${currentOwners.map((o) => styles.bold(`"${o}"`)).join(", ")}`,
   );
   console.log(
-    `  ${chalk.green("New application")}:        ${chalk.bold(`"${appName}"`)}`,
+    `  ${styles.success("New application")}:        ${styles.bold(`"${appName}"`)}`,
   );
-  console.log("");
-  console.log(`  ${chalk.cyan("Resources")}:`);
+  logger.newline();
+  console.log(`  ${styles.info("Resources")}:`);
   for (const c of conflicts) {
     console.log(
-      `    • ${chalk.bold(c.resourceType)} ${chalk.cyan(`"${c.resourceName}"`)}`,
+      `    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`,
     );
   }
 
   if (yes) {
-    consola.success("Updating resources (--yes flag specified)...");
+    logger.success("Updating resources (--yes flag specified)...", {
+      mode: "plain",
+    });
     return;
   }
 
   const promptMessage =
     currentOwners.length === 1
-      ? `Update these resources to be managed by "${appName}"?\n${chalk.gray("(Common when renaming your application)")}`
+      ? `Update these resources to be managed by "${appName}"?\n${styles.dim("(Common when renaming your application)")}`
       : `Update these resources to be managed by "${appName}"?`;
-  const confirmed = await consola.prompt(promptMessage, {
+  const confirmed = await logger.prompt(promptMessage, {
     type: "confirm",
     initial: false,
   });
@@ -66,23 +67,25 @@ export async function confirmUnmanagedResources(
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  consola.warn("Unmanaged resources detected:");
+  logger.warn("Unmanaged resources detected:");
 
-  console.log(`  ${chalk.cyan("Resources")}:`);
+  console.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
     console.log(
-      `    • ${chalk.bold(r.resourceType)} ${chalk.cyan(`"${r.resourceName}"`)}`,
+      `    • ${styles.bold(r.resourceType)} ${styles.info(`"${r.resourceName}"`)}`,
     );
   }
-  console.log("");
+  logger.newline();
   console.log("  These resources are not managed by any application.");
 
   if (yes) {
-    consola.success(`Adding to "${appName}" (--yes flag specified)...`);
+    logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
+      mode: "plain",
+    });
     return;
   }
 
-  const confirmed = await consola.prompt(
+  const confirmed = await logger.prompt(
     `Add these resources to "${appName}"?`,
     { type: "confirm", initial: false },
   );
@@ -105,27 +108,29 @@ export async function confirmImportantResourceDeletion(
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  consola.warn("The following resources will be deleted:");
+  logger.warn("The following resources will be deleted:");
 
-  console.log(`  ${chalk.cyan("Resources")}:`);
+  console.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
     console.log(
-      `    • ${chalk.bold(r.resourceType)} ${chalk.red(`"${r.resourceName}"`)}`,
+      `    • ${styles.bold(r.resourceType)} ${styles.error(`"${r.resourceName}"`)}`,
     );
   }
-  console.log("");
+  logger.newline();
   console.log(
-    chalk.yellow(
+    styles.warning(
       "  Deleting these resources will permanently remove all associated data.",
     ),
   );
 
   if (yes) {
-    consola.success("Deleting resources (--yes flag specified)...");
+    logger.success("Deleting resources (--yes flag specified)...", {
+      mode: "plain",
+    });
     return;
   }
 
-  const confirmed = await consola.prompt(
+  const confirmed = await logger.prompt(
     "Are you sure you want to delete these resources?",
     { type: "confirm", initial: false },
   );

@@ -6,15 +6,14 @@ import {
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import chalk from "chalk";
 import { defineCommand } from "citty";
-import { default as consola } from "consola";
 import ora from "ora";
 import { table } from "table";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
+import { styles, logger } from "../utils/logger";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
@@ -69,15 +68,15 @@ function colorizeStatus(status: WorkflowExecution_Status): string {
   const statusText = WorkflowExecution_Status[status];
   switch (status) {
     case WorkflowExecution_Status.PENDING:
-      return chalk.gray(statusText);
+      return styles.dim(statusText);
     case WorkflowExecution_Status.PENDING_RESUME:
-      return chalk.yellow(statusText);
+      return styles.warning(statusText);
     case WorkflowExecution_Status.RUNNING:
-      return chalk.cyan(statusText);
+      return styles.info(statusText);
     case WorkflowExecution_Status.SUCCESS:
-      return chalk.green(statusText);
+      return styles.success(statusText);
     case WorkflowExecution_Status.FAILED:
-      return chalk.red(statusText);
+      return styles.error(statusText);
     default:
       return statusText;
   }
@@ -347,15 +346,15 @@ function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
 
   // Print job details with logs
   if (execution.jobDetails && execution.jobDetails.length > 0) {
-    console.log(chalk.bold("\nJob Executions:"));
+    console.log(styles.bold("\nJob Executions:"));
     for (const job of execution.jobDetails) {
-      console.log(chalk.cyan(`\n--- ${job.stackedJobName} ---`));
+      console.log(styles.info(`\n--- ${job.stackedJobName} ---`));
       console.log(`  Status: ${job.status}`);
       console.log(`  Started: ${job.startedAt}`);
       console.log(`  Finished: ${job.finishedAt}`);
 
       if (job.logs) {
-        console.log(chalk.yellow("\n  Logs:"));
+        console.log(styles.warning("\n  Logs:"));
         const logLines = job.logs.split("\n");
         for (const line of logLines) {
           console.log(`    ${line}`);
@@ -363,7 +362,7 @@ function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
       }
 
       if (job.result) {
-        console.log(chalk.green("\n  Result:"));
+        console.log(styles.success("\n  Result:"));
         try {
           const parsed = JSON.parse(job.result);
           console.log(
@@ -412,6 +411,7 @@ export const executionsCommand = defineCommand({
     },
     wait: {
       type: "boolean",
+      alias: "W",
       description: "Wait for execution to complete (detail mode only)",
       default: false,
     },
@@ -438,7 +438,7 @@ export const executionsCommand = defineCommand({
       });
 
       if (!args.json) {
-        consola.info(`Execution ID: ${execution.id}`);
+        logger.info(`Execution ID: ${execution.id}`, { mode: "stream" });
       }
 
       const result = args.wait
