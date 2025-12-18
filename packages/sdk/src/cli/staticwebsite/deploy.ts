@@ -2,12 +2,12 @@ import * as fs from "fs";
 import * as path from "path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import consola, { createConsola } from "consola";
+import { consola, createConsola } from "consola";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
 import { withCommonArgs, commonArgs, jsonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
-import { loadAccessToken } from "../context";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 import { createProgress, withTimeout } from "../progress";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UploadFileRequestSchema } from "@tailor-proto/tailor/v1/staticwebsite_pb";
@@ -273,7 +273,10 @@ export const deployCommand = defineCommand({
 
     const name = args.name;
     const dir = path.resolve(process.cwd(), args.dir);
-    const workspaceId = args["workspace-id"];
+    const workspaceId = loadWorkspaceId({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+    });
 
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
       throw new Error(`Directory not found or not a directory: ${dir}`);
