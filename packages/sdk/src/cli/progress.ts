@@ -1,3 +1,5 @@
+import { setTimeout } from "node:timers/promises";
+
 export function createProgress(label: string, total: number) {
   let current = 0;
 
@@ -21,8 +23,8 @@ export async function withTimeout<T>(
 ): Promise<T> {
   return (await Promise.race([
     p,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(message)), ms),
-    ),
+    setTimeout(ms).then(() => {
+      throw new Error(message);
+    }),
   ])) as T;
 }
