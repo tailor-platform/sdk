@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 0.18.0
+
+### Minor Changes
+
+- [#198](https://github.com/tailor-platform/sdk/pull/198) [`7f06c62`](https://github.com/tailor-platform/sdk/commit/7f06c620a2b3baf551dcbd39418fcb0675661463) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor!: rename entityAction to actionEntity
+
+### Patch Changes
+
+- [#203](https://github.com/tailor-platform/sdk/pull/203) [`f3c559e`](https://github.com/tailor-platform/sdk/commit/f3c559e426572431db25f4b71af414650dc6e9a4) Thanks [@remiposo](https://github.com/remiposo)! - Fix Kysely type generation for enum array fields to wrap union types in parentheses
+
+- [#192](https://github.com/tailor-platform/sdk/pull/192) [`d2ce834`](https://github.com/tailor-platform/sdk/commit/d2ce8345fb839f6086f4286c27373dfa3336734c) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support `accessTokenLifetimeSeconds` and `refreshTokenLifetimeSeconds` for auth oauth2 client
+
 ## 0.17.0
 
 ### Minor Changes
