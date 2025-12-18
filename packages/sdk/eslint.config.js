@@ -192,6 +192,21 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/cli/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name=/^(log|error|warn|info|debug)$/]",
+          message:
+            "Use logger from '@/cli/utils/logger' instead of console for consistent logging. Use printData for JSON output.",
+        },
+      ],
+    },
+  },
+  {
     files: ["**/*.test.ts"],
     rules: {
       "no-restricted-syntax": [

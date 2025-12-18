@@ -1,5 +1,6 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import { getBorderCharacters, table } from "table";
+import { logger } from "./utils/logger";
 
 export function humanizeRelativeTime(isoString: string): string {
   const date = new Date(isoString);
@@ -12,7 +13,7 @@ export function humanizeRelativeTime(isoString: string): string {
 
 export function printData(data: object | object[], json: boolean = false) {
   if (json) {
-    console.log(JSON.stringify(data));
+    logger.log(JSON.stringify(data));
     return;
   }
 

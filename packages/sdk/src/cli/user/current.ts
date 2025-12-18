@@ -30,6 +30,6 @@ export const currentCommand = defineCommand({
       `);
     }
 
-    console.log(config.current_user);
+    logger.log(config.current_user);
   }),
 });

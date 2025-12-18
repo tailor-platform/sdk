@@ -346,30 +346,30 @@ function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
 
   // Print job details with logs
   if (execution.jobDetails && execution.jobDetails.length > 0) {
-    console.log(styles.bold("\nJob Executions:"));
+    logger.log(styles.bold("\nJob Executions:"));
     for (const job of execution.jobDetails) {
-      console.log(styles.info(`\n--- ${job.stackedJobName} ---`));
-      console.log(`  Status: ${job.status}`);
-      console.log(`  Started: ${job.startedAt}`);
-      console.log(`  Finished: ${job.finishedAt}`);
+      logger.log(styles.info(`\n--- ${job.stackedJobName} ---`));
+      logger.log(`  Status: ${job.status}`);
+      logger.log(`  Started: ${job.startedAt}`);
+      logger.log(`  Finished: ${job.finishedAt}`);
 
       if (job.logs) {
-        console.log(styles.warning("\n  Logs:"));
+        logger.log(styles.warning("\n  Logs:"));
         const logLines = job.logs.split("\n");
         for (const line of logLines) {
-          console.log(`    ${line}`);
+          logger.log(`    ${line}`);
         }
       }
 
       if (job.result) {
-        console.log(styles.success("\n  Result:"));
+        logger.log(styles.success("\n  Result:"));
         try {
           const parsed = JSON.parse(job.result);
-          console.log(
+          logger.log(
             `    ${JSON.stringify(parsed, null, 2).split("\n").join("\n    ")}`,
           );
         } catch {
-          console.log(`    ${job.result}`);
+          logger.log(`    ${job.result}`);
         }
       }
     }

@@ -3,7 +3,8 @@ import { table } from "table";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { humanizeRelativeTime } from "../format";
+import { humanizeRelativeTime, printData } from "../format";
+import { logger } from "../utils/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
 export interface ListWorkflowsOptions {
@@ -52,10 +53,10 @@ export const listCommand = defineCommand({
     });
 
     if (args.json) {
-      console.log(JSON.stringify(workflows));
+      printData(workflows, args.json);
     } else {
       if (workflows.length === 0) {
-        console.log("No workflows found.");
+        logger.info("No workflows found.");
         return;
       }
       const headers = ["name", "mainJob", "jobFunctions", "updatedAt"];

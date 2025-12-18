@@ -97,7 +97,7 @@ export const withCommonArgs =
       await handler(args);
     } catch (error) {
       if (isCLIError(error)) {
-        console.error(error.format());
+        logger.log(error.format());
         if (args.verbose && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }

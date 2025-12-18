@@ -1,4 +1,4 @@
-import { styles, symbols } from "../../utils/logger";
+import { logger, styles, symbols } from "../../utils/logger";
 
 export interface HasName {
   name: string;
@@ -28,15 +28,15 @@ export class ChangeSet<
       return;
     }
 
-    console.log(styles.bold(`${this.title}:`));
+    logger.log(styles.bold(`${this.title}:`));
     this.creates.forEach((item) => {
-      console.log(`  ${symbols.create} ${item.name}`);
+      logger.log(`  ${symbols.create} ${item.name}`);
     });
     this.deletes.forEach((item) => {
-      console.log(`  ${symbols.delete} ${item.name}`);
+      logger.log(`  ${symbols.delete} ${item.name}`);
     });
     this.updates.forEach((item) => {
-      console.log(`  ${symbols.update} ${item.name}`);
+      logger.log(`  ${symbols.update} ${item.name}`);
     });
   }
 }

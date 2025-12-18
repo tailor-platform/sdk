@@ -98,19 +98,14 @@ export function printLoadedWorkflows(result: WorkflowLoadResult): void {
   }
 
   logger.newline();
-  console.log(
-    "Found",
-    styles.highlight(result.fileCount.toString()),
-    "workflow files",
+  logger.log(
+    `Found ${styles.highlight(result.fileCount.toString())} workflow files`,
   );
 
   for (const { workflow, sourceFile } of result.workflowSources) {
     const relativePath = path.relative(process.cwd(), sourceFile);
-    console.log(
-      "Workflow:",
-      styles.successBright(`"${workflow.name}"`),
-      "loaded from",
-      styles.path(relativePath),
+    logger.log(
+      `Workflow: ${styles.successBright(`"${workflow.name}"`)} loaded from ${styles.path(relativePath)}`,
     );
   }
 }
@@ -156,11 +151,10 @@ async function loadFileContent(filePath: string): Promise<{
     }
   } catch (error) {
     const relativePath = path.relative(process.cwd(), filePath);
-    console.error(
-      styles.error("Failed to load workflow from"),
-      styles.errorBright(relativePath),
+    logger.error(
+      `${styles.error("Failed to load workflow from")} ${styles.errorBright(relativePath)}`,
     );
-    console.error(error);
+    logger.error(String(error));
     throw error;
   }
 

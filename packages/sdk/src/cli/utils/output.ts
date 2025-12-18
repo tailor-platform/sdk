@@ -1,86 +1,6 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import { getBorderCharacters, table } from "table";
-import { styles, symbols } from "./logger";
-
-/**
- * Output options for CLI commands
- */
-export interface OutputOptions {
-  json: boolean;
-  quiet?: boolean;
-}
-
-/**
- * Output helper class for consistent CLI output
- */
-export class Output {
-  constructor(private options: OutputOptions) {}
-
-  /**
-   * Output data (respects --json flag)
-   */
-  data(data: object | object[]): void {
-    if (this.options.json) {
-      console.log(JSON.stringify(data, null, 2));
-      return;
-    }
-    printTable(data);
-  }
-
-  /**
-   * Output informational message (suppressed with --json or --quiet)
-   */
-  info(message: string): void {
-    if (this.options.json || this.options.quiet) return;
-    console.log(`${symbols.info} ${message}`);
-  }
-
-  /**
-   * Output success message (suppressed with --json)
-   */
-  success(message: string): void {
-    if (this.options.json) return;
-    console.log(`${symbols.success} ${styles.success(message)}`);
-  }
-
-  /**
-   * Output warning message (never suppressed)
-   */
-  warn(message: string): void {
-    if (this.options.json) {
-      console.error(JSON.stringify({ warning: message }));
-    } else {
-      console.log(`${symbols.warning} ${styles.warning(message)}`);
-    }
-  }
-
-  /**
-   * Output error message (never suppressed)
-   */
-  error(message: string): void {
-    if (this.options.json) {
-      console.error(JSON.stringify({ error: message }));
-    } else {
-      console.error(`${symbols.error} ${styles.error(message)}`);
-    }
-  }
-
-  /**
-   * Output progress message
-   */
-  progress(message: string): void {
-    if (this.options.json || this.options.quiet) return;
-    process.stdout.write(`\r${styles.dim("...")} ${message}`);
-  }
-
-  /**
-   * Clear progress line
-   */
-  clearProgress(): void {
-    if (this.options.json || this.options.quiet) return;
-    process.stdout.write("\r\x1b[K");
-  }
-}
+import { logger } from "./logger";
 
 /**
  * Format ISO timestamp to relative time
@@ -144,7 +64,7 @@ export function printTable(data: object | object[]): void {
  */
 export function printData(data: object | object[], json: boolean = false) {
   if (json) {
-    console.log(JSON.stringify(data));
+    logger.log(JSON.stringify(data));
     return;
   }
   printTable(data);

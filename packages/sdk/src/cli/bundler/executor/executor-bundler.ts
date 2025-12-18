@@ -39,11 +39,8 @@ export async function bundleExecutors(
   }
 
   logger.newline();
-  console.log(
-    "Bundling",
-    styles.highlight(files.length.toString()),
-    "files for",
-    styles.info('"executor"'),
+  logger.log(
+    `Bundling ${styles.highlight(files.length.toString())} files for ${styles.info('"executor"')}`,
   );
 
   // Load all executors and filter to function/jobFunction only
@@ -90,7 +87,7 @@ export async function bundleExecutors(
     ),
   );
 
-  console.log(styles.success("Bundled"), styles.info('"executor"'));
+  logger.log(`${styles.success("Bundled")} ${styles.info('"executor"')}`);
 }
 
 async function bundleSingleExecutor(

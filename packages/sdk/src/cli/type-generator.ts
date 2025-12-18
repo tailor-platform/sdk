@@ -197,15 +197,15 @@ export async function generateUserTypes(
     }
 
     if (attributeMap) {
-      console.log("Extracted AttributeMap:", attributeMap);
+      logger.debug(`Extracted AttributeMap: ${JSON.stringify(attributeMap)}`);
     }
     if (attributeList) {
-      console.log("Extracted AttributeList:", attributeList);
+      logger.debug(`Extracted AttributeList: ${JSON.stringify(attributeList)}`);
     }
 
     const env = config.env;
     if (env) {
-      console.log("Extracted Env:", env);
+      logger.debug(`Extracted Env: ${JSON.stringify(env)}`);
     }
 
     // Generate type definition
@@ -226,7 +226,7 @@ export async function generateUserTypes(
     });
   } catch (error) {
     logger.error("Error generating types");
-    console.error(error);
+    logger.error(String(error));
     // Don't throw - this should not block apply/generate
   }
 }

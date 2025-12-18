@@ -21,10 +21,8 @@ export class ExecutorService {
     const executorFiles = loadFilesWithIgnores(this.config);
 
     logger.newline();
-    console.log(
-      "Found",
-      styles.highlight(executorFiles.length.toString()),
-      "executor files",
+    logger.log(
+      `Found ${styles.highlight(executorFiles.length.toString())} executor files`,
     );
 
     await Promise.all(
@@ -41,22 +39,18 @@ export class ExecutorService {
       const result = ExecutorSchema.safeParse(executorModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
-        console.log(
-          "Executor:",
-          styles.successBright(`"${result.data.name}"`),
-          "loaded from",
-          styles.path(relativePath),
+        logger.log(
+          `Executor: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
         this.executors[executorFile] = result.data;
         return result.data;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);
-      console.error(
-        styles.error("Failed to load executor from"),
-        styles.errorBright(relativePath),
+      logger.error(
+        `${styles.error("Failed to load executor from")} ${styles.errorBright(relativePath)}`,
       );
-      console.error(error);
+      logger.error(String(error));
       throw error;
     }
     return undefined;

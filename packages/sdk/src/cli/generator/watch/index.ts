@@ -232,7 +232,7 @@ export class DependencyGraphManager {
     try {
       return this.madgeInstance.circular();
     } catch (error) {
-      console.warn("Failed to detect circular dependencies:", error);
+      logger.warn(`Failed to detect circular dependencies: ${String(error)}`);
       return [];
     }
   }
@@ -421,10 +421,8 @@ class DependencyWatcher {
 
     const files = new Set<string>();
     for (const pattern of patterns) {
-      console.log(
-        styles.dim(`Watch pattern for`),
-        styles.dim(groupId + ":"),
-        path.relative(process.cwd(), pattern),
+      logger.log(
+        `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), pattern)}`,
       );
       for await (const file of glob(pattern)) {
         files.add(path.resolve(file));
@@ -517,7 +515,9 @@ class DependencyWatcher {
       const circularDeps =
         this.dependencyGraphManager.findCircularDependencies();
       if (circularDeps.length > 0) {
-        console.warn("Circular dependencies detected:", circularDeps);
+        logger.warn(
+          `Circular dependencies detected: ${JSON.stringify(circularDeps)}`,
+        );
       }
     }
   }
@@ -691,10 +691,9 @@ class DependencyWatcher {
   }
 
   private handleError(error: WatcherError): void {
-    console.error(`[DependencyWatcher] ${error.message}`, {
-      code: error.code,
-      filePath: error.filePath,
-    });
+    logger.error(
+      `[DependencyWatcher] ${error.message} (code: ${error.code}, filePath: ${error.filePath})`,
+    );
 
     if (this.errorCallback) {
       this.errorCallback(error);
@@ -720,10 +719,10 @@ class DependencyWatcher {
     const handleSignal = async () => {
       try {
         await this.stop();
-        console.log("Watcher stopped successfully");
+        logger.info("Watcher stopped successfully");
         process.exit(0);
       } catch (error) {
-        console.error("Error during shutdown:", error);
+        logger.error(`Error during shutdown: ${String(error)}`);
         process.exit(0);
       }
     };

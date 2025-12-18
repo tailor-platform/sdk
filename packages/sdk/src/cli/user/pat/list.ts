@@ -3,6 +3,7 @@ import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
+import { printData } from "../../format";
 import { logger } from "../../utils/logger";
 import {
   transformPersonalAccessToken,
@@ -52,7 +53,7 @@ export const listCommand = defineCommand({
       const patInfos: PersonalAccessTokenInfo[] = pats.map(
         transformPersonalAccessToken,
       );
-      console.log(JSON.stringify(patInfos));
+      printData(patInfos, args.json);
       return;
     }
 
@@ -62,8 +63,7 @@ export const listCommand = defineCommand({
     pats.forEach((pat) => {
       const info = transformPersonalAccessToken(pat);
       const paddedName = info.name.padStart(maxNameLength);
-      // Use console.log instead of logger.log to avoid timestamp
-      console.log(`${paddedName}: ${info.scopes.join("/")}`);
+      logger.log(`${paddedName}: ${info.scopes.join("/")}`);
     });
   }),
 });

@@ -146,9 +146,10 @@ export const removeCommand = defineCommand({
       configPath: args.config,
     });
 
-    console.log(
-      `Planning removal of resources managed by "${application.name}"...\n`,
+    logger.info(
+      `Planning removal of resources managed by "${application.name}"...`,
     );
+    logger.newline();
 
     await execRemove(client, workspaceId, application, async () => {
       if (!args.yes) {

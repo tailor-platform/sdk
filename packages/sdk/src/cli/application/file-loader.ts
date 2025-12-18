@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { logger } from "@/cli/utils/logger";
 
 export interface FileLoadConfig {
   files: string[];
@@ -26,7 +27,9 @@ export function loadFilesWithIgnores(config: FileLoadConfig): string[] {
       const matchedIgnoreFiles = fs.globSync(absoluteIgnorePattern);
       matchedIgnoreFiles.forEach((file) => ignoreFiles.add(file));
     } catch (error) {
-      console.warn(`Failed to glob ignore pattern "${ignorePattern}":`, error);
+      logger.warn(
+        `Failed to glob ignore pattern "${ignorePattern}": ${String(error)}`,
+      );
     }
   }
 
@@ -41,7 +44,7 @@ export function loadFilesWithIgnores(config: FileLoadConfig): string[] {
       );
       files.push(...filteredFiles);
     } catch (error) {
-      console.warn(`Failed to glob pattern "${pattern}":`, error);
+      logger.warn(`Failed to glob pattern "${pattern}": ${String(error)}`);
     }
   }
 

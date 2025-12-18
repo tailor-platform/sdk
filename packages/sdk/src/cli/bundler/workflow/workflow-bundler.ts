@@ -47,11 +47,8 @@ export async function bundleWorkflowJobs(
   const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames);
 
   logger.newline();
-  console.log(
-    "Bundling",
-    styles.highlight(usedJobs.length.toString()),
-    "files for",
-    styles.info('"workflow-job"'),
+  logger.log(
+    `Bundling ${styles.highlight(usedJobs.length.toString())} files for ${styles.info('"workflow-job"')}`,
   );
 
   const outputDir = path.resolve(getDistDir(), "workflow-jobs");
@@ -76,7 +73,7 @@ export async function bundleWorkflowJobs(
     ),
   );
 
-  console.log(styles.success("Bundled"), styles.info('"workflow-job"'));
+  logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
 
   return { mainJobDeps };
 }

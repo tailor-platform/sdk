@@ -23,16 +23,16 @@ export async function confirmOwnerConflict(
 
   logger.warn("Application name mismatch detected:");
 
-  console.log(
+  logger.log(
     `  ${styles.warning("Current application(s)")}: ${currentOwners.map((o) => styles.bold(`"${o}"`)).join(", ")}`,
   );
-  console.log(
+  logger.log(
     `  ${styles.success("New application")}:        ${styles.bold(`"${appName}"`)}`,
   );
   logger.newline();
-  console.log(`  ${styles.info("Resources")}:`);
+  logger.log(`  ${styles.info("Resources")}:`);
   for (const c of conflicts) {
-    console.log(
+    logger.log(
       `    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`,
     );
   }
@@ -69,14 +69,14 @@ export async function confirmUnmanagedResources(
 
   logger.warn("Unmanaged resources detected:");
 
-  console.log(`  ${styles.info("Resources")}:`);
+  logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
-    console.log(
+    logger.log(
       `    • ${styles.bold(r.resourceType)} ${styles.info(`"${r.resourceName}"`)}`,
     );
   }
   logger.newline();
-  console.log("  These resources are not managed by any application.");
+  logger.log("  These resources are not managed by any application.");
 
   if (yes) {
     logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
@@ -110,14 +110,14 @@ export async function confirmImportantResourceDeletion(
 
   logger.warn("The following resources will be deleted:");
 
-  console.log(`  ${styles.info("Resources")}:`);
+  logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
-    console.log(
+    logger.log(
       `    • ${styles.bold(r.resourceType)} ${styles.error(`"${r.resourceName}"`)}`,
     );
   }
   logger.newline();
-  console.log(
+  logger.log(
     styles.warning(
       "  Deleting these resources will permanently remove all associated data.",
     ),

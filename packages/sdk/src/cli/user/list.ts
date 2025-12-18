@@ -2,6 +2,7 @@ import { defineCommand } from "citty";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
+import { printData } from "../format";
 import { logger } from "../utils/logger";
 
 export const listCommand = defineCommand({
@@ -26,7 +27,7 @@ export const listCommand = defineCommand({
     }
 
     if (args.json) {
-      console.log(JSON.stringify(users));
+      printData(users, args.json);
       return;
     }
 

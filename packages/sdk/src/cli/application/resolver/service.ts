@@ -24,11 +24,8 @@ export class ResolverService {
     const resolverFiles = loadFilesWithIgnores(this.config);
 
     logger.newline();
-    console.log(
-      "Found",
-      styles.highlight(resolverFiles.length.toString()),
-      "resolver files for service",
-      styles.highlight(`"${this.namespace}"`),
+    logger.log(
+      `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${this.namespace}"`)}`,
     );
 
     await Promise.all(
@@ -44,22 +41,18 @@ export class ResolverService {
       const result = ResolverSchema.safeParse(resolverModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), resolverFile);
-        console.log(
-          "Resolver:",
-          styles.successBright(`"${result.data.name}"`),
-          "loaded from",
-          styles.path(relativePath),
+        logger.log(
+          `Resolver: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
         this.resolvers[resolverFile] = result.data;
         return result.data;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), resolverFile);
-      console.error(
-        styles.error("Failed to load resolver from"),
-        styles.errorBright(relativePath),
+      logger.error(
+        `${styles.error("Failed to load resolver from")} ${styles.errorBright(relativePath)}`,
       );
-      console.error(error);
+      logger.error(String(error));
       throw error;
     }
     return undefined;

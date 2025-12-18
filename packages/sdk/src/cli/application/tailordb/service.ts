@@ -45,11 +45,8 @@ export class TailorDBService {
     const typeFiles = loadFilesWithIgnores(this.config);
 
     logger.newline();
-    console.log(
-      "Found",
-      styles.highlight(typeFiles.length.toString()),
-      "type files for TailorDB service",
-      styles.highlight(`"${this.namespace}"`),
+    logger.log(
+      `Found ${styles.highlight(typeFiles.length.toString())} type files for TailorDB service ${styles.highlight(`"${this.namespace}"`)}`,
     );
 
     await Promise.all(typeFiles.map((typeFile) => this.loadTypeFile(typeFile)));
@@ -83,11 +80,8 @@ export class TailorDBService {
 
         if (isDBTypeLike) {
           const relativePath = path.relative(process.cwd(), typeFile);
-          console.log(
-            "Type:",
-            styles.successBright(`"${exportName}"`),
-            "loaded from",
-            styles.path(relativePath),
+          logger.log(
+            `Type: ${styles.successBright(`"${exportName}"`)} loaded from ${styles.path(relativePath)}`,
           );
           this.rawTypes[typeFile][exportedValue.name] = exportedValue;
           loadedTypes[exportedValue.name] = exportedValue;
@@ -100,11 +94,10 @@ export class TailorDBService {
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);
-      console.error(
-        styles.error("Failed to load type from"),
-        styles.errorBright(relativePath),
+      logger.error(
+        `${styles.error("Failed to load type from")} ${styles.errorBright(relativePath)}`,
       );
-      console.error(error);
+      logger.error(String(error));
       throw error;
     }
     return loadedTypes;

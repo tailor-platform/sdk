@@ -19,6 +19,7 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/application/resolver/service";
+import { logger } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import { tailorUserMap } from "@/configure/types";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
@@ -391,7 +392,7 @@ function processResolver(
   try {
     functionCode = fs.readFileSync(functionPath, "utf-8");
   } catch {
-    console.warn(`Function file not found: ${functionPath}`);
+    logger.warn(`Function file not found: ${functionPath}`);
   }
 
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] =

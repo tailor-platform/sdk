@@ -41,11 +41,8 @@ export async function bundleResolvers(
   }
 
   logger.newline();
-  console.log(
-    "Bundling",
-    styles.highlight(files.length.toString()),
-    "files for",
-    styles.info(`"${namespace}"`),
+  logger.log(
+    `Bundling ${styles.highlight(files.length.toString())} files for ${styles.info(`"${namespace}"`)}`,
   );
 
   // Load all resolvers to get their names
@@ -80,7 +77,7 @@ export async function bundleResolvers(
     ),
   );
 
-  console.log(styles.success("Bundled"), styles.info(`"${namespace}"`));
+  logger.log(`${styles.success("Bundled")} ${styles.info(`"${namespace}"`)}`);
 }
 
 async function bundleSingleResolver(

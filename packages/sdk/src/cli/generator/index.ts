@@ -48,9 +48,8 @@ export class GenerationManager {
 
   async generate(watch: boolean) {
     logger.newline();
-    console.log(
-      "Generation for application:",
-      styles.highlight(this.application.config.name),
+    logger.log(
+      `Generation for application: ${styles.highlight(this.application.config.name)}`,
     );
     logger.newline();
 
@@ -66,11 +65,10 @@ export class GenerationManager {
           sourceInfo: db.getTypeSourceInfo(),
         };
       } catch (error) {
-        console.error(
-          styles.error("Error loading types for TailorDB service"),
-          styles.errorBright(namespace),
+        logger.error(
+          `${styles.error("Error loading types for TailorDB service")} ${styles.errorBright(namespace)}`,
         );
-        console.error(error);
+        logger.error(String(error));
         if (!watch) {
           throw error;
         }
@@ -89,11 +87,10 @@ export class GenerationManager {
           },
         );
       } catch (error) {
-        console.error(
-          styles.error("Error loading resolvers for Resolver service"),
-          styles.errorBright(namespace),
+        logger.error(
+          `${styles.error("Error loading resolvers for Resolver service")} ${styles.errorBright(namespace)}`,
         );
-        console.error(error);
+        logger.error(String(error));
         if (!watch) {
           throw error;
         }
@@ -165,11 +162,10 @@ export class GenerationManager {
       // Aggregate all results
       await this.aggregate(gen);
     } catch (error) {
-      console.error(
-        styles.error("Error processing generator"),
-        styles.errorBright(gen.id),
+      logger.error(
+        `${styles.error("Error processing generator")} ${styles.errorBright(gen.id)}`,
       );
-      console.error(error);
+      logger.error(String(error));
     }
   }
 
@@ -190,12 +186,10 @@ export class GenerationManager {
             source: typeInfo.sourceInfo[typeName],
           });
         } catch (error) {
-          console.error(
-            styles.error(`Error processing type`),
-            styles.errorBright(typeName),
-            styles.error(`in ${namespace} with generator ${gen.id}`),
+          logger.error(
+            `${styles.error(`Error processing type`)} ${styles.errorBright(typeName)} ${styles.error(`in ${namespace} with generator ${gen.id}`)}`,
           );
-          console.error(error);
+          logger.error(String(error));
         }
       }),
     );
@@ -209,12 +203,10 @@ export class GenerationManager {
             types: results.tailordbResults[namespace],
           });
       } catch (error) {
-        console.error(
-          styles.error(`Error processing TailorDB namespace`),
-          styles.errorBright(namespace),
-          styles.error(`with generator ${gen.id}`),
+        logger.error(
+          `${styles.error(`Error processing TailorDB namespace`)} ${styles.errorBright(namespace)} ${styles.error(`with generator ${gen.id}`)}`,
         );
-        console.error(error);
+        logger.error(String(error));
       }
     } else {
       results.tailordbNamespaceResults[namespace] =
@@ -240,12 +232,10 @@ export class GenerationManager {
               namespace,
             });
         } catch (error) {
-          console.error(
-            styles.error(`Error processing resolver`),
-            styles.errorBright(resolverName),
-            styles.error(`in ${namespace} with generator ${gen.id}`),
+          logger.error(
+            `${styles.error(`Error processing resolver`)} ${styles.errorBright(resolverName)} ${styles.error(`in ${namespace} with generator ${gen.id}`)}`,
           );
-          console.error(error);
+          logger.error(String(error));
         }
       }),
     );
@@ -259,12 +249,10 @@ export class GenerationManager {
             resolvers: results.resolverResults[namespace],
           });
       } catch (error) {
-        console.error(
-          styles.error(`Error processing Resolver namespace`),
-          styles.errorBright(namespace),
-          styles.error(`with generator ${gen.id}`),
+        logger.error(
+          `${styles.error(`Error processing Resolver namespace`)} ${styles.errorBright(namespace)} ${styles.error(`with generator ${gen.id}`)}`,
         );
-        console.error(error);
+        logger.error(String(error));
       }
     } else {
       results.resolverNamespaceResults[namespace] =
@@ -283,12 +271,10 @@ export class GenerationManager {
             results.executorResults[executorId] =
               await gen.processExecutor(executor);
           } catch (error) {
-            console.error(
-              styles.error(`Error processing executor`),
-              styles.errorBright(executor.name),
-              styles.error(`with generator ${gen.id}`),
+            logger.error(
+              `${styles.error(`Error processing executor`)} ${styles.errorBright(executor.name)} ${styles.error(`with generator ${gen.id}`)}`,
             );
-            console.error(error);
+            logger.error(String(error));
           }
         },
       ),
@@ -368,17 +354,15 @@ export class GenerationManager {
           fs.writeFile(file.path, file.content, (err) => {
             if (err) {
               const relativePath = path.relative(process.cwd(), file.path);
-              console.error(
-                styles.error("Error writing file"),
-                styles.errorBright(relativePath),
+              logger.error(
+                `${styles.error("Error writing file")} ${styles.errorBright(relativePath)}`,
               );
-              console.error(err);
+              logger.error(String(err));
               reject(err);
             } else {
               const relativePath = path.relative(process.cwd(), file.path);
-              console.log(
-                `${gen.id} | generate:`,
-                styles.success(relativePath),
+              logger.log(
+                `${gen.id} | generate: ${styles.success(relativePath)}`,
               );
               // Set executable permission if requested
               if (file.executable) {
@@ -388,11 +372,10 @@ export class GenerationManager {
                       process.cwd(),
                       file.path,
                     );
-                    console.error(
-                      styles.error("Error setting executable permission on"),
-                      styles.errorBright(relativePath),
+                    logger.error(
+                      `${styles.error("Error setting executable permission on")} ${styles.errorBright(relativePath)}`,
                     );
-                    console.error(chmodErr);
+                    logger.error(String(chmodErr));
                     reject(chmodErr);
                   } else {
                     resolve();
@@ -524,6 +507,7 @@ export const generateCommand = defineCommand({
     watch: {
       type: "boolean",
       description: "Watch for type/resolver changes and regenerate",
+      alias: "W",
       default: false,
     },
   },

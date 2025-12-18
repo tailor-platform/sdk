@@ -223,7 +223,7 @@ export async function apply(options?: ApplyOptions) {
     });
   }
   if (dryRun) {
-    console.log("Dry run enabled. No changes applied.");
+    logger.info("Dry run enabled. No changes applied.");
     return;
   }
 
@@ -247,7 +247,7 @@ export async function apply(options?: ApplyOptions) {
   await applyStaticWebsite(client, staticWebsite, "delete");
   await applyTailorDB(client, tailorDB, "delete");
 
-  console.log("Successfully applied changes.");
+  logger.success("Successfully applied changes.");
 }
 
 async function buildPipeline(
