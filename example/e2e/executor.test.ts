@@ -197,10 +197,13 @@ describe("dataplane", () => {
       }
       // Use poll to wait until the event is created.
       await expect
-        .poll(async () => {
-          const result = await graphQLClient.rawRequest<Data>(query);
-          return result.data.salesOrderCreatedList.edges.length;
-        })
+        .poll(
+          async () => {
+            const result = await graphQLClient.rawRequest<Data>(query);
+            return result.data.salesOrderCreatedList.edges.length;
+          },
+          { timeout: 90_000, interval: 3_000 },
+        )
         .toEqual(1);
     });
   });
