@@ -14,6 +14,7 @@ import { profileCommand } from "./profile";
 import { removeCommand } from "./remove";
 import { secretCommand } from "./secret";
 import { showCommand } from "./show";
+import { staticwebsiteCommand } from "./staticwebsite";
 import { tailordbCommand } from "./tailordb";
 import { userCommand } from "./user";
 import { workflowCommand } from "./workflow";
@@ -41,9 +42,10 @@ const mainCommand = defineCommand({
     oauth2client: oauth2clientCommand,
     profile: profileCommand,
     remove: removeCommand,
-    show: showCommand,
-    tailordb: tailordbCommand,
     secret: secretCommand,
+    show: showCommand,
+    staticwebsite: staticwebsiteCommand,
+    tailordb: tailordbCommand,
     user: userCommand,
     workflow: workflowCommand,
     workspace: workspaceCommand,

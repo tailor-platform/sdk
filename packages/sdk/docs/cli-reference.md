@@ -105,3 +105,13 @@ Commands for managing secrets and vaults.
 | [secret update](./cli/secret.md#secret-update)             | Update a secret         |
 | [secret list](./cli/secret.md#secret-list)                 | List secrets in a vault |
 | [secret delete](./cli/secret.md#secret-delete)             | Delete a secret         |
+
+### [Static Website Commands](./cli/staticwebsite.md)
+
+Commands for managing and deploying static websites.
+
+| Command                                                             | Description                                          |
+| ------------------------------------------------------------------- | ---------------------------------------------------- |
+| [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory |
+| [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List static websites in a workspace                  |
+| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a static website                      |
