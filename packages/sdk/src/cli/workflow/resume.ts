@@ -1,11 +1,17 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
+import {
+  commonArgs,
+  jsonArgs,
+  parseDuration,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
-import { parseDuration, waitForExecution, type WaitOptions } from "./start";
+import { waitForExecution, type WaitOptions } from "./start";
 import { type WorkflowExecutionInfo } from "./transform";
 
 export interface ResumeWorkflowOptions {

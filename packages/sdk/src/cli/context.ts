@@ -5,6 +5,7 @@ import { parseYAML, stringifyYAML, parseTOML } from "confbox";
 import ml from "multiline-ts";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
+import { workspaceIdSchema } from "./args";
 import { initOAuth2Client } from "./client";
 import { logger } from "./utils/logger";
 
@@ -136,20 +137,33 @@ function fromTailorctlConfig(config: TcConfig): PfConfig {
   return { version: 1, users, profiles, current_user: currentUser };
 }
 
+function validateWorkspaceId(workspaceId: string, source: string): string {
+  const result = workspaceIdSchema.safeParse(workspaceId);
+  if (!result.success) {
+    throw new Error(
+      `Invalid workspace ID from ${source}: must be a valid UUID`,
+    );
+  }
+  return result.data;
+}
+
 // Load workspace ID from command options, environment variables, or platform config.
 // Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
 export function loadWorkspaceId(opts?: {
   workspaceId?: string;
   profile?: string;
-}) {
+}): string {
   // opts/workspaceId
   if (opts?.workspaceId) {
-    return opts.workspaceId;
+    return validateWorkspaceId(opts.workspaceId, "--workspace-id option");
   }
 
   // env/workspaceId
   if (process.env.TAILOR_PLATFORM_WORKSPACE_ID) {
-    return process.env.TAILOR_PLATFORM_WORKSPACE_ID;
+    return validateWorkspaceId(
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID,
+      "TAILOR_PLATFORM_WORKSPACE_ID environment variable",
+    );
   }
 
   // opts/profile > env/profile
@@ -160,7 +174,7 @@ export function loadWorkspaceId(opts?: {
     if (!wsId) {
       throw new Error(`Profile "${profile}" not found`);
     }
-    return wsId;
+    return validateWorkspaceId(wsId, `profile "${profile}"`);
   }
 
   // error

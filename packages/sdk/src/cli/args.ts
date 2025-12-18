@@ -1,8 +1,60 @@
 import * as path from "node:path";
 import { loadEnvFile } from "node:process";
+import { z } from "zod";
 import { isCLIError } from "./utils/errors";
 import { logger } from "./utils/logger";
 import type { ParsedArgs } from "citty";
+
+// ============================================================================
+// Validators
+// ============================================================================
+
+/**
+ * Check if a string is a valid UUID
+ */
+export function isUUID(value: string): boolean {
+  return z.uuid().safeParse(value).success;
+}
+
+/**
+ * Schema for workspace ID validation (UUID format)
+ */
+export const workspaceIdSchema = z.uuid({
+  message: "workspace-id must be a valid UUID",
+});
+
+const durationUnits = ["ms", "s", "m"] as const;
+type DurationUnit = (typeof durationUnits)[number];
+
+const unitToMs: Record<DurationUnit, number> = {
+  ms: 1,
+  s: 1000,
+  m: 60 * 1000,
+};
+
+/**
+ * Schema for duration string validation (e.g., "3s", "500ms", "1m")
+ * Transforms the string to milliseconds
+ */
+export const durationSchema = z
+  .templateLiteral([z.number().int().positive(), z.enum(durationUnits)])
+  .transform((duration) => {
+    const match = duration.match(/^(\d+)(ms|s|m)$/)!;
+    const value = parseInt(match[1], 10);
+    const unit = match[2] as DurationUnit;
+    return value * unitToMs[unit];
+  });
+
+/**
+ * Parse a duration string (e.g., "3s", "500ms", "1m") to milliseconds
+ */
+export function parseDuration(duration: string): number {
+  return durationSchema.parse(duration);
+}
+
+// ============================================================================
+// Argument Definitions
+// ============================================================================
 
 /**
  * Common arguments for all CLI commands

@@ -9,7 +9,13 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 import { defineCommand } from "citty";
 import ora from "ora";
 import { table } from "table";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
+import {
+  commonArgs,
+  jsonArgs,
+  parseDuration,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
@@ -276,27 +282,6 @@ export async function getWorkflowExecution(
     execution,
     wait: waitForCompletion,
   };
-}
-
-function parseDuration(duration: string): number {
-  const match = duration.match(/^(\d+)(s|ms|m)$/);
-  if (!match) {
-    throw new Error(
-      `Invalid duration format: ${duration}. Use format like '5s', '500ms', or '1m'.`,
-    );
-  }
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  switch (unit) {
-    case "ms":
-      return value;
-    case "s":
-      return value * 1000;
-    case "m":
-      return value * 60 * 1000;
-    default:
-      throw new Error(`Unknown duration unit: ${unit}`);
-  }
 }
 
 async function waitWithSpinner(
