@@ -14,7 +14,7 @@ const secretValueSchema = z.object({
 const samlBaseSchema = z.object({
   name: z.string(),
   kind: z.literal("SAML"),
-  enableSignRequest: z.boolean().optional(),
+  enableSignRequest: z.boolean().default(false),
 });
 
 export const OIDCSchema = z.object({

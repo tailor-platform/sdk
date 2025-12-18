@@ -585,7 +585,7 @@ function protoIdPConfig(
               ...(idpConfig.metadataURL !== undefined
                 ? { metadataUrl: idpConfig.metadataURL }
                 : { rawMetadata: idpConfig.rawMetadata! }),
-              enableSignRequest: idpConfig.enableSignRequest ?? false,
+              enableSignRequest: idpConfig.enableSignRequest,
             },
           },
         },
