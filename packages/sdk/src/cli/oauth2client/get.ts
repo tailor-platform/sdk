@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -65,26 +65,11 @@ export const getCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
+    ...deploymentArgs,
     name: {
       type: "positional",
       description: "OAuth2 client name",
       required: true,
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
-      alias: "c",
-      default: "tailor.config.ts",
     },
   },
   run: withCommonArgs(async (args) => {

@@ -1,6 +1,11 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
+import {
+  commonArgs,
+  jsonArgs,
+  withCommonArgs,
+  workspaceArgs,
+} from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { printData } from "../../format";
@@ -61,16 +66,7 @@ export const listCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
+    ...workspaceArgs,
   },
   run: withCommonArgs(async (args) => {
     const vaults = await vaultList({

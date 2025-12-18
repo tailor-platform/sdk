@@ -9,7 +9,7 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 import { defineCommand } from "citty";
 import ora from "ora";
 import { table } from "table";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
@@ -384,20 +384,11 @@ export const executionsCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
+    ...workspaceArgs,
     executionId: {
       type: "positional",
       description: "Execution ID (if provided, shows details)",
       required: false,
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
     },
     "workflow-name": {
       type: "string",

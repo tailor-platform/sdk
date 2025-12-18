@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
@@ -73,20 +73,11 @@ export const resumeCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
+    ...workspaceArgs,
     executionId: {
       type: "positional",
       description: "Failed execution ID",
       required: true,
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
     },
     wait: {
       type: "boolean",

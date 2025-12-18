@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -273,22 +273,7 @@ export const truncateCommand = defineCommand({
       alias: "y",
       default: false,
     },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to tailor config file",
-      default: "tailor.config.ts",
-      alias: "c",
-    },
+    ...deploymentArgs,
   },
   run: withCommonArgs(async (args) => {
     // Get type names from rest arguments (_)

@@ -22,9 +22,9 @@ export const commonArgs = {
 } as const;
 
 /**
- * Arguments for commands that interact with deployed resources
+ * Arguments for commands that require workspace context
  */
-export const deploymentArgs = {
+export const workspaceArgs = {
   "workspace-id": {
     type: "string",
     description: "Workspace ID",
@@ -35,6 +35,13 @@ export const deploymentArgs = {
     description: "Workspace profile",
     alias: "p",
   },
+} as const;
+
+/**
+ * Arguments for commands that interact with deployed resources (includes config)
+ */
+export const deploymentArgs = {
+  ...workspaceArgs,
   config: {
     type: "string",
     description: "Path to SDK config file",

@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../format";
@@ -13,20 +13,11 @@ export const getCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
+    ...workspaceArgs,
     name: {
       type: "positional",
       description: "Static website name",
       required: true,
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
     },
   },
   run: withCommonArgs(async (args) => {

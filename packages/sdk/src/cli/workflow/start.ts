@@ -7,7 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import { defineCommand } from "citty";
 import ora from "ora";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -288,6 +288,7 @@ export const startCommand = defineCommand({
   args: {
     ...commonArgs,
     ...jsonArgs,
+    ...deploymentArgs,
     nameOrId: {
       type: "positional",
       description: "Workflow name or ID",
@@ -303,22 +304,6 @@ export const startCommand = defineCommand({
       type: "string",
       description: "Workflow argument (JSON string)",
       alias: "a",
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
-      alias: "c",
-      default: "tailor.config.ts",
     },
     wait: {
       type: "boolean",

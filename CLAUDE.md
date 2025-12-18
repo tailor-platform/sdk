@@ -426,6 +426,61 @@ export default createWorkflow({
 - Build tool: tsdown for creating ESM bundles
 - **DO NOT use dynamic imports** (`await import()` or `require()`). Always use static imports at the top of files
 
+### CLI Logging Guidelines
+
+The CLI module uses a unified logging system. Always use `logger` and `styles` from `src/cli/utils/logger.ts`.
+
+**Imports:**
+
+```typescript
+import { logger, styles } from "../utils/logger";
+```
+
+**Logger Methods:**
+
+- `logger.info(message, opts?)` - Informational messages (suppressed in JSON mode)
+- `logger.success(message, opts?)` - Success messages (suppressed in JSON mode)
+- `logger.warn(message, opts?)` - Warning messages (suppressed in JSON mode)
+- `logger.error(message, opts?)` - Error messages (always shown)
+- `logger.log(message)` - Raw output without prefix (suppressed in JSON mode)
+- `logger.debug(message)` - Debug messages in dim color (suppressed in JSON mode)
+
+**LogMode Options:**
+
+```typescript
+type LogMode = "default" | "stream" | "plain";
+
+logger.info("message", { mode: "default" }); // Symbol prefix, no timestamp (default)
+logger.info("message", { mode: "stream" }); // Timestamp prefix (for watch/polling)
+logger.info("message", { mode: "plain" }); // No prefix (for list items)
+```
+
+| Mode      | Symbol | Timestamp | Use Case                           |
+| --------- | ------ | --------- | ---------------------------------- |
+| `default` | ✅     | ❌        | Normal output (command results)    |
+| `stream`  | ❌     | ✅        | Log streams (watch mode, polling)  |
+| `plain`   | ❌     | ❌        | Subdued info (list items, details) |
+
+**Styles for Text Formatting:**
+
+```typescript
+styles.success(text); // Green
+styles.error(text); // Red
+styles.warning(text); // Yellow
+styles.info(text); // Cyan
+styles.dim(text); // Gray
+styles.bold(text); // Bold
+```
+
+**Rules:**
+
+1. ❌ Do NOT import `consola` directly - use `logger` instead
+2. ❌ Do NOT create custom consola instances
+3. ❌ Do NOT use `console.log()` for JSON output - use `printData(data, json)` from `../format`
+4. ✅ Use `logger` for all CLI output
+5. ✅ Use `styles` for inline text coloring
+6. ✅ Use `printData()` for structured data output (handles JSON mode automatically)
+
 ### Module Architecture and Import Rules
 
 The SDK enforces strict module boundaries to maintain a clean architecture:
