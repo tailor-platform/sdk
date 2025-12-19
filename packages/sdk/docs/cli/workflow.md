@@ -29,12 +29,12 @@ tailor-sdk workflow list [options]
 Get workflow details.
 
 ```bash
-tailor-sdk workflow get <nameOrId> [options]
+tailor-sdk workflow get <name> [options]
 ```
 
 **Arguments:**
 
-- `nameOrId` - Workflow name or ID (required)
+- `name` - Workflow name (required)
 
 **Options:**
 
@@ -47,12 +47,12 @@ tailor-sdk workflow get <nameOrId> [options]
 Start a workflow execution.
 
 ```bash
-tailor-sdk workflow start <nameOrId> [options]
+tailor-sdk workflow start <name> [options]
 ```
 
 **Arguments:**
 
-- `nameOrId` - Workflow name or ID (required)
+- `name` - Workflow name (required)
 
 **Options:**
 
@@ -62,7 +62,8 @@ tailor-sdk workflow start <nameOrId> [options]
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-W, --wait` - Wait for execution to complete
-- `--interval` - Polling interval when using --wait (default: `3s`)
+- `-i, --interval` - Polling interval when using --wait (default: `3s`)
+- `-l, --logs` - Display job execution logs after completion (requires --wait)
 - `-j, --json` - Output as JSON
 
 **Usage Examples:**
@@ -97,8 +98,8 @@ tailor-sdk workflow executions [executionId] [options]
 - `-n, --workflow-name` - Filter by workflow name (list mode only)
 - `-s, --status` - Filter by status: `PENDING`, `PENDING_RESUME`, `RUNNING`, `SUCCESS`, `FAILED` (list mode only)
 - `-W, --wait` - Wait for execution to complete (detail mode only)
-- `--interval` - Polling interval when using --wait (default: `3s`)
-- `--logs` - Display job execution logs (detail mode only)
+- `-i, --interval` - Polling interval when using --wait (default: `3s`)
+- `-l, --logs` - Display job execution logs (detail mode only)
 - `-j, --json` - Output as JSON
 
 **Usage Examples:**
@@ -140,5 +141,6 @@ tailor-sdk workflow resume <executionId> [options]
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-W, --wait` - Wait for execution to complete after resuming
-- `--interval` - Polling interval when using --wait (default: `3s`)
+- `-i, --interval` - Polling interval when using --wait (default: `3s`)
+- `-l, --logs` - Display job execution logs after completion (requires --wait)
 - `-j, --json` - Output as JSON

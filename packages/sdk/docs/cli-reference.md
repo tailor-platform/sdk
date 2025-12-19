@@ -15,7 +15,7 @@ The following options are available for most commands:
 | Option           | Short | Description                                         |
 | ---------------- | ----- | --------------------------------------------------- |
 | `--env-file`     | `-e`  | Specify a custom environment file path              |
-| `--verbose`      | `-v`  | Enable verbose logging (show stack traces on error) |
+| `--verbose`      |       | Enable verbose logging (show stack traces on error) |
 | `--json`         | `-j`  | Output as JSON (where applicable)                   |
 | `--workspace-id` | `-w`  | Workspace ID (for deployment commands)              |
 | `--profile`      | `-p`  | Workspace profile                                   |

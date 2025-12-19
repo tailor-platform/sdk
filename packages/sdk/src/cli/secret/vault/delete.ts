@@ -1,9 +1,15 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, withCommonArgs, workspaceArgs } from "../../args";
+import {
+  commonArgs,
+  confirmationArgs,
+  withCommonArgs,
+  workspaceArgs,
+} from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
+import { nameArgs } from "./args";
 
 export const deleteCommand = defineCommand({
   meta: {
@@ -13,17 +19,8 @@ export const deleteCommand = defineCommand({
   args: {
     ...commonArgs,
     ...workspaceArgs,
-    name: {
-      type: "string",
-      description: "Vault name",
-      required: true,
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
+    ...nameArgs,
+    ...confirmationArgs,
   },
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({

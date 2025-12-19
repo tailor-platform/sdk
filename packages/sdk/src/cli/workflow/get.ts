@@ -1,21 +1,31 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  isUUID,
-  jsonArgs,
-  withCommonArgs,
-  workspaceArgs,
-} from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
+import { nameArgs } from "./args";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 
 export interface GetWorkflowOptions {
-  nameOrId: string;
+  name: string;
   workspaceId?: string;
   profile?: string;
+}
+
+export async function resolveWorkflow(
+  client: Awaited<ReturnType<typeof initOperatorClient>>,
+  workspaceId: string,
+  name: string,
+) {
+  const { workflow } = await client.getWorkflowByName({
+    workspaceId,
+    workflowName: name,
+  });
+  if (!workflow) {
+    throw new Error(`Workflow '${name}' not found.`);
+  }
+  return workflow;
 }
 
 export async function getWorkflow(
@@ -32,28 +42,11 @@ export async function getWorkflow(
   });
 
   try {
-    if (isUUID(options.nameOrId)) {
-      const { workflow } = await client.getWorkflow({
-        workspaceId,
-        workflowId: options.nameOrId,
-      });
-      if (!workflow) {
-        throw new Error(`Workflow '${options.nameOrId}' not found.`);
-      }
-      return toWorkflowInfo(workflow);
-    }
-
-    const { workflow } = await client.getWorkflowByName({
-      workspaceId,
-      workflowName: options.nameOrId,
-    });
-    if (!workflow) {
-      throw new Error(`Workflow '${options.nameOrId}' not found.`);
-    }
+    const workflow = await resolveWorkflow(client, workspaceId, options.name);
     return toWorkflowInfo(workflow);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Workflow '${options.nameOrId}' not found.`);
+      throw new Error(`Workflow '${options.name}' not found.`);
     }
     throw error;
   }
@@ -68,15 +61,11 @@ export const getCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    nameOrId: {
-      type: "positional",
-      description: "Workflow name or ID",
-      required: true,
-    },
+    ...nameArgs,
   },
   run: withCommonArgs(async (args) => {
     const workflow = await getWorkflow({
-      nameOrId: args.nameOrId,
+      name: args.name,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

@@ -5,6 +5,7 @@ import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
+import { vaultArgs } from "./args";
 import type { SecretManagerSecret } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface SecretListOptions {
@@ -65,11 +66,7 @@ export const listSecretCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    "vault-name": {
-      type: "string",
-      description: "Vault name",
-      required: true,
-    },
+    ...vaultArgs,
   },
   run: withCommonArgs(async (args) => {
     try {
