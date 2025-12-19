@@ -9,13 +9,6 @@ import type { ParsedArgs } from "citty";
 // Validators
 // ============================================================================
 
-/**
- * Check if a string is a valid UUID
- */
-export function isUUID(value: string): boolean {
-  return z.uuid().safeParse(value).success;
-}
-
 const durationUnits = ["ms", "s", "m"] as const;
 type DurationUnit = (typeof durationUnits)[number];
 
@@ -61,7 +54,6 @@ export const commonArgs = {
   verbose: {
     type: "boolean",
     description: "Enable verbose logging",
-    alias: "v",
     default: false,
   },
 } as const;

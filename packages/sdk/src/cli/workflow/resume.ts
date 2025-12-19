@@ -11,6 +11,8 @@ import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
+import { waitArgs } from "./args";
+import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { waitForExecution, type WaitOptions } from "./start";
 import { type WorkflowExecutionInfo } from "./transform";
 
@@ -85,17 +87,7 @@ export const resumeCommand = defineCommand({
       description: "Failed execution ID",
       required: true,
     },
-    wait: {
-      type: "boolean",
-      alias: "W",
-      description: "Wait for execution to complete after resuming",
-      default: false,
-    },
-    interval: {
-      type: "string",
-      description: "Polling interval when using --wait",
-      default: "3s",
-    },
+    ...waitArgs,
   },
   run: withCommonArgs(async (args) => {
     const interval = parseDuration(args.interval);
@@ -113,7 +105,17 @@ export const resumeCommand = defineCommand({
 
     if (args.wait) {
       const result = await wait({ showProgress: !args.json });
-      printData(result, args.json);
+      if (args.logs && !args.json) {
+        const { execution } = await getWorkflowExecution({
+          executionId,
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          logs: true,
+        });
+        printExecutionWithLogs(execution);
+      } else {
+        printData(result, args.json);
+      }
     } else {
       printData({ executionId }, args.json);
     }

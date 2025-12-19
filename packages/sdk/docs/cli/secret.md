@@ -23,12 +23,15 @@ tailor-sdk secret vault <subcommand> [options]
 Create a new Secret Manager vault.
 
 ```bash
-tailor-sdk secret vault create [options]
+tailor-sdk secret vault create <name> [options]
 ```
+
+**Arguments:**
+
+- `name` - Vault name (required)
 
 **Options:**
 
-- `--name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 
@@ -37,12 +40,15 @@ tailor-sdk secret vault create [options]
 Delete a Secret Manager vault.
 
 ```bash
-tailor-sdk secret vault delete [options]
+tailor-sdk secret vault delete <name> [options]
 ```
+
+**Arguments:**
+
+- `name` - Vault name (required)
 
 **Options:**
 
-- `--name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-y, --yes` - Skip confirmation prompt
@@ -71,9 +77,9 @@ tailor-sdk secret create [options]
 
 **Options:**
 
-- `--vault-name` - Vault name (required)
-- `--name` - Secret name (required)
-- `--value` - Secret value (required)
+- `-V, --vault-name` - Vault name (required)
+- `-N, --name` - Secret name (required)
+- `-v, --value` - Secret value (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 
@@ -87,9 +93,9 @@ tailor-sdk secret update [options]
 
 **Options:**
 
-- `--vault-name` - Vault name (required)
-- `--name` - Secret name (required)
-- `--value` - New secret value (required)
+- `-V, --vault-name` - Vault name (required)
+- `-N, --name` - Secret name (required)
+- `-v, --value` - New secret value (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 
@@ -103,7 +109,7 @@ tailor-sdk secret list [options]
 
 **Options:**
 
-- `--vault-name` - Vault name (required)
+- `-V, --vault-name` - Vault name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-j, --json` - Output as JSON
@@ -118,8 +124,8 @@ tailor-sdk secret delete [options]
 
 **Options:**
 
-- `--vault-name` - Vault name (required)
-- `--name` - Secret name (required)
+- `-V, --vault-name` - Vault name (required)
+- `-N, --name` - Secret name (required)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-y, --yes` - Skip confirmation prompt

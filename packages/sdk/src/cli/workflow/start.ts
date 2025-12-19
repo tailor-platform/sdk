@@ -10,7 +10,6 @@ import ora from "ora";
 import {
   commonArgs,
   deploymentArgs,
-  isUUID,
   jsonArgs,
   parseDuration,
   withCommonArgs,
@@ -20,6 +19,9 @@ import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
 import { logger, styles } from "../utils/logger";
+import { nameArgs, waitArgs } from "./args";
+import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
+import { resolveWorkflow } from "./get";
 import {
   type WorkflowExecutionInfo,
   toWorkflowExecutionInfo,
@@ -28,7 +30,7 @@ import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resourc
 import type { Jsonifiable } from "type-fest";
 
 export interface StartWorkflowOptions {
-  nameOrId: string;
+  name: string;
   machineUser: string;
   arg?: Jsonifiable;
   workspaceId?: string;
@@ -167,25 +169,6 @@ function isTerminalStatus(status: WorkflowExecution_Status): boolean {
   );
 }
 
-async function resolveWorkflowId(
-  client: Awaited<ReturnType<typeof initOperatorClient>>,
-  workspaceId: string,
-  nameOrId: string,
-): Promise<string> {
-  if (isUUID(nameOrId)) {
-    return nameOrId;
-  }
-
-  const { workflow } = await client.getWorkflowByName({
-    workspaceId,
-    workflowName: nameOrId,
-  });
-  if (!workflow) {
-    throw new Error(`Workflow '${nameOrId}' not found.`);
-  }
-  return workflow.id;
-}
-
 export interface WaitOptions {
   showProgress?: boolean;
 }
@@ -220,11 +203,7 @@ export async function startWorkflow(
   }
 
   try {
-    const workflowId = await resolveWorkflowId(
-      client,
-      workspaceId,
-      options.nameOrId,
-    );
+    const workflow = await resolveWorkflow(client, workspaceId, options.name);
 
     const authInvoker = create(AuthInvokerSchema, {
       namespace: application.authNamespace,
@@ -240,7 +219,7 @@ export async function startWorkflow(
 
     const { executionId } = await client.testStartWorkflow({
       workspaceId,
-      workflowId,
+      workflowId: workflow.id,
       authInvoker,
       arg,
     });
@@ -259,7 +238,7 @@ export async function startWorkflow(
     };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Workflow '${options.nameOrId}' not found.`);
+      throw new Error(`Workflow '${options.name}' not found.`);
     }
     throw error;
   }
@@ -274,11 +253,7 @@ export const startCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-    nameOrId: {
-      type: "positional",
-      description: "Workflow name or ID",
-      required: true,
-    },
+    ...nameArgs,
     machineuser: {
       type: "string",
       description: "Machine user name",
@@ -290,23 +265,13 @@ export const startCommand = defineCommand({
       description: "Workflow argument (JSON string)",
       alias: "a",
     },
-    wait: {
-      type: "boolean",
-      alias: "W",
-      description: "Wait for execution to complete",
-      default: false,
-    },
-    interval: {
-      type: "string",
-      description: "Polling interval when using --wait",
-      default: "3s",
-    },
+    ...waitArgs,
   },
   run: withCommonArgs(async (args) => {
     const interval = parseDuration(args.interval);
 
     const { executionId, wait } = await startWorkflow({
-      nameOrId: args.nameOrId,
+      name: args.name,
       machineUser: args.machineuser,
       arg: args.arg,
       workspaceId: args["workspace-id"],
@@ -321,7 +286,17 @@ export const startCommand = defineCommand({
 
     if (args.wait) {
       const result = await wait({ showProgress: !args.json });
-      printData(result, args.json);
+      if (args.logs && !args.json) {
+        const { execution } = await getWorkflowExecution({
+          executionId,
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          logs: true,
+        });
+        printExecutionWithLogs(execution);
+      } else {
+        printData(result, args.json);
+      }
     } else {
       printData({ executionId }, args.json);
     }
