@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 0.19.0
+
+### Minor Changes
+
+- [#213](https://github.com/tailor-platform/sdk/pull/213) [`09b7a9b`](https://github.com/tailor-platform/sdk/commit/09b7a9b160d5263215c24ba1846ca084bd915323) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor(cli)!: unify logger/styles
+
+### Patch Changes
+
+- [#214](https://github.com/tailor-platform/sdk/pull/214) [`45f07e0`](https://github.com/tailor-platform/sdk/commit/45f07e0f96192e530c1a7230efcf494c0e92fb13) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support password policy fields for IdP userAuthPolicy
+
+- [#215](https://github.com/tailor-platform/sdk/pull/215) [`63fe144`](https://github.com/tailor-platform/sdk/commit/63fe144eef6e40ef03cbb6414f08de011cd47014) Thanks [@riku99](https://github.com/riku99)! - Add test to ensure CLI subcommands do not define duplicate short option aliases
+
 ## 0.18.2
 
 ### Patch Changes
