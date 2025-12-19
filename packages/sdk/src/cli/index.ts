@@ -24,7 +24,7 @@ register("tsx", import.meta.url, { data: {} });
 
 const packageJson = await readPackageJson();
 
-const mainCommand = defineCommand({
+export const mainCommand = defineCommand({
   meta: {
     name: packageJson.name,
     version: packageJson.version,
