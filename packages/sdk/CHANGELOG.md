@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 0.21.0
+
+### Minor Changes
+
+- [#228](https://github.com/tailor-platform/sdk/pull/228) [`5b7749e`](https://github.com/tailor-platform/sdk/commit/5b7749e996f849bac158678cec0d63c710bfef2e) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(cli)!: enhance command arguments and improve documentation for secret and workflow commands
+
+### Patch Changes
+
+- [#225](https://github.com/tailor-platform/sdk/pull/225) [`21f689d`](https://github.com/tailor-platform/sdk/commit/21f689df8f53e2731a36b50e14faa43f09d5a4e2) Thanks [@riku99](https://github.com/riku99)! - Refactor example resolvers to call getDB() inside handlers instead of importing a shared DB instance
+
+- [#229](https://github.com/tailor-platform/sdk/pull/229) [`70527bb`](https://github.com/tailor-platform/sdk/commit/70527bb1c2bb1e0d2f03d94a539c771f6e3f54d3) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: load organization/folder from env
+
 ## 0.20.0
 
 ### Minor Changes
