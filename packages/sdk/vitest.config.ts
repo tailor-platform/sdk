@@ -16,7 +16,7 @@ export default defineConfig({
     typecheck: { enabled: true },
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov", "json-summary"],
+      reporter: ["text", "json-summary"],
       reportsDirectory: "./coverage",
     },
   },
