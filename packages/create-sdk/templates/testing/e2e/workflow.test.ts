@@ -8,7 +8,7 @@ describe.concurrent("workflow", () => {
     { timeout: 120000 },
     async () => {
       const { executionId, wait } = await startWorkflow({
-        nameOrId: "simple-calculation",
+        name: "simple-calculation",
         machineUser: "admin",
         arg: { a: 2, b: 3 },
       });
@@ -31,7 +31,7 @@ describe.concurrent("workflow", () => {
       const testEmail = `workflow-test-${uuid}@example.com`;
 
       const { executionId, wait } = await startWorkflow({
-        nameOrId: "user-profile-sync",
+        name: "user-profile-sync",
         machineUser: "admin",
         arg: {
           name: "workflow-test-user",

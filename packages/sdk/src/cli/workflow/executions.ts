@@ -20,6 +20,7 @@ import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
 import { styles, logger } from "../utils/logger";
+import { waitArgs } from "./args";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
@@ -317,7 +318,9 @@ async function waitWithSpinner(
   }
 }
 
-function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
+export function printExecutionWithLogs(
+  execution: WorkflowExecutionDetailInfo,
+): void {
   // Print execution summary
   const summaryData: [string, string][] = [
     ["id", execution.id],
@@ -385,17 +388,7 @@ export const executionsCommand = defineCommand({
       description: "Filter by status (list mode only)",
       alias: "s",
     },
-    wait: {
-      type: "boolean",
-      alias: "W",
-      description: "Wait for execution to complete (detail mode only)",
-      default: false,
-    },
-    interval: {
-      type: "string",
-      description: "Polling interval when using --wait",
-      default: "3s",
-    },
+    ...waitArgs,
     logs: {
       type: "boolean",
       description: "Display job execution logs (detail mode only)",
