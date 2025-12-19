@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.20.0
+
+### Minor Changes
+
+- [#220](https://github.com/tailor-platform/sdk/pull/220) [`f4b3d4e`](https://github.com/tailor-platform/sdk/commit/f4b3d4e237e08982e185db980a6b5666fb89cb5a) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor(cli)!: rename "user use" to "user switch"
+
 ## 0.19.0
 
 ### Minor Changes
