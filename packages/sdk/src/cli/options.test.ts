@@ -1,6 +1,22 @@
-import { describe, it, expect } from "vitest";
-import { mainCommand } from "./main-command";
+import { describe, it, expect, vi } from "vitest";
+import { mainCommand } from "./index";
 import type { CommandDef } from "citty";
+
+vi.mock("node:module", async () => {
+  const actual: any = await vi.importActual("node:module");
+  return {
+    ...actual,
+    register: vi.fn(),
+  };
+});
+
+vi.mock("citty", async () => {
+  const actual: any = await vi.importActual("citty");
+  return {
+    ...actual,
+    runMain: vi.fn(),
+  };
+});
 
 type Resolvable<T> = T | Promise<T> | (() => T | Promise<T>);
 
