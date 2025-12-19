@@ -8,4 +8,7 @@ export default defineConfig({
   clean: true,
   outDir: "dist",
   tsconfig: "./tsconfig.json",
+  outExtensions: () => ({
+    js: ".js",
+  }),
 });
