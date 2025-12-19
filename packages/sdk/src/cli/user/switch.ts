@@ -4,9 +4,9 @@ import { commonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig, writePlatformConfig } from "../context";
 import { logger } from "../utils/logger";
 
-export const useCommand = defineCommand({
+export const switchCommand = defineCommand({
   meta: {
-    name: "use",
+    name: "switch",
     description: "Set current user",
   },
   args: {

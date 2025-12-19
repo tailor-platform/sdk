@@ -46,12 +46,12 @@ tailor-sdk user list [options]
 
 - `-j, --json` - Output as JSON
 
-### user use
+### user switch
 
 Set current user.
 
 ```bash
-tailor-sdk user use <user>
+tailor-sdk user switch <user>
 ```
 
 **Arguments:**

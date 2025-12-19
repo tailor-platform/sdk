@@ -76,7 +76,7 @@ Commands for authentication and user management.
 | [logout](./cli/user.md#logout)                   | Logout from Tailor Platform    |
 | [user current](./cli/user.md#user-current)       | Show current user              |
 | [user list](./cli/user.md#user-list)             | List all users                 |
-| [user use](./cli/user.md#user-use)               | Set current user               |
+| [user switch](./cli/user.md#user-switch)         | Set current user               |
 | [user pat list](./cli/user.md#user-pat-list)     | List personal access tokens    |
 | [user pat create](./cli/user.md#user-pat-create) | Create a personal access token |
 | [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token |
