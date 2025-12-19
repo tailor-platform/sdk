@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
-import { loadAccessToken } from "../context";
+import { loadAccessToken, loadFolderId, loadOrganizationId } from "../context";
 import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
@@ -59,13 +59,17 @@ export async function createWorkspace(
   const client = await initOperatorClient(accessToken);
   await validateRegion(validated.region, client);
 
+  // Resolve organization and folder IDs from options or environment variables
+  const organizationId = loadOrganizationId(validated.organizationId);
+  const folderId = loadFolderId(validated.folderId);
+
   // Create workspace
   const resp = await client.createWorkspace({
     workspaceName: validated.name,
     workspaceRegion: validated.region,
     deleteProtection: validated.deleteProtection ?? false,
-    organizationId: validated.organizationId,
-    folderId: validated.folderId,
+    organizationId,
+    folderId,
   });
 
   return workspaceInfo(resp.workspace!);
