@@ -14,5 +14,10 @@ export default defineConfig({
     globals: true,
     watch: false,
     typecheck: { enabled: true },
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov", "json-summary"],
+      reportsDirectory: "./coverage",
+    },
   },
 });

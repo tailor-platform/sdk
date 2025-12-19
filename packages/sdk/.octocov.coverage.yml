@@ -1,0 +1,31 @@
+locale: en
+repository: ${GITHUB_REPOSITORY}/packages/sdk
+
+# We use custom metrics instead of built-in coverage here
+coverage:
+  if: false
+
+codeToTestRatio:
+  if: false
+
+testExecutionTime:
+  if: false
+
+report:
+  if: is_default_branch
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}
+
+diff:
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}
+
+comment:
+  if: is_pull_request
+
+summary:
+  if: true
+
+customMetrics:
+  sdk-coverage:
+    key: sdk-coverage
