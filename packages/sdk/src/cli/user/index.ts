@@ -2,7 +2,7 @@ import { defineCommand, runCommand } from "citty";
 import { currentCommand } from "./current";
 import { listCommand } from "./list";
 import { patCommand } from "./pat";
-import { useCommand } from "./use";
+import { switchCommand } from "./switch";
 
 export const userCommand = defineCommand({
   meta: {
@@ -13,7 +13,7 @@ export const userCommand = defineCommand({
     current: currentCommand,
     list: listCommand,
     pat: patCommand,
-    use: useCommand,
+    switch: switchCommand,
   },
   async run() {
     await runCommand(listCommand, { rawArgs: [] });
