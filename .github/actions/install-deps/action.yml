@@ -9,10 +9,9 @@ runs:
       with:
         standalone: true
         run_install: false
-        cache: true
 
     - name: Install Node.js
-      run: pnpm env use --global 22.21.1
+      run: pnpm env use --global 24
       shell: bash
 
     - name: Install dependencies
