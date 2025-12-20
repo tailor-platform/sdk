@@ -23,9 +23,6 @@ jobs:
       - name: Install Deps
         uses: ./.github/actions/install-deps
 
-      - name: Update npm
-        run: npm install -g npm@latest
-
       - name: Get github access token to create release PR
         id: get_access_token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
@@ -43,7 +40,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
 
-      - name: Setup Node.js for publishing
+      - name: Setup npm registry for publishing
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           registry-url: "https://registry.npmjs.org"
@@ -52,10 +49,6 @@ jobs:
         id: publish
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: |
-          # Update npm to use ID token authentication
-          npm install -g pnpm@latest
-
-          # Capture output and exit code separately
           set +e
           OUTPUT=$(pnpm publish -r --provenance --no-git-checks --access=public 2>&1)
           EXIT_CODE=$?
