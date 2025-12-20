@@ -1,71 +1,66 @@
 import { describe, test, expect } from "vitest";
-import {
-  formatRequestParams,
-  formatResourceType,
-  parseMethodName,
-} from "./client";
+import { formatRequestParams, parseMethodName } from "./client";
 
 describe("parseMethodName", () => {
   test("parses Create methods", () => {
     expect(parseMethodName("CreateWorkflow")).toEqual({
       operation: "create",
-      resourceType: "workflow",
+      resourceType: "Workflow",
     });
     expect(parseMethodName("CreateTailorDBService")).toEqual({
       operation: "create",
-      resourceType: "TailorDB service",
+      resourceType: "TailorDBService",
     });
     expect(parseMethodName("CreateTailorDBType")).toEqual({
       operation: "create",
-      resourceType: "TailorDB type",
+      resourceType: "TailorDBType",
     });
   });
 
   test("parses Update methods", () => {
     expect(parseMethodName("UpdateWorkflow")).toEqual({
       operation: "update",
-      resourceType: "workflow",
+      resourceType: "Workflow",
     });
     expect(parseMethodName("UpdateTailorDBType")).toEqual({
       operation: "update",
-      resourceType: "TailorDB type",
+      resourceType: "TailorDBType",
     });
   });
 
   test("parses Delete methods", () => {
     expect(parseMethodName("DeleteWorkflow")).toEqual({
       operation: "delete",
-      resourceType: "workflow",
+      resourceType: "Workflow",
     });
     expect(parseMethodName("DeleteExecutorExecutor")).toEqual({
       operation: "delete",
-      resourceType: "Executor",
+      resourceType: "ExecutorExecutor",
     });
   });
 
   test("parses Set methods", () => {
     expect(parseMethodName("SetMetadata")).toEqual({
       operation: "set",
-      resourceType: "metadata",
+      resourceType: "Metadata",
     });
   });
 
   test("parses List methods", () => {
     expect(parseMethodName("ListWorkflows")).toEqual({
       operation: "list",
-      resourceType: "workflows",
+      resourceType: "Workflows",
     });
-    // Note: "ListWorkflowJobFunctions" -> "workflow job functions" (uses fallback regex)
     expect(parseMethodName("ListWorkflowJobFunctions")).toEqual({
       operation: "list",
-      resourceType: "workflow job functions",
+      resourceType: "WorkflowJobFunctions",
     });
   });
 
   test("parses Get methods", () => {
     expect(parseMethodName("GetStaticWebsite")).toEqual({
       operation: "get",
-      resourceType: "static website",
+      resourceType: "StaticWebsite",
     });
   });
 
@@ -78,33 +73,6 @@ describe("parseMethodName", () => {
       operation: "perform",
       resourceType: "resource",
     });
-  });
-});
-
-describe("formatResourceType", () => {
-  test("maps known resource types", () => {
-    expect(formatResourceType("TailorDBService")).toBe("TailorDB service");
-    expect(formatResourceType("TailorDBType")).toBe("TailorDB type");
-    expect(formatResourceType("TailorDBGQLPermission")).toBe(
-      "TailorDB GQL permission",
-    );
-    expect(formatResourceType("ExecutorExecutor")).toBe("Executor");
-    expect(formatResourceType("WorkflowJobFunction")).toBe(
-      "Workflow job function",
-    );
-  });
-
-  test("converts CamelCase to lowercase with spaces for unknown types", () => {
-    expect(formatResourceType("StaticWebsite")).toBe("static website");
-    expect(formatResourceType("Application")).toBe("application");
-    expect(formatResourceType("AuthService")).toBe("auth service");
-    // Note: regex only matches [a-z][A-Z], so numbers don't trigger spaces
-    expect(formatResourceType("OAuth2Client")).toBe("oauth2client");
-  });
-
-  test("handles single word resources", () => {
-    expect(formatResourceType("Workflow")).toBe("workflow");
-    expect(formatResourceType("Metadata")).toBe("metadata");
   });
 });
 

@@ -153,26 +153,7 @@ export function parseMethodName(methodName: string): {
   }
 
   const [, action, resource] = match;
-  const operation = action.toLowerCase();
-  const resourceType = formatResourceType(resource);
-
-  return { operation, resourceType };
-}
-
-/** @internal - exported for testing */
-export function formatResourceType(resource: string): string {
-  const mappings: Record<string, string> = {
-    TailorDBService: "TailorDB service",
-    TailorDBType: "TailorDB type",
-    TailorDBGQLPermission: "TailorDB GQL permission",
-    ExecutorExecutor: "Executor",
-    WorkflowJobFunction: "Workflow job function",
-  };
-
-  return (
-    mappings[resource] ||
-    resource.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()
-  );
+  return { operation: action.toLowerCase(), resourceType: resource };
 }
 
 /** @internal - exported for testing */
