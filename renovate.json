@@ -10,6 +10,11 @@
   "schedule": ["* 9-18 * * 1-5"],
   "packageRules": [
     {
+      "description": "Enable major updates without dashboard approval (dashboard is disabled)",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": false
+    },
+    {
       "matchManagers": ["npm"],
       "matchPackageNames": ["@connectrpc/*"],
       "groupName": "@connectrpc"
