@@ -1,5 +1,30 @@
 # @tailor-platform/sdk
 
+## 0.21.3
+
+### Patch Changes
+
+- [#238](https://github.com/tailor-platform/sdk/pull/238) [`36639c6`](https://github.com/tailor-platform/sdk/commit/36639c6e1efee873eff89e61c59c60b8b22531a8) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve Connect error messages in CLI
+  - Add `errorHandlingInterceptor` to enhance error messages from Connect protocol
+  - Error messages now include operation type, resource type, and request parameters
+  - Makes it easier to identify which resource caused validation errors
+
+  Before:
+
+  ```
+  ERROR  [invalid_argument] validation error: namespace_name: value does not match regex pattern...
+  ```
+
+  After:
+
+  ```
+  ERROR  [invalid_argument] Failed to list TailorDBTypes: validation error: namespace_name: value does not match regex pattern...
+  Request: {
+    "namespaceName": "db",
+    ...
+  }
+  ```
+
 ## 0.21.2
 
 ## 0.21.1
