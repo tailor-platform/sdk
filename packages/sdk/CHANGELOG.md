@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.21.1
+
+### Patch Changes
+
+- [#233](https://github.com/tailor-platform/sdk/pull/233) [`475d368`](https://github.com/tailor-platform/sdk/commit/475d36848c35530cc302b82f365af4d4f84cb9a3) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove setup-node from install-deps action and use standalone pnpm with pnpm env for Node.js installation
+
 ## 0.21.0
 
 ### Minor Changes
