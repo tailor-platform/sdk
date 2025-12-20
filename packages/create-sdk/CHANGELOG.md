@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 0.21.2
+
+### Patch Changes
+
+- [#235](https://github.com/tailor-platform/sdk/pull/235) [`e501f94`](https://github.com/tailor-platform/sdk/commit/e501f947a918b37ad1f9bacdbfd6a3e26aa0742a) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: use Node v24
+
 ## 0.21.1
 
 ## 0.21.0

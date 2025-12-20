@@ -1,5 +1,7 @@
 # @tailor-platform/sdk
 
+## 0.21.2
+
 ## 0.21.1
 
 ### Patch Changes
