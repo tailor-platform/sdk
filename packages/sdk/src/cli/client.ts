@@ -38,6 +38,7 @@ export async function initOperatorClient(accessToken: string) {
       await userAgentInterceptor(),
       await bearerTokenInterceptor(accessToken),
       retryInterceptor(),
+      errorHandlingInterceptor(),
     ],
   });
   return createClient(OperatorService, transport);
@@ -116,6 +117,77 @@ function isRetirable(
       );
     default:
       return false;
+  }
+}
+
+function errorHandlingInterceptor(): Interceptor {
+  return (next) => async (req) => {
+    try {
+      return await next(req);
+    } catch (error) {
+      if (error instanceof ConnectError) {
+        const { operation, resourceType } = parseMethodName(req.method.name);
+        const requestParams = formatRequestParams(req.message);
+
+        // Re-throw as ConnectError with enhanced message to avoid re-wrapping
+        // Use rawMessage to avoid duplicating the error code prefix
+        throw new ConnectError(
+          `Failed to ${operation} ${resourceType}: ${error.rawMessage}\nRequest: ${requestParams}`,
+          error.code,
+          error.metadata,
+        );
+      }
+      throw error;
+    }
+  };
+}
+
+/** @internal - exported for testing */
+export function parseMethodName(methodName: string): {
+  operation: string;
+  resourceType: string;
+} {
+  const match = methodName.match(/^(Create|Update|Delete|Set|List|Get)(.+)$/);
+  if (!match) {
+    return { operation: "perform", resourceType: "resource" };
+  }
+
+  const [, action, resource] = match;
+  const operation = action.toLowerCase();
+  const resourceType = formatResourceType(resource);
+
+  return { operation, resourceType };
+}
+
+/** @internal - exported for testing */
+export function formatResourceType(resource: string): string {
+  const mappings: Record<string, string> = {
+    TailorDBService: "TailorDB service",
+    TailorDBType: "TailorDB type",
+    TailorDBGQLPermission: "TailorDB GQL permission",
+    ExecutorExecutor: "Executor",
+    WorkflowJobFunction: "Workflow job function",
+  };
+
+  return (
+    mappings[resource] ||
+    resource.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()
+  );
+}
+
+/** @internal - exported for testing */
+export function formatRequestParams(message: unknown): string {
+  try {
+    if (message && typeof message === "object" && "toJson" in message) {
+      return JSON.stringify(
+        (message as { toJson: () => unknown }).toJson(),
+        null,
+        2,
+      );
+    }
+    return JSON.stringify(message, null, 2);
+  } catch {
+    return "(unable to serialize request)";
   }
 }
 
