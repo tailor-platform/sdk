@@ -142,7 +142,9 @@ function errorHandlingInterceptor(): Interceptor {
   };
 }
 
-/** @internal - exported for testing */
+/**
+ * @internal
+ */
 export function parseMethodName(methodName: string): {
   operation: string;
   resourceType: string;
@@ -156,7 +158,9 @@ export function parseMethodName(methodName: string): {
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 
-/** @internal - exported for testing */
+/**
+ * @internal
+ */
 export function formatRequestParams(message: unknown): string {
   try {
     if (message && typeof message === "object" && "toJson" in message) {
