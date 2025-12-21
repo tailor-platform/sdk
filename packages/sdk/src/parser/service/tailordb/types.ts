@@ -1,11 +1,12 @@
-import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+import type { TailorDBTypeMetadata } from "@/configure/services/tailordb/operator-types";
+import type { OperatorFieldConfig } from "@/configure/types/operator";
 
 /**
  * Parsed and normalized TailorDB field information
  */
 export interface ParsedField {
   name: string;
-  config: TailorDBTypeConfig["schema"]["fields"][string];
+  config: OperatorFieldConfig;
   // Relation information (if this field is a relation)
   relation?: {
     targetType: string;
@@ -41,10 +42,10 @@ export interface ParsedTailorDBType {
   forwardRelationships: Record<string, ParsedRelationship>;
   // Backward relationships (defined on other types pointing to this type)
   backwardRelationships: Record<string, ParsedRelationship>;
-  settings: TailorDBTypeConfig["schema"]["settings"];
-  permissions: TailorDBTypeConfig["schema"]["permissions"];
-  indexes?: TailorDBTypeConfig["schema"]["indexes"];
-  files?: TailorDBTypeConfig["schema"]["files"];
+  settings: TailorDBTypeMetadata["settings"];
+  permissions: TailorDBTypeMetadata["permissions"];
+  indexes?: TailorDBTypeMetadata["indexes"];
+  files?: TailorDBTypeMetadata["files"];
 }
 
 /**

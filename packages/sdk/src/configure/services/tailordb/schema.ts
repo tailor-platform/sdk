@@ -1,10 +1,8 @@
 import { clone } from "es-toolkit";
-import { type InferredAttributeMap, tailorUserMap } from "@/configure/types";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
 } from "@/configure/types/field";
-import { type OperatorFieldConfig } from "@/configure/types/operator";
 import { TailorField } from "@/configure/types/type";
 import {
   type FieldOptions,
@@ -12,7 +10,7 @@ import {
   type TailorFieldType,
   type TailorToTs,
 } from "@/configure/types/types";
-import { type TailorDBTypeConfig } from "./operator-types";
+import { type TailorDBTypeMetadata } from "./operator-types";
 import {
   type Permissions,
   type TailorTypeGqlPermission,
@@ -30,6 +28,7 @@ import {
   type TypeFeatures,
   type ExcludeNestedDBFields,
 } from "./types";
+import type { InferredAttributeMap } from "@/configure/types";
 import type {
   Prettify,
   output,
@@ -89,38 +88,6 @@ interface ReferenceConfig<T extends TailorDBType<any, any>> {
   nameMap: [string | undefined, string];
 }
 
-/**
- * Convert a function to a string representation.
- * Handles method shorthand syntax (e.g., `create() { ... }`) by converting it to
- * a function expression (e.g., `function create() { ... }`).
- *
- * TODO: This function should be moved to the parser module.
- * The same function exists in `src/cli/apply/services/executor.ts`.
- * These should be unified into a common utility in the parser layer.
- */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-const stringifyFunction = (fn: Function): string => {
-  const src = fn.toString().trim();
-  // Method shorthand pattern: methodName(...) { ... }
-  // Needs to be converted to: function methodName(...) { ... }
-  if (
-    /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(src) &&
-    !src.startsWith("function") &&
-    !src.startsWith("(") &&
-    !src.includes("=>")
-  ) {
-    return `function ${src}`;
-  }
-  return src;
-};
-
-const convertFnToExpr = (
-  fn: NonNullable<Hook<any, any>["create"] | Hook<any, any>["update"]>,
-) => {
-  const normalized = stringifyFunction(fn);
-  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
-};
-
 export class TailorDBField<
   const Defined extends DefinedDBFieldMetadata,
   const Output,
@@ -134,61 +101,6 @@ export class TailorDBField<
 
   get metadata() {
     return { ...this._metadata };
-  }
-
-  get config(): OperatorFieldConfig {
-    return {
-      type: this.type,
-      ...this._metadata,
-      ...(this.type === "nested" && Object.keys(this.fields).length > 0
-        ? {
-            fields: Object.entries(this.fields).reduce(
-              (acc, [key, field]) => {
-                acc[key] = (field as TailorDBField<any, any>).config;
-                return acc;
-              },
-              {} as Record<string, OperatorFieldConfig>,
-            ),
-          }
-        : {}),
-      validate: this._metadata.validate?.map((v) => {
-        const { fn, message } =
-          typeof v === "function"
-            ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
-            : { fn: v[0], message: v[1] };
-
-        return {
-          script: {
-            expr: `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
-          },
-          errorMessage: message,
-        };
-      }),
-      hooks: this._metadata.hooks
-        ? {
-            create: this._metadata.hooks.create
-              ? {
-                  expr: convertFnToExpr(this._metadata.hooks.create),
-                }
-              : undefined,
-            update: this._metadata.hooks.update
-              ? {
-                  expr: convertFnToExpr(this._metadata.hooks.update),
-                }
-              : undefined,
-          }
-        : undefined,
-      serial: this._metadata.serial
-        ? {
-            start: this._metadata.serial.start,
-            maxValue: this._metadata.serial.maxValue,
-            format:
-              "format" in this._metadata.serial
-                ? this._metadata.serial.format
-                : undefined,
-          }
-        : undefined,
-    };
   }
 
   private constructor(
@@ -555,15 +467,7 @@ export class TailorDBType<
     });
   }
 
-  get metadata(): TailorDBTypeConfig {
-    const metadataFields = Object.entries(this.fields).reduce(
-      (acc, [key, field]) => {
-        acc[key] = field.config;
-        return acc;
-      },
-      {} as Record<string, OperatorFieldConfig>,
-    );
-
+  get metadata(): TailorDBTypeMetadata {
     // Convert indexes to the format expected by the manifest
     const indexes: Record<string, { fields: string[]; unique?: boolean }> = {};
     if (this._indexes && this._indexes.length > 0) {
@@ -579,15 +483,11 @@ export class TailorDBType<
 
     return {
       name: this.name,
-      schema: {
-        description: this._description,
-        extends: false,
-        fields: metadataFields,
-        settings: this._settings,
-        permissions: this._permissions,
-        files: this._files,
-        ...(Object.keys(indexes).length > 0 && { indexes }),
-      },
+      description: this._description,
+      settings: this._settings,
+      permissions: this._permissions,
+      files: this._files,
+      ...(Object.keys(indexes).length > 0 && { indexes }),
     };
   }
 

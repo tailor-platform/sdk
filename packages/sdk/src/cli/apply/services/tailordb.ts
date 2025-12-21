@@ -52,7 +52,7 @@ import {
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+import type { OperatorFieldConfig } from "@/configure/types/operator";
 import type { Executor } from "@/parser/service/executor";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -583,7 +583,7 @@ function generateTailorDBTypeManifest(
 }
 
 function processNestedFields(
-  fields: Record<string, TailorDBTypeConfig["schema"]["fields"][string]>,
+  fields: Record<string, OperatorFieldConfig>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
   const nestedFields: Record<
     string,

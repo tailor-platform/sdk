@@ -490,11 +490,15 @@ describe("TailorDBField validate modifier tests", () => {
       email: string;
     }>();
 
-    const fieldConfig = _validateType.fields.email.config;
-    expect(fieldConfig.validate).toBeDefined();
-    expect(fieldConfig?.validate?.[0].errorMessage).toBe(
+    // Validate that the validation is stored correctly in metadata
+    const fieldMetadata = _validateType.fields.email.metadata;
+    expect(fieldMetadata.validate).toBeDefined();
+    expect(fieldMetadata.validate).toHaveLength(1);
+    // Error message is part of the tuple [fn, message]
+    expect(fieldMetadata.validate?.[0]).toEqual([
+      expect.any(Function),
       "Email must contain @",
-    );
+    ]);
   });
 
   it("validate modifier can receive multiple validators", () => {
@@ -510,9 +514,10 @@ describe("TailorDBField validate modifier tests", () => {
         ),
     });
 
-    const fieldConfig = _validateType.fields.password.config;
-    expect(fieldConfig.validate).toHaveLength(2);
-    expect(fieldConfig?.validate?.[1].errorMessage).toBe(
+    const fieldMetadata = _validateType.fields.password.metadata;
+    expect(fieldMetadata.validate).toHaveLength(2);
+    // Second validator is a tuple [fn, errorMessage]
+    expect((fieldMetadata.validate?.[1] as [unknown, string])[1]).toBe(
       "Password must contain uppercase letter",
     );
   });
@@ -772,7 +777,7 @@ describe("TailorDBType plural form tests", () => {
       name: db.string(),
     });
 
-    expect(_userType.metadata.schema?.settings?.pluralForm).toBeUndefined();
+    expect(_userType.metadata.settings?.pluralForm).toBeUndefined();
   });
 
   it("when specifying name and plural form as tuple, pluralForm is set", () => {
@@ -780,7 +785,7 @@ describe("TailorDBType plural form tests", () => {
       name: db.string(),
     });
 
-    expect(_personType.metadata.schema?.settings?.pluralForm).toBe("People");
+    expect(_personType.metadata.settings?.pluralForm).toBe("People");
   });
 
   it("when plural form is explicitly specified, default pluralization is not used", () => {
@@ -789,7 +794,7 @@ describe("TailorDBType plural form tests", () => {
       age: db.int(),
     });
 
-    expect(_childType.metadata.schema?.settings?.pluralForm).toBe("Children");
+    expect(_childType.metadata.settings?.pluralForm).toBe("Children");
   });
 
   it("when plural form is empty string, it is not set in configure (inflection is executed at parser layer)", () => {
@@ -797,7 +802,7 @@ describe("TailorDBType plural form tests", () => {
       value: db.string(),
     });
 
-    expect(_dataType.metadata.schema?.settings?.pluralForm).toBeUndefined();
+    expect(_dataType.metadata.settings?.pluralForm).toBeUndefined();
   });
 
   it("error when plural form is same as name (when explicitly specified in tuple format)", () => {
@@ -822,7 +827,7 @@ describe("TailorDBType plural form tests", () => {
     }>();
 
     expect(_postType.name).toBe("Post");
-    expect(_postType.metadata.schema?.settings?.pluralForm).toBe("Posts");
+    expect(_postType.metadata.settings?.pluralForm).toBe("Posts");
   });
 
   it("plural form with special characters can also be set", () => {
@@ -831,7 +836,7 @@ describe("TailorDBType plural form tests", () => {
       status: db.enum(["active", "inactive"]),
     });
 
-    expect(_deviceType.metadata.schema?.settings?.pluralForm).toBe("Device's");
+    expect(_deviceType.metadata.settings?.pluralForm).toBe("Device's");
   });
 
   it("plural form with numbers can also be set", () => {
@@ -840,7 +845,7 @@ describe("TailorDBType plural form tests", () => {
       quantity: db.int(),
     });
 
-    expect(_itemType.metadata.schema?.settings?.pluralForm).toBe("100Items");
+    expect(_itemType.metadata.settings?.pluralForm).toBe("100Items");
   });
 
   it("validation and plural form coexist in tuple format", () => {
@@ -855,10 +860,12 @@ describe("TailorDBType plural form tests", () => {
       });
 
     expect(_userType.name).toBe("User");
-    expect(_userType.metadata.schema?.settings?.pluralForm).toBe("Users");
+    expect(_userType.metadata.settings?.pluralForm).toBe("Users");
 
-    const emailConfig = _userType.fields.email.config;
-    expect(emailConfig.validate![0].errorMessage).toBe("Invalid email format");
+    // Validate that the validation function is stored correctly in metadata
+    const emailMetadata = _userType.fields.email.metadata;
+    expect(emailMetadata.validate).toBeDefined();
+    expect(emailMetadata.validate).toHaveLength(1);
   });
 
   it("plural form works correctly for types with relations", () => {
@@ -874,10 +881,8 @@ describe("TailorDBType plural form tests", () => {
       }),
     });
 
-    expect(_categoryType.metadata.schema?.settings?.pluralForm).toBe(
-      "Categories",
-    );
-    expect(_productType.metadata.schema?.settings?.pluralForm).toBe("Products");
+    expect(_categoryType.metadata.settings?.pluralForm).toBe("Categories");
+    expect(_productType.metadata.settings?.pluralForm).toBe("Products");
   });
 
   it("plural form with mixed case can also be set", () => {
@@ -885,7 +890,7 @@ describe("TailorDBType plural form tests", () => {
       value: db.string(),
     });
 
-    expect(_dataType.metadata.schema?.settings?.pluralForm).toBe("DataSet");
+    expect(_dataType.metadata.settings?.pluralForm).toBe("DataSet");
   });
 });
 
@@ -993,8 +998,8 @@ describe("TailorDBType validate modifier tests", () => {
       id: string;
       email: string;
     }>();
-    const fieldConfig = _validateType.fields.email.config;
-    expect(fieldConfig.validate).toHaveLength(1);
+    const fieldMetadata = _validateType.fields.email.metadata;
+    expect(fieldMetadata.validate).toHaveLength(1);
   });
 
   it("validate modifier can receive object with message", () => {
@@ -1006,9 +1011,10 @@ describe("TailorDBType validate modifier tests", () => {
         email: [({ value }) => value.includes("@"), "Email must contain @"],
       });
 
-    const fieldConfig = _validateType.fields.email.config;
-    expect(fieldConfig.validate).toHaveLength(1);
-    expect(fieldConfig?.validate?.[0].errorMessage).toBe(
+    const fieldMetadata = _validateType.fields.email.metadata;
+    expect(fieldMetadata.validate).toHaveLength(1);
+    // Validator is a tuple [fn, errorMessage]
+    expect((fieldMetadata.validate?.[0] as [unknown, string])[1]).toBe(
       "Email must contain @",
     );
   });
@@ -1028,9 +1034,10 @@ describe("TailorDBType validate modifier tests", () => {
         ],
       });
 
-    const fieldConfig = _validateType.fields.password.config;
-    expect(fieldConfig.validate).toHaveLength(2);
-    expect(fieldConfig?.validate?.[1].errorMessage).toBe(
+    const fieldMetadata = _validateType.fields.password.metadata;
+    expect(fieldMetadata.validate).toHaveLength(2);
+    // Second validator is a tuple [fn, errorMessage]
+    expect((fieldMetadata.validate?.[1] as [unknown, string])[1]).toBe(
       "Password must contain uppercase letter",
     );
   });

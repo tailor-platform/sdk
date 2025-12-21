@@ -1,9 +1,7 @@
 import multiline from "multiline-ts";
 import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
-import type { TailorDBTypeConfig } from "@/configure/services/tailordb/operator-types";
+import type { OperatorFieldConfig } from "@/configure/types/operator";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
-
-type FieldConfig = TailorDBTypeConfig["schema"]["fields"][string];
 
 /**
  * Processor that converts a ParsedTailorDBType into Kysely type metadata.
@@ -65,7 +63,7 @@ export class TypeProcessor {
   /**
    * Generate the complete field type including array and null modifiers.
    */
-  private static generateFieldType(fieldConfig: FieldConfig): {
+  private static generateFieldType(fieldConfig: OperatorFieldConfig): {
     type: string;
     usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
   } {
@@ -101,7 +99,7 @@ export class TypeProcessor {
   /**
    * Get the base Kysely type for a field (without array/null modifiers).
    */
-  private static getBaseType(fieldConfig: FieldConfig): {
+  private static getBaseType(fieldConfig: OperatorFieldConfig): {
     type: string;
     usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
   } {
@@ -145,7 +143,7 @@ export class TypeProcessor {
   /**
    * Get the enum type definition.
    */
-  private static getEnumType(fieldConfig: FieldConfig): string {
+  private static getEnumType(fieldConfig: OperatorFieldConfig): string {
     const allowedValues = fieldConfig.allowedValues;
 
     if (allowedValues && Array.isArray(allowedValues)) {
@@ -162,7 +160,7 @@ export class TypeProcessor {
   /**
    * Get the nested object type definition.
    */
-  private static getNestedType(fieldConfig: FieldConfig): {
+  private static getNestedType(fieldConfig: OperatorFieldConfig): {
     type: string;
     usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
   } {
@@ -175,9 +173,9 @@ export class TypeProcessor {
     }
 
     const fieldResults = Object.entries(fields).map(
-      ([fieldName, nestedFieldConfig]) => ({
+      ([fieldName, nestedOperatorFieldConfig]) => ({
         fieldName,
-        ...this.generateFieldType(nestedFieldConfig),
+        ...this.generateFieldType(nestedOperatorFieldConfig),
       }),
     );
 
