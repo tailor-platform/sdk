@@ -2,6 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>tailor-inc/renovate-config",
+    "github>aquaproj/aqua-renovate-config#2.9.0",
     ":pinAllExceptPeerDependencies",
     ":disableDependencyDashboard"
   ],
@@ -18,22 +19,6 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["@connectrpc/*"],
       "groupName": "@connectrpc"
-    }
-  ],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^aqua\\.yaml$/"],
-      "matchStrings": [
-        "# renovate: depName=(?<depName>[^\\s]+)\\s+(?:datasource=(?<datasource>[^\\s]+))?\\s*\\n[^\\n]*?(?:ref|version): (?<currentValue>[^\\s]+)"
-      ],
-      "datasourceTemplate": "{{#if datasource}}{{datasource}}{{else}}github-releases{{/if}}"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^aqua\\.yaml$/"],
-      "matchStrings": ["- name: (?<depName>[^@]+)@(?<currentValue>.+?)\\s+"],
-      "datasourceTemplate": "github-releases"
     }
   ]
 }
