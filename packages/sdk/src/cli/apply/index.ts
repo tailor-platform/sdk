@@ -227,25 +227,35 @@ export async function apply(options?: ApplyOptions) {
     return;
   }
 
-  // Phase 2: Apply Create/Update
+  // Phase 2: Create/Update services that Application depends on
+  // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
+  // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
   await applyTailorDB(client, tailorDB, "create-update");
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
   await applyPipeline(client, pipeline, "create-update");
-  await applyApplication(client, app, "create-update");
-  await applyExecutor(client, executor, "create-update");
-  await applyWorkflow(client, workflow, "create-update");
 
-  // Phase 3: Apply Delete in reverse order
-  await applyWorkflow(client, workflow, "delete");
-  await applyExecutor(client, executor, "delete");
-  await applyApplication(client, app, "delete");
+  // Phase 3: Delete subgraph services before Application update
+  // This avoids GraphQL SDL composition errors when resources (e.g., resolvers)
+  // conflict with system-generated ones
   await applyPipeline(client, pipeline, "delete");
   await applyAuth(client, auth, "delete");
   await applyIdP(client, idp, "delete");
-  await applyStaticWebsite(client, staticWebsite, "delete");
   await applyTailorDB(client, tailorDB, "delete");
+
+  // Phase 4: Create/Update Application (after subgraph changes complete)
+  await applyApplication(client, app, "create-update");
+
+  // Phase 5: Create/Update services that depend on Application
+  await applyExecutor(client, executor, "create-update");
+  await applyWorkflow(client, workflow, "create-update");
+
+  // Phase 6: Delete services that depend on Application, then Application itself
+  await applyWorkflow(client, workflow, "delete");
+  await applyExecutor(client, executor, "delete");
+  await applyStaticWebsite(client, staticWebsite, "delete");
+  await applyApplication(client, app, "delete");
 
   logger.success("Successfully applied changes.");
 }
