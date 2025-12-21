@@ -1,5 +1,24 @@
 # @tailor-platform/sdk
 
+## 0.21.4
+
+### Patch Changes
+
+- [#245](https://github.com/tailor-platform/sdk/pull/245) [`f4d4c8e`](https://github.com/tailor-platform/sdk/commit/f4d4c8e5f0df6161376c4e02af90f76aecb5ec01) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: throw error for prompts in CI environments
+
+  In CI environments, interactive prompts cause the CLI to hang indefinitely. This change detects CI environments using `std-env` and throws a `CIPromptError` when `logger.prompt` is called, instructing users to use the `--yes` flag to skip confirmation prompts.
+
+- [#243](https://github.com/tailor-platform/sdk/pull/243) [`2084c68`](https://github.com/tailor-platform/sdk/commit/2084c68be83fe5693b3df838e5c780d79d7d06fa) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix deletion of resolvers that conflict with system-generated ones
+
+  When a TailorDB type is created (e.g., `User`), the system auto-generates resolvers like `deleteUser`, `createUser`, etc. If a user created a custom resolver with the same name, it could not be deleted because the Application update (SDL composition) failed before the deletion phase.
+
+  This fix reorders the apply phases to delete subgraph services before updating the Application:
+  1. Create/Update services that Application depends on (subgraphs + StaticWebsite)
+  2. Delete subgraph services (before Application update to avoid SDL conflicts)
+  3. Create/Update Application
+  4. Create/Update services that depend on Application (Executor, Workflow)
+  5. Delete services that depend on Application, then Application itself
+
 ## 0.21.3
 
 ### Patch Changes
