@@ -1,5 +1,19 @@
 import chalk from "chalk";
 import { createConsola, type PromptOptions } from "consola";
+import { isCI } from "std-env";
+
+/**
+ * Error thrown when a prompt is attempted in a CI environment
+ */
+export class CIPromptError extends Error {
+  constructor(message?: string) {
+    super(
+      message ??
+        "Interactive prompts are not available in CI environments. Use --yes flag to skip confirmation prompts.",
+    );
+    this.name = "CIPromptError";
+  }
+}
 
 /**
  * Semantic style functions for inline text styling
@@ -200,11 +214,16 @@ export const logger = {
   /**
    * Interactive prompt (always shown, even in JSON mode)
    * Wraps consola.prompt for consistent interface
+   *
+   * @throws {CIPromptError} When called in a CI environment
    */
   prompt<T extends PromptOptions>(
     message: string,
     options?: T,
   ): ReturnType<typeof defaultLogger.prompt<T>> {
+    if (isCI) {
+      throw new CIPromptError();
+    }
     return defaultLogger.prompt(message, options);
   },
 };
