@@ -1,18 +1,16 @@
 minimumReleaseAge: 4320 # 3 days
-minimumReleaseAgeExclude: # FIXME: remove later
-  - "@toiroakr/lines-db"
 
 packages:
   - packages/*
   - packages/create-sdk/templates/*
   - example
 
-onlyBuiltDependencies:
-  - "@swc/core"
-  - esbuild
-  - lefthook
-  - multiline-ts
-  - oxc-resolver
+allowBuilds:
+  "@swc/core": true
+  esbuild: true
+  lefthook: true
+  multiline-ts: true
+  oxc-resolver: true
 
 # Since tsdown depends on rolldown@latest, and rolldown has published incorrect semver,
 # when updating any package, even unrelated rolldown gets updated to the wrong version.
