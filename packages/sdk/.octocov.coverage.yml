@@ -4,7 +4,7 @@ repository: ${GITHUB_REPOSITORY}/packages/sdk
 coverage:
   if: true
   paths:
-    - coverage/lcov.info
+    - packages/sdk/coverage/lcov.info
 
 codeToTestRatio:
   if: false
