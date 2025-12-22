@@ -1,5 +1,16 @@
 # @tailor-platform/sdk
 
+## 0.22.1
+
+### Patch Changes
+
+- [#248](https://github.com/tailor-platform/sdk/pull/248) [`7263038`](https://github.com/tailor-platform/sdk/commit/7263038d340450146490a6ac9e1af0745963640c) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor: move parseFieldConfig and tailorUserMap to parser layer
+  - Move `TailorDBField.get config()` logic to `parseFieldConfig` in parser layer
+  - Move `tailorUserMap` constant from configure to parser layer
+  - Remove `TailorDBTypeConfig` in favor of `TailorDBTypeMetadata` (without fields)
+  - Update ESLint config to allow type imports from configure in parser module
+  - Export `DBFieldMetadata` and `Hook` types from tailordb module
+
 ## 0.22.0
 
 ### Minor Changes
