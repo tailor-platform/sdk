@@ -4,8 +4,10 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { register } from "node:module";
+import { findUpSync } from "find-up-simple";
 
 const __dirname = import.meta.dirname;
+const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
 
 async function install() {
   const cwd = process.env.INIT_CWD || process.cwd();
@@ -33,11 +35,12 @@ async function install() {
   }
 
   // Try to find and load the user's tailor.config.ts
+  // Priority: env/config > search parent directories
   const configPath = process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH
     ? resolve(cwd, process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH)
-    : resolve(cwd, "tailor.config.ts");
+    : findUpSync(DEFAULT_CONFIG_FILENAME, { cwd });
 
-  if (existsSync(configPath)) {
+  if (configPath && existsSync(configPath)) {
     try {
       const configDir = dirname(configPath);
       process.chdir(configDir);

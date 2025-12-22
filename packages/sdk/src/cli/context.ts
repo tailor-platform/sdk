@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseYAML, stringifyYAML, parseTOML } from "confbox";
+import { findUpSync } from "find-up-simple";
 import ml from "multiline-ts";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
@@ -257,16 +258,20 @@ export async function fetchLatestToken(
   return resp.accessToken;
 }
 
+const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
+
 // Load config path from command options or environment variables.
-// Priority: opts/config > env/config > default("tailor.config.ts")
-export function loadConfigPath(configPath?: string): string {
+// Priority: opts/config > env/config > search parent directories
+export function loadConfigPath(configPath?: string): string | undefined {
   if (configPath) {
     return configPath;
   }
   if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
     return process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
   }
-  return "tailor.config.ts";
+
+  // Search for config file in current directory and parent directories
+  return findUpSync(DEFAULT_CONFIG_FILENAME);
 }
 
 // Load organization ID from command options or environment variables.
