@@ -79,6 +79,12 @@ export async function confirmUnmanagedResources(
   logger.log(
     "  These existing resources are currently not managed by any application.",
   );
+  logger.log(
+    "  To continue this apply, you need to allow this project's application to manage these resources.",
+  );
+  logger.log(
+    "  If you want to manage them with a different application, cancel this apply and run it from that project instead.",
+  );
 
   if (yes) {
     logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
