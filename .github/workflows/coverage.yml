@@ -3,14 +3,14 @@ name: SDK Test Coverage
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "packages/sdk/**"
-      - ".github/workflows/coverage.yml"
+    # paths:
+    #   - "packages/sdk/**"
+    #   - ".github/workflows/coverage.yml"
   push:
     branches: [main]
-    paths:
-      - "packages/sdk/**"
-      - ".github/workflows/coverage.yml"
+    # paths:
+    #   - "packages/sdk/**"
+    #   - ".github/workflows/coverage.yml"
   workflow_dispatch:
 
 permissions:
