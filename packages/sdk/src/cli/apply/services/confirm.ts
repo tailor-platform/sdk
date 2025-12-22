@@ -67,7 +67,7 @@ export async function confirmUnmanagedResources(
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  logger.warn("Existing resources without an application owner were found:");
+  logger.warn("Resources not managed by any application were found:");
 
   logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
@@ -77,9 +77,8 @@ export async function confirmUnmanagedResources(
   }
   logger.newline();
   logger.log(
-    "  These resources exist in your workspace but are not managed by any application.",
+    "  These existing resources are currently not managed by any application.",
   );
-  logger.log("  Each resource should be managed by a single application.");
 
   if (yes) {
     logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
@@ -89,7 +88,7 @@ export async function confirmUnmanagedResources(
   }
 
   const confirmed = await logger.prompt(
-    `Add these resources to "${appName}"?`,
+    `Allow "${appName}" (this project's application) to manage these resources?`,
     { type: "confirm", initial: false },
   );
   if (!confirmed) {
