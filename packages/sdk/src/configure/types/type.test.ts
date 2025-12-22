@@ -474,7 +474,7 @@ describe("TailorField runtime validation tests", () => {
   describe("validates primitive types", () => {
     it("validates string type", () => {
       {
-        const result = t.string().parse({ value: "valid string",  user });
+        const result = t.string().parse({ value: "valid string", user });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
@@ -483,7 +483,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.string().parse({ value: 123,  user });
+        const result = t.string().parse({ value: 123, user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected a string: received 123",
@@ -494,7 +494,7 @@ describe("TailorField runtime validation tests", () => {
 
     it("validates integer type", () => {
       {
-        const result = t.int().parse({ value: 123,  user });
+        const result = t.int().parse({ value: 123, user });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
@@ -503,7 +503,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.int().parse({ value: "invalid string",  user });
+        const result = t.int().parse({ value: "invalid string", user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected an integer: received invalid string",
@@ -511,7 +511,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.int().parse({ value: 1.5,  user });
+        const result = t.int().parse({ value: 1.5, user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected an integer: received 1.5",
@@ -521,7 +521,7 @@ describe("TailorField runtime validation tests", () => {
 
     it("validates float type", () => {
       {
-        const result = t.float().parse({ value: 1.5,  user });
+        const result = t.float().parse({ value: 1.5, user });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
@@ -530,7 +530,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.float().parse({ value: Number.NaN,  user });
+        const result = t.float().parse({ value: Number.NaN, user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected a number: received NaN",
@@ -538,7 +538,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.float().parse({ value: "invalid string",  user });
+        const result = t.float().parse({ value: "invalid string", user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected a number: received invalid string",
@@ -548,7 +548,7 @@ describe("TailorField runtime validation tests", () => {
 
     it("validates boolean type", () => {
       {
-        const result = t.bool().parse({ value: true,  user });
+        const result = t.bool().parse({ value: true, user });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
@@ -557,7 +557,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.bool().parse({ value: "true",  user });
+        const result = t.bool().parse({ value: "true", user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected a boolean: received true",
@@ -581,7 +581,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.uuid().parse({ value: "not-a-uuid",  user });
+        const result = t.uuid().parse({ value: "not-a-uuid", user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected a valid UUID: received not-a-uuid",
@@ -591,7 +591,7 @@ describe("TailorField runtime validation tests", () => {
 
     it("validates date format", () => {
       {
-        const result = t.date().parse({ value: "2025-12-21",  user });
+        const result = t.date().parse({ value: "2025-12-21", user });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
@@ -600,7 +600,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.date().parse({ value: "2025/12/21",  user });
+        const result = t.date().parse({ value: "2025/12/21", user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           'Expected to match "yyyy-MM-dd" format: received 2025/12/21',
@@ -612,7 +612,7 @@ describe("TailorField runtime validation tests", () => {
       {
         const result = t.datetime().parse({
           value: "2025-12-21T10:11:12.123Z",
-        
+
           user,
         });
         expect(result.issues).toBeUndefined();
@@ -625,7 +625,7 @@ describe("TailorField runtime validation tests", () => {
       {
         const result = t
           .datetime()
-          .parse({ value: "2025-12-21 10:11:12",  user });
+          .parse({ value: "2025-12-21 10:11:12", user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Expected to match ISO format: received 2025-12-21 10:11:12",
@@ -635,7 +635,7 @@ describe("TailorField runtime validation tests", () => {
 
     it("vlidates time format", () => {
       {
-        const result = t.time().parse({ value: "10:11",  user });
+        const result = t.time().parse({ value: "10:11", user });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
@@ -644,7 +644,7 @@ describe("TailorField runtime validation tests", () => {
       }
 
       {
-        const result = t.time().parse({ value: "10:11:12",  user });
+        const result = t.time().parse({ value: "10:11:12", user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           'Expected to match "HH:mm" format: received 10:11:12',
@@ -761,7 +761,7 @@ describe("TailorField runtime validation tests", () => {
     it("treats null/undefined as missing when required, and allowed when optional", () => {
       {
         const schema = t.string();
-        const result = schema.parse({ value: null,  user });
+        const result = schema.parse({ value: null, user });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
           "Required field is missing",
@@ -770,7 +770,7 @@ describe("TailorField runtime validation tests", () => {
 
       {
         const schema = t.string({ optional: true });
-        const result = schema.parse({ value: null,  user });
+        const result = schema.parse({ value: null, user });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
