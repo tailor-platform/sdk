@@ -65,6 +65,11 @@ export interface PlanContext {
 
 export type ApplyPhase = "create-update" | "delete";
 
+// NOTE(haru): Enable inline sourcemaps to preserve original source locations in error stack traces for bundled functions
+// This flag will become unnecessary once function registry is implemented, which will resolve script size issues
+export const enableInlineSourcemap: boolean =
+  process.env.TAILOR_ENABLE_INLINE_SOURCEMAP === "true";
+
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
   const { config, configPath } = await loadConfig(options?.configPath);
