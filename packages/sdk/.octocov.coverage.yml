@@ -6,7 +6,10 @@ coverage:
     - coverage/lcov.info
 
 codeToTestRatio:
-  if: false
+  code:
+    - src/**/*.ts
+  test:
+    - src/**/*.test.ts
 
 testExecutionTime:
   if: false
