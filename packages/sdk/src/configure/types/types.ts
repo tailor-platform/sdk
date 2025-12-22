@@ -45,15 +45,6 @@ export const tailorToManifestScalar = {
   nested: "nested",
 } as const;
 
-export interface Script {
-  expr: string;
-}
-
-export interface EnumValue {
-  value: string;
-  description?: string;
-}
-
 export interface FieldMetadata {
   description?: string;
   required?: boolean;

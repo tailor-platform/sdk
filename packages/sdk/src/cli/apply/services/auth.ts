@@ -393,7 +393,8 @@ async function planServices(
     }),
   );
 
-  for (const { config } of auths) {
+  for (const auth of auths) {
+    const { parsedConfig: config } = auth;
     const existing = existingServices[config.name];
     const metaRequest = await buildMetaRequest(
       trn(workspaceId, config.name),
@@ -496,7 +497,8 @@ async function planIdPConfigs(
     });
   };
 
-  for (const { config } of auths) {
+  for (const authService of auths) {
+    const { parsedConfig: config } = authService;
     const existingIdPConfigs = await fetchIdPConfigs(config.name);
     const existingNameSet = new Set<string>();
     existingIdPConfigs.forEach((idpConfig) => {
@@ -586,18 +588,7 @@ function protoIdPConfig(
               ...(idpConfig.metadataURL !== undefined
                 ? { metadataUrl: idpConfig.metadataURL }
                 : { rawMetadata: idpConfig.rawMetadata! }),
-              ...(idpConfig.spCertBase64 && {
-                spCertBase64: {
-                  vaultName: idpConfig.spCertBase64.vaultName,
-                  secretKey: idpConfig.spCertBase64.secretKey,
-                },
-              }),
-              ...(idpConfig.spKeyBase64 && {
-                spKeyBase64: {
-                  vaultName: idpConfig.spKeyBase64.vaultName,
-                  secretKey: idpConfig.spKeyBase64.secretKey,
-                },
-              }),
+              enableSignRequest: idpConfig.enableSignRequest,
             },
           },
         },
@@ -710,11 +701,12 @@ async function planUserProfileConfigs(
   > = new ChangeSet("Auth userProfileConfigs");
 
   for (const auth of auths) {
-    const name = `${auth.config.name}-user-profile-config`;
+    const { parsedConfig: config } = auth;
+    const name = `${config.name}-user-profile-config`;
     try {
       await client.getUserProfileConfig({
         workspaceId,
-        namespaceName: auth.config.name,
+        namespaceName: config.name,
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -723,7 +715,7 @@ async function planUserProfileConfigs(
             name,
             request: {
               workspaceId,
-              namespaceName: auth.config.name,
+              namespaceName: config.name,
               userProfileProviderConfig: protoUserProfileConfig(
                 auth.userProfile,
               ),
@@ -739,7 +731,7 @@ async function planUserProfileConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: auth.config.name,
+          namespaceName: config.name,
           userProfileProviderConfig: protoUserProfileConfig(auth.userProfile),
         },
       });
@@ -748,7 +740,7 @@ async function planUserProfileConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: auth.config.name,
+          namespaceName: config.name,
         },
       });
     }
@@ -834,11 +826,12 @@ async function planTenantConfigs(
   > = new ChangeSet("Auth tenantConfigs");
 
   for (const auth of auths) {
-    const name = `${auth.config.name}-tenant-config`;
+    const { parsedConfig: config } = auth;
+    const name = `${config.name}-tenant-config`;
     try {
       await client.getTenantConfig({
         workspaceId,
-        namespaceName: auth.config.name,
+        namespaceName: config.name,
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -847,7 +840,7 @@ async function planTenantConfigs(
             name,
             request: {
               workspaceId,
-              namespaceName: auth.config.name,
+              namespaceName: config.name,
               tenantProviderConfig: protoTenantConfig(auth.tenantProvider),
             },
           });
@@ -861,7 +854,7 @@ async function planTenantConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: auth.config.name,
+          namespaceName: config.name,
           tenantProviderConfig: protoTenantConfig(auth.tenantProvider),
         },
       });
@@ -870,7 +863,7 @@ async function planTenantConfigs(
         name,
         request: {
           workspaceId,
-          namespaceName: auth.config.name,
+          namespaceName: config.name,
         },
       });
     }
@@ -963,7 +956,8 @@ async function planMachineUsers(
     });
   };
 
-  for (const { config } of auths) {
+  for (const auth of auths) {
+    const { parsedConfig: config } = auth;
     const existingMachineUsers = await fetchMachineUsers(config.name);
     const existingNameSet = new Set<string>();
     existingMachineUsers.forEach((machineUser) => {
@@ -1087,7 +1081,8 @@ async function planOAuth2Clients(
     });
   };
 
-  for (const { config } of auths) {
+  for (const auth of auths) {
+    const { parsedConfig: config } = auth;
     const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
     const existingNameSet = new Set<string>();
     existingOAuth2Clients.forEach((oauth2Client) => {
@@ -1212,7 +1207,8 @@ async function planSCIMConfigs(
     DeleteSCIMConfig
   > = new ChangeSet("Auth scimConfigs");
 
-  for (const { config } of auths) {
+  for (const auth of auths) {
+    const { parsedConfig: config } = auth;
     const name = `${config.name}-scim-config`;
     try {
       await client.getAuthSCIMConfig({
@@ -1350,7 +1346,8 @@ async function planSCIMResources(
     }
   };
 
-  for (const { config } of auths) {
+  for (const auth of auths) {
+    const { parsedConfig: config } = auth;
     const existingSCIMResources = await fetchSCIMResources(config.name);
     const existingNameSet = new Set<string>();
     existingSCIMResources.forEach((scimResource) => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
-import type { OperatorFieldConfig } from "@/configure/types/operator";
+import type { OperatorFieldConfig } from "./types";
 
 function makeFieldConfig(
   partial: Partial<OperatorFieldConfig>,

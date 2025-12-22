@@ -48,7 +48,3 @@ export const unauthenticatedTailorUser: TailorUser = {
   attributes: null,
   attributeList: [],
 };
-
-// Since there's naming difference between platform and sdk,
-// use this mapping in all scripts to provide variables that match sdk types.
-export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes }`;

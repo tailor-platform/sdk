@@ -285,7 +285,7 @@ export class GenerationManager {
     const authService = this.application.authService;
     if (!authService) return undefined;
 
-    const config = authService.config;
+    const config = authService.parsedConfig;
     return {
       name: config.name,
       userProfile: authService.userProfile

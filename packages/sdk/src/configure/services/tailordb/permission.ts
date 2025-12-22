@@ -1,10 +1,12 @@
 import type { InferredAttributeMap } from "../../types";
 import type { ValueOperand } from "../auth";
-
-export interface Permissions {
-  record?: StandardTailorTypePermission;
-  gql?: StandardTailorTypeGqlPermission;
-}
+import type {
+  StandardTailorTypePermission,
+  StandardTailorTypeGqlPermission,
+  StandardActionPermission,
+  StandardPermissionCondition,
+  StandardGqlPermissionPolicy,
+} from "@/parser/service/tailordb/types";
 
 export type TailorTypePermission<
   User extends object = InferredAttributeMap,
@@ -14,13 +16,6 @@ export type TailorTypePermission<
   read: readonly ActionPermission<"record", User, Type, false>[];
   update: readonly ActionPermission<"record", User, Type, true>[];
   delete: readonly ActionPermission<"record", User, Type, false>[];
-};
-
-export type StandardTailorTypePermission = {
-  create: readonly StandardActionPermission<"record", false>[];
-  read: readonly StandardActionPermission<"record", false>[];
-  update: readonly StandardActionPermission<"record", true>[];
-  delete: readonly StandardActionPermission<"record", false>[];
 };
 
 type ActionPermission<
@@ -45,22 +40,10 @@ type ActionPermission<
       ...([] | [boolean]),
     ]; // multiple array condition
 
-export type StandardActionPermission<
-  Level extends "record" | "gql" = "record" | "gql",
-  Update extends boolean = boolean,
-> = {
-  conditions: readonly StandardPermissionCondition<Level, Update>[];
-  description?: string;
-  permit: "allow" | "deny";
-};
-
 export type TailorTypeGqlPermission<
   User extends object = InferredAttributeMap,
   Type extends object = object,
 > = readonly GqlPermissionPolicy<User, Type>[];
-
-export type StandardTailorTypeGqlPermission =
-  readonly StandardGqlPermissionPolicy[];
 
 type GqlPermissionPolicy<
   User extends object = InferredAttributeMap,
@@ -69,13 +52,6 @@ type GqlPermissionPolicy<
   conditions: readonly PermissionCondition<"gql", User, boolean, Type>[];
   actions: "all" | readonly GqlPermissionAction[];
   permit?: boolean;
-  description?: string;
-};
-
-export type StandardGqlPermissionPolicy = {
-  conditions: readonly StandardPermissionCondition<"gql">[];
-  actions: readonly ["all"] | readonly GqlPermissionAction[];
-  permit: "allow" | "deny";
   description?: string;
 };
 
@@ -96,25 +72,6 @@ export type PermissionCondition<
   PermissionOperand<Level, User, Type, Update>,
   PermissionOperator,
   PermissionOperand<Level, User, Type, Update>,
-];
-
-export type StandardPermissionCondition<
-  Level extends "record" | "gql" = "record" | "gql",
-  Update extends boolean = boolean,
-> = readonly [
-  PermissionOperand<
-    Level,
-    Record<string, unknown>,
-    Record<string, unknown>,
-    Update
-  >,
-  StandardPermissionOperator,
-  PermissionOperand<
-    Level,
-    Record<string, unknown>,
-    Record<string, unknown>,
-    Update
-  >,
 ];
 
 type UserOperand<User extends object = InferredAttributeMap> = {
@@ -158,8 +115,6 @@ const operatorMap = {
   in: "in",
   "not in": "nin",
 } as const satisfies Record<PermissionOperator, string>;
-type StandardPermissionOperator =
-  (typeof operatorMap)[keyof typeof operatorMap];
 
 function normalizeOperand<T extends PermissionOperand<any, any, any, any>>(
   operand: T,

@@ -1,5 +1,32 @@
 # @tailor-platform/sdk
 
+## 0.22.2
+
+### Patch Changes
+
+- [#196](https://github.com/tailor-platform/sdk/pull/196) [`23e791f`](https://github.com/tailor-platform/sdk/commit/23e791f0673eaf003059a86a7c493e0e26282f2d) Thanks [@haru0017](https://github.com/haru0017)! - Switch from custom keys/certs to Tailor platform defaults
+
+## 0.22.1
+
+### Patch Changes
+
+- [#248](https://github.com/tailor-platform/sdk/pull/248) [`7263038`](https://github.com/tailor-platform/sdk/commit/7263038d340450146490a6ac9e1af0745963640c) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor: move parseFieldConfig and tailorUserMap to parser layer
+  - Move `TailorDBField.get config()` logic to `parseFieldConfig` in parser layer
+  - Move `tailorUserMap` constant from configure to parser layer
+  - Remove `TailorDBTypeConfig` in favor of `TailorDBTypeMetadata` (without fields)
+  - Update ESLint config to allow type imports from configure in parser module
+  - Export `DBFieldMetadata` and `Hook` types from tailordb module
+
+## 0.22.0
+
+### Minor Changes
+
+- [#258](https://github.com/tailor-platform/sdk/pull/258) [`14da273`](https://github.com/tailor-platform/sdk/commit/14da273763464f2b1e1ad8f3a45b3211a4a0aece) Thanks [@jackchuka](https://github.com/jackchuka)! - feat: introduce api command
+
+### Patch Changes
+
+- [#226](https://github.com/tailor-platform/sdk/pull/226) [`2d0cb80`](https://github.com/tailor-platform/sdk/commit/2d0cb80f627c2c3ef1e72bda11ad25560f0909dd) Thanks [@haru0017](https://github.com/haru0017)! - feat: enable inline sourcemaps for better debugging
+
 ## 0.21.4
 
 ### Patch Changes

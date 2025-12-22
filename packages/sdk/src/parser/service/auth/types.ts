@@ -28,6 +28,7 @@ export type OIDC = z.output<typeof OIDCSchema>;
 export type SAML = z.output<typeof SAMLSchema>;
 export type IDToken = z.output<typeof IDTokenSchema>;
 export type BuiltinIdP = z.output<typeof BuiltinIdPSchema>;
+export type IdProviderConfigInput = z.input<typeof IdProviderSchema>;
 export type IdProviderConfig = z.output<typeof IdProviderSchema>;
 export type OAuth2ClientGrantType = z.output<
   typeof OAuth2ClientGrantTypeSchema
@@ -229,7 +230,7 @@ export type AuthServiceOutput<
     MachineUser<User, AttributeMap, AttributeList>
   >;
   oauth2Clients?: Record<string, OAuth2Client>;
-  idProvider?: IdProviderConfig;
+  idProvider?: IdProviderConfigInput;
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
 };
