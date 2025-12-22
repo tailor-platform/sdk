@@ -2,7 +2,7 @@
 
 import { register } from "node:module";
 import { defineCommand, runMain } from "citty";
-import { apiCommand } from "./api-call";
+import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
 import { generateCommand } from "./generator";
 import { initCommand } from "./init";

@@ -1,83 +1,100 @@
-// CLI API exports for programmatic usage
-import { register } from "node:module";
+import { defineCommand } from "citty";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "./args";
+import { platformBaseUrl, userAgent } from "./client";
+import { loadAccessToken } from "./context";
+import { logger } from "./utils/logger";
 
-// Register tsx to handle TypeScript files when using CLI API programmatically
-register("tsx", import.meta.url, { data: {} });
+export interface ApiCallOptions {
+  profile?: string;
+  endpoint: string;
+  body?: string;
+}
 
-export { apply } from "./apply/index";
-export type { ApplyOptions } from "./apply/index";
-export { generate } from "./generator/index";
-export type { GenerateOptions } from "./generator/options";
-export { loadConfig } from "./config-loader";
-export { generateUserTypes } from "./type-generator";
-export type {
-  CodeGenerator,
-  GeneratorInput,
-  GeneratorResult,
-} from "./generator/types";
-export type { ParsedTailorDBType as TailorDBType } from "@/parser/service/tailordb/types";
-export type { Resolver } from "@/parser/service/resolver";
-export type { Executor } from "@/parser/service/executor";
+export interface ApiCallResult {
+  status: number;
+  data: unknown;
+}
 
-export { show, type ShowOptions, type ApplicationInfo } from "./show";
-export { remove, type RemoveOptions } from "./remove";
-export {
-  createWorkspace,
-  type CreateWorkspaceOptions,
-} from "./workspace/create";
-export { listWorkspaces, type ListWorkspacesOptions } from "./workspace/list";
-export {
-  deleteWorkspace,
-  type DeleteWorkspaceOptions,
-} from "./workspace/delete";
-export type { WorkspaceInfo } from "./workspace/transform";
-export {
-  listMachineUsers,
-  type ListMachineUsersOptions,
-  type MachineUserInfo,
-} from "./machineuser/list";
-export {
-  getMachineUserToken,
-  type GetMachineUserTokenOptions,
-  type MachineUserTokenInfo,
-} from "./machineuser/token";
-export {
-  getOAuth2Client,
-  type GetOAuth2ClientOptions,
-} from "./oauth2client/get";
-export {
-  listOAuth2Clients,
-  type ListOAuth2ClientsOptions,
-} from "./oauth2client/list";
-export type {
-  OAuth2ClientInfo,
-  OAuth2ClientCredentials,
-} from "./oauth2client/transform";
-export { listWorkflows, type ListWorkflowsOptions } from "./workflow/list";
-export { getWorkflow, type GetWorkflowOptions } from "./workflow/get";
-export {
-  startWorkflow,
-  type StartWorkflowOptions,
-  type StartWorkflowResultWithWait,
-  type WaitOptions,
-} from "./workflow/start";
-export {
-  listWorkflowExecutions,
-  getWorkflowExecution,
-  type ListWorkflowExecutionsOptions,
-  type GetWorkflowExecutionOptions,
-  type GetWorkflowExecutionResult,
-} from "./workflow/executions";
-export {
-  resumeWorkflow,
-  type ResumeWorkflowOptions,
-  type ResumeWorkflowResultWithWait,
-} from "./workflow/resume";
-export type {
-  WorkflowListInfo,
-  WorkflowInfo,
-  WorkflowExecutionInfo,
-  WorkflowJobExecutionInfo,
-} from "./workflow/transform";
-export { loadAccessToken, loadWorkspaceId } from "./context";
-export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";
+/**
+ * Call Tailor Platform API endpoints directly.
+ * If the endpoint doesn't contain "/", it defaults to `tailor.v1.OperatorService/{endpoint}`.
+ */
+export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+
+  // Determine the endpoint path
+  let endpointPath: string;
+  if (options.endpoint.includes("/")) {
+    endpointPath = options.endpoint;
+  } else {
+    // Default to OperatorService if no "/" in endpoint
+    endpointPath = `tailor.v1.OperatorService/${options.endpoint}`;
+  }
+
+  // Build the full URL
+  const url = new URL(endpointPath, platformBaseUrl);
+
+  // Make the request
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "User-Agent": await userAgent(),
+    },
+    body: options.body ?? "{}",
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `API call failed (${response.status}): ${JSON.stringify(data)}`,
+    );
+  }
+
+  return {
+    status: response.status,
+    data,
+  };
+}
+
+export const apiCommand = defineCommand({
+  meta: {
+    name: "api",
+    description: "Call Tailor Platform API endpoints directly",
+  },
+  args: {
+    ...commonArgs,
+    ...jsonArgs,
+    ...workspaceArgs,
+    body: {
+      type: "string",
+      description: "Request body as JSON",
+      alias: "b",
+      default: "{}",
+    },
+    endpoint: {
+      type: "positional",
+      description:
+        "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication')",
+      required: true,
+    },
+  },
+  run: withCommonArgs(async (args) => {
+    const result = await apiCall({
+      profile: args.profile,
+      endpoint: args.endpoint as string,
+      body: args.body,
+    });
+
+    if (args.json) {
+      logger.log(JSON.stringify(result.data, null, 2));
+    } else {
+      logger.log(JSON.stringify(result.data, null, 2));
+    }
+  }),
+});

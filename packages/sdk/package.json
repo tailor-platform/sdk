@@ -24,9 +24,9 @@
       "default": "./dist/configure/index.mjs"
     },
     "./cli": {
-      "types": "./dist/cli/api.d.mts",
-      "import": "./dist/cli/api.mjs",
-      "default": "./dist/cli/api.mjs"
+      "types": "./dist/cli/lib.d.mts",
+      "import": "./dist/cli/lib.mjs",
+      "default": "./dist/cli/lib.mjs"
     },
     "./test": {
       "types": "./dist/utils/test/index.d.mts",
