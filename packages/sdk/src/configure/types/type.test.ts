@@ -1,6 +1,7 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
 import { t } from "./type";
 import type { output } from "./helpers";
+import type { TailorUser } from "./user";
 
 describe("TailorType basic field type tests", () => {
   it("string field outputs string type correctly", () => {
@@ -458,5 +459,337 @@ describe("t.object tests", () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-object-type
       empty: {};
     }>();
+  });
+});
+
+describe("TailorField runtime validation tests", () => {
+  const user: TailorUser = {
+    id: "test",
+    type: "user",
+    workspaceId: "workspace-test",
+    attributes: {},
+    attributeList: [],
+  };
+
+  describe("validates primitive types", () => {
+    it("validates string type", () => {
+      {
+        const result = t.string().parse({ value: "valid string",  user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe("valid string");
+      }
+
+      {
+        const result = t.string().parse({ value: 123,  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected a string: received 123",
+        );
+        expect(result.issues?.[0]?.path).toBeUndefined();
+      }
+    });
+
+    it("validates integer type", () => {
+      {
+        const result = t.int().parse({ value: 123,  user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe(123);
+      }
+
+      {
+        const result = t.int().parse({ value: "invalid string",  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected an integer: received invalid string",
+        );
+      }
+
+      {
+        const result = t.int().parse({ value: 1.5,  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected an integer: received 1.5",
+        );
+      }
+    });
+
+    it("validates float type", () => {
+      {
+        const result = t.float().parse({ value: 1.5,  user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe(1.5);
+      }
+
+      {
+        const result = t.float().parse({ value: Number.NaN,  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected a number: received NaN",
+        );
+      }
+
+      {
+        const result = t.float().parse({ value: "invalid string",  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected a number: received invalid string",
+        );
+      }
+    });
+
+    it("validates boolean type", () => {
+      {
+        const result = t.bool().parse({ value: true,  user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe(true);
+      }
+
+      {
+        const result = t.bool().parse({ value: "true",  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected a boolean: received true",
+        );
+      }
+    });
+  });
+
+  describe("validates format-specific types", () => {
+    it("validates uuid format", () => {
+      {
+        const result = t.uuid().parse({
+          value: "550e8400-e29b-41d4-a716-446655440000",
+          user,
+        });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe("550e8400-e29b-41d4-a716-446655440000");
+      }
+
+      {
+        const result = t.uuid().parse({ value: "not-a-uuid",  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected a valid UUID: received not-a-uuid",
+        );
+      }
+    });
+
+    it("validates date format", () => {
+      {
+        const result = t.date().parse({ value: "2025-12-21",  user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe("2025-12-21");
+      }
+
+      {
+        const result = t.date().parse({ value: "2025/12/21",  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          'Expected to match "yyyy-MM-dd" format: received 2025/12/21',
+        );
+      }
+    });
+
+    it("validates datetime format", () => {
+      {
+        const result = t.datetime().parse({
+          value: "2025-12-21T10:11:12.123Z",
+        
+          user,
+        });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe("2025-12-21T10:11:12.123Z");
+      }
+
+      {
+        const result = t
+          .datetime()
+          .parse({ value: "2025-12-21 10:11:12",  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected to match ISO format: received 2025-12-21 10:11:12",
+        );
+      }
+    });
+
+    it("vlidates time format", () => {
+      {
+        const result = t.time().parse({ value: "10:11",  user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe("10:11");
+      }
+
+      {
+        const result = t.time().parse({ value: "10:11:12",  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          'Expected to match "HH:mm" format: received 10:11:12',
+        );
+      }
+    });
+  });
+
+  describe("validates complex types", () => {
+    it("validates enum values", () => {
+      const status = t.enum(["active", "inactive"]);
+      {
+        const result = status.parse({ value: "active", user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe("active");
+      }
+
+      {
+        const result = status.parse({ value: "pending", user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Must be one of [active, inactive]: received pending",
+        );
+      }
+    });
+
+    it("validates nested object fields", () => {
+      const schema = t.object({
+        name: t.string(),
+        age: t.int({ optional: true }),
+        gender: t.enum(["male", "female", "other"]),
+      });
+      {
+        const result = schema.parse({
+          value: {
+            name: "name",
+            age: null,
+            gender: "male",
+          },
+          user,
+        });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toEqual({
+          name: "name",
+          age: null,
+          gender: "male",
+        });
+      }
+
+      {
+        const result = schema.parse({
+          value: { age: 1, gender: "invalid" },
+          user,
+        });
+        expect(result.issues).toBeDefined();
+        expect(result.issues).toEqual([
+          {
+            message: "Required field is missing",
+            path: ["name"],
+          },
+          {
+            message: "Must be one of [male, female, other]: received invalid",
+            path: ["gender"],
+          },
+        ]);
+      }
+
+      {
+        const schema = t.object({
+          value: t.string({ optional: true }),
+        });
+        const now = new Date();
+        const result = schema.parse({ value: now, user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          `Expected an object: received ${String(now)}`,
+        );
+      }
+    });
+
+    it("validates array fields and element paths", () => {
+      const schema = t.int({ array: true });
+      {
+        const result = schema.parse({ value: [1, 2, 3], user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toEqual([1, 2, 3]);
+      }
+
+      {
+        const result = schema.parse({ value: "invalid", user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual("Expected an array");
+      }
+
+      {
+        const result = schema.parse({ value: [1, "x"], user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]).toEqual({
+          path: ["[1]"],
+          message: "Expected an integer: received x",
+        });
+      }
+    });
+
+    it("treats null/undefined as missing when required, and allowed when optional", () => {
+      {
+        const schema = t.string();
+        const result = schema.parse({ value: null,  user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Required field is missing",
+        );
+      }
+
+      {
+        const schema = t.string({ optional: true });
+        const result = schema.parse({ value: null,  user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBeNull();
+      }
+
+      {
+        const schema = t.int({ optional: true, array: true });
+        const result = schema.parse({
+          value: null,
+          user,
+        });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBeNull();
+      }
+    });
   });
 });

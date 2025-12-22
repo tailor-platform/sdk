@@ -1062,18 +1062,18 @@ describe("TailorDBType validate modifier tests", () => {
 
   it("validate modifier on string field receives string", () => {
     const _validate = db.type("Test", { name: db.string() }).validate;
-    expectTypeOf<
-      ValidateConfig<string, { id: string; name: string }>
-    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
+    expectTypeOf<ValidateConfig<string>>().toExtend<
+      Parameters<typeof _validate>[0]["name"]
+    >();
   });
 
   it("validate modifier on optional field receives null", () => {
     const _validate = db.type("Test", {
       name: db.string({ optional: true }),
     }).validate;
-    expectTypeOf<
-      ValidateConfig<string | null, { id: string; name?: string | null }>
-    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
+    expectTypeOf<ValidateConfig<string | null>>().toExtend<
+      Parameters<typeof _validate>[0]["name"]
+    >();
   });
 });
 

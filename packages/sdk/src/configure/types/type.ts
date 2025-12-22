@@ -29,6 +29,7 @@ export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   const Output = any,
   M extends FieldMetadata = FieldMetadata,
+  T extends TailorFieldType = TailorFieldType,
 > implements TailorFieldInput {
   protected _metadata: M;
   public readonly _defined: Defined = undefined as unknown as Defined;
@@ -39,7 +40,7 @@ export class TailorField<
   }
 
   protected constructor(
-    public readonly type: TailorFieldType,
+    public readonly type: T,
     options?: FieldOptions,
     public readonly fields: Record<string, TailorField<any>> = {},
     values?: AllowedValues,
@@ -120,13 +121,11 @@ export class TailorField<
    * Returns StandardSchema Result type with success or failure
    */
   parse(args: {
-    value: any;
-    data: any;
+    value: unknown;
     user: TailorUser;
   }): StandardSchemaV1.Result<Output> {
     return this._parseInternal({
       value: args.value,
-      data: args.data,
       user: args.user,
       pathArray: [],
     });
@@ -138,12 +137,11 @@ export class TailorField<
    * @private
    */
   private _validateValue(args: {
-    value: any;
-    data: any;
+    value: TailorToTs[T];
     user: TailorUser;
     pathArray: string[];
   }): StandardSchemaV1.Issue[] {
-    const { value, data, user, pathArray } = args;
+    const { value, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
     // Type-specific validation
@@ -211,7 +209,7 @@ export class TailorField<
       case "time":
         if (typeof value !== "string" || !regex.time.test(value)) {
           issues.push({
-            message: `Expected to match "HH:mm:ss" format`,
+            message: `Expected to match "HH:mm" format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
           });
         }
@@ -219,7 +217,7 @@ export class TailorField<
       case "enum":
         if (this.metadata.allowedValues) {
           const allowedValues = this.metadata.allowedValues.map((v) => v.value);
-          if (!allowedValues.includes(value)) {
+          if (typeof value !== "string" || !allowedValues.includes(value)) {
             issues.push({
               message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
               path: pathArray.length > 0 ? pathArray : undefined,
@@ -233,7 +231,8 @@ export class TailorField<
         if (
           typeof value !== "object" ||
           value === null ||
-          Array.isArray(value)
+          Array.isArray(value) ||
+          value instanceof Date
         ) {
           issues.push({
             message: `Expected an object: received ${String(value)}`,
@@ -244,7 +243,6 @@ export class TailorField<
             const fieldValue = value?.[fieldName];
             const result = field._parseInternal({
               value: fieldValue,
-              data,
               user,
               pathArray: pathArray.concat(fieldName),
             });
@@ -265,7 +263,7 @@ export class TailorField<
             ? { fn: validateInput, message: "Validation failed" }
             : { fn: validateInput[0], message: validateInput[1] };
 
-        if (!fn({ value, data, user })) {
+        if (!fn({ value, user })) {
           issues.push({
             message,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -283,11 +281,10 @@ export class TailorField<
    */
   private _parseInternal(args: {
     value: any;
-    data: any;
     user: TailorUser;
     pathArray: string[];
   }): StandardSchemaV1.Result<Output> {
-    const { value, data, user, pathArray } = args;
+    const { value, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
     // 1. Check required/optional
@@ -323,7 +320,6 @@ export class TailorField<
         // Validate element with same type but without array flag
         const elementIssues = this._validateValue({
           value: elementValue,
-          data,
           user,
           pathArray: elementPath,
         });
@@ -339,7 +335,7 @@ export class TailorField<
     }
 
     // 3. Type-specific validation and custom validation
-    const valueIssues = this._validateValue({ value, data, user, pathArray });
+    const valueIssues = this._validateValue({ value, user, pathArray });
     issues.push(...valueIssues);
 
     if (issues.length > 0) {

@@ -1,20 +1,16 @@
 import { type TailorUser } from "@/configure/types";
-import type { output, InferFieldsOutput } from "./helpers";
+import type { output } from "./helpers";
 import type { NonEmptyObject } from "type-fest";
 
 /**
  * Validation function type
  */
-export type ValidateFn<O, D = unknown> = (args: {
-  value: O;
-  data: D;
-  user: TailorUser;
-}) => boolean;
+export type ValidateFn<O> = (args: { value: O; user: TailorUser }) => boolean;
 
 /**
  * Validation configuration with custom error message
  */
-export type ValidateConfig<O, D = unknown> = [ValidateFn<O, D>, string];
+export type ValidateConfig<O> = [ValidateFn<O>, string];
 
 /**
  * Field-level validation function
@@ -45,12 +41,9 @@ type ValidatorsBase<
   }
     ? never
     : K]?:
-    | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-    | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-    | (
-        | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-        | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-      )[];
+    | ValidateFn<output<F[K]>>
+    | ValidateConfig<output<F[K]>>
+    | (ValidateFn<output<F[K]>> | ValidateConfig<output<F[K]>>)[];
 }>;
 
 /**
