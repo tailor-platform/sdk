@@ -85,7 +85,7 @@
     "@tailor-platform/function-types": "0.8.0",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
-    "@types/node": "22.19.3",
+    "@types/node": "24.10.4",
     "cross-env": "10.1.0",
     "eslint": "9.39.2",
     "eslint-plugin-jsdoc": "61.5.0",
