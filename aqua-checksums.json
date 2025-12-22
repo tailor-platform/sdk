@@ -21,13 +21,13 @@
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.61.0/buf-Windows-arm64.exe",
-      "checksum": "467EEC551D3A6F7C4A2A10CBFDE8FE4635353035753CC0F8B9EEC1A32D2C97E8",
+      "id": "github_release/github.com/bufbuild/buf/v1.61.0/buf-Windows-arm64.zip",
+      "checksum": "B274CCE55B7C88EB809F5C3B2B743B7152D3179615D5B508E4C1EA4E211C639C",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.61.0/buf-Windows-x86_64.exe",
-      "checksum": "38BDFF1EF30A9F97355DF1C5377ACAD90B3B91355C9CAFD0BF1C6D65C8172DD6",
+      "id": "github_release/github.com/bufbuild/buf/v1.61.0/buf-Windows-x86_64.zip",
+      "checksum": "F8448DC56D411F6D9B898231828ED06B102F2B01CCC38D1E951BFFC3D30AC159",
       "algorithm": "sha256"
     },
     {
@@ -91,8 +91,8 @@
       "algorithm": "sha256"
     },
     {
-      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.398.0/registry.yaml",
-      "checksum": "7ECB8D2982D9147B59B8EE0FD7F01EEAEAA542BC9AD2A6E57E3FF250CB9FA8233347CC963ACC5BE4E0527B4E6967DA88613D99952B0BC42CCBE7C0FC60C562C5",
+      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.446.0/registry.yaml",
+      "checksum": "F89F41662F54892E9E06168596845AA2C84865B6ED9782B527C47622BE3035E3C126C51D80BFFF76B41C4150D41FF1F70F6B521EA52FB6B4933D6170CACEF9F3",
       "algorithm": "sha512"
     }
   ]
