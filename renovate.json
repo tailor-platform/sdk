@@ -9,6 +9,11 @@
   "dependencyDashboardApproval": false,
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
+  "postUpgradeTasks": {
+    "commands": ["node scripts/add-renovate-changeset.mjs"],
+    "fileFilters": [".changeset/**"],
+    "executionMode": "branch"
+  },
   "packageRules": [
     {
       "description": "Enable major updates without dashboard approval (dashboard is disabled)",
