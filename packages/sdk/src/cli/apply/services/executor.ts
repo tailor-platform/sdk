@@ -16,6 +16,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { getDistDir } from "@/configure/config";
+import { stringifyFunction } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
@@ -23,31 +24,6 @@ import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor, Trigger } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-
-/**
- * Convert a function to a string representation.
- * Handles method shorthand syntax (e.g., `requestBody() { ... }`) by converting it to
- * a function expression (e.g., `function requestBody() { ... }`).
- *
- * TODO: This function should be moved to the parser module.
- * The same function exists in `src/configure/services/tailordb/schema.ts`.
- * These should be unified into a common utility in the parser layer.
- */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-const stringifyFunction = (fn: Function): string => {
-  const src = fn.toString().trim();
-  // Method shorthand pattern: methodName(...) { ... }
-  // Needs to be converted to: function methodName(...) { ... }
-  if (
-    /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(src) &&
-    !src.startsWith("function") &&
-    !src.startsWith("(") &&
-    !src.includes("=>")
-  ) {
-    return `function ${src}`;
-  }
-  return src;
-};
 
 export async function applyExecutor(
   client: OperatorClient,
