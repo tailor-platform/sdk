@@ -1,5 +1,7 @@
+import { parseIdProviderConfig } from "@/parser/service/auth";
 import type { TailorDBService } from "@/cli/application/tailordb/service";
 import type { AuthOwnConfig } from "@/configure/services/auth";
+import type { IdProviderConfig } from "@/parser/service/auth";
 
 export class AuthService {
   private _userProfile?: AuthOwnConfig["userProfile"] & {
@@ -8,11 +10,22 @@ export class AuthService {
   private _tenantProvider?: AuthOwnConfig["tenantProvider"] & {
     namespace: string;
   };
+  private _parsedConfig: AuthOwnConfig & {
+    idProvider?: IdProviderConfig;
+  };
 
   constructor(
     public readonly config: AuthOwnConfig,
     public readonly tailorDBServices: ReadonlyArray<TailorDBService>,
-  ) {}
+  ) {
+    // Parse idProvider to apply default values if it exists
+    this._parsedConfig = {
+      ...config,
+      idProvider: config.idProvider
+        ? parseIdProviderConfig(config.idProvider)
+        : undefined,
+    };
+  }
 
   get userProfile() {
     return this._userProfile;
@@ -20,6 +33,12 @@ export class AuthService {
 
   get tenantProvider() {
     return this._tenantProvider;
+  }
+
+  get parsedConfig(): AuthOwnConfig & {
+    idProvider?: IdProviderConfig;
+  } {
+    return this._parsedConfig;
   }
 
   async resolveNamespaces(): Promise<void> {
