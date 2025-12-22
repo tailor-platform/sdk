@@ -383,7 +383,7 @@ importers:
         specifier: 61.5.0
         version: 61.5.0(eslint@9.39.2(jiti@2.5.1))
       find-up-simple:
-        specifier: ^1.0.1
+        specifier: 1.0.1
         version: 1.0.1
       globals:
         specifier: 16.5.0

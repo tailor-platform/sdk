@@ -89,7 +89,7 @@
     "cross-env": "10.1.0",
     "eslint": "9.39.2",
     "eslint-plugin-jsdoc": "61.5.0",
-    "find-up-simple": "^1.0.1",
+    "find-up-simple": "1.0.1",
     "globals": "16.5.0",
     "sonda": "0.10.1",
     "tsdown": "0.18.0",
