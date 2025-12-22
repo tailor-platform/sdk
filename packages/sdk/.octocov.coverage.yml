@@ -2,7 +2,6 @@ locale: en
 repository: ${GITHUB_REPOSITORY}/packages/sdk
 
 coverage:
-  if: true
   paths:
     - coverage/lcov.info
 
@@ -15,11 +14,11 @@ testExecutionTime:
 report:
   if: is_default_branch
   datastores:
-    - artifact://${GITHUB_REPOSITORY}
+    - artifact://${GITHUB_REPOSITORY}/octocov-report-sdk-test-coverage
 
 diff:
   datastores:
-    - artifact://${GITHUB_REPOSITORY}
+    - artifact://${GITHUB_REPOSITORY}/octocov-report-sdk-test-coverage
 
 comment:
   if: is_pull_request
