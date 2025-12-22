@@ -26,7 +26,7 @@ export default defineConfig({
   entry: [
     "src/configure/index.ts",
     "src/cli/index.ts",
-    "src/cli/api.ts",
+    "src/cli/lib.ts",
     "src/utils/test/index.ts",
   ],
   format: ["esm"],
