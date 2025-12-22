@@ -41,7 +41,7 @@
     "graphql-request": "7.4.0",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
-    "vitest": "4.0.15"
+    "vitest": "4.0.16"
   },
   "license": "MIT",
   "engines": {
