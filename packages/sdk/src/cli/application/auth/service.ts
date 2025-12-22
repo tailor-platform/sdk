@@ -1,4 +1,4 @@
-import { parseIdProviderConfig } from "@/parser/service/auth";
+import { IdProviderSchema } from "@/parser/service/auth";
 import type { TailorDBService } from "@/cli/application/tailordb/service";
 import type { AuthOwnConfig } from "@/configure/services/auth";
 import type { IdProviderConfig } from "@/parser/service/auth";
@@ -21,9 +21,7 @@ export class AuthService {
     // Parse idProvider to apply default values if it exists
     this._parsedConfig = {
       ...config,
-      idProvider: config.idProvider
-        ? parseIdProviderConfig(config.idProvider)
-        : undefined,
+      idProvider: IdProviderSchema.optional().parse(config.idProvider),
     };
   }
 
