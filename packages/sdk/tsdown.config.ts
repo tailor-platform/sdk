@@ -1,5 +1,26 @@
+import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig } from "tsdown";
+
+function addDtsBanner(dir: string, baseDir: string = dir): void {
+  const entries = readdirSync(dir);
+  for (const entry of entries) {
+    const fullPath = join(dir, entry);
+    const stat = statSync(fullPath);
+    if (stat.isDirectory()) {
+      addDtsBanner(fullPath, baseDir);
+    } else if (entry.endsWith(".d.mts")) {
+      const relativePath = fullPath.replace(baseDir + "/", "");
+      const depth = relativePath.split("/").length;
+      const banner = `/// <reference path="./${"../".repeat(depth - 1)}user-defined.d.ts" />\n`;
+      const content = readFileSync(fullPath, "utf-8");
+      if (!content.startsWith("/// <reference")) {
+        writeFileSync(fullPath, banner + content);
+      }
+    }
+  }
+}
 
 export default defineConfig({
   entry: [
@@ -12,16 +33,13 @@ export default defineConfig({
   target: "node18",
   platform: "node",
   clean: true,
-  dts: {
-    banner: (chunk) => {
-      const deps = chunk.fileName.split("/").length;
-      if (chunk.fileName.endsWith(".d.mts")) {
-        return `/// <reference path="./${"../".repeat(deps - 1)}user-defined.d.ts" />\n`;
-      }
-      return "";
+  dts: true,
+  outDir: "dist",
+  hooks: {
+    "build:done": () => {
+      addDtsBanner("dist");
     },
   },
-  outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,
   outputOptions: {
