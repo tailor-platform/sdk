@@ -2,7 +2,7 @@ name: Add changeset for Renovate PR
 
 on:
   pull_request_target:
-    types: [opened, synchronize]
+    types: [opened]
 
 permissions:
   contents: write
@@ -38,7 +38,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const prData = ${{ steps.pr.outputs.result }};
+            const prData = JSON.parse('${{ steps.pr.outputs.result }}');
             const { headRef, labels } = prData;
 
             // Prevent duplicate execution via label
@@ -80,16 +80,21 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const prData = ${{ steps.pr.outputs.result }};
+            const prData = JSON.parse('${{ steps.pr.outputs.result }}');
             const { number, headRef } = prData;
+
+            // Get PR title for better description
+            const pr = context.payload.pull_request;
+            const description = pr.title || 'chore: update dependencies';
 
             const filename = `renovate-${number}.md`;
             const content = [
               '---',
               '"@tailor-platform/sdk": patch',
+              '"@tailor-platform/create-sdk": patch',
               '---',
               '',
-              'chore: update dependencies',
+              description,
               '',
             ].join('\n');
 
@@ -155,7 +160,8 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const { number } = ${{ steps.pr.outputs.result }};
+            const prData = JSON.parse('${{ steps.pr.outputs.result }}');
+            const { number } = prData;
 
             await github.rest.issues.addLabels({
               owner,
