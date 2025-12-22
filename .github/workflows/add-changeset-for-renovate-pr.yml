@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   add-changeset:
@@ -18,7 +17,7 @@ jobs:
       github.event.pull_request.user.type == 'Bot'
 
     steps:
-      # ---- Get PR info ----
+      # Get PR info
       - name: Get PR info
         id: pr
         uses: actions/github-script@v7
@@ -28,25 +27,17 @@ jobs:
             return {
               number: pr.number,
               headRef: pr.head.ref,
-              labels: pr.labels.map(l => l.name),
             };
 
-      # ---- Evaluate skip conditions (labels + .changeset) ----
-      - name: Evaluate skip conditions
+      # Check if changeset already exists
+      - name: Check existing changeset
         id: check
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
             const prData = JSON.parse('${{ steps.pr.outputs.result }}');
-            const { headRef, labels } = prData;
-
-            // Prevent duplicate execution via label
-            if (labels.includes('changeset-added')) {
-              core.info('changeset already added (label). skip.');
-              core.setOutput('skip', 'true');
-              return;
-            }
+            const { headRef } = prData;
 
             // Check existence of .changeset (excluding README.md and config.json)
             try {
@@ -73,7 +64,7 @@ jobs:
 
             core.setOutput('skip', 'false');
 
-      # ---- Create changeset commit (API only) ----
+      # Create changeset commit
       - name: Create changeset commit
         if: steps.check.outputs.skip == 'false'
         uses: actions/github-script@v7
@@ -85,7 +76,7 @@ jobs:
 
             // Get PR title for better description
             const pr = context.payload.pull_request;
-            const description = pr.title || 'chore: update dependencies';
+            const description = pr.title || 'Update dependencies';
 
             const filename = `renovate-${number}.md`;
             const content = [
@@ -151,21 +142,4 @@ jobs:
               repo,
               ref: `heads/${headRef}`,
               sha: newCommit.data.sha,
-            });
-
-      # ---- Add changeset-added label ----
-      - name: Add changeset-added label
-        if: steps.check.outputs.skip == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const prData = JSON.parse('${{ steps.pr.outputs.result }}');
-            const { number } = prData;
-
-            await github.rest.issues.addLabels({
-              owner,
-              repo,
-              issue_number: number,
-              labels: ['changeset-added'],
             });
