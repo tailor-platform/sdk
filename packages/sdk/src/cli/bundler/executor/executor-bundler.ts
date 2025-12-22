@@ -7,6 +7,7 @@ import {
   loadFilesWithIgnores,
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
+import { enableInlineSourcemap } from "@/cli/apply";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import {
@@ -123,8 +124,14 @@ async function bundleSingleExecutor(
       output: {
         file: outputPath,
         format: "esm",
-        sourcemap: true,
-        minify: true,
+        sourcemap: enableInlineSourcemap ? "inline" : true,
+        minify: enableInlineSourcemap
+          ? {
+              mangle: {
+                keepNames: true,
+              },
+            }
+          : true,
         inlineDynamicImports: true,
       },
       tsconfig,

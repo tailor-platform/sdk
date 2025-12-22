@@ -50,7 +50,13 @@ export const GeneratorConfigSchema =
 export async function loadConfig(
   configPath?: string,
 ): Promise<{ config: AppConfig; generators: Generator[]; configPath: string }> {
-  const resolvedPath = path.resolve(process.cwd(), loadConfigPath(configPath));
+  const foundPath = loadConfigPath(configPath);
+  if (!foundPath) {
+    throw new Error(
+      "Configuration file not found: tailor.config.ts not found in current or parent directories",
+    );
+  }
+  const resolvedPath = path.resolve(process.cwd(), foundPath);
 
   if (!fs.existsSync(resolvedPath)) {
     throw new Error(`Configuration file not found: ${configPath}`);

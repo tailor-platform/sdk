@@ -4,6 +4,7 @@ import { commonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
+import { nameArgs } from "./args";
 
 export const createCommand = defineCommand({
   meta: {
@@ -13,11 +14,7 @@ export const createCommand = defineCommand({
   args: {
     ...commonArgs,
     ...workspaceArgs,
-    name: {
-      type: "string",
-      description: "Vault name",
-      required: true,
-    },
+    ...nameArgs,
   },
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({

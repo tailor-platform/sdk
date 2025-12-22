@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseYAML, stringifyYAML, parseTOML } from "confbox";
+import { findUpSync } from "find-up-simple";
 import ml from "multiline-ts";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
@@ -136,12 +137,10 @@ function fromTailorctlConfig(config: TcConfig): PfConfig {
   return { version: 1, users, profiles, current_user: currentUser };
 }
 
-function validateWorkspaceId(workspaceId: string, source: string): string {
-  const result = z.uuid().safeParse(workspaceId);
+function validateUUID(value: string, source: string): string {
+  const result = z.uuid().safeParse(value);
   if (!result.success) {
-    throw new Error(
-      `Invalid workspace ID from ${source}: must be a valid UUID`,
-    );
+    throw new Error(`Invalid value from ${source}: must be a valid UUID`);
   }
   return result.data;
 }
@@ -154,12 +153,12 @@ export function loadWorkspaceId(opts?: {
 }): string {
   // opts/workspaceId
   if (opts?.workspaceId) {
-    return validateWorkspaceId(opts.workspaceId, "--workspace-id option");
+    return validateUUID(opts.workspaceId, "--workspace-id option");
   }
 
   // env/workspaceId
   if (process.env.TAILOR_PLATFORM_WORKSPACE_ID) {
-    return validateWorkspaceId(
+    return validateUUID(
       process.env.TAILOR_PLATFORM_WORKSPACE_ID,
       "TAILOR_PLATFORM_WORKSPACE_ID environment variable",
     );
@@ -173,7 +172,7 @@ export function loadWorkspaceId(opts?: {
     if (!wsId) {
       throw new Error(`Profile "${profile}" not found`);
     }
-    return validateWorkspaceId(wsId, `profile "${profile}"`);
+    return validateUUID(wsId, `profile "${profile}"`);
   }
 
   // error
@@ -259,14 +258,50 @@ export async function fetchLatestToken(
   return resp.accessToken;
 }
 
+const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
+
 // Load config path from command options or environment variables.
-// Priority: opts/config > env/config > default("tailor.config.ts")
-export function loadConfigPath(configPath?: string): string {
+// Priority: opts/config > env/config > search parent directories
+export function loadConfigPath(configPath?: string): string | undefined {
   if (configPath) {
     return configPath;
   }
   if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
     return process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
   }
-  return "tailor.config.ts";
+
+  // Search for config file in current directory and parent directories
+  return findUpSync(DEFAULT_CONFIG_FILENAME);
+}
+
+// Load organization ID from command options or environment variables.
+// Priority: opts/organizationId > env/organizationId > undefined (optional)
+export function loadOrganizationId(
+  organizationId?: string,
+): string | undefined {
+  if (organizationId) {
+    return validateUUID(organizationId, "--organization-id option");
+  }
+  if (process.env.TAILOR_PLATFORM_ORGANIZATION_ID) {
+    return validateUUID(
+      process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
+      "TAILOR_PLATFORM_ORGANIZATION_ID environment variable",
+    );
+  }
+  return undefined;
+}
+
+// Load folder ID from command options or environment variables.
+// Priority: opts/folderId > env/folderId > undefined (optional)
+export function loadFolderId(folderId?: string): string | undefined {
+  if (folderId) {
+    return validateUUID(folderId, "--folder-id option");
+  }
+  if (process.env.TAILOR_PLATFORM_FOLDER_ID) {
+    return validateUUID(
+      process.env.TAILOR_PLATFORM_FOLDER_ID,
+      "TAILOR_PLATFORM_FOLDER_ID environment variable",
+    );
+  }
+  return undefined;
 }

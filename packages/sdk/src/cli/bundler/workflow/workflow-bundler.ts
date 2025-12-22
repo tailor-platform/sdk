@@ -4,6 +4,7 @@ import ml from "multiline-ts";
 import { parseSync } from "oxc-parser";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { enableInlineSourcemap } from "@/cli/apply";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
@@ -304,8 +305,14 @@ async function bundleSingleJob(
       output: {
         file: outputPath,
         format: "esm",
-        sourcemap: true,
-        minify: true,
+        sourcemap: enableInlineSourcemap ? "inline" : true,
+        minify: enableInlineSourcemap
+          ? {
+              mangle: {
+                keepNames: true,
+              },
+            }
+          : true,
         inlineDynamicImports: true,
       },
       tsconfig,

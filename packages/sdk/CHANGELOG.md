@@ -1,5 +1,75 @@
 # @tailor-platform/sdk
 
+## 0.21.4
+
+### Patch Changes
+
+- [#245](https://github.com/tailor-platform/sdk/pull/245) [`f4d4c8e`](https://github.com/tailor-platform/sdk/commit/f4d4c8e5f0df6161376c4e02af90f76aecb5ec01) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: throw error for prompts in CI environments
+
+  In CI environments, interactive prompts cause the CLI to hang indefinitely. This change detects CI environments using `std-env` and throws a `CIPromptError` when `logger.prompt` is called, instructing users to use the `--yes` flag to skip confirmation prompts.
+
+- [#243](https://github.com/tailor-platform/sdk/pull/243) [`2084c68`](https://github.com/tailor-platform/sdk/commit/2084c68be83fe5693b3df838e5c780d79d7d06fa) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix deletion of resolvers that conflict with system-generated ones
+
+  When a TailorDB type is created (e.g., `User`), the system auto-generates resolvers like `deleteUser`, `createUser`, etc. If a user created a custom resolver with the same name, it could not be deleted because the Application update (SDL composition) failed before the deletion phase.
+
+  This fix reorders the apply phases to delete subgraph services before updating the Application:
+  1. Create/Update services that Application depends on (subgraphs + StaticWebsite)
+  2. Delete subgraph services (before Application update to avoid SDL conflicts)
+  3. Create/Update Application
+  4. Create/Update services that depend on Application (Executor, Workflow)
+  5. Delete services that depend on Application, then Application itself
+
+## 0.21.3
+
+### Patch Changes
+
+- [#238](https://github.com/tailor-platform/sdk/pull/238) [`36639c6`](https://github.com/tailor-platform/sdk/commit/36639c6e1efee873eff89e61c59c60b8b22531a8) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve Connect error messages in CLI
+  - Add `errorHandlingInterceptor` to enhance error messages from Connect protocol
+  - Error messages now include operation type, resource type, and request parameters
+  - Makes it easier to identify which resource caused validation errors
+
+  Before:
+
+  ```
+  ERROR  [invalid_argument] validation error: namespace_name: value does not match regex pattern...
+  ```
+
+  After:
+
+  ```
+  ERROR  [invalid_argument] Failed to list TailorDBTypes: validation error: namespace_name: value does not match regex pattern...
+  Request: {
+    "namespaceName": "db",
+    ...
+  }
+  ```
+
+## 0.21.2
+
+## 0.21.1
+
+### Patch Changes
+
+- [#233](https://github.com/tailor-platform/sdk/pull/233) [`475d368`](https://github.com/tailor-platform/sdk/commit/475d36848c35530cc302b82f365af4d4f84cb9a3) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove setup-node from install-deps action and use standalone pnpm with pnpm env for Node.js installation
+
+## 0.21.0
+
+### Minor Changes
+
+- [#228](https://github.com/tailor-platform/sdk/pull/228) [`5b7749e`](https://github.com/tailor-platform/sdk/commit/5b7749e996f849bac158678cec0d63c710bfef2e) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(cli)!: enhance command arguments and improve documentation for secret and workflow commands
+
+### Patch Changes
+
+- [#225](https://github.com/tailor-platform/sdk/pull/225) [`21f689d`](https://github.com/tailor-platform/sdk/commit/21f689df8f53e2731a36b50e14faa43f09d5a4e2) Thanks [@riku99](https://github.com/riku99)! - Refactor example resolvers to call getDB() inside handlers instead of importing a shared DB instance
+
+- [#229](https://github.com/tailor-platform/sdk/pull/229) [`70527bb`](https://github.com/tailor-platform/sdk/commit/70527bb1c2bb1e0d2f03d94a539c771f6e3f54d3) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: load organization/folder from env
+
+## 0.20.0
+
+### Minor Changes
+
+- [#220](https://github.com/tailor-platform/sdk/pull/220) [`f4b3d4e`](https://github.com/tailor-platform/sdk/commit/f4b3d4e237e08982e185db980a6b5666fb89cb5a) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor(cli)!: rename "user use" to "user switch"
+
 ## 0.19.0
 
 ### Minor Changes
