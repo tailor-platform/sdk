@@ -41,7 +41,6 @@
   "scripts": {
     "test": "vitest",
     "test:coverage": "vitest --coverage",
-    "measure:coverage": "pnpm test:coverage && node ../../scripts/collect-sdk-coverage-metrics.js",
     "build": "tsdown && cross-env FORCE_CREATE=1 node postinstall.mjs",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",

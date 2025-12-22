@@ -34,30 +34,9 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Run SDK coverage
-        run: pnpm --filter @tailor-platform/sdk measure:coverage
-
-      - name: Upload coverage artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: sdk-coverage-results
-          path: |
-            packages/sdk/coverage/
-            packages/sdk/coverage-metrics.json
-
-      - name: Display coverage summary
-        run: |
-          {
-            echo "## SDK Coverage Summary"
-            echo ""
-            echo "### All files"
-            echo "\`\`\`json"
-            jq '.' packages/sdk/coverage-metrics.json
-            echo "\`\`\`"
-          } >> "${GITHUB_STEP_SUMMARY}"
+        run: pnpm --filter @tailor-platform/sdk test:coverage
 
       - name: Run octocov
         uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
         with:
           config: packages/sdk/.octocov.coverage.yml
-        env:
-          OCTOCOV_CUSTOM_METRICS_SDK_COVERAGE: packages/sdk/coverage-metrics.json

@@ -1,9 +1,10 @@
 locale: en
 repository: ${GITHUB_REPOSITORY}/packages/sdk
 
-# We use custom metrics instead of built-in coverage here
 coverage:
-  if: false
+  if: true
+  paths:
+    - coverage/lcov.info
 
 codeToTestRatio:
   if: false
@@ -25,7 +26,3 @@ comment:
 
 summary:
   if: true
-
-customMetrics:
-  sdk-coverage:
-    key: sdk-coverage
