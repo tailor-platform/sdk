@@ -80,3 +80,4 @@ export type {
   WorkflowJobExecutionInfo,
 } from "./workflow/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
+export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";

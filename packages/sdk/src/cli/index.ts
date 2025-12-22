@@ -2,6 +2,7 @@
 
 import { register } from "node:module";
 import { defineCommand, runMain } from "citty";
+import { apiCommand } from "./api-call";
 import { applyCommand } from "./apply";
 import { generateCommand } from "./generator";
 import { initCommand } from "./init";
@@ -33,6 +34,7 @@ export const mainCommand = defineCommand({
       "Tailor CLI for managing Tailor Platform SDK applications",
   },
   subCommands: {
+    api: apiCommand,
     apply: applyCommand,
     generate: generateCommand,
     init: initCommand,
