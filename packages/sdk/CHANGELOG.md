@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 0.22.0
+
+### Minor Changes
+
+- [#258](https://github.com/tailor-platform/sdk/pull/258) [`14da273`](https://github.com/tailor-platform/sdk/commit/14da273763464f2b1e1ad8f3a45b3211a4a0aece) Thanks [@jackchuka](https://github.com/jackchuka)! - feat: introduce api command
+
+### Patch Changes
+
+- [#226](https://github.com/tailor-platform/sdk/pull/226) [`2d0cb80`](https://github.com/tailor-platform/sdk/commit/2d0cb80f627c2c3ef1e72bda11ad25560f0909dd) Thanks [@haru0017](https://github.com/haru0017)! - feat: enable inline sourcemaps for better debugging
+
 ## 0.21.4
 
 ### Patch Changes
