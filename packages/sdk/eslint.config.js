@@ -120,6 +120,10 @@ export default defineConfig([
               group: ["**/cli/**", "@/cli/**"],
               message: "Parser module should not import from cli module.",
             },
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message: "Parser module should not import from configure module.",
+            },
           ],
         },
       ],

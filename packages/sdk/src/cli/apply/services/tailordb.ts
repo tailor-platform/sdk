@@ -41,7 +41,9 @@ import {
   type StandardPermissionCondition,
   type StandardTailorTypeGqlPermission,
   type StandardTailorTypePermission,
-} from "@/configure/services/tailordb/permission";
+  type OperatorFieldConfig,
+  type ParsedTailorDBType,
+} from "@/parser/service/tailordb/types";
 import { fetchAll, type OperatorClient } from "../../client";
 import {
   buildMetaRequest,
@@ -52,9 +54,7 @@ import {
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { OperatorFieldConfig } from "@/configure/types/operator";
 import type { Executor } from "@/parser/service/executor";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 export async function applyTailorDB(
@@ -704,11 +704,7 @@ function protoCondition(
 }
 
 function protoOperand(
-  operand: PermissionOperand<
-    "record",
-    Record<string, unknown>,
-    Record<string, unknown>
-  >,
+  operand: PermissionOperand,
 ): MessageInitShape<typeof TailorDBType_Permission_OperandSchema> {
   if (typeof operand === "object" && !Array.isArray(operand)) {
     if ("user" in operand) {
@@ -740,7 +736,7 @@ function protoOperand(
         },
       };
     } else {
-      throw new Error(`Unknown operand: ${operand satisfies never}`);
+      throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
     }
   }
 
@@ -953,11 +949,7 @@ function protoGqlCondition(
 }
 
 function protoGqlOperand(
-  operand: PermissionOperand<
-    "gql",
-    Record<string, unknown>,
-    Record<string, unknown>
-  >,
+  operand: PermissionOperand,
 ): MessageInitShape<typeof TailorDBGQLPermission_OperandSchema> {
   if (typeof operand === "object" && !Array.isArray(operand)) {
     if ("user" in operand) {
@@ -968,7 +960,8 @@ function protoGqlOperand(
         },
       };
     } else {
-      throw new Error(`Unknown operand: ${operand satisfies never}`);
+      // RecordOperand is not valid for GQL permissions
+      throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
     }
   }
 

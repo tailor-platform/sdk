@@ -10,9 +10,11 @@ import {
   type TailorFieldType,
   type TailorToTs,
 } from "@/configure/types/types";
-import { type TailorDBTypeMetadata } from "./operator-types";
 import {
+  type TailorDBTypeMetadata,
   type Permissions,
+} from "@/parser/service/tailordb/types";
+import {
   type TailorTypeGqlPermission,
   type TailorTypePermission,
   normalizePermission,

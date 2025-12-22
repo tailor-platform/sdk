@@ -2,8 +2,8 @@ import type {
   TailorDBField,
   DBFieldMetadata,
   Hook,
-} from "@/configure/services/tailordb";
-import type { OperatorFieldConfig } from "@/configure/types/operator";
+  OperatorFieldConfig,
+} from "./types";
 
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.

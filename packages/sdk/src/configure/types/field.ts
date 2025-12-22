@@ -1,4 +1,4 @@
-import { type EnumValue } from "@/configure/types/types";
+import { type EnumValue } from "@/parser/service/tailordb/types";
 
 export type AllowedValue = EnumValue;
 

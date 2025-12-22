@@ -1,7 +1,9 @@
 import multiline from "multiline-ts";
 import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
-import type { OperatorFieldConfig } from "@/configure/types/operator";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type {
+  OperatorFieldConfig,
+  ParsedTailorDBType,
+} from "@/parser/service/tailordb/types";
 
 /**
  * Processor that converts a ParsedTailorDBType into Kysely type metadata.

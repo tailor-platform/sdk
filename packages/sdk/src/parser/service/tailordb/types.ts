@@ -1,5 +1,135 @@
-import type { TailorDBTypeMetadata } from "@/configure/services/tailordb/operator-types";
-import type { OperatorFieldConfig } from "@/configure/types/operator";
+import type { ValueOperand } from "@/parser/service/auth/types";
+export type {
+  TailorDBField,
+  DBFieldMetadata,
+  Hook,
+} from "@/configure/services/tailordb";
+
+export interface Script {
+  expr: string;
+}
+
+export interface EnumValue {
+  value: string;
+  description?: string;
+}
+
+interface OperatorValidateConfig {
+  script: Script;
+  errorMessage: string;
+}
+
+interface OperatorFieldHook {
+  create?: Script;
+  update?: Script;
+}
+
+export interface OperatorFieldConfig {
+  type: string;
+  required?: boolean;
+  description?: string;
+  allowedValues?: EnumValue[];
+  array?: boolean;
+  index?: boolean;
+  unique?: boolean;
+  vector?: boolean;
+  foreignKey?: boolean;
+  foreignKeyType?: string;
+  foreignKeyField?: string;
+  validate?: OperatorValidateConfig[];
+  hooks?: OperatorFieldHook;
+  serial?: {
+    start: number;
+    maxValue?: number;
+    format?: string;
+  };
+  fields?: Record<string, OperatorFieldConfig>;
+}
+
+type GqlPermissionAction =
+  | "read"
+  | "create"
+  | "update"
+  | "delete"
+  | "aggregate"
+  | "bulkUpsert";
+
+type StandardPermissionOperator = "eq" | "ne" | "in" | "nin";
+
+type UserOperand = {
+  user: string;
+};
+
+type RecordOperand<Update extends boolean = false> = Update extends true
+  ? { oldRecord: string } | { newRecord: string }
+  : { record: string };
+
+export type PermissionOperand<
+  Level extends "record" | "gql" = "record" | "gql",
+  Update extends boolean = boolean,
+> =
+  | UserOperand
+  | ValueOperand
+  | (Level extends "record" ? RecordOperand<Update> : never);
+
+export type StandardPermissionCondition<
+  Level extends "record" | "gql" = "record" | "gql",
+  Update extends boolean = boolean,
+> = readonly [
+  PermissionOperand<Level, Update>,
+  StandardPermissionOperator,
+  PermissionOperand<Level, Update>,
+];
+
+export type StandardActionPermission<
+  Level extends "record" | "gql" = "record" | "gql",
+  Update extends boolean = boolean,
+> = {
+  conditions: readonly StandardPermissionCondition<Level, Update>[];
+  description?: string;
+  permit: "allow" | "deny";
+};
+
+export type StandardTailorTypePermission = {
+  create: readonly StandardActionPermission<"record", false>[];
+  read: readonly StandardActionPermission<"record", false>[];
+  update: readonly StandardActionPermission<"record", true>[];
+  delete: readonly StandardActionPermission<"record", false>[];
+};
+
+export type StandardGqlPermissionPolicy = {
+  conditions: readonly StandardPermissionCondition<"gql">[];
+  actions: readonly ["all"] | readonly GqlPermissionAction[];
+  permit: "allow" | "deny";
+  description?: string;
+};
+
+export type StandardTailorTypeGqlPermission =
+  readonly StandardGqlPermissionPolicy[];
+
+export interface Permissions {
+  record?: StandardTailorTypePermission;
+  gql?: StandardTailorTypeGqlPermission;
+}
+
+export interface TailorDBTypeMetadata {
+  name: string;
+  description?: string;
+  settings?: {
+    pluralForm?: string;
+    aggregation?: boolean;
+    bulkUpsert?: boolean;
+  };
+  permissions: Permissions;
+  files: Record<string, string>;
+  indexes?: Record<
+    string,
+    {
+      fields: string[];
+      unique?: boolean;
+    }
+  >;
+}
 
 /**
  * Parsed and normalized TailorDB field information
@@ -7,11 +137,10 @@ import type { OperatorFieldConfig } from "@/configure/types/operator";
 export interface ParsedField {
   name: string;
   config: OperatorFieldConfig;
-  // Relation information (if this field is a relation)
   relation?: {
     targetType: string;
-    forwardName: string; // Always populated (generated via inflection if not provided)
-    backwardName: string; // Always populated (generated via inflection if not provided)
+    forwardName: string;
+    backwardName: string;
     key: string;
     unique: boolean;
   };
@@ -21,10 +150,10 @@ export interface ParsedField {
  * Parsed and normalized TailorDB relationship information
  */
 export interface ParsedRelationship {
-  name: string; // Relationship field name (forward or backward)
+  name: string;
   targetType: string;
-  targetField: string; // The field name in the source type that creates this relationship
-  sourceField: string; // The field name in the target type (for foreign key)
+  targetField: string;
+  sourceField: string;
   isArray: boolean;
   description: string;
 }
@@ -34,13 +163,10 @@ export interface ParsedRelationship {
  */
 export interface ParsedTailorDBType {
   name: string;
-  // Normalized plural form (always populated via inflection if not provided)
   pluralForm: string;
   description?: string;
   fields: Record<string, ParsedField>;
-  // Forward relationships (defined on this type)
   forwardRelationships: Record<string, ParsedRelationship>;
-  // Backward relationships (defined on other types pointing to this type)
   backwardRelationships: Record<string, ParsedRelationship>;
   settings: TailorDBTypeMetadata["settings"];
   permissions: TailorDBTypeMetadata["permissions"];
