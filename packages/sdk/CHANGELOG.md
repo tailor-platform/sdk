@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.22.2
+
+### Patch Changes
+
+- [#196](https://github.com/tailor-platform/sdk/pull/196) [`23e791f`](https://github.com/tailor-platform/sdk/commit/23e791f0673eaf003059a86a7c493e0e26282f2d) Thanks [@haru0017](https://github.com/haru0017)! - Switch from custom keys/certs to Tailor platform defaults
+
 ## 0.22.1
 
 ### Patch Changes
