@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 0.22.3
+
+### Patch Changes
+
+- [#253](https://github.com/tailor-platform/sdk/pull/253) [`a3354b7`](https://github.com/tailor-platform/sdk/commit/a3354b7563ef29333948523c5597a1ad96024726) Thanks [@riku99](https://github.com/riku99)! - Clarify unmanaged resource confirmation message in apply flow
+
+- [#272](https://github.com/tailor-platform/sdk/pull/272) [`4448d64`](https://github.com/tailor-platform/sdk/commit/4448d644ad70ad69b717aec98552399ef345122c) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: update CLI command name
+
+- [#224](https://github.com/tailor-platform/sdk/pull/224) [`db2e72e`](https://github.com/tailor-platform/sdk/commit/db2e72e0070ff51977aa36397181095d077762d1) Thanks [@riku99](https://github.com/riku99)! - Add SDK test coverage reporting to PRs via octocov
+
 ## 0.22.2
 
 ### Patch Changes
