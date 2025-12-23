@@ -1,8 +1,16 @@
+import type {
+  TailorTypePermission,
+  TailorTypeGqlPermission,
+} from "@/configure/services/tailordb";
 import type { ValueOperand } from "@/parser/service/auth/types";
+
 export type {
   TailorDBField,
+  TailorDBType,
   DBFieldMetadata,
   Hook,
+  TailorTypePermission,
+  TailorTypeGqlPermission,
 } from "@/configure/services/tailordb";
 
 export interface Script {
@@ -112,6 +120,11 @@ export interface Permissions {
   gql?: StandardTailorTypeGqlPermission;
 }
 
+export interface RawPermissions {
+  record?: TailorTypePermission<any, any>;
+  gql?: TailorTypeGqlPermission<any, any>;
+}
+
 export interface TailorDBTypeMetadata {
   name: string;
   description?: string;
@@ -120,7 +133,7 @@ export interface TailorDBTypeMetadata {
     aggregation?: boolean;
     bulkUpsert?: boolean;
   };
-  permissions: Permissions;
+  permissions: RawPermissions;
   files: Record<string, string>;
   indexes?: Record<
     string,
@@ -169,7 +182,7 @@ export interface ParsedTailorDBType {
   forwardRelationships: Record<string, ParsedRelationship>;
   backwardRelationships: Record<string, ParsedRelationship>;
   settings: TailorDBTypeMetadata["settings"];
-  permissions: TailorDBTypeMetadata["permissions"];
+  permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
 }
