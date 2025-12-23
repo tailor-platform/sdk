@@ -27,7 +27,7 @@ const packageJson = await readPackageJson();
 
 export const mainCommand = defineCommand({
   meta: {
-    name: packageJson.name,
+    name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
     version: packageJson.version,
     description:
       packageJson.description ||
