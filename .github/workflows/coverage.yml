@@ -1,0 +1,42 @@
+name: SDK Test Coverage
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/sdk/**"
+      - ".github/workflows/coverage.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/sdk/**"
+      - ".github/workflows/coverage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: write
+
+jobs:
+  sdk-coverage:
+    name: Measure SDK Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Run SDK coverage
+        run: pnpm --filter @tailor-platform/sdk test:coverage
+
+      - name: Run octocov
+        uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
+        with:
+          config: packages/sdk/.octocov.coverage.yml
