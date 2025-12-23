@@ -17,11 +17,11 @@ testExecutionTime:
 report:
   if: is_default_branch
   datastores:
-    - artifact://${GITHUB_REPOSITORY}/octocov-report-sdk-test-coverage
+    - artifact://${GITHUB_REPOSITORY}/sdk/coverage
 
 diff:
   datastores:
-    - artifact://${GITHUB_REPOSITORY}/octocov-report-sdk-test-coverage
+    - artifact://${GITHUB_REPOSITORY}/sdk/coverage
 
 comment:
   if: is_pull_request

@@ -14,11 +14,11 @@ testExecutionTime:
 report:
   if: is_default_branch
   datastores:
-    - artifact://${GITHUB_REPOSITORY}
+    - artifact://${GITHUB_REPOSITORY}/example/performance
 
 diff:
   datastores:
-    - artifact://${GITHUB_REPOSITORY}
+    - artifact://${GITHUB_REPOSITORY}/example/performance
 
 comment:
   if: is_pull_request
