@@ -19,6 +19,7 @@ report:
 diff:
   datastores:
     - artifact://${GITHUB_REPOSITORY}/sdk-bundle-size
+
 comment:
   if: is_pull_request
 

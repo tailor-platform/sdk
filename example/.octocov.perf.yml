@@ -19,6 +19,7 @@ report:
 diff:
   datastores:
     - artifact://${GITHUB_REPOSITORY}/example-performance
+
 comment:
   if: is_pull_request
 
