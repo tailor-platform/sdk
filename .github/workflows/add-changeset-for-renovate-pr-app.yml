@@ -1,4 +1,4 @@
-name: Add changeset for Renovate PR (GitHub App)
+name: Add changeset for Renovate PR
 
 on:
   pull_request:
@@ -10,30 +10,25 @@ permissions:
 jobs:
   add-changeset-app:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     # Renovate PR only + security check
     # if: |
     #   github.event.pull_request.user.login == 'renovate[bot]' &&
     #   github.event.pull_request.user.type == 'Bot'
     steps:
-      - name: Debug actor
-        run: |
-          echo "github.actor=${{ github.actor }}"
-          echo "pull_request.user.login=${{ github.event.pull_request.user.login }}"
-          echo "sender.login=${{ github.event.sender.login }}"
-          echo "sender.type=${{ github.event.sender.type }}"
-
       - name: Generate GitHub App token
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
         id: app-token
-        uses: tibdex/github-app-token@v2
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         with:
-          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          permission-contents: write
 
       - name: Create changeset commit
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
