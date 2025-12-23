@@ -4,19 +4,16 @@ import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import {
-  parseTailorDBType,
-  buildBackwardRelationships,
+  parseTypes,
+  type ParsedTailorDBType,
+  type TypeSourceInfo,
 } from "@/parser/service/tailordb";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb";
 
 export class TailorDBService {
   private rawTypes: Record<string, Record<string, TailorDBType>> = {};
   private types: Record<string, ParsedTailorDBType> = {};
-  private typeSourceInfo: Record<
-    string,
-    { filePath: string; exportName: string }
-  > = {};
+  private typeSourceInfo: TypeSourceInfo = {};
 
   constructor(
     public readonly namespace: string,
@@ -109,11 +106,6 @@ export class TailorDBService {
       }
     }
 
-    this.types = {};
-    for (const [typeName, type] of Object.entries(allTypes)) {
-      this.types[typeName] = parseTailorDBType(type);
-    }
-
-    buildBackwardRelationships(this.types);
+    this.types = parseTypes(allTypes, this.namespace, this.typeSourceInfo);
   }
 }
