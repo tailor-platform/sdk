@@ -26,6 +26,10 @@ jobs:
           private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
           permission-contents: write
 
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
       - name: Create changeset commit
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
         run: |
@@ -42,6 +46,7 @@ jobs:
           EOF
 
       - name: Commit and push changeset
+        if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
         run: |
           git config --local user.name "tailor-github-actions[bot]"
           git config --local user.email "tailor-github-actions[bot]@users.noreply.github.com"
