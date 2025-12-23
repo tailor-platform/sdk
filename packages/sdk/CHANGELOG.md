@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 0.22.4
+
+### Patch Changes
+
+- [#281](https://github.com/tailor-platform/sdk/pull/281) [`f01dc22`](https://github.com/tailor-platform/sdk/commit/f01dc22ddfa477349df6f625286def14649d8694) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: validate plural form duplication
+
+- [#279](https://github.com/tailor-platform/sdk/pull/279) [`a279670`](https://github.com/tailor-platform/sdk/commit/a279670980ae2c843a95a4103ad14f20c3d99213) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor(logger): change warning logs to info level for clarity
+
+- [#284](https://github.com/tailor-platform/sdk/pull/284) [`23e780c`](https://github.com/tailor-platform/sdk/commit/23e780c1a4771ba198e7eb3074f994aa09c94fd2) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(deps): add find-up-simple dependency
+
 ## 0.22.3
 
 ### Patch Changes
