@@ -27,6 +27,7 @@ jobs:
           permission-contents: write
 
       - uses: actions/checkout@v4
+        if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
         with:
           token: ${{ steps.app-token.outputs.token }}
           ref: ${{ github.head_ref }}
@@ -49,8 +50,8 @@ jobs:
       - name: Commit and push changeset
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
         run: |
-          git config --local user.name "tailor-github-actions[bot]"
-          git config --local user.email "tailor-github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "tailor-pr-trigger[bot]"
+          git config --local user.email "247949890+tailor-pr-trigger[bot]@users.noreply.github.com"
           git add .changeset
           git commit -m "chore: add changeset for renovate"
           git push
