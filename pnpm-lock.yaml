@@ -307,7 +307,7 @@ importers:
         specifier: 1.43.0
         version: 1.43.0
       find-up-simple:
-        specifier: ^1.0.1
+        specifier: 1.0.1
         version: 1.0.1
       inflection:
         specifier: 3.0.2
