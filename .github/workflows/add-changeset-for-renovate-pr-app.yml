@@ -28,79 +28,25 @@ jobs:
 
       - name: Create changeset commit
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const { owner, repo } = context.repo;
-            const pr = context.payload.pull_request;
-            const headRef = pr.head.ref;
-            const prNumber = pr.number;
-            const prTitle = pr.title || 'Update dependencies';
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          FILENAME="renovate-${PR_NUMBER}.md"
 
-            const filename = `renovate-${prNumber}.md`;
-            const content = [
-              '---',
-              '"@tailor-platform/sdk": patch',
-              '---',
-              '',
-              prTitle,
-              '',
-            ].join('\n');
+          cat > ".changeset/${FILENAME}" << EOF
+          ---
+          "@tailor-platform/sdk": patch
+          ---
 
-            // Get latest commit
-            const ref = await github.rest.git.getRef({
-              owner,
-              repo,
-              ref: `heads/${headRef}`,
-            });
+          ${PR_TITLE}
+          EOF
 
-            const commitSha = ref.data.object.sha;
-
-            const commit = await github.rest.git.getCommit({
-              owner,
-              repo,
-              commit_sha: commitSha,
-            });
-
-            // Create blob
-            const blob = await github.rest.git.createBlob({
-              owner,
-              repo,
-              content,
-              encoding: 'utf-8',
-            });
-
-            // Create tree
-            const tree = await github.rest.git.createTree({
-              owner,
-              repo,
-              base_tree: commit.data.tree.sha,
-              tree: [
-                {
-                  path: `.changeset/${filename}`,
-                  mode: '100644',
-                  type: 'blob',
-                  sha: blob.data.sha,
-                },
-              ],
-            });
-
-            // Create commit (signed automatically by GitHub)
-            const newCommit = await github.rest.git.createCommit({
-              owner,
-              repo,
-              message: 'chore: add changeset for renovate',
-              tree: tree.data.sha,
-              parents: [commitSha],
-            });
-
-            // Update ref
-            await github.rest.git.updateRef({
-              owner,
-              repo,
-              ref: `heads/${headRef}`,
-              sha: newCommit.data.sha,
-            });
-
-            core.info(`Created signed commit: ${newCommit.data.sha}`);
+      - name: Commit and push changeset
+        run: |
+          git config --local user.name "tailor-github-actions[bot]"
+          git config --local user.email "tailor-github-actions[bot]@users.noreply.github.com"
+          git add .changeset
+          git commit -m "chore: add changeset for renovate"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
