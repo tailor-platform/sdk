@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.head_ref }}
 
       - name: Create changeset commit
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
