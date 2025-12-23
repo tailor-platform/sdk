@@ -617,7 +617,7 @@ class DependencyWatcher {
 
       // If any groups are affected, trigger restart instead of calling callbacks
       if (impactResult.affectedGroups.length > 0) {
-        logger.warn("File change detected, restarting watch process...", {
+        logger.info("File change detected, restarting watch process...", {
           mode: "stream",
         });
         logger.info(`Changed file: ${absolutePath}`, { mode: "stream" });
