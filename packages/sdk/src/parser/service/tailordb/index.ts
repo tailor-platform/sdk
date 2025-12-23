@@ -6,5 +6,5 @@ export {
   normalizeGqlPermission,
   normalizeActionPermission,
 } from "./permission";
-export { parseTailorDBType, buildBackwardRelationships } from "./type-parser";
+export { parseTypes, type TypeSourceInfo } from "./type-parser";
 export type * from "./types";

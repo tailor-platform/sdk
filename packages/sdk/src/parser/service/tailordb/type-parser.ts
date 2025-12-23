@@ -10,11 +10,36 @@ import type {
   ParsedRelationship,
 } from "./types";
 
+export type TypeSourceInfo = Record<
+  string,
+  { filePath: string; exportName: string }
+>;
+
+/**
+ * Parse multiple TailorDB types, build relationships, and validate uniqueness.
+ * This is the main entry point for parsing TailorDB types.
+ */
+export function parseTypes(
+  rawTypes: Record<string, TailorDBType>,
+  namespace: string,
+  typeSourceInfo?: TypeSourceInfo,
+): Record<string, ParsedTailorDBType> {
+  const types: Record<string, ParsedTailorDBType> = {};
+
+  for (const [typeName, type] of Object.entries(rawTypes)) {
+    types[typeName] = parseTailorDBType(type);
+  }
+
+  buildBackwardRelationships(types);
+  validatePluralFormUniqueness(types, namespace, typeSourceInfo);
+
+  return types;
+}
+
 /**
  * Parse a TailorDBType into a ParsedTailorDBType.
- * This is the main entry point for parsing TailorDB types in the parser layer.
  */
-export function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
+function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
   const metadata = type.metadata;
 
   const pluralForm =
@@ -84,7 +109,7 @@ export function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
 /**
  * Build backward relationships between parsed types.
  */
-export function buildBackwardRelationships(
+function buildBackwardRelationships(
   types: Record<string, ParsedTailorDBType>,
 ): void {
   for (const [typeName, type] of Object.entries(types)) {
@@ -111,5 +136,87 @@ export function buildBackwardRelationships(
         }
       }
     }
+  }
+}
+
+/**
+ * Validate GraphQL query field name uniqueness.
+ * Checks for:
+ * 1. Each type's singular query name != plural query name
+ * 2. No duplicate query names across all types
+ */
+function validatePluralFormUniqueness(
+  types: Record<string, ParsedTailorDBType>,
+  namespace: string,
+  typeSourceInfo?: TypeSourceInfo,
+): void {
+  const errors: string[] = [];
+
+  // Check 1: Each type's singular and plural query names must be different
+  for (const [, parsedType] of Object.entries(types)) {
+    const singularQuery = inflection.camelize(parsedType.name, true);
+    const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
+
+    if (singularQuery === pluralQuery) {
+      const sourceInfo = typeSourceInfo?.[parsedType.name];
+      const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+      errors.push(
+        `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
+          `Use db.type(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
+      );
+    }
+  }
+
+  // Check 2: All query names must be unique across types
+  const queryNameToSource: Record<
+    string,
+    { typeName: string; kind: string }[]
+  > = {};
+
+  for (const parsedType of Object.values(types)) {
+    const singularQuery = inflection.camelize(parsedType.name, true);
+    const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
+
+    if (!queryNameToSource[singularQuery]) {
+      queryNameToSource[singularQuery] = [];
+    }
+    queryNameToSource[singularQuery].push({
+      typeName: parsedType.name,
+      kind: "singular",
+    });
+
+    if (singularQuery !== pluralQuery) {
+      if (!queryNameToSource[pluralQuery]) {
+        queryNameToSource[pluralQuery] = [];
+      }
+      queryNameToSource[pluralQuery].push({
+        typeName: parsedType.name,
+        kind: "plural",
+      });
+    }
+  }
+
+  const duplicates = Object.entries(queryNameToSource).filter(
+    ([, sources]) => sources.length > 1,
+  );
+
+  for (const [queryName, sources] of duplicates) {
+    const sourceList = sources
+      .map((s) => {
+        const sourceInfo = typeSourceInfo?.[s.typeName];
+        const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        return `"${s.typeName}"${location} (${s.kind})`;
+      })
+      .join(", ");
+    errors.push(
+      `GraphQL query field "${queryName}" conflicts between: ${sourceList}`,
+    );
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `GraphQL field name conflicts detected in TailorDB service "${namespace}".\n` +
+        `${errors.map((e) => `  - ${e}`).join("\n")}`,
+    );
   }
 }
