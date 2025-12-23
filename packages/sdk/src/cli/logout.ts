@@ -16,7 +16,7 @@ export const logoutCommand = defineCommand({
       ? pfConfig.users[pfConfig.current_user]
       : undefined;
     if (!tokens) {
-      logger.warn("You are not logged in.");
+      logger.info("You are not logged in.");
       return;
     }
 

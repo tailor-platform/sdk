@@ -15,11 +15,10 @@ export const currentCommand = defineCommand({
 
     // Check if current user is set
     if (!config.current_user) {
-      logger.warn(ml`
+      throw new Error(ml`
         Current user not set.
         Please login first using 'tailor-sdk login' command to register a user.
       `);
-      return;
     }
 
     // Check if user exists

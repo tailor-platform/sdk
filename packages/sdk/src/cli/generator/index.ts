@@ -433,7 +433,7 @@ export class GenerationManager {
 
   private async restartWatchProcess() {
     logger.newline();
-    logger.warn("Restarting watch process to clear module cache...", {
+    logger.info("Restarting watch process to clear module cache...", {
       mode: "stream",
     });
     logger.newline();
