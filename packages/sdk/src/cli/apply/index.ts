@@ -316,7 +316,7 @@ export const applyCommand = defineCommand({
     "dry-run": {
       type: "boolean",
       description: "Run the command without making any changes",
-      alias: "n",
+      alias: "d",
     },
     yes: {
       type: "boolean",
