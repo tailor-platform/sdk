@@ -1,0 +1,101 @@
+name: Add changeset for Renovate PR
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  add-changeset-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Renovate PR only + security check
+    if: |
+      github.event.pull_request.user.login == 'renovate[bot]' &&
+      github.event.pull_request.user.type == 'Bot'
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        with:
+          app-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Create changeset commit
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const headRef = pr.head.ref;
+            const prNumber = pr.number;
+            const prTitle = pr.title || 'Update dependencies';
+            const filename = `renovate-${prNumber}.md`;
+            const content = [
+              '---',
+              '"@tailor-platform/sdk": patch',
+              '---',
+              '',
+              prTitle,
+              '',
+            ].join('\n');
+
+            // Get latest commit
+            const ref = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: `heads/${headRef}`,
+            });
+
+            const commitSha = ref.data.object.sha;
+            const commit = await github.rest.git.getCommit({
+              owner,
+              repo,
+              commit_sha: commitSha,
+            });
+
+            // Create blob
+            const blob = await github.rest.git.createBlob({
+              owner,
+              repo,
+              content,
+              encoding: 'utf-8',
+            });
+
+            // Create tree
+            const tree = await github.rest.git.createTree({
+              owner,
+              repo,
+              base_tree: commit.data.tree.sha,
+              tree: [
+                {
+                  path: `.changeset/${filename}`,
+                  mode: '100644',
+                  type: 'blob',
+                  sha: blob.data.sha,
+                },
+              ],
+            });
+
+            // Create commit (signed automatically by GitHub)
+            const newCommit = await github.rest.git.createCommit({
+              owner,
+              repo,
+              message: 'chore: add changeset for renovate',
+              tree: tree.data.sha,
+              parents: [commitSha],
+            });
+
+            // Update ref
+            await github.rest.git.updateRef({
+              owner,
+              repo,
+              ref: `heads/${headRef}`,
+              sha: newCommit.data.sha,
+            });
