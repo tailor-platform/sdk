@@ -67,7 +67,7 @@ export async function confirmUnmanagedResources(
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  logger.warn("Unmanaged resources detected:");
+  logger.warn("Existing resources not tracked by tailor-sdk were found:");
 
   logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
@@ -76,7 +76,13 @@ export async function confirmUnmanagedResources(
     );
   }
   logger.newline();
-  logger.log("  These resources are not managed by any application.");
+  logger.log(
+    "  These resources may have been created by older SDK versions, Terraform, or CUE.",
+  );
+  logger.log("  To continue, confirm that tailor-sdk should manage them.");
+  logger.log(
+    "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
+  );
 
   if (yes) {
     logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
@@ -86,7 +92,7 @@ export async function confirmUnmanagedResources(
   }
 
   const confirmed = await logger.prompt(
-    `Add these resources to "${appName}"?`,
+    `Allow tailor-sdk to manage these resources for "${appName}"?`,
     { type: "confirm", initial: false },
   );
   if (!confirmed) {

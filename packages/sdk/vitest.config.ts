@@ -14,5 +14,8 @@ export default defineConfig({
     globals: true,
     watch: false,
     typecheck: { enabled: true },
+    coverage: {
+      reporter: ["text", "lcov"],
+    },
   },
 });

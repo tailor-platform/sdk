@@ -1,12 +1,15 @@
 locale: en
 repository: ${GITHUB_REPOSITORY}/packages/sdk
 
-# Disable coverage metrics
 coverage:
-  if: false
+  paths:
+    - coverage/lcov.info
 
 codeToTestRatio:
-  if: false
+  code:
+    - src/**/*.ts
+  test:
+    - src/**/*.test.ts
 
 testExecutionTime:
   if: false
@@ -14,18 +17,14 @@ testExecutionTime:
 report:
   if: is_default_branch
   datastores:
-    - artifact://${GITHUB_REPOSITORY}/sdk-bundle-size
+    - artifact://${GITHUB_REPOSITORY}/sdk-coverage
 
 diff:
   datastores:
-    - artifact://${GITHUB_REPOSITORY}/sdk-bundle-size
+    - artifact://${GITHUB_REPOSITORY}/sdk-coverage
 
 comment:
   if: is_pull_request
 
 summary:
   if: true
-
-customMetrics:
-  bundle-size:
-    key: bundle-size

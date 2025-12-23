@@ -12,13 +12,11 @@ import {
 } from "@/configure/types/types";
 import {
   type TailorDBTypeMetadata,
-  type Permissions,
+  type RawPermissions,
 } from "@/parser/service/tailordb/types";
 import {
   type TailorTypeGqlPermission,
   type TailorTypePermission,
-  normalizePermission,
-  normalizeGqlPermission,
 } from "./permission";
 import {
   type DBFieldMetadata,
@@ -424,7 +422,7 @@ export class TailorDBType<
   public _description?: string;
   private _settings: TypeFeatures = {};
   private _indexes: IndexDef<this>[] = [];
-  private _permissions: Permissions = {};
+  private _permissions: RawPermissions = {};
   private _files: Record<string, string> = {};
 
   constructor(
@@ -550,7 +548,7 @@ export class TailorDBType<
     >,
   >(permission: P) {
     const ret = this as TailorDBType<Fields, U>;
-    ret._permissions.record = normalizePermission(permission);
+    ret._permissions.record = permission;
     return ret;
   }
 
@@ -559,7 +557,7 @@ export class TailorDBType<
     P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
   >(permission: P) {
     const ret = this as TailorDBType<Fields, U>;
-    ret._permissions.gql = normalizeGqlPermission(permission);
+    ret._permissions.gql = permission;
     return ret;
   }
 
