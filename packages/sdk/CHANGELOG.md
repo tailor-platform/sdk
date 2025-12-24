@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 0.23.3
+
+### Patch Changes
+
+- [#283](https://github.com/tailor-platform/sdk/pull/283) [`cb117a8`](https://github.com/tailor-platform/sdk/commit/cb117a89ac6ca1ff4db654f1c89a21800714ff5f) Thanks [@riku99](https://github.com/riku99)! - Automatically add a changeset commit to newly opened Renovate PRs
+
+- [#298](https://github.com/tailor-platform/sdk/pull/298) [`cc0f9b4`](https://github.com/tailor-platform/sdk/commit/cc0f9b4c7b1bdb7cefc1336143c0952a7c7c4b44) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update suzuki-shunsuke/commit-action action to v0.0.14
+
 ## 0.23.2
 
 ### Patch Changes
