@@ -8,6 +8,8 @@ jobs:
   add-changeset-app:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
 
     if: >-
       github.event.sender.type != 'Bot' &&
