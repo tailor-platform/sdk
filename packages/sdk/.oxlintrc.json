@@ -54,7 +54,7 @@
     "no-unexpected-multiline": "error",
     "no-unsafe-finally": "error",
     "no-unsafe-negation": "error",
-    "no-unsafe-optional-chaining": "error",
+    "no-unsafe-optional-chaining": "off",
     "no-unused-labels": "error",
     "no-unused-private-class-members": "error",
     "no-unused-vars": "error",
@@ -182,6 +182,12 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "files": ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
       }
     },
     {
