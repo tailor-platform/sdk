@@ -27,3 +27,5 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+        env:
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
