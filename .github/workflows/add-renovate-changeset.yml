@@ -12,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    # Renovate PR only + security check
-    if: |
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
       github.event.pull_request.user.login == 'renovate[bot]' &&
       github.event.pull_request.user.type == 'Bot'
 
@@ -25,20 +25,16 @@ jobs:
 
       - name: Create changeset file
         run: |
-          set -eu
-          pr_number="${{ github.event.pull_request.number }}"
-          pr_title="${{ github.event.pull_request.title }}"
-          if [ -z "$pr_title" ]; then
-            pr_title="Update dependencies"
-          fi
-          mkdir -p .changeset
-          cat <<EOF > ".changeset/renovate-${pr_number}.md"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          FILENAME="renovate-${PR_NUMBER}.md"
+
+          cat > ".changeset/${FILENAME}" << EOF
           ---
           "@tailor-platform/sdk": patch
           ---
 
-          $pr_title
-
+          ${PR_TITLE}
           EOF
 
       - name: Commit changeset
