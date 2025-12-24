@@ -5,7 +5,7 @@ on:
     types: [opened]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   add-changeset-app:
@@ -18,84 +18,35 @@ jobs:
       github.event.pull_request.user.type == 'Bot'
 
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          app-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
-          permission-contents: write
+          persist-credentials: false
 
-      - name: Create changeset commit
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      - name: Create changeset file
+        run: |
+          set -eu
+          pr_number="${{ github.event.pull_request.number }}"
+          pr_title="${{ github.event.pull_request.title }}"
+          if [ -z "$pr_title" ]; then
+            pr_title="Update dependencies"
+          fi
+          mkdir -p .changeset
+          cat <<EOF > ".changeset/renovate-${pr_number}.md"
+          ---
+          "@tailor-platform/sdk": patch
+          ---
+
+          $pr_title
+
+          EOF
+
+      - name: Commit changeset
+        uses: suzuki-shunsuke/commit-action@cc96d3a3fd959d05e9b79ca395eb30b835aeba24 # v0.0.7
         with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const { owner, repo } = context.repo;
-            const pr = context.payload.pull_request;
-            const headRef = pr.head.ref;
-            const prNumber = pr.number;
-            const prTitle = pr.title || 'Update dependencies';
-            const filename = `renovate-${prNumber}.md`;
-            const content = [
-              '---',
-              '"@tailor-platform/sdk": patch',
-              '---',
-              '',
-              prTitle,
-              '',
-            ].join('\n');
-
-            // Get latest commit
-            const ref = await github.rest.git.getRef({
-              owner,
-              repo,
-              ref: `heads/${headRef}`,
-            });
-
-            const commitSha = ref.data.object.sha;
-            const commit = await github.rest.git.getCommit({
-              owner,
-              repo,
-              commit_sha: commitSha,
-            });
-
-            // Create blob
-            const blob = await github.rest.git.createBlob({
-              owner,
-              repo,
-              content,
-              encoding: 'utf-8',
-            });
-
-            // Create tree
-            const tree = await github.rest.git.createTree({
-              owner,
-              repo,
-              base_tree: commit.data.tree.sha,
-              tree: [
-                {
-                  path: `.changeset/${filename}`,
-                  mode: '100644',
-                  type: 'blob',
-                  sha: blob.data.sha,
-                },
-              ],
-            });
-
-            // Create commit (signed automatically by GitHub)
-            const newCommit = await github.rest.git.createCommit({
-              owner,
-              repo,
-              message: 'chore: add changeset for renovate',
-              tree: tree.data.sha,
-              parents: [commitSha],
-            });
-
-            // Update ref
-            await github.rest.git.updateRef({
-              owner,
-              repo,
-              ref: `heads/${headRef}`,
-              sha: newCommit.data.sha,
-            });
+          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          commit_message: "chore: add changeset for renovate"
+          files: |
+            .changeset/renovate-${{ github.event.pull_request.number }}.md
+          fail_on_self_push: false
