@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
-import { planTailorDB } from "./tailordb";
+import { applyTailorDB, planTailorDB } from "./tailordb";
 import type { PlanContext } from "../index";
 import type { Application } from "@/cli/application";
 import type { TailorDBService } from "@/cli/application/tailordb/service";
@@ -246,5 +246,127 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.service.deletes[0].name).toBe("my-tailordb");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
+  });
+});
+
+describe("applyTailorDB phase separation", () => {
+  // Helper to create mock client with spies for delete operations
+  function createMockClientWithSpies() {
+    return {
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      deleteTailorDBService: vi.fn().mockResolvedValue({}),
+      // Also mock create/update methods for completeness
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  // Helper to create a mock plan result with deletes
+  function createMockPlanResult() {
+    return {
+      changeSet: {
+        service: {
+          creates: [],
+          updates: [],
+          deletes: [
+            {
+              name: "test-tailordb",
+              request: {
+                workspaceId: "test-workspace",
+                namespaceName: "test-tailordb",
+              },
+            },
+          ],
+          title: "TailorDB Services",
+          isEmpty: () => false,
+          print: () => {},
+        },
+        type: {
+          creates: [],
+          updates: [],
+          deletes: [
+            {
+              name: "TestType",
+              request: {
+                workspaceId: "test-workspace",
+                namespaceName: "test-tailordb",
+                typeName: "TestType",
+              },
+            },
+          ],
+          title: "TailorDB Types",
+          isEmpty: () => false,
+          print: () => {},
+        },
+        gqlPermission: {
+          creates: [],
+          updates: [],
+          deletes: [
+            {
+              name: "TestPermission",
+              request: {
+                workspaceId: "test-workspace",
+                namespaceName: "test-tailordb",
+                permissionName: "TestPermission",
+              },
+            },
+          ],
+          title: "TailorDB GQL Permissions",
+          isEmpty: () => false,
+          print: () => {},
+        },
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("delete-resources phase deletes gqlPermissions and types, but NOT services", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyTailorDB(client, planResult, "delete-resources");
+
+    // GQLPermissions should be deleted
+    expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(1);
+    // Types should be deleted
+    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
+    // Services should NOT be deleted
+    expect(client.deleteTailorDBService).not.toHaveBeenCalled();
+  });
+
+  test("delete-services phase deletes ONLY services", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyTailorDB(client, planResult, "delete-services");
+
+    // GQLPermissions should NOT be deleted
+    expect(client.deleteTailorDBGQLPermission).not.toHaveBeenCalled();
+    // Types should NOT be deleted
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    // Services should be deleted
+    expect(client.deleteTailorDBService).toHaveBeenCalledTimes(1);
+  });
+
+  test("create-update phase does not delete anything", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    // No deletes should happen in create-update phase
+    expect(client.deleteTailorDBGQLPermission).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBService).not.toHaveBeenCalled();
   });
 });

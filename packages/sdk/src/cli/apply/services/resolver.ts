@@ -74,7 +74,7 @@ export async function applyPipeline(
         client.updatePipelineResolver(update.request),
       ),
     ]);
-  } else if (phase === "delete") {
+  } else if (phase === "delete" || phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // Resolvers
     await Promise.all(
@@ -83,7 +83,16 @@ export async function applyPipeline(
       ),
     );
 
-    // Services
+    // Services - only delete if phase is "delete" (legacy) not "delete-resources"
+    if (phase === "delete") {
+      await Promise.all(
+        changeSet.service.deletes.map((del) =>
+          client.deletePipelineService(del.request),
+        ),
+      );
+    }
+  } else if (phase === "delete-services") {
+    // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) =>
         client.deletePipelineService(del.request),
