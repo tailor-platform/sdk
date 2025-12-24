@@ -22,7 +22,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyApplication(
   client: OperatorClient,
   changeSet: Awaited<ReturnType<typeof planApplication>>,
-  phase: ApplyPhase & ("create-update" | "delete") = "create-update",
+  phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   if (phase === "create-update") {
     // Applications
