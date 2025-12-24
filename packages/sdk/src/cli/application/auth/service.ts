@@ -14,6 +14,7 @@ export class AuthService {
   constructor(
     public readonly config: AuthOwnConfig,
     public readonly tailorDBServices: ReadonlyArray<TailorDBService>,
+    public readonly externalTailorDBNamespaces: ReadonlyArray<string>,
   ) {
     // Parse idProvider to apply default values if it exists
     this._parsedConfig = {
@@ -45,15 +46,20 @@ export class AuthService {
       return;
     }
 
-    await Promise.all(
-      this.tailorDBServices.map((service) => service.loadTypes()),
-    );
+    const totalNamespaceCount =
+      this.tailorDBServices.length + this.externalTailorDBNamespaces.length;
 
     let userProfileNamespace: string | undefined;
 
-    if (this.tailorDBServices.length === 1) {
-      userProfileNamespace = this.tailorDBServices[0].namespace;
+    if (totalNamespaceCount === 1) {
+      userProfileNamespace =
+        this.tailorDBServices[0]?.namespace ??
+        this.externalTailorDBNamespaces[0];
     } else {
+      await Promise.all(
+        this.tailorDBServices.map((service) => service.loadTypes()),
+      );
+
       const userProfileTypeName =
         typeof this.config.userProfile.type === "object" &&
         "name" in this.config.userProfile.type
