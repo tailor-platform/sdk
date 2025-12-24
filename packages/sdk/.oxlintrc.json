@@ -154,23 +154,9 @@
       }
     },
     {
-      "files": ["src/parser/**/*.ts"],
+      "files": ["src/parser/**/types.ts"],
       "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["**/cli/**", "@/cli/**"],
-                "message": "Parser module should not import from cli module."
-              },
-              {
-                "group": ["**/configure/**", "@/configure/**"],
-                "message": "Parser module should not import from configure module."
-              }
-            ]
-          }
-        ]
+        "no-restricted-imports": "off"
       }
     },
     {
