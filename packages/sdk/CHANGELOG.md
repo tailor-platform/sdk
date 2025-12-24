@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 0.23.1
+
+### Patch Changes
+
+- [#294](https://github.com/tailor-platform/sdk/pull/294) [`91bafb7`](https://github.com/tailor-platform/sdk/commit/91bafb7d5b8d0c4b2c9fb9f8b9260e33c6213df0) Thanks [@remiposo](https://github.com/remiposo)! - feat: Support optional namespace for userProfile in auth config
+  - Auto-resolve namespace when only one TailorDB exists (including external)
+  - Allow explicit namespace specification when multiple TailorDBs exist
+
 ## 0.23.0
 
 ### Minor Changes
