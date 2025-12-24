@@ -49,7 +49,7 @@ const SCALAR_TYPE_MAP = {
 export async function applyPipeline(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planPipeline>>,
-  phase: ApplyPhase = "create-update",
+  phase: Exclude<ApplyPhase, "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -74,7 +74,7 @@ export async function applyPipeline(
         client.updatePipelineResolver(update.request),
       ),
     ]);
-  } else if (phase === "delete" || phase === "delete-resources") {
+  } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // Resolvers
     await Promise.all(
@@ -82,15 +82,6 @@ export async function applyPipeline(
         client.deletePipelineResolver(del.request),
       ),
     );
-
-    // Services - only delete if phase is "delete" (legacy) not "delete-resources"
-    if (phase === "delete") {
-      await Promise.all(
-        changeSet.service.deletes.map((del) =>
-          client.deletePipelineService(del.request),
-        ),
-      );
-    }
   } else if (phase === "delete-services") {
     // Services only
     await Promise.all(

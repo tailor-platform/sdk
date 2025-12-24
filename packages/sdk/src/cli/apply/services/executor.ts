@@ -28,7 +28,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyExecutor(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planExecutor>>,
-  phase: ApplyPhase = "create-update",
+  phase: ApplyPhase & ("create-update" | "delete") = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
