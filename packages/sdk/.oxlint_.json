@@ -65,25 +65,8 @@
     "require-yield": "error",
     "use-isnan": "error",
     "valid-typeof": "error",
-    "@typescript-eslint/ban-ts-comment": "error",
     "no-array-constructor": "error",
-    "@typescript-eslint/no-duplicate-enum-values": "error",
-    "@typescript-eslint/no-empty-object-type": "error",
-    "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-extra-non-null-assertion": "error",
-    "@typescript-eslint/no-misused-new": "error",
-    "@typescript-eslint/no-namespace": "error",
-    "@typescript-eslint/no-non-null-asserted-optional-chain": "error",
-    "@typescript-eslint/no-require-imports": "error",
-    "@typescript-eslint/no-this-alias": "error",
-    "@typescript-eslint/no-unnecessary-type-constraint": "error",
-    "@typescript-eslint/no-unsafe-declaration-merging": "error",
-    "@typescript-eslint/no-unsafe-function-type": "error",
     "no-unused-expressions": "error",
-    "@typescript-eslint/no-wrapper-object-types": "error",
-    "@typescript-eslint/prefer-as-const": "error",
-    "@typescript-eslint/prefer-namespace-keyword": "error",
-    "@typescript-eslint/triple-slash-reference": "error",
     "import/namespace": "error",
     "import/default": "error",
     "import/no-named-as-default": "warn",
@@ -91,12 +74,7 @@
     "import/no-duplicates": "warn",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
-    "jsdoc/check-tag-names": [
-      "warn",
-      {
-        "definedTags": ["tailor-platform/sdk"]
-      }
-    ],
+    "jsdoc/check-tag-names": "warn",
     "jsdoc/empty-tags": "warn",
     "jsdoc/implements-on-classes": "warn",
     "jsdoc/no-defaults": "warn",
@@ -135,15 +113,6 @@
     {
       "files": ["src/**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
       "rules": {
-        "@typescript-eslint/consistent-type-imports": [
-          "error",
-          {
-            "prefer": "type-imports",
-            "fixStyle": "inline-type-imports"
-          }
-        ],
-        "@typescript-eslint/no-explicit-any": "warn",
-        "import/no-cycle": "off",
         "no-unused-vars": [
           "error",
           {
@@ -189,6 +158,10 @@
       "rules": {
         "no-restricted-imports": "off"
       }
+    },
+    {
+      "files": ["**/*.js", "**/*.mjs"],
+      "rules": {}
     },
     {
       "files": ["**/*.js", "**/*.mjs"],
