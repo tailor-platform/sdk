@@ -13,12 +13,13 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
-import { initOperatorClient, type OperatorClient } from "../client";
-import { loadAccessToken } from "../context";
-import { apply } from "./index";
+import { initOperatorClient, type OperatorClient } from "../src/cli/client";
+import { loadAccessToken } from "../src/cli/context";
+import { apply } from "../src/cli/apply";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,11 +74,16 @@ describe("E2E: Service deletion order", () => {
     // Set workspace ID for apply operations
     process.env.TAILOR_PLATFORM_WORKSPACE_ID = workspaceId;
 
-    // Create temp directory inside SDK package so @tailor-platform/sdk can be resolved
-    // Go up from src/cli/apply to packages/sdk (3 levels: apply -> cli -> src -> sdk)
-    const sdkRoot = path.resolve(__dirname, "../../..");
-    tempDir = path.join(sdkRoot, `.e2e-test-${testRunId}`);
-    fs.mkdirSync(tempDir, { recursive: true });
+    // Create temp directory and symlink @tailor-platform/sdk for module resolution
+    const sdkRoot = path.resolve(__dirname, "..");
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-test-"));
+    const nodeModulesDir = path.join(
+      tempDir,
+      "node_modules",
+      "@tailor-platform",
+    );
+    fs.mkdirSync(nodeModulesDir, { recursive: true });
+    fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
   }, 120000); // 2 minute timeout for workspace creation
 
   afterAll(async () => {

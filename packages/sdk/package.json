@@ -40,6 +40,8 @@
   "types": "./dist/configure/index.d.mts",
   "scripts": {
     "test": "vitest",
+    "test:unit": "vitest --project=unit",
+    "test:e2e": "vitest --project=e2e",
     "test:coverage": "vitest --coverage",
     "build": "tsdown && cross-env FORCE_CREATE=1 node postinstall.mjs",
     "lint": "eslint --cache .",

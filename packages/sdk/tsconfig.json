@@ -15,6 +15,11 @@
     },
     "types": ["@tailor-platform/function-types"]
   },
-  "include": ["./src/**/*.ts", "./tsdown.config.ts", "./vitest.config.ts"],
+  "include": [
+    "./src/**/*.ts",
+    "./e2e/**/*.ts",
+    "./tsdown.config.ts",
+    "./vitest.config.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }
