@@ -30,7 +30,7 @@ export function parseTypes(
     types[typeName] = parseTailorDBType(type);
   }
 
-  buildBackwardRelationships(types);
+  buildBackwardRelationships(types, namespace, typeSourceInfo);
   validatePluralFormUniqueness(types, namespace, typeSourceInfo);
 
   return types;
@@ -108,10 +108,26 @@ function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
 
 /**
  * Build backward relationships between parsed types.
+ * Also validates that backward relation names are unique within each type.
  */
 function buildBackwardRelationships(
   types: Record<string, ParsedTailorDBType>,
+  namespace: string,
+  typeSourceInfo?: TypeSourceInfo,
 ): void {
+  // Track backward name sources for duplicate detection
+  // Map: targetTypeName -> backwardName -> array of source info
+  const backwardNameSources: Record<
+    string,
+    Record<string, { sourceType: string; fieldName: string }[]>
+  > = {};
+
+  // Initialize tracking for all types
+  for (const typeName of Object.keys(types)) {
+    backwardNameSources[typeName] = {};
+  }
+
+  // Build backward relationships and track sources
   for (const [typeName, type] of Object.entries(types)) {
     for (const [otherTypeName, otherType] of Object.entries(types)) {
       for (const [fieldName, field] of Object.entries(otherType.fields)) {
@@ -125,6 +141,15 @@ function buildBackwardRelationships(
               : inflection.pluralize(lowerName);
           }
 
+          // Track the source of this backward name
+          if (!backwardNameSources[typeName][backwardName]) {
+            backwardNameSources[typeName][backwardName] = [];
+          }
+          backwardNameSources[typeName][backwardName].push({
+            sourceType: otherTypeName,
+            fieldName,
+          });
+
           type.backwardRelationships[backwardName] = {
             name: backwardName,
             targetType: otherTypeName,
@@ -136,6 +161,67 @@ function buildBackwardRelationships(
         }
       }
     }
+  }
+
+  // Check for duplicates and collect errors
+  const errors: string[] = [];
+
+  for (const [targetTypeName, backwardNames] of Object.entries(
+    backwardNameSources,
+  )) {
+    const targetType = types[targetTypeName];
+    const targetTypeSourceInfo = typeSourceInfo?.[targetTypeName];
+    const targetLocation = targetTypeSourceInfo
+      ? ` (${targetTypeSourceInfo.filePath})`
+      : "";
+
+    for (const [backwardName, sources] of Object.entries(backwardNames)) {
+      // Check for duplicate backward relation names
+      if (sources.length > 1) {
+        const sourceList = sources
+          .map((s) => {
+            const sourceInfo = typeSourceInfo?.[s.sourceType];
+            const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+            return `${s.sourceType}.${s.fieldName}${location}`;
+          })
+          .join(", ");
+        errors.push(
+          `Backward relation name "${backwardName}" on type "${targetTypeName}" is duplicated from: ${sourceList}. ` +
+            `Use the "backward" option in .relation() to specify unique names.`,
+        );
+      }
+
+      // Check for conflict with existing fields
+      if (backwardName in targetType.fields) {
+        const source = sources[0];
+        const sourceInfo = typeSourceInfo?.[source.sourceType];
+        const sourceLocation = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        errors.push(
+          `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
+            `conflicts with existing field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
+            `Use the "backward" option in .relation() to specify a different name.`,
+        );
+      }
+
+      // Check for conflict with files fields
+      if (targetType.files && backwardName in targetType.files) {
+        const source = sources[0];
+        const sourceInfo = typeSourceInfo?.[source.sourceType];
+        const sourceLocation = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        errors.push(
+          `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
+            `conflicts with files field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
+            `Use the "backward" option in .relation() to specify a different name.`,
+        );
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(
+      `Backward relation name conflicts detected in TailorDB service "${namespace}".\n` +
+        `${errors.map((e) => `  - ${e}`).join("\n")}`,
+    );
   }
 }
 

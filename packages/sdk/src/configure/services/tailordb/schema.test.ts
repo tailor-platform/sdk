@@ -1309,3 +1309,45 @@ describe("TailorDBType/TailorDBField description support", () => {
     expect(userType.fields.email.metadata.description).toBe("User email");
   });
 });
+
+describe("TailorDBType files method tests", () => {
+  it("files method adds file fields to metadata", () => {
+    const userType = db
+      .type("User", {
+        name: db.string(),
+      })
+      .files({
+        avatar: "profile image",
+        document: "user document",
+      });
+
+    expect(userType.metadata.files).toEqual({
+      avatar: "profile image",
+      document: "user document",
+    });
+  });
+
+  it("files field names cannot conflict with existing field names (type error)", () => {
+    const _userType = db.type("User", {
+      name: db.string(),
+      avatar: db.string(), // existing field
+    });
+
+    // This should be a type error - files field name conflicts with existing field
+    type FilesParam = Parameters<typeof _userType.files>[0];
+    // "avatar" key should be `never` due to Partial<Record<keyof output<this>, never>>
+    expectTypeOf<FilesParam>().toExtend<{ avatar?: never }>();
+    expectTypeOf<FilesParam>().not.toExtend<{ nonExists?: never }>();
+  });
+
+  it("files field names that do not conflict are allowed", () => {
+    const _userType = db.type("User", {
+      name: db.string(),
+    });
+
+    type FilesParam = Parameters<typeof _userType.files>[0];
+    // "avatar" is not an existing field, so it should be allowed
+    expectTypeOf<{ avatar: string }>().toExtend<FilesParam>();
+    expectTypeOf<{ avatar?: never }>().not.toExtend<FilesParam>();
+  });
+});
