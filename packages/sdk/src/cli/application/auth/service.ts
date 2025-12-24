@@ -7,7 +7,6 @@ export class AuthService {
   private _userProfile?: AuthOwnConfig["userProfile"] & {
     namespace: string;
   };
-  private _tenantProvider?: AuthOwnConfig["tenantProvider"];
   private _parsedConfig: AuthOwnConfig & {
     idProvider?: IdProviderConfig;
   };
@@ -27,10 +26,6 @@ export class AuthService {
     return this._userProfile;
   }
 
-  get tenantProvider() {
-    return this._tenantProvider;
-  }
-
   get parsedConfig(): AuthOwnConfig & {
     idProvider?: IdProviderConfig;
   } {
@@ -38,8 +33,6 @@ export class AuthService {
   }
 
   async resolveNamespaces(): Promise<void> {
-    this._tenantProvider = this.config.tenantProvider;
-
     if (!this.config.userProfile) {
       return;
     }

@@ -21,6 +21,7 @@ import {
   type SCIMConfig,
   type SCIMResource,
   type AuthAttributeValue,
+  type TenantProviderConfig,
 } from "@/parser/service/auth";
 import {
   fetchAll,
@@ -835,13 +836,13 @@ async function planTenantConfigs(
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (auth.tenantProvider) {
+        if (config.tenantProvider) {
           changeSet.creates.push({
             name,
             request: {
               workspaceId,
               namespaceName: config.name,
-              tenantProviderConfig: protoTenantConfig(auth.tenantProvider),
+              tenantProviderConfig: protoTenantConfig(config.tenantProvider),
             },
           });
         }
@@ -849,13 +850,13 @@ async function planTenantConfigs(
       }
       throw error;
     }
-    if (auth.tenantProvider) {
+    if (config.tenantProvider) {
       changeSet.updates.push({
         name,
         request: {
           workspaceId,
           namespaceName: config.name,
-          tenantProviderConfig: protoTenantConfig(auth.tenantProvider),
+          tenantProviderConfig: protoTenantConfig(config.tenantProvider),
         },
       });
     } else {
@@ -893,7 +894,7 @@ async function planTenantConfigs(
 }
 
 function protoTenantConfig(
-  tenantConfig: NonNullable<AuthService["tenantProvider"]>,
+  tenantConfig: TenantProviderConfig,
 ): MessageInitShape<typeof TenantProviderConfigSchema> {
   return {
     providerType: TenantProviderConfig_TenantProviderType.TAILORDB,
