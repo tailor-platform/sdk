@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 0.23.4
+
+### Patch Changes
+
+- [#302](https://github.com/tailor-platform/sdk/pull/302) [`b6f952d`](https://github.com/tailor-platform/sdk/commit/b6f952d86e84af396b80928fdd0fddc897ba00e3) Thanks [@toiroakr](https://github.com/toiroakr)! - Throw an error when backward relation names conflict with other backward relations, existing fields, or files fields
+
 ## 0.23.3
 
 ### Patch Changes
