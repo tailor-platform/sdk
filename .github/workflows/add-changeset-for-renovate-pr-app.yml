@@ -5,40 +5,26 @@ on:
     types: [opened, synchronize]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   add-changeset-app:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    # Renovate PR only + security check
-    # if: |
-    #   github.event.pull_request.user.login == 'renovate[bot]' &&
-    #   github.event.pull_request.user.type == 'Bot'
     steps:
-      - name: Generate GitHub App token
+      - name: Checkout
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
-        id: app-token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          app-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
-          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
-          permission-contents: write
+          persist-credentials: false
 
-      - uses: actions/checkout@v4
-        if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          ref: ${{ github.head_ref }}
-
-      - name: Create changeset commit
+      - name: Create changeset file
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_NUMBER="${{ github.event.pull_request.number }}"
           FILENAME="renovate-${PR_NUMBER}.md"
-
           cat > ".changeset/${FILENAME}" << EOF
           ---
           "@tailor-platform/sdk": patch
@@ -47,13 +33,13 @@ jobs:
           ${PR_TITLE}
           EOF
 
-      - name: Commit and push changeset
+      - name: Commit changeset
         if: github.event.sender.type != 'Bot' && github.actor != 'tailor-pr-trigger[bot]'
-        run: |
-          git config --local user.name "tailor-pr-trigger[bot]"
-          git config --local user.email "247949890+tailor-pr-trigger[bot]@users.noreply.github.com"
-          git add .changeset
-          git commit -m "chore: add changeset for renovate"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        uses: suzuki-shunsuke/commit-action@cc96d3a3fd959d05e9b79ca395eb30b835aeba24 # v0.0.7
+        with:
+          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          commit_message: "chore: add changeset for renovate"
+          files: |
+            .changeset/renovate-${{ github.event.pull_request.number }}.md
+          fail_on_self_push: false
