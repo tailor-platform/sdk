@@ -4,6 +4,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import importPlugin from "eslint-plugin-import";
 import jsdoc from "eslint-plugin-jsdoc";
+import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
   globalIgnores(["dist/"]),
@@ -231,4 +232,6 @@ export default defineConfig([
       "import/no-unresolved": "off",
     },
   },
+  ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
+  // ...oxlint.configs["flat/recommended"],
 ]);
