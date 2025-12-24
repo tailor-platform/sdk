@@ -164,6 +164,7 @@ type UserProfile<
   AttributeMap extends UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[],
 > = {
+  namespace?: string;
   type: User;
   usernameField: UsernameFieldKey<User>;
   attributes?: DisallowExtraKeys<AttributeMap, UserAttributeKey<User>>;
