@@ -13,7 +13,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyWorkflow(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planWorkflow>>,
-  phase: ApplyPhase & ("create-update" | "delete") = "create-update",
+  phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
