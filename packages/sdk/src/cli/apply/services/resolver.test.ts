@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
-import { planPipeline } from "./resolver";
+import { applyPipeline, planPipeline } from "./resolver";
 import type { PlanContext } from "../index";
 import type { Application } from "@/cli/application";
 import type { ResolverService } from "@/cli/application/resolver/service";
@@ -256,5 +256,103 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.deletes[0].name).toBe("my-resolver");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
+  });
+});
+
+describe("applyPipeline phase separation", () => {
+  // Helper to create mock client with spies for delete operations
+  function createMockClientWithSpies() {
+    return {
+      deletePipelineResolver: vi.fn().mockResolvedValue({}),
+      deletePipelineService: vi.fn().mockResolvedValue({}),
+      // Also mock create/update methods for completeness
+      createPipelineService: vi.fn().mockResolvedValue({}),
+      createPipelineResolver: vi.fn().mockResolvedValue({}),
+      updatePipelineResolver: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  // Helper to create a mock plan result with deletes
+  function createMockPlanResult() {
+    return {
+      changeSet: {
+        service: {
+          creates: [],
+          updates: [],
+          deletes: [
+            {
+              name: "test-pipeline",
+              request: {
+                workspaceId: "test-workspace",
+                namespaceName: "test-pipeline",
+              },
+            },
+          ],
+          title: "Pipeline Services",
+          isEmpty: () => false,
+          print: () => {},
+        },
+        resolver: {
+          creates: [],
+          updates: [],
+          deletes: [
+            {
+              name: "testResolver",
+              request: {
+                workspaceId: "test-workspace",
+                namespaceName: "test-pipeline",
+                resolverName: "testResolver",
+              },
+            },
+          ],
+          title: "Pipeline Resolvers",
+          isEmpty: () => false,
+          print: () => {},
+        },
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    } as unknown as Awaited<ReturnType<typeof planPipeline>>;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("delete-resources phase deletes resolvers, but NOT services", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyPipeline(client, planResult, "delete-resources");
+
+    // Resolvers should be deleted
+    expect(client.deletePipelineResolver).toHaveBeenCalledTimes(1);
+    // Services should NOT be deleted
+    expect(client.deletePipelineService).not.toHaveBeenCalled();
+  });
+
+  test("delete-services phase deletes ONLY services", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyPipeline(client, planResult, "delete-services");
+
+    // Resolvers should NOT be deleted
+    expect(client.deletePipelineResolver).not.toHaveBeenCalled();
+    // Services should be deleted
+    expect(client.deletePipelineService).toHaveBeenCalledTimes(1);
+  });
+
+  test("create-update phase does not delete anything", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyPipeline(client, planResult, "create-update");
+
+    // No deletes should happen in create-update phase
+    expect(client.deletePipelineResolver).not.toHaveBeenCalled();
+    expect(client.deletePipelineService).not.toHaveBeenCalled();
   });
 });

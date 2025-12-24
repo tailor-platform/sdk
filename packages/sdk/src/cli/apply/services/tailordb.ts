@@ -60,7 +60,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
-  phase: ApplyPhase = "create-update",
+  phase: Exclude<ApplyPhase, "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -94,7 +94,7 @@ export async function applyTailorDB(
         client.updateTailorDBGQLPermission(update.request),
       ),
     ]);
-  } else if (phase === "delete") {
+  } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // GQLPermissions
     await Promise.all(
@@ -109,8 +109,8 @@ export async function applyTailorDB(
         client.deleteTailorDBType(del.request),
       ),
     );
-
-    // Services
+  } else if (phase === "delete-services") {
+    // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) =>
         client.deleteTailorDBService(del.request),

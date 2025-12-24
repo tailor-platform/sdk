@@ -74,7 +74,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyAuth(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planAuth>>,
-  phase: ApplyPhase = "create-update",
+  phase: Exclude<ApplyPhase, "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -186,7 +186,7 @@ export async function applyAuth(
         client.updateAuthSCIMResource(update.request),
       ),
     ]);
-  } else if (phase === "delete") {
+  } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // SCIMResources
     await Promise.all(
@@ -236,8 +236,8 @@ export async function applyAuth(
         client.deleteAuthIDPConfig(del.request),
       ),
     );
-
-    // Services
+  } else if (phase === "delete-services") {
+    // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) =>
         client.deleteAuthService(del.request),

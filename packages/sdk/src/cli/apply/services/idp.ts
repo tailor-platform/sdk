@@ -27,7 +27,7 @@ export function idpClientSecretName(namespaceName: string, clientName: string) {
 export async function applyIdP(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planIdP>>,
-  phase: ApplyPhase = "create-update",
+  phase: Exclude<ApplyPhase, "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -100,7 +100,7 @@ export async function applyIdP(
         });
       }),
     ]);
-  } else if (phase === "delete") {
+  } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // Clients
     await Promise.all(
@@ -115,8 +115,8 @@ export async function applyIdP(
         });
       }),
     );
-
-    // Services
+  } else if (phase === "delete-services") {
+    // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) =>
         client.deleteIdPService(del.request),
