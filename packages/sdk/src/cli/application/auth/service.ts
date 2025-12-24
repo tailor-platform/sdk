@@ -33,11 +33,21 @@ export class AuthService {
     return this._parsedConfig;
   }
 
+  /**
+   * Resolves namespace for userProfile.
+   *
+   * Resolution priority:
+   * 1. Explicit namespace in config
+   * 2. Single TailorDB (regular or external) → use that namespace
+   * 3. Multiple TailorDBs → search by type name (external cannot be searched)
+   */
   async resolveNamespaces(): Promise<void> {
+    // No userProfile defined
     if (!this.config.userProfile) {
       return;
     }
 
+    // 1. Explicit namespace
     if (this.config.userProfile.namespace) {
       this._userProfile = {
         ...this.config.userProfile,
@@ -48,14 +58,15 @@ export class AuthService {
 
     const totalNamespaceCount =
       this.tailorDBServices.length + this.externalTailorDBNamespaces.length;
-
     let userProfileNamespace: string | undefined;
 
+    // 2. Single TailorDB
     if (totalNamespaceCount === 1) {
       userProfileNamespace =
         this.tailorDBServices[0]?.namespace ??
         this.externalTailorDBNamespaces[0];
     } else {
+      // 3. Multiple TailorDBs
       await Promise.all(
         this.tailorDBServices.map((service) => service.loadTypes()),
       );
