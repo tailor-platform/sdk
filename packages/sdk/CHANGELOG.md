@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 0.23.2
+
+### Patch Changes
+
+- [#296](https://github.com/tailor-platform/sdk/pull/296) [`adb9a9d`](https://github.com/tailor-platform/sdk/commit/adb9a9d5d6dad4b961fb8dd448ea2b08d610fc5b) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix service deletion order to prevent "used by gateway(s)" error
+
+  When deleting subgraph services (TailorDB, Pipeline, Auth, IdP), the deletion would fail with an error like "Failed to delete AuthService: auth xxx is used by gateway(s)" because the Application was still referencing them.
+
+  This fix separates the deletion phases:
+  - `delete-resources`: Deletes resources (types, resolvers, clients, etc.) before Application update
+  - `delete-services`: Deletes services after Application is deleted
+
+  This ensures services are deleted only after the Application no longer references them.
+
 ## 0.23.1
 
 ### Patch Changes
