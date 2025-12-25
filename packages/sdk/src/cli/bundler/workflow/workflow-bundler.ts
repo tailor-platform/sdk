@@ -40,7 +40,7 @@ export async function bundleWorkflowJobs(
   triggerContext?: TriggerContext,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
-    logger.debug("No workflow jobs to bundle");
+    logger.warn("No workflow jobs to bundle");
     return { mainJobDeps: {} };
   }
 
