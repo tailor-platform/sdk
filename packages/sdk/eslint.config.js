@@ -14,6 +14,9 @@ export default defineConfig([
   importPlugin.flatConfigs.typescript,
   jsdoc.configs["flat/recommended"],
   {
+    linterOptions: {
+      reportUnusedDisableDirectives: "off",
+    },
     rules: {
       "jsdoc/require-param-type": "off",
       "jsdoc/require-returns-type": "off",
@@ -233,5 +236,4 @@ export default defineConfig([
     },
   },
   ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
-  // ...oxlint.configs["flat/recommended"],
 ]);
