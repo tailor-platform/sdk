@@ -112,9 +112,6 @@ jobs:
 
       - name: Run runtime performance
         run: pnpm --filter @tailor-platform/sdk perf:runtime
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-          TAILOR_PLATFORM_WORKSPACE_ID: "00000000-0000-0000-0000-000000000000"
 
       - name: Upload results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -179,7 +176,7 @@ jobs:
             echo "| Command | Min | Max | Median | Avg | StdDev |"
             echo "|---------|----:|----:|-------:|----:|-------:|"
             jq -r '"| generate | \(.generate.min)ms | \(.generate.max)ms | \(.generate.median)ms | \(.generate.avg)ms | \(.generate.stddev)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
-            jq -r '"| apply -d | \(."apply-dry".min)ms | \(."apply-dry".max)ms | \(."apply-dry".median)ms | \(."apply-dry".avg)ms | \(."apply-dry".stddev)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
+            jq -r '"| apply (build) | \(."apply-build".min)ms | \(."apply-build".max)ms | \(."apply-build".median)ms | \(."apply-build".avg)ms | \(."apply-build".stddev)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
             echo ""
           } >> "${GITHUB_STEP_SUMMARY}"
 

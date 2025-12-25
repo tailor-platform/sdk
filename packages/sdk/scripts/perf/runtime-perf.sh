@@ -45,9 +45,9 @@ if ! pnpm generate > "${LOG_DIR}/generate-warmup.log" 2>&1; then
   exit 1
 fi
 
-echo "Warmup: Running apply -d..."
-if ! pnpm exec tailor-sdk apply -d -c tailor.config.ts > "${LOG_DIR}/apply-warmup.log" 2>&1; then
-  echo "ERROR: apply -d warmup failed"
+echo "Warmup: Running apply (build-only)..."
+if ! TAILOR_PLATFORM_SDK_BUILD_ONLY=true pnpm exec tailor-sdk apply -c tailor.config.ts > "${LOG_DIR}/apply-warmup.log" 2>&1; then
+  echo "ERROR: apply warmup failed"
   cat "${LOG_DIR}/apply-warmup.log"
   exit 1
 fi
@@ -73,13 +73,13 @@ done
 
 echo ""
 
-# Measure apply -d command
-echo "Measuring apply -d command..."
+# Measure apply (build-only) command
+echo "Measuring apply (build-only) command..."
 for i in $(seq 1 $ITERATIONS); do
-  echo "  apply -d iteration $i/$ITERATIONS..."
+  echo "  apply iteration $i/$ITERATIONS..."
   START=$(get_timestamp_ms)
-  if ! pnpm exec tailor-sdk apply -d -c tailor.config.ts > "${LOG_DIR}/apply-iter-${i}.log" 2>&1; then
-    echo "ERROR: apply -d iteration $i failed"
+  if ! TAILOR_PLATFORM_SDK_BUILD_ONLY=true pnpm exec tailor-sdk apply -c tailor.config.ts > "${LOG_DIR}/apply-iter-${i}.log" 2>&1; then
+    echo "ERROR: apply iteration $i failed"
     cat "${LOG_DIR}/apply-iter-${i}.log"
     exit 1
   fi
@@ -143,7 +143,7 @@ echo ""
 printf "%-20s %10s %10s %10s %10s %10s\n" "Command" "Min" "Max" "Avg" "Median" "StdDev"
 printf "%-20s %10s %10s %10s %10s %10s\n" "-------" "---" "---" "---" "------" "------"
 printf "%-20s %10s %10s %10s %10s %10s\n" "generate" "${GEN_MIN}ms" "${GEN_MAX}ms" "${GEN_AVG}ms" "${GEN_MEDIAN}ms" "${GEN_STDDEV}ms"
-printf "%-20s %10s %10s %10s %10s %10s\n" "apply -d" "${APPLY_MIN}ms" "${APPLY_MAX}ms" "${APPLY_AVG}ms" "${APPLY_MEDIAN}ms" "${APPLY_STDDEV}ms"
+printf "%-20s %10s %10s %10s %10s %10s\n" "apply (build)" "${APPLY_MIN}ms" "${APPLY_MAX}ms" "${APPLY_AVG}ms" "${APPLY_MEDIAN}ms" "${APPLY_STDDEV}ms"
 echo ""
 
 # Generate JSON for octocov
@@ -159,11 +159,11 @@ cat > "$OUTPUT_FILE" << EOF
     {"key": "generate-max", "name": "Generate Max", "value": ${GEN_MAX}, "unit": "ms"},
     {"key": "generate-avg", "name": "Generate Average", "value": ${GEN_AVG}, "unit": "ms"},
     {"key": "generate-stddev", "name": "Generate StdDev", "value": ${GEN_STDDEV}, "unit": "ms"},
-    {"key": "apply-dry-median", "name": "Apply Dry Median", "value": ${APPLY_MEDIAN}, "unit": "ms"},
-    {"key": "apply-dry-min", "name": "Apply Dry Min", "value": ${APPLY_MIN}, "unit": "ms"},
-    {"key": "apply-dry-max", "name": "Apply Dry Max", "value": ${APPLY_MAX}, "unit": "ms"},
-    {"key": "apply-dry-avg", "name": "Apply Dry Average", "value": ${APPLY_AVG}, "unit": "ms"},
-    {"key": "apply-dry-stddev", "name": "Apply Dry StdDev", "value": ${APPLY_STDDEV}, "unit": "ms"}
+    {"key": "apply-build-median", "name": "Apply Build Median", "value": ${APPLY_MEDIAN}, "unit": "ms"},
+    {"key": "apply-build-min", "name": "Apply Build Min", "value": ${APPLY_MIN}, "unit": "ms"},
+    {"key": "apply-build-max", "name": "Apply Build Max", "value": ${APPLY_MAX}, "unit": "ms"},
+    {"key": "apply-build-avg", "name": "Apply Build Average", "value": ${APPLY_AVG}, "unit": "ms"},
+    {"key": "apply-build-stddev", "name": "Apply Build StdDev", "value": ${APPLY_STDDEV}, "unit": "ms"}
   ]
 }
 EOF
@@ -186,7 +186,7 @@ cat > "$SUMMARY_FILE" << EOF
     "median": ${GEN_MEDIAN},
     "stddev": ${GEN_STDDEV}
   },
-  "apply-dry": {
+  "apply-build": {
     "iterations": ${ITERATIONS},
     "times": ${apply_times_json},
     "min": ${APPLY_MIN},

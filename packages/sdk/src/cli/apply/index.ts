@@ -79,7 +79,8 @@ export async function apply(options?: ApplyOptions) {
   const { config, configPath } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
-  const buildOnly = options?.buildOnly ?? false;
+  const buildOnly =
+    options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
