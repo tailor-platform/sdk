@@ -1,5 +1,16 @@
-import type { BaseGeneratorConfigSchema, CodeGeneratorSchema } from "./index";
+import type {
+  BaseGeneratorConfigSchema,
+  CodeGeneratorSchema,
+  DependencyKind,
+} from "./index";
 import type { z } from "zod";
 
 export type GeneratorConfig = z.input<typeof BaseGeneratorConfigSchema>;
-export type CodeGeneratorBase = z.output<typeof CodeGeneratorSchema>;
+
+// Manual type definition to support readonly dependencies array
+export type CodeGeneratorBase = Omit<
+  z.output<typeof CodeGeneratorSchema>,
+  "dependencies"
+> & {
+  dependencies: readonly DependencyKind[];
+};

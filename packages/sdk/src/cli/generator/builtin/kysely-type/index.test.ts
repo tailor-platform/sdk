@@ -81,9 +81,8 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
-    it("processResolver method returns undefined", () => {
-      const result = kyselyGenerator.processResolver();
-      expect(result).toBeUndefined();
+    it("should have correct dependencies", () => {
+      expect(kyselyGenerator.dependencies).toEqual(["tailordb"]);
     });
   });
 
@@ -240,11 +239,9 @@ describe("KyselyGenerator integration tests", () => {
             types: processedTypes,
           },
         ],
-        resolver: [],
       };
       const result = kyselyGenerator.aggregate({
         input: input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });
@@ -286,11 +283,9 @@ describe("KyselyGenerator integration tests", () => {
             types: processedTypes,
           },
         ],
-        resolver: [],
       };
       const result = kyselyGenerator.aggregate({
         input: input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });
@@ -376,12 +371,10 @@ describe("KyselyGenerator integration tests", () => {
           { namespace: "tailordb", types: tailordbTypes },
           { namespace: "analytics", types: analyticsTypes },
         ],
-        resolver: [],
       };
 
       const result = kyselyGenerator.aggregate({
         input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });
@@ -418,12 +411,10 @@ describe("KyselyGenerator integration tests", () => {
 
       const input = {
         tailordb: [{ namespace: "test", types }],
-        resolver: [],
       };
 
       const result = kyselyGenerator.aggregate({
         input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });

@@ -1,7 +1,9 @@
 import * as path from "node:path";
 import ml from "multiline-ts";
 import {
-  type CodeGenerator,
+  type TailorDBGenerator,
+  type TailorDBInput,
+  type AggregateArgs,
   type GeneratorResult,
 } from "@/cli/generator/types";
 import { processGqlIngest } from "./gql-ingest-processor";
@@ -14,14 +16,9 @@ import {
   generateLinesDbSchemaFile,
 } from "./lines-db-processor";
 import type { SeedTypeMetadata } from "./types";
-import type { Executor } from "@/parser/service/executor";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
-/**
- * Factory function to create a Seed generator.
- * Combines GraphQL Ingest and lines-db schema generation.
- */
 /**
  * Generates the exec.mjs script content (Node.js executable)
  */
@@ -62,19 +59,18 @@ function generateExecScript(
     `;
 }
 
+/**
+ * Factory function to create a Seed generator.
+ * Combines GraphQL Ingest and lines-db schema generation.
+ */
 export function createSeedGenerator(options: {
   distPath: string;
   machineUserName?: string;
-}): CodeGenerator<
-  SeedTypeMetadata,
-  undefined,
-  undefined,
-  Record<string, SeedTypeMetadata>,
-  undefined
-> {
+}): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
   return {
     id: SeedGeneratorID,
     description: "Generates seed data files (GraphQL Ingest + lines-db schema)",
+    dependencies: ["tailordb"] as const,
 
     processType: ({ type, source }) => {
       const gqlIngest = processGqlIngest(type);
@@ -84,11 +80,10 @@ export function createSeedGenerator(options: {
 
     processTailorDBNamespace: ({ types }) => types,
 
-    processExecutor: (_executor: Executor) => undefined,
-
-    processResolver: (_args) => undefined,
-
-    aggregate: ({ input, configPath }) => {
+    aggregate: ({
+      input,
+      configPath,
+    }: AggregateArgs<TailorDBInput<Record<string, SeedTypeMetadata>>>) => {
       const entityDependencies: Record<
         /* outputDir */ string,
         Record</* type */ string, /* dependencies */ string[]>

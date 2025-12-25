@@ -1,6 +1,14 @@
 import { z } from "zod";
 import type { CodeGeneratorBase } from "./types";
 
+// Dependency kind enum for generators
+export const DependencyKindSchema = z.enum([
+  "tailordb",
+  "resolver",
+  "executor",
+]);
+export type DependencyKind = z.infer<typeof DependencyKindSchema>;
+
 // Literal-based schemas for each generator
 export const KyselyTypeConfigSchema = z.tuple([
   z.literal("@tailor-platform/kysely-type"),
@@ -22,13 +30,14 @@ export const FileUtilsConfigSchema = z.tuple([
   z.object({ distPath: z.string() }),
 ]);
 
-// FIXME: more strict schema validation
+// Custom generator schema with dependencies
 export const CodeGeneratorSchema = z.object({
   id: z.string(),
   description: z.string(),
-  processType: z.function(),
-  processResolver: z.function(),
-  processExecutor: z.function(),
+  dependencies: z.array(DependencyKindSchema),
+  processType: z.function().optional(),
+  processResolver: z.function().optional(),
+  processExecutor: z.function().optional(),
   processTailorDBNamespace: z.function().optional(),
   processResolverNamespace: z.function().optional(),
   aggregate: z.function({ output: z.any() }),
