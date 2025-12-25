@@ -21,6 +21,7 @@
     "example/generated/",
     "example/seed/",
     "packages/tailor-proto/",
+    "packages/create-sdk/templates/**",
     "packages/create-sdk/templates/**/generated/"
   ]
 }

@@ -8,7 +8,8 @@ export default createExecutor({
   description: "Notify when inventory drops below threshold",
   trigger: recordUpdatedTrigger({
     type: inventory,
-    condition: ({ oldRecord, newRecord }) => oldRecord.quantity >= 10 && newRecord.quantity < 10,
+    condition: ({ oldRecord, newRecord }) =>
+      oldRecord.quantity >= 10 && newRecord.quantity < 10,
   }),
   operation: {
     kind: "function",

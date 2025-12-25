@@ -18,13 +18,20 @@ export interface SyncResult {
 export interface DbOperations {
   getUser: (email: string) => Promise<User | undefined>;
   createUser: (input: UserProfile) => Promise<User>;
-  updateUser: (email: string, input: Omit<UserProfile, "email">) => Promise<void>;
+  updateUser: (
+    email: string,
+    input: Omit<UserProfile, "email">,
+  ) => Promise<void>;
 }
 
 function createDbOperations(db: DB<"main-db">): DbOperations {
   return {
     getUser: async (email: string) => {
-      return await db.selectFrom("User").where("email", "=", email).selectAll().executeTakeFirst();
+      return await db
+        .selectFrom("User")
+        .where("email", "=", email)
+        .selectAll()
+        .executeTakeFirst();
     },
     createUser: async (input: UserProfile) => {
       return await db

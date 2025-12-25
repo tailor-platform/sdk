@@ -26,7 +26,9 @@ describe("syncUserProfile workflow", () => {
       created: true,
       profile: { name: "New User", email: "new@example.com", age: 25 },
     });
-    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith("new@example.com");
+    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
+      "new@example.com",
+    );
     expect(dbOperations.createUser).toHaveBeenCalledExactlyOnceWith({
       name: "New User",
       email: "new@example.com",
@@ -59,11 +61,16 @@ describe("syncUserProfile workflow", () => {
       created: false,
       profile: { name: "Updated Name", email: "existing@example.com", age: 31 },
     });
-    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith("existing@example.com");
+    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
+      "existing@example.com",
+    );
     expect(dbOperations.createUser).not.toHaveBeenCalled();
-    expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith("existing@example.com", {
-      name: "Updated Name",
-      age: 31,
-    });
+    expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith(
+      "existing@example.com",
+      {
+        name: "Updated Name",
+        age: 31,
+      },
+    );
   });
 });

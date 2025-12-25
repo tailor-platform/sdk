@@ -55,7 +55,11 @@ const updateInventory = async (db: DB<"main-db">, input: Input) => {
           `Cannot create order because inventory is not enough. productId: ${item.productId}`,
         );
       }
-      await db.updateTable("Inventory").set({ quantity }).where("id", "=", inventory.id).execute();
+      await db
+        .updateTable("Inventory")
+        .set({ quantity })
+        .where("id", "=", inventory.id)
+        .execute();
     } else {
       if (input.order.orderType === "PURCHASE") {
         await db
@@ -88,7 +92,9 @@ export default createResolver({
   },
   output: t
     .object({
-      success: t.bool().description("Whether the order was registered successfully"),
+      success: t
+        .bool()
+        .description("Whether the order was registered successfully"),
     })
     .description("Result of order registration"),
 });

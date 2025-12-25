@@ -6,9 +6,12 @@ describe("decrementUserAge resolver", () => {
     // Mock database operations
     const dbOperations = {
       transaction: vi.fn(
-        async (fn: (ops: DbOperations) => Promise<unknown>) => await fn(dbOperations),
+        async (fn: (ops: DbOperations) => Promise<unknown>) =>
+          await fn(dbOperations),
       ),
-      getUser: vi.fn().mockResolvedValue({ email: "test@example.com", age: 30 }),
+      getUser: vi
+        .fn()
+        .mockResolvedValue({ email: "test@example.com", age: 30 }),
       updateUser: vi.fn(),
     } as DbOperations;
 
@@ -16,7 +19,10 @@ describe("decrementUserAge resolver", () => {
 
     expect(result).toEqual({ oldAge: 30, newAge: 29 });
     expect(dbOperations.transaction).toHaveBeenCalledTimes(1);
-    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith("test@example.com", true);
+    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
+      "test@example.com",
+      true,
+    );
     expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         age: 29,
@@ -28,7 +34,8 @@ describe("decrementUserAge resolver", () => {
     // Mock database operations
     const dbOperations = {
       transaction: vi.fn(
-        async (fn: (ops: DbOperations) => Promise<unknown>) => await fn(dbOperations),
+        async (fn: (ops: DbOperations) => Promise<unknown>) =>
+          await fn(dbOperations),
       ),
       getUser: vi.fn().mockRejectedValue(new Error("User not found")),
       updateUser: vi.fn(),
@@ -37,7 +44,10 @@ describe("decrementUserAge resolver", () => {
     const result = decrementUserAge("test@example.com", dbOperations);
 
     expect(dbOperations.transaction).toHaveBeenCalledTimes(1);
-    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith("test@example.com", true);
+    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
+      "test@example.com",
+      true,
+    );
     await expect(result).rejects.toThrowError();
   });
 });
