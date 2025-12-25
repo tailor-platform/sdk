@@ -90,23 +90,16 @@ done
 
 echo ""
 
-# Function to calculate statistics
+# Function to calculate statistics (min and median only)
 calculate_stats() {
   local -n arr=$1
-  local sum=0
   local min=${arr[0]}
-  local max=${arr[0]}
   local count=${#arr[@]}
 
-  # Calculate sum, min, max
+  # Calculate min
   for val in "${arr[@]}"; do
-    sum=$((sum + val))
     ((val < min)) && min=$val
-    ((val > max)) && max=$val
   done
-
-  # Calculate average
-  local avg=$((sum / count))
 
   # Sort for median
   IFS=$'\n' sorted=($(sort -n <<<"${arr[*]}")); unset IFS
@@ -118,32 +111,22 @@ calculate_stats() {
     median=${sorted[$mid]}
   fi
 
-  # Calculate standard deviation
-  local sum_sq=0
-  for val in "${arr[@]}"; do
-    local diff=$((val - avg))
-    sum_sq=$((sum_sq + diff * diff))
-  done
-  local variance=$((sum_sq / count))
-  # Use awk for sqrt since bash doesn't support it
-  local stddev=$(awk "BEGIN {printf \"%.0f\", sqrt($variance)}")
-
-  echo "$min $max $avg $median $stddev"
+  echo "$min $median"
 }
 
 # Calculate stats for generate
-read GEN_MIN GEN_MAX GEN_AVG GEN_MEDIAN GEN_STDDEV <<< $(calculate_stats GENERATE_TIMES)
+read GEN_MIN GEN_MEDIAN <<< $(calculate_stats GENERATE_TIMES)
 
-# Calculate stats for apply -d
-read APPLY_MIN APPLY_MAX APPLY_AVG APPLY_MEDIAN APPLY_STDDEV <<< $(calculate_stats APPLY_DRY_TIMES)
+# Calculate stats for apply
+read APPLY_MIN APPLY_MEDIAN <<< $(calculate_stats APPLY_DRY_TIMES)
 
 # Display summary
 echo "=== Summary ==="
 echo ""
-printf "%-20s %10s %10s %10s %10s %10s\n" "Command" "Min" "Max" "Avg" "Median" "StdDev"
-printf "%-20s %10s %10s %10s %10s %10s\n" "-------" "---" "---" "---" "------" "------"
-printf "%-20s %10s %10s %10s %10s %10s\n" "generate" "${GEN_MIN}ms" "${GEN_MAX}ms" "${GEN_AVG}ms" "${GEN_MEDIAN}ms" "${GEN_STDDEV}ms"
-printf "%-20s %10s %10s %10s %10s %10s\n" "apply (build)" "${APPLY_MIN}ms" "${APPLY_MAX}ms" "${APPLY_AVG}ms" "${APPLY_MEDIAN}ms" "${APPLY_STDDEV}ms"
+printf "%-20s %10s %10s\n" "Command" "Min" "Median"
+printf "%-20s %10s %10s\n" "-------" "---" "------"
+printf "%-20s %10s %10s\n" "generate" "${GEN_MIN}ms" "${GEN_MEDIAN}ms"
+printf "%-20s %10s %10s\n" "apply (build)" "${APPLY_MIN}ms" "${APPLY_MEDIAN}ms"
 echo ""
 
 # Generate JSON for octocov
@@ -156,14 +139,8 @@ cat > "$OUTPUT_FILE" << EOF
   "metrics": [
     {"key": "generate-median", "name": "Generate Median", "value": ${GEN_MEDIAN}, "unit": "ms"},
     {"key": "generate-min", "name": "Generate Min", "value": ${GEN_MIN}, "unit": "ms"},
-    {"key": "generate-max", "name": "Generate Max", "value": ${GEN_MAX}, "unit": "ms"},
-    {"key": "generate-avg", "name": "Generate Average", "value": ${GEN_AVG}, "unit": "ms"},
-    {"key": "generate-stddev", "name": "Generate StdDev", "value": ${GEN_STDDEV}, "unit": "ms"},
     {"key": "apply-build-median", "name": "Apply Build Median", "value": ${APPLY_MEDIAN}, "unit": "ms"},
-    {"key": "apply-build-min", "name": "Apply Build Min", "value": ${APPLY_MIN}, "unit": "ms"},
-    {"key": "apply-build-max", "name": "Apply Build Max", "value": ${APPLY_MAX}, "unit": "ms"},
-    {"key": "apply-build-avg", "name": "Apply Build Average", "value": ${APPLY_AVG}, "unit": "ms"},
-    {"key": "apply-build-stddev", "name": "Apply Build StdDev", "value": ${APPLY_STDDEV}, "unit": "ms"}
+    {"key": "apply-build-min", "name": "Apply Build Min", "value": ${APPLY_MIN}, "unit": "ms"}
   ]
 }
 EOF
@@ -181,19 +158,13 @@ cat > "$SUMMARY_FILE" << EOF
     "iterations": ${ITERATIONS},
     "times": ${gen_times_json},
     "min": ${GEN_MIN},
-    "max": ${GEN_MAX},
-    "avg": ${GEN_AVG},
-    "median": ${GEN_MEDIAN},
-    "stddev": ${GEN_STDDEV}
+    "median": ${GEN_MEDIAN}
   },
   "apply-build": {
     "iterations": ${ITERATIONS},
     "times": ${apply_times_json},
     "min": ${APPLY_MIN},
-    "max": ${APPLY_MAX},
-    "avg": ${APPLY_AVG},
-    "median": ${APPLY_MEDIAN},
-    "stddev": ${APPLY_STDDEV}
+    "median": ${APPLY_MEDIAN}
   }
 }
 EOF
