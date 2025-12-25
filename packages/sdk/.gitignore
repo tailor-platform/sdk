@@ -1,1 +1,6 @@
 .eslintcache
+
+
+# Performance measurement results
+diagnostics.json
+scripts/perf/tsconfig.temp.json

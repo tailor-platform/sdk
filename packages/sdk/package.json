@@ -47,6 +47,7 @@
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
+    "perf:typecheck": "bash scripts/perf/exec.sh",
     "prepublish": "pnpm run build",
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js"
