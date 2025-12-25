@@ -238,7 +238,7 @@ export class TypeProcessor {
     }
 
     const importsSection = multiline /* ts */ `
-      import { type ColumnType, Kysely } from "kysely";
+      import { type ColumnType, Kysely, KyselyConfig } from "kysely";
       import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
       ${utilityTypeDeclarations.join("\n")}
@@ -263,9 +263,15 @@ export class TypeProcessor {
     const namespaceInterface = `export interface Namespace {\n${namespaceInterfaces}\n}`;
 
     const getDBFunction = multiline /* ts */ `
-      export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
+      export function getDB<const N extends keyof Namespace>(
+        namespace: N,
+        kyselyConfig?: Omit<KyselyConfig, "dialect">,
+      ): Kysely<Namespace[N]> {
         const client = new tailordb.Client({ namespace });
-        return new Kysely<Namespace[N]>({ dialect: new TailordbDialect(client) });
+        return new Kysely<Namespace[N]>({
+          dialect: new TailordbDialect(client),
+          ...kyselyConfig,
+        });
       }
 
       export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;
