@@ -1,4 +1,4 @@
-import { type ColumnType, Kysely, KyselyConfig } from "kysely";
+import { type ColumnType, Kysely, type KyselyConfig } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
