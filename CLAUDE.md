@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm exec turbo run check` - Run format, lint:fix, and typecheck in sequence
 - `pnpm exec turbo run lint` - Run ESLint
 - `pnpm exec turbo run lint:fix` - Run ESLint with auto-fix
-- `pnpm exec turbo run format` - Format code with Prettier
+- `pnpm exec turbo run format` - Format code with Oxfmt
 - `pnpm exec turbo run format:check` - Check code formatting
 - `pnpm exec turbo run typecheck` - Run TypeScript type checking
 
