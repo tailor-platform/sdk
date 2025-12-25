@@ -26,6 +26,8 @@ cd "${SCRIPT_DIR}/../../../../example"
 ITERATIONS=${1:-10}
 OUTPUT_FILE="${SDK_DIR}/runtime-perf.json"
 SUMMARY_FILE="${SDK_DIR}/runtime-perf-summary.json"
+LOG_DIR=$(mktemp -d)
+trap "rm -rf ${LOG_DIR}" EXIT
 
 echo "Running runtime performance benchmark..."
 echo "Iterations: ${ITERATIONS}"
@@ -37,10 +39,18 @@ declare -a APPLY_DRY_TIMES
 
 # Warmup runs (not counted) to avoid cold-start effects
 echo "Warmup: Running generate..."
-pnpm generate > /dev/null 2>&1
+if ! pnpm generate > "${LOG_DIR}/generate-warmup.log" 2>&1; then
+  echo "ERROR: generate warmup failed"
+  cat "${LOG_DIR}/generate-warmup.log"
+  exit 1
+fi
 
 echo "Warmup: Running apply -d..."
-pnpm exec tailor-sdk apply -d -c tailor.config.ts > /dev/null 2>&1
+if ! pnpm exec tailor-sdk apply -d -c tailor.config.ts > "${LOG_DIR}/apply-warmup.log" 2>&1; then
+  echo "ERROR: apply -d warmup failed"
+  cat "${LOG_DIR}/apply-warmup.log"
+  exit 1
+fi
 
 echo ""
 echo "Starting measurements..."
@@ -51,7 +61,11 @@ echo "Measuring generate command..."
 for i in $(seq 1 $ITERATIONS); do
   echo "  generate iteration $i/$ITERATIONS..."
   START=$(get_timestamp_ms)
-  pnpm generate > /dev/null 2>&1
+  if ! pnpm generate > "${LOG_DIR}/generate-iter-${i}.log" 2>&1; then
+    echo "ERROR: generate iteration $i failed"
+    cat "${LOG_DIR}/generate-iter-${i}.log"
+    exit 1
+  fi
   END=$(get_timestamp_ms)
   ELAPSED=$((END - START))
   GENERATE_TIMES+=($ELAPSED)
@@ -64,7 +78,11 @@ echo "Measuring apply -d command..."
 for i in $(seq 1 $ITERATIONS); do
   echo "  apply -d iteration $i/$ITERATIONS..."
   START=$(get_timestamp_ms)
-  pnpm exec tailor-sdk apply -d -c tailor.config.ts > /dev/null 2>&1
+  if ! pnpm exec tailor-sdk apply -d -c tailor.config.ts > "${LOG_DIR}/apply-iter-${i}.log" 2>&1; then
+    echo "ERROR: apply -d iteration $i failed"
+    cat "${LOG_DIR}/apply-iter-${i}.log"
+    exit 1
+  fi
   END=$(get_timestamp_ms)
   ELAPSED=$((END - START))
   APPLY_DRY_TIMES+=($ELAPSED)
