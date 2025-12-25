@@ -4,7 +4,7 @@ import ml from "multiline-ts";
 import { parseSync } from "oxc-parser";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { enableInlineSourcemap } from "@/cli/apply";
+import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
