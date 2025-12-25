@@ -90,15 +90,15 @@ done
 
 echo ""
 
-# Function to calculate statistics (min and median only)
+# Function to calculate statistics (max and median only)
 calculate_stats() {
   local -n arr=$1
-  local min=${arr[0]}
+  local max=${arr[0]}
   local count=${#arr[@]}
 
-  # Calculate min
+  # Calculate max
   for val in "${arr[@]}"; do
-    ((val < min)) && min=$val
+    ((val > max)) && max=$val
   done
 
   # Sort for median
@@ -111,22 +111,22 @@ calculate_stats() {
     median=${sorted[$mid]}
   fi
 
-  echo "$min $median"
+  echo "$max $median"
 }
 
 # Calculate stats for generate
-read GEN_MIN GEN_MEDIAN <<< $(calculate_stats GENERATE_TIMES)
+read GEN_MAX GEN_MEDIAN <<< $(calculate_stats GENERATE_TIMES)
 
 # Calculate stats for apply
-read APPLY_MIN APPLY_MEDIAN <<< $(calculate_stats APPLY_DRY_TIMES)
+read APPLY_MAX APPLY_MEDIAN <<< $(calculate_stats APPLY_DRY_TIMES)
 
 # Display summary
 echo "=== Summary ==="
 echo ""
-printf "%-20s %10s %10s\n" "Command" "Min" "Median"
+printf "%-20s %10s %10s\n" "Command" "Max" "Median"
 printf "%-20s %10s %10s\n" "-------" "---" "------"
-printf "%-20s %10s %10s\n" "generate" "${GEN_MIN}ms" "${GEN_MEDIAN}ms"
-printf "%-20s %10s %10s\n" "apply (build)" "${APPLY_MIN}ms" "${APPLY_MEDIAN}ms"
+printf "%-20s %10s %10s\n" "generate" "${GEN_MAX}ms" "${GEN_MEDIAN}ms"
+printf "%-20s %10s %10s\n" "apply (build)" "${APPLY_MAX}ms" "${APPLY_MEDIAN}ms"
 echo ""
 
 # Generate JSON for octocov
@@ -138,9 +138,9 @@ cat > "$OUTPUT_FILE" << EOF
   "name": "Runtime Performance",
   "metrics": [
     {"key": "generate-median", "name": "Generate Median", "value": ${GEN_MEDIAN}, "unit": "ms"},
-    {"key": "generate-min", "name": "Generate Min", "value": ${GEN_MIN}, "unit": "ms"},
+    {"key": "generate-max", "name": "Generate Max", "value": ${GEN_MAX}, "unit": "ms"},
     {"key": "apply-build-median", "name": "Apply Build Median", "value": ${APPLY_MEDIAN}, "unit": "ms"},
-    {"key": "apply-build-min", "name": "Apply Build Min", "value": ${APPLY_MIN}, "unit": "ms"}
+    {"key": "apply-build-max", "name": "Apply Build Max", "value": ${APPLY_MAX}, "unit": "ms"}
   ]
 }
 EOF
@@ -157,13 +157,13 @@ cat > "$SUMMARY_FILE" << EOF
   "generate": {
     "iterations": ${ITERATIONS},
     "times": ${gen_times_json},
-    "min": ${GEN_MIN},
+    "max": ${GEN_MAX},
     "median": ${GEN_MEDIAN}
   },
   "apply-build": {
     "iterations": ${ITERATIONS},
     "times": ${apply_times_json},
-    "min": ${APPLY_MIN},
+    "max": ${APPLY_MAX},
     "median": ${APPLY_MEDIAN}
   }
 }

@@ -173,10 +173,10 @@ jobs:
 
             echo "## Runtime Performance"
             echo ""
-            echo "| Command | Min | Median |"
+            echo "| Command | Max | Median |"
             echo "|---------|----:|-------:|"
-            jq -r '"| generate | \(.generate.min)ms | \(.generate.median)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
-            jq -r '"| apply (build) | \(."apply-build".min)ms | \(."apply-build".median)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
+            jq -r '"| generate | \(.generate.max)ms | \(.generate.median)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
+            jq -r '"| apply (build) | \(."apply-build".max)ms | \(."apply-build".median)ms |"' artifacts/runtime-perf-results/runtime-perf-summary.json
             echo ""
           } >> "${GITHUB_STEP_SUMMARY}"
 
