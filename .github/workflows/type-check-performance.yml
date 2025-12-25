@@ -44,21 +44,7 @@ jobs:
             echo ""
             echo "| Feature | Instantiations | Types |"
             echo "|---------|---------------:|------:|"
-            jq -r '
-              [.metrics[] | select(.key | endswith("-instantiations"))]
-              | sort_by(.value) | reverse
-              | .[]
-              | .key | sub("-instantiations$"; "")
-            ' packages/sdk/diagnostics.json | while read -r feature; do
-              inst=$(jq -r ".metrics[] | select(.key == \"${feature}-instantiations\") | .value" packages/sdk/diagnostics.json)
-              types=$(jq -r ".metrics[] | select(.key == \"${feature}-types\") | .value" packages/sdk/diagnostics.json)
-              echo "| ${feature} | ${inst} | ${types} |"
-            done
-            echo ""
-            echo "### Key Metrics"
-            echo ""
-            echo "- **Instantiations**: Primary indicator of type complexity"
-            echo "- **Types**: Number of distinct types processed"
+            jq -r 'sort_by(.instantiations) | reverse | .[] | "| \(.key) | \(.instantiations) | \(.types) |"' packages/sdk/diagnostics-summary.json
             echo ""
             echo "See [Operational Guidelines](packages/sdk/scripts/perf/README.md#operational-guidelines) for interpretation."
           } >> "${GITHUB_STEP_SUMMARY}"

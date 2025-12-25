@@ -6,6 +6,7 @@ cd "$(dirname "$0")/../.."
 
 FEATURES_DIR="scripts/perf/features"
 OUTPUT_FILE="diagnostics.json"
+SUMMARY_FILE="diagnostics-summary.json"
 TEMP_TSCONFIG="scripts/perf/tsconfig.temp.json"
 
 echo "Running type inference performance measurement..."
@@ -81,10 +82,9 @@ done
 
 echo ""
 
-# Generate combined JSON for octocov
+# Generate JSON for octocov (instantiations only)
 echo "Generating ${OUTPUT_FILE}..."
 
-# Build metrics array
 metrics_json="["
 first=true
 for feature in "${FEATURES[@]}"; do
@@ -93,18 +93,35 @@ for feature in "${FEATURES[@]}"; do
   else
     metrics_json+=","
   fi
-  metrics_json+="{\"key\":\"${feature}-instantiations\",\"name\":\"${feature} (instantiations)\",\"value\":${INSTANTIATIONS[$feature]},\"unit\":\"\"},"
-  metrics_json+="{\"key\":\"${feature}-types\",\"name\":\"${feature} (types)\",\"value\":${TYPES[$feature]},\"unit\":\"\"}"
+  metrics_json+="{\"key\":\"${feature}\",\"name\":\"${feature}\",\"value\":${INSTANTIATIONS[$feature]},\"unit\":\"\"}"
 done
 metrics_json+="]"
 
-# Write final JSON
 cat > "$OUTPUT_FILE" << EOF
 {
   "key": "type-performance",
-  "name": "Type Performance",
+  "name": "Type Performance (instantiations)",
   "metrics": ${metrics_json}
 }
 EOF
 
-echo "Results written to ${OUTPUT_FILE}"
+# Generate JSON for Step Summary (both instantiations and types)
+echo "Generating ${SUMMARY_FILE}..."
+
+summary_json="["
+first=true
+for feature in "${FEATURES[@]}"; do
+  if [ "$first" = true ]; then
+    first=false
+  else
+    summary_json+=","
+  fi
+  summary_json+="{\"key\":\"${feature}\",\"instantiations\":${INSTANTIATIONS[$feature]},\"types\":${TYPES[$feature]}}"
+done
+summary_json+="]"
+
+cat > "$SUMMARY_FILE" << EOF
+${summary_json}
+EOF
+
+echo "Results written to ${OUTPUT_FILE} and ${SUMMARY_FILE}"
