@@ -164,6 +164,13 @@ type UserProfile<
   AttributeMap extends UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[],
 > = {
+  /**
+   * TailorDB namespace where the user type is defined.
+   *
+   * Usually auto-resolved, so you don't need to specify this.
+   * Required only when multiple TailorDBs exist and the type is in an external TailorDB.
+   */
+  namespace?: string;
   type: User;
   usernameField: UsernameFieldKey<User>;
   attributes?: DisallowExtraKeys<AttributeMap, UserAttributeKey<User>>;

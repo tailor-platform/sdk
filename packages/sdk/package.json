@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "0.22.3",
+  "version": "0.24.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -40,11 +40,14 @@
   },
   "scripts": {
     "test": "vitest",
+    "test:unit": "vitest --project=unit",
+    "test:e2e": "vitest --project=e2e",
     "test:coverage": "vitest --coverage",
     "build": "tsdown && cross-env FORCE_CREATE=1 node postinstall.mjs",
     "lint": "oxlint . && eslint --cache .",
     "lint:fix": "oxlint . --fix && eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
+    "perf:typecheck": "bash scripts/perf/exec.sh",
     "prepublish": "pnpm run build",
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js"
@@ -63,6 +66,7 @@
     "consola": "3.4.2",
     "date-fns": "4.1.0",
     "es-toolkit": "1.43.0",
+    "find-up-simple": "1.0.1",
     "inflection": "3.0.2",
     "madge": "8.0.0",
     "mime-types": "3.0.2",
@@ -97,7 +101,7 @@
     "oxlint": "^1.34.0",
     "oxlint-tsgolint": "^0.10.0",
     "sonda": "0.10.1",
-    "tsdown": "0.18.1",
+    "tsdown": "0.18.2",
     "typescript": "5.9.3",
     "typescript-eslint": "8.50.0",
     "vitest": "4.0.16"

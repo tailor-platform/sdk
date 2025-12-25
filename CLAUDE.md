@@ -78,20 +78,17 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Always export both the value and type: `export const model = db.type(...); export type model = typeof model;`
    - Use `db.fields.timestamps()` for automatic timestamp fields
    - Relations are defined with `.relation()` method
-
 2. **Resolvers** (`src/configure/services/resolver/`)
    - Create GraphQL resolvers using `createResolver`
    - Define resolver configuration with `name`, `operation` (query/mutation), `input`, `body`, and `output`
    - The `body` function receives a context object with `input` and `user` properties
    - Use `getDB()` from generated files to access database with Kysely query builder
    - Return data directly from the body function (supports both sync and async)
-
 3. **Executors** (`src/configure/services/executor/`)
    - Event-driven handlers using `createExecutor()`
    - Trigger on record changes: `recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`
    - Execute functions, webhooks, or GraphQL operations
    - Use `getDB()` from generated files to access database with Kysely query builder
-
 4. **Workflows** (`src/configure/services/workflow/`)
    - Orchestrate multiple jobs using `createWorkflow()` and `createWorkflowJob()`
    - **Important Rules:**
@@ -102,26 +99,22 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Trigger other jobs using `.trigger()` method (e.g., `fetchCustomer.trigger({ id })`)
    - `.trigger()` is synchronous on server - do NOT use await with it
    - Use `getDB()` from generated files to access database with Kysely query builder
-
 5. **Static Websites** (`src/configure/services/staticwebsite/`)
    - Define static website configurations using `defineStaticWebSite()`
    - Provides type-safe URL references via `.url` and `.callback` properties
    - Use `website.url` in CORS settings for type-safe configuration
    - Static website URLs are resolved at deployment time and injected into configuration
-
 6. **Identity Provider (IdP)** (`src/configure/services/idp/`)
    - Define Identity Provider configurations using `defineIdp()`
    - Configure authorization rules and OAuth2 clients
    - Use `idp.provider()` method to create BuiltInIdP references for auth configuration
    - Supports multiple clients with automatic client selection
-
 7. **Configuration** (`tailor.config.ts`)
    - Central configuration using `defineConfig()` for a single application
    - Required fields: `name`
    - Specify component locations with glob patterns
    - Configure generators using `defineGenerators()` - must include `@tailor-platform/kysely-type` for database access
-   - Application-level settings: `cors`, `allowedIPAddresses`, `disableIntrospection`
-
+   - Application-level settings: `cors`, `allowedIpAddresses`, `disableIntrospection`
 8. **Code Generators**
    - `@tailor-platform/kysely-type`: Generates Kysely type definitions and `getDB()` function (required for database access)
    - Configure generators with `defineGenerators()` and specify `distPath` for output files
@@ -528,66 +521,6 @@ Some import restriction rules in `eslint.config.js` are currently commented out 
 - Always use type-only imports for consistency: `import type { Foo } from "..."` or `import { type Foo } from "..."`
 - Prefer inline type imports: `import { type Foo } from "..."`
 - **Special case for `export type`**: Even when `allowTypeImports: true` is configured, `export type` statements will still trigger ESLint errors. In such cases, you may use `eslint-disable` comments for the export line
-
-**CRITICAL: No Backward Compatibility**
-
-This project is in **PoC stage**. Simplicity and correctness are prioritized over backward compatibility.
-
-**Core Principle:**
-
-- **ALWAYS refactor to the ideal structure** without maintaining backward compatibility
-- **DO NOT** write compatibility layers, deprecated exports, or migration helpers
-- Update all affected code directly to use the new structure
-- The ONLY exception is when the user explicitly requests backward compatibility
-
-**This applies to ALL aspects of the codebase:**
-
-1. **API Changes**: When changing function signatures, type definitions, or exported interfaces, update all call sites directly
-2. **File Restructuring**: When moving or renaming files, update all import statements
-3. **Type Consolidation**: When merging or splitting types, update all usage sites
-4. **Refactoring**: When improving code structure, apply changes consistently across the codebase
-
-**Specific Rule: No Re-exports for Compatibility**
-
-When consolidating or moving types:
-
-1. **NEVER write re-exports** like:
-
-   ```typescript
-   // ❌ FORBIDDEN - Do not write this
-   export { type Foo, type Bar } from "./new-location";
-   ```
-
-2. **ALWAYS update all import sites directly**:
-   - Use `Grep` to find all usage sites
-   - Update each import to use the new direct location
-   - Verify with build and tests
-
-3. **Why this matters**:
-   - Compatibility code accumulates technical debt
-   - It obscures the actual source of truth
-   - This is a PoC - simplicity > backward compatibility
-   - AI in future sessions MUST follow this rule
-
-**Example of correct refactoring:**
-
-```typescript
-// Before: types defined in both A and B
-// A.ts: export type Foo = ...
-// B.ts: export type Foo = ...
-// usage.ts: import { type Foo } from "./A"
-
-// ❌ WRONG - Do not add re-export
-// A.ts: export { type Foo } from "./common"
-// B.ts: (remove duplicate)
-// common.ts: export type Foo = ...
-
-// ✅ CORRECT - Update all imports
-// A.ts: (remove export)
-// B.ts: (remove duplicate)
-// common.ts: export type Foo = ...
-// usage.ts: import { type Foo } from "./common"  // ← Updated directly
-```
 
 ### Preventing Bundling Issues with Zod and Type-Only Dependencies
 

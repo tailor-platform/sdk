@@ -15,7 +15,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyStaticWebsite(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planStaticWebsite>>,
-  phase: ApplyPhase = "create-update",
+  phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {

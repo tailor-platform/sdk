@@ -63,7 +63,11 @@ export interface PlanContext {
   forRemoval: boolean;
 }
 
-export type ApplyPhase = "create-update" | "delete";
+export type ApplyPhase =
+  | "create-update"
+  | "delete"
+  | "delete-resources"
+  | "delete-services";
 
 // NOTE(haru): Enable inline sourcemaps to preserve original source locations in error stack traces for bundled functions
 // This flag will become unnecessary once function registry is implemented, which will resolve script size issues
@@ -241,26 +245,35 @@ export async function apply(options?: ApplyOptions) {
   await applyAuth(client, auth, "create-update");
   await applyPipeline(client, pipeline, "create-update");
 
-  // Phase 3: Delete subgraph services before Application update
-  // This avoids GraphQL SDL composition errors when resources (e.g., resolvers)
-  // conflict with system-generated ones
-  await applyPipeline(client, pipeline, "delete");
-  await applyAuth(client, auth, "delete");
-  await applyIdP(client, idp, "delete");
-  await applyTailorDB(client, tailorDB, "delete");
+  // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
+  // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
+  // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
+  await applyPipeline(client, pipeline, "delete-resources");
+  await applyAuth(client, auth, "delete-resources");
+  await applyIdP(client, idp, "delete-resources");
+  await applyTailorDB(client, tailorDB, "delete-resources");
 
-  // Phase 4: Create/Update Application (after subgraph changes complete)
+  // Phase 4: Create/Update Application (after subgraph resource changes complete)
   await applyApplication(client, app, "create-update");
 
   // Phase 5: Create/Update services that depend on Application
   await applyExecutor(client, executor, "create-update");
   await applyWorkflow(client, workflow, "create-update");
 
-  // Phase 6: Delete services that depend on Application, then Application itself
+  // Phase 6: Delete services that depend on Application
   await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
+
+  // Phase 7: Delete Application
   await applyApplication(client, app, "delete");
+
+  // Phase 8: Delete subgraph services (after Application is deleted, no reference errors)
+  // Fix for issue #570: Services couldn't be deleted because Application was still referencing them
+  await applyPipeline(client, pipeline, "delete-services");
+  await applyAuth(client, auth, "delete-services");
+  await applyIdP(client, idp, "delete-services");
+  await applyTailorDB(client, tailorDB, "delete-services");
 
   logger.success("Successfully applied changes.");
 }
@@ -316,7 +329,7 @@ export const applyCommand = defineCommand({
     "dry-run": {
       type: "boolean",
       description: "Run the command without making any changes",
-      alias: "n",
+      alias: "d",
     },
     yes: {
       type: "boolean",

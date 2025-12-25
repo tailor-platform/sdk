@@ -1,0 +1,49 @@
+name: Add changeset for Renovate PR
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  add-changeset-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+      github.event.pull_request.user.login == 'renovate[bot]' &&
+      github.event.pull_request.user.type == 'Bot'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create changeset file
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          FILENAME="renovate-${PR_NUMBER}.md"
+
+          cat > ".changeset/${FILENAME}" << EOF
+          ---
+          "@tailor-platform/sdk": patch
+          ---
+
+          ${PR_TITLE}
+          EOF
+
+      - name: Commit changeset
+        uses: suzuki-shunsuke/commit-action@87b297f0ce551411b43d1880f4fb3cbc60381055 # v0.0.14
+        with:
+          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          commit_message: "chore: add changeset for renovate"
+          files: |
+            .changeset/renovate-${{ github.event.pull_request.number }}.md
+          fail_on_self_push: false

@@ -87,7 +87,7 @@ export const createCommand = defineCommand({
       type: "string",
       description: "Workspace name",
       required: true,
-      alias: "N",
+      alias: "n",
     },
     region: {
       type: "string",
@@ -98,7 +98,7 @@ export const createCommand = defineCommand({
     "delete-protection": {
       type: "boolean",
       description: "Enable delete protection",
-      alias: "D",
+      alias: "d",
       default: false,
     },
     "organization-id": {

@@ -96,12 +96,16 @@ async function execRemove(
   // Apply deletions in reverse order of dependencies
   await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
-  await applyApplication(client, app, "delete");
-  await applyPipeline(client, pipeline, "delete");
-  await applyAuth(client, auth, "delete");
-  await applyIdP(client, idp, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
-  await applyTailorDB(client, tailorDB, "delete");
+  await applyApplication(client, app, "delete");
+  await applyPipeline(client, pipeline, "delete-resources");
+  await applyPipeline(client, pipeline, "delete-services");
+  await applyAuth(client, auth, "delete-resources");
+  await applyAuth(client, auth, "delete-services");
+  await applyIdP(client, idp, "delete-resources");
+  await applyIdP(client, idp, "delete-services");
+  await applyTailorDB(client, tailorDB, "delete-resources");
+  await applyTailorDB(client, tailorDB, "delete-services");
 }
 
 export async function remove(options?: RemoveOptions): Promise<void> {

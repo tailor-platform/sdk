@@ -22,7 +22,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyApplication(
   client: OperatorClient,
   changeSet: Awaited<ReturnType<typeof planApplication>>,
-  phase: ApplyPhase = "create-update",
+  phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   if (phase === "create-update") {
     // Applications
@@ -169,7 +169,7 @@ export async function planApplication({
         subgraphs: application.subgraphs.map((subgraph) =>
           protoSubgraph(subgraph),
         ),
-        allowedIpAddresses: application.config.allowedIPAddresses,
+        allowedIpAddresses: application.config.allowedIpAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
       metaRequest,
@@ -186,7 +186,7 @@ export async function planApplication({
         subgraphs: application.subgraphs.map((subgraph) =>
           protoSubgraph(subgraph),
         ),
-        allowedIpAddresses: application.config.allowedIPAddresses,
+        allowedIpAddresses: application.config.allowedIpAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
       metaRequest,

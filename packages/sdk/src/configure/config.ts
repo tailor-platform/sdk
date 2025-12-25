@@ -19,7 +19,7 @@ export interface AppConfig<
   name: string;
   env?: Env;
   cors?: string[];
-  allowedIPAddresses?: string[];
+  allowedIpAddresses?: string[];
   disableIntrospection?: boolean;
   db?: TailorDBServiceInput;
   resolver?: ResolverServiceInput;

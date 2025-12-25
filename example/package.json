@@ -20,10 +20,7 @@
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix --quiet",
-    "typecheck": "pnpm generate && tsc --noEmit",
-    "perf:typecheck": "pnpm perf:typecheck:full && pnpm perf:typecheck:inference",
-    "perf:typecheck:full": "bash scripts/perf/run-typecheck-full.sh",
-    "perf:typecheck:inference": "bash scripts/perf/run-typecheck-inference.sh"
+    "typecheck": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
