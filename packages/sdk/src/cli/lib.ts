@@ -12,8 +12,18 @@ export { loadConfig } from "./config-loader";
 export { generateUserTypes } from "./type-generator";
 export type {
   CodeGenerator,
-  GeneratorInput,
+  TailorDBGenerator,
+  ResolverGenerator,
+  ExecutorGenerator,
+  TailorDBResolverGenerator,
+  FullCodeGenerator,
+  TailorDBInput,
+  ResolverInput,
+  ExecutorInput,
+  FullInput,
+  AggregateArgs,
   GeneratorResult,
+  DependencyKind,
 } from "./generator/types";
 export type { ParsedTailorDBType as TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";

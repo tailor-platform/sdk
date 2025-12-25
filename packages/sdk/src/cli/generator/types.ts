@@ -293,17 +293,6 @@ export function hasDependency<D extends DependencyKind>(
   return generator.dependencies.includes(dependency);
 }
 
-// ========================================
-// Legacy types for backward compatibility
-// ========================================
-
-/** @deprecated Use SelectInput instead */
-export interface GeneratorInput<T, R> {
-  tailordb: TailorDBNamespaceResult<T>[];
-  resolver: ResolverNamespaceResult<R>[];
-  auth?: GeneratorAuthInput;
-}
-
 // Type for any generator (used in GenerationManager)
 // This is a more permissive type that includes all possible methods
 export interface AnyCodeGenerator {
