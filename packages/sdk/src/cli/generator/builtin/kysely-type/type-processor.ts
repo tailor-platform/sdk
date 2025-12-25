@@ -238,7 +238,7 @@ export class TypeProcessor {
     }
 
     const importsSection = multiline /* ts */ `
-      import { type ColumnType, Kysely, KyselyConfig } from "kysely";
+      import { type ColumnType, Kysely, type KyselyConfig } from "kysely";
       import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
       ${utilityTypeDeclarations.join("\n")}
