@@ -168,9 +168,7 @@ export class Application {
     (websites ?? []).forEach((config) => {
       const website = StaticWebsiteSchema.parse(config);
       if (websiteNames.has(website.name)) {
-        throw new Error(
-          `Static website with name "${website.name}" already defined.`,
-        );
+        throw new Error(`Static website with name "${website.name}" already defined.`);
       }
       websiteNames.add(website.name);
       this._staticWebsiteServices.push(website);

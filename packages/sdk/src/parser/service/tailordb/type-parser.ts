@@ -10,10 +10,7 @@ import type {
   ParsedRelationship,
 } from "./types";
 
-export type TypeSourceInfo = Record<
-  string,
-  { filePath: string; exportName: string }
->;
+export type TypeSourceInfo = Record<string, { filePath: string; exportName: string }>;
 
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.
@@ -42,8 +39,7 @@ export function parseTypes(
 function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
   const metadata = type.metadata;
 
-  const pluralForm =
-    metadata.settings?.pluralForm || inflection.pluralize(type.name);
+  const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
 
   const fields: Record<string, ParsedField> = {};
   const forwardRelationships: Record<string, ParsedRelationship> = {};
@@ -64,8 +60,7 @@ function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
     if (ref) {
       const targetType = ref.type?.name;
       if (targetType) {
-        const forwardName =
-          ref.nameMap?.[0] || inflection.camelize(targetType, true);
+        const forwardName = ref.nameMap?.[0] || inflection.camelize(targetType, true);
         const backwardName = ref.nameMap?.[1] || "";
         const key = ref.key || "id";
         const unique = fieldDef.metadata?.unique ?? false;
@@ -166,14 +161,10 @@ function buildBackwardRelationships(
   // Check for duplicates and collect errors
   const errors: string[] = [];
 
-  for (const [targetTypeName, backwardNames] of Object.entries(
-    backwardNameSources,
-  )) {
+  for (const [targetTypeName, backwardNames] of Object.entries(backwardNameSources)) {
     const targetType = types[targetTypeName];
     const targetTypeSourceInfo = typeSourceInfo?.[targetTypeName];
-    const targetLocation = targetTypeSourceInfo
-      ? ` (${targetTypeSourceInfo.filePath})`
-      : "";
+    const targetLocation = targetTypeSourceInfo ? ` (${targetTypeSourceInfo.filePath})` : "";
 
     for (const [backwardName, sources] of Object.entries(backwardNames)) {
       // Check for duplicate backward relation names
@@ -254,10 +245,7 @@ function validatePluralFormUniqueness(
   }
 
   // Check 2: All query names must be unique across types
-  const queryNameToSource: Record<
-    string,
-    { typeName: string; kind: string }[]
-  > = {};
+  const queryNameToSource: Record<string, { typeName: string; kind: string }[]> = {};
 
   for (const parsedType of Object.values(types)) {
     const singularQuery = inflection.camelize(parsedType.name, true);
@@ -282,9 +270,7 @@ function validatePluralFormUniqueness(
     }
   }
 
-  const duplicates = Object.entries(queryNameToSource).filter(
-    ([, sources]) => sources.length > 1,
-  );
+  const duplicates = Object.entries(queryNameToSource).filter(([, sources]) => sources.length > 1);
 
   for (const [queryName, sources] of duplicates) {
     const sourceList = sources
@@ -294,9 +280,7 @@ function validatePluralFormUniqueness(
         return `"${s.typeName}"${location} (${s.kind})`;
       })
       .join(", ");
-    errors.push(
-      `GraphQL query field "${queryName}" conflicts between: ${sourceList}`,
-    );
+    errors.push(`GraphQL query field "${queryName}" conflicts between: ${sourceList}`);
   }
 
   if (errors.length > 0) {

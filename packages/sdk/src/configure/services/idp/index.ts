@@ -20,10 +20,7 @@ export function defineIdp<const TClients extends string[]>(
       } as const satisfies BuiltinIdP;
     },
   } as const satisfies IdPInput & {
-    provider: (
-      providerName: string,
-      clientName: TClients[number],
-    ) => BuiltinIdP;
+    provider: (providerName: string, clientName: TClients[number]) => BuiltinIdP;
   };
 
   return result as typeof result & IdpDefinitionBrand;
@@ -31,6 +28,4 @@ export function defineIdp<const TClients extends string[]>(
 
 export type IdPExternalConfig = { name: string; external: true };
 
-export type IdPConfig =
-  | Omit<ReturnType<typeof defineIdp>, "provider">
-  | IdPExternalConfig;
+export type IdPConfig = Omit<ReturnType<typeof defineIdp>, "provider"> | IdPExternalConfig;

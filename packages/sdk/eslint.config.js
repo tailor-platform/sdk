@@ -54,15 +54,7 @@ export default defineConfig([
       "import/order": [
         "error",
         {
-          groups: [
-            "builtin",
-            "external",
-            "internal",
-            "parent",
-            "sibling",
-            "index",
-            "type",
-          ],
+          groups: ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
           pathGroups: [
             {
               pattern: "@/**",
@@ -104,8 +96,7 @@ export default defineConfig([
             {
               group: ["zod"],
               allowTypeImports: true,
-              message:
-                "Configure module can import only types from zod module.",
+              message: "Configure module can import only types from zod module.",
             },
           ],
         },

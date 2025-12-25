@@ -209,8 +209,7 @@ describe("dataplane", () => {
           }
         }
       `;
-      const createSupplierResult =
-        await graphQLClient.rawRequest(createSupplier);
+      const createSupplierResult = await graphQLClient.rawRequest(createSupplier);
       expect(createSupplierResult.errors).toBeUndefined();
     });
 
@@ -297,9 +296,7 @@ describe("dataplane", () => {
       const typeField = responseFields.find((f) => f.name === "type");
       expect(typeField?.description).toBe("User type");
 
-      const workspaceIdField = responseFields.find(
-        (f) => f.name === "workspaceId",
-      );
+      const workspaceIdField = responseFields.find((f) => f.name === "workspaceId");
       expect(workspaceIdField?.description).toBe("Workspace ID");
 
       const roleField = responseFields.find((f) => f.name === "role");
@@ -434,9 +431,8 @@ describe("dataplane", () => {
       });
 
       // Verify workflowRunId is a valid UUID
-      const workflowRunId = (
-        result.data as { triggerOrderProcessing: { workflowRunId: string } }
-      ).triggerOrderProcessing.workflowRunId;
+      const workflowRunId = (result.data as { triggerOrderProcessing: { workflowRunId: string } })
+        .triggerOrderProcessing.workflowRunId;
       expect(workflowRunId).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       );
@@ -451,9 +447,7 @@ describe("dataplane", () => {
         pipelineResolverView: PipelineResolverView.FULL,
       });
 
-      const triggerResolver = pipelineResolvers.find(
-        (e) => e.name === "triggerOrderProcessing",
-      );
+      const triggerResolver = pipelineResolvers.find((e) => e.name === "triggerOrderProcessing");
       expect(triggerResolver).toBeDefined();
       expect(triggerResolver).toMatchObject({
         name: "triggerOrderProcessing",
@@ -467,26 +461,20 @@ describe("dataplane", () => {
       expect(inputNames).toContain("customerId");
 
       // Verify orderId input
-      const orderIdInput = triggerResolver?.inputs?.find(
-        (i) => i.name === "orderId",
-      );
+      const orderIdInput = triggerResolver?.inputs?.find((i) => i.name === "orderId");
       expect(orderIdInput?.description).toBe("Order ID to process");
       expect(orderIdInput?.type?.kind).toBe("ScalarType");
       expect(orderIdInput?.type?.name).toBe("String");
 
       // Verify customerId input
-      const customerIdInput = triggerResolver?.inputs?.find(
-        (i) => i.name === "customerId",
-      );
+      const customerIdInput = triggerResolver?.inputs?.find((i) => i.name === "customerId");
       expect(customerIdInput?.description).toBe("Customer ID for the order");
       expect(customerIdInput?.type?.kind).toBe("ScalarType");
       expect(customerIdInput?.type?.name).toBe("String");
 
       // Verify response
       const responseFields = triggerResolver?.response?.type?.fields ?? [];
-      const workflowRunIdField = responseFields.find(
-        (f) => f.name === "workflowRunId",
-      );
+      const workflowRunIdField = responseFields.find((f) => f.name === "workflowRunId");
       expect(workflowRunIdField).toBeDefined();
       const messageField = responseFields.find((f) => f.name === "message");
       expect(messageField).toBeDefined();

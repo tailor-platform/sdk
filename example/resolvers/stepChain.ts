@@ -27,9 +27,7 @@ export default createResolver({
               ]),
           })
           .description("User's full name"),
-        activatedAt: t
-          .datetime({ optional: true })
-          .description("User activation timestamp"),
+        activatedAt: t.datetime({ optional: true }).description("User activation timestamp"),
       })
       .typeName("StepChainUser")
       .description("User information"),
@@ -38,9 +36,7 @@ export default createResolver({
     .object({
       result: t
         .object({
-          summary: t
-            .string({ array: true })
-            .description("Summary of processing steps"),
+          summary: t.string({ array: true }).description("Summary of processing steps"),
         })
         .description("Processing result"),
     })
@@ -50,10 +46,7 @@ export default createResolver({
     const step2 = `step2: recorded ${format(new Date(), "yyyy-MM-dd HH:mm:ss")} on step2!`;
 
     const db = getDB("tailordb");
-    const kyselyResult = await db
-      .selectFrom("Supplier")
-      .select(["state"])
-      .execute();
+    const kyselyResult = await db.selectFrom("Supplier").select(["state"]).execute();
     const kyselyStep = kyselyResult.map((r) => r.state).join(", ");
 
     return {

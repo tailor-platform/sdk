@@ -5,10 +5,7 @@ import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
-import {
-  type OAuth2ClientCredentials,
-  toOAuth2ClientCredentials,
-} from "./transform";
+import { type OAuth2ClientCredentials, toOAuth2ClientCredentials } from "./transform";
 
 export interface GetOAuth2ClientOptions {
   name: string;
@@ -36,9 +33,7 @@ export async function getOAuth2Client(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(
-      `Application ${config.name} does not have an auth configuration.`,
-    );
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
   try {

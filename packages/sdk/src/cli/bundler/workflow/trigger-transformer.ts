@@ -1,10 +1,5 @@
 import { parseSync } from "oxc-parser";
-import {
-  type ASTNode,
-  type Replacement,
-  applyReplacements,
-  resolvePath,
-} from "./ast-utils";
+import { type ASTNode, type Replacement, applyReplacements, resolvePath } from "./ast-utils";
 import { detectDefaultImports } from "./workflow-detector";
 import type {
   Program,
@@ -66,10 +61,7 @@ function extractAuthInvokerInfo(
         return { isShorthand: true, valueText: "authInvoker" };
       }
       // Extract value text directly from source
-      const valueText = sourceText.slice(
-        objProp.value.start,
-        objProp.value.end,
-      );
+      const valueText = sourceText.slice(objProp.value.start, objProp.value.end);
       return { isShorthand: false, valueText };
     }
   }
@@ -94,10 +86,7 @@ function detectExtendedTriggerCalls(
 ): ExtendedTriggerCall[] {
   const calls: ExtendedTriggerCall[] = [];
 
-  function walk(
-    node: ASTNode | null | undefined,
-    parent: ASTNode | null = null,
-  ): void {
+  function walk(node: ASTNode | null | undefined, parent: ASTNode | null = null): void {
     if (!node || typeof node !== "object") return;
 
     // Detect pattern: identifier.trigger(args) or identifier.trigger(args, config)
@@ -112,8 +101,7 @@ function detectExtendedTriggerCalls(
           memberExpr.object.type === "Identifier" &&
           memberExpr.property.name === "trigger"
         ) {
-          const identifierName = (memberExpr.object as IdentifierReference)
-            .name;
+          const identifierName = (memberExpr.object as IdentifierReference).name;
 
           // Only process if this is a known workflow or job
           const isWorkflow = workflowNames.has(identifierName);
@@ -130,19 +118,14 @@ function detectExtendedTriggerCalls(
           if (argCount > 0) {
             const firstArg = callExpr.arguments[0];
             if (firstArg && "start" in firstArg && "end" in firstArg) {
-              argsText = sourceText.slice(
-                firstArg.start as number,
-                firstArg.end as number,
-              );
+              argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
             }
           }
 
           // Check if this call is wrapped in an await expression
           // For job triggers, we need to remove the await since triggerJobFunction is synchronous
           const hasAwait = parent?.type === "AwaitExpression";
-          const awaitExpr = hasAwait
-            ? (parent as unknown as AwaitExpression)
-            : null;
+          const awaitExpr = hasAwait ? (parent as unknown as AwaitExpression) : null;
 
           // Determine kind based on known identifier type
           if (isWorkflow && argCount >= 2) {
@@ -170,9 +153,7 @@ function detectExtendedTriggerCalls(
               callRange: { start: callExpr.start, end: callExpr.end },
               argsText,
               hasAwait,
-              fullRange: awaitExpr
-                ? { start: awaitExpr.start, end: awaitExpr.end }
-                : undefined,
+              fullRange: awaitExpr ? { start: awaitExpr.start, end: awaitExpr.end } : undefined,
             });
           }
         }
@@ -239,12 +220,7 @@ export function transformFunctionTriggers(
   const jobNames = new Set(jobNameMap.keys());
 
   // Detect trigger calls only for known workflows and jobs
-  const triggerCalls = detectExtendedTriggerCalls(
-    program,
-    source,
-    workflowNames,
-    jobNames,
-  );
+  const triggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
 
   const replacements: Replacement[] = [];
 
@@ -275,8 +251,7 @@ export function transformFunctionTriggers(
 
         // If the call was wrapped in await, replace the entire await expression
         // Otherwise just replace the call
-        const range =
-          call.hasAwait && call.fullRange ? call.fullRange : call.callRange;
+        const range = call.hasAwait && call.fullRange ? call.fullRange : call.callRange;
         replacements.push({
           start: range.start,
           end: range.end,

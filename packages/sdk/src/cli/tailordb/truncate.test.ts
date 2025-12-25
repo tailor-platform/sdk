@@ -59,25 +59,19 @@ describe("truncate command", () => {
     });
 
     test("throws error when --all is specified with --namespace", async () => {
-      await expect(
-        truncate({ all: true, namespace: "tailordb", yes: true }),
-      ).rejects.toThrow(
+      await expect(truncate({ all: true, namespace: "tailordb", yes: true })).rejects.toThrow(
         "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
       );
     });
 
     test("throws error when --all is specified with type names", async () => {
-      await expect(
-        truncate({ all: true, types: ["User"], yes: true }),
-      ).rejects.toThrow(
+      await expect(truncate({ all: true, types: ["User"], yes: true })).rejects.toThrow(
         "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
       );
     });
 
     test("throws error when --namespace is specified with type names", async () => {
-      await expect(
-        truncate({ namespace: "tailordb", types: ["User"], yes: true }),
-      ).rejects.toThrow(
+      await expect(truncate({ namespace: "tailordb", types: ["User"], yes: true })).rejects.toThrow(
         "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
       );
     });
@@ -130,9 +124,7 @@ describe("truncate command", () => {
     });
 
     test("throws error when namespace not found in config", async () => {
-      await expect(
-        truncate({ namespace: "nonexistent", yes: true }),
-      ).rejects.toThrow(
+      await expect(truncate({ namespace: "nonexistent", yes: true })).rejects.toThrow(
         'Namespace "nonexistent" not found in config. Available namespaces: tailordb, anotherdb',
       );
     });
@@ -183,9 +175,7 @@ describe("truncate command", () => {
         }),
       } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
-      await expect(
-        truncate({ types: ["NonExistentType"], yes: true }),
-      ).rejects.toThrow(
+      await expect(truncate({ types: ["NonExistentType"], yes: true })).rejects.toThrow(
         "The following types were not found in any namespace: NonExistentType",
       );
     });

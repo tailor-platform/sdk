@@ -24,14 +24,8 @@ type ActionPermission<
       description?: string | undefined;
       permit?: boolean;
     }
-  | readonly [
-      ...PermissionCondition<Level, User, Update, Type>,
-      ...([] | [boolean]),
-    ] // single array condition
-  | readonly [
-      ...PermissionCondition<Level, User, Update, Type>[],
-      ...([] | [boolean]),
-    ]; // multiple array condition
+  | readonly [...PermissionCondition<Level, User, Update, Type>, ...([] | [boolean])] // single array condition
+  | readonly [...PermissionCondition<Level, User, Update, Type>[], ...([] | [boolean])]; // multiple array condition
 
 export type TailorTypeGqlPermission<
   User extends object = InferredAttributeMap,
@@ -48,13 +42,7 @@ type GqlPermissionPolicy<
   description?: string;
 };
 
-type GqlPermissionAction =
-  | "read"
-  | "create"
-  | "update"
-  | "delete"
-  | "aggregate"
-  | "bulkUpsert";
+type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
 export type PermissionCondition<
   Level extends "record" | "gql" = "record" | "gql",
@@ -70,25 +58,14 @@ export type PermissionCondition<
 type UserOperand<User extends object = InferredAttributeMap> = {
   user:
     | {
-        [K in keyof User]: User[K] extends
-          | string
-          | string[]
-          | boolean
-          | boolean[]
-          ? K
-          : never;
+        [K in keyof User]: User[K] extends string | string[] | boolean | boolean[] ? K : never;
       }[keyof User]
     | "id"
     | "_loggedIn";
 };
 
-type RecordOperand<
-  Type extends object,
-  Update extends boolean = false,
-> = Update extends true
-  ?
-      | { oldRecord: (keyof Type & string) | "id" }
-      | { newRecord: (keyof Type & string) | "id" }
+type RecordOperand<Type extends object, Update extends boolean = false> = Update extends true
+  ? { oldRecord: (keyof Type & string) | "id" } | { newRecord: (keyof Type & string) | "id" }
   : { record: (keyof Type & string) | "id" };
 
 export type PermissionOperand<

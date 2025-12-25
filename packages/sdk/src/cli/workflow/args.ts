@@ -22,8 +22,7 @@ export const waitArgs = {
   logs: {
     type: "boolean",
     alias: "l",
-    description:
-      "Display job execution logs after completion (requires --wait)",
+    description: "Display job execution logs after completion (requires --wait)",
     default: false,
   },
 } as const;

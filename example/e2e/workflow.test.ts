@@ -12,44 +12,28 @@ describe("controlplane", async () => {
       expect(workflows.length).toBe(2);
 
       // Verify order-processing workflow
-      const orderProcessing = workflows.find(
-        (w) => w.name === "order-processing",
-      );
+      const orderProcessing = workflows.find((w) => w.name === "order-processing");
       expect(orderProcessing).toBeDefined();
       expect(orderProcessing).toMatchObject({
         name: "order-processing",
         mainJobFunctionName: "process-order",
       });
       // Verify job functions are registered
-      expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain(
-        "process-order",
-      );
-      expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain(
-        "fetch-customer",
-      );
-      expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain(
-        "send-notification",
-      );
+      expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain("process-order");
+      expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain("fetch-customer");
+      expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain("send-notification");
 
       // Verify sample-workflow
-      const sampleWorkflow = workflows.find(
-        (w) => w.name === "sample-workflow",
-      );
+      const sampleWorkflow = workflows.find((w) => w.name === "sample-workflow");
       expect(sampleWorkflow).toBeDefined();
       expect(sampleWorkflow).toMatchObject({
         name: "sample-workflow",
         mainJobFunctionName: "validate-order",
       });
       // Verify job functions are registered
-      expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain(
-        "validate-order",
-      );
-      expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain(
-        "check-inventory",
-      );
-      expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain(
-        "process-payment",
-      );
+      expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("validate-order");
+      expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("check-inventory");
+      expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("process-payment");
     });
   });
 
@@ -89,15 +73,11 @@ describe("controlplane", async () => {
       }
 
       // Verify specific job function content
-      const fetchCustomer = jobFunctions.find(
-        (j) => j.name === "fetch-customer",
-      );
+      const fetchCustomer = jobFunctions.find((j) => j.name === "fetch-customer");
       expect(fetchCustomer).toBeDefined();
       expect(fetchCustomer?.script).toBeTruthy();
 
-      const sendNotification = jobFunctions.find(
-        (j) => j.name === "send-notification",
-      );
+      const sendNotification = jobFunctions.find((j) => j.name === "send-notification");
       expect(sendNotification).toBeDefined();
       expect(sendNotification?.script).toBeTruthy();
     });

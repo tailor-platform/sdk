@@ -24,12 +24,7 @@ type AttributeMap = {
 
 type AttributeList = ["externalId"];
 
-type AuthInput = AuthServiceInput<
-  typeof _userType,
-  AttributeMap,
-  AttributeList,
-  "admin"
->;
+type AuthInput = AuthServiceInput<typeof _userType, AttributeMap, AttributeList, "admin">;
 
 type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
@@ -42,10 +37,7 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     expectTypeOf<ServiceOptionalKeys>().toEqualTypeOf<SchemaOptionalKeys>();
 
     type ServiceRequiredKeys = Exclude<keyof AuthInput, ServiceOptionalKeys>;
-    type SchemaRequiredKeys = Exclude<
-      keyof AuthSchemaInput,
-      SchemaOptionalKeys
-    >;
+    type SchemaRequiredKeys = Exclude<keyof AuthSchemaInput, SchemaOptionalKeys>;
 
     expectTypeOf<ServiceRequiredKeys>().toEqualTypeOf<SchemaRequiredKeys>();
     expectTypeOf<keyof AuthInput>().toEqualTypeOf<keyof AuthSchemaInput>();
@@ -65,15 +57,10 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     type ServiceAttributes = NonNullable<ServiceUserProfile["attributes"]>;
     type SchemaAttributes = NonNullable<SchemaUserProfile["attributes"]>;
 
-    type AlignedSchemaAttributes = Pick<
-      SchemaAttributes,
-      keyof ServiceAttributes
-    >;
+    type AlignedSchemaAttributes = Pick<SchemaAttributes, keyof ServiceAttributes>;
 
     expectTypeOf<ServiceAttributes>().toMatchObjectType<AlignedSchemaAttributes>();
-    expectTypeOf<ServiceUserProfile["type"]>().toExtend<
-      SchemaUserProfile["type"]
-    >();
+    expectTypeOf<ServiceUserProfile["type"]>().toExtend<SchemaUserProfile["type"]>();
     expectTypeOf<ServiceUserProfile["usernameField"]>().toExtend<
       SchemaUserProfile["usernameField"]
     >();
@@ -83,17 +70,14 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
   });
 
   it("aligns particular machineUsers with the schema", () => {
-    type SchemaMachineUser = NonNullable<
-      AuthSchemaInput["machineUsers"]
-    >[string];
+    type SchemaMachineUser = NonNullable<AuthSchemaInput["machineUsers"]>[string];
     type SchemaAttributes = NonNullable<SchemaMachineUser["attributes"]>;
     type SchemaAttributeValue = SchemaAttributes[keyof SchemaAttributes];
     type SchemaAttributeList = SchemaMachineUser["attributeList"];
 
     type FunctionMachineUser = MachineUserConfig;
     type FunctionAttributeKeys = keyof AttributeMap;
-    type FunctionAttributeValues =
-      FunctionMachineUser["attributes"][FunctionAttributeKeys];
+    type FunctionAttributeValues = FunctionMachineUser["attributes"][FunctionAttributeKeys];
     type FunctionAttributeList = FunctionMachineUser["attributeList"];
 
     expectTypeOf<FunctionAttributeValues>().toExtend<SchemaAttributeValue>();
@@ -115,15 +99,11 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
   });
 
   it("rejects attributes not declared in userProfile", () => {
-    expectTypeOf<
-      MachineUserConfig["attributes"] & { email: string }
-    >().toBeNever();
+    expectTypeOf<MachineUserConfig["attributes"] & { email: string }>().toBeNever();
   });
 
   it("rejects attributeList value mismatches", () => {
-    expectTypeOf<
-      MachineUserConfig["attributeList"] & [string, boolean]
-    >().toBeNever();
+    expectTypeOf<MachineUserConfig["attributeList"] & [string, boolean]>().toBeNever();
   });
 });
 

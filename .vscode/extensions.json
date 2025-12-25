@@ -1,6 +1,3 @@
 {
-  "recommendations": [
-    "toiroakr.lines-db-vscode",
-    "bierner.comment-tagged-templates"
-  ]
+  "recommendations": ["toiroakr.lines-db-vscode", "bierner.comment-tagged-templates"]
 }

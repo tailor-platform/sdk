@@ -46,11 +46,7 @@ export type WorkflowJobInput = undefined | JsonCompatible<unknown>;
  * - Output: Must be Jsonifiable, undefined, or void
  * - Trigger returns Jsonify<Output> (Date becomes string after JSON.stringify)
  */
-export interface WorkflowJob<
-  Name extends string = string,
-  Input = undefined,
-  Output = undefined,
-> {
+export interface WorkflowJob<Name extends string = string, Input = undefined, Output = undefined> {
   readonly [WORKFLOW_JOB_BRAND]?: true;
   name: Name;
   /**
@@ -112,11 +108,7 @@ type WorkflowJobBody<I, O> =
       : never
     : never;
 
-export const createWorkflowJob = <
-  const Name extends string,
-  I = undefined,
-  O = undefined,
->(config: {
+export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(config: {
   readonly name: Name;
   readonly body: WorkflowJobBody<I, O>;
 }): WorkflowJob<Name, I, Awaited<O>> => {

@@ -14,10 +14,7 @@ export const TailorFieldTypeSchema = z.enum([
   "nested",
 ]);
 
-export const QueryTypeSchema = z.union([
-  z.literal("query"),
-  z.literal("mutation"),
-]);
+export const QueryTypeSchema = z.union([z.literal("query"), z.literal("mutation")]);
 
 export const AllowedValueSchema = z.object({
   value: z.string(),

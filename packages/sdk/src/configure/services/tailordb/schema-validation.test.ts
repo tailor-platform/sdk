@@ -27,8 +27,7 @@ describe("TailorDBType validation functionality", () => {
   });
 
   it("should set validators on individual fields", () => {
-    const emailValidator = ({ value }: { value: string }) =>
-      value.includes("@");
+    const emailValidator = ({ value }: { value: string }) => value.includes("@");
     const nameValidator = ({ value }: { value: string }) => value.length > 0;
 
     UserType.validate({
@@ -38,13 +37,9 @@ describe("TailorDBType validation functionality", () => {
 
     // Check that validators were set on the fields
 
-    expect((UserType.fields.name as any)._metadata.validate).toEqual([
-      nameValidator,
-    ]);
+    expect((UserType.fields.name as any)._metadata.validate).toEqual([nameValidator]);
 
-    expect((UserType.fields.email as any)._metadata.validate).toEqual([
-      emailValidator,
-    ]);
+    expect((UserType.fields.email as any)._metadata.validate).toEqual([emailValidator]);
   });
 
   it("should work with both field-level and type-level validators", () => {
@@ -53,8 +48,7 @@ describe("TailorDBType validation functionality", () => {
       name: db.string().validate(({ value }) => value.length > 0),
       email: db.string(),
     });
-    const emailValidator = ({ value }: { value: string }) =>
-      value.includes("@");
+    const emailValidator = ({ value }: { value: string }) => value.includes("@");
 
     UserType.validate({
       email: [emailValidator],
@@ -64,14 +58,10 @@ describe("TailorDBType validation functionality", () => {
 
     expect((UserType.fields.name as any)._metadata.validate).toHaveLength(1);
 
-    expect((UserType.fields.name as any)._metadata.validate[0]).toBeInstanceOf(
-      Function,
-    );
+    expect((UserType.fields.name as any)._metadata.validate[0]).toBeInstanceOf(Function);
 
     // Type-level validator should be set
 
-    expect((UserType.fields.email as any)._metadata.validate).toEqual([
-      emailValidator,
-    ]);
+    expect((UserType.fields.email as any)._metadata.validate).toEqual([emailValidator]);
   });
 });

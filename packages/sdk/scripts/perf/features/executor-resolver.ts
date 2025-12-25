@@ -4,12 +4,7 @@
  * Tests type inference cost for resolver executed trigger executors
  * Uses graphql operation (same as other trigger tests) to isolate trigger cost
  */
-import {
-  createExecutor,
-  createResolver,
-  resolverExecutedTrigger,
-  t,
-} from "../../../src/configure";
+import { createExecutor, createResolver, resolverExecutedTrigger, t } from "../../../src/configure";
 
 const dummyResolver = createResolver({
   name: "dummyResolver",

@@ -25,9 +25,7 @@ describe("EnumConstantsGenerator", () => {
   describe("basic properties", () => {
     it("should have correct id and description", () => {
       expect(generator.id).toBe("@tailor-platform/enum-constants");
-      expect(generator.description).toBe(
-        "Generates enum constants from TailorDB type definitions",
-      );
+      expect(generator.description).toBe("Generates enum constants from TailorDB type definitions");
     });
 
     it("should have correct dependencies", () => {
@@ -126,9 +124,7 @@ describe("EnumConstantsGenerator", () => {
       expect(result).toContain('  "admin": "admin"');
       expect(result).toContain('  "user": "user"');
       expect(result).toContain("} as const;");
-      expect(result).toContain(
-        "export type UserRole = (typeof UserRole)[keyof typeof UserRole];",
-      );
+      expect(result).toContain("export type UserRole = (typeof UserRole)[keyof typeof UserRole];");
     });
 
     it("should preserve original enum values", () => {
@@ -150,11 +146,7 @@ describe("EnumConstantsGenerator", () => {
       const allEnums = [
         {
           name: "OrderStatus",
-          values: [
-            { value: "in-progress" },
-            { value: "ready to ship" },
-            { value: "delivered" },
-          ],
+          values: [{ value: "in-progress" }, { value: "ready to ship" }, { value: "delivered" }],
         },
       ];
 

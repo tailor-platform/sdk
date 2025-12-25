@@ -42,9 +42,7 @@ ${mapFields}
   }`;
 
   // Generate AttributeList type as a tuple of strings based on the length
-  const listType = attributeList
-    ? `[${attributeList.map(() => "string").join(", ")}]`
-    : "[]";
+  const listType = attributeList ? `[${attributeList.map(() => "string").join(", ")}]` : "[]";
 
   // Use interface with __tuple marker for declaration merging and tuple type support
   const listBody = `{
@@ -55,8 +53,7 @@ ${mapFields}
   const envFields = env
     ? Object.entries(env)
         .map(([key, value]) => {
-          const valueType =
-            typeof value === "string" ? `"${value}"` : String(value);
+          const valueType = typeof value === "string" ? `"${value}"` : String(value);
           return `    ${key}: ${valueType};`;
         })
         .join("\n")
@@ -138,9 +135,7 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
             typeStr = "boolean";
           } else if (type === "enum" && metadata.allowedValues) {
             // Generate union type from enum values
-            typeStr = metadata.allowedValues
-              .map((v) => `"${v.value}"`)
-              .join(" | ");
+            typeStr = metadata.allowedValues.map((v) => `"${v.value}"`).join(" | ");
           }
 
           // Add array suffix if needed
@@ -186,10 +181,7 @@ export function resolveTypeDefinitionPath(configPath: string): string {
   return path.join(packageDir, "dist", "user-defined.d.ts");
 }
 
-export async function generateUserTypes(
-  config: AppConfig,
-  configPath: string,
-): Promise<void> {
+export async function generateUserTypes(config: AppConfig, configPath: string): Promise<void> {
   try {
     const { attributeMap, attributeList } = extractAttributesFromConfig(config);
     if (!attributeMap && !attributeList) {
@@ -209,11 +201,7 @@ export async function generateUserTypes(
     }
 
     // Generate type definition
-    const typeDefContent = generateTypeDefinition(
-      attributeMap,
-      attributeList,
-      env,
-    );
+    const typeDefContent = generateTypeDefinition(attributeMap, attributeList, env);
     const outputPath = resolveTypeDefinitionPath(configPath);
 
     // Write to file
@@ -236,12 +224,7 @@ function resolvePackageDirectory(startDir: string): string | null {
   const root = path.parse(currentDir).root;
 
   while (true) {
-    const candidate = path.join(
-      currentDir,
-      "node_modules",
-      "@tailor-platform",
-      "sdk",
-    );
+    const candidate = path.join(currentDir, "node_modules", "@tailor-platform", "sdk");
     const packageJsonPath = path.join(candidate, "package.json");
     if (fs.existsSync(packageJsonPath)) {
       return candidate;

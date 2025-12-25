@@ -63,26 +63,20 @@ export class AuthService {
     // 2. Single TailorDB
     if (totalNamespaceCount === 1) {
       userProfileNamespace =
-        this.tailorDBServices[0]?.namespace ??
-        this.externalTailorDBNamespaces[0];
+        this.tailorDBServices[0]?.namespace ?? this.externalTailorDBNamespaces[0];
     } else {
       // 3. Multiple TailorDBs
-      await Promise.all(
-        this.tailorDBServices.map((service) => service.loadTypes()),
-      );
+      await Promise.all(this.tailorDBServices.map((service) => service.loadTypes()));
 
       const userProfileTypeName =
-        typeof this.config.userProfile.type === "object" &&
-        "name" in this.config.userProfile.type
+        typeof this.config.userProfile.type === "object" && "name" in this.config.userProfile.type
           ? this.config.userProfile.type.name
           : undefined;
 
       if (userProfileTypeName) {
         for (const service of this.tailorDBServices) {
           const types = service.getTypes();
-          if (
-            Object.prototype.hasOwnProperty.call(types, userProfileTypeName)
-          ) {
+          if (Object.prototype.hasOwnProperty.call(types, userProfileTypeName)) {
             userProfileNamespace = service.namespace;
             break;
           }

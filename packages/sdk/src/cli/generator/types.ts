@@ -1,9 +1,6 @@
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
-import type {
-  IdProviderConfig,
-  OAuth2ClientInput,
-} from "@/parser/service/auth/types";
+import type { IdProviderConfig, OAuth2ClientInput } from "@/parser/service/auth/types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 // ========================================
@@ -87,10 +84,7 @@ export interface TailorDBProcessMethods<T, Ts> {
 }
 
 export interface ResolverProcessMethods<R, Rs> {
-  processResolver(args: {
-    resolver: Resolver;
-    namespace: string;
-  }): R | Promise<R>;
+  processResolver(args: { resolver: Resolver; namespace: string }): R | Promise<R>;
 
   processResolverNamespace?(args: {
     namespace: string;
@@ -106,22 +100,14 @@ export interface ExecutorProcessMethods<E> {
 // Conditional method selection
 // ========================================
 
-type SelectMethods<
-  Deps extends readonly DependencyKind[],
-  T,
-  R,
-  E,
-  Ts,
-  Rs,
-> = (HasDependency<Deps, "tailordb"> extends true
+type SelectMethods<Deps extends readonly DependencyKind[], T, R, E, Ts, Rs> = (HasDependency<
+  Deps,
+  "tailordb"
+> extends true
   ? TailorDBProcessMethods<T, Ts>
   : object) &
-  (HasDependency<Deps, "resolver"> extends true
-    ? ResolverProcessMethods<R, Rs>
-    : object) &
-  (HasDependency<Deps, "executor"> extends true
-    ? ExecutorProcessMethods<E>
-    : object);
+  (HasDependency<Deps, "resolver"> extends true ? ResolverProcessMethods<R, Rs> : object) &
+  (HasDependency<Deps, "executor"> extends true ? ExecutorProcessMethods<E> : object);
 
 // ========================================
 // Conditional input selection for aggregate
@@ -144,20 +130,14 @@ interface AuthPart {
   auth?: GeneratorAuthInput;
 }
 
-type SelectInput<
-  Deps extends readonly DependencyKind[],
-  Ts,
-  Rs,
-  E,
-> = (HasDependency<Deps, "tailordb"> extends true
+type SelectInput<Deps extends readonly DependencyKind[], Ts, Rs, E> = (HasDependency<
+  Deps,
+  "tailordb"
+> extends true
   ? TailorDBInputPart<Ts>
   : object) &
-  (HasDependency<Deps, "resolver"> extends true
-    ? ResolverInputPart<Rs>
-    : object) &
-  (HasDependency<Deps, "executor"> extends true
-    ? ExecutorInputPart<E>
-    : object) &
+  (HasDependency<Deps, "resolver"> extends true ? ResolverInputPart<Rs> : object) &
+  (HasDependency<Deps, "executor"> extends true ? ExecutorInputPart<E> : object) &
   AuthPart;
 
 // ========================================
@@ -236,16 +216,24 @@ export type CodeGenerator<
 // ========================================
 
 /** TailorDB-only generator */
-export type TailorDBGenerator<
-  T = unknown,
-  Ts = Record<string, T>,
-> = CodeGenerator<readonly ["tailordb"], T, never, never, Ts, never>;
+export type TailorDBGenerator<T = unknown, Ts = Record<string, T>> = CodeGenerator<
+  readonly ["tailordb"],
+  T,
+  never,
+  never,
+  Ts,
+  never
+>;
 
 /** Resolver-only generator */
-export type ResolverGenerator<
-  R = unknown,
-  Rs = Record<string, R>,
-> = CodeGenerator<readonly ["resolver"], never, R, never, never, Rs>;
+export type ResolverGenerator<R = unknown, Rs = Record<string, R>> = CodeGenerator<
+  readonly ["resolver"],
+  never,
+  R,
+  never,
+  never,
+  Rs
+>;
 
 /** Executor-only generator */
 export type ExecutorGenerator<E = unknown> = CodeGenerator<
@@ -272,14 +260,7 @@ export type FullCodeGenerator<
   E = unknown,
   Ts = Record<string, T>,
   Rs = Record<string, R>,
-> = CodeGenerator<
-  readonly ["tailordb", "resolver", "executor"],
-  T,
-  R,
-  E,
-  Ts,
-  Rs
->;
+> = CodeGenerator<readonly ["tailordb", "resolver", "executor"], T, R, E, Ts, Rs>;
 
 // ========================================
 // Runtime utility
@@ -311,10 +292,7 @@ export interface AnyCodeGenerator {
     types: Record<string, unknown>;
   }): unknown | Promise<unknown>;
 
-  processResolver?(args: {
-    resolver: Resolver;
-    namespace: string;
-  }): unknown | Promise<unknown>;
+  processResolver?(args: { resolver: Resolver; namespace: string }): unknown | Promise<unknown>;
 
   processResolverNamespace?(args: {
     namespace: string;

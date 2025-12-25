@@ -37,15 +37,7 @@ export default defineConfig([
       "import/order": [
         "error",
         {
-          groups: [
-            "builtin",
-            "external",
-            "internal",
-            "parent",
-            "sibling",
-            "index",
-            "type",
-          ],
+          groups: ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
           pathGroups: [
             {
               pattern: "@tailor-platform/**",

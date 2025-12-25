@@ -12,10 +12,7 @@ export function createOperatorClient() {
   const transport = createConnectTransport({
     httpVersion: "2",
     baseUrl,
-    interceptors: [
-      userAgentInterceptor(),
-      bearerTokenInterceptor(platformToken),
-    ],
+    interceptors: [userAgentInterceptor(), bearerTokenInterceptor(platformToken)],
   });
   return [createClient(OperatorService, transport), workspaceId] as const;
 }

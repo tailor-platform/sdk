@@ -17,10 +17,7 @@ const createWorkspaceOptionsSchema = z.object({
     .string()
     .min(3, "Name must be at least 3 characters")
     .max(63, "Name must be at most 63 characters")
-    .regex(
-      /^[a-z0-9-]+$/,
-      "Name can only contain lowercase letters, numbers, and hyphens",
-    )
+    .regex(/^[a-z0-9-]+$/, "Name can only contain lowercase letters, numbers, and hyphens")
     .refine(
       (n) => !n.startsWith("-") && !n.endsWith("-"),
       "Name cannot start or end with a hyphen",
@@ -31,22 +28,16 @@ const createWorkspaceOptionsSchema = z.object({
   folderId: z.uuid().optional(),
 });
 
-export type CreateWorkspaceOptions = z.input<
-  typeof createWorkspaceOptionsSchema
->;
+export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
   if (!availableRegions.regions.includes(region)) {
-    throw new Error(
-      `Region must be one of: ${availableRegions.regions.join(", ")}.`,
-    );
+    throw new Error(`Region must be one of: ${availableRegions.regions.join(", ")}.`);
   }
 };
 
-export async function createWorkspace(
-  options: CreateWorkspaceOptions,
-): Promise<WorkspaceInfo> {
+export async function createWorkspace(options: CreateWorkspaceOptions): Promise<WorkspaceInfo> {
   // Validate options with zod schema
   const result = createWorkspaceOptionsSchema.safeParse(options);
   if (!result.success) {

@@ -23,11 +23,7 @@ import {
   type AuthAttributeValue,
   type TenantProviderConfig,
 } from "@/parser/service/auth";
-import {
-  fetchAll,
-  resolveStaticWebsiteUrls,
-  type OperatorClient,
-} from "../../client";
+import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "../../client";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { ChangeSet } from ".";
@@ -84,9 +80,7 @@ export async function applyAuth(
         await client.createAuthService(create.request);
         await client.setMetadata(create.metaRequest);
       }),
-      ...changeSet.service.updates.map((update) =>
-        client.setMetadata(update.metaRequest),
-      ),
+      ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
     ]);
 
     // IdPConfigs
@@ -125,12 +119,8 @@ export async function applyAuth(
 
     // TenantConfigs
     await Promise.all([
-      ...changeSet.tenantConfig.creates.map((create) =>
-        client.createTenantConfig(create.request),
-      ),
-      ...changeSet.tenantConfig.updates.map((update) =>
-        client.updateTenantConfig(update.request),
-      ),
+      ...changeSet.tenantConfig.creates.map((create) => client.createTenantConfig(create.request)),
+      ...changeSet.tenantConfig.updates.map((update) => client.updateTenantConfig(update.request)),
     ]);
 
     // MachineUsers
@@ -146,35 +136,29 @@ export async function applyAuth(
     // OAuth2Clients
     await Promise.all([
       ...changeSet.oauth2Client.creates.map(async (create) => {
-        create.request.oauth2Client!.redirectUris =
-          await resolveStaticWebsiteUrls(
-            client,
-            create.request.workspaceId!,
-            create.request.oauth2Client!.redirectUris,
-            "OAuth2 redirect URIs",
-          );
+        create.request.oauth2Client!.redirectUris = await resolveStaticWebsiteUrls(
+          client,
+          create.request.workspaceId!,
+          create.request.oauth2Client!.redirectUris,
+          "OAuth2 redirect URIs",
+        );
         return client.createAuthOAuth2Client(create.request);
       }),
       ...changeSet.oauth2Client.updates.map(async (update) => {
-        update.request.oauth2Client!.redirectUris =
-          await resolveStaticWebsiteUrls(
-            client,
-            update.request.workspaceId!,
-            update.request.oauth2Client!.redirectUris,
-            "OAuth2 redirect URIs",
-          );
+        update.request.oauth2Client!.redirectUris = await resolveStaticWebsiteUrls(
+          client,
+          update.request.workspaceId!,
+          update.request.oauth2Client!.redirectUris,
+          "OAuth2 redirect URIs",
+        );
         return client.updateAuthOAuth2Client(update.request);
       }),
     ]);
 
     // SCIMConfigs
     await Promise.all([
-      ...changeSet.scim.creates.map((create) =>
-        client.createAuthSCIMConfig(create.request),
-      ),
-      ...changeSet.scim.updates.map((update) =>
-        client.updateAuthSCIMConfig(update.request),
-      ),
+      ...changeSet.scim.creates.map((create) => client.createAuthSCIMConfig(create.request)),
+      ...changeSet.scim.updates.map((update) => client.updateAuthSCIMConfig(update.request)),
     ]);
 
     // SCIMResources
@@ -190,68 +174,47 @@ export async function applyAuth(
     // Delete in reverse order of dependencies
     // SCIMResources
     await Promise.all(
-      changeSet.scimResource.deletes.map((del) =>
-        client.deleteAuthSCIMResource(del.request),
-      ),
+      changeSet.scimResource.deletes.map((del) => client.deleteAuthSCIMResource(del.request)),
     );
 
     // SCIMConfigs
     await Promise.all(
-      changeSet.scim.deletes.map((del) =>
-        client.deleteAuthSCIMConfig(del.request),
-      ),
+      changeSet.scim.deletes.map((del) => client.deleteAuthSCIMConfig(del.request)),
     );
 
     // OAuth2Clients
     await Promise.all(
-      changeSet.oauth2Client.deletes.map((del) =>
-        client.deleteAuthOAuth2Client(del.request),
-      ),
+      changeSet.oauth2Client.deletes.map((del) => client.deleteAuthOAuth2Client(del.request)),
     );
 
     // MachineUsers
     await Promise.all(
-      changeSet.machineUser.deletes.map((del) =>
-        client.deleteAuthMachineUser(del.request),
-      ),
+      changeSet.machineUser.deletes.map((del) => client.deleteAuthMachineUser(del.request)),
     );
 
     // TenantConfigs
     await Promise.all(
-      changeSet.tenantConfig.deletes.map((del) =>
-        client.deleteTenantConfig(del.request),
-      ),
+      changeSet.tenantConfig.deletes.map((del) => client.deleteTenantConfig(del.request)),
     );
 
     // UserProfileConfigs
     await Promise.all(
-      changeSet.userProfileConfig.deletes.map((del) =>
-        client.deleteUserProfileConfig(del.request),
-      ),
+      changeSet.userProfileConfig.deletes.map((del) => client.deleteUserProfileConfig(del.request)),
     );
 
     // IdPConfigs
     await Promise.all(
-      changeSet.idpConfig.deletes.map((del) =>
-        client.deleteAuthIDPConfig(del.request),
-      ),
+      changeSet.idpConfig.deletes.map((del) => client.deleteAuthIDPConfig(del.request)),
     );
   } else if (phase === "delete-services") {
     // Services only
     await Promise.all(
-      changeSet.service.deletes.map((del) =>
-        client.deleteAuthService(del.request),
-      ),
+      changeSet.service.deletes.map((del) => client.deleteAuthService(del.request)),
     );
   }
 }
 
-export async function planAuth({
-  client,
-  workspaceId,
-  application,
-  forRemoval,
-}: PlanContext) {
+export async function planAuth({ client, workspaceId, application, forRemoval }: PlanContext) {
   const auths: Readonly<AuthService>[] = [];
   if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();
@@ -264,12 +227,7 @@ export async function planAuth({
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, auths);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const idpConfigChangeSet = await planIdPConfigs(
-    client,
-    workspaceId,
-    auths,
-    deletedServices,
-  );
+  const idpConfigChangeSet = await planIdPConfigs(client, workspaceId, auths, deletedServices);
   const userProfileConfigChangeSet = await planUserProfileConfigs(
     client,
     workspaceId,
@@ -282,24 +240,14 @@ export async function planAuth({
     auths,
     deletedServices,
   );
-  const machineUserChangeSet = await planMachineUsers(
-    client,
-    workspaceId,
-    auths,
-    deletedServices,
-  );
+  const machineUserChangeSet = await planMachineUsers(client, workspaceId, auths, deletedServices);
   const oauth2ClientChangeSet = await planOAuth2Clients(
     client,
     workspaceId,
     auths,
     deletedServices,
   );
-  const scimChangeSet = await planSCIMConfigs(
-    client,
-    workspaceId,
-    auths,
-    deletedServices,
-  );
+  const scimChangeSet = await planSCIMConfigs(client, workspaceId, auths, deletedServices);
   const scimResourceChangeSet = await planSCIMResources(
     client,
     workspaceId,
@@ -358,8 +306,9 @@ async function planServices(
   appName: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
-  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
-    new ChangeSet("Auth services");
+  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> = new ChangeSet(
+    "Auth services",
+  );
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -397,10 +346,7 @@ async function planServices(
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
     const existing = existingServices[config.name];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, config.name),
-      appName,
-    );
+    const metaRequest = await buildMetaRequest(trn(workspaceId, config.name), appName);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -474,11 +420,9 @@ async function planIdPConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateIdPConfig,
-    UpdateIdPConfig,
-    DeleteIdPConfig
-  > = new ChangeSet("Auth idpConfigs");
+  const changeSet: ChangeSet<CreateIdPConfig, UpdateIdPConfig, DeleteIdPConfig> = new ChangeSet(
+    "Auth idpConfigs",
+  );
 
   const fetchIdPConfigs = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -558,9 +502,7 @@ async function planIdPConfigs(
   return changeSet;
 }
 
-function protoIdPConfig(
-  idpConfig: IdProviderConfig,
-): MessageInitShape<typeof AuthIDPConfigSchema> {
+function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof AuthIDPConfigSchema> {
   switch (idpConfig.kind) {
     case "IDToken":
       return {
@@ -650,14 +592,8 @@ async function protoBuiltinIdPConfig(
     namespaceName: builtinIdPConfig.namespace,
     name: builtinIdPConfig.clientName,
   });
-  const vaultName = idpClientVaultName(
-    builtinIdPConfig.namespace,
-    builtinIdPConfig.clientName,
-  );
-  const secretKey = idpClientSecretName(
-    builtinIdPConfig.namespace,
-    builtinIdPConfig.clientName,
-  );
+  const vaultName = idpClientVaultName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
+  const secretKey = idpClientSecretName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
   return {
     config: {
       case: "oidc",
@@ -717,9 +653,7 @@ async function planUserProfileConfigs(
             request: {
               workspaceId,
               namespaceName: config.name,
-              userProfileProviderConfig: protoUserProfileConfig(
-                auth.userProfile,
-              ),
+              userProfileProviderConfig: protoUserProfileConfig(auth.userProfile),
             },
           });
         }
@@ -775,9 +709,7 @@ function protoUserProfileConfig(
 ): MessageInitShape<typeof UserProfileProviderConfigSchema> {
   // Convert attributes from { key: true } to { key: "key" }
   const attributeMap = userProfile.attributes
-    ? Object.fromEntries(
-        Object.keys(userProfile.attributes).map((key) => [key, key]),
-      )
+    ? Object.fromEntries(Object.keys(userProfile.attributes).map((key) => [key, key]))
     : undefined;
 
   return {
@@ -820,11 +752,8 @@ async function planTenantConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateTenantConfig,
-    UpdateTenantConfig,
-    DeleteTenantConfig
-  > = new ChangeSet("Auth tenantConfigs");
+  const changeSet: ChangeSet<CreateTenantConfig, UpdateTenantConfig, DeleteTenantConfig> =
+    new ChangeSet("Auth tenantConfigs");
 
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
@@ -932,21 +861,17 @@ async function planMachineUsers(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateMachineUser,
-    UpdateMachineUser,
-    DeleteMachineUser
-  > = new ChangeSet("Auth machineUsers");
+  const changeSet: ChangeSet<CreateMachineUser, UpdateMachineUser, DeleteMachineUser> =
+    new ChangeSet("Auth machineUsers");
 
   const fetchMachineUsers = (authNamespace: string) => {
     return fetchAll(async (pageToken) => {
       try {
-        const { machineUsers, nextPageToken } =
-          await client.listAuthMachineUsers({
-            workspaceId,
-            authNamespace,
-            pageToken,
-          });
+        const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
+          workspaceId,
+          authNamespace,
+          pageToken,
+        });
         return [machineUsers, nextPageToken];
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -1057,21 +982,17 @@ async function planOAuth2Clients(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateOAuth2Clients,
-    UpdateOAuth2Client,
-    DeleteOAuth2Client
-  > = new ChangeSet("Auth oauth2Clients");
+  const changeSet: ChangeSet<CreateOAuth2Clients, UpdateOAuth2Client, DeleteOAuth2Client> =
+    new ChangeSet("Auth oauth2Clients");
 
   const fetchOAuth2Clients = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
       try {
-        const { oauth2Clients, nextPageToken } =
-          await client.listAuthOAuth2Clients({
-            workspaceId,
-            namespaceName,
-            pageToken,
-          });
+        const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
+          workspaceId,
+          namespaceName,
+          pageToken,
+        });
         return [oauth2Clients, nextPageToken];
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -1160,9 +1081,7 @@ function protoOAuth2Client(
         case "refresh_token":
           return AuthOAuth2Client_GrantType.REFRESH_TOKEN;
         default:
-          throw new Error(
-            `Unknown OAuth2 client grant type: ${grantType satisfies never}`,
-          );
+          throw new Error(`Unknown OAuth2 client grant type: ${grantType satisfies never}`);
       }
     }),
     redirectUris: parsed.redirectURIs,
@@ -1171,10 +1090,7 @@ function protoOAuth2Client(
         confidential: AuthOAuth2Client_ClientType.CONFIDENTIAL,
         public: AuthOAuth2Client_ClientType.PUBLIC,
         browser: AuthOAuth2Client_ClientType.BROWSER,
-      } satisfies Record<
-        NonNullable<OAuth2ClientInput["clientType"]>,
-        AuthOAuth2Client_ClientType
-      >
+      } satisfies Record<NonNullable<OAuth2ClientInput["clientType"]>, AuthOAuth2Client_ClientType>
     )[parsed.clientType ?? "confidential"],
     accessTokenLifetime: parsed.accessTokenLifetimeSeconds,
     refreshTokenLifetime: parsed.refreshTokenLifetimeSeconds,
@@ -1202,11 +1118,9 @@ async function planSCIMConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateSCIMConfig,
-    UpdateSCIMConfig,
-    DeleteSCIMConfig
-  > = new ChangeSet("Auth scimConfigs");
+  const changeSet: ChangeSet<CreateSCIMConfig, UpdateSCIMConfig, DeleteSCIMConfig> = new ChangeSet(
+    "Auth scimConfigs",
+  );
 
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
@@ -1275,9 +1189,7 @@ async function planSCIMConfigs(
   return changeSet;
 }
 
-function protoSCIMConfig(
-  scimConfig: SCIMConfig,
-): MessageInitShape<typeof AuthSCIMConfigSchema> {
+function protoSCIMConfig(scimConfig: SCIMConfig): MessageInitShape<typeof AuthSCIMConfigSchema> {
   let authorizationType;
   switch (scimConfig.authorization.type) {
     case "bearer":
@@ -1326,11 +1238,8 @@ async function planSCIMResources(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateSCIMResource,
-    UpdateSCIMResource,
-    DeleteSCIMResource
-  > = new ChangeSet("Auth scimResources");
+  const changeSet: ChangeSet<CreateSCIMResource, UpdateSCIMResource, DeleteSCIMResource> =
+    new ChangeSet("Auth scimResources");
 
   const fetchSCIMResources = async (namespaceName: string) => {
     try {
@@ -1413,9 +1322,7 @@ function protoSCIMResource(
     tailorDbType: scimResource.tailorDBType,
     coreSchema: {
       name: scimResource.coreSchema.name,
-      attributes: scimResource.coreSchema.attributes.map((attr) =>
-        protoSCIMAttribute(attr),
-      ),
+      attributes: scimResource.coreSchema.attributes.map((attr) => protoSCIMAttribute(attr)),
     },
     attributeMapping: scimResource.attributeMapping.map((attr) => ({
       tailorDbField: attr.tailorDBField,
@@ -1424,9 +1331,7 @@ function protoSCIMResource(
   };
 }
 
-function protoSCIMAttribute(
-  attr: SCIMAttribute,
-): MessageInitShape<typeof AuthSCIMAttributeSchema> {
+function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSCIMAttributeSchema> {
   let typ;
   switch (attr.type) {
     case "string":
@@ -1445,9 +1350,7 @@ function protoSCIMAttribute(
       typ = AuthSCIMAttribute_Type.COMPLEX;
       break;
     default:
-      throw new Error(
-        `Unknown SCIM attribute type: ${attr.type satisfies never}`,
-      );
+      throw new Error(`Unknown SCIM attribute type: ${attr.type satisfies never}`);
   }
   let mutability;
   if (attr.mutability) {
@@ -1462,9 +1365,7 @@ function protoSCIMAttribute(
         mutability = AuthSCIMAttribute_Mutability.WRITE_ONLY;
         break;
       default:
-        throw new Error(
-          `Unknown SCIM attribute mutability: ${attr.mutability satisfies never}`,
-        );
+        throw new Error(`Unknown SCIM attribute mutability: ${attr.mutability satisfies never}`);
     }
   }
   let uniqueness;
@@ -1480,9 +1381,7 @@ function protoSCIMAttribute(
         uniqueness = AuthSCIMAttribute_Uniqueness.GLOBAL;
         break;
       default:
-        throw new Error(
-          `Unknown SCIM attribute uniqueness: ${attr.uniqueness satisfies never}`,
-        );
+        throw new Error(`Unknown SCIM attribute uniqueness: ${attr.uniqueness satisfies never}`);
     }
   }
   return {

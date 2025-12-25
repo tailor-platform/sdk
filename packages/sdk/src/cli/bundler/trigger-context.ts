@@ -1,17 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseSync } from "oxc-parser";
-import {
-  loadFilesWithIgnores,
-  type FileLoadConfig,
-} from "@/cli/application/file-loader";
+import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { logger } from "@/cli/utils/logger";
 import { findAllJobs, buildJobNameMap } from "./workflow/job-detector";
 import { transformFunctionTriggers } from "./workflow/trigger-transformer";
-import {
-  findAllWorkflows,
-  buildWorkflowNameMap,
-} from "./workflow/workflow-detector";
+import { findAllWorkflows, buildWorkflowNameMap } from "./workflow/workflow-detector";
 import type { Plugin } from "rolldown";
 
 /**
@@ -78,8 +72,7 @@ export async function buildTriggerContext(
         jobNameMap.set(exportName, jobName);
       }
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {
         mode: "stream",
       });

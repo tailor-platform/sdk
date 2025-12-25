@@ -25,15 +25,8 @@ const mockBasicType = db.type("User", {
 });
 
 const mockEnumType = db.type("Status", {
-  status: db.enum([
-    { value: "active" },
-    { value: "inactive" },
-    { value: "pending" },
-  ]),
-  priority: db.enum(
-    [{ value: "high" }, { value: "medium" }, { value: "low" }],
-    { optional: true },
-  ),
+  status: db.enum([{ value: "active" }, { value: "inactive" }, { value: "pending" }]),
+  priority: db.enum([{ value: "high" }, { value: "medium" }, { value: "low" }], { optional: true }),
 });
 
 const mockNestedType = db.type("ComplexUser", {
@@ -93,12 +86,8 @@ describe("KyselyGenerator integration tests", () => {
         namespace: "test-namespace",
       });
 
-      expect(result.typeDef).toContain(
-        'status: "active" | "inactive" | "pending";',
-      );
-      expect(result.typeDef).toContain(
-        'priority: "high" | "medium" | "low" | null;',
-      );
+      expect(result.typeDef).toContain('status: "active" | "inactive" | "pending";');
+      expect(result.typeDef).toContain('priority: "high" | "medium" | "low" | null;');
     });
 
     it("correctly processes nested object type", async () => {
@@ -132,9 +121,7 @@ describe("KyselyGenerator integration tests", () => {
 
       expect(result.typeDef).toContain("requiredField: string;");
       expect(result.typeDef).toContain("optionalField: string | null;");
-      expect(result.typeDef).toContain(
-        "undefinedRequiredField: string | null;",
-      );
+      expect(result.typeDef).toContain("undefinedRequiredField: string | null;");
     });
 
     it("correctly processes array types", async () => {
@@ -250,9 +237,7 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.files[0].path).toBe(testDistPath);
 
       const content = result.files[0].content;
-      expect(content).toContain(
-        'import { type ColumnType, Kysely, KyselyConfig } from "kysely"',
-      );
+      expect(content).toContain('import { type ColumnType, Kysely, KyselyConfig } from "kysely"');
       expect(content).toContain("interface Namespace {");
       expect(content).toContain('"test-namespace": {');
       expect(content).toContain("User: {");

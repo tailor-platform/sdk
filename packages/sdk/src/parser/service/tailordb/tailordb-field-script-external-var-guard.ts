@@ -38,10 +38,7 @@ const eslintConfig: Linter.Config = {
   },
 };
 
-export function ensureNoExternalVariablesInScript(
-  expr: string,
-  ctx: ScriptContext,
-): void {
+export function ensureNoExternalVariablesInScript(expr: string, ctx: ScriptContext): void {
   if (!expr.trim()) return;
 
   let messages: Linter.LintMessage[];

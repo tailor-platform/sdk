@@ -39,9 +39,7 @@ export async function getMachineUserToken(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(
-      `Application ${config.name} does not have an auth configuration.`,
-    );
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
   // Get machine user

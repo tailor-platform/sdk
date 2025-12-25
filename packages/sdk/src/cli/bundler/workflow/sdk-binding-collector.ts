@@ -1,9 +1,4 @@
-import {
-  type ASTNode,
-  isTailorSdkSource,
-  getImportSource,
-  unwrapAwait,
-} from "./ast-utils";
+import { type ASTNode, isTailorSdkSource, getImportSource, unwrapAwait } from "./ast-utils";
 import type {
   Program,
   ImportDeclaration,
@@ -22,10 +17,7 @@ import type {
  * Collect all import bindings for a specific function from \@tailor-platform/sdk
  * Returns a Set of local names that refer to the function
  */
-export function collectSdkBindings(
-  program: Program,
-  functionName: string,
-): Set<string> {
+export function collectSdkBindings(program: Program, functionName: string): Set<string> {
   const bindings = new Set<string>();
 
   function walk(node: ASTNode | null | undefined): void {
@@ -57,9 +49,7 @@ export function collectSdkBindings(
             specifier.type === "ImportDefaultSpecifier" ||
             specifier.type === "ImportNamespaceSpecifier"
           ) {
-            const spec = specifier as
-              | ImportDefaultSpecifier
-              | ImportNamespaceSpecifier;
+            const spec = specifier as ImportDefaultSpecifier | ImportNamespaceSpecifier;
             // Store namespace/default with special prefix to track member access
             bindings.add(`__namespace__:${spec.local?.name}`);
           }
@@ -98,9 +88,7 @@ export function collectSdkBindings(
                     : (bindingProp.key as { value?: string }).value;
                 if (keyName === functionName) {
                   const localName =
-                    bindingProp.value.type === "Identifier"
-                      ? bindingProp.value.name
-                      : keyName;
+                    bindingProp.value.type === "Identifier" ? bindingProp.value.name : keyName;
                   bindings.add(localName ?? "");
                 }
               }

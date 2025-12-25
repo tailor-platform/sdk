@@ -13,11 +13,10 @@ export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
   });
 }
 
-export type AllowedValuesOutput<V extends AllowedValues> =
-  V[number] extends infer T
-    ? T extends string
-      ? T
-      : T extends { value: infer K }
-        ? K
-        : never
-    : never;
+export type AllowedValuesOutput<V extends AllowedValues> = V[number] extends infer T
+  ? T extends string
+    ? T
+    : T extends { value: infer K }
+      ? K
+      : never
+  : never;

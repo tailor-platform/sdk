@@ -35,9 +35,7 @@ export const initCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     const packageJson = await readPackageJson();
     const version =
-      packageJson.version && packageJson.version !== "0.0.0"
-        ? packageJson.version
-        : "latest";
+      packageJson.version && packageJson.version !== "0.0.0" ? packageJson.version : "latest";
 
     let packageManager = detectPackageManager();
     if (!packageManager) {

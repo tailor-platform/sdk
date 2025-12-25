@@ -1,7 +1,4 @@
-import type {
-  TailorTypePermission,
-  TailorTypeGqlPermission,
-} from "@/configure/services/tailordb";
+import type { TailorTypePermission, TailorTypeGqlPermission } from "@/configure/services/tailordb";
 import type { ValueOperand } from "@/parser/service/auth/types";
 
 export type {
@@ -54,13 +51,7 @@ export interface OperatorFieldConfig {
   fields?: Record<string, OperatorFieldConfig>;
 }
 
-type GqlPermissionAction =
-  | "read"
-  | "create"
-  | "update"
-  | "delete"
-  | "aggregate"
-  | "bulkUpsert";
+type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
 type StandardPermissionOperator = "eq" | "ne" | "in" | "nin";
 
@@ -75,10 +66,7 @@ type RecordOperand<Update extends boolean = false> = Update extends true
 export type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
   Update extends boolean = boolean,
-> =
-  | UserOperand
-  | ValueOperand
-  | (Level extends "record" ? RecordOperand<Update> : never);
+> = UserOperand | ValueOperand | (Level extends "record" ? RecordOperand<Update> : never);
 
 export type StandardPermissionCondition<
   Level extends "record" | "gql" = "record" | "gql",
@@ -112,8 +100,7 @@ export type StandardGqlPermissionPolicy = {
   description?: string;
 };
 
-export type StandardTailorTypeGqlPermission =
-  readonly StandardGqlPermissionPolicy[];
+export type StandardTailorTypeGqlPermission = readonly StandardGqlPermissionPolicy[];
 
 export interface Permissions {
   record?: StandardTailorTypePermission;

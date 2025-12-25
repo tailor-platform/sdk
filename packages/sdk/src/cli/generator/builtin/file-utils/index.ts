@@ -13,13 +13,9 @@ export const FileUtilsGeneratorID = "@tailor-platform/file-utils";
 /**
  * Generator for file utility functions from TailorDB type definitions.
  */
-export class FileUtilsGenerator implements TailorDBGenerator<
-  FileUtilMetadata,
-  string
-> {
+export class FileUtilsGenerator implements TailorDBGenerator<FileUtilMetadata, string> {
   readonly id = FileUtilsGeneratorID;
-  readonly description =
-    "Generates TypeWithFiles interface from TailorDB type definitions";
+  readonly description = "Generates TypeWithFiles interface from TailorDB type definitions";
   readonly dependencies = ["tailordb"] as const;
 
   constructor(
@@ -40,9 +36,7 @@ export class FileUtilsGenerator implements TailorDBGenerator<
     types: Record<string, FileUtilMetadata>;
   }): Promise<string> {
     // Return empty string for now - actual generation happens in aggregate
-    const typesWithFiles = Object.values(args.types).filter(
-      (t) => t.fileFields.length > 0,
-    );
+    const typesWithFiles = Object.values(args.types).filter((t) => t.fileFields.length > 0);
     if (typesWithFiles.length === 0) {
       return "";
     }
@@ -57,8 +51,7 @@ export class FileUtilsGenerator implements TailorDBGenerator<
     const files: GeneratorResult["files"] = [];
 
     // Collect all namespace metadata
-    const allNamespaceData: { namespace: string; types: FileUtilMetadata[] }[] =
-      [];
+    const allNamespaceData: { namespace: string; types: FileUtilMetadata[] }[] = [];
 
     for (const nsResult of args.input.tailordb) {
       if (nsResult.types) {

@@ -14,14 +14,10 @@ import type {
 import type { z } from "zod";
 
 export type RecordTrigger = z.infer<typeof RecordTriggerSchema>;
-export type ResolverExecutedTrigger = z.infer<
-  typeof ResolverExecutedTriggerSchema
->;
+export type ResolverExecutedTrigger = z.infer<typeof ResolverExecutedTriggerSchema>;
 export type ScheduleTrigger = z.infer<typeof ScheduleTriggerSchema>;
 export type ScheduleTriggerInput = z.input<typeof ScheduleTriggerSchema>;
-export type IncomingWebhookTrigger = z.infer<
-  typeof IncomingWebhookTriggerSchema
->;
+export type IncomingWebhookTrigger = z.infer<typeof IncomingWebhookTriggerSchema>;
 export type Trigger = z.infer<typeof TriggerSchema>;
 
 export type FunctionOperation = z.infer<typeof FunctionOperationSchema>;

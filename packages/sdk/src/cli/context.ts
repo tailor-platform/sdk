@@ -44,9 +44,7 @@ export function readPlatformConfig(): PfConfig {
 
   // If platform config doesn't exist, try to read tailorctl config and migrate
   if (!fs.existsSync(configPath)) {
-    logger.warn(
-      `Config not found at ${configPath}, migrating from tailorctl config...`,
-    );
+    logger.warn(`Config not found at ${configPath}, migrating from tailorctl config...`);
     const tcConfig = readTailorctlConfig();
     const pfConfig = tcConfig
       ? fromTailorctlConfig(tcConfig)
@@ -122,11 +120,7 @@ function fromTailorctlConfig(config: TcConfig): PfConfig {
       workspace_id: context.workspaceid,
     };
     const user = users[context.username];
-    if (
-      !user ||
-      new Date(user.token_expires_at) <
-        new Date(context.controlplanetokenexpiresat)
-    ) {
+    if (!user || new Date(user.token_expires_at) < new Date(context.controlplanetokenexpiresat)) {
       users[context.username] = {
         access_token: context.controlplaneaccesstoken,
         refresh_token: context.controlplanerefreshtoken,
@@ -147,10 +141,7 @@ function validateUUID(value: string, source: string): string {
 
 // Load workspace ID from command options, environment variables, or platform config.
 // Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
-export function loadWorkspaceId(opts?: {
-  workspaceId?: string;
-  profile?: string;
-}): string {
+export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string }): string {
   // opts/workspaceId
   if (opts?.workspaceId) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
@@ -184,19 +175,14 @@ export function loadWorkspaceId(opts?: {
 
 // Load access token from command options, environment variables, or platform config.
 // Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
-export async function loadAccessToken(opts?: {
-  useProfile?: boolean;
-  profile?: string;
-}) {
+export async function loadAccessToken(opts?: { useProfile?: boolean; profile?: string }) {
   // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
   if (process.env.TAILOR_PLATFORM_TOKEN) {
     return process.env.TAILOR_PLATFORM_TOKEN;
   }
   // TAILOR_TOKEN is deprecated
   if (process.env.TAILOR_TOKEN) {
-    logger.warn(
-      "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
-    );
+    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
     return process.env.TAILOR_TOKEN;
   }
 
@@ -228,10 +214,7 @@ export async function loadAccessToken(opts?: {
   return await fetchLatestToken(pfConfig, user);
 }
 
-export async function fetchLatestToken(
-  config: PfConfig,
-  user: string,
-): Promise<string> {
+export async function fetchLatestToken(config: PfConfig, user: string): Promise<string> {
   const tokens = config.users[user];
   if (!tokens) {
     throw new Error(ml`
@@ -276,9 +259,7 @@ export function loadConfigPath(configPath?: string): string | undefined {
 
 // Load organization ID from command options or environment variables.
 // Priority: opts/organizationId > env/organizationId > undefined (optional)
-export function loadOrganizationId(
-  organizationId?: string,
-): string | undefined {
+export function loadOrganizationId(organizationId?: string): string | undefined {
   if (organizationId) {
     return validateUUID(organizationId, "--organization-id option");
   }

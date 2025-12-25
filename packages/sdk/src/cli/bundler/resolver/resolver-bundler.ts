@@ -3,17 +3,11 @@ import * as path from "node:path";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import {
-  loadFilesWithIgnores,
-  type FileLoadConfig,
-} from "@/cli/application/file-loader";
+import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
-import {
-  createTriggerTransformPlugin,
-  type TriggerContext,
-} from "../trigger-context";
+import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
 import { loadResolver } from "./loader";
 
 interface ResolverInfo {
@@ -36,9 +30,7 @@ export async function bundleResolvers(
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
-    throw new Error(
-      `No files found matching pattern: ${config.files?.join(", ")}`,
-    );
+    throw new Error(`No files found matching pattern: ${config.files?.join(", ")}`);
   }
 
   logger.newline();
@@ -89,9 +81,7 @@ async function bundleSingleResolver(
 ): Promise<void> {
   // Step 1: Create entry file that imports from the original source
   const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
-  const absoluteSourcePath = path
-    .resolve(resolver.sourceFile)
-    .replace(/\\/g, "/");
+  const absoluteSourcePath = path.resolve(resolver.sourceFile).replace(/\\/g, "/");
 
   const entryContent = ml /* js */ `
     import _internalResolver from "${absoluteSourcePath}";

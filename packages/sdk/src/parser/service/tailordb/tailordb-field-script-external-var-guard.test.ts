@@ -2,9 +2,7 @@ import { describe, it, expect } from "vitest";
 import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import type { OperatorFieldConfig } from "./types";
 
-function makeFieldConfig(
-  partial: Partial<OperatorFieldConfig>,
-): OperatorFieldConfig {
+function makeFieldConfig(partial: Partial<OperatorFieldConfig>): OperatorFieldConfig {
   return {
     type: "string",
     ...partial,
@@ -42,9 +40,7 @@ describe("ensureNoExternalVariablesInFieldScripts", () => {
         ],
       });
 
-      expect(() =>
-        ensureNoExternalVariablesInFieldScripts("User", "name", fieldConfig),
-      ).toThrow(
+      expect(() => ensureNoExternalVariablesInFieldScripts("User", "name", fieldConfig)).toThrow(
         "TailorDB validate for User.name captures external variables (externalValue). Hooks and validators must not reference variables outside their own parameters and local declarations.",
       );
     });
@@ -65,9 +61,7 @@ describe("ensureNoExternalVariablesInFieldScripts", () => {
         ],
       });
 
-      expect(() =>
-        ensureNoExternalVariablesInFieldScripts("User", "name", fieldConfig),
-      ).toThrow(
+      expect(() => ensureNoExternalVariablesInFieldScripts("User", "name", fieldConfig)).toThrow(
         "TailorDB validate for User.name captures external variables (isNonEmpty). Hooks and validators must not reference variables outside their own parameters and local declarations.",
       );
     });
@@ -116,9 +110,7 @@ describe("ensureNoExternalVariablesInFieldScripts", () => {
         },
       });
 
-      expect(() =>
-        ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig),
-      ).toThrow(
+      expect(() => ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig)).toThrow(
         "TailorDB hook.create for User.email captures external variables (emptyEmail). Hooks and validators must not reference variables outside their own parameters and local declarations.",
       );
     });
@@ -136,9 +128,7 @@ describe("ensureNoExternalVariablesInFieldScripts", () => {
         },
       });
 
-      expect(() =>
-        ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig),
-      ).toThrow(
+      expect(() => ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig)).toThrow(
         "TailorDB hook.create for User.email captures external variables (formatEmail). Hooks and validators must not reference variables outside their own parameters and local declarations.",
       );
     });
@@ -152,9 +142,7 @@ describe("ensureNoExternalVariablesInFieldScripts", () => {
         },
       });
 
-      expect(() =>
-        ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig),
-      ).toThrow(
+      expect(() => ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig)).toThrow(
         "TailorDB hook.update for User.email captures external variables (emptyEmail). Hooks and validators must not reference variables outside their own parameters and local declarations.",
       );
     });
@@ -172,9 +160,7 @@ describe("ensureNoExternalVariablesInFieldScripts", () => {
         },
       });
 
-      expect(() =>
-        ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig),
-      ).toThrow(
+      expect(() => ensureNoExternalVariablesInFieldScripts("User", "email", fieldConfig)).toThrow(
         "TailorDB hook.update for User.email captures external variables (formatEmail). Hooks and validators must not reference variables outside their own parameters and local declarations.",
       );
     });

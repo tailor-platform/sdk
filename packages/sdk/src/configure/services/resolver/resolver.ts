@@ -5,9 +5,7 @@ import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { ResolverInput } from "@/parser/service/resolver/types";
 
 type Context<Input extends Record<string, TailorField<any>> | undefined> = {
-  input: Input extends Record<string, TailorField<any>>
-    ? InferFieldsOutput<Input>
-    : never;
+  input: Input extends Record<string, TailorField<any>> ? InferFieldsOutput<Input> : never;
   user: TailorUser;
   env: TailorEnv;
 };
@@ -21,22 +19,17 @@ type OutputType<O> =
 
 export function createResolver<
   Input extends Record<string, TailorField<any>> | undefined = undefined,
-  Output extends TailorField<any> | Record<string, TailorField<any>> =
-    TailorField<any>,
+  Output extends TailorField<any> | Record<string, TailorField<any>> = TailorField<any>,
 >(
   config: Omit<ResolverInput, "input" | "output" | "body"> &
     Readonly<{
       input?: Input;
       output: Output;
-      body: (
-        context: Context<Input>,
-      ) => OutputType<Output> | Promise<OutputType<Output>>;
+      body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     }>,
 ) {
   const normalizedOutput =
-    config.output instanceof TailorField
-      ? config.output
-      : t.object(config.output);
+    config.output instanceof TailorField ? config.output : t.object(config.output);
 
   return {
     ...config,

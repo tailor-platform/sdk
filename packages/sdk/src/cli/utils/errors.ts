@@ -81,8 +81,7 @@ export const errors = {
   configNotFound: (path: string) =>
     createCLIError({
       message: `Configuration file not found: ${path}`,
-      suggestion:
-        "Create a tailor.config.ts file or specify the path with --config",
+      suggestion: "Create a tailor.config.ts file or specify the path with --config",
       command: "apply",
       code: "CONFIG_NOT_FOUND",
     }),
@@ -145,9 +144,7 @@ export const errors = {
    */
   permissionDenied: (resource?: string) =>
     createCLIError({
-      message: resource
-        ? `Permission denied for ${resource}`
-        : "Permission denied",
+      message: resource ? `Permission denied for ${resource}` : "Permission denied",
       suggestion: "Check your access permissions for this resource",
       code: "PERMISSION_DENIED",
     }),

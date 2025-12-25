@@ -31,19 +31,15 @@ export async function listOAuth2Clients(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(
-      `Application ${config.name} does not have an auth configuration.`,
-    );
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
   const oauth2Clients = await fetchAll(async (pageToken) => {
-    const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients(
-      {
-        workspaceId,
-        pageToken,
-        namespaceName: application.authNamespace,
-      },
-    );
+    const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
+      workspaceId,
+      pageToken,
+      namespaceName: application.authNamespace,
+    });
     return [oauth2Clients, nextPageToken];
   });
 

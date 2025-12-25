@@ -36,15 +36,11 @@ export const updateSecretCommand = defineCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(
-          `Secret "${args.name}" not found in vault "${args["vault-name"]}".`,
-        );
+        throw new Error(`Secret "${args.name}" not found in vault "${args["vault-name"]}".`);
       }
       throw error;
     }
 
-    logger.success(
-      `Secret: ${args.name} updated in vault: ${args["vault-name"]}`,
-    );
+    logger.success(`Secret: ${args.name} updated in vault: ${args["vault-name"]}`);
   }),
 });

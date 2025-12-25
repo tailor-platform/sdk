@@ -22,8 +22,7 @@ export class EnumConstantsGenerator implements TailorDBGenerator<
   EnumNamespaceMetadata
 > {
   readonly id = EnumConstantsGeneratorID;
-  readonly description =
-    "Generates enum constants from TailorDB type definitions";
+  readonly description = "Generates enum constants from TailorDB type definitions";
   readonly dependencies = ["tailordb"] as const;
 
   constructor(
@@ -54,9 +53,7 @@ export class EnumConstantsGenerator implements TailorDBGenerator<
     };
   }
 
-  aggregate(
-    args: AggregateArgs<TailorDBInput<EnumNamespaceMetadata>>,
-  ): GeneratorResult {
+  aggregate(args: AggregateArgs<TailorDBInput<EnumNamespaceMetadata>>): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
     const allEnums: EnumDefinition[] = [];

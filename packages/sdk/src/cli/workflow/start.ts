@@ -7,13 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import { defineCommand } from "citty";
 import ora from "ora";
-import {
-  commonArgs,
-  deploymentArgs,
-  jsonArgs,
-  parseDuration,
-  withCommonArgs,
-} from "../args";
+import { commonArgs, deploymentArgs, jsonArgs, parseDuration, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -22,10 +16,7 @@ import { logger, styles } from "../utils/logger";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
-import {
-  type WorkflowExecutionInfo,
-  toWorkflowExecutionInfo,
-} from "./transform";
+import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
 import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
@@ -77,14 +68,7 @@ export interface WaitForExecutionOptions {
 export async function waitForExecution(
   options: WaitForExecutionOptions,
 ): Promise<WorkflowExecutionInfo> {
-  const {
-    client,
-    workspaceId,
-    executionId,
-    interval,
-    showProgress,
-    trackJobs,
-  } = options;
+  const { client, workspaceId, executionId, interval, showProgress, trackJobs } = options;
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
@@ -197,9 +181,7 @@ export async function startWorkflow(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(
-      `Application ${config.name} does not have an auth configuration.`,
-    );
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
   try {

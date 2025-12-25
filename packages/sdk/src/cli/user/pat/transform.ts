@@ -20,9 +20,7 @@ function patScopeToString(scope: PATScope): string {
   }
 }
 
-export function transformPersonalAccessToken(
-  pat: PersonalAccessToken,
-): PersonalAccessTokenInfo {
+export function transformPersonalAccessToken(pat: PersonalAccessToken): PersonalAccessTokenInfo {
   return {
     name: pat.name,
     scopes: pat.scopes.map(patScopeToString),
@@ -30,9 +28,7 @@ export function transformPersonalAccessToken(
 }
 
 export function getScopesFromWriteFlag(write: boolean): PATScope[] {
-  return write
-    ? [PATScope.PAT_SCOPE_READ, PATScope.PAT_SCOPE_WRITE]
-    : [PATScope.PAT_SCOPE_READ];
+  return write ? [PATScope.PAT_SCOPE_READ, PATScope.PAT_SCOPE_WRITE] : [PATScope.PAT_SCOPE_READ];
 }
 
 function getScopeStringsFromWriteFlag(write: boolean): string[] {

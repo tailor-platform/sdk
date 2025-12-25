@@ -4,11 +4,7 @@ export interface HasName {
   name: string;
 }
 
-export class ChangeSet<
-  C extends HasName,
-  U extends HasName,
-  D extends HasName,
-> {
+export class ChangeSet<C extends HasName, U extends HasName, D extends HasName> {
   creates: C[] = [];
   updates: U[] = [];
   deletes: D[] = [];
@@ -16,11 +12,7 @@ export class ChangeSet<
   constructor(private title: string) {}
 
   isEmpty(): boolean {
-    return (
-      this.creates.length === 0 &&
-      this.updates.length === 0 &&
-      this.deletes.length === 0
-    );
+    return this.creates.length === 0 && this.updates.length === 0 && this.deletes.length === 0;
   }
 
   print() {

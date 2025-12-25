@@ -69,9 +69,7 @@ export async function bundleWorkflowJobs(
 
   // Process each job
   await Promise.all(
-    usedJobs.map((job) =>
-      bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext),
-    ),
+    usedJobs.map((job) => bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext)),
   );
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
@@ -138,8 +136,7 @@ async function filterUsedJobs(
         const triggerCalls = detectTriggerCalls(program, source);
 
         // For each job in this file, find which triggers are inside its body
-        const jobDependencies: Array<{ jobName: string; deps: Set<string> }> =
-          [];
+        const jobDependencies: Array<{ jobName: string; deps: Set<string> }> = [];
 
         for (const job of jobs) {
           const detectedJob = detectedJobs.find((d) => d.name === job.name);
@@ -245,9 +242,7 @@ async function bundleSingleJob(
   const outputPath = path.join(outputDir, `${job.name}.js`);
 
   // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
-  const otherJobExportNames = allJobs
-    .filter((j) => j.name !== job.name)
-    .map((j) => j.exportName);
+  const otherJobExportNames = allJobs.filter((j) => j.name !== job.name).map((j) => j.exportName);
 
   // Build a map from export name to job name for trigger transformation
   const allJobsMap = new Map<string, string>();

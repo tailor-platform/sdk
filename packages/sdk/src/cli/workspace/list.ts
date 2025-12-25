@@ -12,9 +12,7 @@ export interface ListWorkspacesOptions {
 
 const limitSchema = z.coerce.number().int().positive().optional();
 
-export async function listWorkspaces(
-  options?: ListWorkspacesOptions,
-): Promise<WorkspaceInfo[]> {
+export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<WorkspaceInfo[]> {
   const limit = options?.limit;
   const hasLimit = limit !== undefined;
 
@@ -36,8 +34,7 @@ export async function listWorkspaces(
     }
 
     const remaining = hasLimit ? limit! - results.length : undefined;
-    const pageSize =
-      remaining !== undefined && remaining > 0 ? remaining : undefined;
+    const pageSize = remaining !== undefined && remaining > 0 ? remaining : undefined;
 
     const { workspaces, nextPageToken } = await client.listWorkspaces({
       pageToken,
@@ -81,9 +78,7 @@ export const listCommand = defineCommand({
     try {
       limit = limitSchema.parse(args.limit);
     } catch {
-      throw new Error(
-        `--limit must be a positive integer, got '${args.limit}'`,
-      );
+      throw new Error(`--limit must be a positive integer, got '${args.limit}'`);
     }
 
     // Execute workspace list logic

@@ -11,10 +11,7 @@ export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
   Idp extends IdPConfig[] = IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
-  Env extends Record<string, string | number | boolean> = Record<
-    string,
-    string | number | boolean
-  >,
+  Env extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
 > {
   name: string;
   env?: Env;

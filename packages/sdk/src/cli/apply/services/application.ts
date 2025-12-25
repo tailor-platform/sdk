@@ -4,11 +4,7 @@ import {
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
-import {
-  fetchAll,
-  resolveStaticWebsiteUrls,
-  type OperatorClient,
-} from "../../client";
+import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "../../client";
 import { buildMetaRequest } from "./label";
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
@@ -86,11 +82,8 @@ export async function planApplication({
   application,
   forRemoval,
 }: PlanContext) {
-  const changeSet: ChangeSet<
-    CreateApplication,
-    UpdateApplication,
-    DeleteApplication
-  > = new ChangeSet("Applications");
+  const changeSet: ChangeSet<CreateApplication, UpdateApplication, DeleteApplication> =
+    new ChangeSet("Applications");
 
   const existingApplications = await fetchAll(async (pageToken) => {
     try {
@@ -152,10 +145,7 @@ export async function planApplication({
       authIdpConfigName = idpConfigs[0].name;
     }
   }
-  const metaRequest = await buildMetaRequest(
-    trn(workspaceId, application.name),
-    application.name,
-  );
+  const metaRequest = await buildMetaRequest(trn(workspaceId, application.name), application.name);
 
   if (existingApplications.some((app) => app.name === application.name)) {
     changeSet.updates.push({
@@ -166,9 +156,7 @@ export async function planApplication({
         authNamespace,
         authIdpConfigName,
         cors: application.config.cors,
-        subgraphs: application.subgraphs.map((subgraph) =>
-          protoSubgraph(subgraph),
-        ),
+        subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
         allowedIpAddresses: application.config.allowedIpAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
@@ -183,9 +171,7 @@ export async function planApplication({
         authNamespace,
         authIdpConfigName,
         cors: application.config.cors,
-        subgraphs: application.subgraphs.map((subgraph) =>
-          protoSubgraph(subgraph),
-        ),
+        subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
         allowedIpAddresses: application.config.allowedIpAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },

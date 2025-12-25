@@ -90,9 +90,7 @@ describe("formatRequestParams", () => {
       toJson: () => ({ workspaceId: "test-id", name: "test-name" }),
     };
     const result = formatRequestParams(protoMessage);
-    expect(result).toBe(
-      JSON.stringify({ workspaceId: "test-id", name: "test-name" }, null, 2),
-    );
+    expect(result).toBe(JSON.stringify({ workspaceId: "test-id", name: "test-name" }, null, 2));
   });
 
   test("handles null and undefined", () => {
