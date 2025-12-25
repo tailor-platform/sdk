@@ -1,0 +1,40 @@
+locale: en
+repository: ${GITHUB_REPOSITORY}/packages/sdk
+
+# Coverage metrics
+coverage:
+  paths:
+    - coverage/lcov.info
+
+codeToTestRatio:
+  code:
+    - src/**/*.ts
+  test:
+    - src/**/*.test.ts
+
+testExecutionTime:
+  if: false
+
+# Store reports on main branch
+report:
+  if: is_default_branch
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}/sdk-metrics
+
+# Compare with previous reports
+diff:
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}/sdk-metrics
+
+# Post comment on PRs
+comment:
+  if: is_pull_request
+
+# Always generate summary
+summary:
+  if: true
+
+# Custom metrics are specified via environment variables:
+# - OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: diagnostics.json
+# - OCTOCOV_CUSTOM_METRICS_BUNDLE_SIZE: bundle-size.json
+# - OCTOCOV_CUSTOM_METRICS_RUNTIME_PERFORMANCE: runtime-perf.json
