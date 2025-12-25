@@ -67,7 +67,10 @@ describe("syncUserProfile workflow", () => {
     expect(dbOperations.createUser).not.toHaveBeenCalled();
     expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith(
       "existing@example.com",
-      { name: "Updated Name", age: 31 },
+      {
+        name: "Updated Name",
+        age: 31,
+      },
     );
   });
 });

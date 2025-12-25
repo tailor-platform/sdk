@@ -3,20 +3,24 @@
   "version": "0.22.3",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
-  "main": "./dist/configure/index.mjs",
-  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/tailor-platform/sdk.git",
     "directory": "packages/sdk"
   },
+  "bin": {
+    "tailor-sdk": "./dist/cli/index.mjs"
+  },
   "files": [
+    "CHANGELOG.md",
     "dist",
-    "postinstall.mjs",
     "docs",
-    "README.md",
-    "CHANGELOG.md"
+    "postinstall.mjs",
+    "README.md"
   ],
+  "type": "module",
+  "main": "./dist/configure/index.mjs",
+  "types": "./dist/configure/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/configure/index.d.mts",
@@ -34,10 +38,6 @@
       "default": "./dist/utils/test/index.mjs"
     }
   },
-  "bin": {
-    "tailor-sdk": "./dist/cli/index.mjs"
-  },
-  "types": "./dist/configure/index.d.mts",
   "scripts": {
     "test": "vitest",
     "test:coverage": "vitest --coverage",

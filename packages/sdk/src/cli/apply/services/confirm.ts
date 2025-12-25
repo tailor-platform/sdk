@@ -138,7 +138,10 @@ export async function confirmImportantResourceDeletion(
 
   const confirmed = await logger.prompt(
     "Are you sure you want to delete these resources?",
-    { type: "confirm", initial: false },
+    {
+      type: "confirm",
+      initial: false,
+    },
   );
   if (!confirmed) {
     throw new Error(ml`

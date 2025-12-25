@@ -385,7 +385,9 @@ class DependencyWatcher {
       this.chokidarWatcher.on("error", (error: unknown) => {
         logger.error(
           `Watcher error: ${error instanceof Error ? error.message : String(error)}`,
-          { mode: "stream" },
+          {
+            mode: "stream",
+          },
         );
         this.handleError(
           new WatcherError(
@@ -623,7 +625,9 @@ class DependencyWatcher {
         logger.info(`Changed file: ${absolutePath}`, { mode: "stream" });
         logger.info(
           `Affected groups: ${impactResult.affectedGroups.join(", ")}`,
-          { mode: "stream" },
+          {
+            mode: "stream",
+          },
         );
 
         if (this.restartCallback) {

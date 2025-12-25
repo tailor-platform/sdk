@@ -3,7 +3,6 @@
   "version": "0.22.3",
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
-  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/tailor-platform/sdk.git",
@@ -11,12 +10,13 @@
   },
   "bin": "dist/index.js",
   "files": [
-    "dist",
-    "templates",
-    "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "dist",
+    "LICENSE",
+    "README.md",
+    "templates"
   ],
+  "type": "module",
   "scripts": {
     "build": "tsdown",
     "lint": "eslint --cache .",

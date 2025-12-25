@@ -123,7 +123,9 @@ describe("GenerationManager", () => {
     it("base directory is created", () => {
       expect(fs.mkdirSync).toHaveBeenCalledWith(
         expect.stringContaining("generated"),
-        { recursive: true },
+        {
+          recursive: true,
+        },
       );
     });
   });
