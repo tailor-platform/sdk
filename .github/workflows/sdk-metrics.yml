@@ -17,6 +17,8 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -41,6 +43,8 @@ jobs:
     name: Bundle Size
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -66,6 +70,8 @@ jobs:
     name: Type Performance
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -90,6 +96,8 @@ jobs:
     name: Runtime Performance
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -98,6 +106,9 @@ jobs:
 
       - name: Install deps
         uses: ./.github/actions/install-deps
+
+      - name: Build SDK
+        run: pnpm --filter @tailor-platform/sdk build
 
       - name: Run runtime performance
         run: pnpm --filter @tailor-platform/sdk perf:runtime
@@ -115,6 +126,10 @@ jobs:
     needs: [coverage, bundle-size, type-performance, runtime-performance]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
