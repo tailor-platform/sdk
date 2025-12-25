@@ -10,7 +10,7 @@ pre-commit:
 
     2-format:
       glob: "*.{ts,js,json,md,yml,yaml}"
-      run: npx prettier --check {staged_files}
+      run: pnpm oxfmt --check {staged_files}
 
     3-lint:
       glob: "*.{ts,js}"
