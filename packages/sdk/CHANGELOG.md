@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.0.0
+
+### Major Changes
+
+- [#310](https://github.com/tailor-platform/sdk/pull/310) [`07f8f43`](https://github.com/tailor-platform/sdk/commit/07f8f43427a61f4aa8cdf45ebfa5380751ca34d5) Thanks [@toiroakr](https://github.com/toiroakr)! - v1 release 🎉
+
 ## 0.24.0
 
 ### Minor Changes
