@@ -13,9 +13,9 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "format": "turbo run format",
-    "format:root": "prettier --write .",
+    "format:root": "oxfmt --write .",
     "format:check": "turbo run format:check",
-    "format:check:root": "prettier --check .",
+    "format:check:root": "oxfmt --check .",
     "typecheck": "TAILOR_PLATFORM_SDK_TYPE_PATH=./user-defined.d.ts turbo run typecheck",
     "typecheck:root": "tsc --noEmit",
     "perf:typecheck": "pnpm --filter example perf:typecheck"
