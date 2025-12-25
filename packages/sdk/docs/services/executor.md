@@ -74,7 +74,12 @@ scheduleTrigger({ cron: "0 * * * *", timezone: "Asia/Tokyo" });
 Fires when an external webhook is received:
 
 ```typescript
-incomingWebhookTrigger<WebhookPayload>();
+type WebhookRequest = {
+  body: WebhookPayload;
+  headers: Record<string, string>;
+};
+
+incomingWebhookTrigger<WebhookRequest>();
 ```
 
 ### Resolver Executed Trigger
@@ -113,8 +118,7 @@ Call external webhooks with dynamic data:
 createExecutor({
   operation: {
     kind: "webhook",
-    url: ({ newRecord }) =>
-      `https://api.example.com/webhooks/${newRecord.type}`,
+    url: ({ typeName }) => `https://api.example.com/webhooks/${typeName}`,
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": { vault: "api-keys", key: "external-api" },
@@ -133,13 +137,11 @@ createExecutor({
 Execute GraphQL queries and mutations:
 
 ```typescript
-import { gql } from "@tailor-platform/sdk";
-
 createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: gql`
+    query: `
       mutation UpdateUserStatus($id: ID!, $status: String!) {
         updateUser(id: $id, input: { status: $status }) {
           id
@@ -169,7 +171,7 @@ Record triggers receive context based on the operation type:
 ```typescript
 interface RecordCreatedContext<T> {
   workspaceId: string; // Workspace identifier
-  namespaceName: string; // Application/namespace name
+  appNamespace: string; // Application/namespace name
   typeName: string; // TailorDB type name
   newRecord: T; // The newly created record
 }
@@ -180,7 +182,7 @@ interface RecordCreatedContext<T> {
 ```typescript
 interface RecordUpdatedContext<T> {
   workspaceId: string;
-  namespaceName: string;
+  appNamespace: string;
   typeName: string;
   oldRecord: T; // Previous record state
   newRecord: T; // Current record state
@@ -192,7 +194,7 @@ interface RecordUpdatedContext<T> {
 ```typescript
 interface RecordDeletedContext<T> {
   workspaceId: string;
-  namespaceName: string;
+  appNamespace: string;
   typeName: string;
   oldRecord: T; // The deleted record
 }
@@ -240,7 +242,7 @@ Webhook triggers receive HTTP request data:
 interface WebhookContext<T = unknown> {
   body: T; // Parsed request body
   headers: Record<string, string>; // Request headers
-  method: string; // HTTP method (POST, etc.)
+  method: "POST" | "GET" | "PUT" | "DELETE"; // HTTP method
   rawBody: string; // Raw request body as string
 }
 ```
@@ -257,7 +259,10 @@ interface StripeWebhook {
 
 export default createExecutor({
   name: "stripe-webhook",
-  trigger: incomingWebhookTrigger<StripeWebhook>(),
+  trigger: incomingWebhookTrigger<{
+    body: StripeWebhook;
+    headers: { "stripe-signature": string };
+  }>(),
   operation: {
     kind: "function",
     body: async ({ body, headers }) => {
@@ -275,9 +280,11 @@ Resolver triggers receive the resolver's result or error:
 
 ```typescript
 interface ResolverExecutedContext<TResult> {
+  workspaceId: string; // Workspace identifier
+  appNamespace: string; // Application/namespace name
   resolverName: string; // Name of the executed resolver
   result?: TResult; // Return value (on success)
-  error?: Error; // Error object (on failure)
+  error?: string; // Error message (on failure)
 }
 ```
 

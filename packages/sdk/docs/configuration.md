@@ -16,17 +16,19 @@ For service-specific documentation, see:
 ### Application Settings
 
 ```typescript
+import { defineConfig } from "@tailor-platform/sdk";
+
 export default defineConfig({
   name: "my-app",
-  cors: ["https://example.com", website.url],
-  allowedIPAddresses: ["192.168.1.0/24"],
+  cors: ["https://example.com"],
+  allowedIpAddresses: ["192.168.1.0/24"],
   disableIntrospection: false,
 });
 ```
 
 **Name**: Set the application name.
 
-**CORS**: Specify CORS settings as an array.
+**CORS**: Specify CORS settings as an array. You can also include Static Website URL references (e.g. `website.url`) in this array; see [Static Website](./services/staticwebsite.md).
 
 **Allowed IP Addresses**: Specify IP addresses allowed to access the application in CIDR format.
 

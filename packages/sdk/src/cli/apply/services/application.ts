@@ -169,7 +169,7 @@ export async function planApplication({
         subgraphs: application.subgraphs.map((subgraph) =>
           protoSubgraph(subgraph),
         ),
-        allowedIpAddresses: application.config.allowedIPAddresses,
+        allowedIpAddresses: application.config.allowedIpAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
       metaRequest,
@@ -186,7 +186,7 @@ export async function planApplication({
         subgraphs: application.subgraphs.map((subgraph) =>
           protoSubgraph(subgraph),
         ),
-        allowedIpAddresses: application.config.allowedIPAddresses,
+        allowedIpAddresses: application.config.allowedIpAddresses,
         disableIntrospection: application.config.disableIntrospection,
       },
       metaRequest,

@@ -189,6 +189,12 @@ E2E tests verify your application works correctly when deployed to Tailor Platfo
 
 ### Setting Up E2E Tests
 
+The examples below use `graphql-request` as a lightweight GraphQL client.
+
+```bash
+pnpm add -D graphql-request
+```
+
 **1. Global Setup**
 
 Create a global setup file that retrieves deployment information before running tests:
