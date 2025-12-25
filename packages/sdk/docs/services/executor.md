@@ -10,7 +10,7 @@ Executors provide:
 - Scheduled execution via cron expressions
 - Incoming webhook handlers
 - Post-resolver execution hooks
-- Multiple execution targets (functions, webhooks, GraphQL)
+- Multiple operation types (functions, webhooks, GraphQL, workflows)
 
 For the official Tailor Platform documentation, see [Executor Guide](https://docs.tailor.tech/guides/executor/overview).
 
@@ -93,9 +93,9 @@ resolverExecutedTrigger({
 });
 ```
 
-## Execution Targets
+## Operation Types
 
-### Function Execution
+### Function Operation
 
 Execute JavaScript/TypeScript functions:
 
@@ -110,7 +110,31 @@ createExecutor({
 });
 ```
 
-### Webhook Execution
+### Job Function Operation
+
+For long-running operations, use `jobFunction` which runs asynchronously and supports extended execution times. See [Job Function Operation](https://docs.tailor.tech/guides/executor/job-function-operation) for details.
+
+```typescript
+import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
+import { getDB } from "../generated/tailordb";
+
+export default createExecutor({
+  name: "daily-report-generator",
+  description: "Generate daily reports",
+  trigger: scheduleTrigger({ cron: "0 0 * * *" }),
+  operation: {
+    kind: "jobFunction",
+    body: async () => {
+      const db = getDB("tailordb");
+      // Long-running report generation logic
+      const records = await db.selectFrom("Order").selectAll().execute();
+      // Process records...
+    },
+  },
+});
+```
+
+### Webhook Operation
 
 Call external webhooks with dynamic data:
 
@@ -132,7 +156,7 @@ createExecutor({
 });
 ```
 
-### GraphQL Execution
+### GraphQL Operation
 
 Execute GraphQL queries and mutations:
 
@@ -158,7 +182,7 @@ createExecutor({
 });
 ```
 
-### Workflow Execution
+### Workflow Operation
 
 Trigger workflows from executors. See [Workflow documentation](./workflow.md) for how to define workflows.
 
