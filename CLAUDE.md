@@ -78,20 +78,17 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Always export both the value and type: `export const model = db.type(...); export type model = typeof model;`
    - Use `db.fields.timestamps()` for automatic timestamp fields
    - Relations are defined with `.relation()` method
-
 2. **Resolvers** (`src/configure/services/resolver/`)
    - Create GraphQL resolvers using `createResolver`
    - Define resolver configuration with `name`, `operation` (query/mutation), `input`, `body`, and `output`
    - The `body` function receives a context object with `input` and `user` properties
    - Use `getDB()` from generated files to access database with Kysely query builder
    - Return data directly from the body function (supports both sync and async)
-
 3. **Executors** (`src/configure/services/executor/`)
    - Event-driven handlers using `createExecutor()`
    - Trigger on record changes: `recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`
    - Execute functions, webhooks, or GraphQL operations
    - Use `getDB()` from generated files to access database with Kysely query builder
-
 4. **Workflows** (`src/configure/services/workflow/`)
    - Orchestrate multiple jobs using `createWorkflow()` and `createWorkflowJob()`
    - **Important Rules:**
@@ -102,26 +99,22 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
    - Trigger other jobs using `.trigger()` method (e.g., `fetchCustomer.trigger({ id })`)
    - `.trigger()` is synchronous on server - do NOT use await with it
    - Use `getDB()` from generated files to access database with Kysely query builder
-
 5. **Static Websites** (`src/configure/services/staticwebsite/`)
    - Define static website configurations using `defineStaticWebSite()`
    - Provides type-safe URL references via `.url` and `.callback` properties
    - Use `website.url` in CORS settings for type-safe configuration
    - Static website URLs are resolved at deployment time and injected into configuration
-
 6. **Identity Provider (IdP)** (`src/configure/services/idp/`)
    - Define Identity Provider configurations using `defineIdp()`
    - Configure authorization rules and OAuth2 clients
    - Use `idp.provider()` method to create BuiltInIdP references for auth configuration
    - Supports multiple clients with automatic client selection
-
 7. **Configuration** (`tailor.config.ts`)
    - Central configuration using `defineConfig()` for a single application
    - Required fields: `name`
    - Specify component locations with glob patterns
    - Configure generators using `defineGenerators()` - must include `@tailor-platform/kysely-type` for database access
-   - Application-level settings: `cors`, `allowedIPAddresses`, `disableIntrospection`
-
+   - Application-level settings: `cors`, `allowedIpAddresses`, `disableIntrospection`
 8. **Code Generators**
    - `@tailor-platform/kysely-type`: Generates Kysely type definitions and `getDB()` function (required for database access)
    - Configure generators with `defineGenerators()` and specify `distPath` for output files

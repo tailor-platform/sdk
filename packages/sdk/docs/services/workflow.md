@@ -10,7 +10,7 @@ Workflows provide:
 - Durable execution with automatic state management
 - Resume capabilities from failure points
 - Access to TailorDB via Kysely query builder
-- Job triggering for parallel or sequential execution
+- Job triggering to compose multi-step logic
 
 For the official Tailor Platform documentation, see [Workflow Guide](https://docs.tailor.tech/guides/workflow).
 
@@ -18,13 +18,12 @@ For the official Tailor Platform documentation, see [Workflow Guide](https://doc
 
 All workflow components must follow these rules:
 
-| Rule                                           | Description                                         |
-| ---------------------------------------------- | --------------------------------------------------- |
-| `createWorkflow` result must be default export | Workflow files must export the workflow as default  |
-| All jobs must be named exports                 | Every job used in a workflow must be a named export |
-| Job names must be unique                       | Job names must be unique across the entire project  |
-| `mainJob` is required                          | Every workflow must specify a `mainJob`             |
-| Jobs in `deps` must be job objects             | Pass job objects, not strings                       |
+| Rule                                           | Description                                                                                              |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `createWorkflow` result must be default export | Workflow files must export the workflow as default                                                       |
+| All jobs must be named exports                 | Includes `mainJob` and any job triggered via `.trigger()` (even if referenced only within the same file) |
+| Job `name` values must be unique               | Job names must be unique across the entire project                                                       |
+| `mainJob` is required                          | Every workflow must specify a `mainJob`                                                                  |
 
 ## Creating a Workflow Job
 
@@ -49,56 +48,27 @@ export const fetchCustomer = createWorkflowJob({
 });
 ```
 
-## Job Dependencies
+## Triggering Jobs
 
-Jobs can depend on other jobs using the `deps` array. Dependent jobs are accessible via the second argument of `body` function with hyphens replaced by underscores:
+Use `.trigger()` to start other jobs from within a job.
+
+Jobs are triggered by calling `.trigger()` on the other job object (no `deps` and no `jobs` object in the context).
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
 import { fetchCustomer } from "./jobs/fetch-customer";
 import { sendNotification } from "./jobs/send-notification";
 
-// All jobs must be named exports - including jobs with dependencies
-export const processOrder = createWorkflowJob({
-  name: "process-order",
-  deps: [fetchCustomer, sendNotification],
-  body: async (input: { orderId: string; customerId: string }, { jobs }) => {
-    // Access dependent jobs with hyphens replaced by underscores
-    // "fetch-customer" -> jobs.fetch_customer()
-    // "send-notification" -> jobs.send_notification()
-    const customer = await jobs.fetch_customer({
-      customerId: input.customerId,
-    });
-
-    const notification = await jobs.send_notification({
-      message: `Order ${input.orderId} is being processed`,
-      recipient: customer.email,
-    });
-
-    return {
-      orderId: input.orderId,
-      customerEmail: customer.email,
-      notificationSent: notification.sent,
-    };
-  },
-});
-```
-
-## Triggering Jobs
-
-Use `.trigger()` to start other jobs from within a job:
-
-```typescript
 export const mainJob = createWorkflowJob({
   name: "main-job",
-  deps: [fetchCustomer, sendNotification],
-  body: (input: { customerId: string }, { jobs }) => {
-    // .trigger() is synchronous on server - do NOT use await
-    // "fetch-customer" -> jobs.fetch_customer
-    const customer = jobs.fetch_customer.trigger({
+  body: async (input: { customerId: string }) => {
+    // You can write `await` for type-safety in your source.
+    // During deployment bundling, job.trigger() calls are transformed to a synchronous
+    // runtime call and `await` is removed.
+    const customer = await fetchCustomer.trigger({
       customerId: input.customerId,
     });
-    const notification = jobs.send_notification.trigger({
+    const notification = await sendNotification.trigger({
       message: "Order processed",
       recipient: customer.email,
     });
@@ -107,7 +77,7 @@ export const mainJob = createWorkflowJob({
 });
 ```
 
-**Important:** `.trigger()` is synchronous on the server. Do NOT use `await` with it.
+**Important:** On the Tailor runtime, job triggers are executed synchronously. This means `Promise.all([jobA.trigger(), jobB.trigger()])` will not run jobs in parallel.
 
 ## Workflow Definition
 
@@ -121,9 +91,17 @@ import { sendNotification } from "./jobs/send-notification";
 // Jobs must be named exports
 export const processOrder = createWorkflowJob({
   name: "process-order",
-  deps: [fetchCustomer, sendNotification],
-  body: async (input, { jobs }) => {
-    // ... job logic
+  body: async (input: { customerId: string }, { env }) => {
+    // `env` contains values from `tailor.config.ts` -> `env`.
+    // Trigger other jobs by calling .trigger() on the job object.
+    const customer = await fetchCustomer.trigger({
+      customerId: input.customerId,
+    });
+    await sendNotification.trigger({
+      message: "Order processed",
+      recipient: customer.email,
+    });
+    return { customerId: input.customerId };
   },
 });
 
@@ -133,6 +111,41 @@ export default createWorkflow({
   mainJob: processOrder,
 });
 ```
+
+## Triggering a Workflow from a Resolver
+
+You can start a workflow execution from a resolver using `workflow.trigger()`.
+
+- `workflow.trigger(args, options?)` returns a workflow run ID (`Promise<string>`).
+- To run with machine-user permissions, pass `{ authInvoker: auth.invoker("<machine-user>") }`.
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+import { auth } from "../tailor.config";
+import orderProcessingWorkflow from "../workflows/order-processing";
+
+export default createResolver({
+  name: "triggerOrderProcessing",
+  operation: "mutation",
+  input: {
+    orderId: t.string(),
+    customerId: t.string(),
+  },
+  body: async ({ input }) => {
+    const workflowRunId = await orderProcessingWorkflow.trigger(
+      { orderId: input.orderId, customerId: input.customerId },
+      { authInvoker: auth.invoker("manager-machine-user") },
+    );
+
+    return { workflowRunId };
+  },
+  output: t.object({
+    workflowRunId: t.string(),
+  }),
+});
+```
+
+See the full working example in the repository: [example/resolvers/triggerWorkflow.ts](../../../../example/resolvers/triggerWorkflow.ts).
 
 ## File Organization
 
