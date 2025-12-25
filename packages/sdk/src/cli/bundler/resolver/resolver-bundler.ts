@@ -30,7 +30,8 @@ export async function bundleResolvers(
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
-    throw new Error(`No files found matching pattern: ${config.files?.join(", ")}`);
+    logger.warn(`No resolver files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
+    return;
   }
 
   logger.newline();

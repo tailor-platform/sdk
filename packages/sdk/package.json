@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -48,6 +48,7 @@
     "lint:fix": "oxlint . --fix && eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
     "perf:typecheck": "bash scripts/perf/exec.sh",
+    "perf:runtime": "bash scripts/perf/runtime-perf.sh",
     "prepublish": "pnpm run build",
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js"

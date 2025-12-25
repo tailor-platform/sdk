@@ -28,7 +28,8 @@ export async function bundleExecutors(
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
-    throw new Error(`No files found matching pattern: ${config.files?.join(", ")}`);
+    logger.warn(`No executor files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
+    return;
   }
 
   logger.newline();

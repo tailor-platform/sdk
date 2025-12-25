@@ -1,5 +1,32 @@
 # @tailor-platform/sdk
 
+## 1.1.1
+
+### Patch Changes
+
+- [#322](https://github.com/tailor-platform/sdk/pull/322) [`5d1805b`](https://github.com/tailor-platform/sdk/commit/5d1805b1c920285fa5e79f03e6604b898002c355) Thanks [@toiroakr](https://github.com/toiroakr)! - Handle empty resolver/executor/workflow bundles without error and add tests
+
+## 1.1.0
+
+### Minor Changes
+
+- [#314](https://github.com/tailor-platform/sdk/pull/314) [`a073fb9`](https://github.com/tailor-platform/sdk/commit/a073fb92837a3bbe053ce2571c557f9084756c04) Thanks [@toiroakr](https://github.com/toiroakr)! - Add dependencies-based execution order for generators
+  - Generators now declare their dependencies (`tailordb`, `resolver`, `executor`)
+  - Execution order is phased: TailorDB → Auth → TailorDB-only generators → Resolver → non-executor generators → Executor → executor-dependent generators
+  - This allows generated files to be imported by Resolvers and Executors
+  - Added utility types for aggregate input: `TailorDBInput`, `ResolverInput`, `ExecutorInput`, `FullInput`, `AggregateArgs`
+  - Fixed console output formatting with proper blank line placement
+
+### Patch Changes
+
+- [#317](https://github.com/tailor-platform/sdk/pull/317) [`5af7004`](https://github.com/tailor-platform/sdk/commit/5af700468d48c18b31c3c1d6e7c45d25f9d51962) Thanks [@riku99](https://github.com/riku99)! - Break CLI apply/bundler dependency cycle by extracting enableInlineSourcemap into a shared bundler utility
+
+- [#321](https://github.com/tailor-platform/sdk/pull/321) [`be23262`](https://github.com/tailor-platform/sdk/commit/be23262e0cb09078137d648ee4b6f8d2131e291e) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: use type import in kysely generator template
+
+- [#312](https://github.com/tailor-platform/sdk/pull/312) [`514ca72`](https://github.com/tailor-platform/sdk/commit/514ca7231d2a7d0c37066af0b562ec03a63488fc) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency rolldown to v1.0.0-beta.56
+
+- [#319](https://github.com/tailor-platform/sdk/pull/319) [`33d0849`](https://github.com/tailor-platform/sdk/commit/33d08492062bad5622aa0a83214641fd725fbe73) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/download-artifact action to v7
+
 ## 1.0.0
 
 ### Major Changes

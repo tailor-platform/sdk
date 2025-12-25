@@ -237,7 +237,9 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.files[0].path).toBe(testDistPath);
 
       const content = result.files[0].content;
-      expect(content).toContain('import { type ColumnType, Kysely, KyselyConfig } from "kysely"');
+      expect(content).toContain(
+        'import { type ColumnType, Kysely, type KyselyConfig } from "kysely"',
+      );
       expect(content).toContain("interface Namespace {");
       expect(content).toContain('"test-namespace": {');
       expect(content).toContain("User: {");
