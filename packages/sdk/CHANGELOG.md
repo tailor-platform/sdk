@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.1.1
+
+### Patch Changes
+
+- [#322](https://github.com/tailor-platform/sdk/pull/322) [`5d1805b`](https://github.com/tailor-platform/sdk/commit/5d1805b1c920285fa5e79f03e6604b898002c355) Thanks [@toiroakr](https://github.com/toiroakr)! - Handle empty resolver/executor/workflow bundles without error and add tests
+
 ## 1.1.0
 
 ### Minor Changes
