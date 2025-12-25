@@ -158,6 +158,69 @@ createExecutor({
 });
 ```
 
+### Workflow Execution
+
+Trigger workflows from executors. See [Workflow documentation](./workflow.md) for how to define workflows.
+
+```typescript
+import { createExecutor, recordCreatedTrigger } from "@tailor-platform/sdk";
+import { order } from "../tailordb/order";
+import processOrderWorkflow from "../workflows/process-order";
+
+export default createExecutor({
+  name: "order-processor",
+  description: "Process new orders via workflow",
+  trigger: recordCreatedTrigger({ type: order }),
+  operation: {
+    kind: "workflow",
+    workflow: processOrderWorkflow,
+    args: ({ newRecord }) => ({
+      orderId: newRecord.id,
+      customerId: newRecord.customerId,
+    }),
+  },
+});
+```
+
+You can also pass static arguments:
+
+```typescript
+createExecutor({
+  operation: {
+    kind: "workflow",
+    workflow: dailyReportWorkflow,
+    args: { reportType: "summary" },
+  },
+});
+```
+
+### Authentication for Operations
+
+GraphQL and Workflow operations can specify an `authInvoker` to execute with machine user credentials:
+
+```typescript
+import { defineAuth, createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
+
+const auth = defineAuth("my-auth", {
+  // ... auth configuration
+  machineUsers: {
+    "batch-processor": {
+      attributes: { role: "ADMIN" },
+    },
+  },
+});
+
+export default createExecutor({
+  name: "scheduled-cleanup",
+  trigger: scheduleTrigger({ cron: "0 0 * * *" }),
+  operation: {
+    kind: "graphql",
+    query: `mutation { cleanupOldRecords { count } }`,
+    authInvoker: auth.invoker("batch-processor"),
+  },
+});
+```
+
 ## Event Payloads
 
 Each trigger type provides specific context data in the callback functions.
