@@ -30,8 +30,7 @@ export const mainCommand = defineCommand({
     name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
     version: packageJson.version,
     description:
-      packageJson.description ||
-      "Tailor CLI for managing Tailor Platform SDK applications",
+      packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
   },
   subCommands: {
     api: apiCommand,

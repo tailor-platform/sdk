@@ -1,9 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  ExecutorSchema,
-  GqlOperationSchema,
-  WorkflowOperationSchema,
-} from "./schema";
+import { ExecutorSchema, GqlOperationSchema, WorkflowOperationSchema } from "./schema";
 
 describe("GqlOperationSchema", () => {
   test("converts query to string", () => {
@@ -112,9 +108,7 @@ describe("ExecutorSchema", () => {
     if (result.success) {
       expect(result.data.operation.kind).toBe("graphql");
       if (result.data.operation.kind === "graphql") {
-        expect(result.data.operation.query).toBe(
-          "mutation { createUser { id } }",
-        );
+        expect(result.data.operation.query).toBe("mutation { createUser { id } }");
       }
     }
   });

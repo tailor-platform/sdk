@@ -3,20 +3,24 @@
   "version": "1.1.1",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
-  "main": "./dist/configure/index.mjs",
-  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/tailor-platform/sdk.git",
     "directory": "packages/sdk"
   },
+  "bin": {
+    "tailor-sdk": "./dist/cli/index.mjs"
+  },
   "files": [
+    "CHANGELOG.md",
     "dist",
-    "postinstall.mjs",
     "docs",
-    "README.md",
-    "CHANGELOG.md"
+    "postinstall.mjs",
+    "README.md"
   ],
+  "type": "module",
+  "main": "./dist/configure/index.mjs",
+  "types": "./dist/configure/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/configure/index.d.mts",
@@ -34,18 +38,14 @@
       "default": "./dist/utils/test/index.mjs"
     }
   },
-  "bin": {
-    "tailor-sdk": "./dist/cli/index.mjs"
-  },
-  "types": "./dist/configure/index.d.mts",
   "scripts": {
     "test": "vitest",
     "test:unit": "vitest --project=unit",
     "test:e2e": "vitest --project=e2e",
     "test:coverage": "vitest --coverage",
     "build": "tsdown && cross-env FORCE_CREATE=1 node postinstall.mjs",
-    "lint": "eslint --cache .",
-    "lint:fix": "eslint --cache . --fix",
+    "lint": "oxlint . && eslint --cache .",
+    "lint:fix": "oxlint . --fix && eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
     "perf:typecheck": "bash scripts/perf/exec.sh",
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
@@ -96,7 +96,9 @@
     "cross-env": "10.1.0",
     "eslint": "9.39.2",
     "eslint-plugin-jsdoc": "61.5.0",
+    "eslint-plugin-oxlint": "1.34.0",
     "globals": "16.5.0",
+    "oxlint": "1.34.0",
     "sonda": "0.10.1",
     "tsdown": "0.18.2",
     "typescript": "5.9.3",

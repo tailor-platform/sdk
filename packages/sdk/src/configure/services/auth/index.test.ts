@@ -139,14 +139,11 @@ describe("defineAuth", () => {
   describe("AuthInvoker type compatibility with tailor-proto", () => {
     it("AuthInvoker has namespace field compatible with proto", () => {
       // Verify the field name matches tailor.v1.AuthInvoker
-      type HasNamespace =
-        AuthInvoker<string> extends { namespace: string } ? true : false;
+      type HasNamespace = AuthInvoker<string> extends { namespace: string } ? true : false;
       expectTypeOf<HasNamespace>().toEqualTypeOf<true>();
 
       // Verify proto type has the same field
-      type ProtoHasNamespace = ProtoAuthInvoker extends { namespace: string }
-        ? true
-        : false;
+      type ProtoHasNamespace = ProtoAuthInvoker extends { namespace: string } ? true : false;
       expectTypeOf<ProtoHasNamespace>().toEqualTypeOf<true>();
     });
 
@@ -173,10 +170,7 @@ describe("defineAuth", () => {
       // This ensures that our AuthInvoker can be used where proto AuthInvoker is expected
       // (checking the common properties)
       type IsCompatible =
-        AuthInvoker<string> extends Pick<
-          ProtoAuthInvoker,
-          "namespace" | "machineUserName"
-        >
+        AuthInvoker<string> extends Pick<ProtoAuthInvoker, "namespace" | "machineUserName">
           ? true
           : false;
       expectTypeOf<IsCompatible>().toEqualTypeOf<true>();

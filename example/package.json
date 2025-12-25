@@ -2,6 +2,7 @@
   "name": "example",
   "private": true,
   "description": "Example for Tailor Platform SDK usage",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "generate": "tailor-sdk generate -c tailor.config.ts",
@@ -40,7 +41,6 @@
     "typescript": "5.9.3",
     "vitest": "4.0.16"
   },
-  "license": "MIT",
   "engines": {
     "node": ">= 22.14.0"
   }

@@ -91,9 +91,7 @@ describe("planWorkflow", () => {
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
           metadata: {
-            labels: workflow?.label
-              ? { [sdkNameLabelKey]: workflow.label }
-              : {},
+            labels: workflow?.label ? { [sdkNameLabelKey]: workflow.label } : {},
           },
         };
       }),
@@ -111,9 +109,7 @@ describe("planWorkflow", () => {
   describe("rename scenarios", () => {
     test("old workflow is deleted when renamed", async () => {
       // Existing workflow: "old-workflow" with app label
-      const client = createMockClient([
-        { id: "1", name: "old-workflow", label: appName },
-      ]);
+      const client = createMockClient([{ id: "1", name: "old-workflow", label: appName }]);
 
       // New config has "new-workflow" (renamed)
       const workflows = {
@@ -124,13 +120,7 @@ describe("planWorkflow", () => {
         "main-job": ["main-job"],
       };
 
-      const result = await planWorkflow(
-        client,
-        workspaceId,
-        appName,
-        workflows,
-        mainJobDeps,
-      );
+      const result = await planWorkflow(client, workspaceId, appName, workflows, mainJobDeps);
 
       // "new-workflow" should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -158,13 +148,7 @@ describe("planWorkflow", () => {
         "job-a": ["job-a"],
       };
 
-      const result = await planWorkflow(
-        client,
-        workspaceId,
-        appName,
-        workflows,
-        mainJobDeps,
-      );
+      const result = await planWorkflow(client, workspaceId, appName, workflows, mainJobDeps);
 
       // "workflow-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
@@ -203,9 +187,7 @@ describe("planWorkflow", () => {
     });
 
     test("workflow owned by different app is NOT deleted", async () => {
-      const client = createMockClient([
-        { id: "1", name: "other-workflow", label: "other-app" },
-      ]);
+      const client = createMockClient([{ id: "1", name: "other-workflow", label: "other-app" }]);
 
       const result = await planWorkflow(client, workspaceId, appName, {}, {});
 

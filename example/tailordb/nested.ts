@@ -15,9 +15,7 @@ export const nestedProfile = db
     metadata: db
       .object({
         created: db.datetime().description("Creation timestamp"),
-        lastUpdated: db
-          .datetime({ optional: true })
-          .description("Last update timestamp"),
+        lastUpdated: db.datetime({ optional: true }).description("Last update timestamp"),
         version: db.int().description("Version number"),
       })
       .description("Profile metadata"),

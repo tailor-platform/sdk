@@ -73,10 +73,7 @@ describe("pnpm apply command integration tests", () => {
         if (entry.isDirectory()) {
           traverse(fullPath);
         } else {
-          const relativePath = path
-            .relative(rootDir, fullPath)
-            .split(path.sep)
-            .join("/");
+          const relativePath = path.relative(rootDir, fullPath).split(path.sep).join("/");
           files.push(relativePath);
         }
       }
@@ -100,9 +97,7 @@ describe("pnpm apply command integration tests", () => {
     vi.useRealTimers();
   });
 
-  type MainFunction = (
-    args: Record<string, unknown>,
-  ) => unknown | Promise<unknown>;
+  type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
   type QueryResolver = (query: string, params: unknown[]) => unknown[];
 
   const GlobalThis = globalThis as {
@@ -149,10 +144,7 @@ describe("pnpm apply command integration tests", () => {
         this.record.ended = true;
       }
 
-      async queryObject(
-        query: string,
-        params: unknown[] = [],
-      ): Promise<{ rows: unknown[] }> {
+      async queryObject(query: string, params: unknown[] = []): Promise<{ rows: unknown[] }> {
         executedQueries.push({ query, params });
         const rows = resolver(query, params) ?? [];
         return { rows: Array.isArray(rows) ? rows : [] };
@@ -349,9 +341,7 @@ describe("pnpm apply command integration tests", () => {
             workspaceId: "test-workspace-id",
           },
         }),
-      ).rejects.toThrow(
-        "user.name.first: First name must be at least 2 characters",
-      );
+      ).rejects.toThrow("user.name.first: First name must be at least 2 characters");
     });
 
     test("resolvers/stepChain.js validates nested fields - invalid last name", async () => {
@@ -372,9 +362,7 @@ describe("pnpm apply command integration tests", () => {
             workspaceId: "test-workspace-id",
           },
         }),
-      ).rejects.toThrow(
-        "user.name.last: Last name must be at least 2 characters",
-      );
+      ).rejects.toThrow("user.name.last: Last name must be at least 2 characters");
     });
 
     test("resolvers/stepChain.js validates nested fields - multiple nested fields invalid", async () => {
@@ -436,11 +424,7 @@ describe("pnpm apply command integration tests", () => {
         setupTailordbMock((query) => {
           if (typeof query === "string") {
             const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
-            if (
-              normalizedQuery.includes(
-                "SELECT NAME FROM USER ORDER BY CREATEDAT DESC",
-              )
-            ) {
+            if (normalizedQuery.includes("SELECT NAME FROM USER ORDER BY CREATEDAT DESC")) {
               return [{ name: "Alice" }];
             }
             if (normalizedQuery.includes("SELECT STATE FROM SUPPLIER")) {
@@ -478,20 +462,18 @@ describe("pnpm apply command integration tests", () => {
 
     describe("executors", () => {
       test("executors/user-created.js uses the tailordb client", async () => {
-        const { executedQueries, createdClients } = setupTailordbMock(
-          (query, params) => {
-            if (query.includes("select * from User where id = $1")) {
-              expect(params).toEqual(["user-1"]);
-              return [
-                {
-                  name: "Expected User",
-                  email: "expected@tailor.tech",
-                },
-              ];
-            }
-            return [];
-          },
-        );
+        const { executedQueries, createdClients } = setupTailordbMock((query, params) => {
+          if (query.includes("select * from User where id = $1")) {
+            expect(params).toEqual(["user-1"]);
+            return [
+              {
+                name: "Expected User",
+                email: "expected@tailor.tech",
+              },
+            ];
+          }
+          return [];
+        });
 
         const main = await importActualMain("executors/user-created.js");
         const payload = { newRecord: { id: "user-1" } };
@@ -501,8 +483,7 @@ describe("pnpm apply command integration tests", () => {
         expect(executedQueries).toEqual([
           { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
           {
-            query:
-              'insert into "UserLog" ("userID", "message") values ($1, $2)',
+            query: 'insert into "UserLog" ("userID", "message") values ($1, $2)',
             params: ["user-1", "User created: undefined (undefined)"],
           },
         ]);
@@ -589,9 +570,7 @@ describe("pnpm apply command integration tests", () => {
       });
 
       test("workflow-jobs/send-notification.js executes correctly", async () => {
-        const main = await importActualMain(
-          "workflow-jobs/send-notification.js",
-        );
+        const main = await importActualMain("workflow-jobs/send-notification.js");
         const result = await main({
           message: "Test message",
           recipient: "test@example.com",
@@ -599,9 +578,7 @@ describe("pnpm apply command integration tests", () => {
 
         expect(result).toMatchObject({
           sent: true,
-          timestamp: expect.stringMatching(
-            /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
-          ),
+          timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
         });
       });
 
@@ -618,9 +595,7 @@ describe("pnpm apply command integration tests", () => {
           const content = fs.readFileSync(path.join(actualDir, file), "utf-8");
 
           // Check that env is defined with correct values
-          expect(content).toContain(
-            'const env = {"foo":1,"bar":"hello","baz":true}',
-          );
+          expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
 
           // Check that body is called with { jobs, env } object
           expect(content).toMatch(/\.body\(input, \{ env \}\)/);

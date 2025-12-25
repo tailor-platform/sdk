@@ -1,15 +1,6 @@
 import { parseSync } from "oxc-parser";
-import {
-  type ASTNode,
-  type Replacement,
-  applyReplacements,
-  findStatementEnd,
-} from "./ast-utils";
-import {
-  findAllJobs,
-  buildJobNameMap,
-  detectTriggerCalls,
-} from "./job-detector";
+import { type ASTNode, type Replacement, applyReplacements, findStatementEnd } from "./ast-utils";
+import { findAllJobs, buildJobNameMap, detectTriggerCalls } from "./job-detector";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
 import type {
   Program,
@@ -83,9 +74,7 @@ function findVariableDeclarationsByName(
  * Find createWorkflow default export declarations
  * Returns the range of the export statement to remove
  */
-function findWorkflowDefaultExport(
-  program: Program,
-): { start: number; end: number } | null {
+function findWorkflowDefaultExport(program: Program): { start: number; end: number } | null {
   const bindings = collectSdkBindings(program, "createWorkflow");
 
   for (const statement of program.body) {
@@ -94,13 +83,7 @@ function findWorkflowDefaultExport(
       const declaration = exportDecl.declaration;
 
       // Check for direct createWorkflow call: export default createWorkflow({...})
-      if (
-        isSdkFunctionCall(
-          declaration as unknown as ASTNode,
-          bindings,
-          "createWorkflow",
-        )
-      ) {
+      if (isSdkFunctionCall(declaration as unknown as ASTNode, bindings, "createWorkflow")) {
         return { start: exportDecl.start, end: exportDecl.end };
       }
 
@@ -169,10 +152,7 @@ export function transformWorkflowSource(
       continue;
     }
 
-    if (
-      job.statementRange &&
-      !isAlreadyMarkedForRemoval(job.statementRange.start)
-    ) {
+    if (job.statementRange && !isAlreadyMarkedForRemoval(job.statementRange.start)) {
       const endPos = findStatementEnd(source, job.statementRange.end);
       removedRanges.push({ start: job.statementRange.start, end: endPos });
       replacements.push({

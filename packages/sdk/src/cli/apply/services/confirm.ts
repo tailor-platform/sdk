@@ -26,15 +26,11 @@ export async function confirmOwnerConflict(
   logger.log(
     `  ${styles.warning("Current application(s)")}: ${currentOwners.map((o) => styles.bold(`"${o}"`)).join(", ")}`,
   );
-  logger.log(
-    `  ${styles.success("New application")}:        ${styles.bold(`"${appName}"`)}`,
-  );
+  logger.log(`  ${styles.success("New application")}:        ${styles.bold(`"${appName}"`)}`);
   logger.newline();
   logger.log(`  ${styles.info("Resources")}:`);
   for (const c of conflicts) {
-    logger.log(
-      `    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`,
-    );
+    logger.log(`    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`);
   }
 
   if (yes) {
@@ -71,14 +67,10 @@ export async function confirmUnmanagedResources(
 
   logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
-    logger.log(
-      `    • ${styles.bold(r.resourceType)} ${styles.info(`"${r.resourceName}"`)}`,
-    );
+    logger.log(`    • ${styles.bold(r.resourceType)} ${styles.info(`"${r.resourceName}"`)}`);
   }
   logger.newline();
-  logger.log(
-    "  These resources may have been created by older SDK versions, Terraform, or CUE.",
-  );
+  logger.log("  These resources may have been created by older SDK versions, Terraform, or CUE.");
   logger.log("  To continue, confirm that tailor-sdk should manage them.");
   logger.log(
     "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
@@ -118,15 +110,11 @@ export async function confirmImportantResourceDeletion(
 
   logger.log(`  ${styles.info("Resources")}:`);
   for (const r of resources) {
-    logger.log(
-      `    • ${styles.bold(r.resourceType)} ${styles.error(`"${r.resourceName}"`)}`,
-    );
+    logger.log(`    • ${styles.bold(r.resourceType)} ${styles.error(`"${r.resourceName}"`)}`);
   }
   logger.newline();
   logger.log(
-    styles.warning(
-      "  Deleting these resources will permanently remove all associated data.",
-    ),
+    styles.warning("  Deleting these resources will permanently remove all associated data."),
   );
 
   if (yes) {
@@ -136,10 +124,10 @@ export async function confirmImportantResourceDeletion(
     return;
   }
 
-  const confirmed = await logger.prompt(
-    "Are you sure you want to delete these resources?",
-    { type: "confirm", initial: false },
-  );
+  const confirmed = await logger.prompt("Are you sure you want to delete these resources?", {
+    type: "confirm",
+    initial: false,
+  });
   if (!confirmed) {
     throw new Error(ml`
       Apply cancelled. Resources will not be deleted.

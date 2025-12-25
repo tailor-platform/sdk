@@ -35,9 +35,7 @@ export function isTailorSdkSource(source: string): boolean {
 /**
  * Get the source string from a dynamic import or require call
  */
-export function getImportSource(
-  node: Expression | null | undefined,
-): string | null {
+export function getImportSource(node: Expression | null | undefined): string | null {
   if (!node) return null;
   // await import("@tailor-platform/sdk")
   if (node.type === "ImportExpression") {
@@ -50,10 +48,7 @@ export function getImportSource(
   // require("@tailor-platform/sdk")
   if (node.type === "CallExpression") {
     const callExpr = node as CallExpression;
-    if (
-      callExpr.callee.type === "Identifier" &&
-      callExpr.callee.name === "require"
-    ) {
+    if (callExpr.callee.type === "Identifier" && callExpr.callee.name === "require") {
       const arg = callExpr.arguments[0];
       if (
         arg &&
@@ -72,9 +67,7 @@ export function getImportSource(
 /**
  * Unwrap AwaitExpression to get the inner expression
  */
-export function unwrapAwait(
-  node: Expression | null | undefined,
-): Expression | null | undefined {
+export function unwrapAwait(node: Expression | null | undefined): Expression | null | undefined {
   if (node?.type === "AwaitExpression") {
     return (node as AwaitExpression).argument;
   }
@@ -88,10 +81,7 @@ export function isStringLiteral(
   node: Expression | null | undefined,
 ): node is Expression & { type: "Literal"; value: string } {
   // Note: oxc uses "Literal" for all literals, distinguishing by value type
-  return (
-    node?.type === "Literal" &&
-    typeof (node as { value?: unknown }).value === "string"
-  );
+  return node?.type === "Literal" && typeof (node as { value?: unknown }).value === "string";
 }
 
 /**
@@ -100,19 +90,13 @@ export function isStringLiteral(
 export function isFunctionExpression(
   node: Expression | null | undefined,
 ): node is ArrowFunctionExpression | FunctionExpression {
-  return (
-    node?.type === "ArrowFunctionExpression" ||
-    node?.type === "FunctionExpression"
-  );
+  return node?.type === "ArrowFunctionExpression" || node?.type === "FunctionExpression";
 }
 
 /**
  * Find a property in an object expression
  */
-export function findProperty(
-  properties: ObjectPropertyKind[],
-  name: string,
-): FoundProperty | null {
+export function findProperty(properties: ObjectPropertyKind[], name: string): FoundProperty | null {
   for (const prop of properties) {
     // Note: oxc uses "Property" for object properties
     if (prop.type === "Property") {
@@ -140,10 +124,7 @@ export function findProperty(
  * Apply string replacements to source code
  * Replacements are applied from end to start to maintain positions
  */
-export function applyReplacements(
-  source: string,
-  replacements: Replacement[],
-): string {
+export function applyReplacements(source: string, replacements: Replacement[]): string {
   const sorted = [...replacements].sort((a, b) => b.start - a.start);
   let result = source;
   for (const r of sorted) {
@@ -158,10 +139,7 @@ export function applyReplacements(
 export function findStatementEnd(source: string, position: number): number {
   let i = position;
   // Skip any trailing semicolons and whitespace on the same line
-  while (
-    i < source.length &&
-    (source[i] === ";" || source[i] === " " || source[i] === "\t")
-  ) {
+  while (i < source.length && (source[i] === ";" || source[i] === " " || source[i] === "\t")) {
     i++;
   }
   // Include the newline if present
@@ -187,9 +165,7 @@ export function walkASTNodes(
   for (const key of Object.keys(node)) {
     const child = node[key] as unknown;
     if (Array.isArray(child)) {
-      child.forEach((c: unknown) =>
-        walkASTNodes(c as ASTNode | null, callback, newParents),
-      );
+      child.forEach((c: unknown) => walkASTNodes(c as ASTNode | null, callback, newParents));
     } else if (child && typeof child === "object") {
       walkASTNodes(child as ASTNode, callback, newParents);
     }

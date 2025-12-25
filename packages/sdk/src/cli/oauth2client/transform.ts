@@ -4,9 +4,7 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
-export const grantTypeToString = (
-  grantType: AuthOAuth2Client_GrantType,
-): string => {
+export const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string => {
   switch (grantType) {
     case AuthOAuth2Client_GrantType.AUTHORIZATION_CODE:
       return "authorization_code";
@@ -43,15 +41,11 @@ export function toOAuth2ClientInfo(client: AuthOAuth2Client): OAuth2ClientInfo {
     clientId: client.clientId,
     grantTypes: client.grantTypes.map(grantTypeToString),
     redirectUris: client.redirectUris,
-    createdAt: client.createdAt
-      ? timestampDate(client.createdAt).toISOString()
-      : "N/A",
+    createdAt: client.createdAt ? timestampDate(client.createdAt).toISOString() : "N/A",
   };
 }
 
-export function toOAuth2ClientCredentials(
-  client: AuthOAuth2Client,
-): OAuth2ClientCredentials {
+export function toOAuth2ClientCredentials(client: AuthOAuth2Client): OAuth2ClientCredentials {
   return {
     name: client.name,
     description: client.description,
@@ -59,8 +53,6 @@ export function toOAuth2ClientCredentials(
     clientSecret: client.clientSecret,
     grantTypes: client.grantTypes.map(grantTypeToString),
     redirectUris: client.redirectUris,
-    createdAt: client.createdAt
-      ? timestampDate(client.createdAt).toISOString()
-      : "N/A",
+    createdAt: client.createdAt ? timestampDate(client.createdAt).toISOString() : "N/A",
   };
 }

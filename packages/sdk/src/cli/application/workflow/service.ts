@@ -3,11 +3,7 @@ import { pathToFileURL } from "node:url";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import { WORKFLOW_JOB_BRAND } from "@/configure/services/workflow/job";
-import {
-  type Workflow,
-  WorkflowJobSchema,
-  WorkflowSchema,
-} from "@/parser/service/workflow";
+import { type Workflow, WorkflowJobSchema, WorkflowSchema } from "@/parser/service/workflow";
 import type { WorkflowServiceConfig } from "@/configure/services/workflow/types";
 
 export interface CollectedJob {
@@ -47,10 +43,7 @@ export async function loadAndCollectJobs(
   const fileCount = workflowFiles.length;
 
   // Maps for collecting data
-  const allJobsMap = new Map<
-    string,
-    { name: string; exportName: string; sourceFile: string }
-  >();
+  const allJobsMap = new Map<string, { name: string; exportName: string; sourceFile: string }>();
 
   // Load all files in parallel and collect jobs and workflows
   const loadResults = await Promise.all(
@@ -98,9 +91,7 @@ export function printLoadedWorkflows(result: WorkflowLoadResult): void {
   }
 
   logger.newline();
-  logger.log(
-    `Found ${styles.highlight(result.fileCount.toString())} workflow files`,
-  );
+  logger.log(`Found ${styles.highlight(result.fileCount.toString())} workflow files`);
 
   for (const { workflow, sourceFile } of result.workflowSources) {
     const relativePath = path.relative(process.cwd(), sourceFile);

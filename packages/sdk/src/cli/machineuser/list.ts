@@ -26,12 +26,8 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
     name: user.name,
     clientId: user.clientId,
     clientSecret: user.clientSecret,
-    createdAt: user.createdAt
-      ? timestampDate(user.createdAt).toISOString()
-      : "N/A",
-    updatedAt: user.updatedAt
-      ? timestampDate(user.updatedAt).toISOString()
-      : "N/A",
+    createdAt: user.createdAt ? timestampDate(user.createdAt).toISOString() : "N/A",
+    updatedAt: user.updatedAt ? timestampDate(user.updatedAt).toISOString() : "N/A",
   };
 }
 
@@ -56,9 +52,7 @@ export async function listMachineUsers(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(
-      `Application ${config.name} does not have an auth configuration.`,
-    );
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
   // Fetch all machine users

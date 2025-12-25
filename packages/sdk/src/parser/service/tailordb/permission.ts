@@ -20,11 +20,7 @@ type PermissionOperand =
   | { newRecord: string }
   | { value: unknown };
 
-type PermissionCondition = readonly [
-  PermissionOperand,
-  PermissionOperator,
-  PermissionOperand,
-];
+type PermissionCondition = readonly [PermissionOperand, PermissionOperator, PermissionOperand];
 
 const operatorMap: Record<PermissionOperator, string> = {
   "=": "eq",
@@ -40,13 +36,7 @@ type GqlPermissionPolicy = {
   description?: string;
 };
 
-type GqlPermissionAction =
-  | "read"
-  | "create"
-  | "update"
-  | "delete"
-  | "aggregate"
-  | "bulkUpsert";
+type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
 function normalizeOperand(operand: PermissionOperand): PermissionOperand {
   if (typeof operand === "object" && "user" in operand) {
@@ -61,11 +51,7 @@ function normalizeConditions(
 ): StandardPermissionCondition[] {
   return conditions.map((cond) => {
     const [left, operator, right] = cond;
-    return [
-      normalizeOperand(left),
-      operatorMap[operator],
-      normalizeOperand(right),
-    ];
+    return [normalizeOperand(left), operatorMap[operator], normalizeOperand(right)];
   }) as StandardPermissionCondition[];
 }
 
@@ -79,10 +65,9 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
   return cond.length >= 2 && typeof cond[1] === "string"; // Check if middle element is an operator
 }
 
-export function normalizePermission<
-  User extends object = object,
-  Type extends object = object,
->(permission: TailorTypePermission<User, Type>): StandardTailorTypePermission {
+export function normalizePermission<User extends object = object, Type extends object = object>(
+  permission: TailorTypePermission<User, Type>,
+): StandardTailorTypePermission {
   return Object.keys(permission).reduce((acc, action) => {
     (acc as any)[action] = (permission as any)[action].map((p: any) =>
       normalizeActionPermission(p),
@@ -99,9 +84,7 @@ export function normalizeGqlPermission(
   ) as StandardTailorTypeGqlPermission;
 }
 
-function normalizeGqlPolicy(
-  policy: GqlPermissionPolicy,
-): StandardGqlPermissionPolicy {
+function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionPolicy {
   return {
     conditions: policy.conditions ? normalizeConditions(policy.conditions) : [],
     actions: policy.actions === "all" ? ["all"] : policy.actions,
@@ -125,9 +108,7 @@ export function parsePermissions(rawPermissions: RawPermissions): Permissions {
   };
 }
 
-export function normalizeActionPermission(
-  permission: unknown,
-): StandardActionPermission {
+export function normalizeActionPermission(permission: unknown): StandardActionPermission {
   // object format
   if (isObjectFormat(permission)) {
     const conditions = permission.conditions as
@@ -156,9 +137,7 @@ export function normalizeActionPermission(
       boolean,
     ];
     return {
-      conditions: normalizeConditions([
-        [op1, operator, op2] as PermissionCondition,
-      ]),
+      conditions: normalizeConditions([[op1, operator, op2] as PermissionCondition]),
       permit: permit ? "allow" : "deny",
     };
   }

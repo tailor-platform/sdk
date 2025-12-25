@@ -11,14 +11,8 @@ import {
   EnumConstantsGenerator,
   EnumConstantsGeneratorID,
 } from "./generator/builtin/enum-constants";
-import {
-  FileUtilsGenerator,
-  FileUtilsGeneratorID,
-} from "./generator/builtin/file-utils";
-import {
-  KyselyGenerator,
-  KyselyGeneratorID,
-} from "./generator/builtin/kysely-type";
+import { FileUtilsGenerator, FileUtilsGeneratorID } from "./generator/builtin/file-utils";
+import { KyselyGenerator, KyselyGeneratorID } from "./generator/builtin/kysely-type";
 import { createSeedGenerator, SeedGeneratorID } from "./generator/builtin/seed";
 import type { AppConfig } from "@/configure/config";
 import "./mock";
@@ -26,26 +20,16 @@ import "./mock";
 // Register built-in generators with their constructor functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
-  [
-    KyselyGeneratorID,
-    (options: { distPath: string }) => new KyselyGenerator(options),
-  ],
-  [
-    SeedGeneratorID,
-    (options: { distPath: string }) => createSeedGenerator(options),
-  ],
+  [KyselyGeneratorID, (options: { distPath: string }) => new KyselyGenerator(options)],
+  [SeedGeneratorID, (options: { distPath: string }) => createSeedGenerator(options)],
   [
     EnumConstantsGeneratorID,
     (options: { distPath: string }) => new EnumConstantsGenerator(options),
   ],
-  [
-    FileUtilsGeneratorID,
-    (options: { distPath: string }) => new FileUtilsGenerator(options),
-  ],
+  [FileUtilsGeneratorID, (options: { distPath: string }) => new FileUtilsGenerator(options)],
 ]);
 
-export const GeneratorConfigSchema =
-  createGeneratorConfigSchema(builtinGenerators);
+export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
 
 export async function loadConfig(
   configPath?: string,

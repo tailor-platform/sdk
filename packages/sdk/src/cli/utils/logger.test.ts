@@ -14,12 +14,9 @@ describe("logger", () => {
       }));
 
       // Import logger after mocking - this gets the mocked version
-      const { logger: ciLogger, CIPromptError: CIError } =
-        await import("./logger");
+      const { logger: ciLogger, CIPromptError: CIError } = await import("./logger");
 
-      expect(() => ciLogger.prompt("test", { type: "confirm" })).toThrow(
-        CIError,
-      );
+      expect(() => ciLogger.prompt("test", { type: "confirm" })).toThrow(CIError);
       expect(() => ciLogger.prompt("test", { type: "confirm" })).toThrow(
         /Interactive prompts are not available in CI environments/,
       );

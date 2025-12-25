@@ -9,13 +9,7 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 import { defineCommand } from "citty";
 import ora from "ora";
 import { table } from "table";
-import {
-  commonArgs,
-  jsonArgs,
-  parseDuration,
-  withCommonArgs,
-  workspaceArgs,
-} from "../args";
+import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
@@ -219,17 +213,14 @@ export async function getWorkflowExecution(
       throw new Error(`Execution '${executionId}' not found.`);
     }
 
-    const result: WorkflowExecutionDetailInfo =
-      toWorkflowExecutionInfo(execution);
+    const result: WorkflowExecutionDetailInfo = toWorkflowExecutionInfo(execution);
 
     if (includeLogs && execution.jobExecutions.length > 0) {
       result.jobDetails = await Promise.all(
         execution.jobExecutions.map(async (job) => {
           const jobInfo = toWorkflowJobExecutionInfo(job);
           if (job.executionId) {
-            const functionExecution = await fetchFunctionExecution(
-              job.executionId,
-            );
+            const functionExecution = await fetchFunctionExecution(job.executionId);
             if (functionExecution) {
               return {
                 ...jobInfo,
@@ -264,20 +255,14 @@ export async function getWorkflowExecution(
         execution.status === WorkflowExecution_Status.SUCCESS ||
         execution.status === WorkflowExecution_Status.FAILED
       ) {
-        return await fetchExecutionWithLogs(
-          options.executionId,
-          options.logs ?? false,
-        );
+        return await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
       }
 
       await sleep(interval);
     }
   }
 
-  const execution = await fetchExecutionWithLogs(
-    options.executionId,
-    options.logs ?? false,
-  );
+  const execution = await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
 
   return {
     execution,
@@ -302,9 +287,7 @@ async function waitWithSpinner(
   try {
     const result = await waitFn();
     const coloredStatus = colorizeStatus(
-      WorkflowExecution_Status[
-        result.status as keyof typeof WorkflowExecution_Status
-      ],
+      WorkflowExecution_Status[result.status as keyof typeof WorkflowExecution_Status],
     );
     if (result.status === "SUCCESS") {
       spinner?.succeed(`Completed: ${coloredStatus}`);
@@ -318,9 +301,7 @@ async function waitWithSpinner(
   }
 }
 
-export function printExecutionWithLogs(
-  execution: WorkflowExecutionDetailInfo,
-): void {
+export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
   // Print execution summary
   const summaryData: [string, string][] = [
     ["id", execution.id],
@@ -353,9 +334,7 @@ export function printExecutionWithLogs(
         logger.log(styles.success("\n  Result:"));
         try {
           const parsed = JSON.parse(job.result);
-          logger.log(
-            `    ${JSON.stringify(parsed, null, 2).split("\n").join("\n    ")}`,
-          );
+          logger.log(`    ${JSON.stringify(parsed, null, 2).split("\n").join("\n    ")}`);
         } catch {
           logger.log(`    ${job.result}`);
         }
@@ -410,9 +389,7 @@ export const executionsCommand = defineCommand({
         logger.info(`Execution ID: ${execution.id}`, { mode: "stream" });
       }
 
-      const result = args.wait
-        ? await waitWithSpinner(wait, interval, args.json)
-        : execution;
+      const result = args.wait ? await waitWithSpinner(wait, interval, args.json) : execution;
 
       if (args.logs && !args.json) {
         printExecutionWithLogs(result);

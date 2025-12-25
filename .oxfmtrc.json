@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [
+    "node_modules/",
+    "pnpm-lock.yaml",
+    "dist/",
+    "build/",
+    "out/",
+    "*.tsbuildinfo",
+    "logs",
+    "*.log",
+    "npm-debug.log*",
+    "yarn-debug.log*",
+    "yarn-error.log*",
+    "pnpm-debug.log*",
+    "lerna-debug.log*",
+    ".eslintcache",
+    "coverage/",
+    ".tailor-sdk",
+    "example/tests/fixtures/",
+    "example/generated/",
+    "example/seed/",
+    "packages/tailor-proto/",
+    "packages/create-sdk/templates/**"
+  ]
+}

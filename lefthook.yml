@@ -10,7 +10,29 @@ pre-commit:
 
     2-format:
       glob: "*.{ts,js,json,md,yml,yaml}"
-      run: npx prettier --check {staged_files}
+      exclude:
+        - "node_modules/**"
+        - "pnpm-lock.yaml"
+        - "dist/**"
+        - "build/**"
+        - "out/**"
+        - "*.tsbuildinfo"
+        - "logs/**"
+        - "*.log"
+        - "npm-debug.log*"
+        - "yarn-debug.log*"
+        - "yarn-error.log*"
+        - "pnpm-debug.log*"
+        - "lerna-debug.log*"
+        - ".eslintcache"
+        - "coverage/**"
+        - ".tailor-sdk/**"
+        - "example/tests/fixtures/**"
+        - "example/generated/**"
+        - "example/seed/**"
+        - "packages/tailor-proto/**"
+        - "packages/create-sdk/templates/**"
+      run: pnpm oxfmt --check {staged_files}
 
     3-lint:
       glob: "*.{ts,js}"

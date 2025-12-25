@@ -22,12 +22,8 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.Employee.backwardRelationships).toHaveProperty(
-        "performanceReviews",
-      );
-      expect(
-        result.Employee.backwardRelationships.performanceReviews,
-      ).toMatchObject({
+      expect(result.Employee.backwardRelationships).toHaveProperty("performanceReviews");
+      expect(result.Employee.backwardRelationships.performanceReviews).toMatchObject({
         name: "performanceReviews",
         targetType: "PerformanceReview",
         targetField: "employeeId",
@@ -55,22 +51,13 @@ describe("parseTypes", () => {
       });
 
       expect(() =>
-        parseTypes(
-          { Employee: employee, PerformanceReview: performanceReview },
-          "test-namespace",
-        ),
+        parseTypes({ Employee: employee, PerformanceReview: performanceReview }, "test-namespace"),
       ).toThrow(/Backward relation name conflicts detected/);
       expect(() =>
-        parseTypes(
-          { Employee: employee, PerformanceReview: performanceReview },
-          "test-namespace",
-        ),
+        parseTypes({ Employee: employee, PerformanceReview: performanceReview }, "test-namespace"),
       ).toThrow(/performanceReviews/);
       expect(() =>
-        parseTypes(
-          { Employee: employee, PerformanceReview: performanceReview },
-          "test-namespace",
-        ),
+        parseTypes({ Employee: employee, PerformanceReview: performanceReview }, "test-namespace"),
       ).toThrow(/Employee/);
     });
 
@@ -98,26 +85,18 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.Employee.backwardRelationships).toHaveProperty(
-        "targetReviews",
-      );
-      expect(result.Employee.backwardRelationships).toHaveProperty(
-        "authorReviews",
-      );
-      expect(result.Employee.backwardRelationships.targetReviews).toMatchObject(
-        {
-          name: "targetReviews",
-          targetType: "PerformanceReview",
-          targetField: "targetEmployeeId",
-        },
-      );
-      expect(result.Employee.backwardRelationships.authorReviews).toMatchObject(
-        {
-          name: "authorReviews",
-          targetType: "PerformanceReview",
-          targetField: "authorEmployeeId",
-        },
-      );
+      expect(result.Employee.backwardRelationships).toHaveProperty("targetReviews");
+      expect(result.Employee.backwardRelationships).toHaveProperty("authorReviews");
+      expect(result.Employee.backwardRelationships.targetReviews).toMatchObject({
+        name: "targetReviews",
+        targetType: "PerformanceReview",
+        targetField: "targetEmployeeId",
+      });
+      expect(result.Employee.backwardRelationships.authorReviews).toMatchObject({
+        name: "authorReviews",
+        targetType: "PerformanceReview",
+        targetField: "authorEmployeeId",
+      });
     });
 
     it("should include source file information in error message when available", () => {
@@ -188,10 +167,7 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes(
-        { User: user, Profile: profile },
-        "test-namespace",
-      );
+      const result = parseTypes({ User: user, Profile: profile }, "test-namespace");
 
       expect(result.User.backwardRelationships).toHaveProperty("profile");
       expect(result.User.backwardRelationships.profile).toMatchObject({
@@ -216,9 +192,7 @@ describe("parseTypes", () => {
         }),
       });
 
-      expect(() =>
-        parseTypes({ User: user, Post: post }, "test-namespace"),
-      ).toThrow(/posts/);
+      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(/posts/);
     });
 
     it("should throw error when backward name conflicts with files field", () => {
@@ -238,9 +212,7 @@ describe("parseTypes", () => {
         }),
       });
 
-      expect(() =>
-        parseTypes({ User: user, Post: post }, "test-namespace"),
-      ).toThrow(/posts/);
+      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(/posts/);
     });
   });
 });

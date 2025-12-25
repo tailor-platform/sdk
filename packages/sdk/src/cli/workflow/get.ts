@@ -28,9 +28,7 @@ export async function resolveWorkflow(
   return workflow;
 }
 
-export async function getWorkflow(
-  options: GetWorkflowOptions,
-): Promise<WorkflowInfo> {
+export async function getWorkflow(options: GetWorkflowOptions): Promise<WorkflowInfo> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,

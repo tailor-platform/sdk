@@ -31,15 +31,9 @@ export type { Executor } from "@/parser/service/executor";
 
 export { show, type ShowOptions, type ApplicationInfo } from "./show";
 export { remove, type RemoveOptions } from "./remove";
-export {
-  createWorkspace,
-  type CreateWorkspaceOptions,
-} from "./workspace/create";
+export { createWorkspace, type CreateWorkspaceOptions } from "./workspace/create";
 export { listWorkspaces, type ListWorkspacesOptions } from "./workspace/list";
-export {
-  deleteWorkspace,
-  type DeleteWorkspaceOptions,
-} from "./workspace/delete";
+export { deleteWorkspace, type DeleteWorkspaceOptions } from "./workspace/delete";
 export type { WorkspaceInfo } from "./workspace/transform";
 export {
   listMachineUsers,
@@ -51,18 +45,9 @@ export {
   type GetMachineUserTokenOptions,
   type MachineUserTokenInfo,
 } from "./machineuser/token";
-export {
-  getOAuth2Client,
-  type GetOAuth2ClientOptions,
-} from "./oauth2client/get";
-export {
-  listOAuth2Clients,
-  type ListOAuth2ClientsOptions,
-} from "./oauth2client/list";
-export type {
-  OAuth2ClientInfo,
-  OAuth2ClientCredentials,
-} from "./oauth2client/transform";
+export { getOAuth2Client, type GetOAuth2ClientOptions } from "./oauth2client/get";
+export { listOAuth2Clients, type ListOAuth2ClientsOptions } from "./oauth2client/list";
+export type { OAuth2ClientInfo, OAuth2ClientCredentials } from "./oauth2client/transform";
 export { listWorkflows, type ListWorkflowsOptions } from "./workflow/list";
 export { getWorkflow, type GetWorkflowOptions } from "./workflow/get";
 export {

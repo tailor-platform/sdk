@@ -31,9 +31,7 @@ async function truncateSingleType(
     tailordbTypeName: options.typeName,
   });
 
-  logger.success(
-    `Truncated type "${options.typeName}" in namespace "${options.namespaceName}"`,
-  );
+  logger.success(`Truncated type "${options.typeName}" in namespace "${options.namespaceName}"`);
 }
 
 async function truncateNamespace(
@@ -111,9 +109,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
   // All options are mutually exclusive
   const optionCount = [hasAll, hasNamespace, hasTypes].filter(Boolean).length;
   if (optionCount === 0) {
-    throw new Error(
-      "Please specify one of: --all, --namespace <name>, or type names",
-    );
+    throw new Error("Please specify one of: --all, --namespace <name>, or type names");
   }
   if (optionCount > 1) {
     throw new Error(
@@ -191,12 +187,7 @@ export async function truncate(options?: TruncateOptions): Promise<void> {
     const notFoundTypes: string[] = [];
 
     for (const typeName of typeNames) {
-      const namespace = await getTypeNamespace(
-        workspaceId,
-        typeName,
-        client,
-        options.configPath,
-      );
+      const namespace = await getTypeNamespace(workspaceId, typeName, client, options.configPath);
 
       if (namespace) {
         typeNamespaceMap.set(typeName, namespace);
@@ -277,10 +268,7 @@ export const truncateCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     // Get type names from rest arguments (_)
-    const types =
-      args._.length > 0
-        ? args._.map((arg) => String(arg)).filter(Boolean)
-        : undefined;
+    const types = args._.length > 0 ? args._.map((arg) => String(arg)).filter(Boolean) : undefined;
     await truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,

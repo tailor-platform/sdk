@@ -136,9 +136,7 @@ describe("TailorField array option tests", () => {
 describe("TailorField enum field tests", () => {
   it("set enum field by passing string", () => {
     const enumField = t.enum(["active", "inactive", "pending"]);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
-      "active" | "inactive" | "pending"
-    >();
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
     expect(enumField.metadata.allowedValues).toEqual([
       { value: "active", description: "" },
       { value: "inactive", description: "" },
@@ -152,9 +150,7 @@ describe("TailorField enum field tests", () => {
       { value: "medium" },
       { value: "large", description: "Large size" },
     ]);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
-      "small" | "medium" | "large"
-    >();
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"small" | "medium" | "large">();
     expect(enumField.metadata.allowedValues).toEqual([
       { value: "small", description: "Small size" },
       { value: "medium", description: "" },
@@ -163,14 +159,8 @@ describe("TailorField enum field tests", () => {
   });
 
   it("set enum field by mixing string and object", () => {
-    const enumField = t.enum([
-      "red",
-      { value: "green", description: "Green color" },
-      "blue",
-    ]);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
-      "red" | "green" | "blue"
-    >();
+    const enumField = t.enum(["red", { value: "green", description: "Green color" }, "blue"]);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"red" | "green" | "blue">();
     expect(enumField.metadata.allowedValues).toEqual([
       { value: "red", description: "" },
       { value: "green", description: "Green color" },
@@ -274,9 +264,7 @@ describe("TailorType type consistency tests", () => {
       name: t.string(),
       age: t.int(),
     });
-    expectTypeOf<output<typeof _type1>>().toEqualTypeOf<
-      output<typeof _type2>
-    >();
+    expectTypeOf<output<typeof _type1>>().toEqualTypeOf<output<typeof _type2>>();
   });
 });
 

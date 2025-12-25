@@ -17,17 +17,11 @@ export interface WorkflowLocation {
 /**
  * Find all workflows by detecting createWorkflow calls from \@tailor-platform/sdk
  */
-export function findAllWorkflows(
-  program: Program,
-  _sourceText: string,
-): WorkflowLocation[] {
+export function findAllWorkflows(program: Program, _sourceText: string): WorkflowLocation[] {
   const workflows: WorkflowLocation[] = [];
   const bindings = collectSdkBindings(program, "createWorkflow");
 
-  function walk(
-    node: ASTNode | null | undefined,
-    parents: ASTNode[] = [],
-  ): void {
+  function walk(node: ASTNode | null | undefined, parents: ASTNode[] = []): void {
     if (!node || typeof node !== "object") return;
 
     // Detect createWorkflow(...) calls
@@ -86,9 +80,7 @@ export function findAllWorkflows(
 /**
  * Build a map from export name to workflow name from detected workflows
  */
-export function buildWorkflowNameMap(
-  workflows: WorkflowLocation[],
-): Map<string, string> {
+export function buildWorkflowNameMap(workflows: WorkflowLocation[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const workflow of workflows) {
     if (workflow.exportName) {

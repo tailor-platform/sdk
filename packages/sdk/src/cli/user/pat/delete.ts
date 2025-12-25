@@ -35,8 +35,6 @@ export const deleteCommand = defineCommand({
       name: args.name,
     });
 
-    logger.success(
-      `Personal access token "${args.name}" deleted successfully.`,
-    );
+    logger.success(`Personal access token "${args.name}" deleted successfully.`);
   }),
 });

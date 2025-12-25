@@ -1,9 +1,4 @@
-import type {
-  TailorDBField,
-  DBFieldMetadata,
-  Hook,
-  OperatorFieldConfig,
-} from "./types";
+import type { TailorDBField, DBFieldMetadata, Hook, OperatorFieldConfig } from "./types";
 
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.
@@ -34,9 +29,7 @@ export const stringifyFunction = (fn: Function): string => {
  * Convert a hook function to a script expression.
  */
 const convertHookToExpr = (
-  fn: NonNullable<
-    Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]
-  >,
+  fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,
 ): string => {
   const normalized = stringifyFunction(fn);
   return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
@@ -47,22 +40,16 @@ const convertHookToExpr = (
  * This transforms user-defined functions into script expressions.
  */
 
-export function parseFieldConfig(
-  field: TailorDBField<any, any>,
-): OperatorFieldConfig {
+export function parseFieldConfig(field: TailorDBField<any, any>): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
 
-  const nestedFields = field.fields as
-    | Record<string, TailorDBField<any, any>>
-    | undefined;
+  const nestedFields = field.fields as Record<string, TailorDBField<any, any>> | undefined;
 
   return {
     type: fieldType,
     ...metadata,
-    ...(fieldType === "nested" &&
-    nestedFields &&
-    Object.keys(nestedFields).length > 0
+    ...(fieldType === "nested" && nestedFields && Object.keys(nestedFields).length > 0
       ? {
           fields: Object.entries(nestedFields).reduce(
             (acc, [key, nestedField]) => {
@@ -104,8 +91,7 @@ export function parseFieldConfig(
       ? {
           start: metadata.serial.start,
           maxValue: metadata.serial.maxValue,
-          format:
-            "format" in metadata.serial ? metadata.serial.format : undefined,
+          format: "format" in metadata.serial ? metadata.serial.format : undefined,
         }
       : undefined,
   };

@@ -1,8 +1,4 @@
-import type {
-  IdPLangSchema,
-  IdPSchema,
-  IdPUserAuthPolicySchema,
-} from "./schema";
+import type { IdPLangSchema, IdPSchema, IdPUserAuthPolicySchema } from "./schema";
 import type { z } from "zod";
 
 export type IdP = z.output<typeof IdPSchema>;

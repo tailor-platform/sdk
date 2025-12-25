@@ -68,14 +68,9 @@ export type FieldOptions = {
 };
 
 // Return Output type based on FieldOptions.
-export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<
-  ArrayFieldOutput<T, O>,
-  O
->;
+export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;
 
-type OptionalFieldOutput<T, O extends FieldOptions> = O["optional"] extends true
-  ? T | null
-  : T;
+type OptionalFieldOutput<T, O extends FieldOptions> = O["optional"] extends true ? T | null : T;
 
 export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
   {

@@ -8,10 +8,7 @@ import {
 } from "@/cli/application/workflow/service";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
-import {
-  buildTriggerContext,
-  type TriggerContext,
-} from "@/cli/bundler/trigger-context";
+import { buildTriggerContext, type TriggerContext } from "@/cli/bundler/trigger-context";
 import {
   bundleWorkflowJobs,
   type BundleWorkflowJobsResult,
@@ -35,10 +32,7 @@ import {
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
-import {
-  applyStaticWebsite,
-  planStaticWebsite,
-} from "./services/staticwebsite";
+import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
@@ -63,19 +57,14 @@ export interface PlanContext {
   forRemoval: boolean;
 }
 
-export type ApplyPhase =
-  | "create-update"
-  | "delete"
-  | "delete-resources"
-  | "delete-services";
+export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
   const { config, configPath } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
-  const buildOnly =
-    options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
+  const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
@@ -102,9 +91,7 @@ export async function apply(options?: ApplyOptions) {
   }
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
-    const mainJobNames = workflowResult.workflowSources.map(
-      (ws) => ws.workflow.mainJob.name,
-    );
+    const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
     workflowBuildResult = await buildWorkflow(
       workflowResult.jobs,
       mainJobNames,
@@ -215,9 +202,7 @@ export async function apply(options?: ApplyOptions) {
     ...workflow.resourceOwners,
   ]);
   const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
-  const emptyApps = [...conflictOwners].filter(
-    (owner) => !resourceOwners.has(owner),
-  );
+  const emptyApps = [...conflictOwners].filter((owner) => !resourceOwners.has(owner));
   for (const emptyApp of emptyApps) {
     app.deletes.push({
       name: emptyApp,
@@ -282,10 +267,7 @@ async function buildPipeline(
   await bundleResolvers(namespace, config, triggerContext);
 }
 
-async function buildExecutor(
-  config: FileLoadConfig,
-  triggerContext?: TriggerContext,
-) {
+async function buildExecutor(config: FileLoadConfig, triggerContext?: TriggerContext) {
   await bundleExecutors(config, triggerContext);
 }
 

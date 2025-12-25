@@ -19,9 +19,7 @@ const templatesDir = () => resolve(import.meta.dirname, "..", "templates");
 
 const availableTemplates = async () => {
   const entries = await readdir(templatesDir(), { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 };
 
 const templateHints: Record<string, string | undefined> = {
@@ -53,10 +51,7 @@ const validateTemplate = async (template: string) => {
   }
 };
 
-export const collectContext = async ({
-  name,
-  template,
-}: Opts): Promise<Context> => {
+export const collectContext = async ({ name, template }: Opts): Promise<Context> => {
   if (name) {
     const err = validateName(name);
     if (err) {

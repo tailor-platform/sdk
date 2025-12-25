@@ -1,15 +1,10 @@
 import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
-import {
-  type DefinedFieldMetadata,
-  type FieldMetadata,
-} from "@/configure/types/types";
+import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorDBField } from "./schema";
 import type { NonEmptyObject } from "type-fest";
 
-export type SerialConfig<
-  T extends "string" | "integer" = "string" | "integer",
-> = Prettify<
+export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
   {
     start: number;
     maxValue?: number;
@@ -47,13 +42,8 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   relation?: boolean;
 }
 
-export type ExcludeNestedDBFields<
-  T extends Record<string, TailorDBField<any, any>>,
-> = {
-  [K in keyof T]: T[K] extends TailorDBField<
-    { type: "nested"; array: boolean },
-    any
-  >
+export type ExcludeNestedDBFields<T extends Record<string, TailorDBField<any, any>>> = {
+  [K in keyof T]: T[K] extends TailorDBField<{ type: "nested"; array: boolean }, any>
     ? never
     : T[K];
 };

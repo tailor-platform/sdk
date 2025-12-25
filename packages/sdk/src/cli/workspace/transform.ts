@@ -14,11 +14,7 @@ export const workspaceInfo = (workspace: Workspace): WorkspaceInfo => {
     id: workspace.id,
     name: workspace.name,
     region: workspace.region,
-    createdAt: workspace.createTime
-      ? timestampDate(workspace.createTime).toISOString()
-      : "N/A",
-    updatedAt: workspace.updateTime
-      ? timestampDate(workspace.updateTime).toISOString()
-      : "N/A",
+    createdAt: workspace.createTime ? timestampDate(workspace.createTime).toISOString() : "N/A",
+    updatedAt: workspace.updateTime ? timestampDate(workspace.updateTime).toISOString() : "N/A",
   };
 };

@@ -6,9 +6,7 @@ import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
  * Processor that collects file fields and generates TypeWithFiles interface.
  */
 export class FileProcessor {
-  static async processType(
-    type: ParsedTailorDBType,
-  ): Promise<FileUtilMetadata> {
+  static async processType(type: ParsedTailorDBType): Promise<FileUtilMetadata> {
     const fileFields: string[] = [];
 
     if (type.files) {

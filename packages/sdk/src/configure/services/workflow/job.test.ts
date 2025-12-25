@@ -221,9 +221,7 @@ describe("WorkflowJob type constraints", () => {
           return Math.random() > 0.5 ? { value: 1 } : undefined;
         },
       });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<
-        { value: number } | undefined
-      >();
+      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{ value: number } | undefined>();
     });
   });
 
@@ -246,8 +244,7 @@ describe("WorkflowJob type constraints", () => {
       });
       // trigger should require the input parameter
       // Using type assertion to verify the signature
-      const _trigger: (input: { id: string }) => Promise<{ result: string }> =
-        job.trigger;
+      const _trigger: (input: { id: string }) => Promise<{ result: string }> = job.trigger;
       expectTypeOf(_trigger).toBeFunction();
     });
   });
@@ -267,11 +264,7 @@ describe("WorkflowJob type constraints", () => {
 
     it("WorkflowJob Output constraint is Jsonifiable", () => {
       // This should compile - Date is Jsonifiable
-      type ValidJob = WorkflowJob<
-        "test",
-        undefined,
-        { timestamp: Date; result: string }
-      >;
+      type ValidJob = WorkflowJob<"test", undefined, { timestamp: Date; result: string }>;
 
       // Verify trigger return is Jsonify<Output>
       expectTypeOf<ReturnType<ValidJob["trigger"]>>().resolves.toEqualTypeOf<{

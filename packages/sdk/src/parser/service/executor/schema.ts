@@ -50,10 +50,7 @@ export const WebhookOperationSchema = z.object({
   url: functionSchema,
   requestBody: functionSchema.optional(),
   headers: z
-    .record(
-      z.string(),
-      z.union([z.string(), z.object({ vault: z.string(), key: z.string() })]),
-    )
+    .record(z.string(), z.union([z.string(), z.object({ vault: z.string(), key: z.string() })]))
     .optional(),
 });
 
@@ -75,9 +72,7 @@ export const WorkflowOperationSchema = z.preprocess(
   z.object({
     kind: z.literal("workflow"),
     workflowName: z.string(),
-    args: z
-      .union([z.record(z.string(), z.unknown()), functionSchema])
-      .optional(),
+    args: z.union([z.record(z.string(), z.unknown()), functionSchema]).optional(),
     authInvoker: AuthInvokerSchema.optional(),
   }),
 );

@@ -41,9 +41,7 @@ describe("E2E: Service deletion order", () => {
   beforeAll(async () => {
     // Check for required environment variable
     if (!process.env.TAILOR_PLATFORM_TOKEN) {
-      throw new Error(
-        "TAILOR_PLATFORM_TOKEN environment variable must be set to run E2E tests",
-      );
+      throw new Error("TAILOR_PLATFORM_TOKEN environment variable must be set to run E2E tests");
     }
 
     // Initialize client
@@ -58,9 +56,7 @@ describe("E2E: Service deletion order", () => {
     }
 
     // Create workspace dynamically
-    console.log(
-      `Creating workspace "${testWorkspaceName}" in region "${region}"...`,
-    );
+    console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
     const createResp = await client.createWorkspace({
       workspaceName: testWorkspaceName,
       workspaceRegion: region,
@@ -77,11 +73,7 @@ describe("E2E: Service deletion order", () => {
     // Create temp directory and symlink @tailor-platform/sdk for module resolution
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-test-"));
-    const nodeModulesDir = path.join(
-      tempDir,
-      "node_modules",
-      "@tailor-platform",
-    );
+    const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
     fs.mkdirSync(nodeModulesDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
   }, 120000); // 2 minute timeout for workspace creation

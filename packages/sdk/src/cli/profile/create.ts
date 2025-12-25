@@ -1,11 +1,7 @@
 import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
-import {
-  fetchLatestToken,
-  readPlatformConfig,
-  writePlatformConfig,
-} from "../context";
+import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "../context";
 import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";

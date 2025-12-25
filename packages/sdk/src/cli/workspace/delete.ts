@@ -9,9 +9,7 @@ const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
 });
 
-export type DeleteWorkspaceOptions = z.input<
-  typeof deleteWorkspaceOptionsSchema
->;
+export type DeleteWorkspaceOptions = z.input<typeof deleteWorkspaceOptionsSchema>;
 
 async function loadOptions(options: DeleteWorkspaceOptions) {
   // Validate options with zod schema
@@ -29,9 +27,7 @@ async function loadOptions(options: DeleteWorkspaceOptions) {
   };
 }
 
-export async function deleteWorkspace(
-  options: DeleteWorkspaceOptions,
-): Promise<void> {
+export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<void> {
   // Load and validate options
   const { client, workspaceId } = await loadOptions(options);
 

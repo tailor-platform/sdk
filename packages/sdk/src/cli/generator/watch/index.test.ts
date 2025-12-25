@@ -15,12 +15,7 @@ vi.mock("madge", () => ({
   default: madgeMock,
 }));
 
-import {
-  DependencyGraphManager,
-  DependencyWatcher,
-  WatcherError,
-  WatcherErrorCode,
-} from "./index";
+import { DependencyGraphManager, DependencyWatcher, WatcherError, WatcherErrorCode } from "./index";
 
 let manager: DependencyGraphManager;
 
@@ -43,10 +38,7 @@ async function createTempDir(): Promise<string> {
 /**
  * Create files for testing
  */
-async function createTestFile(
-  filePath: string,
-  content: string,
-): Promise<void> {
+async function createTestFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content);
 }
@@ -122,23 +114,17 @@ describe("DependencyWatcher", () => {
 
       await watcher.addWatchGroup("test-group", [testFile]);
 
-      await expect(
-        watcher.addWatchGroup("test-group", [testFile]),
-      ).rejects.toThrow(WatcherError);
+      await expect(watcher.addWatchGroup("test-group", [testFile])).rejects.toThrow(WatcherError);
     });
   });
 
   describe("validation", () => {
     it("invalid group ID causes error", async () => {
-      await expect(watcher.addWatchGroup("", ["test.ts"])).rejects.toThrow(
-        WatcherError,
-      );
+      await expect(watcher.addWatchGroup("", ["test.ts"])).rejects.toThrow(WatcherError);
     });
 
     it("empty pattern array causes error", async () => {
-      await expect(watcher.addWatchGroup("test-group", [])).rejects.toThrow(
-        WatcherError,
-      );
+      await expect(watcher.addWatchGroup("test-group", [])).rejects.toThrow(WatcherError);
     });
   });
 
@@ -254,16 +240,10 @@ describe("DependencyGraphManager", () => {
 
 describe("WatcherErrorCode", () => {
   it("all error codes are defined", () => {
-    expect(WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED).toBe(
-      "DEPENDENCY_ANALYSIS_FAILED",
-    );
+    expect(WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED).toBe("DEPENDENCY_ANALYSIS_FAILED");
     expect(WatcherErrorCode.FILE_WATCH_FAILED).toBe("FILE_WATCH_FAILED");
-    expect(WatcherErrorCode.CIRCULAR_DEPENDENCY_DETECTED).toBe(
-      "CIRCULAR_DEPENDENCY_DETECTED",
-    );
+    expect(WatcherErrorCode.CIRCULAR_DEPENDENCY_DETECTED).toBe("CIRCULAR_DEPENDENCY_DETECTED");
     expect(WatcherErrorCode.INVALID_WATCH_GROUP).toBe("INVALID_WATCH_GROUP");
-    expect(WatcherErrorCode.MADGE_INITIALIZATION_FAILED).toBe(
-      "MADGE_INITIALIZATION_FAILED",
-    );
+    expect(WatcherErrorCode.MADGE_INITIALIZATION_FAILED).toBe("MADGE_INITIALIZATION_FAILED");
   });
 });

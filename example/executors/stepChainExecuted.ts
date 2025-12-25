@@ -14,8 +14,7 @@ export default createExecutor({
   }),
   operation: {
     kind: "webhook",
-    url: ({ result }) =>
-      `https://example.com/webhook/${result!.result.summary.length}`,
+    url: ({ result }) => `https://example.com/webhook/${result!.result.summary.length}`,
     headers: {
       "Content-Type": "application/json",
       Authorization: { vault: "my-vault", key: "my-secret" },

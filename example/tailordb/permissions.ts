@@ -9,11 +9,7 @@ const defaultMachineUser = [
   "=",
   "MANAGER",
 ] as const satisfies PermissionCondition;
-const loggedIn = [
-  { user: "_loggedIn" },
-  "=",
-  true,
-] as const satisfies PermissionCondition;
+const loggedIn = [{ user: "_loggedIn" }, "=", true] as const satisfies PermissionCondition;
 
 export const defaultPermission: TailorTypePermission = {
   create: [defaultMachineUser],

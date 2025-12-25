@@ -2,11 +2,7 @@ import { z } from "zod";
 import type { CodeGeneratorBase } from "./types";
 
 // Dependency kind enum for generators
-export const DependencyKindSchema = z.enum([
-  "tailordb",
-  "resolver",
-  "executor",
-]);
+export const DependencyKindSchema = z.enum(["tailordb", "resolver", "executor"]);
 export type DependencyKind = z.infer<typeof DependencyKindSchema>;
 
 // Literal-based schemas for each generator
@@ -87,7 +83,5 @@ export function createGeneratorConfigSchema(
     .brand("CodeGenerator");
 }
 
-export type GeneratorConfigSchemaType = ReturnType<
-  typeof createGeneratorConfigSchema
->;
+export type GeneratorConfigSchemaType = ReturnType<typeof createGeneratorConfigSchema>;
 export type Generator = z.output<GeneratorConfigSchemaType>;

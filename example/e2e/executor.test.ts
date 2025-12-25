@@ -13,9 +13,7 @@ describe("controlplane", async () => {
     const { executors } = await client.listExecutorExecutors({ workspaceId });
     expect(executors.length).toBe(4);
 
-    const salesOrderCreated = executors.find(
-      (e) => e.name === "sales-order-created",
-    );
+    const salesOrderCreated = executors.find((e) => e.name === "sales-order-created");
     expect(salesOrderCreated).toMatchObject({
       name: "sales-order-created",
       description: "Triggered when a new sales order is created",
@@ -43,9 +41,7 @@ describe("controlplane", async () => {
       },
     });
 
-    const stepChainExecuted = executors.find(
-      (e) => e.name === "step-chain-executed",
-    );
+    const stepChainExecuted = executors.find((e) => e.name === "step-chain-executed");
     expect(stepChainExecuted).toMatchObject({
       name: "step-chain-executed",
       description: "Triggered when a step chain is executed",
@@ -148,8 +144,7 @@ describe("dataplane", () => {
           id: string;
         };
       }
-      const createCustomerResult =
-        await graphQLClient.rawRequest<CreateCustomer>(createCustomer);
+      const createCustomerResult = await graphQLClient.rawRequest<CreateCustomer>(createCustomer);
       expect(createCustomerResult.errors).toBeUndefined();
       const customerId = createCustomerResult.data.createCustomer.id;
 

@@ -3,10 +3,7 @@ import { t } from "@/configure/types";
 import { db } from "./schema";
 import type { Hook } from "./types";
 import type { output } from "@/configure/types/helpers";
-import type {
-  FieldValidateInput,
-  ValidateConfig,
-} from "@/configure/types/validation";
+import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
 
 describe("TailorDBField basic field type tests", () => {
   it("string field outputs string type correctly", () => {
@@ -155,9 +152,7 @@ describe("TailorDBField array option tests", () => {
 describe("TailorDBField enum field tests", () => {
   it("set enum field by passing string", () => {
     const enumField = db.enum(["active", "inactive", "pending"]);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
-      "active" | "inactive" | "pending"
-    >();
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
     expect(enumField.metadata.allowedValues).toEqual([
       { value: "active", description: "" },
       { value: "inactive", description: "" },
@@ -171,9 +166,7 @@ describe("TailorDBField enum field tests", () => {
       { value: "medium" },
       { value: "large", description: "Large size" },
     ]);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
-      "small" | "medium" | "large"
-    >();
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"small" | "medium" | "large">();
     expect(enumField.metadata.allowedValues).toEqual([
       { value: "small", description: "Small size" },
       { value: "medium", description: "" },
@@ -182,14 +175,8 @@ describe("TailorDBField enum field tests", () => {
   });
 
   it("set enum field by mixing string and object", () => {
-    const enumField = db.enum([
-      "red",
-      { value: "green", description: "Green color" },
-      "blue",
-    ]);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<
-      "red" | "green" | "blue"
-    >();
+    const enumField = db.enum(["red", { value: "green", description: "Green color" }, "blue"]);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"red" | "green" | "blue">();
     expect(enumField.metadata.allowedValues).toEqual([
       { value: "red", description: "" },
       { value: "green", description: "Green color" },
@@ -455,16 +442,12 @@ describe("TailorDBField hooks modifier tests", () => {
 
   it("hooks modifier on string field receives string", () => {
     const _hooks = db.string().hooks;
-    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
-      Hook<unknown, string>
-    >();
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string>>();
   });
 
   it("hooks modifier on optional field receives null", () => {
     const _hooks = db.string({ optional: true }).hooks;
-    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<
-      Hook<unknown, string | null>
-    >();
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string | null>>();
   });
 });
 
@@ -481,9 +464,7 @@ describe("TailorDBField validate modifier tests", () => {
 
   it("validate modifier can receive object with message", () => {
     const _validateType = db.type("Test", {
-      email: db
-        .string()
-        .validate([({ value }) => value.includes("@"), "Email must contain @"]),
+      email: db.string().validate([({ value }) => value.includes("@"), "Email must contain @"]),
     });
     expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
       id: string;
@@ -495,10 +476,7 @@ describe("TailorDBField validate modifier tests", () => {
     expect(fieldMetadata.validate).toBeDefined();
     expect(fieldMetadata.validate).toHaveLength(1);
     // Error message is part of the tuple [fn, message]
-    expect(fieldMetadata.validate?.[0]).toEqual([
-      expect.any(Function),
-      "Email must contain @",
-    ]);
+    expect(fieldMetadata.validate?.[0]).toEqual([expect.any(Function), "Email must contain @"]);
   });
 
   it("validate modifier can receive multiple validators", () => {
@@ -507,10 +485,7 @@ describe("TailorDBField validate modifier tests", () => {
         .string()
         .validate(
           ({ value }) => value.length >= 8,
-          [
-            ({ value }) => /[A-Z]/.test(value),
-            "Password must contain uppercase letter",
-          ],
+          [({ value }) => /[A-Z]/.test(value), "Password must contain uppercase letter"],
         ),
     });
 
@@ -531,9 +506,7 @@ describe("TailorDBField validate modifier tests", () => {
 
   it("validate modifier on string field receives string", () => {
     const _validate = db.string().validate;
-    expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<
-      FieldValidateInput<string>
-    >();
+    expectTypeOf<Parameters<typeof _validate>[1]>().toEqualTypeOf<FieldValidateInput<string>>();
   });
 
   it("validate modifier on optional field receives null", () => {
@@ -692,9 +665,7 @@ describe("TailorDBType type consistency tests", () => {
       name: db.string(),
       age: db.int(),
     });
-    expectTypeOf<output<typeof _type1>>().toEqualTypeOf<
-      output<typeof _type2>
-    >();
+    expectTypeOf<output<typeof _type1>>().toEqualTypeOf<output<typeof _type2>>();
   });
 
   it("id field is automatically added", () => {
@@ -1014,9 +985,7 @@ describe("TailorDBType validate modifier tests", () => {
     const fieldMetadata = _validateType.fields.email.metadata;
     expect(fieldMetadata.validate).toHaveLength(1);
     // Validator is a tuple [fn, errorMessage]
-    expect((fieldMetadata.validate?.[0] as [unknown, string])[1]).toBe(
-      "Email must contain @",
-    );
+    expect((fieldMetadata.validate?.[0] as [unknown, string])[1]).toBe("Email must contain @");
   });
 
   it("validate modifier can receive multiple validators", () => {
@@ -1027,10 +996,7 @@ describe("TailorDBType validate modifier tests", () => {
       .validate({
         password: [
           ({ value }) => value.length >= 8,
-          [
-            ({ value }) => /[A-Z]/.test(value),
-            "Password must contain uppercase letter",
-          ],
+          [({ value }) => /[A-Z]/.test(value), "Password must contain uppercase letter"],
         ],
       });
 
@@ -1062,18 +1028,18 @@ describe("TailorDBType validate modifier tests", () => {
 
   it("validate modifier on string field receives string", () => {
     const _validate = db.type("Test", { name: db.string() }).validate;
-    expectTypeOf<
-      ValidateConfig<string, { id: string; name: string }>
-    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
+    expectTypeOf<ValidateConfig<string, { id: string; name: string }>>().toExtend<
+      Parameters<typeof _validate>[0]["name"]
+    >();
   });
 
   it("validate modifier on optional field receives null", () => {
     const _validate = db.type("Test", {
       name: db.string({ optional: true }),
     }).validate;
-    expectTypeOf<
-      ValidateConfig<string | null, { id: string; name?: string | null }>
-    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
+    expectTypeOf<ValidateConfig<string | null, { id: string; name?: string | null }>>().toExtend<
+      Parameters<typeof _validate>[0]["name"]
+    >();
   });
 });
 
@@ -1285,15 +1251,9 @@ describe("TailorDBType/TailorDBField description support", () => {
         .description("User information object"),
     });
 
-    expect(profileType.fields.userInfo.metadata.description).toBe(
-      "User information object",
-    );
-    expect(profileType.fields.userInfo.fields.name.metadata.description).toBe(
-      "Full name",
-    );
-    expect(profileType.fields.userInfo.fields.email.metadata.description).toBe(
-      "Email address",
-    );
+    expect(profileType.fields.userInfo.metadata.description).toBe("User information object");
+    expect(profileType.fields.userInfo.fields.name.metadata.description).toBe("Full name");
+    expect(profileType.fields.userInfo.fields.email.metadata.description).toBe("Email address");
   });
 
   it("TailorDBType can be used in resolver with description preserved", () => {

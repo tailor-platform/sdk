@@ -3,17 +3,11 @@ import * as path from "node:path";
 import ml from "multiline-ts";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import {
-  loadFilesWithIgnores,
-  type FileLoadConfig,
-} from "@/cli/application/file-loader";
+import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
-import {
-  createTriggerTransformPlugin,
-  type TriggerContext,
-} from "../trigger-context";
+import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
 import { loadExecutor } from "./loader";
 
 interface ExecutorInfo {
@@ -34,9 +28,7 @@ export async function bundleExecutors(
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
-    logger.warn(
-      `No executor files found for patterns: ${config.files?.join(", ") ?? "(none)"}`,
-    );
+    logger.warn(`No executor files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
     return;
   }
 
@@ -100,9 +92,7 @@ async function bundleSingleExecutor(
 ): Promise<void> {
   // Step 1: Create entry file that imports and extracts operation.body
   const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
-  const absoluteSourcePath = path
-    .resolve(executor.sourceFile)
-    .replace(/\\/g, "/");
+  const absoluteSourcePath = path.resolve(executor.sourceFile).replace(/\\/g, "/");
 
   const entryContent = ml /* js */ `
     import _internalExecutor from "${absoluteSourcePath}";

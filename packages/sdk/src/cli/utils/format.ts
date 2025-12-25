@@ -30,9 +30,7 @@ export function printData(data: object | object[], json: boolean = false) {
     return;
   }
 
-  const headers = Array.from(
-    new Set(data.flatMap((item) => Object.keys(item))),
-  );
+  const headers = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
 
   const rows = data.map((item) =>
     headers.map((header) => {
@@ -40,10 +38,7 @@ export function printData(data: object | object[], json: boolean = false) {
       if (value === null || value === undefined) {
         return "";
       }
-      if (
-        (header === "createdAt" || header === "updatedAt") &&
-        typeof value === "string"
-      ) {
+      if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
         return humanizeRelativeTime(value);
       }
       return String(value);

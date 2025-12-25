@@ -37,10 +37,7 @@ export type {
  * - namespace: auth service name
  * - machineUserName: machine user name
  */
-export type AuthInvoker<M extends string> = Omit<
-  ParserAuthInvoker,
-  "machineUserName"
-> & {
+export type AuthInvoker<M extends string> = Omit<ParserAuthInvoker, "machineUserName"> & {
   machineUserName: M;
 };
 
@@ -50,22 +47,14 @@ export function defineAuth<
   const AttributeMap extends UserAttributeMap<User>,
   const AttributeList extends UserAttributeListKey<User>[],
   const MachineUserNames extends string,
->(
-  name: Name,
-  config: AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames>,
-) {
+>(name: Name, config: AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames>) {
   const result = {
     ...config,
     name,
     invoker<M extends MachineUserNames>(machineUser: M) {
       return { namespace: name, machineUserName: machineUser } as const;
     },
-  } as const satisfies AuthServiceInput<
-    User,
-    AttributeMap,
-    AttributeList,
-    MachineUserNames
-  > & {
+  } as const satisfies AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames> & {
     name: string;
     invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
   };
@@ -75,8 +64,6 @@ export function defineAuth<
 
 export type AuthExternalConfig = { name: string; external: true };
 
-export type AuthOwnConfig = ReturnType<
-  typeof defineAuth<string, any, any, any, string>
->;
+export type AuthOwnConfig = ReturnType<typeof defineAuth<string, any, any, any, string>>;
 
 export type AuthConfig = AuthOwnConfig | AuthExternalConfig;

@@ -16,9 +16,9 @@ export type IncomingWebhookTrigger<Args> = ParserIncomingWebhookTrigger & {
   __args: Args;
 };
 
-export function incomingWebhookTrigger<
-  T extends IncomingWebhookRequest,
->(): IncomingWebhookTrigger<IncomingWebhookArgs<T>> {
+export function incomingWebhookTrigger<T extends IncomingWebhookRequest>(): IncomingWebhookTrigger<
+  IncomingWebhookArgs<T>
+> {
   return {
     kind: "incomingWebhook",
     __args: {} as IncomingWebhookArgs<T>,

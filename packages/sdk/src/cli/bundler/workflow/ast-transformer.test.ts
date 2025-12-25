@@ -1,10 +1,6 @@
 import { parseSync } from "oxc-parser";
 import { describe, expect, it } from "vitest";
-import {
-  findAllJobs,
-  detectTriggerCalls,
-  buildJobNameMap,
-} from "./job-detector";
+import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 import { findAllWorkflows, buildWorkflowNameMap } from "./workflow-detector";
@@ -89,10 +85,7 @@ const job = createWorkflowJob({ name: "test", body: () => { return 42; } });`;
       const jobs = findAllJobs(program, source);
 
       expect(jobs).toHaveLength(1);
-      const bodyCode = source.slice(
-        jobs[0].bodyValueRange.start,
-        jobs[0].bodyValueRange.end,
-      );
+      const bodyCode = source.slice(jobs[0].bodyValueRange.start, jobs[0].bodyValueRange.end);
       expect(bodyCode).toBe("() => { return 42; }");
     });
 
@@ -516,9 +509,7 @@ const mainJob = createWorkflowJob({
       // mainJob body is preserved
       expect(result).toContain('result: "main"');
       // trigger is transformed (job name appears in triggerJobFunction call)
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("heavy-job", undefined)',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("heavy-job", undefined)');
     });
 
     it("removes declarations of multiple other jobs", () => {
@@ -565,12 +556,8 @@ const mainJob = createWorkflowJob({
       // heavy code is removed (part of job1/job2 body)
       expect(result).not.toContain("heavy code");
       // triggers are transformed (job names appear in triggerJobFunction calls)
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("job-one", undefined)',
-      );
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("job-two", undefined)',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("job-one", undefined)');
+      expect(result).toContain('tailor.workflow.triggerJobFunction("job-two", undefined)');
     });
 
     it("does not modify jobs without trigger calls", () => {
@@ -750,15 +737,9 @@ const workflowRunId = await orderWorkflow.trigger(
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain(
-        'tailor.workflow.triggerWorkflow("order-processing"',
-      );
+      expect(result).toContain('tailor.workflow.triggerWorkflow("order-processing"');
       expect(result).toContain('{ orderId: "123", customerId: "456" }');
       expect(result).toContain('{ authInvoker: auth.invoker("admin") }');
     });
@@ -771,11 +752,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
       expect(result).toContain("{ authInvoker: authInvoker }");
@@ -790,15 +767,9 @@ const result = await fetchCustomer.trigger({ customerId: "123" });
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("fetch-customer"',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
       expect(result).toContain('{ customerId: "123" }');
     });
 
@@ -809,15 +780,9 @@ const result = await simpleJob.trigger();
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["simpleJob", "simple-job"]]);
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("simple-job", undefined)',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("simple-job", undefined)');
     });
   });
 
@@ -833,11 +798,7 @@ const event = button.trigger("click");
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       // Should remain unchanged
       expect(result).toContain('someRandomObject.trigger({ data: "test" })');
@@ -859,20 +820,12 @@ const unknown = await randomThing.trigger({ id: 3 });
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map([["fetchData", "fetch-data"]]);
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       // Known workflow transformed
-      expect(result).toContain(
-        'tailor.workflow.triggerWorkflow("order-processing"',
-      );
+      expect(result).toContain('tailor.workflow.triggerWorkflow("order-processing"');
       // Known job transformed
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("fetch-data"',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-data"');
       // Unknown NOT transformed
       expect(result).toContain("randomThing.trigger({ id: 3 })");
     });
@@ -885,11 +838,7 @@ const result = await myWorkflow.trigger({ id: 1 });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       // Not transformed because workflow needs 2 args
       expect(result).toContain("myWorkflow.trigger({ id: 1 })");
@@ -916,18 +865,10 @@ async function processOrder(orderId: string) {
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("fetch-customer"',
-      );
-      expect(result).toContain(
-        'tailor.workflow.triggerWorkflow("order-processing"',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("order-processing"');
     });
   });
 
@@ -940,11 +881,7 @@ console.log(customer);
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       // Should NOT have await before triggerJobFunction since it's synchronous
       expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
@@ -965,21 +902,13 @@ const notification = await sendNotification.trigger({ message: "Hello" });
         ["sendNotification", "send-notification"],
       ]);
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       // Should NOT have await
       expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
       // Both calls should be transformed
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("fetch-customer"',
-      );
-      expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("send-notification"',
-      );
+      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
+      expect(result).toContain('tailor.workflow.triggerJobFunction("send-notification"');
     });
 
     it("does not remove await for workflow.trigger() calls (async)", () => {
@@ -989,17 +918,11 @@ const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoke
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       // Workflow trigger is async, so await should remain (not removed)
       // The transformation replaces only the call expression, not the await
-      expect(result).toContain(
-        'await tailor.workflow.triggerWorkflow("order-processing"',
-      );
+      expect(result).toContain('await tailor.workflow.triggerWorkflow("order-processing"');
     });
 
     it("handles job.trigger() without await correctly", () => {
@@ -1009,11 +932,7 @@ const customer = fetchCustomer.trigger({ customerId: "123" });
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(
-        source,
-        workflowNameMap,
-        jobNameMap,
-      );
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       // Should transform normally without adding await
       expect(result).toContain(

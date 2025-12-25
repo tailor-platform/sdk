@@ -1,8 +1,5 @@
 import { clone } from "es-toolkit";
-import {
-  type AllowedValues,
-  type AllowedValuesOutput,
-} from "@/configure/types/field";
+import { type AllowedValues, type AllowedValuesOutput } from "@/configure/types/field";
 import { TailorField } from "@/configure/types/type";
 import {
   type FieldOptions,
@@ -10,14 +7,8 @@ import {
   type TailorFieldType,
   type TailorToTs,
 } from "@/configure/types/types";
-import {
-  type TailorDBTypeMetadata,
-  type RawPermissions,
-} from "@/parser/service/tailordb/types";
-import {
-  type TailorTypeGqlPermission,
-  type TailorTypePermission,
-} from "./permission";
+import { type TailorDBTypeMetadata, type RawPermissions } from "@/parser/service/tailordb/types";
+import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
   type DBFieldMetadata,
   type DefinedDBFieldMetadata,
@@ -29,24 +20,10 @@ import {
   type ExcludeNestedDBFields,
 } from "./types";
 import type { InferredAttributeMap } from "@/configure/types";
-import type {
-  Prettify,
-  output,
-  InferFieldsOutput,
-} from "@/configure/types/helpers";
-import type {
-  FieldValidateInput,
-  ValidateConfig,
-  Validators,
-} from "@/configure/types/validation";
+import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
+import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
 
-type RelationType =
-  | "oneToOne"
-  | "1-1"
-  | "manyToOne"
-  | "n-1"
-  | "N-1"
-  | "keyOnly";
+type RelationType = "oneToOne" | "1-1" | "manyToOne" | "n-1" | "N-1" | "keyOnly";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -208,15 +185,10 @@ export class TailorDBField<
   }
 
   index<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { index: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
+    this: CurrentDefined extends { index: unknown } ? never : TailorDBField<CurrentDefined, Output>,
   ) {
     this._metadata.index = true;
-    return this as TailorDBField<
-      Prettify<CurrentDefined & { index: true }>,
-      Output
-    >;
+    return this as TailorDBField<Prettify<CurrentDefined & { index: true }>, Output>;
   }
 
   unique<CurrentDefined extends Defined>(
@@ -226,10 +198,7 @@ export class TailorDBField<
   ) {
     this._metadata.unique = true;
     this._metadata.index = true;
-    return this as TailorDBField<
-      Prettify<CurrentDefined & { unique: true; index: true }>,
-      Output
-    >;
+    return this as TailorDBField<Prettify<CurrentDefined & { unique: true; index: true }>, Output>;
   }
 
   vector<CurrentDefined extends Defined>(
@@ -240,10 +209,7 @@ export class TailorDBField<
         : never,
   ) {
     this._metadata.vector = true;
-    return this as TailorDBField<
-      Prettify<CurrentDefined & { vector: true }>,
-      Output
-    >;
+    return this as TailorDBField<Prettify<CurrentDefined & { vector: true }>, Output>;
   }
 
   hooks<CurrentDefined extends Defined, const H extends Hook<unknown, Output>>(
@@ -276,10 +242,7 @@ export class TailorDBField<
     ...validate: FieldValidateInput<Output>[]
   ) {
     this._metadata.validate = validate;
-    return this as TailorDBField<
-      Prettify<CurrentDefined & { validate: true }>,
-      Output
-    >;
+    return this as TailorDBField<Prettify<CurrentDefined & { validate: true }>, Output>;
   }
 
   serial<CurrentDefined extends Defined>(
@@ -320,9 +283,10 @@ export class TailorDBField<
     FieldOutput<TailorToTs[Defined["type"]], NewOpt>
   > {
     // Create a clone using Object.create to preserve prototype chain
-    const clonedField = Object.create(
-      Object.getPrototypeOf(this),
-    ) as TailorDBField<Defined, Output>;
+    const clonedField = Object.create(Object.getPrototypeOf(this)) as TailorDBField<
+      Defined,
+      Output
+    >;
 
     // Copy all properties
     Object.assign(clonedField, {
@@ -395,17 +359,11 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   { type: "enum"; array: Opt extends { array: true } ? true : false },
   FieldOutput<AllowedValuesOutput<V>, Opt>
 > {
-  return createField<"enum", Opt, AllowedValuesOutput<V>>(
-    "enum",
-    options,
-    undefined,
-    values,
-  );
+  return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
 function object<
-  const F extends Record<string, TailorDBField<any, any>> &
-    ExcludeNestedDBFields<F>,
+  const F extends Record<string, TailorDBField<any, any>> & ExcludeNestedDBFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<
@@ -434,9 +392,7 @@ export class TailorDBType<
 
     if (options.pluralForm) {
       if (name === options.pluralForm) {
-        throw new Error(
-          `The name and the plural form must be different. name=${name}`,
-        );
+        throw new Error(`The name and the plural form must be different. name=${name}`);
       }
       this._settings.pluralForm = options.pluralForm;
     }
@@ -542,10 +498,7 @@ export class TailorDBType<
 
   permission<
     U extends object = User,
-    P extends TailorTypePermission<U, output<this>> = TailorTypePermission<
-      U,
-      output<this>
-    >,
+    P extends TailorTypePermission<U, output<this>> = TailorTypePermission<U, output<this>>,
   >(permission: P) {
     const ret = this as TailorDBType<Fields, U>;
     ret._permissions.record = permission;
@@ -572,10 +525,7 @@ export class TailorDBType<
    * @param options - Optional field options to apply to picked fields
    * @returns An object containing only the specified fields
    */
-  pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
-    keys: K[],
-    options: Opt,
-  ) {
+  pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options: Opt) {
     const result = {} as Record<K, TailorDBField<any, any>>;
     for (const key of keys) {
       if (options) {
@@ -605,10 +555,7 @@ export class TailorDBType<
     const keysSet = new Set(keys);
     const result = {} as Record<string, TailorDBField<any, any>>;
     for (const key in this.fields) {
-      if (
-        Object.hasOwn(this.fields, key) &&
-        !keysSet.has(key as unknown as K)
-      ) {
+      if (Object.hasOwn(this.fields, key) && !keysSet.has(key as unknown as K)) {
         result[key] = this.fields[key];
       }
     }
@@ -623,9 +570,9 @@ export type TailorDBInstance<
 
 const idField = uuid();
 type idField = typeof idField;
-type DBType<
-  F extends { id?: never } & Record<string, TailorDBField<any, any>>,
-> = TailorDBInstance<{ id: idField } & F>;
+type DBType<F extends { id?: never } & Record<string, TailorDBField<any, any>>> = TailorDBInstance<
+  { id: idField } & F
+>;
 
 /**
  * Creates a new database type with the specified fields
@@ -633,9 +580,10 @@ type DBType<
  * @param fields - The field definitions for the type
  * @returns A new TailorDBType instance
  */
-function dbType<
-  const F extends { id?: never } & Record<string, TailorDBField<any, any>>,
->(name: string | [string, string], fields: F): DBType<F>;
+function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
+  name: string | [string, string],
+  fields: F,
+): DBType<F>;
 /**
  * Creates a new database type with the specified fields and description
  * @param name - The name of the type, or a tuple of [name, pluralForm]
@@ -643,12 +591,12 @@ function dbType<
  * @param fields - The field definitions for the type
  * @returns A new TailorDBType instance
  */
-function dbType<
-  const F extends { id?: never } & Record<string, TailorDBField<any, any>>,
->(name: string | [string, string], description: string, fields: F): DBType<F>;
-function dbType<
-  const F extends { id?: never } & Record<string, TailorDBField<any, any>>,
->(
+function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
+  name: string | [string, string],
+  description: string,
+  fields: F,
+): DBType<F>;
+function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
   name: string | [string, string],
   fieldsOrDescription: string | F,
   fields?: F,

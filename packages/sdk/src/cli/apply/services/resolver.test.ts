@@ -92,9 +92,7 @@ describe("planPipeline (resolver service level)", () => {
   }
 
   // Helper to create mock application
-  function createMockApplication(
-    resolverServices: ResolverService[],
-  ): Application {
+  function createMockApplication(resolverServices: ResolverService[]): Application {
     return {
       name: appName,
       env: {},
@@ -112,14 +110,10 @@ describe("planPipeline (resolver service level)", () => {
   describe("rename scenarios (service level)", () => {
     test("old service is deleted when renamed", async () => {
       // Existing service: "old-resolver" with app label
-      const client = createMockClient([
-        { name: "old-resolver", label: appName },
-      ]);
+      const client = createMockClient([{ name: "old-resolver", label: appName }]);
 
       // New config has "new-resolver" (renamed)
-      const application = createMockApplication([
-        createMockResolverService("new-resolver"),
-      ]);
+      const application = createMockApplication([createMockResolverService("new-resolver")]);
 
       const ctx: PlanContext = {
         client,
@@ -148,9 +142,7 @@ describe("planPipeline (resolver service level)", () => {
       ]);
 
       // Only resolver-a in config
-      const application = createMockApplication([
-        createMockResolverService("resolver-a"),
-      ]);
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
 
       const ctx: PlanContext = {
         client,
@@ -188,9 +180,10 @@ describe("planPipeline (resolver service level)", () => {
       const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(
-        result.changeSet.service.deletes.map((d) => d.name).sort(),
-      ).toEqual(["resolver-1", "resolver-2"]);
+      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+        "resolver-1",
+        "resolver-2",
+      ]);
     });
   });
 
@@ -215,9 +208,7 @@ describe("planPipeline (resolver service level)", () => {
     });
 
     test("service owned by different app is NOT deleted", async () => {
-      const client = createMockClient([
-        { name: "other-resolver", label: "other-app" },
-      ]);
+      const client = createMockClient([{ name: "other-resolver", label: "other-app" }]);
 
       const application = createMockApplication([]);
 

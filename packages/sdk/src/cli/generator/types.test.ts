@@ -15,9 +15,7 @@ import type { CodeGeneratorBase } from "@/parser/generator-config";
 describe("Generator type compatibility", () => {
   describe("TailorDBGenerator", () => {
     it("should have tailordb dependency", () => {
-      expectTypeOf<TailorDBGenerator["dependencies"]>().toEqualTypeOf<
-        readonly ["tailordb"]
-      >();
+      expectTypeOf<TailorDBGenerator["dependencies"]>().toEqualTypeOf<readonly ["tailordb"]>();
     });
 
     it("should have processType method", () => {
@@ -37,9 +35,7 @@ describe("Generator type compatibility", () => {
 
   describe("ResolverGenerator", () => {
     it("should have resolver dependency", () => {
-      expectTypeOf<ResolverGenerator["dependencies"]>().toEqualTypeOf<
-        readonly ["resolver"]
-      >();
+      expectTypeOf<ResolverGenerator["dependencies"]>().toEqualTypeOf<readonly ["resolver"]>();
     });
 
     it("should have processResolver method", () => {
@@ -59,9 +55,7 @@ describe("Generator type compatibility", () => {
 
   describe("ExecutorGenerator", () => {
     it("should have executor dependency", () => {
-      expectTypeOf<ExecutorGenerator["dependencies"]>().toEqualTypeOf<
-        readonly ["executor"]
-      >();
+      expectTypeOf<ExecutorGenerator["dependencies"]>().toEqualTypeOf<readonly ["executor"]>();
     });
 
     it("should have processExecutor method", () => {
@@ -88,9 +82,7 @@ describe("Generator type compatibility", () => {
 
     it("should have both processType and processResolver methods", () => {
       expectTypeOf<TailorDBResolverGenerator["processType"]>().toBeFunction();
-      expectTypeOf<
-        TailorDBResolverGenerator["processResolver"]
-      >().toBeFunction();
+      expectTypeOf<TailorDBResolverGenerator["processResolver"]>().toBeFunction();
     });
 
     it("should not have processExecutor", () => {
@@ -151,9 +143,7 @@ describe("Generator type compatibility", () => {
   describe("CodeGenerator generic type", () => {
     it("should correctly infer dependencies from type parameter", () => {
       type TestGen = CodeGenerator<readonly ["tailordb"]>;
-      expectTypeOf<TestGen["dependencies"]>().toEqualTypeOf<
-        readonly ["tailordb"]
-      >();
+      expectTypeOf<TestGen["dependencies"]>().toEqualTypeOf<readonly ["tailordb"]>();
     });
 
     it("should be compatible with readonly dependency arrays", () => {

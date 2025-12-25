@@ -5,11 +5,7 @@ import type { NonEmptyObject } from "type-fest";
 /**
  * Validation function type
  */
-export type ValidateFn<O, D = unknown> = (args: {
-  value: O;
-  data: D;
-  user: TailorUser;
-}) => boolean;
+export type ValidateFn<O, D = unknown> = (args: { value: O; data: D; user: TailorUser }) => boolean;
 
 /**
  * Validation configuration with custom error message

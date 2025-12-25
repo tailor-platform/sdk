@@ -32,9 +32,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         if (key === "id") {
           // Use existing id from data if provided, otherwise generate new UUID
           const existingId =
-            data && typeof data === "object"
-              ? (data as Record<string, unknown>)[key]
-              : undefined;
+            data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
           hooked[key] = existingId ?? crypto.randomUUID();
         } else if (field.type === "nested") {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

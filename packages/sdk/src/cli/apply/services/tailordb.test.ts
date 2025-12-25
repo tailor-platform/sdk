@@ -82,9 +82,7 @@ describe("planTailorDB (service level)", () => {
   }
 
   // Helper to create mock application
-  function createMockApplication(
-    tailorDBServices: TailorDBService[],
-  ): Application {
+  function createMockApplication(tailorDBServices: TailorDBService[]): Application {
     return {
       name: appName,
       env: {},
@@ -102,14 +100,10 @@ describe("planTailorDB (service level)", () => {
   describe("rename scenarios (service level)", () => {
     test("old service is deleted when renamed", async () => {
       // Existing service: "old-tailordb" with app label
-      const client = createMockClient([
-        { name: "old-tailordb", label: appName },
-      ]);
+      const client = createMockClient([{ name: "old-tailordb", label: appName }]);
 
       // New config has "new-tailordb" (renamed)
-      const application = createMockApplication([
-        createMockTailorDBService("new-tailordb"),
-      ]);
+      const application = createMockApplication([createMockTailorDBService("new-tailordb")]);
 
       const ctx: PlanContext = {
         client,
@@ -138,9 +132,7 @@ describe("planTailorDB (service level)", () => {
       ]);
 
       // Only tailordb-a in config
-      const application = createMockApplication([
-        createMockTailorDBService("tailordb-a"),
-      ]);
+      const application = createMockApplication([createMockTailorDBService("tailordb-a")]);
 
       const ctx: PlanContext = {
         client,
@@ -178,9 +170,10 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
-      expect(
-        result.changeSet.service.deletes.map((d) => d.name).sort(),
-      ).toEqual(["tailordb-1", "tailordb-2"]);
+      expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
+        "tailordb-1",
+        "tailordb-2",
+      ]);
     });
   });
 
@@ -205,9 +198,7 @@ describe("planTailorDB (service level)", () => {
     });
 
     test("service owned by different app is NOT deleted", async () => {
-      const client = createMockClient([
-        { name: "other-tailordb", label: "other-app" },
-      ]);
+      const client = createMockClient([{ name: "other-tailordb", label: "other-app" }]);
 
       const application = createMockApplication([]);
 

@@ -23,18 +23,12 @@ export interface SecretInfo {
 function secretInfo(secret: SecretManagerSecret): SecretInfo {
   return {
     name: secret.name,
-    createdAt: secret.createTime
-      ? timestampDate(secret.createTime).toISOString()
-      : "N/A",
-    updatedAt: secret.updateTime
-      ? timestampDate(secret.updateTime).toISOString()
-      : "N/A",
+    createdAt: secret.createTime ? timestampDate(secret.createTime).toISOString() : "N/A",
+    updatedAt: secret.updateTime ? timestampDate(secret.updateTime).toISOString() : "N/A",
   };
 }
 
-export async function secretList(
-  options: SecretListOptions,
-): Promise<SecretInfo[]> {
+export async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,

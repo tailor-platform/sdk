@@ -84,9 +84,7 @@ describe("planExecutor", () => {
         const executor = existingExecutors.find((e) => e.name === name);
         return {
           metadata: {
-            labels: executor?.label
-              ? { [sdkNameLabelKey]: executor.label }
-              : {},
+            labels: executor?.label ? { [sdkNameLabelKey]: executor.label } : {},
           },
         };
       }),
@@ -101,9 +99,7 @@ describe("planExecutor", () => {
       executorService: {
         loadExecutors: vi
           .fn()
-          .mockResolvedValue(
-            Object.fromEntries(executors.map((e) => [e.name, e])),
-          ),
+          .mockResolvedValue(Object.fromEntries(executors.map((e) => [e.name, e]))),
       },
     } as unknown as Application;
   }
@@ -115,14 +111,10 @@ describe("planExecutor", () => {
   describe("rename scenarios", () => {
     test("old executor is deleted when renamed", async () => {
       // Existing executor: "old-executor" with app label
-      const client = createMockClient([
-        { name: "old-executor", label: appName },
-      ]);
+      const client = createMockClient([{ name: "old-executor", label: appName }]);
 
       // New config has "new-executor" (renamed from old-executor)
-      const application = createMockApplication([
-        createMockExecutor("new-executor"),
-      ]);
+      const application = createMockApplication([createMockExecutor("new-executor")]);
 
       const ctx: PlanContext = {
         client,
@@ -190,9 +182,7 @@ describe("planExecutor", () => {
       ]);
 
       // New config only has executor-a (executor-b removed)
-      const application = createMockApplication([
-        createMockExecutor("executor-a"),
-      ]);
+      const application = createMockApplication([createMockExecutor("executor-a")]);
 
       const ctx: PlanContext = {
         client,
@@ -274,9 +264,7 @@ describe("planExecutor", () => {
 
     test("executor owned by different app is NOT deleted", async () => {
       // Existing: executor owned by another app
-      const client = createMockClient([
-        { name: "other-app-executor", label: "other-app" },
-      ]);
+      const client = createMockClient([{ name: "other-app-executor", label: "other-app" }]);
 
       // New config is empty
       const application = createMockApplication([]);
@@ -331,9 +319,7 @@ describe("planExecutor", () => {
       const client = createMockClient([]);
 
       // New executor in config
-      const application = createMockApplication([
-        createMockExecutor("new-executor"),
-      ]);
+      const application = createMockApplication([createMockExecutor("new-executor")]);
 
       const ctx: PlanContext = {
         client,
@@ -357,14 +343,10 @@ describe("planExecutor", () => {
   describe("update scenarios", () => {
     test("existing executor is updated", async () => {
       // Existing executor with app label
-      const client = createMockClient([
-        { name: "existing-executor", label: appName },
-      ]);
+      const client = createMockClient([{ name: "existing-executor", label: appName }]);
 
       // Same executor in config (will be updated)
-      const application = createMockApplication([
-        createMockExecutor("existing-executor"),
-      ]);
+      const application = createMockApplication([createMockExecutor("existing-executor")]);
 
       const ctx: PlanContext = {
         client,
@@ -392,9 +374,7 @@ describe("planExecutor", () => {
       ]);
 
       // Config has same name
-      const application = createMockApplication([
-        createMockExecutor("my-executor"),
-      ]);
+      const application = createMockApplication([createMockExecutor("my-executor")]);
 
       const ctx: PlanContext = {
         client,
@@ -411,14 +391,10 @@ describe("planExecutor", () => {
     });
 
     test("detects conflict when same name owned by different app", async () => {
-      const client = createMockClient([
-        { name: "my-executor", label: "other-app" },
-      ]);
+      const client = createMockClient([{ name: "my-executor", label: "other-app" }]);
 
       // Config has same name
-      const application = createMockApplication([
-        createMockExecutor("my-executor"),
-      ]);
+      const application = createMockApplication([createMockExecutor("my-executor")]);
 
       const ctx: PlanContext = {
         client,

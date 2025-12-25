@@ -31,8 +31,7 @@ export const IdPUserAuthPolicySchema = z
       data.passwordMaxLength === undefined ||
       data.passwordMinLength <= data.passwordMaxLength,
     {
-      message:
-        "passwordMinLength must be less than or equal to passwordMaxLength",
+      message: "passwordMinLength must be less than or equal to passwordMaxLength",
       path: ["passwordMinLength"],
     },
   );

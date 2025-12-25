@@ -188,8 +188,9 @@ export async function planWorkflow(
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
 ) {
-  const changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow> =
-    new ChangeSet("Workflows");
+  const changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow> = new ChangeSet(
+    "Workflows",
+  );
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -200,10 +201,7 @@ export async function planWorkflow(
       workspaceId,
       pageToken,
     });
-    return [
-      response.workflows.map((w) => ({ id: w.id, name: w.name })),
-      response.nextPageToken,
-    ];
+    return [response.workflows.map((w) => ({ id: w.id, name: w.name })), response.nextPageToken];
   });
   const existingWorkflows: WithLabel<(typeof withoutLabel)[number]> = {};
   await Promise.all(
@@ -223,10 +221,7 @@ export async function planWorkflow(
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, workflow.name),
-      appName,
-    );
+    const metaRequest = await buildMetaRequest(trn(workspaceId, workflow.name), appName);
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
     if (!usedJobNames) {

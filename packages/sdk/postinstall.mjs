@@ -14,10 +14,7 @@ async function install() {
   const forceCreate = process.env.FORCE_CREATE === "1";
 
   // Skip if running in the tailor-sdk package itself (unless forced)
-  if (
-    !forceCreate &&
-    (cwd === __dirname || cwd === resolve(__dirname, "..", ".."))
-  ) {
+  if (!forceCreate && (cwd === __dirname || cwd === resolve(__dirname, "..", ".."))) {
     console.log("⚠️  Skipping postinstall in tailor-sdk package itself");
     return;
   }

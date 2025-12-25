@@ -45,12 +45,7 @@ import {
   type ParsedTailorDBType,
 } from "@/parser/service/tailordb/types";
 import { fetchAll, type OperatorClient } from "../../client";
-import {
-  buildMetaRequest,
-  sdkNameLabelKey,
-  trnPrefix,
-  type WithLabel,
-} from "./label";
+import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -70,19 +65,13 @@ export async function applyTailorDB(
         await client.createTailorDBService(create.request);
         await client.setMetadata(create.metaRequest);
       }),
-      ...changeSet.service.updates.map((update) =>
-        client.setMetadata(update.metaRequest),
-      ),
+      ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
     ]);
 
     // Types
     await Promise.all([
-      ...changeSet.type.creates.map((create) =>
-        client.createTailorDBType(create.request),
-      ),
-      ...changeSet.type.updates.map((update) =>
-        client.updateTailorDBType(update.request),
-      ),
+      ...changeSet.type.creates.map((create) => client.createTailorDBType(create.request)),
+      ...changeSet.type.updates.map((update) => client.updateTailorDBType(update.request)),
     ]);
 
     // GQLPermissions
@@ -98,33 +87,20 @@ export async function applyTailorDB(
     // Delete in reverse order of dependencies
     // GQLPermissions
     await Promise.all(
-      changeSet.gqlPermission.deletes.map((del) =>
-        client.deleteTailorDBGQLPermission(del.request),
-      ),
+      changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
     );
 
     // Types
-    await Promise.all(
-      changeSet.type.deletes.map((del) =>
-        client.deleteTailorDBType(del.request),
-      ),
-    );
+    await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
   } else if (phase === "delete-services") {
     // Services only
     await Promise.all(
-      changeSet.service.deletes.map((del) =>
-        client.deleteTailorDBService(del.request),
-      ),
+      changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
     );
   }
 }
 
-export async function planTailorDB({
-  client,
-  workspaceId,
-  application,
-  forRemoval,
-}: PlanContext) {
+export async function planTailorDB({ client, workspaceId, application, forRemoval }: PlanContext) {
   const tailordbs: TailorDBService[] = [];
   if (!forRemoval) {
     for (const tailordb of application.tailorDBServices) {
@@ -143,13 +119,7 @@ export async function planTailorDB({
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const typeChangeSet = await planTypes(
-    client,
-    workspaceId,
-    tailordbs,
-    executors,
-    deletedServices,
-  );
+  const typeChangeSet = await planTypes(client, workspaceId, tailordbs, executors, deletedServices);
   const gqlPermissionChangeSet = await planGqlPermissions(
     client,
     workspaceId,
@@ -199,19 +169,19 @@ async function planServices(
   appName: string,
   tailordbs: ReadonlyArray<TailorDBService>,
 ) {
-  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
-    new ChangeSet("TailorDB services");
+  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> = new ChangeSet(
+    "TailorDB services",
+  );
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
-      const { tailordbServices, nextPageToken } =
-        await client.listTailorDBServices({
-          workspaceId,
-          pageToken,
-        });
+      const { tailordbServices, nextPageToken } = await client.listTailorDBServices({
+        workspaceId,
+        pageToken,
+      });
       return [tailordbServices, nextPageToken];
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -238,10 +208,7 @@ async function planServices(
 
   for (const tailordb of tailordbs) {
     const existing = existingServices[tailordb.namespace];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, tailordb.namespace),
-      appName,
-    );
+    const metaRequest = await buildMetaRequest(trn(workspaceId, tailordb.namespace), appName);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -316,19 +283,16 @@ async function planTypes(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateType, UpdateType, DeleteType> =
-    new ChangeSet("TailorDB types");
+  const changeSet: ChangeSet<CreateType, UpdateType, DeleteType> = new ChangeSet("TailorDB types");
 
   const fetchTypes = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
       try {
-        const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes(
-          {
-            workspaceId,
-            namespaceName,
-            pageToken,
-          },
-        );
+        const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
+          workspaceId,
+          namespaceName,
+          pageToken,
+        });
         return [tailordbTypes, nextPageToken];
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -357,10 +321,7 @@ async function planTypes(
 
     const types = tailordb.getTypes();
     for (const typeName of Object.keys(types)) {
-      const tailordbType = generateTailorDBTypeManifest(
-        types[typeName],
-        executorUsedTypes,
-      );
+      const tailordbType = generateTailorDBTypeManifest(types[typeName], executorUsedTypes);
       if (existingNameSet.has(typeName)) {
         changeSet.updates.push({
           name: typeName,
@@ -431,22 +392,16 @@ function generateTailorDBTypeManifest(
     defaultSettings.publishRecordEvents = true;
   }
 
-  const fields: Record<
-    string,
-    MessageInitShape<typeof TailorDBType_FieldConfigSchema>
-  > = {};
+  const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
 
   Object.keys(type.fields)
     .filter((fieldName) => fieldName !== "id")
     .forEach((fieldName) => {
       const fieldConfig = type.fields[fieldName].config;
       const fieldType = fieldConfig.type;
-      const fieldEntry: MessageInitShape<
-        typeof TailorDBType_FieldConfigSchema
-      > = {
+      const fieldEntry: MessageInitShape<typeof TailorDBType_FieldConfigSchema> = {
         type: fieldType,
-        allowedValues:
-          fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
+        allowedValues: fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
         description: fieldConfig.description || "",
         validate: (fieldConfig.validate || []).map((val) => ({
           action: TailorDBType_PermitAction.DENY,
@@ -515,9 +470,7 @@ function generateTailorDBTypeManifest(
     };
   }
 
-  for (const [relationName, rel] of Object.entries(
-    type.backwardRelationships,
-  )) {
+  for (const [relationName, rel] of Object.entries(type.backwardRelationships)) {
     relationships[relationName] = {
       refType: rel.targetType,
       refField: rel.targetField,
@@ -528,10 +481,7 @@ function generateTailorDBTypeManifest(
   }
 
   // Process indexes from metadata
-  const indexes: Record<
-    string,
-    MessageInitShape<typeof TailorDBType_IndexSchema>
-  > = {};
+  const indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>> = {};
   if (type.indexes) {
     Object.entries(type.indexes).forEach(([key, index]) => {
       indexes[key] = {
@@ -542,10 +492,7 @@ function generateTailorDBTypeManifest(
   }
 
   // Process files from metadata
-  const files: Record<
-    string,
-    MessageInitShape<typeof TailorDBType_FileConfigSchema>
-  > = {};
+  const files: Record<string, MessageInitShape<typeof TailorDBType_FileConfigSchema>> = {};
   if (type.files) {
     Object.entries(type.files).forEach(([key, description]) => {
       files[key] = { description: description || "" };
@@ -554,9 +501,7 @@ function generateTailorDBTypeManifest(
 
   // To be secure by default, add Permission settings that reject everyone
   // when Permission/RecordPermission is not configured.
-  const defaultPermission: MessageInitShape<
-    typeof TailorDBType_PermissionSchema
-  > = {
+  const defaultPermission: MessageInitShape<typeof TailorDBType_PermissionSchema> = {
     create: [],
     read: [],
     update: [],
@@ -585,10 +530,7 @@ function generateTailorDBTypeManifest(
 function processNestedFields(
   fields: Record<string, OperatorFieldConfig>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
-  const nestedFields: Record<
-    string,
-    MessageInitShape<typeof TailorDBType_FieldConfigSchema>
-  > = {};
+  const nestedFields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
 
   Object.entries(fields).forEach(([nestedFieldName, nestedFieldConfig]) => {
     const nestedType = nestedFieldConfig.type;
@@ -611,8 +553,7 @@ function processNestedFields(
     } else {
       nestedFields[nestedFieldName] = {
         type: nestedType,
-        allowedValues:
-          nestedType === "enum" ? nestedFieldConfig.allowedValues || [] : [],
+        allowedValues: nestedType === "enum" ? nestedFieldConfig.allowedValues || [] : [],
         description: nestedFieldConfig.description || "",
         validate: [],
         required: nestedFieldConfig.required ?? true,
@@ -644,9 +585,7 @@ function protoPermission(
 ): MessageInitShape<typeof TailorDBType_PermissionSchema> {
   const ret: MessageInitShape<typeof TailorDBType_PermissionSchema> = {};
   for (const [key, policies] of Object.entries(permission)) {
-    ret[key as keyof StandardTailorTypePermission] = policies.map((policy) =>
-      protoPolicy(policy),
-    );
+    ret[key as keyof StandardTailorTypePermission] = policies.map((policy) => protoPolicy(policy));
   }
   return ret;
 }
@@ -769,21 +708,17 @@ async function planGqlPermissions(
   tailordbs: ReadonlyArray<TailorDBService>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
-    CreateGqlPermission,
-    UpdateGqlPermission,
-    DeleteGqlPermission
-  > = new ChangeSet("TailorDB gqlPermissions");
+  const changeSet: ChangeSet<CreateGqlPermission, UpdateGqlPermission, DeleteGqlPermission> =
+    new ChangeSet("TailorDB gqlPermissions");
 
   const fetchGqlPermissions = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
       try {
-        const { permissions, nextPageToken } =
-          await client.listTailorDBGQLPermissions({
-            workspaceId,
-            namespaceName,
-            pageToken,
-          });
+        const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+          workspaceId,
+          namespaceName,
+          pageToken,
+        });
         return [permissions, nextPageToken];
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -795,9 +730,7 @@ async function planGqlPermissions(
   };
 
   for (const tailordb of tailordbs) {
-    const existingGqlPermissions = await fetchGqlPermissions(
-      tailordb.namespace,
-    );
+    const existingGqlPermissions = await fetchGqlPermissions(tailordb.namespace);
     const existingNameSet = new Set<string>();
     existingGqlPermissions.forEach((gqlPermission) => {
       existingNameSet.add(gqlPermission.typeName);

@@ -55,9 +55,7 @@ export class KyselyGenerator implements TailorDBGenerator<
     };
   }
 
-  aggregate(
-    args: AggregateArgs<TailorDBInput<KyselyNamespaceMetadata>>,
-  ): GeneratorResult {
+  aggregate(args: AggregateArgs<TailorDBInput<KyselyNamespaceMetadata>>): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
     const allNamespaceData: KyselyNamespaceMetadata[] = [];

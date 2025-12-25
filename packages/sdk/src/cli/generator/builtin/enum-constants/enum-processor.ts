@@ -5,9 +5,7 @@ import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
  * Processor that collects enum fields and generates enum constants.
  */
 export class EnumProcessor {
-  static async processType(
-    type: ParsedTailorDBType,
-  ): Promise<EnumConstantMetadata> {
+  static async processType(type: ParsedTailorDBType): Promise<EnumConstantMetadata> {
     const enums = this.collectEnums(type);
 
     return {
@@ -20,10 +18,7 @@ export class EnumProcessor {
     const enums: EnumConstantMetadata["enums"] = [];
 
     for (const [fieldName, parsedField] of Object.entries(type.fields)) {
-      if (
-        parsedField.config.type === "enum" &&
-        parsedField.config.allowedValues
-      ) {
+      if (parsedField.config.type === "enum" && parsedField.config.allowedValues) {
         const enumTypeName = `${type.name}${this.capitalizeFirst(fieldName)}`;
         enums.push({
           name: enumTypeName,
@@ -37,10 +32,7 @@ export class EnumProcessor {
         for (const [nestedFieldName, nestedFieldConfig] of Object.entries(
           parsedField.config.fields,
         )) {
-          if (
-            nestedFieldConfig.type === "enum" &&
-            nestedFieldConfig.allowedValues
-          ) {
+          if (nestedFieldConfig.type === "enum" && nestedFieldConfig.allowedValues) {
             const fullFieldName = `${fieldName}${this.capitalizeFirst(nestedFieldName)}`;
             const enumTypeName = `${type.name}${this.capitalizeFirst(fullFieldName)}`;
             enums.push({

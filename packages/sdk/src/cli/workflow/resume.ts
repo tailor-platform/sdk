@@ -1,12 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  jsonArgs,
-  parseDuration,
-  withCommonArgs,
-  workspaceArgs,
-} from "../args";
+import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
@@ -64,9 +58,7 @@ export async function resumeWorkflow(
         throw new Error(`Execution '${options.executionId}' not found.`);
       }
       if (error.code === Code.FailedPrecondition) {
-        throw new Error(
-          `Execution '${options.executionId}' is not in a resumable state.`,
-        );
+        throw new Error(`Execution '${options.executionId}' is not in a resumable state.`);
       }
     }
     throw error;
