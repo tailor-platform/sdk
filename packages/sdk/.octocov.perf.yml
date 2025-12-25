@@ -1,0 +1,31 @@
+locale: en
+repository: ${GITHUB_REPOSITORY}/packages/sdk
+
+# Disable coverage metrics
+coverage:
+  if: false
+
+codeToTestRatio:
+  if: false
+
+testExecutionTime:
+  if: false
+
+report:
+  if: is_default_branch
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}/sdk-type-performance
+
+diff:
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}/sdk-type-performance
+
+comment:
+  if: is_pull_request
+
+summary:
+  if: true
+
+customMetrics:
+  type-performance:
+    key: type-performance

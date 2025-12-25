@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   type-check-performance:
-    name: Measure Type Check Performance
+    name: Type Check Performance
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -26,52 +26,32 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Run type check performance (full project)
-        run: pnpm --filter example perf:typecheck:full
-
-      - name: Run type check performance (inference)
-        run: pnpm --filter example perf:typecheck:inference
+      - name: Run type check performance
+        run: pnpm --filter @tailor-platform/sdk perf:typecheck
 
       - name: Upload results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: type-check-performance-results
-          path: example/diagnostics-*.json
+          path: packages/sdk/diagnostics.json
 
       - name: Display results
         run: |
           {
             echo "## Type Check Performance Results"
             echo ""
-            echo "### Full Project Check"
-            echo "\`\`\`json"
-            jq '.metrics[] | select(.key == "total-time")' example/diagnostics-full.json
-            echo "\`\`\`"
+            echo "### Feature-based Tests (sorted by instantiations)"
             echo ""
-            echo "### Type Inference Checks"
+            echo "| Feature | Instantiations | Types |"
+            echo "|---------|---------------:|------:|"
+            jq -r 'sort_by(.instantiations) | reverse | .[] | "| \(.key) | \(.instantiations) | \(.types) |"' packages/sdk/diagnostics-summary.json
             echo ""
-            echo "#### TailorDB Types"
-            echo "\`\`\`json"
-            jq '.metrics[] | select(.key == "total-time")' example/diagnostics-types.json
-            echo "\`\`\`"
-            echo ""
-            echo "#### Pipeline Resolvers"
-            echo "\`\`\`json"
-            jq '.metrics[] | select(.key == "total-time")' example/diagnostics-resolvers.json
-            echo "\`\`\`"
-            echo ""
-            echo "#### Executors"
-            echo "\`\`\`json"
-            jq '.metrics[] | select(.key == "total-time")' example/diagnostics-executors.json
-            echo "\`\`\`"
+            echo "See [Operational Guidelines](packages/sdk/scripts/perf/README.md#operational-guidelines) for interpretation."
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Run octocov
         uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
         with:
-          config: example/.octocov.perf.yml
+          config: packages/sdk/.octocov.perf.yml
         env:
-          OCTOCOV_CUSTOM_METRICS_1_DIAGNOSTICS_FULL: example/diagnostics-full.json
-          OCTOCOV_CUSTOM_METRICS_2_DIAGNOSTICS_TYPES: example/diagnostics-types.json
-          OCTOCOV_CUSTOM_METRICS_3_DIAGNOSTICS_RESOLVERS: example/diagnostics-resolvers.json
-          OCTOCOV_CUSTOM_METRICS_4_DIAGNOSTICS_EXECUTORS: example/diagnostics-executors.json
+          OCTOCOV_CUSTOM_METRICS_TYPE_PERFORMANCE: packages/sdk/diagnostics.json

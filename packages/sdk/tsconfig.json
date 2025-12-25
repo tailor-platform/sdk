@@ -17,6 +17,7 @@
   },
   "include": [
     "./src/**/*.ts",
+    "./scripts/**/*.ts",
     "./e2e/**/*.ts",
     "./tsdown.config.ts",
     "./vitest.config.ts"
