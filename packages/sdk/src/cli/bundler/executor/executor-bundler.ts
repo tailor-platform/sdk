@@ -7,7 +7,7 @@ import {
   loadFilesWithIgnores,
   type FileLoadConfig,
 } from "@/cli/application/file-loader";
-import { enableInlineSourcemap } from "@/cli/apply";
+import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 import {

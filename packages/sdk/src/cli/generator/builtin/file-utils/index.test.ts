@@ -28,17 +28,9 @@ describe("FileUtilsGenerator", () => {
         "Generates TypeWithFiles interface from TailorDB type definitions",
       );
     });
-  });
 
-  describe("processResolver", () => {
-    it("should return undefined", () => {
-      expect(generator.processResolver()).toBeUndefined();
-    });
-  });
-
-  describe("processExecutor", () => {
-    it("should return undefined", () => {
-      expect(generator.processExecutor()).toBeUndefined();
+    it("should have correct dependencies", () => {
+      expect(generator.dependencies).toEqual(["tailordb"]);
     });
   });
 

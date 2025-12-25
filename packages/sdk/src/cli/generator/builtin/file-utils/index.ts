@@ -1,6 +1,7 @@
 import {
-  type CodeGenerator,
-  type GeneratorInput,
+  type TailorDBGenerator,
+  type TailorDBInput,
+  type AggregateArgs,
   type GeneratorResult,
 } from "@/cli/generator/types";
 import { FileProcessor } from "./file-processor";
@@ -12,16 +13,14 @@ export const FileUtilsGeneratorID = "@tailor-platform/file-utils";
 /**
  * Generator for file utility functions from TailorDB type definitions.
  */
-export class FileUtilsGenerator implements CodeGenerator<
+export class FileUtilsGenerator implements TailorDBGenerator<
   FileUtilMetadata,
-  undefined,
-  undefined,
-  string,
-  undefined
+  string
 > {
   readonly id = FileUtilsGeneratorID;
   readonly description =
     "Generates TypeWithFiles interface from TailorDB type definitions";
+  readonly dependencies = ["tailordb"] as const;
 
   constructor(
     private readonly options: {
@@ -34,14 +33,6 @@ export class FileUtilsGenerator implements CodeGenerator<
     namespace: string;
   }): Promise<FileUtilMetadata> {
     return await FileProcessor.processType(args.type);
-  }
-
-  processResolver(): undefined {
-    return undefined;
-  }
-
-  processExecutor(): undefined {
-    return undefined;
   }
 
   async processTailorDBNamespace(args: {
@@ -62,24 +53,7 @@ export class FileUtilsGenerator implements CodeGenerator<
     });
   }
 
-  processIdProvider(): undefined {
-    return undefined;
-  }
-
-  processAuth(): undefined {
-    return undefined;
-  }
-
-  processStaticWebsite(): undefined {
-    return undefined;
-  }
-
-  aggregate(args: {
-    input: GeneratorInput<string, undefined>;
-    executorInputs: undefined[];
-    baseDir: string;
-    configPath: string;
-  }): GeneratorResult {
+  aggregate(args: AggregateArgs<TailorDBInput<string>>): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
     // Collect all namespace metadata

@@ -5,10 +5,12 @@ import { defineCommand } from "citty";
 import { defineApplication, type Application } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
 import {
-  type CodeGenerator,
+  type AnyCodeGenerator,
   type TailorDBNamespaceResult,
   type ResolverNamespaceResult,
   type GeneratorAuthInput,
+  type DependencyKind,
+  hasDependency,
 } from "@/cli/generator/types";
 import { generateUserTypes } from "@/cli/type-generator";
 import { logger, styles } from "@/cli/utils/logger";
@@ -27,6 +29,7 @@ interface TypeInfo {
   types: Record<string, ParsedTailorDBType>;
   sourceInfo: Record<string, { filePath: string; exportName: string }>;
 }
+
 export class GenerationManager {
   public readonly application: Application;
   private services: {
@@ -46,6 +49,33 @@ export class GenerationManager {
     fs.mkdirSync(this.baseDir, { recursive: true });
   }
 
+  // Helper functions for dependency checking
+  private getDeps(gen: AnyCodeGenerator): Set<DependencyKind> {
+    return new Set(gen.dependencies);
+  }
+
+  private onlyHas(
+    gen: AnyCodeGenerator,
+    ...required: DependencyKind[]
+  ): boolean {
+    const deps = this.getDeps(gen);
+    return required.every((r) => deps.has(r)) && deps.size === required.length;
+  }
+
+  private hasAll(
+    gen: AnyCodeGenerator,
+    ...required: DependencyKind[]
+  ): boolean {
+    return required.every((r) => this.getDeps(gen).has(r));
+  }
+
+  private hasNone(
+    gen: AnyCodeGenerator,
+    ...excluded: DependencyKind[]
+  ): boolean {
+    return excluded.every((e) => !this.getDeps(gen).has(e));
+  }
+
   async generate(watch: boolean) {
     logger.newline();
     logger.log(
@@ -53,9 +83,9 @@ export class GenerationManager {
     );
     logger.newline();
 
-    // Initialize data structure
     const app = this.application;
 
+    // Phase 1: Load TailorDB
     for (const db of app.tailorDBServices) {
       const namespace = db.namespace;
       try {
@@ -75,7 +105,26 @@ export class GenerationManager {
       }
     }
 
-    // Resolver services
+    // Phase 2: Auth resolveNamespaces (depends on TailorDB)
+    if (app.authService) {
+      await app.authService.resolveNamespaces();
+    }
+
+    // Add blank line after TailorDB types loaded
+    if (app.tailorDBServices.length > 0) {
+      logger.newline();
+    }
+
+    // Phase 3: Run TailorDB-only generators
+    const tailordbOnlyGens = this.generators.filter((g) =>
+      this.onlyHas(g as AnyCodeGenerator, "tailordb"),
+    );
+    if (tailordbOnlyGens.length > 0) {
+      await this.runGenerators(tailordbOnlyGens, watch);
+      logger.newline();
+    }
+
+    // Phase 4: Load Resolvers (can now import generated files)
     for (const resolverService of app.resolverServices) {
       const namespace = resolverService.namespace;
       try {
@@ -97,18 +146,49 @@ export class GenerationManager {
       }
     }
 
-    // Auth service
-    if (app.authService) {
-      await app.authService.resolveNamespaces();
+    // Phase 5: Run non-executor generators (resolver-dependent but not executor-dependent)
+    const nonExecutorGens = this.generators.filter(
+      (g) =>
+        !tailordbOnlyGens.includes(g) &&
+        this.hasNone(g as AnyCodeGenerator, "executor"),
+    );
+    if (nonExecutorGens.length > 0) {
+      await this.runGenerators(nonExecutorGens, watch);
+      logger.newline();
     }
 
-    // Executor services
+    // Phase 6: Load Executors (can now import generated files)
     const executors = await this.application.executorService?.loadExecutors();
     Object.entries(executors ?? {}).forEach(([filePath, executor]) => {
       this.services.executor[filePath] = executor as Executor;
     });
 
-    await this.processGenerators();
+    // Phase 7: Run executor-dependent generators
+    const executorGens = this.generators.filter((g) =>
+      this.hasAll(g as AnyCodeGenerator, "executor"),
+    );
+    if (executorGens.length > 0) {
+      await this.runGenerators(executorGens, watch);
+      logger.newline();
+    }
+  }
+
+  private async runGenerators(generators: Generator[], watch: boolean) {
+    await Promise.allSettled(
+      generators.map(async (gen) => {
+        try {
+          await this.processGenerator(gen as AnyCodeGenerator);
+        } catch (error) {
+          logger.error(
+            `${styles.error("Error processing generator")} ${styles.errorBright(gen.id)}`,
+          );
+          logger.error(String(error));
+          if (!watch) {
+            throw error;
+          }
+        }
+      }),
+    );
   }
 
   // Store results for each generator, service type, and namespace
@@ -117,70 +197,70 @@ export class GenerationManager {
     {
       tailordbResults: Record<
         /* namespace */ string,
-        Record</* type */ string, any>
+        Record</* type */ string, unknown>
       >;
       resolverResults: Record<
         /* namespace */ string,
-        Record</* resolver */ string, any>
+        Record</* resolver */ string, unknown>
       >;
-      tailordbNamespaceResults: Record</* namespace */ string, any>;
-      resolverNamespaceResults: Record</* namespace */ string, any>;
-      executorResults: Record</* executor */ string, any>;
+      tailordbNamespaceResults: Record</* namespace */ string, unknown>;
+      resolverNamespaceResults: Record</* namespace */ string, unknown>;
+      executorResults: Record</* executor */ string, unknown>;
     }
   > = {};
 
-  async processGenerators() {
-    await Promise.allSettled(
-      this.generators.map(async (gen) => await this.processGenerator(gen)),
-    );
-  }
+  async processGenerator(gen: AnyCodeGenerator) {
+    this.generatorResults[gen.id] = {
+      tailordbResults: {},
+      resolverResults: {},
+      tailordbNamespaceResults: {},
+      resolverNamespaceResults: {},
+      executorResults: {},
+    };
 
-  async processGenerator(gen: CodeGenerator) {
-    try {
-      this.generatorResults[gen.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
-
+    // Process TailorDB if generator has tailordb dependency
+    if (hasDependency(gen, "tailordb")) {
       for (const [namespace, types] of Object.entries(this.services.tailordb)) {
         await this.processTailorDBNamespace(gen, namespace, types);
       }
+    }
 
-      // Process Resolver namespaces
+    // Process Resolver if generator has resolver dependency
+    if (hasDependency(gen, "resolver")) {
       for (const [namespace, resolvers] of Object.entries(
         this.services.resolver,
       )) {
         await this.processResolverNamespace(gen, namespace, resolvers);
       }
-
-      // Process Executors
-      await this.processExecutors(gen);
-
-      // Aggregate all results
-      await this.aggregate(gen);
-    } catch (error) {
-      logger.error(
-        `${styles.error("Error processing generator")} ${styles.errorBright(gen.id)}`,
-      );
-      logger.error(String(error));
     }
+
+    // Process Executors if generator has executor dependency
+    if (hasDependency(gen, "executor")) {
+      await this.processExecutors(gen);
+    }
+
+    // Aggregate all results
+    await this.aggregate(gen);
   }
 
   async processTailorDBNamespace(
-    gen: CodeGenerator,
+    gen: AnyCodeGenerator,
     namespace: string,
     typeInfo: TypeInfo,
   ) {
     const results = this.generatorResults[gen.id];
     results.tailordbResults[namespace] = {};
 
+    // Check if generator has processType method
+    if (!gen.processType) {
+      return;
+    }
+
+    const processType = gen.processType;
     await Promise.allSettled(
       Object.entries(typeInfo.types).map(async ([typeName, type]) => {
         try {
-          results.tailordbResults[namespace][typeName] = await gen.processType({
+          results.tailordbResults[namespace][typeName] = await processType({
             type,
             namespace,
             source: typeInfo.sourceInfo[typeName],
@@ -195,7 +275,10 @@ export class GenerationManager {
     );
 
     // Process namespace summary if available
-    if (gen.processTailorDBNamespace) {
+    if (
+      "processTailorDBNamespace" in gen &&
+      typeof gen.processTailorDBNamespace === "function"
+    ) {
       try {
         results.tailordbNamespaceResults[namespace] =
           await gen.processTailorDBNamespace({
@@ -215,19 +298,25 @@ export class GenerationManager {
   }
 
   async processResolverNamespace(
-    gen: CodeGenerator,
+    gen: AnyCodeGenerator,
     namespace: string,
     resolvers: Record<string, Resolver>,
   ) {
     const results = this.generatorResults[gen.id];
     results.resolverResults[namespace] = {};
 
+    // Check if generator has processResolver method
+    if (!gen.processResolver) {
+      return;
+    }
+
+    const processResolver = gen.processResolver;
     // Process individual resolvers
     await Promise.allSettled(
       Object.entries(resolvers).map(async ([resolverName, resolver]) => {
         try {
           results.resolverResults[namespace][resolverName] =
-            await gen.processResolver({
+            await processResolver({
               resolver,
               namespace,
             });
@@ -241,7 +330,10 @@ export class GenerationManager {
     );
 
     // Process namespace summary if available
-    if (gen.processResolverNamespace) {
+    if (
+      "processResolverNamespace" in gen &&
+      typeof gen.processResolverNamespace === "function"
+    ) {
       try {
         results.resolverNamespaceResults[namespace] =
           await gen.processResolverNamespace({
@@ -260,16 +352,22 @@ export class GenerationManager {
     }
   }
 
-  async processExecutors(gen: CodeGenerator) {
+  async processExecutors(gen: AnyCodeGenerator) {
     const results = this.generatorResults[gen.id];
 
+    // Check if generator has processExecutor method
+    if (!gen.processExecutor) {
+      return;
+    }
+
+    const processExecutor = gen.processExecutor;
     // Process individual executors
     await Promise.allSettled(
       Object.entries(this.services.executor).map(
         async ([executorId, executor]) => {
           try {
             results.executorResults[executorId] =
-              await gen.processExecutor(executor);
+              await processExecutor(executor);
           } catch (error) {
             logger.error(
               `${styles.error(`Error processing executor`)} ${styles.errorBright(executor.name)} ${styles.error(`with generator ${gen.id}`)}`,
@@ -301,11 +399,11 @@ export class GenerationManager {
     };
   }
 
-  async aggregate(gen: CodeGenerator) {
+  async aggregate(gen: AnyCodeGenerator) {
     const results = this.generatorResults[gen.id];
 
-    const tailordbResults: TailorDBNamespaceResult<any>[] = [];
-    const resolverResults: ResolverNamespaceResult<any>[] = [];
+    const tailordbResults: TailorDBNamespaceResult<unknown>[] = [];
+    const resolverResults: ResolverNamespaceResult<unknown>[] = [];
 
     // Collect TailorDB namespace results
     for (const [namespace, types] of Object.entries(
@@ -326,16 +424,25 @@ export class GenerationManager {
         resolvers,
       });
     }
-    const input = {
-      tailordb: tailordbResults,
-      resolver: resolverResults,
+
+    // Build input based on generator dependencies
+    const input: Record<string, unknown> = {
       auth: this.getAuthInput(),
     };
 
+    if (hasDependency(gen, "tailordb")) {
+      input.tailordb = tailordbResults;
+    }
+    if (hasDependency(gen, "resolver")) {
+      input.resolver = resolverResults;
+    }
+    if (hasDependency(gen, "executor")) {
+      input.executor = Object.values(results.executorResults);
+    }
+
     // Call generator's aggregate method
     const result = await gen.aggregate({
-      input,
-      executorInputs: Object.values(results.executorResults),
+      input: input as Parameters<typeof gen.aggregate>[0]["input"],
       baseDir: path.join(this.baseDir, gen.id),
       configPath: this.configPath ?? "tailor.config.ts",
     });
@@ -389,7 +496,6 @@ export class GenerationManager {
         });
       }),
     );
-    logger.newline();
   }
 
   private watcher: DependencyWatcher | null = null;
