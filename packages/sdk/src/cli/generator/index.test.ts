@@ -55,7 +55,7 @@ class TestGenerator {
     return { processed: true, count: Object.keys(args.resolvers).length };
   }
 
-  async aggregate(args: { input: any; baseDir: string }) {
+  async aggregate(args: { input: object; baseDir: string }) {
     return {
       files: [
         {
@@ -83,8 +83,7 @@ describe("GenerationManager", () => {
       name: "testApp",
       db: { main: { files: ["src/types/*.ts"] } },
       resolver: { main: { files: ["src/resolvers/*.ts"] } },
-      auth: { namespace: "test-auth" },
-    } as any;
+    };
 
     manager = new GenerationManager(mockConfig, [new TestGenerator()] as any);
   });
@@ -480,7 +479,7 @@ describe("GenerationManager", () => {
             },
           ],
           executor: [],
-          auth: expect.anything(),
+          auth: undefined,
         },
         baseDir: expect.stringContaining(testGenerator.id),
         configPath: expect.any(String),
@@ -556,7 +555,10 @@ describe("GenerationManager", () => {
   });
 
   describe("watch", () => {
-    let mockWatcher: any;
+    let mockWatcher: {
+      addWatchGroup: () => Promise<void>;
+      setRestartCallback: () => void;
+    };
 
     beforeEach(() => {
       mockWatcher = {
@@ -677,10 +679,7 @@ describe("Integration Tests", () => {
           files: [path.join(tempDir, "resolvers/*.ts")],
         },
       },
-      auth: {
-        namespace: "test-auth",
-      },
-    } as any;
+    };
   });
 
   afterEach(() => {
