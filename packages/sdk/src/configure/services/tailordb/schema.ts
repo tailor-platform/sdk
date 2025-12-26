@@ -1,6 +1,5 @@
 import { clone } from "es-toolkit";
 import { type AllowedValues, type AllowedValuesOutput } from "@/configure/types/field";
-import { TailorField } from "@/configure/types/type";
 import {
   type FieldOptions,
   type FieldOutput,
@@ -22,6 +21,7 @@ import {
 import type { InferredAttributeMap } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import { TailorField } from "#configure/types/type";
 
 type RelationType = "oneToOne" | "1-1" | "manyToOne" | "n-1" | "N-1" | "keyOnly";
 

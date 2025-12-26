@@ -21,6 +21,19 @@
   "type": "module",
   "main": "./dist/configure/index.mjs",
   "types": "./dist/configure/index.d.mts",
+  "imports": {
+    "#*": [
+      "./src/*",
+      "./src/*.ts",
+      "./src/*.tsx",
+      "./src/*.js",
+      "./src/*.jsx",
+      "./src/*/index.ts",
+      "./src/*/index.tsx",
+      "./src/*/index.js",
+      "./src/*/index.jsx"
+    ]
+  },
   "exports": {
     ".": {
       "types": "./dist/configure/index.d.mts",
