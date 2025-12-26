@@ -1,6 +1,7 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
+import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
   // Ignore sdk's output directory.
@@ -30,4 +31,5 @@ export default defineConfig([
     files: ["eslint.config.js"],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
 ]);

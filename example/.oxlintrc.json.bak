@@ -1,6 +1,9 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "import"],
+  "plugins": [
+    "typescript",
+    "import"
+  ],
   "categories": {
     "correctness": "off"
   },
@@ -113,7 +116,12 @@
   },
   "overrides": [
     {
-      "files": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      "files": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.mts",
+        "**/*.cts"
+      ],
       "rules": {
         "constructor-super": "off",
         "no-class-assign": "off",
@@ -135,7 +143,11 @@
       }
     },
     {
-      "files": ["**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
+      "files": [
+        "**/*.ts",
+        "tsdown.config.ts",
+        "vitest.config.ts"
+      ],
       "rules": {
         "import/no-cycle": [
           "error",
@@ -153,7 +165,9 @@
       }
     },
     {
-      "files": ["eslint.config.js"],
+      "files": [
+        "eslint.config.js"
+      ],
       "rules": {
         "@typescript-eslint/await-thenable": "off",
         "@typescript-eslint/no-array-delete": "off",

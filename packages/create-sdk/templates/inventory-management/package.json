@@ -7,8 +7,8 @@
     "generate": "tailor-sdk generate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint --cache .",
-    "lint:fix": "eslint --cache --fix .",
+    "lint": "oxlint . && eslint --cache .",
+    "lint:fix": "oxlint --fix . && eslint --cache --fix .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -21,6 +21,8 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.10.4",
     "eslint": "9.39.2",
+    "eslint-plugin-oxlint": "1.34.0",
+    "oxlint": "1.34.0",
     "prettier": "3.7.4",
     "typescript": "5.9.3",
     "typescript-eslint": "8.50.0"
