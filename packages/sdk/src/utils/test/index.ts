@@ -82,6 +82,7 @@ export function createStandardSchema<T = Record<string, unknown>>(
         const hooked = hook(value);
         const result = schemaType.parse({
           value: hooked,
+          data: hooked,
           user: unauthenticatedTailorUser,
         });
         if (result.issues) {
