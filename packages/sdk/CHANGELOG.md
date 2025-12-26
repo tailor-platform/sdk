@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 1.1.2
+
+### Patch Changes
+
+- [#289](https://github.com/tailor-platform/sdk/pull/289) [`c6f655e`](https://github.com/tailor-platform/sdk/commit/c6f655ecd9ae4641bf98233e64f12954410ebcc4) Thanks [@riku99](https://github.com/riku99)! - Introduce oxlint/oxfmt as primary lint/format tools
+
+- [#326](https://github.com/tailor-platform/sdk/pull/326) [`6a61ab8`](https://github.com/tailor-platform/sdk/commit/6a61ab8be5b023e5d890526b3ad897809c43a67f) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.50.1
+
+- [#327](https://github.com/tailor-platform/sdk/pull/327) [`480ae46`](https://github.com/tailor-platform/sdk/commit/480ae46b88d4919132f0ea60140460e3602c52ab) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.448.0
+
+- [#328](https://github.com/tailor-platform/sdk/pull/328) [`c3ab92e`](https://github.com/tailor-platform/sdk/commit/c3ab92ef1ca57647a47ce0c9be00d8d0c6e358bd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxlint monorepo
+
+- [#325](https://github.com/tailor-platform/sdk/pull/325) [`fbc29a6`](https://github.com/tailor-platform/sdk/commit/fbc29a645ba5c37c35e298cffb7377aab50233c0) Thanks [@toiroakr](https://github.com/toiroakr)! - chore(docs): add workflow execution to executor
+
 ## 1.1.1
 
 ### Patch Changes
