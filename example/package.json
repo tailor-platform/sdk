@@ -18,8 +18,8 @@
     "seed:truncate": "tailor-sdk tailordb truncate -a",
     "seed": "node ./seed/exec.mjs",
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
-    "lint": "eslint --cache .",
-    "lint:fix": "eslint --cache . --fix --quiet",
+    "lint": "oxlint . && eslint --cache .",
+    "lint:fix": "oxlint --fix . && eslint --cache . --fix --quiet",
     "typecheck": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
@@ -35,8 +35,10 @@
     "@tailor-platform/function-types": "0.8.0",
     "@toiroakr/lines-db": "0.6.1",
     "@types/node": "24.10.4",
+    "eslint-plugin-oxlint": "1.34.0",
     "graphql": "16.12.0",
     "graphql-request": "7.4.0",
+    "oxlint": "1.34.0",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vitest": "4.0.16"
