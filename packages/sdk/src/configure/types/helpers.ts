@@ -17,9 +17,7 @@ export type DeepWidening<T> = T extends object
   ? { [K in keyof T]: DeepWidening<T[K]> }
   : Widening<T>;
 
-export type output<T> = T extends { _output: infer U }
-  ? DeepWritable<U>
-  : never;
+export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never;
 
 export type NullableToOptional<T> = {
   [K in keyof T as null extends T[K] ? never : K]: T[K];
@@ -28,15 +26,14 @@ export type NullableToOptional<T> = {
 };
 
 // Return Output type for TailorFields.
-export type InferFieldsOutput<
-  F extends Record<string, { _output: any; [key: string]: any }>,
-> = DeepWritable<
-  Prettify<
-    NullableToOptional<{
-      [K in keyof F]: output<F[K]>;
-    }>
-  >
->;
+export type InferFieldsOutput<F extends Record<string, { _output: any; [key: string]: any }>> =
+  DeepWritable<
+    Prettify<
+      NullableToOptional<{
+        [K in keyof F]: output<F[K]>;
+      }>
+    >
+  >;
 
 /**
  * A looser version of JsonValue that accepts interfaces.
@@ -44,12 +41,7 @@ export type InferFieldsOutput<
  * so they can't be assigned to JsonValue's {[Key in string]: JsonValue}.
  * This type uses a recursive check instead.
  */
-export type JsonCompatible<T> = T extends
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
+export type JsonCompatible<T> = T extends string | number | boolean | null | undefined
   ? T
   : T extends readonly (infer U)[]
     ? JsonCompatible<U>[]

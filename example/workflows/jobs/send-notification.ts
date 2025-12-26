@@ -6,9 +6,7 @@ export const sendNotification = createWorkflowJob({
   body: async (input: { message: string; recipient: string }) => {
     // Simulate sending notification
     const timestamp = format(new Date(), "yyyy-MM-dd HH:mm:ss");
-    console.log(
-      `[${timestamp}] Sending to ${input.recipient}: ${input.message}`,
-    );
+    console.log(`[${timestamp}] Sending to ${input.recipient}: ${input.message}`);
     return { sent: true, timestamp };
   },
 });

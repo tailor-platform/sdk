@@ -13,9 +13,7 @@ describe("controlplane", () => {
       workspaceId,
     });
     expect(tailordbServices.length).toBe(2); // tailordb + analyticsdb
-    const tailordbService = tailordbServices.find(
-      (s) => s.namespace?.name === namespaceName,
-    );
+    const tailordbService = tailordbServices.find((s) => s.namespace?.name === namespaceName);
     expect(tailordbService).toBeDefined();
     expect(tailordbService?.namespace?.name).toBe(namespaceName);
   });
@@ -430,8 +428,7 @@ describe("dataplane", () => {
           id: string;
         };
       }
-      const createCustomerResult =
-        await graphQLClient.rawRequest<CreateCustomer>(createCustomer);
+      const createCustomerResult = await graphQLClient.rawRequest<CreateCustomer>(createCustomer);
       expect(createCustomerResult.errors).toBeUndefined();
       const customerId = createCustomerResult.data.createCustomer.id;
 

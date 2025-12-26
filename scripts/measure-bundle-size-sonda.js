@@ -9,14 +9,10 @@ const sdkDir = path.join(__dirname, "../packages/sdk");
 const sondaOutput = path.join(sdkDir, ".sonda/bundle-analysis.json");
 
 function getChunkSize(report, distPath) {
-  const normalized = distPath.startsWith("dist/")
-    ? distPath
-    : `dist/${distPath}`;
+  const normalized = distPath.startsWith("dist/") ? distPath : `dist/${distPath}`;
 
   const entry = report.resources.find(
-    (r) =>
-      r.kind === "asset" &&
-      path.normalize(r.name) === path.normalize(normalized),
+    (r) => r.kind === "asset" && path.normalize(r.name) === path.normalize(normalized),
   );
   return entry?.uncompressed ?? 0;
 }

@@ -1,7 +1,8 @@
 import {
-  type CodeGenerator,
+  type TailorDBGenerator,
+  type TailorDBInput,
+  type AggregateArgs,
   type GeneratorResult,
-  type GeneratorInput,
 } from "@/cli/generator/types";
 import { EnumProcessor } from "./enum-processor";
 import {
@@ -16,16 +17,13 @@ export const EnumConstantsGeneratorID = "@tailor-platform/enum-constants";
 /**
  * Generator for enum constants from TailorDB type definitions.
  */
-export class EnumConstantsGenerator implements CodeGenerator<
+export class EnumConstantsGenerator implements TailorDBGenerator<
   EnumConstantMetadata,
-  undefined,
-  undefined,
-  EnumNamespaceMetadata,
-  undefined
+  EnumNamespaceMetadata
 > {
   readonly id = EnumConstantsGeneratorID;
-  readonly description =
-    "Generates enum constants from TailorDB type definitions";
+  readonly description = "Generates enum constants from TailorDB type definitions";
+  readonly dependencies = ["tailordb"] as const;
 
   constructor(
     private readonly options: {
@@ -38,14 +36,6 @@ export class EnumConstantsGenerator implements CodeGenerator<
     namespace: string;
   }): Promise<EnumConstantMetadata> {
     return await EnumProcessor.processType(args.type);
-  }
-
-  processResolver(): undefined {
-    return undefined;
-  }
-
-  processExecutor(): undefined {
-    return undefined;
   }
 
   async processTailorDBNamespace(args: {
@@ -63,24 +53,7 @@ export class EnumConstantsGenerator implements CodeGenerator<
     };
   }
 
-  processIdProvider(): undefined {
-    return undefined;
-  }
-
-  processAuth(): undefined {
-    return undefined;
-  }
-
-  processStaticWebsite(): undefined {
-    return undefined;
-  }
-
-  aggregate(args: {
-    input: GeneratorInput<EnumNamespaceMetadata, undefined>;
-    executorInputs: undefined[];
-    baseDir: string;
-    configPath: string;
-  }): GeneratorResult {
+  aggregate(args: AggregateArgs<TailorDBInput<EnumNamespaceMetadata>>): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
     const allEnums: EnumDefinition[] = [];

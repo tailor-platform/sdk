@@ -104,8 +104,7 @@ const WatcherErrorCode = {
   INVALID_WATCH_GROUP: "INVALID_WATCH_GROUP",
   MADGE_INITIALIZATION_FAILED: "MADGE_INITIALIZATION_FAILED",
 } as const;
-type WatcherErrorCode =
-  (typeof WatcherErrorCode)[keyof typeof WatcherErrorCode];
+type WatcherErrorCode = (typeof WatcherErrorCode)[keyof typeof WatcherErrorCode];
 
 /**
  * Watcher-specific error.
@@ -148,10 +147,7 @@ export class DependencyGraphManager {
         ...this.options,
       });
 
-      const dependencyObj = this.madgeInstance.obj() as Record<
-        string,
-        string[]
-      >;
+      const dependencyObj = this.madgeInstance.obj() as Record<string, string[]>;
       this.graph.clear();
 
       for (const filePath of filePaths) {
@@ -308,10 +304,7 @@ export class DependencyGraphManager {
     return result;
   }
 
-  private traverseDependencies(
-    filePath: string,
-    visited: Set<string>,
-  ): string[] {
+  private traverseDependencies(filePath: string, visited: Set<string>): string[] {
     if (visited.has(filePath)) return [];
     visited.add(filePath);
 
@@ -343,9 +336,7 @@ class DependencyWatcher {
   private signalHandlersRegistered = false;
 
   constructor(private readonly options: WatcherOptions = {}) {
-    this.dependencyGraphManager = new DependencyGraphManager(
-      options.madgeOptions,
-    );
+    this.dependencyGraphManager = new DependencyGraphManager(options.madgeOptions);
   }
 
   /**
@@ -383,10 +374,9 @@ class DependencyWatcher {
       });
 
       this.chokidarWatcher.on("error", (error: unknown) => {
-        logger.error(
-          `Watcher error: ${error instanceof Error ? error.message : String(error)}`,
-          { mode: "stream" },
-        );
+        logger.error(`Watcher error: ${error instanceof Error ? error.message : String(error)}`, {
+          mode: "stream",
+        });
         this.handleError(
           new WatcherError(
             `File watcher error: ${error instanceof Error ? error.message : String(error)}`,
@@ -512,12 +502,9 @@ class DependencyWatcher {
     this.dependencyCache.clear();
 
     if (this.options.detectCircularDependencies) {
-      const circularDeps =
-        this.dependencyGraphManager.findCircularDependencies();
+      const circularDeps = this.dependencyGraphManager.findCircularDependencies();
       if (circularDeps.length > 0) {
-        logger.warn(
-          `Circular dependencies detected: ${JSON.stringify(circularDeps)}`,
-        );
+        logger.warn(`Circular dependencies detected: ${JSON.stringify(circularDeps)}`);
       }
     }
   }
@@ -595,10 +582,7 @@ class DependencyWatcher {
     this.restartCallback = callback;
   }
 
-  private async handleFileChange(
-    event: FileChangeEvent,
-    filePath: string,
-  ): Promise<void> {
+  private async handleFileChange(event: FileChangeEvent, filePath: string): Promise<void> {
     try {
       const absolutePath = path.resolve(filePath);
 
@@ -617,14 +601,13 @@ class DependencyWatcher {
 
       // If any groups are affected, trigger restart instead of calling callbacks
       if (impactResult.affectedGroups.length > 0) {
-        logger.warn("File change detected, restarting watch process...", {
+        logger.info("File change detected, restarting watch process...", {
           mode: "stream",
         });
         logger.info(`Changed file: ${absolutePath}`, { mode: "stream" });
-        logger.info(
-          `Affected groups: ${impactResult.affectedGroups.join(", ")}`,
-          { mode: "stream" },
-        );
+        logger.info(`Affected groups: ${impactResult.affectedGroups.join(", ")}`, {
+          mode: "stream",
+        });
 
         if (this.restartCallback) {
           this.restartCallback();
@@ -649,9 +632,7 @@ class DependencyWatcher {
   }
 
   private findAffectedGroups(affectedFiles: string[]): string[] {
-    logger.debug(
-      `Finding affected groups for files: ${affectedFiles.join(", ")}`,
-    );
+    logger.debug(`Finding affected groups for files: ${affectedFiles.join(", ")}`);
     const affectedGroups = new Set<string>();
 
     for (const [groupId, group] of this.watchGroups) {

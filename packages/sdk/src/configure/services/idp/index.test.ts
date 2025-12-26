@@ -87,12 +87,8 @@ describe("defineIdp", () => {
         allowSelfPasswordReset: false,
       },
     });
-    expect(
-      idpWithPartialPolicy.userAuthPolicy?.useNonEmailIdentifier,
-    ).toBeUndefined();
-    expect(idpWithPartialPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(
-      false,
-    );
+    expect(idpWithPartialPolicy.userAuthPolicy?.useNonEmailIdentifier).toBeUndefined();
+    expect(idpWithPartialPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(false);
 
     const idpNoPolicy = defineIdp("idp-no-policy", {
       authorization: "loggedIn",
@@ -114,41 +110,24 @@ describe("defineIdp", () => {
         passwordMaxLength: 128,
       },
     });
-    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireUppercase).toBe(
-      true,
-    );
-    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireLowercase).toBe(
-      true,
-    );
-    expect(
-      idpWithPasswordPolicy.userAuthPolicy?.passwordRequireNonAlphanumeric,
-    ).toBe(true);
-    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireNumeric).toBe(
-      true,
-    );
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireUppercase).toBe(true);
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireLowercase).toBe(true);
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireNonAlphanumeric).toBe(true);
+    expect(idpWithPasswordPolicy.userAuthPolicy?.passwordRequireNumeric).toBe(true);
     expect(idpWithPasswordPolicy.userAuthPolicy?.passwordMinLength).toBe(10);
     expect(idpWithPasswordPolicy.userAuthPolicy?.passwordMaxLength).toBe(128);
 
-    const idpWithPartialPasswordPolicy = defineIdp(
-      "idp-with-partial-password-policy",
-      {
-        authorization: "loggedIn",
-        clients: ["client-1"] as const,
-        userAuthPolicy: {
-          passwordRequireUppercase: true,
-          passwordMinLength: 8,
-        },
+    const idpWithPartialPasswordPolicy = defineIdp("idp-with-partial-password-policy", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        passwordRequireUppercase: true,
+        passwordMinLength: 8,
       },
-    );
-    expect(
-      idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireUppercase,
-    ).toBe(true);
-    expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordMinLength).toBe(
-      8,
-    );
-    expect(
-      idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireLowercase,
-    ).toBeUndefined();
+    });
+    expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireUppercase).toBe(true);
+    expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordMinLength).toBe(8);
+    expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireLowercase).toBeUndefined();
   });
 
   it("should validate password length ranges", () => {

@@ -1,7 +1,8 @@
 import {
-  type CodeGenerator,
+  type TailorDBGenerator,
+  type TailorDBInput,
+  type AggregateArgs,
   type GeneratorResult,
-  type GeneratorInput,
 } from "@/cli/generator/types";
 import { TypeProcessor } from "./type-processor";
 import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
@@ -12,15 +13,13 @@ export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 /**
  * Main entry point for the Kysely type generation system.
  */
-export class KyselyGenerator implements CodeGenerator<
+export class KyselyGenerator implements TailorDBGenerator<
   KyselyTypeMetadata,
-  undefined,
-  undefined,
-  KyselyNamespaceMetadata,
-  undefined
+  KyselyNamespaceMetadata
 > {
   readonly id = KyselyGeneratorID;
   readonly description = "Generates Kysely type definitions for TailorDB types";
+  readonly dependencies = ["tailordb"] as const;
 
   constructor(
     private readonly options: {
@@ -33,14 +32,6 @@ export class KyselyGenerator implements CodeGenerator<
     namespace: string;
   }): Promise<KyselyTypeMetadata> {
     return await TypeProcessor.processType(args.type);
-  }
-
-  processResolver(): undefined {
-    return undefined;
-  }
-
-  processExecutor(): undefined {
-    return undefined;
   }
 
   async processTailorDBNamespace(args: {
@@ -64,12 +55,7 @@ export class KyselyGenerator implements CodeGenerator<
     };
   }
 
-  aggregate(args: {
-    input: GeneratorInput<KyselyNamespaceMetadata, undefined>;
-    executorInputs: undefined[];
-    baseDir: string;
-    configPath: string;
-  }): GeneratorResult {
+  aggregate(args: AggregateArgs<TailorDBInput<KyselyNamespaceMetadata>>): GeneratorResult {
     const files: GeneratorResult["files"] = [];
 
     const allNamespaceData: KyselyNamespaceMetadata[] = [];

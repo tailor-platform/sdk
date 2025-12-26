@@ -46,8 +46,6 @@ export const createSecretCommand = defineCommand({
       throw error;
     }
 
-    logger.success(
-      `Secret: ${args.name} created in vault: ${args["vault-name"]}`,
-    );
+    logger.success(`Secret: ${args.name} created in vault: ${args["vault-name"]}`);
   }),
 });

@@ -8,10 +8,7 @@ import {
 } from "@/cli/application/workflow/service";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
-import {
-  buildTriggerContext,
-  type TriggerContext,
-} from "@/cli/bundler/trigger-context";
+import { buildTriggerContext, type TriggerContext } from "@/cli/bundler/trigger-context";
 import {
   bundleWorkflowJobs,
   type BundleWorkflowJobsResult,
@@ -35,10 +32,7 @@ import {
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
-import {
-  applyStaticWebsite,
-  planStaticWebsite,
-} from "./services/staticwebsite";
+import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
@@ -63,19 +57,14 @@ export interface PlanContext {
   forRemoval: boolean;
 }
 
-export type ApplyPhase = "create-update" | "delete";
-
-// NOTE(haru): Enable inline sourcemaps to preserve original source locations in error stack traces for bundled functions
-// This flag will become unnecessary once function registry is implemented, which will resolve script size issues
-export const enableInlineSourcemap: boolean =
-  process.env.TAILOR_ENABLE_INLINE_SOURCEMAP === "true";
+export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
   const { config, configPath } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
-  const buildOnly = options?.buildOnly ?? false;
+  const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
@@ -102,9 +91,7 @@ export async function apply(options?: ApplyOptions) {
   }
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
-    const mainJobNames = workflowResult.workflowSources.map(
-      (ws) => ws.workflow.mainJob.name,
-    );
+    const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
     workflowBuildResult = await buildWorkflow(
       workflowResult.jobs,
       mainJobNames,
@@ -215,9 +202,7 @@ export async function apply(options?: ApplyOptions) {
     ...workflow.resourceOwners,
   ]);
   const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
-  const emptyApps = [...conflictOwners].filter(
-    (owner) => !resourceOwners.has(owner),
-  );
+  const emptyApps = [...conflictOwners].filter((owner) => !resourceOwners.has(owner));
   for (const emptyApp of emptyApps) {
     app.deletes.push({
       name: emptyApp,
@@ -241,26 +226,35 @@ export async function apply(options?: ApplyOptions) {
   await applyAuth(client, auth, "create-update");
   await applyPipeline(client, pipeline, "create-update");
 
-  // Phase 3: Delete subgraph services before Application update
-  // This avoids GraphQL SDL composition errors when resources (e.g., resolvers)
-  // conflict with system-generated ones
-  await applyPipeline(client, pipeline, "delete");
-  await applyAuth(client, auth, "delete");
-  await applyIdP(client, idp, "delete");
-  await applyTailorDB(client, tailorDB, "delete");
+  // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
+  // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
+  // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
+  await applyPipeline(client, pipeline, "delete-resources");
+  await applyAuth(client, auth, "delete-resources");
+  await applyIdP(client, idp, "delete-resources");
+  await applyTailorDB(client, tailorDB, "delete-resources");
 
-  // Phase 4: Create/Update Application (after subgraph changes complete)
+  // Phase 4: Create/Update Application (after subgraph resource changes complete)
   await applyApplication(client, app, "create-update");
 
   // Phase 5: Create/Update services that depend on Application
   await applyExecutor(client, executor, "create-update");
   await applyWorkflow(client, workflow, "create-update");
 
-  // Phase 6: Delete services that depend on Application, then Application itself
+  // Phase 6: Delete services that depend on Application
   await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
+
+  // Phase 7: Delete Application
   await applyApplication(client, app, "delete");
+
+  // Phase 8: Delete subgraph services (after Application is deleted, no reference errors)
+  // Fix for issue #570: Services couldn't be deleted because Application was still referencing them
+  await applyPipeline(client, pipeline, "delete-services");
+  await applyAuth(client, auth, "delete-services");
+  await applyIdP(client, idp, "delete-services");
+  await applyTailorDB(client, tailorDB, "delete-services");
 
   logger.success("Successfully applied changes.");
 }
@@ -273,10 +267,7 @@ async function buildPipeline(
   await bundleResolvers(namespace, config, triggerContext);
 }
 
-async function buildExecutor(
-  config: FileLoadConfig,
-  triggerContext?: TriggerContext,
-) {
+async function buildExecutor(config: FileLoadConfig, triggerContext?: TriggerContext) {
   await bundleExecutors(config, triggerContext);
 }
 
@@ -316,7 +307,7 @@ export const applyCommand = defineCommand({
     "dry-run": {
       type: "boolean",
       description: "Run the command without making any changes",
-      alias: "n",
+      alias: "d",
     },
     yes: {
       type: "boolean",

@@ -15,10 +15,7 @@ export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
 
-export type GqlOperation<Args> = Omit<
-  ParserGqlOperation,
-  "query" | "variables"
-> & {
+export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables"> & {
   query: UrqlOperationArgs[0];
   variables?: (args: Args) => UrqlOperationArgs[1];
 };

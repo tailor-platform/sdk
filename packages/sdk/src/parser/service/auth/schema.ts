@@ -65,9 +65,7 @@ export const OAuth2ClientGrantTypeSchema = z.union([
 
 export const OAuth2ClientSchema = z.object({
   description: z.string().optional(),
-  grantTypes: z
-    .array(OAuth2ClientGrantTypeSchema)
-    .default(["authorization_code", "refresh_token"]),
+  grantTypes: z.array(OAuth2ClientGrantTypeSchema).default(["authorization_code", "refresh_token"]),
   redirectURIs: z.array(
     z.union([
       z.templateLiteral(["https://", z.string()]),
@@ -77,11 +75,7 @@ export const OAuth2ClientSchema = z.object({
     ]),
   ),
   clientType: z
-    .union([
-      z.literal("confidential"),
-      z.literal("public"),
-      z.literal("browser"),
-    ])
+    .union([z.literal("confidential"), z.literal("public"), z.literal("browser")])
     .optional(),
   accessTokenLifetimeSeconds: z
     .number()
@@ -117,17 +111,11 @@ export const SCIMAttributeSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   mutability: z
-    .union([
-      z.literal("readOnly"),
-      z.literal("readWrite"),
-      z.literal("writeOnly"),
-    ])
+    .union([z.literal("readOnly"), z.literal("readWrite"), z.literal("writeOnly")])
     .optional(),
   required: z.boolean().optional(),
   multiValued: z.boolean().optional(),
-  uniqueness: z
-    .union([z.literal("none"), z.literal("server"), z.literal("global")])
-    .optional(),
+  uniqueness: z.union([z.literal("none"), z.literal("server"), z.literal("global")]).optional(),
   canonicalValues: z.array(z.string()).nullable().optional(),
   get subAttributes() {
     return z.array(SCIMAttributeSchema).nullable().optional();

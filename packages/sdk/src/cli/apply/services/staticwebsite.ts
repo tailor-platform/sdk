@@ -15,7 +15,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyStaticWebsite(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planStaticWebsite>>,
-  phase: ApplyPhase = "create-update",
+  phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -33,9 +33,7 @@ export async function applyStaticWebsite(
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // StaticWebsites
-    await Promise.all(
-      changeSet.deletes.map((del) => client.deleteStaticWebsite(del.request)),
-    );
+    await Promise.all(changeSet.deletes.map((del) => client.deleteStaticWebsite(del.request)));
   }
 }
 
@@ -66,11 +64,8 @@ export async function planStaticWebsite({
   application,
   forRemoval,
 }: PlanContext) {
-  const changeSet: ChangeSet<
-    CreateStaticWebsite,
-    UpdateStaticWebsite,
-    DeleteStaticWebsite
-  > = new ChangeSet("StaticWebsites");
+  const changeSet: ChangeSet<CreateStaticWebsite, UpdateStaticWebsite, DeleteStaticWebsite> =
+    new ChangeSet("StaticWebsites");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -78,12 +73,10 @@ export async function planStaticWebsite({
   // Fetch existing static websites
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
-      const { staticwebsites, nextPageToken } = await client.listStaticWebsites(
-        {
-          workspaceId,
-          pageToken,
-        },
-      );
+      const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
+        workspaceId,
+        pageToken,
+      });
       return [staticwebsites, nextPageToken];
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -105,17 +98,12 @@ export async function planStaticWebsite({
     }),
   );
 
-  const staticWebsiteServices = forRemoval
-    ? []
-    : application.staticWebsiteServices;
+  const staticWebsiteServices = forRemoval ? [] : application.staticWebsiteServices;
   for (const websiteService of staticWebsiteServices) {
     const config = websiteService;
     const name = websiteService.name;
     const existing = existingWebsites[name];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, name),
-      application.name,
-    );
+    const metaRequest = await buildMetaRequest(trn(workspaceId, name), application.name);
 
     if (existing) {
       if (!existing.label) {

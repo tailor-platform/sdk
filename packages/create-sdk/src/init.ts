@@ -27,9 +27,7 @@ export const initProject = async () => {
     await execa(packageManager, ["install"]);
     s.stop("✅ Dependencies installed");
   } else {
-    log.warn(
-      "⚠️ Could not detect package manager, skipping dependency installation",
-    );
+    log.warn("⚠️ Could not detect package manager, skipping dependency installation");
   }
 
   if (!(await isGitRepository())) {

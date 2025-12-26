@@ -54,9 +54,7 @@ function extractModules(filePath: string): Map<string, LibraryModule[]> {
         if (currentRegion.includes("node_modules/")) {
           // Extract library name: for @scoped packages, get @scope/package
           // For regular packages, get only the first segment
-          const match = /node_modules\/(@[^/]+\/[^/]+|[^/]+)/.exec(
-            currentRegion,
-          );
+          const match = /node_modules\/(@[^/]+\/[^/]+|[^/]+)/.exec(currentRegion);
           libraryName = match ? match[1] : "unknown";
         } else if (currentRegion.includes("packages/sdk/")) {
           libraryName = "@tailor-platform/sdk";
@@ -103,9 +101,7 @@ function addExports(code: string): string {
 
     if (isTopLevel) {
       // Match declarations: class, function, const, let, var
-      const declarationMatch = /^(class|function|const|let|var)\s+(\w+)/.exec(
-        line,
-      );
+      const declarationMatch = /^(class|function|const|let|var)\s+(\w+)/.exec(line);
       if (declarationMatch && !line.startsWith("export ")) {
         // Add export
         result.push(`export ${line}`);
@@ -174,14 +170,11 @@ async function minifyCode(
 const fileSizeBase = 1000;
 function formatBytes(bytes: number): string {
   if (bytes < fileSizeBase) return `${bytes} B`;
-  if (bytes < fileSizeBase * fileSizeBase)
-    return `${(bytes / fileSizeBase).toFixed(2)} KB`;
+  if (bytes < fileSizeBase * fileSizeBase) return `${(bytes / fileSizeBase).toFixed(2)} KB`;
   return `${(bytes / (fileSizeBase * fileSizeBase)).toFixed(2)} MB`;
 }
 
-async function analyzeMinifiedSizes(
-  transformedPath: string,
-): Promise<MinifiedResult[]> {
+async function analyzeMinifiedSizes(transformedPath: string): Promise<MinifiedResult[]> {
   const libraryMap = extractModules(transformedPath);
 
   // Create temp directory
@@ -195,11 +188,7 @@ async function analyzeMinifiedSizes(
 
   for (const [libraryName, modules] of libraryMap.entries()) {
     const combinedCode = combineLibraryModules(modules);
-    const { originalSize, minifiedSize } = await minifyCode(
-      combinedCode,
-      tempDir,
-      libraryName,
-    );
+    const { originalSize, minifiedSize } = await minifyCode(combinedCode, tempDir, libraryName);
 
     results.push({
       library: libraryName,
@@ -225,10 +214,7 @@ function printResults(results: MinifiedResult[], fileName: string) {
   const totalMinified = results.reduce((sum, r) => sum + r.minifiedSize, 0);
 
   // Calculate max library name length for proper alignment
-  const maxLibraryNameLength = Math.max(
-    ...results.map((r) => r.library.length),
-    "Library".length,
-  );
+  const maxLibraryNameLength = Math.max(...results.map((r) => r.library.length), "Library".length);
   const libraryColWidth = Math.max(maxLibraryNameLength + 2, 35);
   const modulesColWidth = 8;
   const originalColWidth = 12;
@@ -322,9 +308,7 @@ async function analyzeAllTransformedFiles() {
 // Run analysis
 if (targetFile) {
   // Analyze specific file
-  const filePath = path.isAbsolute(targetFile)
-    ? targetFile
-    : path.join(process.cwd(), targetFile);
+  const filePath = path.isAbsolute(targetFile) ? targetFile : path.join(process.cwd(), targetFile);
 
   analyzeFile(filePath).catch((error) => {
     console.error("Error during analysis:", error);

@@ -7,9 +7,6 @@ export class AuthService {
   private _userProfile?: AuthOwnConfig["userProfile"] & {
     namespace: string;
   };
-  private _tenantProvider?: AuthOwnConfig["tenantProvider"] & {
-    namespace: string;
-  };
   private _parsedConfig: AuthOwnConfig & {
     idProvider?: IdProviderConfig;
   };
@@ -17,6 +14,7 @@ export class AuthService {
   constructor(
     public readonly config: AuthOwnConfig,
     public readonly tailorDBServices: ReadonlyArray<TailorDBService>,
+    public readonly externalTailorDBNamespaces: ReadonlyArray<string>,
   ) {
     // Parse idProvider to apply default values if it exists
     this._parsedConfig = {
@@ -29,104 +27,72 @@ export class AuthService {
     return this._userProfile;
   }
 
-  get tenantProvider() {
-    return this._tenantProvider;
-  }
-
   get parsedConfig(): AuthOwnConfig & {
     idProvider?: IdProviderConfig;
   } {
     return this._parsedConfig;
   }
 
+  /**
+   * Resolves namespace for userProfile.
+   *
+   * Resolution priority:
+   * 1. Explicit namespace in config
+   * 2. Single TailorDB (regular or external) → use that namespace
+   * 3. Multiple TailorDBs → search by type name (external cannot be searched)
+   */
   async resolveNamespaces(): Promise<void> {
-    // Load types for all TailorDB services
-    await Promise.all(
-      this.tailorDBServices.map((service) => service.loadTypes()),
-    );
-
-    // Default to single namespace if only one service exists
-    if (this.tailorDBServices.length === 1) {
-      const singleNamespace = this.tailorDBServices[0].namespace;
-      this._userProfile = this.config.userProfile
-        ? {
-            ...this.config.userProfile,
-            namespace: singleNamespace,
-          }
-        : undefined;
-      this._tenantProvider = this.config.tenantProvider
-        ? {
-            ...this.config.tenantProvider,
-            namespace: singleNamespace,
-          }
-        : undefined;
+    // No userProfile defined
+    if (!this.config.userProfile) {
       return;
     }
 
-    // Extract type names to search for
-    const userProfileTypeName =
-      this.config.userProfile?.type &&
-      typeof this.config.userProfile.type === "object" &&
-      "name" in this.config.userProfile.type
-        ? this.config.userProfile.type.name
-        : undefined;
+    // 1. Explicit namespace
+    if (this.config.userProfile.namespace) {
+      this._userProfile = {
+        ...this.config.userProfile,
+        namespace: this.config.userProfile.namespace,
+      };
+      return;
+    }
 
-    const tenantProviderTypeName =
-      typeof this.config.tenantProvider?.type === "string"
-        ? this.config.tenantProvider.type
-        : undefined;
-
-    // Find namespaces in a single loop
+    const totalNamespaceCount =
+      this.tailorDBServices.length + this.externalTailorDBNamespaces.length;
     let userProfileNamespace: string | undefined;
-    let tenantProviderNamespace: string | undefined;
 
-    for (const service of this.tailorDBServices) {
-      const types = service.getTypes();
+    // 2. Single TailorDB
+    if (totalNamespaceCount === 1) {
+      userProfileNamespace =
+        this.tailorDBServices[0]?.namespace ?? this.externalTailorDBNamespaces[0];
+    } else {
+      // 3. Multiple TailorDBs
+      await Promise.all(this.tailorDBServices.map((service) => service.loadTypes()));
 
-      if (
-        userProfileTypeName &&
-        !userProfileNamespace &&
-        Object.prototype.hasOwnProperty.call(types, userProfileTypeName)
-      ) {
-        userProfileNamespace = service.namespace;
-      }
-      if (
-        tenantProviderTypeName &&
-        !tenantProviderNamespace &&
-        Object.prototype.hasOwnProperty.call(types, tenantProviderTypeName)
-      ) {
-        tenantProviderNamespace = service.namespace;
-      }
+      const userProfileTypeName =
+        typeof this.config.userProfile.type === "object" && "name" in this.config.userProfile.type
+          ? this.config.userProfile.type.name
+          : undefined;
 
-      // Early exit if both are found
-      if (userProfileNamespace && tenantProviderNamespace) {
-        break;
-      }
-    }
-
-    if (this.config.userProfile && !userProfileNamespace) {
-      throw new Error(
-        `userProfile type "${this.config.userProfile.type.name}" not found in any TailorDB namespace`,
-      );
-    }
-
-    if (this.config.tenantProvider && !tenantProviderNamespace) {
-      throw new Error(
-        `tenantProvider type "${this.config.tenantProvider.type}" not found in any TailorDB namespace`,
-      );
-    }
-
-    this._userProfile = this.config.userProfile
-      ? {
-          ...this.config.userProfile,
-          namespace: userProfileNamespace!,
+      if (userProfileTypeName) {
+        for (const service of this.tailorDBServices) {
+          const types = service.getTypes();
+          if (Object.prototype.hasOwnProperty.call(types, userProfileTypeName)) {
+            userProfileNamespace = service.namespace;
+            break;
+          }
         }
-      : undefined;
-    this._tenantProvider = this.config.tenantProvider
-      ? {
-          ...this.config.tenantProvider,
-          namespace: tenantProviderNamespace!,
-        }
-      : undefined;
+      }
+
+      if (!userProfileNamespace) {
+        throw new Error(
+          `userProfile type "${this.config.userProfile.type.name}" not found in any TailorDB namespace`,
+        );
+      }
+    }
+
+    this._userProfile = {
+      ...this.config.userProfile,
+      namespace: userProfileNamespace,
+    };
   }
 }

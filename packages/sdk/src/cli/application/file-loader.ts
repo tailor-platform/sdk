@@ -27,9 +27,7 @@ export function loadFilesWithIgnores(config: FileLoadConfig): string[] {
       const matchedIgnoreFiles = fs.globSync(absoluteIgnorePattern);
       matchedIgnoreFiles.forEach((file) => ignoreFiles.add(file));
     } catch (error) {
-      logger.warn(
-        `Failed to glob ignore pattern "${ignorePattern}": ${String(error)}`,
-      );
+      logger.warn(`Failed to glob ignore pattern "${ignorePattern}": ${String(error)}`);
     }
   }
 
@@ -39,9 +37,7 @@ export function loadFilesWithIgnores(config: FileLoadConfig): string[] {
     try {
       const matchedFiles = fs.globSync(absolutePattern);
       // Filter out ignored files
-      const filteredFiles = matchedFiles.filter(
-        (file) => !ignoreFiles.has(file),
-      );
+      const filteredFiles = matchedFiles.filter((file) => !ignoreFiles.has(file));
       files.push(...filteredFiles);
     } catch (error) {
       logger.warn(`Failed to glob pattern "${pattern}": ${String(error)}`);

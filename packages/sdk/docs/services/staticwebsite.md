@@ -40,13 +40,13 @@ defineStaticWebSite("my-website", {
 });
 ```
 
-### allowedIPAddresses
+### allowedIpAddresses
 
 Restrict access to specific IP addresses in CIDR format:
 
 ```typescript
 defineStaticWebSite("my-website", {
-  allowedIPAddresses: ["192.168.0.0/24", "10.0.0.0/8"],
+  allowedIpAddresses: ["192.168.0.0/24", "10.0.0.0/8"],
 });
 ```
 

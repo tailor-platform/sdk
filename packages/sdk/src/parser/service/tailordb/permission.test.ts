@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  normalizeActionPermission,
-  normalizeGqlPermission,
-} from "./permission";
+import { normalizeActionPermission, normalizeGqlPermission } from "./permission";
 
 type Permission = Parameters<typeof normalizeActionPermission>[0];
 
@@ -73,11 +70,7 @@ describe("normalizeActionPermission", () => {
     });
 
     it("should handle array values in conditions", () => {
-      const permission = [
-        "user.role",
-        "in",
-        ["admin", "manager"] as string[],
-      ] as Permission;
+      const permission = ["user.role", "in", ["admin", "manager"] as string[]] as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
         conditions: [["user.role", "in", ["admin", "manager"]]],
@@ -86,11 +79,7 @@ describe("normalizeActionPermission", () => {
     });
 
     it("should handle user operand", () => {
-      const permission = [
-        { user: "role" },
-        "=",
-        "admin",
-      ] as unknown as Permission;
+      const permission = [{ user: "role" }, "=", "admin"] as unknown as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
         conditions: [[{ user: "role" }, "eq", "admin"]],
@@ -99,11 +88,7 @@ describe("normalizeActionPermission", () => {
     });
 
     it("should handle record operand", () => {
-      const permission = [
-        { record: "status" },
-        "=",
-        "active",
-      ] as unknown as Permission;
+      const permission = [{ record: "status" }, "=", "active"] as unknown as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
         conditions: [[{ record: "status" }, "eq", "active"]],
@@ -202,37 +187,21 @@ describe("normalizeActionPermission", () => {
     });
 
     it("should handle 'in' operator", () => {
-      const permission = [
-        "user.role",
-        "in",
-        ["admin", "moderator"] as string[],
-      ] as const;
+      const permission = ["user.role", "in", ["admin", "moderator"] as string[]] as const;
       const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([
-        ["user.role", "in", ["admin", "moderator"]],
-      ]);
+      expect(result.conditions).toEqual([["user.role", "in", ["admin", "moderator"]]]);
     });
 
     it("should handle 'not in' operator", () => {
-      const permission = [
-        "user.status",
-        "not in",
-        ["suspended", "banned"] as string[],
-      ] as const;
+      const permission = ["user.status", "not in", ["suspended", "banned"] as string[]] as const;
       const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([
-        ["user.status", "nin", ["suspended", "banned"]],
-      ]);
+      expect(result.conditions).toEqual([["user.status", "nin", ["suspended", "banned"]]]);
     });
   });
 
   describe("Type-specific permissions", () => {
     it("should handle record-level permissions with type info", () => {
-      const permission = [
-        { record: "ownerId" },
-        "=",
-        { user: "id" },
-      ] as unknown as Permission;
+      const permission = [{ record: "ownerId" }, "=", { user: "id" }] as unknown as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
         conditions: [[{ record: "ownerId" }, "eq", { user: "_id" }]],
@@ -254,11 +223,7 @@ describe("normalizeActionPermission", () => {
     });
 
     it("should handle GQL-level permissions", () => {
-      const permission = [
-        { user: "role" },
-        "=",
-        "admin",
-      ] as unknown as Permission;
+      const permission = [{ user: "role" }, "=", "admin"] as unknown as Permission;
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
         conditions: [[{ user: "role" }, "eq", "admin"]],
@@ -437,14 +402,7 @@ describe("normalizeGqlPermission", () => {
     const permission = [
       {
         conditions: [["user.role", "=", "superadmin"]],
-        actions: [
-          "read",
-          "create",
-          "update",
-          "delete",
-          "aggregate",
-          "bulkUpsert",
-        ],
+        actions: ["read", "create", "update", "delete", "aggregate", "bulkUpsert"],
         permit: true,
       },
     ] as const;
@@ -452,14 +410,7 @@ describe("normalizeGqlPermission", () => {
     expect(result).toEqual([
       {
         conditions: [["user.role", "eq", "superadmin"]],
-        actions: [
-          "read",
-          "create",
-          "update",
-          "delete",
-          "aggregate",
-          "bulkUpsert",
-        ],
+        actions: ["read", "create", "update", "delete", "aggregate", "bulkUpsert"],
         permit: "allow",
         description: undefined,
       },

@@ -93,9 +93,7 @@ const startAuthServer = async () => {
       try {
         await open(authorizeUri);
       } catch {
-        logger.warn(
-          "Failed to open browser automatically. Please open the URL above manually.",
-        );
+        logger.warn("Failed to open browser automatically. Please open the URL above manually.");
       }
     });
   });

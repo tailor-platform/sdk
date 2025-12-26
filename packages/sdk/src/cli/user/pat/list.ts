@@ -5,10 +5,7 @@ import { fetchAll, initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
 import { printData } from "../../utils/format";
 import { logger } from "../../utils/logger";
-import {
-  transformPersonalAccessToken,
-  type PersonalAccessTokenInfo,
-} from "./transform";
+import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
 
 export const listCommand = defineCommand({
   meta: {
@@ -33,10 +30,9 @@ export const listCommand = defineCommand({
     const client = await initOperatorClient(token);
 
     const pats = await fetchAll(async (pageToken) => {
-      const { personalAccessTokens, nextPageToken } =
-        await client.listPersonalAccessTokens({
-          pageToken,
-        });
+      const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
+        pageToken,
+      });
       return [personalAccessTokens, nextPageToken];
     });
 
@@ -50,9 +46,7 @@ export const listCommand = defineCommand({
 
     if (args.json) {
       // JSON format with scopes as array
-      const patInfos: PersonalAccessTokenInfo[] = pats.map(
-        transformPersonalAccessToken,
-      );
+      const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
       printData(patInfos, args.json);
       return;
     }

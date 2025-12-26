@@ -82,9 +82,7 @@ describe("createResolver", () => {
         }),
         body: (context) => {
           expectTypeOf(context.input.required).toBeString();
-          expectTypeOf(context.input.optional).toEqualTypeOf<
-            string | null | undefined
-          >();
+          expectTypeOf(context.input.optional).toEqualTypeOf<string | null | undefined>();
           return { result: context.input.required };
         },
       });
@@ -155,9 +153,7 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context.input.user.name.first).toBeString();
           expectTypeOf(context.input.user.name.last).toBeString();
-          expectTypeOf(context.input.user.age).toEqualTypeOf<
-            number | null | undefined
-          >();
+          expectTypeOf(context.input.user.age).toEqualTypeOf<number | null | undefined>();
           return {
             fullName: `${context.input.user.name.first} ${context.input.user.name.last}`,
           };
@@ -316,9 +312,7 @@ describe("createResolver", () => {
         }),
         body: (context) => {
           expectTypeOf(context.input.orders).toBeArray();
-          expectTypeOf(context.input.orders[0]?.id).toExtend<
-            string | undefined
-          >();
+          expectTypeOf(context.input.orders[0]?.id).toExtend<string | undefined>();
           return { processed: context.input.orders.length };
         },
       });
@@ -591,9 +585,7 @@ describe("createResolver", () => {
         body: (context) => ({ result: context.input.name }),
       });
 
-      expect(resolver.output.metadata.description).toBe(
-        "Output type description",
-      );
+      expect(resolver.output.metadata.description).toBe("Output type description");
     });
 
     test("TailorDBType field descriptions are preserved in resolver", () => {
@@ -633,9 +625,7 @@ describe("createResolver", () => {
 
       expect(resolver.input?.name.metadata.description).toBe("User name field");
       expect(resolver.input?.age.metadata.description).toBe("User age field");
-      expect(resolver.output.fields.result.metadata.description).toBe(
-        "Result message",
-      );
+      expect(resolver.output.fields.result.metadata.description).toBe("Result message");
     });
 
     test("nested object field supports description", () => {
@@ -658,15 +648,9 @@ describe("createResolver", () => {
         body: (context) => ({ result: context.input.user.name }),
       });
 
-      expect(resolver.input?.user.metadata.description).toBe(
-        "User object field",
-      );
-      expect(resolver.input?.user.fields.name.metadata.description).toBe(
-        "Name field",
-      );
-      expect(resolver.input?.user.fields.age.metadata.description).toBe(
-        "Age field",
-      );
+      expect(resolver.input?.user.metadata.description).toBe("User object field");
+      expect(resolver.input?.user.fields.name.metadata.description).toBe("Name field");
+      expect(resolver.input?.user.fields.age.metadata.description).toBe("Age field");
     });
   });
 

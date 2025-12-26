@@ -23,16 +23,11 @@ export class ResolverService {
 
     const resolverFiles = loadFilesWithIgnores(this.config);
 
-    logger.newline();
     logger.log(
       `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${this.namespace}"`)}`,
     );
 
-    await Promise.all(
-      resolverFiles.map((resolverFile) =>
-        this.loadResolverForFile(resolverFile),
-      ),
-    );
+    await Promise.all(resolverFiles.map((resolverFile) => this.loadResolverForFile(resolverFile)));
   }
 
   async loadResolverForFile(resolverFile: string) {

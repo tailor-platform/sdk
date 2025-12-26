@@ -25,15 +25,8 @@ const mockBasicType = db.type("User", {
 });
 
 const mockEnumType = db.type("Status", {
-  status: db.enum([
-    { value: "active" },
-    { value: "inactive" },
-    { value: "pending" },
-  ]),
-  priority: db.enum(
-    [{ value: "high" }, { value: "medium" }, { value: "low" }],
-    { optional: true },
-  ),
+  status: db.enum([{ value: "active" }, { value: "inactive" }, { value: "pending" }]),
+  priority: db.enum([{ value: "high" }, { value: "medium" }, { value: "low" }], { optional: true }),
 });
 
 const mockNestedType = db.type("ComplexUser", {
@@ -81,9 +74,8 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
-    it("processResolver method returns undefined", () => {
-      const result = kyselyGenerator.processResolver();
-      expect(result).toBeUndefined();
+    it("should have correct dependencies", () => {
+      expect(kyselyGenerator.dependencies).toEqual(["tailordb"]);
     });
   });
 
@@ -94,12 +86,8 @@ describe("KyselyGenerator integration tests", () => {
         namespace: "test-namespace",
       });
 
-      expect(result.typeDef).toContain(
-        'status: "active" | "inactive" | "pending";',
-      );
-      expect(result.typeDef).toContain(
-        'priority: "high" | "medium" | "low" | null;',
-      );
+      expect(result.typeDef).toContain('status: "active" | "inactive" | "pending";');
+      expect(result.typeDef).toContain('priority: "high" | "medium" | "low" | null;');
     });
 
     it("correctly processes nested object type", async () => {
@@ -133,9 +121,7 @@ describe("KyselyGenerator integration tests", () => {
 
       expect(result.typeDef).toContain("requiredField: string;");
       expect(result.typeDef).toContain("optionalField: string | null;");
-      expect(result.typeDef).toContain(
-        "undefinedRequiredField: string | null;",
-      );
+      expect(result.typeDef).toContain("undefinedRequiredField: string | null;");
     });
 
     it("correctly processes array types", async () => {
@@ -240,11 +226,9 @@ describe("KyselyGenerator integration tests", () => {
             types: processedTypes,
           },
         ],
-        resolver: [],
       };
       const result = kyselyGenerator.aggregate({
         input: input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });
@@ -254,7 +238,7 @@ describe("KyselyGenerator integration tests", () => {
 
       const content = result.files[0].content;
       expect(content).toContain(
-        'import { type ColumnType, Kysely } from "kysely"',
+        'import { type ColumnType, Kysely, type KyselyConfig } from "kysely"',
       );
       expect(content).toContain("interface Namespace {");
       expect(content).toContain('"test-namespace": {');
@@ -286,11 +270,9 @@ describe("KyselyGenerator integration tests", () => {
             types: processedTypes,
           },
         ],
-        resolver: [],
       };
       const result = kyselyGenerator.aggregate({
         input: input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });
@@ -376,12 +358,10 @@ describe("KyselyGenerator integration tests", () => {
           { namespace: "tailordb", types: tailordbTypes },
           { namespace: "analytics", types: analyticsTypes },
         ],
-        resolver: [],
       };
 
       const result = kyselyGenerator.aggregate({
         input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });
@@ -418,12 +398,10 @@ describe("KyselyGenerator integration tests", () => {
 
       const input = {
         tailordb: [{ namespace: "test", types }],
-        resolver: [],
       };
 
       const result = kyselyGenerator.aggregate({
         input,
-        executorInputs: [],
         baseDir: "/test",
         configPath: "tailor.config.ts",
       });

@@ -30,9 +30,7 @@ export type IDToken = z.output<typeof IDTokenSchema>;
 export type BuiltinIdP = z.output<typeof BuiltinIdPSchema>;
 export type IdProviderConfigInput = z.input<typeof IdProviderSchema>;
 export type IdProviderConfig = z.output<typeof IdProviderSchema>;
-export type OAuth2ClientGrantType = z.output<
-  typeof OAuth2ClientGrantTypeSchema
->;
+export type OAuth2ClientGrantType = z.output<typeof OAuth2ClientGrantTypeSchema>;
 // OAuth2Client input type (before transform) for configure layer
 export type OAuth2ClientInput = z.input<typeof OAuth2ClientSchema>;
 // OAuth2Client output type (after transform) for parser/cli layers
@@ -63,10 +61,8 @@ type FieldOutput<
   Key extends UserFieldKeys<User>,
 > = output<User>[Key];
 
-type FieldIsRequired<
-  User extends TailorDBInstance,
-  Key extends UserFieldKeys<User>,
-> = undefined extends FieldOutput<User, Key> ? false : true;
+type FieldIsRequired<User extends TailorDBInstance, Key extends UserFieldKeys<User>> =
+  undefined extends FieldOutput<User, Key> ? false : true;
 
 type FieldIsOfType<
   User extends TailorDBInstance,
@@ -74,20 +70,13 @@ type FieldIsOfType<
   Type extends string,
 > = FieldDefined<User, Key> extends { type: Type } ? true : false;
 
-type FieldIsArray<
-  User extends TailorDBInstance,
-  Key extends UserFieldKeys<User>,
-> = FieldDefined<User, Key> extends { array: true } ? true : false;
+type FieldIsArray<User extends TailorDBInstance, Key extends UserFieldKeys<User>> =
+  FieldDefined<User, Key> extends { array: true } ? true : false;
 
-type FieldIsUnique<
-  User extends TailorDBInstance,
-  Key extends UserFieldKeys<User>,
-> = FieldDefined<User, Key> extends { unique: true } ? true : false;
+type FieldIsUnique<User extends TailorDBInstance, Key extends UserFieldKeys<User>> =
+  FieldDefined<User, Key> extends { unique: true } ? true : false;
 
-type FieldSupportsValueOperand<
-  User extends TailorDBInstance,
-  Key extends UserFieldKeys<User>,
-> =
+type FieldSupportsValueOperand<User extends TailorDBInstance, Key extends UserFieldKeys<User>> =
   FieldOutput<User, Key> extends ValueOperand | null | undefined ? true : false;
 
 // Exported user field key types
@@ -164,6 +153,13 @@ type UserProfile<
   AttributeMap extends UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[],
 > = {
+  /**
+   * TailorDB namespace where the user type is defined.
+   *
+   * Usually auto-resolved, so you don't need to specify this.
+   * Required only when multiple TailorDBs exist and the type is in an external TailorDB.
+   */
+  namespace?: string;
   type: User;
   usernameField: UsernameFieldKey<User>;
   attributes?: DisallowExtraKeys<AttributeMap, UserAttributeKey<User>>;
@@ -184,10 +180,9 @@ type MachineUser<
         ? { attributes?: never }
         : {
             attributes: {
-              [K in AttributeMapSelectedKeys<
-                User,
-                AttributeMap
-              >]: K extends keyof output<User> ? output<User>[K] : never;
+              [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
+                ? output<User>[K]
+                : never;
             } & {
               [K in Exclude<
                 keyof output<User>,
@@ -207,10 +202,7 @@ export type AuthServiceInput<
   MachineUserNames extends string,
 > = {
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
-  machineUsers?: Record<
-    MachineUserNames,
-    MachineUser<User, AttributeMap, AttributeList>
-  >;
+  machineUsers?: Record<MachineUserNames, MachineUser<User, AttributeMap, AttributeList>>;
   oauth2Clients?: Record<string, OAuth2ClientInput>;
   idProvider?: IdProviderConfig;
   scim?: SCIMConfig;
@@ -225,10 +217,7 @@ export type AuthServiceOutput<
   MachineUserNames extends string,
 > = {
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
-  machineUsers?: Record<
-    MachineUserNames,
-    MachineUser<User, AttributeMap, AttributeList>
-  >;
+  machineUsers?: Record<MachineUserNames, MachineUser<User, AttributeMap, AttributeList>>;
   oauth2Clients?: Record<string, OAuth2Client>;
   idProvider?: IdProviderConfigInput;
   scim?: SCIMConfig;

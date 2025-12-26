@@ -9,10 +9,31 @@ export default defineConfig({
     },
   },
   test: {
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
+          exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "e2e",
+          include: ["e2e/**/*.test.ts"],
+          testTimeout: 120000,
+          hookTimeout: 120000,
+        },
+      },
+    ],
     environment: "node",
-    include: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
     globals: true,
     watch: false,
     typecheck: { enabled: true },
+    coverage: {
+      reporter: ["text", "lcov"],
+    },
   },
 });

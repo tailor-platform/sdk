@@ -2,18 +2,12 @@ import { defineCommand } from "citty";
 import ml from "multiline-ts";
 import { type Application, defineApplication } from "@/cli/application";
 import { type PlanContext } from "@/cli/apply";
-import {
-  applyApplication,
-  planApplication,
-} from "@/cli/apply/services/application";
+import { applyApplication, planApplication } from "@/cli/apply/services/application";
 import { applyAuth, planAuth } from "@/cli/apply/services/auth";
 import { applyExecutor, planExecutor } from "@/cli/apply/services/executor";
 import { applyIdP, planIdP } from "@/cli/apply/services/idp";
 import { applyPipeline, planPipeline } from "@/cli/apply/services/resolver";
-import {
-  applyStaticWebsite,
-  planStaticWebsite,
-} from "@/cli/apply/services/staticwebsite";
+import { applyStaticWebsite, planStaticWebsite } from "@/cli/apply/services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig } from "@/cli/config-loader";
 import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
@@ -67,13 +61,7 @@ async function execRemove(
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
-  const workflow = await planWorkflow(
-    client,
-    workspaceId,
-    application.name,
-    {},
-    {},
-  );
+  const workflow = await planWorkflow(client, workspaceId, application.name, {}, {});
 
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&
@@ -96,12 +84,16 @@ async function execRemove(
   // Apply deletions in reverse order of dependencies
   await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
-  await applyApplication(client, app, "delete");
-  await applyPipeline(client, pipeline, "delete");
-  await applyAuth(client, auth, "delete");
-  await applyIdP(client, idp, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
-  await applyTailorDB(client, tailorDB, "delete");
+  await applyApplication(client, app, "delete");
+  await applyPipeline(client, pipeline, "delete-resources");
+  await applyPipeline(client, pipeline, "delete-services");
+  await applyAuth(client, auth, "delete-resources");
+  await applyAuth(client, auth, "delete-services");
+  await applyIdP(client, idp, "delete-resources");
+  await applyIdP(client, idp, "delete-services");
+  await applyTailorDB(client, tailorDB, "delete-resources");
+  await applyTailorDB(client, tailorDB, "delete-services");
 }
 
 export async function remove(options?: RemoveOptions): Promise<void> {
@@ -146,17 +138,15 @@ export const removeCommand = defineCommand({
       configPath: args.config,
     });
 
-    logger.info(
-      `Planning removal of resources managed by "${application.name}"...`,
-    );
+    logger.info(`Planning removal of resources managed by "${application.name}"...`);
     logger.newline();
 
     await execRemove(client, workspaceId, application, async () => {
       if (!args.yes) {
-        const confirmed = await logger.prompt(
-          "Are you sure you want to remove all resources?",
-          { type: "confirm", initial: false },
-        );
+        const confirmed = await logger.prompt("Are you sure you want to remove all resources?", {
+          type: "confirm",
+          initial: false,
+        });
         if (!confirmed) {
           throw new Error(ml`
         Remove cancelled. No resources were deleted.
@@ -168,8 +158,6 @@ export const removeCommand = defineCommand({
       }
     });
 
-    logger.success(
-      `Successfully removed all resources managed by "${application.name}".`,
-    );
+    logger.success(`Successfully removed all resources managed by "${application.name}".`);
   }),
 });

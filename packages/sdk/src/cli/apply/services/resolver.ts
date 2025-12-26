@@ -49,7 +49,7 @@ const SCALAR_TYPE_MAP = {
 export async function applyPipeline(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planPipeline>>,
-  phase: ApplyPhase = "create-update",
+  phase: Exclude<ApplyPhase, "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -67,36 +67,23 @@ export async function applyPipeline(
 
     // Resolvers
     await Promise.all([
-      ...changeSet.resolver.creates.map((create) =>
-        client.createPipelineResolver(create.request),
-      ),
-      ...changeSet.resolver.updates.map((update) =>
-        client.updatePipelineResolver(update.request),
-      ),
+      ...changeSet.resolver.creates.map((create) => client.createPipelineResolver(create.request)),
+      ...changeSet.resolver.updates.map((update) => client.updatePipelineResolver(update.request)),
     ]);
-  } else if (phase === "delete") {
+  } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // Resolvers
     await Promise.all(
-      changeSet.resolver.deletes.map((del) =>
-        client.deletePipelineResolver(del.request),
-      ),
+      changeSet.resolver.deletes.map((del) => client.deletePipelineResolver(del.request)),
     );
-
-    // Services
+  } else if (phase === "delete-services") {
+    // Services only
     await Promise.all(
-      changeSet.service.deletes.map((del) =>
-        client.deletePipelineService(del.request),
-      ),
+      changeSet.service.deletes.map((del) => client.deletePipelineService(del.request)),
     );
   }
 }
-export async function planPipeline({
-  client,
-  workspaceId,
-  application,
-  forRemoval,
-}: PlanContext) {
+export async function planPipeline({ client, workspaceId, application, forRemoval }: PlanContext) {
   const pipelines: Readonly<ResolverService>[] = [];
   if (!forRemoval) {
     for (const pipeline of application.resolverServices) {
@@ -164,19 +151,19 @@ async function planServices(
   appName: string,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
 ) {
-  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
-    new ChangeSet("Pipeline services");
+  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> = new ChangeSet(
+    "Pipeline services",
+  );
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
   const withoutLabel = await fetchAll(async (pageToken) => {
     try {
-      const { pipelineServices, nextPageToken } =
-        await client.listPipelineServices({
-          workspaceId,
-          pageToken,
-        });
+      const { pipelineServices, nextPageToken } = await client.listPipelineServices({
+        workspaceId,
+        pageToken,
+      });
       return [pipelineServices, nextPageToken];
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -203,10 +190,7 @@ async function planServices(
 
   for (const pipeline of pipelines) {
     const existing = existingServices[pipeline.namespace];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, pipeline.namespace),
-      appName,
-    );
+    const metaRequest = await buildMetaRequest(trn(workspaceId, pipeline.namespace), appName);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -284,18 +268,18 @@ async function planResolvers(
   deletedServices: ReadonlyArray<string>,
   env: Record<string, string | number | boolean>,
 ) {
-  const changeSet: ChangeSet<CreateResolver, UpdateResolver, DeleteResolver> =
-    new ChangeSet("Pipeline resolvers");
+  const changeSet: ChangeSet<CreateResolver, UpdateResolver, DeleteResolver> = new ChangeSet(
+    "Pipeline resolvers",
+  );
 
   const fetchResolvers = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
       try {
-        const { pipelineResolvers, nextPageToken } =
-          await client.listPipelineResolvers({
-            workspaceId,
-            namespaceName,
-            pageToken,
-          });
+        const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
+          workspaceId,
+          namespaceName,
+          pageToken,
+        });
         return [pipelineResolvers, nextPageToken];
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {
@@ -326,11 +310,7 @@ async function planResolvers(
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(
-              resolver,
-              executorUsedResolvers,
-              env,
-            ),
+            pipelineResolver: processResolver(resolver, executorUsedResolvers, env),
           },
         });
         existingNameSet.delete(resolver.name);
@@ -340,11 +320,7 @@ async function planResolvers(
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(
-              resolver,
-              executorUsedResolvers,
-              env,
-            ),
+            pipelineResolver: processResolver(resolver, executorUsedResolvers, env),
           },
         });
       }
@@ -383,11 +359,7 @@ function processResolver(
   env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   // Read body function code
-  const functionPath = path.join(
-    getDistDir(),
-    "resolvers",
-    `${resolver.name}.js`,
-  );
+  const functionPath = path.join(getDistDir(), "resolvers", `${resolver.name}.js`);
   let functionCode = "";
   try {
     functionCode = fs.readFileSync(functionPath, "utf-8");
@@ -395,36 +367,36 @@ function processResolver(
     logger.warn(`Function file not found: ${functionPath}`);
   }
 
-  const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] =
-    [
-      {
-        name: "body",
-        operationName: "body",
-        description: `${resolver.name} function body`,
-        operationType: PipelineResolver_OperationType.FUNCTION,
-        operationSource: functionCode,
-        operationHook: {
-          expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
-        },
-        postScript: `args.body`,
+  const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
+    {
+      name: "body",
+      operationName: "body",
+      description: `${resolver.name} function body`,
+      operationType: PipelineResolver_OperationType.FUNCTION,
+      operationSource: functionCode,
+      operationHook: {
+        expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
       },
-    ];
+      postScript: `args.body`,
+    },
+  ];
 
   const typeBaseName = inflection.camelize(resolver.name);
 
   // Build inputs
-  const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] =
-    resolver.input
-      ? protoFields(resolver.input, `${typeBaseName}Input`, true)
-      : [];
+  const inputs: MessageInitShape<typeof PipelineResolver_FieldSchema>[] = resolver.input
+    ? protoFields(resolver.input, `${typeBaseName}Input`, true)
+    : [];
 
   // Build response
-  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> =
-    protoFields({ "": resolver.output }, `${typeBaseName}Output`, false)[0];
+  const response: MessageInitShape<typeof PipelineResolver_FieldSchema> = protoFields(
+    { "": resolver.output },
+    `${typeBaseName}Output`,
+    false,
+  )[0];
 
   // Build description (combine resolver description and output description)
-  const resolverDescription =
-    resolver.description || `${resolver.name} resolver`;
+  const resolverDescription = resolver.description || `${resolver.name} resolver`;
   const outputDescription = resolver.output.metadata.description;
   const combinedDescription = outputDescription
     ? `${resolverDescription}\n\nReturns:\n${outputDescription}`
@@ -457,9 +429,7 @@ function protoFields(
     const required = hasCreateHook ? false : (field.metadata.required ?? true);
 
     if (field.type === "nested") {
-      const typeName =
-        field.metadata.typeName ??
-        `${baseName}${inflection.camelize(fieldName)}`;
+      const typeName = field.metadata.typeName ?? `${baseName}${inflection.camelize(fieldName)}`;
       type = {
         kind: "UserDefined",
         name: typeName,
@@ -468,9 +438,7 @@ function protoFields(
         fields: protoFields(field.fields, typeName, isInput),
       };
     } else if (field.type === "enum") {
-      const typeName =
-        field.metadata.typeName ??
-        `${baseName}${inflection.camelize(fieldName)}`;
+      const typeName = field.metadata.typeName ?? `${baseName}${inflection.camelize(fieldName)}`;
       type = {
         kind: "EnumType",
         name: typeName,

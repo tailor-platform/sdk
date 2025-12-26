@@ -1,9 +1,4 @@
-import {
-  type ASTNode,
-  isStringLiteral,
-  isFunctionExpression,
-  findProperty,
-} from "./ast-utils";
+import { type ASTNode, isStringLiteral, isFunctionExpression, findProperty } from "./ast-utils";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
 import type {
   Program,
@@ -36,17 +31,11 @@ export interface TriggerCall {
 /**
  * Find all workflow jobs by detecting createWorkflowJob calls from \@tailor-platform/sdk
  */
-export function findAllJobs(
-  program: Program,
-  _sourceText: string,
-): JobLocation[] {
+export function findAllJobs(program: Program, _sourceText: string): JobLocation[] {
   const jobs: JobLocation[] = [];
   const bindings = collectSdkBindings(program, "createWorkflowJob");
 
-  function walk(
-    node: ASTNode | null | undefined,
-    parents: ASTNode[] = [],
-  ): void {
+  function walk(node: ASTNode | null | undefined, parents: ASTNode[] = []): void {
     if (!node || typeof node !== "object") return;
 
     // Detect createWorkflowJob(...) calls
@@ -79,10 +68,7 @@ export function findAllJobs(
               }
             }
             // Keep track of the outermost statement (ExportNamedDeclaration > VariableDeclaration)
-            if (
-              parent.type === "ExportNamedDeclaration" ||
-              parent.type === "VariableDeclaration"
-            ) {
+            if (parent.type === "ExportNamedDeclaration" || parent.type === "VariableDeclaration") {
               statementRange = {
                 start: parent.start as number,
                 end: parent.end as number,
@@ -137,16 +123,10 @@ export function buildJobNameMap(jobs: JobLocation[]): Map<string, string> {
  * Detect all .trigger() calls in the source code
  * Returns information about each trigger call for transformation
  */
-export function detectTriggerCalls(
-  program: Program,
-  sourceText: string,
-): TriggerCall[] {
+export function detectTriggerCalls(program: Program, sourceText: string): TriggerCall[] {
   const calls: TriggerCall[] = [];
 
-  function walk(
-    node: ASTNode | null | undefined,
-    parent: ASTNode | null = null,
-  ): void {
+  function walk(node: ASTNode | null | undefined, parent: ASTNode | null = null): void {
     if (!node || typeof node !== "object") return;
 
     // Detect pattern: identifier.trigger(args)
@@ -161,38 +141,25 @@ export function detectTriggerCalls(
           memberExpr.object.type === "Identifier" &&
           memberExpr.property.name === "trigger"
         ) {
-          const identifierName = (memberExpr.object as IdentifierReference)
-            .name;
+          const identifierName = (memberExpr.object as IdentifierReference).name;
 
           // Extract arguments text
           let argsText = "";
           if (callExpr.arguments.length > 0) {
             const firstArg = callExpr.arguments[0];
             const lastArg = callExpr.arguments[callExpr.arguments.length - 1];
-            if (
-              firstArg &&
-              lastArg &&
-              "start" in firstArg &&
-              "end" in lastArg
-            ) {
-              argsText = sourceText.slice(
-                firstArg.start as number,
-                lastArg.end as number,
-              );
+            if (firstArg && lastArg && "start" in firstArg && "end" in lastArg) {
+              argsText = sourceText.slice(firstArg.start as number, lastArg.end as number);
             }
           }
 
           // Check if this call is wrapped in an await expression
           // triggerJobFunction is synchronous, so we need to remove await
           const hasAwait = parent?.type === "AwaitExpression";
-          const awaitExpr = hasAwait
-            ? (parent as unknown as AwaitExpression)
-            : null;
+          const awaitExpr = hasAwait ? (parent as unknown as AwaitExpression) : null;
 
           const callRange = { start: callExpr.start, end: callExpr.end };
-          const fullRange = awaitExpr
-            ? { start: awaitExpr.start, end: awaitExpr.end }
-            : callRange;
+          const fullRange = awaitExpr ? { start: awaitExpr.start, end: awaitExpr.end } : callRange;
 
           calls.push({
             identifierName,

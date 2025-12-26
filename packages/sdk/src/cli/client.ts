@@ -13,12 +13,10 @@ import { z } from "zod";
 import { logger } from "./utils/logger";
 import { readPackageJson } from "./utils/package-json";
 
-export const platformBaseUrl =
-  process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
 const oauth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
-const oauth2DiscoveryEndpoint =
-  "/.well-known/oauth-authorization-server/oauth2/platform";
+const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
 
 export function initOAuth2Client() {
   return new OAuth2Client({
@@ -57,9 +55,7 @@ export async function userAgent() {
   return `tailor-sdk/${packageJson.version ?? "unknown"}`;
 }
 
-async function bearerTokenInterceptor(
-  accessToken: string,
-): Promise<Interceptor> {
+async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor> {
   return (next) => async (req) => {
     req.header.set("Authorization", `Bearer ${accessToken}`);
     return await next(req);
@@ -99,10 +95,7 @@ function waitRetryBackoff(attempt: number) {
   return new Promise((resolve) => setTimeout(resolve, backoff));
 }
 
-function isRetirable(
-  error: unknown,
-  idempotency: MethodOptions_IdempotencyLevel,
-) {
+function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel) {
   if (!(error instanceof ConnectError)) {
     return false;
   }
@@ -164,11 +157,7 @@ export function parseMethodName(methodName: string): {
 export function formatRequestParams(message: unknown): string {
   try {
     if (message && typeof message === "object" && "toJson" in message) {
-      return JSON.stringify(
-        (message as { toJson: () => unknown }).toJson(),
-        null,
-        2,
-      );
+      return JSON.stringify((message as { toJson: () => unknown }).toJson(), null, 2);
     }
     return JSON.stringify(message, null, 2);
   } catch {
@@ -176,9 +165,7 @@ export function formatRequestParams(message: unknown): string {
   }
 }
 
-export async function fetchAll<T>(
-  fn: (pageToken: string) => Promise<[T[], string]>,
-) {
+export async function fetchAll<T>(fn: (pageToken: string) => Promise<[T[], string]>) {
   const items: T[] = [];
   let pageToken = "";
 
@@ -258,11 +245,7 @@ export async function resolveStaticWebsiteUrls(
   return results.flat();
 }
 
-export async function fetchMachineUserToken(
-  url: string,
-  clientId: string,
-  clientSecret: string,
-) {
+export async function fetchMachineUserToken(url: string, clientId: string, clientSecret: string) {
   const tokenEndpoint = new URL("/oauth2/token", url).href;
   const formData = new URLSearchParams();
   formData.append("grant_type", "client_credentials");

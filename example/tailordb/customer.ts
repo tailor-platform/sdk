@@ -24,10 +24,7 @@ export const customer = db
     },
   })
   .validate({
-    name: [
-      ({ value }) => value.length > 5,
-      "Name must be longer than 5 characters",
-    ],
+    name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
   })
   .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

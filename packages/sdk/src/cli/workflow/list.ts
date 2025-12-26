@@ -12,9 +12,7 @@ export interface ListWorkflowsOptions {
   profile?: string;
 }
 
-export async function listWorkflows(
-  options?: ListWorkflowsOptions,
-): Promise<WorkflowListInfo[]> {
+export async function listWorkflows(options?: ListWorkflowsOptions): Promise<WorkflowListInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options?.profile,

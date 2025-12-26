@@ -1,12 +1,6 @@
 #!/usr/bin/env node
 
-import {
-  readFileSync,
-  writeFileSync,
-  readdirSync,
-  existsSync,
-  copyFileSync,
-} from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, existsSync, copyFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // Get SDK version or URL from environment variable or package.json
@@ -19,16 +13,8 @@ if (sdkVersionOrUrl) {
   console.log(`Using SDK version from environment: ${version}`);
 } else {
   // Otherwise, read version from tailor-sdk's package.json
-  const tailorSdkPackageJsonPath = resolve(
-    import.meta.dirname,
-    "..",
-    "..",
-    "sdk",
-    "package.json",
-  );
-  const tailorSdkPackageJson = JSON.parse(
-    readFileSync(tailorSdkPackageJsonPath, "utf-8"),
-  );
+  const tailorSdkPackageJsonPath = resolve(import.meta.dirname, "..", "..", "sdk", "package.json");
+  const tailorSdkPackageJson = JSON.parse(readFileSync(tailorSdkPackageJsonPath, "utf-8"));
   version = tailorSdkPackageJson.version;
   console.log(`Using SDK version from package.json: ${version}`);
 }

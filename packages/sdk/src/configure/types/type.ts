@@ -1,8 +1,4 @@
-import {
-  type AllowedValues,
-  type AllowedValuesOutput,
-  mapAllowedValues,
-} from "./field";
+import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
 import {
   type TailorFieldType,
   type TailorToTs,
@@ -82,10 +78,7 @@ export class TailorField<
     description: string,
   ) {
     this._metadata.description = description;
-    return this as TailorField<
-      Prettify<CurrentDefined & { description: true }>,
-      Output
-    >;
+    return this as TailorField<Prettify<CurrentDefined & { description: true }>, Output>;
   }
 
   typeName<CurrentDefined extends Defined>(
@@ -97,10 +90,7 @@ export class TailorField<
     typeName: string,
   ) {
     this._metadata.typeName = typeName;
-    return this as TailorField<
-      Prettify<CurrentDefined & { typeName: true }>,
-      Output
-    >;
+    return this as TailorField<Prettify<CurrentDefined & { typeName: true }>, Output>;
   }
 
   validate<CurrentDefined extends Defined>(
@@ -110,10 +100,7 @@ export class TailorField<
     ...validate: FieldValidateInput<Output>[]
   ) {
     this._metadata.validate = validate;
-    return this as TailorField<
-      Prettify<CurrentDefined & { validate: true }>,
-      Output
-    >;
+    return this as TailorField<Prettify<CurrentDefined & { validate: true }>, Output>;
   }
 
   /**
@@ -392,18 +379,13 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   { type: "enum"; array: Opt extends { array: true } ? true : false },
   FieldOutput<AllowedValuesOutput<V>, Opt>
 > {
-  return createField<"enum", Opt, AllowedValuesOutput<V>>(
-    "enum",
-    options,
-    undefined,
-    values,
-  );
+  return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
-function object<
-  const F extends Record<string, TailorField<any>>,
-  const Opt extends FieldOptions,
->(fields: F, options?: Opt) {
+function object<const F extends Record<string, TailorField<any>>, const Opt extends FieldOptions>(
+  fields: F,
+  options?: Opt,
+) {
   const objectField = createField("nested", options, fields) as TailorField<
     { type: "nested"; array: Opt extends { array: true } ? true : false },
     FieldOutput<InferFieldsOutput<F>, Opt>

@@ -118,9 +118,7 @@ export const jsonArgs = {
  * - Exit code management
  */
 export const withCommonArgs =
-  <T extends ParsedArgs<typeof commonArgs>>(
-    handler: (args: T) => Promise<void>,
-  ) =>
+  <T extends ParsedArgs<typeof commonArgs>>(handler: (args: T) => Promise<void>) =>
   async ({ args }: { args: T }) => {
     try {
       // Set JSON mode if --json flag is provided

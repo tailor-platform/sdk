@@ -20,9 +20,7 @@ vi.mock("citty", async () => {
 
 type Resolvable<T> = T | Promise<T> | (() => T | Promise<T>);
 
-async function resolveCommand(
-  cmd: Resolvable<CommandDef<any>>,
-): Promise<CommandDef<any>> {
+async function resolveCommand(cmd: Resolvable<CommandDef<any>>): Promise<CommandDef<any>> {
   if (typeof cmd === "function") {
     return await cmd();
   }
@@ -40,11 +38,7 @@ const checkArgs = (args: CommandArgs, path: string[]) => {
   const seen = new Map<string, string>();
 
   for (const [name, def] of Object.entries(args)) {
-    const aliases = Array.isArray(def.alias)
-      ? def.alias
-      : def.alias
-        ? [def.alias]
-        : [];
+    const aliases = Array.isArray(def.alias) ? def.alias : def.alias ? [def.alias] : [];
     for (const alias of aliases) {
       const prev = seen.get(alias);
       if (prev) {
@@ -57,10 +51,7 @@ const checkArgs = (args: CommandArgs, path: string[]) => {
   }
 };
 
-async function walkCommand(
-  cmd: Resolvable<CommandDef<any>>,
-  path: string[] = [],
-) {
+async function walkCommand(cmd: Resolvable<CommandDef<any>>, path: string[] = []) {
   const resolved = await resolveCommand(cmd);
   if (resolved.args) {
     checkArgs(resolved.args, path);

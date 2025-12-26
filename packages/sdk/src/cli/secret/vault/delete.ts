@@ -1,11 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  confirmationArgs,
-  withCommonArgs,
-  workspaceArgs,
-} from "../../args";
+import { commonArgs, confirmationArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";

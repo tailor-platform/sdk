@@ -1,1 +1,10 @@
 .eslintcache
+
+
+# Performance measurement results
+diagnostics.json
+diagnostics-summary.json
+runtime-perf.json
+runtime-perf-summary.json
+bundle-size.json
+scripts/perf/tsconfig.temp.json

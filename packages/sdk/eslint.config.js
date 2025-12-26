@@ -4,6 +4,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import importPlugin from "eslint-plugin-import";
 import jsdoc from "eslint-plugin-jsdoc";
+import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
   globalIgnores(["dist/"]),
@@ -13,6 +14,9 @@ export default defineConfig([
   importPlugin.flatConfigs.typescript,
   jsdoc.configs["flat/recommended"],
   {
+    linterOptions: {
+      reportUnusedDisableDirectives: "off",
+    },
     rules: {
       "jsdoc/require-param-type": "off",
       "jsdoc/require-returns-type": "off",
@@ -50,15 +54,7 @@ export default defineConfig([
       "import/order": [
         "error",
         {
-          groups: [
-            "builtin",
-            "external",
-            "internal",
-            "parent",
-            "sibling",
-            "index",
-            "type",
-          ],
+          groups: ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
           pathGroups: [
             {
               pattern: "@/**",
@@ -100,8 +96,7 @@ export default defineConfig([
             {
               group: ["zod"],
               allowTypeImports: true,
-              message:
-                "Configure module can import only types from zod module.",
+              message: "Configure module can import only types from zod module.",
             },
           ],
         },
@@ -231,4 +226,5 @@ export default defineConfig([
       "import/no-unresolved": "off",
     },
   },
+  ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
 ]);

@@ -9,9 +9,7 @@ export interface WorkflowConfig<
   mainJob: Job;
 }
 
-export interface Workflow<
-  Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>,
-> {
+export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
   trigger: (

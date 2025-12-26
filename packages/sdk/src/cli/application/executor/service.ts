@@ -21,15 +21,9 @@ export class ExecutorService {
     const executorFiles = loadFilesWithIgnores(this.config);
 
     logger.newline();
-    logger.log(
-      `Found ${styles.highlight(executorFiles.length.toString())} executor files`,
-    );
+    logger.log(`Found ${styles.highlight(executorFiles.length.toString())} executor files`);
 
-    await Promise.all(
-      executorFiles.map((executorFile) =>
-        this.loadExecutorForFile(executorFile),
-      ),
-    );
+    await Promise.all(executorFiles.map((executorFile) => this.loadExecutorForFile(executorFile)));
     return this.executors;
   }
 

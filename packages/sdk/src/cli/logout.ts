@@ -12,11 +12,9 @@ export const logoutCommand = defineCommand({
   args: commonArgs,
   run: withCommonArgs(async () => {
     const pfConfig = readPlatformConfig();
-    const tokens = pfConfig.current_user
-      ? pfConfig.users[pfConfig.current_user]
-      : undefined;
+    const tokens = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;
     if (!tokens) {
-      logger.warn("You are not logged in.");
+      logger.info("You are not logged in.");
       return;
     }
 

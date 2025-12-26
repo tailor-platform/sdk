@@ -18,7 +18,7 @@ export const secretIdentifyArgs = {
   name: {
     type: "string",
     description: "Secret name",
-    alias: "N",
+    alias: "n",
     required: true,
   },
 } as const;

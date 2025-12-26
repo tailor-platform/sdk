@@ -81,8 +81,5 @@ export const generators = defineGenerators(
   ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
   ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
   ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
-  [
-    "@tailor-platform/seed",
-    { distPath: "./seed", machineUserName: "manager-machine-user" },
-  ],
+  ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
 );

@@ -75,12 +75,8 @@ export function processLinesDb(
 /**
  * Generates the schema file content for lines-db
  */
-export function generateLinesDbSchemaFile(
-  metadata: LinesDbMetadata,
-  importPath: string,
-): string {
-  const { exportName, optionalFields, omitFields, foreignKeys, indexes } =
-    metadata;
+export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath: string): string {
+  const { exportName, optionalFields, omitFields, foreignKeys, indexes } = metadata;
 
   const schemaTypeCode = ml /* ts */ `
     const schemaType = t.object({
@@ -121,11 +117,7 @@ export function generateLinesDbSchemaFile(
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),${
         schemaOptions.length > 0
-          ? [
-              "\n  {",
-              ...schemaOptions.map((option) => `    ${option}`),
-              "  }",
-            ].join("\n")
+          ? ["\n  {", ...schemaOptions.map((option) => `    ${option}`), "  }"].join("\n")
           : ""
       }
     );

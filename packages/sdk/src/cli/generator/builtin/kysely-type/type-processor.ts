@@ -1,9 +1,6 @@
 import multiline from "multiline-ts";
 import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
-import type {
-  OperatorFieldConfig,
-  ParsedTailorDBType,
-} from "@/parser/service/tailordb/types";
+import type { OperatorFieldConfig, ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Processor that converts a ParsedTailorDBType into Kysely type metadata.
@@ -12,9 +9,7 @@ export class TypeProcessor {
   /**
    * Convert a ParsedTailorDBType into KyselyTypeMetadata.
    */
-  static async processType(
-    type: ParsedTailorDBType,
-  ): Promise<KyselyTypeMetadata> {
+  static async processType(type: ParsedTailorDBType): Promise<KyselyTypeMetadata> {
     const result = this.generateTableInterface(type);
 
     return {
@@ -31,9 +26,7 @@ export class TypeProcessor {
     typeDef: string;
     usedUtilityTypes: { Timestamp: boolean; Serial: boolean };
   } {
-    const fieldEntries = Object.entries(type.fields).filter(
-      ([fieldName]) => fieldName !== "id",
-    );
+    const fieldEntries = Object.entries(type.fields).filter(([fieldName]) => fieldName !== "id");
 
     const fieldResults = fieldEntries.map(([fieldName, parsedField]) => ({
       fieldName,
@@ -79,9 +72,7 @@ export class TypeProcessor {
     if (isArray) {
       // Wrap enum types in parentheses before adding array suffix
       const needsParens = fieldConfig.type === "enum";
-      finalType = needsParens
-        ? `(${baseTypeResult.type})[]`
-        : `${baseTypeResult.type}[]`;
+      finalType = needsParens ? `(${baseTypeResult.type})[]` : `${baseTypeResult.type}[]`;
     }
     if (isNullable) {
       finalType = `${finalType} | null`;
@@ -174,16 +165,12 @@ export class TypeProcessor {
       };
     }
 
-    const fieldResults = Object.entries(fields).map(
-      ([fieldName, nestedOperatorFieldConfig]) => ({
-        fieldName,
-        ...this.generateFieldType(nestedOperatorFieldConfig),
-      }),
-    );
+    const fieldResults = Object.entries(fields).map(([fieldName, nestedOperatorFieldConfig]) => ({
+      fieldName,
+      ...this.generateFieldType(nestedOperatorFieldConfig),
+    }));
 
-    const fieldTypes = fieldResults.map(
-      (result) => `${result.fieldName}: ${result.type}`,
-    );
+    const fieldTypes = fieldResults.map((result) => `${result.fieldName}: ${result.type}`);
 
     const aggregatedUtilityTypes = fieldResults.reduce(
       (acc, result) => ({
@@ -200,9 +187,7 @@ export class TypeProcessor {
   /**
    * Generate unified types file from multiple namespaces.
    */
-  static generateUnifiedTypes(
-    namespaceData: KyselyNamespaceMetadata[],
-  ): string {
+  static generateUnifiedTypes(namespaceData: KyselyNamespaceMetadata[]): string {
     if (namespaceData.length === 0) {
       return "";
     }
@@ -238,7 +223,7 @@ export class TypeProcessor {
     }
 
     const importsSection = multiline /* ts */ `
-      import { type ColumnType, Kysely } from "kysely";
+      import { type ColumnType, Kysely, type KyselyConfig } from "kysely";
       import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
       ${utilityTypeDeclarations.join("\n")}
@@ -263,16 +248,20 @@ export class TypeProcessor {
     const namespaceInterface = `export interface Namespace {\n${namespaceInterfaces}\n}`;
 
     const getDBFunction = multiline /* ts */ `
-      export function getDB<const N extends keyof Namespace>(namespace: N): Kysely<Namespace[N]> {
+      export function getDB<const N extends keyof Namespace>(
+        namespace: N,
+        kyselyConfig?: Omit<KyselyConfig, "dialect">,
+      ): Kysely<Namespace[N]> {
         const client = new tailordb.Client({ namespace });
-        return new Kysely<Namespace[N]>({ dialect: new TailordbDialect(client) });
+        return new Kysely<Namespace[N]>({
+          dialect: new TailordbDialect(client),
+          ...kyselyConfig,
+        });
       }
 
       export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;
     `;
 
-    return (
-      [importsSection, namespaceInterface, getDBFunction].join("\n\n") + "\n"
-    );
+    return [importsSection, namespaceInterface, getDBFunction].join("\n\n") + "\n";
   }
 }

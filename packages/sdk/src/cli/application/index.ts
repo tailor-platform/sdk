@@ -18,6 +18,7 @@ import type { IdPConfig } from "@/configure/services/idp";
 
 export class Application {
   private _tailorDBServices: TailorDBService[] = [];
+  private _externalTailorDBNamespaces: string[] = [];
   private _resolverServices: ResolverService[] = [];
   private _idpServices: IdP[] = [];
   private _authService?: AuthService = undefined;
@@ -44,6 +45,10 @@ export class Application {
 
   get tailorDBServices() {
     return this._tailorDBServices as ReadonlyArray<TailorDBService>;
+  }
+
+  get externalTailorDBNamespaces() {
+    return this._externalTailorDBNamespaces as ReadonlyArray<string>;
   }
 
   get resolverServices() {
@@ -84,7 +89,9 @@ export class Application {
     }
 
     for (const [namespace, serviceConfig] of Object.entries(config)) {
-      if (!("external" in serviceConfig)) {
+      if ("external" in serviceConfig) {
+        this._externalTailorDBNamespaces.push(namespace);
+      } else {
         const tailorDB = new TailorDBService(namespace, serviceConfig);
         this._tailorDBServices.push(tailorDB);
       }
@@ -132,7 +139,11 @@ export class Application {
     }
 
     if (!("external" in config)) {
-      const authService = new AuthService(config, this.tailorDBServices);
+      const authService = new AuthService(
+        config,
+        this.tailorDBServices,
+        this.externalTailorDBNamespaces,
+      );
       this._authService = authService;
     }
     this.addSubgraph("auth", config.name);
@@ -157,9 +168,7 @@ export class Application {
     (websites ?? []).forEach((config) => {
       const website = StaticWebsiteSchema.parse(config);
       if (websiteNames.has(website.name)) {
-        throw new Error(
-          `Static website with name "${website.name}" already defined.`,
-        );
+        throw new Error(`Static website with name "${website.name}" already defined.`);
       }
       websiteNames.add(website.name);
       this._staticWebsiteServices.push(website);

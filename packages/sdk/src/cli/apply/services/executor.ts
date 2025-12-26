@@ -28,7 +28,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 export async function applyExecutor(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planExecutor>>,
-  phase: ApplyPhase = "create-update",
+  phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -46,11 +46,7 @@ export async function applyExecutor(
   } else if (phase === "delete") {
     // Delete in reverse order of dependencies
     // Executors
-    await Promise.all(
-      changeSet.deletes.map((del) =>
-        client.deleteExecutorExecutor(del.request),
-      ),
-    );
+    await Promise.all(changeSet.deletes.map((del) => client.deleteExecutorExecutor(del.request)));
   }
 }
 
@@ -75,14 +71,10 @@ function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:executor:${name}`;
 }
 
-export async function planExecutor({
-  client,
-  workspaceId,
-  application,
-  forRemoval,
-}: PlanContext) {
-  const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> =
-    new ChangeSet("Executors");
+export async function planExecutor({ client, workspaceId, application, forRemoval }: PlanContext) {
+  const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> = new ChangeSet(
+    "Executors",
+  );
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -114,15 +106,10 @@ export async function planExecutor({
     }),
   );
 
-  const executors = forRemoval
-    ? {}
-    : ((await application.executorService?.loadExecutors()) ?? {});
+  const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, executor.name),
-      application.name,
-    );
+    const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -277,9 +264,7 @@ function protoExecutor(
             },
             headers: target.headers
               ? Object.entries(target.headers).map(([key, v]) => {
-                  let value: MessageInitShape<
-                    typeof ExecutorTargetWebhookHeaderSchema
-                  >["value"];
+                  let value: MessageInitShape<typeof ExecutorTargetWebhookHeaderSchema>["value"];
                   if (typeof v === "string") {
                     value = {
                       case: "rawValue",
@@ -333,11 +318,7 @@ function protoExecutor(
         targetType = ExecutorTargetType.JOB_FUNCTION;
       }
 
-      const scriptPath = path.join(
-        getDistDir(),
-        "executors",
-        `${executor.name}.js`,
-      );
+      const scriptPath = path.join(getDistDir(), "executors", `${executor.name}.js`);
       const script = fs.readFileSync(scriptPath, "utf-8");
       targetConfig = {
         config: {

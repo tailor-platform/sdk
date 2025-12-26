@@ -27,7 +27,7 @@ export function idpClientSecretName(namespaceName: string, clientName: string) {
 export async function applyIdP(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planIdP>>,
-  phase: ApplyPhase = "create-update",
+  phase: Exclude<ApplyPhase, "delete"> = "create-update",
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
@@ -71,10 +71,7 @@ export async function applyIdP(
       ...changeSet.client.updates.map(async (update) => {
         // Ensure the vault and secret exist
         const vaultName = idpClientVaultName(update.namespaceName, update.name);
-        const secretName = idpClientSecretName(
-          update.namespaceName,
-          update.name,
-        );
+        const secretName = idpClientSecretName(update.namespaceName, update.name);
         try {
           await client.getSecretManagerVault({
             workspaceId: update.workspaceId,
@@ -82,9 +79,7 @@ export async function applyIdP(
           });
           return;
         } catch (error) {
-          if (
-            !(error instanceof ConnectError && error.code === Code.NotFound)
-          ) {
+          if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
             throw error;
           }
         }
@@ -100,7 +95,7 @@ export async function applyIdP(
         });
       }),
     ]);
-  } else if (phase === "delete") {
+  } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // Clients
     await Promise.all(
@@ -115,22 +110,13 @@ export async function applyIdP(
         });
       }),
     );
-
-    // Services
-    await Promise.all(
-      changeSet.service.deletes.map((del) =>
-        client.deleteIdPService(del.request),
-      ),
-    );
+  } else if (phase === "delete-services") {
+    // Services only
+    await Promise.all(changeSet.service.deletes.map((del) => client.deleteIdPService(del.request)));
   }
 }
 
-export async function planIdP({
-  client,
-  workspaceId,
-  application,
-  forRemoval,
-}: PlanContext) {
+export async function planIdP({ client, workspaceId, application, forRemoval }: PlanContext) {
   const idps = forRemoval ? [] : application.idpServices;
   const {
     changeSet: serviceChangeSet,
@@ -139,12 +125,7 @@ export async function planIdP({
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const clientChangeSet = await planClients(
-    client,
-    workspaceId,
-    idps,
-    deletedServices,
-  );
+  const clientChangeSet = await planClients(client, workspaceId, idps, deletedServices);
 
   serviceChangeSet.print();
   clientChangeSet.print();
@@ -186,8 +167,9 @@ async function planServices(
   appName: string,
   idps: ReadonlyArray<IdP>,
 ) {
-  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> =
-    new ChangeSet("IdP services");
+  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> = new ChangeSet(
+    "IdP services",
+  );
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -225,10 +207,7 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
-    const metaRequest = await buildMetaRequest(
-      trn(workspaceId, namespaceName),
-      appName,
-    );
+    const metaRequest = await buildMetaRequest(trn(workspaceId, namespaceName), appName);
     let authorization;
     switch (idp.authorization) {
       case "insecure":
@@ -328,8 +307,9 @@ async function planClients(
   idps: ReadonlyArray<IdP>,
   deletedServices: string[],
 ) {
-  const changeSet: ChangeSet<CreateClient, UpdateClient, DeleteClient> =
-    new ChangeSet("IdP clients");
+  const changeSet: ChangeSet<CreateClient, UpdateClient, DeleteClient> = new ChangeSet(
+    "IdP clients",
+  );
 
   const fetchClients = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {

@@ -78,9 +78,7 @@ async function uploadDirectory(
   const limit = pLimit(concurrency);
 
   const total = files.length;
-  const progress = showProgress
-    ? createProgress("Uploading files", total)
-    : undefined;
+  const progress = showProgress ? createProgress("Uploading files", total) : undefined;
   const skippedFiles: string[] = [];
 
   await Promise.all(
@@ -108,10 +106,7 @@ async function uploadDirectory(
   return skippedFiles;
 }
 
-async function collectFiles(
-  rootDir: string,
-  currentDir = "",
-): Promise<string[]> {
+async function collectFiles(rootDir: string, currentDir = ""): Promise<string[]> {
   const dirPath = path.join(rootDir, currentDir);
 
   const entries = await fs.promises.readdir(dirPath, {
@@ -124,11 +119,7 @@ async function collectFiles(
     if (entry.isDirectory()) {
       const sub = await collectFiles(rootDir, rel);
       files.push(...sub);
-    } else if (
-      entry.isFile() &&
-      !entry.isSymbolicLink() &&
-      !shouldIgnoreFile(rel)
-    ) {
+    } else if (entry.isFile() && !entry.isSymbolicLink() && !shouldIgnoreFile(rel)) {
       files.push(rel);
     }
   }
@@ -151,9 +142,7 @@ async function uploadSingleFile(
   const mime = mimeLookup(filePath);
 
   if (!mime) {
-    skippedFiles.push(
-      `${filePath} (unsupported content type; no MIME mapping found)`,
-    );
+    skippedFiles.push(`${filePath} (unsupported content type; no MIME mapping found)`);
     return;
   }
 
@@ -163,9 +152,7 @@ async function uploadSingleFile(
     highWaterMark: CHUNK_SIZE,
   });
 
-  async function* requestStream(): AsyncIterable<
-    MessageInitShape<typeof UploadFileRequestSchema>
-  > {
+  async function* requestStream(): AsyncIterable<MessageInitShape<typeof UploadFileRequestSchema>> {
     yield {
       payload: {
         case: "initialMetadata",
@@ -191,13 +178,8 @@ async function uploadSingleFile(
     try {
       await client.uploadFile(requestStream());
     } catch (error) {
-      if (
-        error instanceof ConnectError &&
-        error.code === Code.InvalidArgument
-      ) {
-        skippedFiles.push(
-          `${filePath} (server rejected file as invalid: ${error.message})`,
-        );
+      if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
+        skippedFiles.push(`${filePath} (server rejected file as invalid: ${error.message})`);
         return;
       }
       // For non-validation errors, fail the deployment as before.
@@ -248,9 +230,7 @@ export const deployCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    logger.info(
-      `Deploying static website "${args.name}" from directory: ${args.dir}`,
-    );
+    logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,
@@ -278,9 +258,7 @@ export const deployCommand = defineCommand({
     if (args.json) {
       printData({ name, workspaceId, url, skippedFiles }, true);
     } else {
-      logger.success(
-        `Static website "${name}" deployed successfully. URL: ${url}`,
-      );
+      logger.success(`Static website "${name}" deployed successfully. URL: ${url}`);
       logSkippedFiles(skippedFiles);
     }
   }),

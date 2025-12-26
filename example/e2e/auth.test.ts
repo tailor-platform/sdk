@@ -95,8 +95,6 @@ describe("controlplane", async () => {
     const redirectUris = oauth2Clients[0].redirectUris;
     expect(redirectUris.length).toBe(2);
     expect(redirectUris[0]).toEqual("https://example.com/callback");
-    expect(redirectUris[1]).toMatch(
-      /^https:\/\/my-frontend-[\w]+\.web\.erp\.dev\/callback$/,
-    );
+    expect(redirectUris[1]).toMatch(/^https:\/\/my-frontend-[\w]+\.web\.erp\.dev\/callback$/);
   });
 });

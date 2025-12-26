@@ -1,34 +1,22 @@
 import * as path from "node:path";
 import ml from "multiline-ts";
 import {
-  type CodeGenerator,
+  type TailorDBGenerator,
+  type TailorDBInput,
+  type AggregateArgs,
   type GeneratorResult,
 } from "@/cli/generator/types";
 import { processGqlIngest } from "./gql-ingest-processor";
-import {
-  processIdpUser,
-  generateIdpUserSchemaFile,
-} from "./idp-user-processor";
-import {
-  processLinesDb,
-  generateLinesDbSchemaFile,
-} from "./lines-db-processor";
+import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
+import { processLinesDb, generateLinesDbSchemaFile } from "./lines-db-processor";
 import type { SeedTypeMetadata } from "./types";
-import type { Executor } from "@/parser/service/executor";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
 /**
- * Factory function to create a Seed generator.
- * Combines GraphQL Ingest and lines-db schema generation.
- */
-/**
  * Generates the exec.mjs script content (Node.js executable)
  */
-function generateExecScript(
-  machineUserName: string,
-  relativeConfigPath: string,
-): string {
+function generateExecScript(machineUserName: string, relativeConfigPath: string): string {
   return ml /* js */ `
     import { execSync } from "node:child_process";
     import { join } from "node:path";
@@ -62,19 +50,18 @@ function generateExecScript(
     `;
 }
 
+/**
+ * Factory function to create a Seed generator.
+ * Combines GraphQL Ingest and lines-db schema generation.
+ */
 export function createSeedGenerator(options: {
   distPath: string;
   machineUserName?: string;
-}): CodeGenerator<
-  SeedTypeMetadata,
-  undefined,
-  undefined,
-  Record<string, SeedTypeMetadata>,
-  undefined
-> {
+}): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
   return {
     id: SeedGeneratorID,
     description: "Generates seed data files (GraphQL Ingest + lines-db schema)",
+    dependencies: ["tailordb"] as const,
 
     processType: ({ type, source }) => {
       const gqlIngest = processGqlIngest(type);
@@ -84,11 +71,10 @@ export function createSeedGenerator(options: {
 
     processTailorDBNamespace: ({ types }) => types,
 
-    processExecutor: (_executor: Executor) => undefined,
-
-    processResolver: (_args) => undefined,
-
-    aggregate: ({ input, configPath }) => {
+    aggregate: ({
+      input,
+      configPath,
+    }: AggregateArgs<TailorDBInput<Record<string, SeedTypeMetadata>>>) => {
       const entityDependencies: Record<
         /* outputDir */ string,
         Record</* type */ string, /* dependencies */ string[]>
@@ -107,17 +93,12 @@ export function createSeedGenerator(options: {
         for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
           const { gqlIngest, linesDb } = metadata;
 
-          entityDependencies[outputBaseDir][gqlIngest.name] =
-            gqlIngest.dependencies;
+          entityDependencies[outputBaseDir][gqlIngest.name] = gqlIngest.dependencies;
 
           // Generate GraphQL Ingest files
           files.push(
             {
-              path: path.join(
-                outputBaseDir,
-                "mappings",
-                `${gqlIngest.name}.json`,
-              ),
+              path: path.join(outputBaseDir, "mappings", `${gqlIngest.name}.json`),
               content: JSON.stringify(gqlIngest.mapping, null, 2) + "\n",
             },
             {
@@ -137,13 +118,8 @@ export function createSeedGenerator(options: {
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
-          const importPath = path.relative(
-            path.dirname(schemaOutputPath),
-            linesDb.importPath,
-          );
-          const normalizedImportPath = importPath
-            .replace(/\.ts$/, "")
-            .startsWith(".")
+          const importPath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
+          const normalizedImportPath = importPath.replace(/\.ts$/, "").startsWith(".")
             ? importPath.replace(/\.ts$/, "")
             : `./${importPath.replace(/\.ts$/, "")}`;
 
@@ -164,8 +140,7 @@ export function createSeedGenerator(options: {
           }
 
           // Add _User to entityDependencies
-          entityDependencies[outputBaseDir][idpUser.name] =
-            idpUser.dependencies;
+          entityDependencies[outputBaseDir][idpUser.name] = idpUser.dependencies;
 
           // Generate GraphQL mutation file
           files.push({
@@ -198,9 +173,7 @@ export function createSeedGenerator(options: {
       }
 
       // Generate config.yaml for each output directory
-      for (const [outputDir, dependencies] of Object.entries(
-        entityDependencies,
-      )) {
+      for (const [outputDir, dependencies] of Object.entries(entityDependencies)) {
         files.push({
           path: path.join(outputDir, "config.yaml"),
           content: /* yaml */ `entityDependencies:
@@ -213,15 +186,10 @@ export function createSeedGenerator(options: {
         // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
           // Use forward slashes for cross-platform compatibility in the generated script
-          const relativeConfigPath = path
-            .relative(outputDir, configPath)
-            .replaceAll("\\", "/");
+          const relativeConfigPath = path.relative(outputDir, configPath).replaceAll("\\", "/");
           files.push({
             path: path.join(outputDir, "exec.mjs"),
-            content: generateExecScript(
-              options.machineUserName,
-              relativeConfigPath,
-            ),
+            content: generateExecScript(options.machineUserName, relativeConfigPath),
           });
         }
       }

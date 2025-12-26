@@ -2,6 +2,7 @@
   "name": "example",
   "private": true,
   "description": "Example for Tailor Platform SDK usage",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "generate": "tailor-sdk generate -c tailor.config.ts",
@@ -19,10 +20,7 @@
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache . --fix --quiet",
-    "typecheck": "pnpm generate && tsc --noEmit",
-    "perf:typecheck": "pnpm perf:typecheck:full && pnpm perf:typecheck:inference",
-    "perf:typecheck:full": "bash scripts/perf/run-typecheck-full.sh",
-    "perf:typecheck:inference": "bash scripts/perf/run-typecheck-inference.sh"
+    "typecheck": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
@@ -36,14 +34,13 @@
     "@tailor-platform/function-kysely-tailordb": "0.1.3",
     "@tailor-platform/function-types": "0.8.0",
     "@toiroakr/lines-db": "0.6.1",
-    "@types/node": "22.19.3",
+    "@types/node": "24.10.4",
     "graphql": "16.12.0",
     "graphql-request": "7.4.0",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vitest": "4.0.16"
   },
-  "license": "MIT",
   "engines": {
     "node": ">= 22.14.0"
   }

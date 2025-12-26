@@ -1,11 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "citty";
-import {
-  commonArgs,
-  jsonArgs,
-  withCommonArgs,
-  workspaceArgs,
-} from "../../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { printData } from "../../utils/format";
@@ -25,18 +20,12 @@ export interface VaultInfo {
 function vaultInfo(vault: SecretManagerVault): VaultInfo {
   return {
     name: vault.name,
-    createdAt: vault.createTime
-      ? timestampDate(vault.createTime).toISOString()
-      : "N/A",
-    updatedAt: vault.updateTime
-      ? timestampDate(vault.updateTime).toISOString()
-      : "N/A",
+    createdAt: vault.createTime ? timestampDate(vault.createTime).toISOString() : "N/A",
+    updatedAt: vault.updateTime ? timestampDate(vault.updateTime).toISOString() : "N/A",
   };
 }
 
-export async function vaultList(
-  options?: VaultListOptions,
-): Promise<VaultInfo[]> {
+export async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options?.profile,
