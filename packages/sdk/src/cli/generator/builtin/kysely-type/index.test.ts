@@ -290,14 +290,13 @@ describe("KyselyGenerator integration tests", () => {
 
   describe("error handling tests", () => {
     it("handles errors appropriately with invalid type definitions", async () => {
-      const invalidType = {
+      const validType = parseTailorDBType(mockBasicType);
+      const invalidType: ParsedTailorDBType = {
+        ...validType,
         name: "Invalid",
-        fields: null, // Invalid field
-        options: {},
-        metadata: {},
-        hooks: {},
-        _output: {},
-      } as any;
+        // @ts-expect-error - intentionally invalid to verify runtime error handling
+        fields: null,
+      };
 
       await expect(
         kyselyGenerator.processType({

@@ -43,7 +43,7 @@ class TestGenerator {
     return { name: args.resolver.name, processed: true };
   }
 
-  async processExecutor(executor: any) {
+  async processExecutor<T>(executor: { name: T }) {
     return { name: executor.name, processed: true };
   }
 
@@ -129,7 +129,7 @@ describe("GenerationManager", () => {
 
   describe("generate", () => {
     it("executes complete generation process", async () => {
-      await manager.generate({ watch: false });
+      await manager.generate(false);
 
       // Generators are configured but may be 0 if actual type files do not exist
       expect(manager.generators.length).toBeGreaterThan(0);
@@ -628,7 +628,7 @@ describe("generate function", () => {
   beforeEach(() => {
     mockConfig = {
       name: "test-workspace",
-    } as any;
+    };
   });
 
   it("creates and executes GenerationManager", async () => {
@@ -699,7 +699,7 @@ describe("Integration Tests", () => {
     const generators = [new TestGenerator(), kyselyGen];
     const manager = new GenerationManager(fullConfig, generators);
 
-    await expect(manager.generate({ watch: false })).resolves.not.toThrow();
+    await expect(manager.generate(false)).resolves.not.toThrow();
 
     expect(manager.generators.length).toBe(2);
     expect(manager.generators.some((g: unknown) => g instanceof TestGenerator)).toBe(true);
@@ -708,11 +708,11 @@ describe("Integration Tests", () => {
 
   it("integration test for error recovery and performance", async () => {
     const indexModule = await import("./index");
-    const GenerationManager = (indexModule as any).GenerationManager;
+    const GenerationManager = indexModule.GenerationManager;
     const manager = new GenerationManager(fullConfig, []);
 
     const start = Date.now();
-    await manager.generate({ watch: false });
+    await manager.generate(false);
     const duration = Date.now() - start;
 
     expect(duration).toBeLessThan(5000);
