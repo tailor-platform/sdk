@@ -14,6 +14,14 @@ import type { SeedTypeMetadata } from "./types";
 export const SeedGeneratorID = "@tailor-platform/seed";
 
 /**
+ * Converts a path to POSIX format (forward slashes).
+ * This ensures consistent import paths across platforms.
+ */
+function toPosixPath(p: string): string {
+  return p.split(path.sep).join(path.posix.sep);
+}
+
+/**
  * Generates the exec.mjs script content (Node.js executable)
  */
 function generateExecScript(machineUserName: string, relativeConfigPath: string): string {
@@ -118,7 +126,9 @@ export function createSeedGenerator(options: {
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
-          const importPath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
+          const importPath = toPosixPath(
+            path.relative(path.dirname(schemaOutputPath), linesDb.importPath),
+          );
           const normalizedImportPath = importPath.replace(/\.ts$/, "").startsWith(".")
             ? importPath.replace(/\.ts$/, "")
             : `./${importPath.replace(/\.ts$/, "")}`;
@@ -185,8 +195,7 @@ export function createSeedGenerator(options: {
 
         // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
-          // Use forward slashes for cross-platform compatibility in the generated script
-          const relativeConfigPath = path.relative(outputDir, configPath).replaceAll("\\", "/");
+          const relativeConfigPath = toPosixPath(path.relative(outputDir, configPath));
           files.push({
             path: path.join(outputDir, "exec.mjs"),
             content: generateExecScript(options.machineUserName, relativeConfigPath),
