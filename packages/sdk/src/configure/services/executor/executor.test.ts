@@ -424,7 +424,7 @@ describe("resolverExecutedTrigger", () => {
     });
   });
 
-  test("function args include client and event args", () => {
+  test("function args include client and event args with success tag", () => {
     const resolver = createResolver({
       name: "test",
       operation: "query",
@@ -440,8 +440,7 @@ describe("resolverExecutedTrigger", () => {
             workspaceId: string;
             appNamespace: string;
             resolverName: string;
-            result: { result: boolean } | undefined;
-            error: string | undefined;
+            success: boolean;
           }>();
           return true;
         },
@@ -453,9 +452,182 @@ describe("resolverExecutedTrigger", () => {
             workspaceId: string;
             appNamespace: string;
             resolverName: string;
-            result: { result: boolean } | undefined;
-            error: string | undefined;
+            success: boolean;
           }>();
+
+          // Test tagged union narrowing with success
+          if (args.success) {
+            expectTypeOf(args.result).toEqualTypeOf<{ result: boolean }>();
+            expectTypeOf(args.error).toEqualTypeOf<undefined>();
+          } else {
+            expectTypeOf(args.result).toEqualTypeOf<undefined>();
+            expectTypeOf(args.error).toEqualTypeOf<string>();
+          }
+        },
+      },
+    });
+  });
+
+  test("result type is correctly inferred from resolver output (not any)", () => {
+    // This test ensures that the result type is correctly inferred from the resolver's output type,
+    // preventing regression where result becomes `any` due to type inference issues.
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ data: { items: ["a", "b", "c"] }, count: 3 }),
+      output: t.object({
+        data: t.object({
+          items: t.string({ array: true }),
+        }),
+        count: t.int(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          // Verify success is a boolean for tagged union
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+
+          // Verify exact type structure when success is true
+          if (args.success) {
+            // result should not be `any` - if it were, this test would pass incorrectly
+            expectTypeOf(args.result).not.toBeAny();
+            expectTypeOf(args.result.data).not.toBeAny();
+            expectTypeOf(args.result.data.items).toEqualTypeOf<string[]>();
+            expectTypeOf(args.result.count).toEqualTypeOf<number>();
+
+            // This should cause a type error (property doesn't exist)
+            // @ts-expect-error - nonExistent property should not exist
+            void args.result.nonExistent;
+          } else {
+            // error should be string when success is false
+            expectTypeOf(args.error).toEqualTypeOf<string>();
+          }
+        },
+      },
+    });
+  });
+
+  test("result type preserves nested object structure from resolver output", () => {
+    const resolver = createResolver({
+      name: "nestedOutput",
+      operation: "query",
+      body: () => ({
+        user: {
+          profile: {
+            name: "John",
+            settings: {
+              theme: "dark",
+            },
+          },
+        },
+      }),
+      output: t.object({
+        user: t.object({
+          profile: t.object({
+            name: t.string(),
+            settings: t.object({
+              theme: t.string(),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.success) {
+            // Deeply nested properties should be correctly typed
+            expectTypeOf(args.result.user.profile.name).toEqualTypeOf<string>();
+            expectTypeOf(args.result.user.profile.settings.theme).toEqualTypeOf<string>();
+
+            // Invalid property access should fail
+            // @ts-expect-error - invalid nested property
+            void args.result.user.invalid;
+          }
+        },
+      },
+    });
+  });
+
+  test("webhook operation also receives correctly typed result", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ id: "123", status: "active" }),
+      output: t.object({
+        id: t.string(),
+        status: t.string(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "webhook",
+        url: (args) => {
+          // success tag should be available in webhook url function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            expectTypeOf(args.result.id).toEqualTypeOf<string>();
+            expectTypeOf(args.result.status).toEqualTypeOf<string>();
+          }
+          return "https://example.com/webhook";
+        },
+        requestBody: (args) => {
+          // success tag should be available in webhook body function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            return { data: args.result };
+          }
+          return { error: args.error };
+        },
+      },
+    });
+  });
+
+  test("graphql operation variables receives correctly typed result", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ userId: "user-123" }),
+      output: t.object({
+        userId: t.string(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: "query { test }",
+        variables: (args) => {
+          // success tag should be available in graphql variables function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            expectTypeOf(args.result.userId).toEqualTypeOf<string>();
+            return { id: args.result.userId };
+          }
+          return { error: args.error };
         },
       },
     });

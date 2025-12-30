@@ -32,11 +32,13 @@ export type ResolverExecutedArgs<R extends ResolverConfig> = EventArgs & {
   resolverName: string;
 } & (
     | {
+        success: true;
         result: output<R["output"]>;
-        error: undefined;
+        error?: never;
       }
     | {
-        result: undefined;
+        success: false;
+        result?: never;
         error: string;
       }
   );
