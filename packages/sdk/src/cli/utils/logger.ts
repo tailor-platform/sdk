@@ -1,3 +1,4 @@
+import { formatWithOptions, type InspectOptions } from "node:util";
 import chalk from "chalk";
 import { createConsola, type PromptOptions } from "consola";
 import { isCI } from "std-env";
@@ -75,16 +76,90 @@ export interface LogOptions {
   mode?: LogMode;
 }
 
-// Mode-specific consola instances
+// Type icons matching consola's FancyReporter
+const TYPE_ICONS: Record<string, string> = {
+  info: "ℹ",
+  success: "✔",
+  warn: "⚠",
+  error: "✖",
+  debug: "⚙",
+  trace: "→",
+  log: "",
+};
+
+/**
+ * Custom reporter that outputs messages without extra newlines that FancyReporter adds
+ * but still includes type icons for info/success/warn/error
+ */
+class IconReporter {
+  log(
+    logObj: { type: string; tag?: string; args: unknown[]; level: number; date?: Date },
+    ctx: {
+      options: {
+        stdout?: NodeJS.WriteStream;
+        stderr?: NodeJS.WriteStream;
+        formatOptions: { date?: boolean; compact?: boolean | number };
+      };
+    },
+  ) {
+    const stdout = ctx.options.stdout || process.stdout;
+    const stderr = ctx.options.stderr || process.stderr;
+    const formatOptions = ctx.options.formatOptions;
+    const inspectOpts: InspectOptions = {
+      breakLength: stdout.columns || 80,
+      compact: formatOptions.compact,
+    };
+    const message = formatWithOptions(inspectOpts, ...logObj.args);
+    const icon = TYPE_ICONS[logObj.type] || "";
+    const prefix = icon ? `${icon} ` : "";
+
+    // Add timestamp if date option is enabled
+    const timestamp =
+      formatOptions.date && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
+
+    const stream = logObj.level < 2 ? stderr : stdout;
+    stream.write(`${timestamp}${prefix}${message}\n`);
+  }
+}
+
+/**
+ * Custom reporter that outputs messages without type prefix brackets
+ * and without extra newlines that FancyReporter adds
+ */
+class PlainReporter {
+  log(
+    logObj: { type: string; tag?: string; args: unknown[]; level: number },
+    ctx: {
+      options: { stdout?: NodeJS.WriteStream; stderr?: NodeJS.WriteStream; formatOptions: object };
+    },
+  ) {
+    const stdout = ctx.options.stdout || process.stdout;
+    const stderr = ctx.options.stderr || process.stderr;
+    const formatOptions = ctx.options.formatOptions as { compact?: boolean | number };
+    const inspectOpts: InspectOptions = {
+      breakLength: 100,
+      compact: formatOptions.compact,
+    };
+    const message = formatWithOptions(inspectOpts, ...logObj.args);
+    const stream = logObj.level < 2 ? stderr : stdout;
+    stream.write(`${message}\n`);
+  }
+}
+
+// Mode-specific consola instances with custom reporters to avoid extra newlines
 const defaultLogger = createConsola({
+  reporters: [new IconReporter()],
   formatOptions: { date: false },
 });
 
 const streamLogger = createConsola({
+  reporters: [new IconReporter()],
   formatOptions: { date: true },
 });
 
+// Use custom PlainReporter to avoid [log] prefix and extra newlines
 const plainLogger = createConsola({
+  reporters: [new PlainReporter()],
   formatOptions: { date: false, compact: true },
 });
 
