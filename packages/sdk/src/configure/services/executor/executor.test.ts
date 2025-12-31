@@ -632,6 +632,81 @@ describe("resolverExecutedTrigger", () => {
       },
     });
   });
+
+  test("workflow operation args receives correctly typed result", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ orderId: "order-123", total: 100 }),
+      output: t.object({
+        orderId: t.string(),
+        total: t.int(),
+      }),
+    });
+
+    const processOrder = createWorkflowJob({
+      name: "process-order",
+      body: (input: { orderId: string; total: number }) => ({ processed: true, ...input }),
+    });
+
+    const workflow = createWorkflow({
+      name: "order-workflow",
+      mainJob: processOrder,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "workflow",
+        workflow,
+        args: (args) => {
+          // success tag should be available in workflow args function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            expectTypeOf(args.result.orderId).toEqualTypeOf<string>();
+            expectTypeOf(args.result.total).toEqualTypeOf<number>();
+            return { orderId: args.result.orderId, total: args.result.total };
+          }
+          return { orderId: "unknown", total: 0 };
+        },
+      },
+    });
+  });
+
+  test("condition function can narrow type using success", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ value: 42 }),
+      output: t.object({
+        value: t.int(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+        // Condition can use success to filter only successful executions
+        condition: (args) => {
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          // Type narrowing should work in condition
+          if (args.success) {
+            expectTypeOf(args.result.value).toEqualTypeOf<number>();
+            return args.result.value > 0;
+          }
+          return false;
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+  });
 });
 
 describe("functionTarget", () => {
