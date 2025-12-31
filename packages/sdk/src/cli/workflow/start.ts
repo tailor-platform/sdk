@@ -262,12 +262,10 @@ export const startCommand = defineCommand({
       interval,
     });
 
-    if (!args.json) {
-      logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
-    }
+    logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
 
     if (args.wait) {
-      const result = await wait({ showProgress: !args.json });
+      const result = await wait({ showProgress: true });
       if (args.logs && !args.json) {
         const { execution } = await getWorkflowExecution({
           executionId,

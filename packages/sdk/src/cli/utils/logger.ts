@@ -76,7 +76,10 @@ export interface LogOptions {
   mode?: LogMode;
 }
 
-// Type icons matching consola's FancyReporter
+// In JSON mode, all logs go to stderr to keep stdout clean for JSON data
+let _jsonMode = false;
+
+// Type icons for log output
 const TYPE_ICONS: Record<string, string> = {
   info: "ℹ",
   success: "✔",
@@ -87,10 +90,6 @@ const TYPE_ICONS: Record<string, string> = {
   log: "",
 };
 
-/**
- * Custom reporter that outputs messages without extra newlines that FancyReporter adds
- * but still includes type icons for info/success/warn/error
- */
 class IconReporter {
   log(
     logObj: { type: string; tag?: string; args: unknown[]; level: number; date?: Date },
@@ -113,19 +112,13 @@ class IconReporter {
     const icon = TYPE_ICONS[logObj.type] || "";
     const prefix = icon ? `${icon} ` : "";
 
-    // Add timestamp if date option is enabled
     const timestamp =
       formatOptions.date && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
-
-    const stream = logObj.level < 2 ? stderr : stdout;
+    const stream = _jsonMode || logObj.level < 2 ? stderr : stdout;
     stream.write(`${timestamp}${prefix}${message}\n`);
   }
 }
 
-/**
- * Custom reporter that outputs messages without type prefix brackets
- * and without extra newlines that FancyReporter adds
- */
 class PlainReporter {
   log(
     logObj: { type: string; tag?: string; args: unknown[]; level: number },
@@ -141,12 +134,11 @@ class PlainReporter {
       compact: formatOptions.compact,
     };
     const message = formatWithOptions(inspectOpts, ...logObj.args);
-    const stream = logObj.level < 2 ? stderr : stdout;
+    const stream = _jsonMode || logObj.level < 2 ? stderr : stdout;
     stream.write(`${message}\n`);
   }
 }
 
-// Mode-specific consola instances with custom reporters to avoid extra newlines
 const defaultLogger = createConsola({
   reporters: [new IconReporter()],
   formatOptions: { date: false },
@@ -157,27 +149,20 @@ const streamLogger = createConsola({
   formatOptions: { date: true },
 });
 
-// Use custom PlainReporter to avoid [log] prefix and extra newlines
 const plainLogger = createConsola({
   reporters: [new PlainReporter()],
   formatOptions: { date: false, compact: true },
 });
 
-/**
- * Logger object for CLI output
- */
 export const logger = {
-  /**
-   * JSON mode flag
-   * When enabled, most log output is suppressed
-   */
-  jsonMode: false,
+  get jsonMode(): boolean {
+    return _jsonMode;
+  },
+  set jsonMode(value: boolean) {
+    _jsonMode = value;
+  },
 
-  /**
-   * Log informational message (suppressed in JSON mode)
-   */
   info(message: string, opts?: LogOptions): void {
-    if (this.jsonMode) return;
     const mode = opts?.mode ?? "default";
 
     switch (mode) {
@@ -192,11 +177,7 @@ export const logger = {
     }
   },
 
-  /**
-   * Log success message (suppressed in JSON mode)
-   */
   success(message: string, opts?: LogOptions): void {
-    if (this.jsonMode) return;
     const mode = opts?.mode ?? "default";
 
     switch (mode) {
@@ -211,11 +192,7 @@ export const logger = {
     }
   },
 
-  /**
-   * Log warning message (suppressed in JSON mode)
-   */
   warn(message: string, opts?: LogOptions): void {
-    if (this.jsonMode) return;
     const mode = opts?.mode ?? "default";
 
     switch (mode) {
@@ -230,9 +207,6 @@ export const logger = {
     }
   },
 
-  /**
-   * Log error message (always shown, even in JSON mode)
-   */
   error(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
 
@@ -248,34 +222,18 @@ export const logger = {
     }
   },
 
-  /**
-   * Log raw message without prefix (suppressed in JSON mode)
-   */
   log(message: string): void {
-    if (this.jsonMode) return;
     plainLogger.log(message);
   },
 
-  /**
-   * Log empty line (suppressed in JSON mode)
-   */
   newline(): void {
-    if (this.jsonMode) return;
     plainLogger.log("");
   },
 
-  /**
-   * Log debug message (suppressed in JSON mode)
-   * Uses dim color for less emphasis
-   */
   debug(message: string): void {
-    if (this.jsonMode) return;
     plainLogger.log(styles.dim(message));
   },
 
-  /**
-   * Output data - JSON in JSON mode, otherwise formatted
-   */
   data(dataValue: unknown, formatFn?: (d: unknown) => void): void {
     if (this.jsonMode) {
       plainLogger.log(JSON.stringify(dataValue, null, 2));
@@ -287,9 +245,6 @@ export const logger = {
   },
 
   /**
-   * Interactive prompt (always shown, even in JSON mode)
-   * Wraps consola.prompt for consistent interface
-   *
    * @throws {CIPromptError} When called in a CI environment
    */
   prompt<T extends PromptOptions>(
