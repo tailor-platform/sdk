@@ -1,7 +1,9 @@
 import { formatWithOptions, type InspectOptions } from "node:util";
 import chalk from "chalk";
 import { createConsola, type PromptOptions } from "consola";
+import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
+import { getBorderCharacters, table } from "table";
 
 /**
  * Error thrown when a prompt is attempted in a CI environment
@@ -234,14 +236,47 @@ export const logger = {
     plainLogger.log(styles.dim(message));
   },
 
-  data(dataValue: unknown, formatFn?: (d: unknown) => void): void {
+  data(data: object | object[]): void {
     if (this.jsonMode) {
-      plainLogger.log(JSON.stringify(dataValue, null, 2));
-    } else if (formatFn) {
-      formatFn(dataValue);
-    } else {
-      plainLogger.log(String(dataValue));
+      // eslint-disable-next-line no-restricted-syntax
+      console.log(JSON.stringify(data));
+      return;
     }
+
+    if (!Array.isArray(data)) {
+      const t = table(Object.entries(data), {
+        singleLine: true,
+        border: getBorderCharacters("norc"),
+      });
+      process.stdout.write(t);
+      return;
+    }
+
+    if (data.length === 0) {
+      return;
+    }
+
+    const headers = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const rows = data.map((item) =>
+      headers.map((header) => {
+        const value = (item as Record<string, unknown>)[header];
+        if (value === null || value === undefined) {
+          return "";
+        }
+        if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
+          return formatDistanceToNowStrict(new Date(value), { addSuffix: true });
+        }
+        return String(value);
+      }),
+    );
+
+    const t = table([headers, ...rows], {
+      border: getBorderCharacters("norc"),
+      drawHorizontalLine: (lineIndex, rowCount) => {
+        return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
+      },
+    });
+    process.stdout.write(t);
   },
 
   /**

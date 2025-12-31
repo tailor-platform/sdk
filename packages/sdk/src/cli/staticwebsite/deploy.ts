@@ -7,7 +7,6 @@ import pLimit from "p-limit";
 import { withCommonArgs, commonArgs, jsonArgs, workspaceArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import { createProgress, withTimeout } from "../utils/progress";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -256,7 +255,7 @@ export const deployCommand = defineCommand({
     );
 
     if (args.json) {
-      printData({ name, workspaceId, url, skippedFiles }, true);
+      logger.data({ name, workspaceId, url, skippedFiles });
     } else {
       logger.success(`Static website "${name}" deployed successfully. URL: ${url}`);
       logSkippedFiles(skippedFiles);

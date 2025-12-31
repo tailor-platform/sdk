@@ -4,7 +4,7 @@ import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
 import { type OAuth2ClientCredentials, toOAuth2ClientCredentials } from "./transform";
 
 export interface GetOAuth2ClientOptions {
@@ -75,6 +75,6 @@ export const getCommand = defineCommand({
       configPath: args.config,
     });
 
-    printData(credentials, args.json);
+    logger.data(credentials);
   }),
 });

@@ -4,7 +4,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
 import { vaultArgs } from "./args";
 import type { SecretManagerSecret } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
@@ -69,7 +69,7 @@ export const listSecretCommand = defineCommand({
         profile: args.profile,
         vaultName: args["vault-name"],
       });
-      printData(secrets, args.json);
+      logger.data(secrets);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw new Error(`Vault "${args["vault-name"]}" not found.`);

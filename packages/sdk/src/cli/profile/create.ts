@@ -2,7 +2,6 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "../context";
-import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";
 
@@ -74,6 +73,6 @@ export const createCommand = defineCommand({
       user: args.user,
       workspaceId: args["workspace-id"],
     };
-    printData(profileInfo, args.json);
+    logger.data(profileInfo);
   }),
 });

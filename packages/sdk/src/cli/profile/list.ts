@@ -2,7 +2,6 @@ import { defineCommand } from "citty";
 import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
-import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";
 
@@ -15,7 +14,7 @@ export const listCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
   },
-  run: withCommonArgs(async (args) => {
+  run: withCommonArgs(async () => {
     const config = readPlatformConfig();
 
     const profiles = Object.entries(config.profiles);
@@ -32,6 +31,6 @@ export const listCommand = defineCommand({
       user: profile!.user,
       workspaceId: profile!.workspace_id,
     }));
-    printData(profileInfos, args.json);
+    logger.data(profileInfos);
   }),
 });

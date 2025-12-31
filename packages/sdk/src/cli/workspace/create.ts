@@ -3,7 +3,6 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken, loadFolderId, loadOrganizationId } from "../context";
-import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
@@ -117,6 +116,6 @@ export const createCommand = defineCommand({
       logger.success(`Workspace "${args.name}" created successfully.`);
     }
 
-    printData(workspace, args.json);
+    logger.data(workspace);
   }),
 });

@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
 
 export interface StaticWebsiteInfo {
   workspaceId: string;
@@ -78,6 +78,6 @@ export const listCommand = defineCommand({
           };
         });
 
-    printData(formatted, args.json);
+    logger.data(formatted);
   }),
 });

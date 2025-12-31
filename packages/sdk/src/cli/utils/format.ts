@@ -54,36 +54,3 @@ export function humanizeRelativeTime(isoString: string): string {
 
   return formatDistanceToNowStrict(date, { addSuffix: true });
 }
-
-export function printData(data: object | object[], json: boolean = false) {
-  if (json) {
-    // eslint-disable-next-line no-restricted-syntax
-    console.log(JSON.stringify(data));
-    return;
-  }
-
-  if (!Array.isArray(data)) {
-    process.stdout.write(
-      formatKeyValueTable(Object.entries(data).map(([k, v]) => [k, formatValue(v)])),
-    );
-    return;
-  }
-
-  if (data.length === 0) {
-    return;
-  }
-
-  const headers = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
-
-  const rows = data.map((item) =>
-    headers.map((header) => {
-      const value = (item as Record<string, unknown>)[header];
-      if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
-        return humanizeRelativeTime(value);
-      }
-      return formatValue(value);
-    }),
-  );
-
-  process.stdout.write(formatTableWithHeaders(headers, rows));
-}

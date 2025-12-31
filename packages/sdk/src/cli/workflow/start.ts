@@ -11,7 +11,6 @@ import { commonArgs, deploymentArgs, jsonArgs, parseDuration, withCommonArgs } f
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
 import { logger, styles } from "../utils/logger";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
@@ -275,10 +274,10 @@ export const startCommand = defineCommand({
         });
         printExecutionWithLogs(execution);
       } else {
-        printData(result, args.json);
+        logger.data(result);
       }
     } else {
-      printData({ executionId }, args.json);
+      logger.data({ executionId });
     }
   }),
 });

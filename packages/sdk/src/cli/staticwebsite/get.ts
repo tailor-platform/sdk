@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
 
 export const getCommand = defineCommand({
   meta: {
@@ -53,7 +53,7 @@ export const getCommand = defineCommand({
           : staticwebsite.allowedIpAddresses.join("\n"),
       };
 
-      printData(info, args.json);
+      logger.data(info);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw new Error(notFoundErrorMessage);

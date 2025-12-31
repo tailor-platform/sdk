@@ -4,7 +4,7 @@ import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
 import type { MachineUser } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
@@ -87,6 +87,6 @@ export const listCommand = defineCommand({
     });
 
     // Show machine users info
-    printData(machineUsers, args.json);
+    logger.data(machineUsers);
   }),
 });

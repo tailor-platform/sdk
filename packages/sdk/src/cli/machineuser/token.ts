@@ -3,7 +3,7 @@ import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
 
 export interface GetMachineUserTokenOptions {
   name: string;
@@ -99,6 +99,6 @@ export const tokenCommand = defineCommand({
       token_type: token.tokenType,
       expires_at: token.expiresAt,
     };
-    printData(tokenInfo, args.json);
+    logger.data(tokenInfo);
   }),
 });
