@@ -1,4 +1,10 @@
 import { describe, expect, test } from "vitest";
+import {
+  filterByMetadataWithName,
+  filterUniqueNamesByMetadata,
+  jobFunctionTrn,
+  workflowTrn,
+} from "./metadata";
 import { createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {
@@ -7,12 +13,13 @@ describe("controlplane", async () => {
   describe("workflows", () => {
     test("workflow applied", async () => {
       const { workflows } = await client.listWorkflows({ workspaceId });
+      const ownedWorkflows = await filterByMetadataWithName(client, workflows, workflowTrn);
 
       // There are 2 workflows defined in example/workflows
-      expect(workflows.length).toBe(2);
+      expect(ownedWorkflows.length).toBe(2);
 
       // Verify order-processing workflow
-      const orderProcessing = workflows.find((w) => w.name === "order-processing");
+      const orderProcessing = ownedWorkflows.find((w) => w.name === "order-processing");
       expect(orderProcessing).toBeDefined();
       expect(orderProcessing).toMatchObject({
         name: "order-processing",
@@ -24,7 +31,7 @@ describe("controlplane", async () => {
       expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain("send-notification");
 
       // Verify sample-workflow
-      const sampleWorkflow = workflows.find((w) => w.name === "sample-workflow");
+      const sampleWorkflow = ownedWorkflows.find((w) => w.name === "sample-workflow");
       expect(sampleWorkflow).toBeDefined();
       expect(sampleWorkflow).toMatchObject({
         name: "sample-workflow",
@@ -43,22 +50,22 @@ describe("controlplane", async () => {
         workspaceId,
       });
 
-      // Verify job functions that are used by workflows are bundled
+      // Get unique job function names and filter by metadata
       const jobNames = jobFunctions.map((j) => j.name);
+      const ownedJobNames = await filterUniqueNamesByMetadata(client, jobNames, jobFunctionTrn);
+
+      // There are exactly 6 job functions used by the 2 workflows
+      expect(ownedJobNames).toHaveLength(6);
 
       // Jobs from order-processing workflow
-      expect(jobNames).toContain("process-order");
-      expect(jobNames).toContain("fetch-customer");
-      expect(jobNames).toContain("send-notification");
+      expect(ownedJobNames).toContain("process-order");
+      expect(ownedJobNames).toContain("fetch-customer");
+      expect(ownedJobNames).toContain("send-notification");
 
       // Jobs from sample-workflow
-      expect(jobNames).toContain("validate-order");
-      expect(jobNames).toContain("check-inventory");
-      expect(jobNames).toContain("process-payment");
-
-      // Jobs NOT used by any workflow should NOT be bundled
-      expect(jobNames).not.toContain("generate-report");
-      expect(jobNames).not.toContain("archive-data");
+      expect(ownedJobNames).toContain("validate-order");
+      expect(ownedJobNames).toContain("check-inventory");
+      expect(ownedJobNames).toContain("process-payment");
     });
 
     test("job function script is bundled", async () => {
@@ -66,18 +73,27 @@ describe("controlplane", async () => {
         workspaceId,
       });
 
-      // Verify each job function has a non-empty script
-      for (const jobFunction of jobFunctions) {
-        expect(jobFunction.script).toBeTruthy();
-        expect(jobFunction.script.length).toBeGreaterThan(0);
+      // Get unique job function names and filter by metadata
+      const jobNames = jobFunctions.map((j) => j.name);
+      const ownedJobNames = await filterUniqueNamesByMetadata(client, jobNames, jobFunctionTrn);
+
+      // Get one job function per owned name (for script verification)
+      const ownedJobFunctions = ownedJobNames.map((name) =>
+        jobFunctions.find((j) => j.name === name),
+      );
+
+      // Verify each owned job function has a non-empty script
+      for (const jobFunction of ownedJobFunctions) {
+        expect(jobFunction?.script).toBeTruthy();
+        expect(jobFunction?.script?.length).toBeGreaterThan(0);
       }
 
       // Verify specific job function content
-      const fetchCustomer = jobFunctions.find((j) => j.name === "fetch-customer");
+      const fetchCustomer = ownedJobFunctions.find((j) => j?.name === "fetch-customer");
       expect(fetchCustomer).toBeDefined();
       expect(fetchCustomer?.script).toBeTruthy();
 
-      const sendNotification = jobFunctions.find((j) => j.name === "send-notification");
+      const sendNotification = ownedJobFunctions.find((j) => j?.name === "send-notification");
       expect(sendNotification).toBeDefined();
       expect(sendNotification?.script).toBeTruthy();
     });

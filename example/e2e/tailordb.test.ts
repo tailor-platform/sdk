@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { TailorDBType_Permission_Operator } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { gql } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
+import { filterByMetadata, tailordbTrn } from "./metadata";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", () => {
@@ -12,8 +13,10 @@ describe("controlplane", () => {
     const { tailordbServices } = await client.listTailorDBServices({
       workspaceId,
     });
-    expect(tailordbServices.length).toBe(2); // tailordb + analyticsdb
-    const tailordbService = tailordbServices.find((s) => s.namespace?.name === namespaceName);
+    const ownedServices = await filterByMetadata(client, tailordbServices, tailordbTrn);
+
+    expect(ownedServices.length).toBe(2); // tailordb + analyticsdb
+    const tailordbService = ownedServices.find((s) => s.namespace?.name === namespaceName);
     expect(tailordbService).toBeDefined();
     expect(tailordbService?.namespace?.name).toBe(namespaceName);
   });
