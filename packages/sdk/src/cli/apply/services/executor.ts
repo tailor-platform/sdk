@@ -182,6 +182,11 @@ function protoExecutor(
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
+
+  // Common args expressions with env
+  const envField = `env: ${JSON.stringify(env)}`;
+  const baseArgsExpr = `({ ...args, appNamespace: args.namespaceName, ${envField} })`;
+
   const eventType: { [key in Trigger["kind"]]?: string } = {
     recordCreated: "tailordb.type_record.created",
     recordUpdated: "tailordb.type_record.updated",
@@ -214,9 +219,7 @@ function protoExecutor(
               expr: [
                 /* js */ `args.typeName === "${trigger.typeName}"`,
                 ...(trigger.condition
-                  ? [
-                      /* js */ `(${stringifyFunction(trigger.condition)})({ ...args, appNamespace: args.namespaceName })`,
-                    ]
+                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${baseArgsExpr})`]
                   : []),
               ].join(" && "),
             },
@@ -236,7 +239,7 @@ function protoExecutor(
                 /* js */ `args.resolverName === "${trigger.resolverName}"`,
                 ...(trigger.condition
                   ? [
-                      /* js */ `(${stringifyFunction(trigger.condition)})(${buildResolverExecutedArgsExpr()})`,
+                      /* js */ `(${stringifyFunction(trigger.condition)})(${buildResolverExecutedArgsExpr(envField)})`,
                     ]
                   : []),
               ].join(" && "),
@@ -262,12 +265,9 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  // Build common args expression with env for all target types
-  const envField = `env: ${JSON.stringify(env)}`;
+  // Build args expression for target operations
   const argsExpr =
-    trigger.kind === "resolverExecuted"
-      ? buildResolverExecutedArgsExpr(envField)
-      : `({ ...args, appNamespace: args.namespaceName, ${envField} })`;
+    trigger.kind === "resolverExecuted" ? buildResolverExecutedArgsExpr(envField) : baseArgsExpr;
 
   switch (target.kind) {
     case "webhook": {
