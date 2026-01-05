@@ -2,10 +2,7 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add typed `success`, `result`, and `error` fields to `resolverExecutedTrigger` args
+Add typed fields to `resolverExecutedTrigger` and `env` support for all executor args
 
-- Add tagged union type to `ResolverExecutedArgs` with `success: true | false` discriminator
-- When `success` is `true`, `result` contains the resolver output (`output<R["output"]>`)
-- When `success` is `false`, `error` contains the error message (`string`)
-- Transform server's `succeeded`/`failed` fields to `success`/`result`/`error` at runtime
-- Extract `result` from `args.succeeded.result.resolver` to match the resolver output type
+- Add `success`, `result`, `error` fields to `ResolverExecutedArgs` with tagged union type
+- Add `env: TailorEnv` to all trigger Args types and operation args
