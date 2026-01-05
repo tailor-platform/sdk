@@ -20,6 +20,8 @@
     "example/tests/fixtures/",
     "example/generated/",
     "example/seed/",
-    "packages/tailor-proto/"
+    "packages/tailor-proto/",
+    "packages/create-sdk/templates/inventory-management/src/generated/",
+    "packages/create-sdk/templates/testing/src/generated/"
   ]
 }
