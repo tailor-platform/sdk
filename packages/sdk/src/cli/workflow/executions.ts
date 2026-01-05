@@ -11,7 +11,7 @@ import ora from "ora";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { formatKeyValueTable, printData } from "../utils/format";
+import { formatKeyValueTable } from "../utils/format";
 import { styles, logger } from "../utils/logger";
 import { waitArgs } from "./args";
 import {
@@ -310,7 +310,7 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
     ["startedAt", execution.startedAt],
     ["finishedAt", execution.finishedAt],
   ];
-  process.stdout.write(formatKeyValueTable(summaryData));
+  logger.out(formatKeyValueTable(summaryData));
 
   // Print job details with logs
   if (execution.jobDetails && execution.jobDetails.length > 0) {
@@ -393,7 +393,7 @@ export const executionsCommand = defineCommand({
       if (args.logs && !args.json) {
         printExecutionWithLogs(result);
       } else {
-        printData(result, args.json);
+        logger.out(result);
       }
     } else {
       const executions = await listWorkflowExecutions({
@@ -402,7 +402,7 @@ export const executionsCommand = defineCommand({
         workflowName: args["workflow-name"],
         status: args.status,
       });
-      printData(executions, args.json);
+      logger.out(executions);
     }
   }),
 });

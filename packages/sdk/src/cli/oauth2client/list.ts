@@ -3,7 +3,7 @@ import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { logger } from "../utils/logger";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
 
 export interface ListOAuth2ClientsOptions {
@@ -63,6 +63,6 @@ export const listCommand = defineCommand({
       configPath: args.config,
     });
 
-    printData(oauth2Clients, args.json);
+    logger.out(oauth2Clients);
   }),
 });

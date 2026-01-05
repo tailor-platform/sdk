@@ -3,7 +3,8 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { humanizeRelativeTime, printData } from "../utils/format";
+import { humanizeRelativeTime } from "../utils/format";
+import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface ListWorkspacesOptions {
@@ -91,6 +92,6 @@ export const listCommand = defineCommand({
           createdAt: humanizeRelativeTime(createdAt),
         }));
 
-    printData(formattedWorkspaces, args.json);
+    logger.out(formattedWorkspaces);
   }),
 });

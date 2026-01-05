@@ -4,7 +4,7 @@ import { commonArgs, jsonArgs, withCommonArgs } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadWorkspaceId } from "./context";
-import { printData } from "./utils/format";
+import { logger } from "./utils/logger";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 export interface ShowOptions {
@@ -93,6 +93,6 @@ export const showCommand = defineCommand({
       configPath: args.config,
     });
 
-    printData(appInfo, args.json);
+    logger.out(appInfo);
   }),
 });

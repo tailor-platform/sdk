@@ -1,11 +1,10 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect } from "vitest";
 import {
   formatTable,
   formatKeyValueTable,
   formatTableWithHeaders,
   formatValue,
   humanizeRelativeTime,
-  printData,
 } from "./format";
 
 describe("format", () => {
@@ -152,109 +151,6 @@ describe("format", () => {
       const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
       const result = humanizeRelativeTime(twoDaysAgo);
       expect(result).toContain("ago");
-    });
-  });
-
-  describe("printData", () => {
-    let stdoutWriteSpy: ReturnType<typeof vi.spyOn>;
-    let consoleLogSpy: ReturnType<typeof vi.spyOn>;
-
-    beforeEach(() => {
-      stdoutWriteSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-      consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-      stdoutWriteSpy.mockRestore();
-      consoleLogSpy.mockRestore();
-    });
-
-    test("outputs JSON when json flag is true", () => {
-      const data = { name: "test", value: 42 };
-      printData(data, true);
-      expect(consoleLogSpy).toHaveBeenCalledWith(JSON.stringify(data));
-      expect(stdoutWriteSpy).not.toHaveBeenCalled();
-    });
-
-    test("outputs key-value table for single object", () => {
-      const data = { name: "test", status: "ok" };
-      printData(data);
-      expect(stdoutWriteSpy).toHaveBeenCalled();
-      const output = stdoutWriteSpy.mock.calls[0][0] as string;
-      expect(output).toContain("name");
-      expect(output).toContain("test");
-      expect(output).toContain("status");
-      expect(output).toContain("ok");
-    });
-
-    test("outputs nothing for empty array", () => {
-      printData([]);
-      expect(stdoutWriteSpy).not.toHaveBeenCalled();
-      expect(consoleLogSpy).not.toHaveBeenCalled();
-    });
-
-    test("outputs table with headers for array of objects", () => {
-      const data = [
-        { name: "item1", value: "a" },
-        { name: "item2", value: "b" },
-      ];
-      printData(data);
-      expect(stdoutWriteSpy).toHaveBeenCalled();
-      const output = stdoutWriteSpy.mock.calls[0][0] as string;
-      expect(output).toContain("name");
-      expect(output).toContain("value");
-      expect(output).toContain("item1");
-      expect(output).toContain("item2");
-      // Should have header separator
-      expect(output).toContain("├");
-    });
-
-    test("formats nested object in value", () => {
-      const data = { config: { nested: "value" } };
-      printData(data);
-      const output = stdoutWriteSpy.mock.calls[0][0] as string;
-      expect(output).toContain("config");
-      expect(output).toContain('"nested"');
-      expect(output).toContain('"value"');
-    });
-
-    test("formats array in value", () => {
-      const data = { tags: ["a", "b", "c"] };
-      printData(data);
-      const output = stdoutWriteSpy.mock.calls[0][0] as string;
-      expect(output).toContain("tags");
-      expect(output).toContain("a");
-      expect(output).toContain("b");
-      expect(output).toContain("c");
-    });
-
-    test("handles objects with different keys in array", () => {
-      const data = [{ name: "a" }, { name: "b", extra: "c" }];
-      printData(data);
-      const output = stdoutWriteSpy.mock.calls[0][0] as string;
-      expect(output).toContain("name");
-      expect(output).toContain("extra");
-      expect(output).toContain("a");
-      expect(output).toContain("b");
-      expect(output).toContain("c");
-    });
-
-    test("humanizes createdAt field in array", () => {
-      const now = new Date();
-      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
-      const data = [{ name: "test", createdAt: fiveMinutesAgo }];
-      printData(data);
-      const output = stdoutWriteSpy.mock.calls[0][0] as string;
-      expect(output).toContain("5 minutes ago");
-    });
-
-    test("humanizes updatedAt field in array", () => {
-      const now = new Date();
-      const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
-      const data = [{ name: "test", updatedAt: tenMinutesAgo }];
-      printData(data);
-      const output = stdoutWriteSpy.mock.calls[0][0] as string;
-      expect(output).toContain("10 minutes ago");
     });
   });
 });

@@ -3,7 +3,6 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import { waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
@@ -106,10 +105,10 @@ export const resumeCommand = defineCommand({
         });
         printExecutionWithLogs(execution);
       } else {
-        printData(result, args.json);
+        logger.out(result);
       }
     } else {
-      printData({ executionId }, args.json);
+      logger.out({ executionId });
     }
   }),
 });

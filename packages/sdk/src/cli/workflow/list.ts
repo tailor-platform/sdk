@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { formatTableWithHeaders, humanizeRelativeTime, printData } from "../utils/format";
+import { formatTableWithHeaders, humanizeRelativeTime } from "../utils/format";
 import { logger } from "../utils/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
@@ -50,7 +50,7 @@ export const listCommand = defineCommand({
     });
 
     if (args.json) {
-      printData(workflows, args.json);
+      logger.out(workflows);
     } else {
       if (workflows.length === 0) {
         logger.info("No workflows found.");
@@ -63,7 +63,7 @@ export const listCommand = defineCommand({
         w.jobFunctions.toString(),
         humanizeRelativeTime(w.updatedAt),
       ]);
-      process.stdout.write(formatTableWithHeaders(headers, rows));
+      logger.out(formatTableWithHeaders(headers, rows));
     }
   }),
 });

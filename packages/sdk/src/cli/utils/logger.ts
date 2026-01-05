@@ -1,6 +1,9 @@
+import { formatWithOptions, type InspectOptions } from "node:util";
 import chalk from "chalk";
 import { createConsola, type PromptOptions } from "consola";
+import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
+import { getBorderCharacters, table } from "table";
 
 /**
  * Error thrown when a prompt is attempted in a CI environment
@@ -75,34 +78,90 @@ export interface LogOptions {
   mode?: LogMode;
 }
 
-// Mode-specific consola instances
+// In JSON mode, all logs go to stderr to keep stdout clean for JSON data
+let _jsonMode = false;
+
+// Type icons for log output
+const TYPE_ICONS: Record<string, string> = {
+  info: "ℹ",
+  success: "✔",
+  warn: "⚠",
+  error: "✖",
+  debug: "⚙",
+  trace: "→",
+  log: "",
+};
+
+class IconReporter {
+  log(
+    logObj: { type: string; tag?: string; args: unknown[]; level: number; date?: Date },
+    ctx: {
+      options: {
+        stdout?: NodeJS.WriteStream;
+        stderr?: NodeJS.WriteStream;
+        formatOptions: { date?: boolean; compact?: boolean | number };
+      };
+    },
+  ) {
+    const stdout = ctx.options.stdout || process.stdout;
+    const stderr = ctx.options.stderr || process.stderr;
+    const formatOptions = ctx.options.formatOptions;
+    const inspectOpts: InspectOptions = {
+      breakLength: stdout.columns || 80,
+      compact: formatOptions.compact,
+    };
+    const message = formatWithOptions(inspectOpts, ...logObj.args);
+    const icon = TYPE_ICONS[logObj.type] || "";
+    const prefix = icon ? `${icon} ` : "";
+
+    const timestamp =
+      formatOptions.date && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
+    stderr.write(`${timestamp}${prefix}${message}\n`);
+  }
+}
+
+class PlainReporter {
+  log(
+    logObj: { type: string; tag?: string; args: unknown[]; level: number },
+    ctx: {
+      options: { stderr?: NodeJS.WriteStream; formatOptions: object };
+    },
+  ) {
+    const stderr = ctx.options.stderr || process.stderr;
+    const formatOptions = ctx.options.formatOptions as { compact?: boolean | number };
+    const inspectOpts: InspectOptions = {
+      breakLength: 100,
+      compact: formatOptions.compact,
+    };
+    const message = formatWithOptions(inspectOpts, ...logObj.args);
+    stderr.write(`${message}\n`);
+  }
+}
+
 const defaultLogger = createConsola({
+  reporters: [new IconReporter()],
   formatOptions: { date: false },
 });
 
 const streamLogger = createConsola({
+  reporters: [new IconReporter()],
   formatOptions: { date: true },
 });
 
 const plainLogger = createConsola({
+  reporters: [new PlainReporter()],
   formatOptions: { date: false, compact: true },
 });
 
-/**
- * Logger object for CLI output
- */
 export const logger = {
-  /**
-   * JSON mode flag
-   * When enabled, most log output is suppressed
-   */
-  jsonMode: false,
+  get jsonMode(): boolean {
+    return _jsonMode;
+  },
+  set jsonMode(value: boolean) {
+    _jsonMode = value;
+  },
 
-  /**
-   * Log informational message (suppressed in JSON mode)
-   */
   info(message: string, opts?: LogOptions): void {
-    if (this.jsonMode) return;
     const mode = opts?.mode ?? "default";
 
     switch (mode) {
@@ -117,11 +176,7 @@ export const logger = {
     }
   },
 
-  /**
-   * Log success message (suppressed in JSON mode)
-   */
   success(message: string, opts?: LogOptions): void {
-    if (this.jsonMode) return;
     const mode = opts?.mode ?? "default";
 
     switch (mode) {
@@ -136,11 +191,7 @@ export const logger = {
     }
   },
 
-  /**
-   * Log warning message (suppressed in JSON mode)
-   */
   warn(message: string, opts?: LogOptions): void {
-    if (this.jsonMode) return;
     const mode = opts?.mode ?? "default";
 
     switch (mode) {
@@ -155,9 +206,6 @@ export const logger = {
     }
   },
 
-  /**
-   * Log error message (always shown, even in JSON mode)
-   */
   error(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
 
@@ -173,48 +221,67 @@ export const logger = {
     }
   },
 
-  /**
-   * Log raw message without prefix (suppressed in JSON mode)
-   */
   log(message: string): void {
-    if (this.jsonMode) return;
     plainLogger.log(message);
   },
 
-  /**
-   * Log empty line (suppressed in JSON mode)
-   */
   newline(): void {
-    if (this.jsonMode) return;
     plainLogger.log("");
   },
 
-  /**
-   * Log debug message (suppressed in JSON mode)
-   * Uses dim color for less emphasis
-   */
   debug(message: string): void {
-    if (this.jsonMode) return;
     plainLogger.log(styles.dim(message));
   },
 
-  /**
-   * Output data - JSON in JSON mode, otherwise formatted
-   */
-  data(dataValue: unknown, formatFn?: (d: unknown) => void): void {
-    if (this.jsonMode) {
-      plainLogger.log(JSON.stringify(dataValue, null, 2));
-    } else if (formatFn) {
-      formatFn(dataValue);
-    } else {
-      plainLogger.log(String(dataValue));
+  out(data: string | object | object[]): void {
+    if (typeof data === "string") {
+      process.stdout.write(data.endsWith("\n") ? data : data + "\n");
+      return;
     }
+
+    if (this.jsonMode) {
+      // eslint-disable-next-line no-restricted-syntax
+      console.log(JSON.stringify(data));
+      return;
+    }
+
+    if (!Array.isArray(data)) {
+      const t = table(Object.entries(data), {
+        singleLine: true,
+        border: getBorderCharacters("norc"),
+      });
+      process.stdout.write(t);
+      return;
+    }
+
+    if (data.length === 0) {
+      return;
+    }
+
+    const headers = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const rows = data.map((item) =>
+      headers.map((header) => {
+        const value = (item as Record<string, unknown>)[header];
+        if (value === null || value === undefined) {
+          return "";
+        }
+        if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
+          return formatDistanceToNowStrict(new Date(value), { addSuffix: true });
+        }
+        return String(value);
+      }),
+    );
+
+    const t = table([headers, ...rows], {
+      border: getBorderCharacters("norc"),
+      drawHorizontalLine: (lineIndex, rowCount) => {
+        return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
+      },
+    });
+    process.stdout.write(t);
   },
 
   /**
-   * Interactive prompt (always shown, even in JSON mode)
-   * Wraps consola.prompt for consistent interface
-   *
    * @throws {CIPromptError} When called in a CI environment
    */
   prompt<T extends PromptOptions>(

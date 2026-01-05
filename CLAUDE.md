@@ -431,12 +431,13 @@ import { logger, styles } from "../utils/logger";
 
 **Logger Methods:**
 
-- `logger.info(message, opts?)` - Informational messages (suppressed in JSON mode)
-- `logger.success(message, opts?)` - Success messages (suppressed in JSON mode)
-- `logger.warn(message, opts?)` - Warning messages (suppressed in JSON mode)
-- `logger.error(message, opts?)` - Error messages (always shown)
-- `logger.log(message)` - Raw output without prefix (suppressed in JSON mode)
-- `logger.debug(message)` - Debug messages in dim color (suppressed in JSON mode)
+- `logger.info(message, opts?)` - Informational messages (output to stderr)
+- `logger.success(message, opts?)` - Success messages (output to stderr)
+- `logger.warn(message, opts?)` - Warning messages (output to stderr)
+- `logger.error(message, opts?)` - Error messages (output to stderr)
+- `logger.log(message)` - Raw output without prefix (output to stderr)
+- `logger.debug(message)` - Debug messages in dim color (output to stderr)
+- `logger.out(data)` - Primary output for stdout (string, object, or object[])
 
 **LogMode Options:**
 
@@ -465,14 +466,23 @@ styles.dim(text); // Gray
 styles.bold(text); // Bold
 ```
 
+**stdout vs stderr (following [clig.dev](https://clig.dev/#output) guidelines):**
+
+| Stream   | Method                                     | Use Case                              |
+| -------- | ------------------------------------------ | ------------------------------------- |
+| `stdout` | `logger.out()`                             | Primary program output (data, tables) |
+| `stderr` | `logger.info/success/warn/error/log/debug` | Logs, diagnostics, progress messages  |
+
+This separation allows piping data to other commands without log messages interfering.
+
 **Rules:**
 
 1. ❌ Do NOT import `consola` directly - use `logger` instead
 2. ❌ Do NOT create custom consola instances
-3. ❌ Do NOT use `console.log()` for JSON output - use `printData(data, json)` from `../format`
+3. ❌ Do NOT use `console.log()` or `process.stdout.write()` directly - use `logger.out()` for stdout
 4. ✅ Use `logger` for all CLI output
 5. ✅ Use `styles` for inline text coloring
-6. ✅ Use `printData()` for structured data output (handles JSON mode automatically)
+6. ✅ Use `logger.out()` for structured data output (handles JSON mode automatically)
 
 ### Module Architecture and Import Rules
 

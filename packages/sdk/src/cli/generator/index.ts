@@ -70,7 +70,6 @@ export class GenerationManager {
   async generate(watch: boolean) {
     logger.newline();
     logger.log(`Generation for application: ${styles.highlight(this.application.config.name)}`);
-    logger.newline();
 
     const app = this.application;
 

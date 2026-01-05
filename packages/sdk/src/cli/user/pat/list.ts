@@ -3,7 +3,6 @@ import ml from "multiline-ts";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
-import { printData } from "../../utils/format";
 import { logger } from "../../utils/logger";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
 
@@ -47,7 +46,7 @@ export const listCommand = defineCommand({
     if (args.json) {
       // JSON format with scopes as array
       const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
-      printData(patInfos, args.json);
+      logger.out(patInfos);
       return;
     }
 

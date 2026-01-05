@@ -48,6 +48,6 @@ export const createCommand = defineCommand({
       throw new Error("Failed to create personal access token");
     }
 
-    printCreatedToken(args.name, result.accessToken, args.write, "created", args.json);
+    printCreatedToken(args.name, result.accessToken, args.write, "created");
   }),
 });

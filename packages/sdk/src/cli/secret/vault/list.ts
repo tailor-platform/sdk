@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
-import { printData } from "../../utils/format";
+import { logger } from "../../utils/logger";
 import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
 
 export interface VaultListOptions {
@@ -63,6 +63,6 @@ export const listCommand = defineCommand({
       profile: args.profile,
     });
 
-    printData(vaults, args.json);
+    logger.out(vaults);
   }),
 });

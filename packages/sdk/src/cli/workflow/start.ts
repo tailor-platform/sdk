@@ -11,7 +11,6 @@ import { commonArgs, deploymentArgs, jsonArgs, parseDuration, withCommonArgs } f
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
 import { logger, styles } from "../utils/logger";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
@@ -262,12 +261,10 @@ export const startCommand = defineCommand({
       interval,
     });
 
-    if (!args.json) {
-      logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
-    }
+    logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
 
     if (args.wait) {
-      const result = await wait({ showProgress: !args.json });
+      const result = await wait({ showProgress: true });
       if (args.logs && !args.json) {
         const { execution } = await getWorkflowExecution({
           executionId,
@@ -277,10 +274,10 @@ export const startCommand = defineCommand({
         });
         printExecutionWithLogs(execution);
       } else {
-        printData(result, args.json);
+        logger.out(result);
       }
     } else {
-      printData({ executionId }, args.json);
+      logger.out({ executionId });
     }
   }),
 });
