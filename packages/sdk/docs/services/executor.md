@@ -10,7 +10,7 @@ Executors provide:
 - Scheduled execution via cron expressions
 - Incoming webhook handlers
 - Post-resolver execution hooks
-- Multiple execution targets (functions, webhooks, GraphQL)
+- Multiple operation types (functions, webhooks, GraphQL, workflows)
 
 For the official Tailor Platform documentation, see [Executor Guide](https://docs.tailor.tech/guides/executor/overview).
 
@@ -93,9 +93,9 @@ resolverExecutedTrigger({
 });
 ```
 
-## Execution Targets
+## Operation Types
 
-### Function Execution
+### Function Operation
 
 Execute JavaScript/TypeScript functions:
 
@@ -110,7 +110,31 @@ createExecutor({
 });
 ```
 
-### Webhook Execution
+### Job Function Operation
+
+For long-running operations, use `jobFunction` which runs asynchronously and supports extended execution times. See [Job Function Operation](https://docs.tailor.tech/guides/executor/job-function-operation) for details.
+
+```typescript
+import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
+import { getDB } from "../generated/tailordb";
+
+export default createExecutor({
+  name: "daily-report-generator",
+  description: "Generate daily reports",
+  trigger: scheduleTrigger({ cron: "0 0 * * *" }),
+  operation: {
+    kind: "jobFunction",
+    body: async () => {
+      const db = getDB("tailordb");
+      // Long-running report generation logic
+      const records = await db.selectFrom("Order").selectAll().execute();
+      // Process records...
+    },
+  },
+});
+```
+
+### Webhook Operation
 
 Call external webhooks with dynamic data:
 
@@ -132,7 +156,7 @@ createExecutor({
 });
 ```
 
-### GraphQL Execution
+### GraphQL Operation
 
 Execute GraphQL queries and mutations:
 
@@ -154,6 +178,69 @@ createExecutor({
       id: newRecord.userId,
       status: "active",
     }),
+  },
+});
+```
+
+### Workflow Operation
+
+Trigger workflows from executors. See [Workflow documentation](./workflow.md) for how to define workflows.
+
+```typescript
+import { createExecutor, recordCreatedTrigger } from "@tailor-platform/sdk";
+import { order } from "../tailordb/order";
+import processOrderWorkflow from "../workflows/process-order";
+
+export default createExecutor({
+  name: "order-processor",
+  description: "Process new orders via workflow",
+  trigger: recordCreatedTrigger({ type: order }),
+  operation: {
+    kind: "workflow",
+    workflow: processOrderWorkflow,
+    args: ({ newRecord }) => ({
+      orderId: newRecord.id,
+      customerId: newRecord.customerId,
+    }),
+  },
+});
+```
+
+You can also pass static arguments:
+
+```typescript
+createExecutor({
+  operation: {
+    kind: "workflow",
+    workflow: dailyReportWorkflow,
+    args: { reportType: "summary" },
+  },
+});
+```
+
+### Authentication for Operations
+
+GraphQL and Workflow operations can specify an `authInvoker` to execute with machine user credentials:
+
+```typescript
+import { defineAuth, createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
+
+const auth = defineAuth("my-auth", {
+  // ... auth configuration
+  machineUsers: {
+    "batch-processor": {
+      attributes: { role: "ADMIN" },
+    },
+  },
+});
+
+export default createExecutor({
+  name: "scheduled-cleanup",
+  trigger: scheduleTrigger({ cron: "0 0 * * *" }),
+  operation: {
+    kind: "graphql",
+    query: `mutation { cleanupOldRecords { count } }`,
+    authInvoker: auth.invoker("batch-processor"),
   },
 });
 ```

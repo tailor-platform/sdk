@@ -12,6 +12,7 @@ declare module "vitest" {
     token: string;
     workspaceId: string;
     platformToken: string;
+    appName: string;
   }
 }
 
@@ -27,4 +28,5 @@ export async function setup(project: TestProject) {
   project.provide("token", tokens.accessToken);
   project.provide("workspaceId", workspaceId);
   project.provide("platformToken", platformToken);
+  project.provide("appName", app.name);
 }

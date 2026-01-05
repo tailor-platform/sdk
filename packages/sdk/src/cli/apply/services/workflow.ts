@@ -15,10 +15,10 @@ export async function applyWorkflow(
   result: Awaited<ReturnType<typeof planWorkflow>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
-  const { changeSet } = result;
+  const { changeSet, appName } = result;
   if (phase === "create-update") {
     // Register job functions used by any workflow, returns map of job name to version
-    const jobFunctionVersions = await registerJobFunctions(client, changeSet);
+    const jobFunctionVersions = await registerJobFunctions(client, changeSet, appName);
 
     // Create and update workflows in parallel
     // Each workflow only gets the job function versions it actually uses
@@ -83,10 +83,12 @@ function filterJobFunctionVersions(
  * Register job functions used by any workflow.
  * Only registers jobs that are actually used (based on usedJobNames in changeSet).
  * Uses create for new jobs and update for existing jobs.
+ * Sets metadata on used JobFunctions and removes metadata from unused ones.
  */
 async function registerJobFunctions(
   client: OperatorClient,
   changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
+  appName: string,
 ): Promise<{ [key: string]: bigint }> {
   const jobFunctionVersions: { [key: string]: bigint } = {};
 
@@ -106,15 +108,15 @@ async function registerJobFunctions(
     }
   }
 
-  // Fetch existing job function names
-  const existingJobNames = await fetchAll(async (pageToken) => {
+  // Fetch existing job functions with their names
+  const existingJobFunctions = await fetchAll(async (pageToken) => {
     const response = await client.listWorkflowJobFunctions({
       workspaceId,
       pageToken,
     });
     return [response.jobFunctions.map((j) => j.name), response.nextPageToken];
   });
-  const existingJobNamesSet = new Set(existingJobNames);
+  const existingJobNamesSet = new Set(existingJobFunctions);
 
   // Register job functions in parallel
   // Use create for new jobs, update for existing jobs
@@ -140,6 +142,12 @@ async function registerJobFunctions(
             jobFunctionName: jobName,
             script,
           });
+
+      // Set metadata to mark this JobFunction as owned by this app
+      await client.setMetadata(
+        await buildMetaRequest(jobFunctionTrn(workspaceId, jobName), appName),
+      );
+
       return { jobName, version: response.jobFunction?.version };
     }),
   );
@@ -149,6 +157,27 @@ async function registerJobFunctions(
       jobFunctionVersions[jobName] = version;
     }
   }
+
+  // Remove metadata from JobFunctions that are no longer used by this app
+  const unusedJobFunctions = existingJobFunctions.filter(
+    (jobName) => !allUsedJobNames.has(jobName),
+  );
+  await Promise.all(
+    unusedJobFunctions.map(async (jobName) => {
+      const { metadata } = await client.getMetadata({
+        trn: jobFunctionTrn(workspaceId, jobName),
+      });
+      const label = metadata?.labels?.[sdkNameLabelKey];
+
+      // Only remove metadata if owned by this app
+      if (label === appName) {
+        await client.setMetadata({
+          trn: jobFunctionTrn(workspaceId, jobName),
+          labels: { [sdkNameLabelKey]: "" }, // Remove ownership
+        });
+      }
+    }),
+  );
 
   return jobFunctionVersions;
 }
@@ -177,8 +206,12 @@ type DeleteWorkflow = {
   workflowId: string;
 };
 
-function trn(workspaceId: string, name: string) {
+function workflowTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
+}
+
+function jobFunctionTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:workflow_job_function:${name}`;
 }
 
 export async function planWorkflow(
@@ -207,7 +240,7 @@ export async function planWorkflow(
   await Promise.all(
     withoutLabel.map(async (resource) => {
       const { metadata } = await client.getMetadata({
-        trn: trn(workspaceId, resource.name),
+        trn: workflowTrn(workspaceId, resource.name),
       });
       existingWorkflows[resource.name] = {
         resource,
@@ -221,7 +254,7 @@ export async function planWorkflow(
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, workflow.name), appName);
+    const metaRequest = await buildMetaRequest(workflowTrn(workspaceId, workflow.name), appName);
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
     if (!usedJobNames) {
@@ -282,7 +315,7 @@ export async function planWorkflow(
   });
 
   changeSet.print();
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners, appName };
 }
 
 async function loadWorkflowScripts(): Promise<Map<string, string>> {

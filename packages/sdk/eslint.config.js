@@ -159,7 +159,7 @@ export default defineConfig([
   // },
   {
     files: ["src/cli/**/*.ts"],
-    ignores: ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts"],
+    ignores: ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts", "src/cli/utils/format.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -180,6 +180,11 @@ export default defineConfig([
               name: "consola",
               message:
                 "Use logger from '@/cli/utils/logger' instead of consola for consistent logging.",
+            },
+            {
+              name: "table",
+              message:
+                "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/utils/format' instead of table for consistent table styling.",
             },
           ],
         },

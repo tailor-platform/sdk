@@ -3,6 +3,7 @@ import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb"
 import { gql } from "graphql-request";
 import ml from "multiline-ts";
 import { describe, expect, inject, test } from "vitest";
+import { filterByMetadata, pipelineTrn } from "./metadata";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {
@@ -13,8 +14,10 @@ describe("controlplane", async () => {
     const { pipelineServices } = await client.listPipelineServices({
       workspaceId,
     });
-    expect(pipelineServices.length).toBe(1);
-    expect(pipelineServices[0].namespace?.name).toBe(namespaceName);
+    const ownedServices = await filterByMetadata(client, pipelineServices, pipelineTrn);
+
+    expect(ownedServices.length).toBe(1);
+    expect(ownedServices[0].namespace?.name).toBe(namespaceName);
   });
 
   test("pipeline applied", async () => {

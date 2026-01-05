@@ -3,7 +3,7 @@ import { mainCommand } from "./index";
 import type { CommandDef } from "citty";
 
 vi.mock("node:module", async () => {
-  const actual: any = await vi.importActual("node:module");
+  const actual = await vi.importActual("node:module");
   return {
     ...actual,
     register: vi.fn(),
@@ -11,7 +11,7 @@ vi.mock("node:module", async () => {
 });
 
 vi.mock("citty", async () => {
-  const actual: any = await vi.importActual("citty");
+  const actual = await vi.importActual("citty");
   return {
     ...actual,
     runMain: vi.fn(),

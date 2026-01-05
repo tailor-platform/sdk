@@ -25,6 +25,7 @@ export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   const Output = any,
   M extends FieldMetadata = FieldMetadata,
+  T extends TailorFieldType = TailorFieldType,
 > implements TailorFieldInput {
   protected _metadata: M;
   public readonly _defined: Defined = undefined as unknown as Defined;
@@ -35,7 +36,7 @@ export class TailorField<
   }
 
   protected constructor(
-    public readonly type: TailorFieldType,
+    public readonly type: T,
     options?: FieldOptions,
     public readonly fields: Record<string, TailorField<any>> = {},
     values?: AllowedValues,
@@ -106,7 +107,11 @@ export class TailorField<
    * Parse and validate a value against this field's validation rules
    * Returns StandardSchema Result type with success or failure
    */
-  parse(args: { value: any; data: any; user: TailorUser }): StandardSchemaV1.Result<Output> {
+  parse(args: {
+    value: unknown;
+    data: unknown;
+    user: TailorUser;
+  }): StandardSchemaV1.Result<Output> {
     return this._parseInternal({
       value: args.value,
       data: args.data,
@@ -121,8 +126,8 @@ export class TailorField<
    * @private
    */
   private _validateValue(args: {
-    value: any;
-    data: any;
+    value: TailorToTs[T];
+    data: unknown;
     user: TailorUser;
     pathArray: string[];
   }): StandardSchemaV1.Issue[] {
@@ -194,7 +199,7 @@ export class TailorField<
       case "time":
         if (typeof value !== "string" || !regex.time.test(value)) {
           issues.push({
-            message: `Expected to match "HH:mm:ss" format`,
+            message: `Expected to match "HH:mm" format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
           });
         }
@@ -202,7 +207,7 @@ export class TailorField<
       case "enum":
         if (this.metadata.allowedValues) {
           const allowedValues = this.metadata.allowedValues.map((v) => v.value);
-          if (!allowedValues.includes(value)) {
+          if (typeof value !== "string" || !allowedValues.includes(value)) {
             issues.push({
               message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
               path: pathArray.length > 0 ? pathArray : undefined,
@@ -213,7 +218,12 @@ export class TailorField<
 
       case "nested":
         // Validate nested object fields
-        if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          Array.isArray(value) ||
+          value instanceof Date
+        ) {
           issues.push({
             message: `Expected an object: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -262,7 +272,7 @@ export class TailorField<
    */
   private _parseInternal(args: {
     value: any;
-    data: any;
+    data: unknown;
     user: TailorUser;
     pathArray: string[];
   }): StandardSchemaV1.Result<Output> {
