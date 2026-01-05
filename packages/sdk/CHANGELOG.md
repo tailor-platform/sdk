@@ -1,5 +1,39 @@
 # @tailor-platform/sdk
 
+## 1.1.3
+
+### Patch Changes
+
+- [#331](https://github.com/tailor-platform/sdk/pull/331) [`a427322`](https://github.com/tailor-platform/sdk/commit/a427322a2f9cf191079ce5dca5264603b32cec65) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: use POSIX path separators in seed generator for Windows compatibility
+
+  The seed generator now uses forward slashes for import paths on all platforms, ensuring consistent output between Windows and Unix systems.
+
+- [#332](https://github.com/tailor-platform/sdk/pull/332) [`660e688`](https://github.com/tailor-platform/sdk/commit/660e688ccd4e5e680a309b45c45781acf61c4022) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.56.1
+
+- [#333](https://github.com/tailor-platform/sdk/pull/333) [`820e925`](https://github.com/tailor-platform/sdk/commit/820e925c10a4071c00096639e767655652e253af) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.448.1
+
+- [#335](https://github.com/tailor-platform/sdk/pull/335) [`abcd50d`](https://github.com/tailor-platform/sdk/commit/abcd50d2e8b148280fdd4cd7f014ff0a3df2899b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.18.3
+
+- [#337](https://github.com/tailor-platform/sdk/pull/337) [`37980eb`](https://github.com/tailor-platform/sdk/commit/37980ebe3d8fd69f6d436e346124f58c3d237e52) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency lefthook to v2.0.13
+
+- [#338](https://github.com/tailor-platform/sdk/pull/338) [`53e405c`](https://github.com/tailor-platform/sdk/commit/53e405c1ddea520ca7d54574418267a322d43602) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.7.2
+
+- [#339](https://github.com/tailor-platform/sdk/pull/339) [`f9be44c`](https://github.com/tailor-platform/sdk/commit/f9be44c5b06b4087d2ebaa55ad27499e77cf9e2c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm to v10.26.2
+
+- [#340](https://github.com/tailor-platform/sdk/pull/340) [`2eacdb7`](https://github.com/tailor-platform/sdk/commit/2eacdb7178a6631ed44e8cfbae26ddd3835eb95d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.449.0
+
+- [#341](https://github.com/tailor-platform/sdk/pull/341) [`721fabc`](https://github.com/tailor-platform/sdk/commit/721fabc17bbd38daf6d40e6ad7410f03c63065cd) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency bufbuild/buf to v1.62.1
+
+- [#344](https://github.com/tailor-platform/sdk/pull/344) [`fca3b66`](https://github.com/tailor-platform/sdk/commit/fca3b668af49de5f2358f48c5dca506ecb1efd80) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency rhysd/actionlint to v1.7.10
+
+- [#347](https://github.com/tailor-platform/sdk/pull/347) [`a0c9d9a`](https://github.com/tailor-platform/sdk/commit/a0c9d9a2b7a903c0b216bbf150d5a7cb22186768) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @jackchuka/gql-ingest to v2.2.2
+
+- [#348](https://github.com/tailor-platform/sdk/pull/348) [`2bf5a50`](https://github.com/tailor-platform/sdk/commit/2bf5a5042915363cf79853df284912f5b87faeea) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency oxc-parser to v0.106.0
+
+- [#349](https://github.com/tailor-platform/sdk/pull/349) [`06b12ca`](https://github.com/tailor-platform/sdk/commit/06b12ca350745e34456fef5e7a77f3790db80880) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.51.0
+
+- [#350](https://github.com/tailor-platform/sdk/pull/350) [`3234867`](https://github.com/tailor-platform/sdk/commit/32348670b86f19f3bf66398e5c6f373230ac4130) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.18.4
+
 ## 1.1.2
 
 ### Patch Changes
