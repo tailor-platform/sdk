@@ -1,9 +1,8 @@
 import { defineCommand } from "citty";
-import { table } from "table";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { humanizeRelativeTime, printData } from "../utils/format";
+import { formatTableWithHeaders, humanizeRelativeTime, printData } from "../utils/format";
 import { logger } from "../utils/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
@@ -64,7 +63,7 @@ export const listCommand = defineCommand({
         w.jobFunctions.toString(),
         humanizeRelativeTime(w.updatedAt),
       ]);
-      process.stdout.write(table([headers, ...rows]));
+      process.stdout.write(formatTableWithHeaders(headers, rows));
     }
   }),
 });

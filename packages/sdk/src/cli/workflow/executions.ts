@@ -8,11 +8,10 @@ import {
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import { defineCommand } from "citty";
 import ora from "ora";
-import { table } from "table";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { formatKeyValueTable, printData } from "../utils/format";
 import { styles, logger } from "../utils/logger";
 import { waitArgs } from "./args";
 import {
@@ -311,7 +310,7 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
     ["startedAt", execution.startedAt],
     ["finishedAt", execution.finishedAt],
   ];
-  process.stdout.write(table(summaryData, { singleLine: true }));
+  process.stdout.write(formatKeyValueTable(summaryData));
 
   // Print job details with logs
   if (execution.jobDetails && execution.jobDetails.length > 0) {
