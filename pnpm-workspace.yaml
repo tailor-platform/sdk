@@ -21,4 +21,4 @@ overrides:
   rolldown: "catalog:" # Reference the catalog for automatic updates by renovate
 
 catalog:
-  rolldown: "1.0.0-beta.56"
+  rolldown: "1.0.0-beta.58"
