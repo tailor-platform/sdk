@@ -1,5 +1,39 @@
 # @tailor-platform/sdk
 
+## 1.2.0
+
+### Minor Changes
+
+- [#343](https://github.com/tailor-platform/sdk/pull/343) [`7264ef6`](https://github.com/tailor-platform/sdk/commit/7264ef6a1fbbb53c69aacccb2e50d500ab0e61c8) Thanks [@toiroakr](https://github.com/toiroakr)! - Add typed fields to `resolverExecutedTrigger` and `env` support for all executor args
+  - Add `success`, `result`, `error` fields to `ResolverExecutedArgs` with tagged union type
+  - Add `env: TailorEnv` to all trigger Args types and operation args
+
+### Patch Changes
+
+- [#342](https://github.com/tailor-platform/sdk/pull/342) [`ec710be`](https://github.com/tailor-platform/sdk/commit/ec710be1aa2ff6f9b8f5d6816010340a95b6835e) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): unify table border style to single-line across all CLI commands
+  - Add `formatTable`, `formatKeyValueTable`, `formatTableWithHeaders` utility functions
+  - Add `formatValue` function for proper object/array formatting in tables
+  - Add ESLint rule to restrict direct `table` import
+  - Add tests for format utilities
+
+- [#346](https://github.com/tailor-platform/sdk/pull/346) [`a8355bb`](https://github.com/tailor-platform/sdk/commit/a8355bb9aafbf6ea1da5167939cc429b4010462a) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor(cli): improve stdout/stderr separation following clig.dev guidelines
+  - Add custom reporters (`IconReporter`, `PlainReporter`) to prevent extra newlines in piped environments
+  - All log methods (`info`, `success`, `warn`, `error`, `log`, `debug`) now output to stderr
+  - Rename `logger.data()` to `logger.out()` for primary program output to stdout
+  - `logger.out()` now accepts strings in addition to objects for table output
+
+  This separation allows clean command composition where stdout carries data output and stderr handles all messaging.
+
+- [#345](https://github.com/tailor-platform/sdk/pull/345) [`f92d582`](https://github.com/tailor-platform/sdk/commit/f92d582c6b4c23163ba6d750251f7ed4fad4677b) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: e2e tests incorrectly counting resources when multiple apps exist in workspace
+
+  Fixed an issue where e2e tests counted resources from other applications in the same workspace.
+  - Add metadata filtering by `sdk-name` label in e2e tests
+  - Set metadata on JobFunctions during apply and remove when no longer used
+
+- [#355](https://github.com/tailor-platform/sdk/pull/355) [`c41a004`](https://github.com/tailor-platform/sdk/commit/c41a0044652f2c28d64ccd1f5af5a6db7a0450b8) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.451.1
+
+- [#357](https://github.com/tailor-platform/sdk/pull/357) [`7bf2782`](https://github.com/tailor-platform/sdk/commit/7bf2782db414ba22e5e756fe7c72f4507815924c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm to v10.27.0
+
 ## 1.1.3
 
 ### Patch Changes
