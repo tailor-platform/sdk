@@ -1,6 +1,5 @@
 import type { AuthInvoker } from "@/configure/services/auth";
 import type { Workflow } from "@/configure/services/workflow/workflow";
-import type { TailorEnv } from "@/configure/types/env";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -10,7 +9,7 @@ import type {
 import type { Client } from "@urql/core";
 
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
-  body: (args: Args & { env: TailorEnv }) => void | Promise<void>;
+  body: (args: Args) => void | Promise<void>;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;

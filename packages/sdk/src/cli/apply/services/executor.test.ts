@@ -70,6 +70,24 @@ describe("planExecutor", () => {
     };
   }
 
+  // Helper to create mock executor with resolverExecuted trigger
+  function createMockResolverExecutedExecutor(name: string): Executor {
+    return {
+      name,
+      description: `Executor ${name}`,
+      disabled: false,
+      trigger: {
+        kind: "resolverExecuted",
+        resolverName: "testResolver",
+        condition: ({ success }: { success: boolean }) => success,
+      },
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    };
+  }
+
   // Helper to create mock client
   function createMockClient(
     existingExecutors: Array<{ name: string; label?: string }>,
@@ -440,6 +458,68 @@ describe("planExecutor", () => {
 
       // All existing executors with matching label should be deleted
       expect(result.changeSet.deletes).toHaveLength(2);
+    });
+  });
+
+  describe("resolverExecutedTrigger success field", () => {
+    test("includes success field in trigger condition expression", async () => {
+      const client = createMockClient([]);
+      const application = createMockApplication([
+        createMockResolverExecutedExecutor("test-executor"),
+      ]);
+
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+      };
+
+      const result = await planExecutor(ctx);
+
+      expect(result.changeSet.creates).toHaveLength(1);
+      const create = result.changeSet.creates[0];
+
+      // Check that condition expression includes success field
+      const conditionExpr = (
+        create.request.executor?.triggerConfig?.config as {
+          case: "event";
+          value: { condition: { expr: string } };
+        }
+      ).value.condition.expr;
+      expect(conditionExpr).toContain("success: !!args.succeeded");
+      expect(conditionExpr).toContain("result: args.succeeded?.result.resolver");
+      expect(conditionExpr).toContain("error: args.failed?.error");
+    });
+
+    test("includes success field in function operation variables expression", async () => {
+      const client = createMockClient([]);
+      const application = createMockApplication([
+        createMockResolverExecutedExecutor("test-executor"),
+      ]);
+
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+      };
+
+      const result = await planExecutor(ctx);
+
+      expect(result.changeSet.creates).toHaveLength(1);
+      const create = result.changeSet.creates[0];
+
+      // Check that function variables expression includes success field
+      const variablesExpr = (
+        create.request.executor?.targetConfig?.config as {
+          case: "function";
+          value: { variables: { expr: string } };
+        }
+      ).value.variables.expr;
+      expect(variablesExpr).toContain("success: !!args.succeeded");
+      expect(variablesExpr).toContain("result: args.succeeded?.result.resolver");
+      expect(variablesExpr).toContain("error: args.failed?.error");
     });
   });
 });

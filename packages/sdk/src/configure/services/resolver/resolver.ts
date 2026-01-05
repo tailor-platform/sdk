@@ -17,6 +17,29 @@ type OutputType<O> =
       ? InferFieldsOutput<O>
       : never;
 
+/**
+ * Normalized output type that preserves generic type information.
+ * - If Output is already a TailorField, use it as-is
+ * - If Output is a Record of fields, wrap it as a nested TailorField
+ */
+type NormalizedOutput<Output extends TailorField<any> | Record<string, TailorField<any>>> =
+  Output extends TailorField<any>
+    ? Output
+    : TailorField<
+        { type: "nested"; array: false },
+        InferFieldsOutput<Extract<Output, Record<string, TailorField<any>>>>
+      >;
+
+type ResolverReturn<
+  Input extends Record<string, TailorField<any>> | undefined,
+  Output extends TailorField<any> | Record<string, TailorField<any>>,
+> = Omit<ResolverInput, "input" | "output" | "body"> &
+  Readonly<{
+    input?: Input;
+    output: NormalizedOutput<Output>;
+    body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+  }>;
+
 export function createResolver<
   Input extends Record<string, TailorField<any>> | undefined = undefined,
   Output extends TailorField<any> | Record<string, TailorField<any>> = TailorField<any>,
@@ -27,14 +50,14 @@ export function createResolver<
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     }>,
-) {
+): ResolverReturn<Input, Output> {
   const normalizedOutput =
     config.output instanceof TailorField ? config.output : t.object(config.output);
 
   return {
     ...config,
     output: normalizedOutput,
-  };
+  } as ResolverReturn<Input, Output>;
 }
 
 export type ResolverConfig = ReturnType<typeof createResolver<any, any>>;

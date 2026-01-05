@@ -1,3 +1,4 @@
+import type { TailorEnv } from "@/configure/types/env";
 import type { IncomingWebhookTrigger as ParserIncomingWebhookTrigger } from "@/parser/service/executor/types";
 
 export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
@@ -5,6 +6,7 @@ export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
   headers: T["headers"];
   method: "POST" | "GET" | "PUT" | "DELETE";
   rawBody: string;
+  env: TailorEnv;
 }
 
 export interface IncomingWebhookRequest {
