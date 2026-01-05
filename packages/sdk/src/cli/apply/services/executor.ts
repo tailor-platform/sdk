@@ -261,20 +261,23 @@ function protoExecutor(
   const target = executor.operation;
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
+
+  // Build common args expression with env for all target types
+  const envField = `env: ${JSON.stringify(env)}`;
+  const argsExpr =
+    trigger.kind === "resolverExecuted"
+      ? buildResolverExecutedArgsExpr(envField)
+      : `({ ...args, appNamespace: args.namespaceName, ${envField} })`;
+
   switch (target.kind) {
     case "webhook": {
       targetType = ExecutorTargetType.WEBHOOK;
-
-      // Build args transformation for resolverExecuted trigger
-      const webhookArgsExpr =
-        trigger.kind === "resolverExecuted" ? buildResolverExecutedArgsExpr() : `args`;
-
       targetConfig = {
         config: {
           case: "webhook",
           value: {
             url: {
-              expr: `(${stringifyFunction(target.url)})(${webhookArgsExpr})`,
+              expr: `(${stringifyFunction(target.url)})(${argsExpr})`,
             },
             headers: target.headers
               ? Object.entries(target.headers).map(([key, v]) => {
@@ -298,7 +301,7 @@ function protoExecutor(
               : undefined,
             body: target.requestBody
               ? {
-                  expr: `(${stringifyFunction(target.requestBody)})(${webhookArgsExpr})`,
+                  expr: `(${stringifyFunction(target.requestBody)})(${argsExpr})`,
                 }
               : undefined,
           },
@@ -308,11 +311,6 @@ function protoExecutor(
     }
     case "graphql": {
       targetType = ExecutorTargetType.TAILOR_GRAPHQL;
-
-      // Build args transformation for resolverExecuted trigger
-      const graphqlArgsExpr =
-        trigger.kind === "resolverExecuted" ? buildResolverExecutedArgsExpr() : `args`;
-
       targetConfig = {
         config: {
           case: "tailorGraphql",
@@ -321,7 +319,7 @@ function protoExecutor(
             query: target.query,
             variables: target.variables
               ? {
-                  expr: `(${stringifyFunction(target.variables)})(${graphqlArgsExpr})`,
+                  expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
             invoker: target.authInvoker ?? undefined,
@@ -341,13 +339,6 @@ function protoExecutor(
       const scriptPath = path.join(getDistDir(), "executors", `${executor.name}.js`);
       const script = fs.readFileSync(scriptPath, "utf-8");
 
-      // Build variables expression based on trigger type
-      const envField = `env: ${JSON.stringify(env)}`;
-      const variablesExpr =
-        trigger.kind === "resolverExecuted"
-          ? buildResolverExecutedArgsExpr(envField)
-          : `({ ...args, appNamespace: args.namespaceName, ${envField} })`;
-
       targetConfig = {
         config: {
           case: "function",
@@ -355,7 +346,7 @@ function protoExecutor(
             name: `${executor.name}__target`,
             script,
             variables: {
-              expr: variablesExpr,
+              expr: argsExpr,
             },
             invoker: target.authInvoker ?? undefined,
           },
@@ -365,11 +356,6 @@ function protoExecutor(
     }
     case "workflow": {
       targetType = ExecutorTargetType.WORKFLOW;
-
-      // Build args transformation for resolverExecuted trigger
-      const workflowArgsExpr =
-        trigger.kind === "resolverExecuted" ? buildResolverExecutedArgsExpr() : `args`;
-
       targetConfig = {
         config: {
           case: "workflow",
@@ -377,7 +363,7 @@ function protoExecutor(
             workflowName: target.workflowName,
             variables: target.args
               ? typeof target.args === "function"
-                ? { expr: `(${stringifyFunction(target.args)})(${workflowArgsExpr})` }
+                ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
                 : { expr: JSON.stringify(target.args) }
               : undefined,
             invoker: target.authInvoker ?? undefined,

@@ -1,5 +1,6 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
+import type { TailorEnv } from "@/configure/types/env";
 import type { output } from "@/configure/types/helpers";
 import type {
   RecordTrigger as ParserRecordTrigger,
@@ -9,6 +10,7 @@ import type {
 interface EventArgs {
   workspaceId: string;
   appNamespace: string;
+  env: TailorEnv;
 }
 
 interface RecordArgs extends EventArgs {

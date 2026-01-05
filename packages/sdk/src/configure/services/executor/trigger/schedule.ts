@@ -1,6 +1,6 @@
+import type { TailorEnv } from "@/configure/types/env";
 import type { ScheduleTriggerInput as ParserScheduleTriggerInput } from "@/parser/service/executor/types";
 import type { StandardCRON } from "ts-cron-validator";
-import type { EmptyObject } from "type-fest";
 
 type Timezone =
   | "UTC"
@@ -433,17 +433,21 @@ export type ScheduleTrigger<Args> = ParserScheduleTriggerInput & {
   __args: Args;
 };
 
+export interface ScheduleArgs {
+  env: TailorEnv;
+}
+
 export function scheduleTrigger<T extends string>({
   cron,
   timezone,
 }: {
   cron: StandardCRON<T> extends never ? never : T;
   timezone?: Timezone;
-}): ScheduleTrigger<EmptyObject> {
+}): ScheduleTrigger<ScheduleArgs> {
   return {
     kind: "schedule",
     cron,
     timezone,
-    __args: {} as EmptyObject,
+    __args: {} as ScheduleArgs,
   };
 }
