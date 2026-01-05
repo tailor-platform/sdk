@@ -1,6 +1,12 @@
 import * as inflection from "inflection";
 import { parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
+import {
+  validateRelationConfig,
+  processRelationMetadata,
+  buildRelationInfo,
+  applyRelationMetadataToFieldConfig,
+} from "./relation";
 import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import type {
   TailorDBType,
@@ -22,9 +28,10 @@ export function parseTypes(
   typeSourceInfo?: TypeSourceInfo,
 ): Record<string, ParsedTailorDBType> {
   const types: Record<string, ParsedTailorDBType> = {};
+  const allTypeNames = new Set(Object.keys(rawTypes));
 
   for (const [typeName, type] of Object.entries(rawTypes)) {
-    types[typeName] = parseTailorDBType(type);
+    types[typeName] = parseTailorDBType(type, allTypeNames, rawTypes);
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -36,7 +43,11 @@ export function parseTypes(
 /**
  * Parse a TailorDBType into a ParsedTailorDBType.
  */
-function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
+function parseTailorDBType(
+  type: TailorDBType,
+  allTypeNames: Set<string>,
+  rawTypes: Record<string, TailorDBType>,
+): ParsedTailorDBType {
   const metadata = type.metadata;
 
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
@@ -49,39 +60,35 @@ function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    // Use parser function to convert field metadata to config
-    const fieldConfig = parseFieldConfig(fieldDef);
+    let fieldConfig = parseFieldConfig(fieldDef);
+    const rawRelation = fieldConfig.rawRelation;
+    const context = { typeName: type.name, fieldName, allTypeNames };
+
+    // Process relation if rawRelation is present
+    if (rawRelation) {
+      validateRelationConfig(rawRelation, context);
+      const relationMetadata = processRelationMetadata(rawRelation, context);
+      fieldConfig = applyRelationMetadataToFieldConfig(fieldConfig, relationMetadata);
+    }
 
     ensureNoExternalVariablesInFieldScripts(type.name, fieldName, fieldConfig);
 
     const parsedField: ParsedField = { name: fieldName, config: fieldConfig };
 
-    const ref = fieldDef.reference;
-    if (ref) {
-      const targetType = ref.type?.name;
-      if (targetType) {
-        const forwardName = ref.nameMap?.[0] || inflection.camelize(targetType, true);
-        const backwardName = ref.nameMap?.[1] || "";
-        const key = ref.key || "id";
-        const unique = fieldDef.metadata?.unique ?? false;
+    // Build relation info for forward/backward relationships
+    const relationInfo = rawRelation ? buildRelationInfo(rawRelation, context) : undefined;
+    if (relationInfo) {
+      parsedField.relation = { ...relationInfo };
 
-        parsedField.relation = {
-          targetType,
-          forwardName,
-          backwardName,
-          key,
-          unique,
-        };
-
-        forwardRelationships[forwardName] = {
-          name: forwardName,
-          targetType,
-          targetField: fieldName,
-          sourceField: key,
-          isArray: false,
-          description: ref.type?.metadata?.description || "",
-        };
-      }
+      const targetType = rawTypes[relationInfo.targetType];
+      forwardRelationships[relationInfo.forwardName] = {
+        name: relationInfo.forwardName,
+        targetType: relationInfo.targetType,
+        targetField: fieldName,
+        sourceField: relationInfo.key,
+        isArray: false,
+        description: targetType?.metadata?.description || "",
+      };
     }
 
     fields[fieldName] = parsedField;

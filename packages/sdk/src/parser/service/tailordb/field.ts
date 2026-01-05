@@ -1,4 +1,10 @@
-import type { TailorDBField, DBFieldMetadata, Hook, OperatorFieldConfig } from "./types";
+import type {
+  TailorDBField,
+  DBFieldMetadata,
+  Hook,
+  OperatorFieldConfig,
+  RawRelationConfig,
+} from "./types";
 
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.
@@ -43,12 +49,15 @@ const convertHookToExpr = (
 export function parseFieldConfig(field: TailorDBField<any, any>): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
+  // Access rawRelation via getter (if available)
+  const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig }).rawRelation;
 
   const nestedFields = field.fields as Record<string, TailorDBField<any, any>> | undefined;
 
   return {
     type: fieldType,
     ...metadata,
+    rawRelation,
     ...(fieldType === "nested" && nestedFields && Object.keys(nestedFields).length > 0
       ? {
           fields: Object.entries(nestedFields).reduce(
