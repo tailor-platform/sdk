@@ -50,7 +50,7 @@ export const listCommand = defineCommand({
     });
 
     if (args.json) {
-      logger.data(workflows);
+      logger.out(workflows);
     } else {
       if (workflows.length === 0) {
         logger.info("No workflows found.");
@@ -63,7 +63,7 @@ export const listCommand = defineCommand({
         w.jobFunctions.toString(),
         humanizeRelativeTime(w.updatedAt),
       ]);
-      process.stdout.write(formatTableWithHeaders(headers, rows));
+      logger.out(formatTableWithHeaders(headers, rows));
     }
   }),
 });

@@ -75,6 +75,6 @@ export const getCommand = defineCommand({
       configPath: args.config,
     });
 
-    logger.data(credentials);
+    logger.out(credentials);
   }),
 });

@@ -43,7 +43,7 @@ export function printCreatedToken(
   const scopes = getScopeStringsFromWriteFlag(write);
 
   if (logger.jsonMode) {
-    logger.data({ name, scopes, token });
+    logger.out({ name, scopes, token });
   } else {
     logger.log(ml`
       Personal access token ${action} successfully.

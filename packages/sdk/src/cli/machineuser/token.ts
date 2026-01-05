@@ -99,6 +99,6 @@ export const tokenCommand = defineCommand({
       token_type: token.tokenType,
       expires_at: token.expiresAt,
     };
-    logger.data(tokenInfo);
+    logger.out(tokenInfo);
   }),
 });

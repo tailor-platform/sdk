@@ -63,6 +63,6 @@ export const listCommand = defineCommand({
       configPath: args.config,
     });
 
-    logger.data(oauth2Clients);
+    logger.out(oauth2Clients);
   }),
 });

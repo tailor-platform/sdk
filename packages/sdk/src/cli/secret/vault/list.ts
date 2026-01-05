@@ -63,6 +63,6 @@ export const listCommand = defineCommand({
       profile: args.profile,
     });
 
-    logger.data(vaults);
+    logger.out(vaults);
   }),
 });

@@ -116,8 +116,7 @@ class IconReporter {
 
     const timestamp =
       formatOptions.date && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
-    const stream = _jsonMode || logObj.level < 2 ? stderr : stdout;
-    stream.write(`${timestamp}${prefix}${message}\n`);
+    stderr.write(`${timestamp}${prefix}${message}\n`);
   }
 }
 
@@ -125,10 +124,9 @@ class PlainReporter {
   log(
     logObj: { type: string; tag?: string; args: unknown[]; level: number },
     ctx: {
-      options: { stdout?: NodeJS.WriteStream; stderr?: NodeJS.WriteStream; formatOptions: object };
+      options: { stderr?: NodeJS.WriteStream; formatOptions: object };
     },
   ) {
-    const stdout = ctx.options.stdout || process.stdout;
     const stderr = ctx.options.stderr || process.stderr;
     const formatOptions = ctx.options.formatOptions as { compact?: boolean | number };
     const inspectOpts: InspectOptions = {
@@ -136,8 +134,7 @@ class PlainReporter {
       compact: formatOptions.compact,
     };
     const message = formatWithOptions(inspectOpts, ...logObj.args);
-    const stream = _jsonMode || logObj.level < 2 ? stderr : stdout;
-    stream.write(`${message}\n`);
+    stderr.write(`${message}\n`);
   }
 }
 
@@ -236,7 +233,12 @@ export const logger = {
     plainLogger.log(styles.dim(message));
   },
 
-  data(data: object | object[]): void {
+  out(data: string | object | object[]): void {
+    if (typeof data === "string") {
+      process.stdout.write(data.endsWith("\n") ? data : data + "\n");
+      return;
+    }
+
     if (this.jsonMode) {
       // eslint-disable-next-line no-restricted-syntax
       console.log(JSON.stringify(data));

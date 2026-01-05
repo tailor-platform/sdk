@@ -310,7 +310,7 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
     ["startedAt", execution.startedAt],
     ["finishedAt", execution.finishedAt],
   ];
-  process.stdout.write(formatKeyValueTable(summaryData));
+  logger.out(formatKeyValueTable(summaryData));
 
   // Print job details with logs
   if (execution.jobDetails && execution.jobDetails.length > 0) {
@@ -393,7 +393,7 @@ export const executionsCommand = defineCommand({
       if (args.logs && !args.json) {
         printExecutionWithLogs(result);
       } else {
-        logger.data(result);
+        logger.out(result);
       }
     } else {
       const executions = await listWorkflowExecutions({
@@ -402,7 +402,7 @@ export const executionsCommand = defineCommand({
         workflowName: args["workflow-name"],
         status: args.status,
       });
-      logger.data(executions);
+      logger.out(executions);
     }
   }),
 });

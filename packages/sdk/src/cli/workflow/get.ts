@@ -68,6 +68,6 @@ export const getCommand = defineCommand({
       profile: args.profile,
     });
 
-    logger.data(workflow);
+    logger.out(workflow);
   }),
 });

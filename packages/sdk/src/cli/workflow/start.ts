@@ -274,10 +274,10 @@ export const startCommand = defineCommand({
         });
         printExecutionWithLogs(execution);
       } else {
-        logger.data(result);
+        logger.out(result);
       }
     } else {
-      logger.data({ executionId });
+      logger.out({ executionId });
     }
   }),
 });

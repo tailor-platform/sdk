@@ -78,6 +78,6 @@ export const listCommand = defineCommand({
           };
         });
 
-    logger.data(formatted);
+    logger.out(formatted);
   }),
 });

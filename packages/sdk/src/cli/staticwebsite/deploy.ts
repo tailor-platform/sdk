@@ -255,7 +255,7 @@ export const deployCommand = defineCommand({
     );
 
     if (args.json) {
-      logger.data({ name, workspaceId, url, skippedFiles });
+      logger.out({ name, workspaceId, url, skippedFiles });
     } else {
       logger.success(`Static website "${name}" deployed successfully. URL: ${url}`);
       logSkippedFiles(skippedFiles);

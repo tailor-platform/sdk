@@ -92,6 +92,6 @@ export const listCommand = defineCommand({
           createdAt: humanizeRelativeTime(createdAt),
         }));
 
-    logger.data(formattedWorkspaces);
+    logger.out(formattedWorkspaces);
   }),
 });

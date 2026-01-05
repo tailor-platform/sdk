@@ -69,7 +69,7 @@ export const listSecretCommand = defineCommand({
         profile: args.profile,
         vaultName: args["vault-name"],
       });
-      logger.data(secrets);
+      logger.out(secrets);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw new Error(`Vault "${args["vault-name"]}" not found.`);

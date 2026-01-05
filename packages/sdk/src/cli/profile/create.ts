@@ -73,6 +73,6 @@ export const createCommand = defineCommand({
       user: args.user,
       workspaceId: args["workspace-id"],
     };
-    logger.data(profileInfo);
+    logger.out(profileInfo);
   }),
 });

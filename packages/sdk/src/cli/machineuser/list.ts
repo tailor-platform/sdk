@@ -87,6 +87,6 @@ export const listCommand = defineCommand({
     });
 
     // Show machine users info
-    logger.data(machineUsers);
+    logger.out(machineUsers);
   }),
 });

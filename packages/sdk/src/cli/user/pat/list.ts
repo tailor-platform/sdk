@@ -46,7 +46,7 @@ export const listCommand = defineCommand({
     if (args.json) {
       // JSON format with scopes as array
       const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
-      logger.data(patInfos);
+      logger.out(patInfos);
       return;
     }
 

@@ -2,8 +2,11 @@
 "@tailor-platform/sdk": patch
 ---
 
-fix(cli): prevent extra newlines in turbo-piped output by using custom consola reporters
+refactor(cli): improve stdout/stderr separation following clig.dev guidelines
 
-- Add `IconReporter` for defaultLogger and streamLogger to maintain icons without extra newlines
-- Add `PlainReporter` for plainLogger to output messages without prefix brackets or extra newlines
-- Fixes issue where FancyReporter added `\n + line + \n` for badge-level logs in piped environments
+- Add custom reporters (`IconReporter`, `PlainReporter`) to prevent extra newlines in piped environments
+- All log methods (`info`, `success`, `warn`, `error`, `log`, `debug`) now output to stderr
+- Rename `logger.data()` to `logger.out()` for primary program output to stdout
+- `logger.out()` now accepts strings in addition to objects for table output
+
+This separation allows clean command composition where stdout carries data output and stderr handles all messaging.

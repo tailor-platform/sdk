@@ -78,6 +78,6 @@ export const updateCommand = defineCommand({
       user: newUser,
       workspaceId: newWorkspaceId,
     };
-    logger.data(profileInfo);
+    logger.out(profileInfo);
   }),
 });

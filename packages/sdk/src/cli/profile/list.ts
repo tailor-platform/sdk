@@ -31,6 +31,6 @@ export const listCommand = defineCommand({
       user: profile!.user,
       workspaceId: profile!.workspace_id,
     }));
-    logger.data(profileInfos);
+    logger.out(profileInfos);
   }),
 });

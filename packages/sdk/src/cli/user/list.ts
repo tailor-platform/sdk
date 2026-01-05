@@ -26,7 +26,7 @@ export const listCommand = defineCommand({
     }
 
     if (args.json) {
-      logger.data(users);
+      logger.out(users);
       return;
     }
 

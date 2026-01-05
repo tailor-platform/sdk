@@ -53,7 +53,7 @@ export const getCommand = defineCommand({
           : staticwebsite.allowedIpAddresses.join("\n"),
       };
 
-      logger.data(info);
+      logger.out(info);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         throw new Error(notFoundErrorMessage);

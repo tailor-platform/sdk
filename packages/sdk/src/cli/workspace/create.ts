@@ -116,6 +116,6 @@ export const createCommand = defineCommand({
       logger.success(`Workspace "${args.name}" created successfully.`);
     }
 
-    logger.data(workspace);
+    logger.out(workspace);
   }),
 });

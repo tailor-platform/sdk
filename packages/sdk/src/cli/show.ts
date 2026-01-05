@@ -93,6 +93,6 @@ export const showCommand = defineCommand({
       configPath: args.config,
     });
 
-    logger.data(appInfo);
+    logger.out(appInfo);
   }),
 });
