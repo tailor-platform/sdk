@@ -14,6 +14,8 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -41,3 +43,39 @@ jobs:
           app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
           commit_message: "chore: run generate"
           files: ${{ steps.changes.outputs.files }}
+
+  generate-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Configure git for Windows
+        run: git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Run generate
+        run: pnpm exec turbo run generate
+
+      - name: Check for uncommitted changes
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated files differ between Windows and committed files"
+            echo ""
+            echo "Changed files:"
+            git status --porcelain
+            echo ""
+            echo "Diff:"
+            git diff
+            exit 1
+          fi
+          echo "No differences found - generate output is consistent across platforms"
