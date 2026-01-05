@@ -2,9 +2,10 @@ import { type ColumnType, Kysely, type KyselyConfig } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
-type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export interface Namespace {
   "main-db": {
@@ -14,7 +15,7 @@ export interface Namespace {
       description: string | null;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
+    };
 
     Contact: {
       id: Generated<string>;
@@ -24,7 +25,7 @@ export interface Namespace {
       address: string | null;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
+    };
 
     Inventory: {
       id: Generated<string>;
@@ -32,14 +33,14 @@ export interface Namespace {
       quantity: number;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
+    };
 
     Notification: {
       id: Generated<string>;
       message: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
+    };
 
     Order: {
       id: Generated<string>;
@@ -50,7 +51,7 @@ export interface Namespace {
       contactId: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
+    };
 
     OrderItem: {
       id: Generated<string>;
@@ -61,7 +62,7 @@ export interface Namespace {
       totalPrice: Generated<number | null>;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
+    };
 
     Product: {
       id: Generated<string>;
@@ -70,7 +71,7 @@ export interface Namespace {
       categoryId: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
+    };
 
     User: {
       id: Generated<string>;
@@ -79,8 +80,8 @@ export interface Namespace {
       role: "MANAGER" | "STAFF";
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
-  }
+    };
+  };
 }
 
 export function getDB<const N extends keyof Namespace>(

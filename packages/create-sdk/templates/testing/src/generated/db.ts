@@ -2,9 +2,10 @@ import { type ColumnType, Kysely, type KyselyConfig } from "kysely";
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
-type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export interface Namespace {
   "main-db": {
@@ -15,8 +16,8 @@ export interface Namespace {
       age: number;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    }
-  }
+    };
+  };
 }
 
 export function getDB<const N extends keyof Namespace>(

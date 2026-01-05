@@ -1,13 +1,5 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import resolver from "./mockTailordb";
 
 describe("incrementUserAge resolver", () => {

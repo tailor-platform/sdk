@@ -13,11 +13,7 @@ export const managerRole = [
   "=",
   "MANAGER",
 ] as const satisfies PermissionCondition;
-export const loggedIn = [
-  { user: "_loggedIn" },
-  "=",
-  true,
-] as const satisfies PermissionCondition;
+export const loggedIn = [{ user: "_loggedIn" }, "=", true] as const satisfies PermissionCondition;
 
 // Manager can do anything, Staff can only read.
 export const permissionManager = {
