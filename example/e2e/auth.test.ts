@@ -4,6 +4,7 @@ import {
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test } from "vitest";
+import { authTrn, filterByMetadata } from "./metadata";
 import { createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {
@@ -12,8 +13,10 @@ describe("controlplane", async () => {
 
   test("service applied", async () => {
     const { authServices } = await client.listAuthServices({ workspaceId });
-    expect(authServices.length).toBe(1);
-    expect(authServices[0].namespace?.name).toBe(namespaceName);
+    const ownedServices = await filterByMetadata(client, authServices, authTrn);
+
+    expect(ownedServices.length).toBe(1);
+    expect(ownedServices[0].namespace?.name).toBe(namespaceName);
   });
 
   test("idpConfig applied", async () => {
