@@ -74,7 +74,7 @@
     "multiline-ts": "4.0.1",
     "open": "11.0.0",
     "ora": "9.0.0",
-    "oxc-parser": "0.105.0",
+    "oxc-parser": "0.106.0",
     "p-limit": "7.2.0",
     "pkg-types": "2.3.0",
     "rolldown": "catalog:",
