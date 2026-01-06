@@ -1,5 +1,7 @@
 # Tailor Platform SDK
 
+<!-- test: verify apply workflow skip behavior -->
+
 Monorepo for Tailor Platform SDK development.
 
 ## Prerequisites
