@@ -40,4 +40,4 @@ pre-commit:
 
     4-typecheck:
       glob: "*.{ts,js}"
-      run: pnpm exec turbo run typecheck --filter=@tailor-platform/sdk --filter=example
+      run: pnpm --filter @tailor-platform/sdk typecheck:go && pnpm --filter example typecheck:go
