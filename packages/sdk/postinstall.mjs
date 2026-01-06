@@ -65,6 +65,7 @@ declare module "@tailor-platform/sdk" {
   interface AttributeList {
     __tuple: string[];
   }
+  interface Env {}
 }
 
 export {};
