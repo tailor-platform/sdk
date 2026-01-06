@@ -59,6 +59,11 @@
       "dependsOn": ["build", "generate"],
       "outputs": [],
       "cache": true
+    },
+    "typecheck:go": {
+      "dependsOn": ["build", "generate"],
+      "outputs": [],
+      "cache": true
     }
   }
 }
