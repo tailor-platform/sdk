@@ -59,11 +59,14 @@ function isRelationSelfConfig(
   return config.toward.type === "self";
 }
 
-interface ReferenceConfig<T extends TailorDBType<any, any>> {
-  type: TailorDBType<any, any>;
+interface ReferenceConfig<T extends TailorAnyDBType> {
+  type: TailorAnyDBType;
   key: keyof T["fields"] & string;
   nameMap: [string | undefined, string];
 }
+
+// oxlint-disable-next-line no-explicit-any
+export type TailorAnyDBField = TailorDBField<any, any>;
 
 export class TailorDBField<
   const Defined extends DefinedDBFieldMetadata,
@@ -83,7 +86,7 @@ export class TailorDBField<
   private constructor(
     type: TailorFieldType,
     options?: FieldOptions,
-    fields?: Record<string, TailorDBField<any, any>>,
+    fields?: Record<string, TailorAnyDBField>,
     values?: AllowedValues,
   ) {
     super(type, options, fields, values);
@@ -96,7 +99,7 @@ export class TailorDBField<
   >(
     type: T,
     options?: TOptions,
-    fields?: Record<string, TailorDBField<any, any>>,
+    fields?: Record<string, TailorAnyDBField>,
     values?: AllowedValues,
   ) {
     return new TailorDBField<
@@ -114,11 +117,7 @@ export class TailorDBField<
     return super.description(description) as any;
   }
 
-  relation<
-    S extends RelationType,
-    T extends TailorDBType<any, any>,
-    CurrentDefined extends Defined,
-  >(
+  relation<S extends RelationType, T extends TailorAnyDBType, CurrentDefined extends Defined>(
     this: CurrentDefined extends { relation: unknown }
       ? never
       : TailorDBField<CurrentDefined, Output>,
@@ -315,7 +314,7 @@ export class TailorDBField<
       clonedField._pendingSelfRelation = { ...this._pendingSelfRelation };
     }
 
-    return clonedField as TailorDBField<any, any>;
+    return clonedField as TailorAnyDBField;
   }
 }
 
@@ -363,7 +362,7 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
 }
 
 function object<
-  const F extends Record<string, TailorDBField<any, any>> & ExcludeNestedDBFields<F>,
+  const F extends Record<string, TailorAnyDBField> & ExcludeNestedDBFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<
@@ -372,8 +371,11 @@ function object<
   >;
 }
 
+// oxlint-disable-next-line no-explicit-any
+export type TailorAnyDBType = TailorDBType<any, any>;
+
 export class TailorDBType<
-  const Fields extends Record<string, TailorDBField<any, any>> = any,
+  const Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
 > {
   public readonly _output = null as unknown as InferFieldsOutput<Fields>;
@@ -402,7 +404,7 @@ export class TailorDBType<
       const f = field as unknown as {
         _pendingSelfRelation: PendingSelfRelation | undefined;
         _metadata: DBFieldMetadata;
-        _ref: ReferenceConfig<TailorDBType<any, any>>;
+        _ref: ReferenceConfig<TailorAnyDBType>;
       };
       const pending = f._pendingSelfRelation;
       if (pending) {
@@ -456,7 +458,7 @@ export class TailorDBType<
 
   validate(validators: Validators<Fields>) {
     Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
-      const field = this.fields[fieldName] as TailorDBField<any, any>;
+      const field = this.fields[fieldName] as TailorAnyDBField;
 
       const validators = fieldValidators as
         | FieldValidateInput<unknown>
@@ -526,7 +528,7 @@ export class TailorDBType<
    * @returns An object containing only the specified fields
    */
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options: Opt) {
-    const result = {} as Record<K, TailorDBField<any, any>>;
+    const result = {} as Record<K, TailorAnyDBField>;
     for (const key of keys) {
       if (options) {
         result[key] = this.fields[key].clone(options);
@@ -553,7 +555,7 @@ export class TailorDBType<
    */
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K> {
     const keysSet = new Set(keys);
-    const result = {} as Record<string, TailorDBField<any, any>>;
+    const result = {} as Record<string, TailorAnyDBField>;
     for (const key in this.fields) {
       if (Object.hasOwn(this.fields, key) && !keysSet.has(key as unknown as K)) {
         result[key] = this.fields[key];
@@ -564,13 +566,13 @@ export class TailorDBType<
 }
 
 export type TailorDBInstance<
-  Fields extends Record<string, TailorDBField<any, any>> = any,
+  Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
 > = InstanceType<typeof TailorDBType<Fields, User>>;
 
 const idField = uuid();
 type idField = typeof idField;
-type DBType<F extends { id?: never } & Record<string, TailorDBField<any, any>>> = TailorDBInstance<
+type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
   { id: idField } & F
 >;
 
@@ -580,7 +582,7 @@ type DBType<F extends { id?: never } & Record<string, TailorDBField<any, any>>> 
  * @param fields - The field definitions for the type
  * @returns A new TailorDBType instance
  */
-function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
+function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fields: F,
 ): DBType<F>;
@@ -591,12 +593,12 @@ function dbType<const F extends { id?: never } & Record<string, TailorDBField<an
  * @param fields - The field definitions for the type
  * @returns A new TailorDBType instance
  */
-function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
+function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   description: string,
   fields: F,
 ): DBType<F>;
-function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
+function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fieldsOrDescription: string | F,
   fields?: F,

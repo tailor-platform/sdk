@@ -1,7 +1,7 @@
 import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
-import { type TailorDBField } from "./schema";
+import { type TailorAnyDBField, type TailorDBField } from "./schema";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
@@ -42,7 +42,7 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   relation?: boolean;
 }
 
-export type ExcludeNestedDBFields<T extends Record<string, TailorDBField<any, any>>> = {
+export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = {
   [K in keyof T]: T[K] extends TailorDBField<{ type: "nested"; array: boolean }, any>
     ? never
     : T[K];
@@ -62,7 +62,7 @@ export type Hook<TData, TReturn> = {
 };
 
 export type Hooks<
-  F extends Record<string, TailorDBField<any, any>>,
+  F extends Record<string, TailorAnyDBField>,
   TData = { [K in keyof F]: output<F[K]> },
 > = NonEmptyObject<{
   [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {

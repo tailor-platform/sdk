@@ -21,6 +21,9 @@ const regex = {
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
 } as const;
 
+// oxlint-disable-next-line no-explicit-any
+export type TailorAnyField = TailorField<any>;
+
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   const Output = any,
@@ -38,7 +41,7 @@ export class TailorField<
   protected constructor(
     public readonly type: T,
     options?: FieldOptions,
-    public readonly fields: Record<string, TailorField<any>> = {},
+    public readonly fields: Record<string, TailorAnyField> = {},
     values?: AllowedValues,
   ) {
     this._metadata = { required: true } as M;
@@ -62,7 +65,7 @@ export class TailorField<
   >(
     type: TType,
     options?: TOptions,
-    fields?: Record<string, TailorField<any>>,
+    fields?: Record<string, TailorAnyField>,
     values?: AllowedValues,
   ) {
     return new TailorField<
@@ -382,7 +385,7 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
-function object<const F extends Record<string, TailorField<any>>, const Opt extends FieldOptions>(
+function object<const F extends Record<string, TailorAnyField>, const Opt extends FieldOptions>(
   fields: F,
   options?: Opt,
 ) {
