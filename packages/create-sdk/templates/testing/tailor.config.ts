@@ -1,8 +1,4 @@
-import {
-  defineAuth,
-  defineConfig,
-  defineGenerators,
-} from "@tailor-platform/sdk";
+import { defineAuth, defineConfig, defineGenerators } from "@tailor-platform/sdk";
 
 export default defineConfig({
   name: "testing",

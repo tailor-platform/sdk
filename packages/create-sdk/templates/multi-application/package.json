@@ -6,10 +6,10 @@
     "deploy": "pnpm run deploy:user && pnpm run deploy:admin",
     "deploy:user": "tailor-sdk apply -c apps/user/tailor.config.ts",
     "deploy:admin": "tailor-sdk apply -c apps/admin/tailor.config.ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "eslint --cache .",
-    "lint:fix": "eslint --cache --fix .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware . && eslint --cache .",
+    "lint:fix": "oxlint --type-aware --fix . && eslint --cache --fix .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -17,7 +17,10 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.10.4",
     "eslint": "9.39.2",
-    "prettier": "3.7.4",
+    "eslint-plugin-oxlint": "1.36.0",
+    "oxfmt": "0.21.0",
+    "oxlint": "1.36.0",
+    "oxlint-tsgolint": "0.10.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.51.0"
   }

@@ -5,18 +5,13 @@ import { getDB, type DB, type Namespace } from "../generated/db";
 export interface DbOperations {
   transaction: <T>(fn: (ops: DbOperations) => Promise<T>) => Promise<T>;
 
-  getUser: (
-    email: string,
-    forUpdate: boolean,
-  ) => Promise<Selectable<Namespace["main-db"]["User"]>>;
+  getUser: (email: string, forUpdate: boolean) => Promise<Selectable<Namespace["main-db"]["User"]>>;
   updateUser: (user: Selectable<Namespace["main-db"]["User"]>) => Promise<void>;
 }
 
 function createDbOperations(db: DB<"main-db">): DbOperations {
   return {
-    transaction: async <T>(
-      fn: (ops: DbOperations) => Promise<T>,
-    ): Promise<T> => {
+    transaction: async <T>(fn: (ops: DbOperations) => Promise<T>): Promise<T> => {
       return await db.transaction().execute(async (trx) => {
         const dbOperations = createDbOperations(trx);
         return await fn(dbOperations);
@@ -40,10 +35,7 @@ function createDbOperations(db: DB<"main-db">): DbOperations {
   };
 }
 
-export async function decrementUserAge(
-  email: string,
-  dbOperations: DbOperations,
-) {
+export async function decrementUserAge(email: string, dbOperations: DbOperations) {
   return await dbOperations.transaction(async (ops) => {
     // Select user
     const user = await ops.getUser(email, true);

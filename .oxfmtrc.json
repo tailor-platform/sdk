@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "ignorePatterns": [
+    "**/CHANGELOG.md",
     "node_modules/",
     "pnpm-lock.yaml",
     "dist/",
@@ -21,6 +22,7 @@
     "example/generated/",
     "example/seed/",
     "packages/tailor-proto/",
-    "packages/create-sdk/templates/**"
+    "packages/create-sdk/templates/inventory-management/src/generated/",
+    "packages/create-sdk/templates/testing/src/generated/"
   ]
 }
