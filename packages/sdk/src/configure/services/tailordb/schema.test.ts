@@ -557,6 +557,45 @@ describe("TailorDBField serial modifier tests", () => {
   });
 });
 
+describe("TailorDBField index modifier tests", () => {
+  it("index modifier cannot be called on array fields", () => {
+    const _indexed = db.string().index();
+    expect(_indexed.metadata.index).toBe(true);
+
+    // @ts-expect-error index() cannot be called on array fields
+    db.string({ array: true }).index();
+    // @ts-expect-error index() cannot be called on array fields
+    db.uuid({ array: true }).index();
+    // @ts-expect-error index() cannot be called on array fields
+    db.int({ array: true }).index();
+  });
+
+  it("calling index modifier more than once causes type error", () => {
+    // @ts-expect-error index() cannot be called after index() has already been called
+    db.string().index().index();
+  });
+});
+
+describe("TailorDBField unique modifier tests", () => {
+  it("unique modifier cannot be called on array fields", () => {
+    const _unique = db.string().unique();
+    expect(_unique.metadata.unique).toBe(true);
+    expect(_unique.metadata.index).toBe(true);
+
+    // @ts-expect-error unique() cannot be called on array fields
+    db.string({ array: true }).unique();
+    // @ts-expect-error unique() cannot be called on array fields
+    db.uuid({ array: true }).unique();
+    // @ts-expect-error unique() cannot be called on array fields
+    db.int({ array: true }).unique();
+  });
+
+  it("calling unique modifier more than once causes type error", () => {
+    // @ts-expect-error unique() cannot be called after unique() has already been called
+    db.string().unique().unique();
+  });
+});
+
 describe("TailorDBType withTimestamps option tests", () => {
   it("withTimestamps: false does not add timestamp fields", () => {
     const _noTimestampType = db.type("Test", {

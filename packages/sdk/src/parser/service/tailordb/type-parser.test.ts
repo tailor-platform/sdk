@@ -3,6 +3,54 @@ import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
+  describe("array field validation", () => {
+    it("should throw error when index is set on array field", () => {
+      // Bypass type check by directly setting metadata
+      const field = db.string({ array: true });
+      (field as unknown as { _metadata: { index: boolean } })._metadata.index = true;
+
+      const testType = db.type("Test", {
+        tags: field,
+      });
+
+      expect(() => parseTypes({ Test: testType }, "test-namespace")).toThrow(
+        'Field "tags" on type "Test": index cannot be set on array fields',
+      );
+    });
+
+    it("should throw error when unique is set on array field", () => {
+      // Bypass type check by directly setting metadata
+      const field = db.string({ array: true });
+      (field as unknown as { _metadata: { unique: boolean } })._metadata.unique = true;
+
+      const testType = db.type("Test", {
+        tags: field,
+      });
+
+      expect(() => parseTypes({ Test: testType }, "test-namespace")).toThrow(
+        'Field "tags" on type "Test": unique cannot be set on array fields',
+      );
+    });
+
+    it("should allow index on non-array fields", () => {
+      const testType = db.type("Test", {
+        email: db.string().index(),
+      });
+
+      const result = parseTypes({ Test: testType }, "test-namespace");
+      expect(result.Test.fields.email.config.index).toBe(true);
+    });
+
+    it("should allow unique on non-array fields", () => {
+      const testType = db.type("Test", {
+        email: db.string().unique(),
+      });
+
+      const result = parseTypes({ Test: testType }, "test-namespace");
+      expect(result.Test.fields.email.config.unique).toBe(true);
+    });
+  });
+
   describe("buildBackwardRelationships", () => {
     it("should build backward relationships correctly", () => {
       const employee = db.type("Employee", {
