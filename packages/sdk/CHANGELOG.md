@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.2.1
+
+### Patch Changes
+
+- [#353](https://github.com/tailor-platform/sdk/pull/353) [`2f5e2bf`](https://github.com/tailor-platform/sdk/commit/2f5e2bf80174e48c6e7ffd4e057d740a88b178e7) Thanks [@riku99](https://github.com/riku99)! - Use oxlint and oxfmt in example and create-sdk/templates
+
+- [#363](https://github.com/tailor-platform/sdk/pull/363) [`71fdaa9`](https://github.com/tailor-platform/sdk/commit/71fdaa97ae80db62e1bd4778721baee849f0412f) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: remove rolldown override (upstream issues resolved)
+
+- [#358](https://github.com/tailor-platform/sdk/pull/358) [`90618d1`](https://github.com/tailor-platform/sdk/commit/90618d10bd543ddbe57ace65b80c007247865737) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.3.4
+
 ## 1.2.0
 
 ### Minor Changes
@@ -11,12 +21,14 @@
 ### Patch Changes
 
 - [#342](https://github.com/tailor-platform/sdk/pull/342) [`ec710be`](https://github.com/tailor-platform/sdk/commit/ec710be1aa2ff6f9b8f5d6816010340a95b6835e) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): unify table border style to single-line across all CLI commands
+
   - Add `formatTable`, `formatKeyValueTable`, `formatTableWithHeaders` utility functions
   - Add `formatValue` function for proper object/array formatting in tables
   - Add ESLint rule to restrict direct `table` import
   - Add tests for format utilities
 
 - [#346](https://github.com/tailor-platform/sdk/pull/346) [`a8355bb`](https://github.com/tailor-platform/sdk/commit/a8355bb9aafbf6ea1da5167939cc429b4010462a) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor(cli): improve stdout/stderr separation following clig.dev guidelines
+
   - Add custom reporters (`IconReporter`, `PlainReporter`) to prevent extra newlines in piped environments
   - All log methods (`info`, `success`, `warn`, `error`, `log`, `debug`) now output to stderr
   - Rename `logger.data()` to `logger.out()` for primary program output to stdout
@@ -27,6 +39,7 @@
 - [#345](https://github.com/tailor-platform/sdk/pull/345) [`f92d582`](https://github.com/tailor-platform/sdk/commit/f92d582c6b4c23163ba6d750251f7ed4fad4677b) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: e2e tests incorrectly counting resources when multiple apps exist in workspace
 
   Fixed an issue where e2e tests counted resources from other applications in the same workspace.
+
   - Add metadata filtering by `sdk-name` label in e2e tests
   - Set metadata on JobFunctions during apply and remove when no longer used
 
@@ -125,7 +138,7 @@
 
   ```ts
   export function getDB<const N extends keyof Namespace>(
-    namespace: N,
+    namespace: N
   ): Kysely<Namespace[N]> {
     const client = new tailordb.Client({ namespace });
     return new Kysely<Namespace[N]>({ dialect: new TailordbDialect(client) });
@@ -139,7 +152,7 @@
   ```ts
   export function getDB<const N extends keyof Namespace>(
     namespace: N,
-    kyselyConfig?: Omit<KyselyConfig, "dialect">,
+    kyselyConfig?: Omit<KyselyConfig, "dialect">
   ): Kysely<Namespace[N]> {
     const client = new tailordb.Client({ namespace });
     return new Kysely<Namespace[N]>({
@@ -182,6 +195,7 @@
   When deleting subgraph services (TailorDB, Pipeline, Auth, IdP), the deletion would fail with an error like "Failed to delete AuthService: auth xxx is used by gateway(s)" because the Application was still referencing them.
 
   This fix separates the deletion phases:
+
   - `delete-resources`: Deletes resources (types, resolvers, clients, etc.) before Application update
   - `delete-services`: Deletes services after Application is deleted
 
@@ -202,6 +216,7 @@
 - [#286](https://github.com/tailor-platform/sdk/pull/286) [`3409d66`](https://github.com/tailor-platform/sdk/commit/3409d66e6c6944292a3933e055d80c178efa7786) Thanks [@toiroakr](https://github.com/toiroakr)! - Unify CLI option short flags for consistency
 
   **Breaking Changes:**
+
   - `apply --dry-run`: Changed short flag from `-n` to `-d`
   - `workspace create --name`: Changed short flag from `-N` to `-n`
   - `workspace create --delete-protection`: Changed short flag from `-D` to `-d`
@@ -210,10 +225,12 @@
   - `secret delete --name`: Changed short flag from `-N` to `-n`
 
   **Documentation:**
+
   - Updated CLI documentation to reflect the new short flags
   - Added missing `staticwebsite` CLI documentation
 
   **New Unified Rules:**
+
   - `--name`: Always uses `-n`
   - `--namespace`: Always uses `-n` (no conflict as it's in different commands)
   - `--dry-run`: Uses `-d` (apply command)
@@ -282,6 +299,7 @@
   When a TailorDB type is created (e.g., `User`), the system auto-generates resolvers like `deleteUser`, `createUser`, etc. If a user created a custom resolver with the same name, it could not be deleted because the Application update (SDL composition) failed before the deletion phase.
 
   This fix reorders the apply phases to delete subgraph services before updating the Application:
+
   1. Create/Update services that Application depends on (subgraphs + StaticWebsite)
   2. Delete subgraph services (before Application update to avoid SDL conflicts)
   3. Create/Update Application
@@ -293,6 +311,7 @@
 ### Patch Changes
 
 - [#238](https://github.com/tailor-platform/sdk/pull/238) [`36639c6`](https://github.com/tailor-platform/sdk/commit/36639c6e1efee873eff89e61c59c60b8b22531a8) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve Connect error messages in CLI
+
   - Add `errorHandlingInterceptor` to enhance error messages from Connect protocol
   - Error messages now include operation type, resource type, and request parameters
   - Makes it easier to identify which resource caused validation errors
@@ -384,6 +403,7 @@
 ### Minor Changes
 
 - [#158](https://github.com/tailor-platform/sdk/pull/158) [`cde0a0a`](https://github.com/tailor-platform/sdk/commit/cde0a0a3e1d517e8036f799ce2a0b8958f7e18c4) Thanks [@riku99](https://github.com/riku99)! - CLI changes:
+
   - Replace `--format` with `--json` for all list/detail commands. `--format` is no longer supported.
   - Change default table layout for list output and humanize `createdAt` / `updatedAt` in table format (JSON remains ISO strings).
   - `workspace list`: hide `updatedAt` in table output and add `--limit=<number>` to cap the number of workspaces shown.
@@ -441,6 +461,7 @@
   Previously, the SDK used `hasExistingWorkflows` (based on workflow updates) to decide whether to use `createWorkflowJobFunction` or `updateWorkflowJobFunction`. This caused errors when renaming job functions, as renamed jobs were incorrectly sent to the update API which requires the job to already exist.
 
   Now the SDK fetches the actual list of existing job function names via `listWorkflowJobFunctions` API and correctly uses:
+
   - `createWorkflowJobFunction` for new job names (including renamed jobs)
   - `updateWorkflowJobFunction` for existing job names
 
@@ -498,10 +519,12 @@
 ### Minor Changes
 
 - [#124](https://github.com/tailor-platform/sdk/pull/124) [`6d96fdb`](https://github.com/tailor-platform/sdk/commit/6d96fdbbecc225e9906b9c0b2225a733dd8fc4d8) Thanks [@toiroakr](https://github.com/toiroakr)! - Add workflow trigger functionality
+
   - Add `trigger` method to `Workflow` type that allows triggering workflows from resolvers and executors
   - Support `authInvoker` option for authentication when triggering workflows
 
   **Breaking Changes**
+
   - AuthInvoker field names changed:
     - `authName` → `namespace`
     - `machineUser` → `machineUserName`
@@ -519,6 +542,7 @@
 - [#121](https://github.com/tailor-platform/sdk/pull/121) [`bc7a3e9`](https://github.com/tailor-platform/sdk/commit/bc7a3e96b4805e75fcb153220d286abaced26368) Thanks [@toiroakr](https://github.com/toiroakr)! - Streamline workflow job function registration and trigger handling
 
   **Breaking Changes:**
+
   - Removed `deps` property from `createWorkflowJob()` - jobs no longer declare dependencies explicitly
   - Removed `jobs` object from `WorkflowJobContext` - use `.trigger()` method instead
   - Changed the way workflow jobs call other jobs: from `jobs.job_name()` to `otherJob.trigger()`
@@ -569,6 +593,7 @@
   ```
 
   **Key Changes:**
+
   - Dependencies are now automatically detected via AST analysis of `.trigger()` calls at bundle time
   - The `.trigger()` method is transformed to `tailor.workflow.triggerJobFunction()` during bundling
   - Job function registration is optimized - all job functions are registered once and shared across workflows
@@ -659,6 +684,7 @@
   ```
 
   **Options:**
+
   - `-w, --workspace-id` - ID of the workspace to remove resources from
   - `-p, --profile` - Workspace profile to use
   - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
@@ -972,7 +998,7 @@
   ```typescript
   defineGenerators(
     ["@tailor/kysely-type", { distPath: "./generated/kysely.ts" }],
-    ["@tailor/db-type", { distPath: "./generated/db.ts" }],
+    ["@tailor/db-type", { distPath: "./generated/db.ts" }]
   );
   ```
 
@@ -992,6 +1018,7 @@
 - [#691](https://github.com/tailor-platform/sdk/pull/691) [`4e949b6`](https://github.com/tailor-platform/sdk/commit/4e949b67291ce8775c189a793a99f768ab8904db) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add seed generator
 
   Added `@tailor-platform/seed` generator that automatically generates seed data files from TailorDB type definitions. This generator creates:
+
   - GraphQL Ingest mapping files (`mappings/*.json`) and GraphQL files for bulk data loading via [gql-ingest](https://github.com/jackchuka/gql-ingest)
   - lines-db schema files (`data/*.schema.ts`) for validation via [lines-db](https://github.com/toiroakr/lines-db)
   - Configuration file (`config.yaml`) defining entity dependencies
