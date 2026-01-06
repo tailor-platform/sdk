@@ -2,19 +2,37 @@ name: "Workspace Apply Test"
 
 on:
   pull_request:
-    paths:
-      - .github/workflows/apply.yml
-      - example/**
-      - packages/**
-      - package.json
-      - pnpm-lock.yaml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: "false"
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            changes:
+              - .github/workflows/apply.yml
+              - example/**
+              - packages/**
+              - package.json
+              - pnpm-lock.yaml
+
   apply:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -98,3 +116,22 @@ jobs:
         run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+  apply-result:
+    needs: [changes, apply]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check result
+        run: |
+          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+            echo "Skipped - no relevant changes"
+            exit 0
+          fi
+          if [[ "${{ needs.apply.result }}" != "success" ]]; then
+            echo "Apply jobs failed"
+            exit 1
+          fi
+          echo "All apply jobs succeeded"

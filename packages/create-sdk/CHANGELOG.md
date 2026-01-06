@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 1.2.1
+
+### Patch Changes
+
+- [#353](https://github.com/tailor-platform/sdk/pull/353) [`2f5e2bf`](https://github.com/tailor-platform/sdk/commit/2f5e2bf80174e48c6e7ffd4e057d740a88b178e7) Thanks [@riku99](https://github.com/riku99)! - Use oxlint and oxfmt in example and create-sdk/templates
+
 ## 1.2.0
 
 ## 1.1.3
@@ -183,6 +189,7 @@
 - [#691](https://github.com/tailor-platform/sdk/pull/691) [`4e949b6`](https://github.com/tailor-platform/sdk/commit/4e949b67291ce8775c189a793a99f768ab8904db) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add seed generator
 
   Added `@tailor-platform/seed` generator that automatically generates seed data files from TailorDB type definitions. This generator creates:
+
   - GraphQL Ingest mapping files (`mappings/*.json`) and GraphQL files for bulk data loading via [gql-ingest](https://github.com/jackchuka/gql-ingest)
   - lines-db schema files (`data/*.schema.ts`) for validation via [lines-db](https://github.com/toiroakr/lines-db)
   - Configuration file (`config.yaml`) defining entity dependencies
