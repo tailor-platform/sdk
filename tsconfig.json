@@ -7,7 +7,6 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "baseUrl": ".",
     "skipLibCheck": true
   },
   "include": ["**/*.ts", "**/*.js"],

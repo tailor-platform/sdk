@@ -303,10 +303,11 @@ describe("TailorDBField RelationConfig option field tests", () => {
   });
 
   it("specifying non-existent field name for toward.key causes type error", () => {
-    // @ts-expect-error 'nonExisting' does not exist on type 'Customer'
+    // @ts-ignore 'nonExisting' does not exist on type 'Customer'
     db.uuid().relation({
       type: "oneToOne",
       toward: {
+        // @ts-ignore to suppress cascading errors
         type: Customer,
         key: "nonExisting",
       },

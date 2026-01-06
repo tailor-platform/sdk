@@ -18,6 +18,15 @@ export default defineConfig([
       reportUnusedDisableDirectives: "off",
     },
     rules: {
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        {
+          tsIgnore: "allow-with-description",
+          tsExpectError: "allow-with-description",
+          tsNocheck: "ban",
+          tsCheck: "ban",
+        },
+      ],
       "jsdoc/require-param-type": "off",
       "jsdoc/require-returns-type": "off",
       "jsdoc/tag-lines": "off",
