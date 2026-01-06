@@ -2,6 +2,7 @@ import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 import importPlugin from "eslint-plugin-import";
+import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
   globalIgnores([
@@ -65,4 +66,5 @@ export default defineConfig([
       "import/no-unresolved": "off",
     },
   },
+  ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
 ]);

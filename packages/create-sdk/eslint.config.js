@@ -1,6 +1,7 @@
 import eslint from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
 import importPlugin from "eslint-plugin-import";
+import oxlint from "eslint-plugin-oxlint";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -47,4 +48,5 @@ export default defineConfig([
       ],
     },
   },
+  ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
 ]);
