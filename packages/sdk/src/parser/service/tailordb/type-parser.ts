@@ -47,6 +47,8 @@ export function parseTypes(
 /**
  * Parse a TailorDBType into a ParsedTailorDBType.
  * @param {TailorDBType} type - TailorDB type to parse
+ * @param {Set<string>} allTypeNames - Set of all TailorDB type names
+ * @param {Record<string, TailorDBType>} rawTypes - All raw TailorDB types keyed by name
  * @returns {ParsedTailorDBType} Parsed TailorDB type
  */
 function parseTailorDBType(
