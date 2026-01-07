@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.2.2
+
+### Patch Changes
+
+- [#369](https://github.com/tailor-platform/sdk/pull/369) [`202e5a7`](https://github.com/tailor-platform/sdk/commit/202e5a7f5c170de18d98255ca798d19552d2905d) Thanks [@toiroakr](https://github.com/toiroakr)! - Prevent index/unique settings on array fields with type-level constraints and runtime validation
+
+- [#371](https://github.com/tailor-platform/sdk/pull/371) [`1c5f2a8`](https://github.com/tailor-platform/sdk/commit/1c5f2a897ef0b346a8de9cb71c7359e09724ac00) Thanks [@riku99](https://github.com/riku99)! - Enable selected JSDoc-related lint rules
+
+- [#370](https://github.com/tailor-platform/sdk/pull/370) [`78d4667`](https://github.com/tailor-platform/sdk/commit/78d4667b7f8fc649dd1d1fe8e0aa70bf8c456be9) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency bufbuild/buf to v1.63.0
+
+- [#374](https://github.com/tailor-platform/sdk/pull/374) [`8c4bff8`](https://github.com/tailor-platform/sdk/commit/8c4bff8db7dedba16ab6572473d7b93cf9ac2211) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): pin dependency oxlint-tsgolint to 0.10.1
+
+- [#375](https://github.com/tailor-platform/sdk/pull/375) [`f42a755`](https://github.com/tailor-platform/sdk/commit/f42a7556785bf97f6aedb3dc03d398f0d38c492d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260103.1
+
+- [#367](https://github.com/tailor-platform/sdk/pull/367) [`2edef96`](https://github.com/tailor-platform/sdk/commit/2edef96db3b1a6ed88e5fb1f64dab4e2d0dd7867) Thanks [@riku99](https://github.com/riku99)! - Use tsgo and tsgolint in packages/sdk and example
+
 ## 1.2.1
 
 ### Patch Changes
