@@ -150,9 +150,12 @@ export class TailorDBField<
       : TailorDBField<CurrentDefined, Output>,
     config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
   ): TailorDBField<DefinedDBFieldMetadata, Output> {
-    this._metadata.index = true;
+    // Index and unique are not supported on array fields
+    if (!this._metadata.array) {
+      this._metadata.index = true;
+      this._metadata.unique = ["oneToOne", "1-1"].includes(config.type);
+    }
     this._metadata.foreignKey = true;
-    this._metadata.unique = ["oneToOne", "1-1"].includes(config.type);
 
     const key = config.toward.key ?? "id";
     const backward = config.backward ?? "";
@@ -185,7 +188,11 @@ export class TailorDBField<
   }
 
   index<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { index: unknown } ? never : TailorDBField<CurrentDefined, Output>,
+    this: CurrentDefined extends { index: unknown }
+      ? never
+      : CurrentDefined extends { array: true }
+        ? never
+        : TailorDBField<CurrentDefined, Output>,
   ) {
     this._metadata.index = true;
     return this as TailorDBField<Prettify<CurrentDefined & { index: true }>, Output>;
@@ -194,7 +201,9 @@ export class TailorDBField<
   unique<CurrentDefined extends Defined>(
     this: CurrentDefined extends { unique: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output>,
+      : CurrentDefined extends { array: true }
+        ? never
+        : TailorDBField<CurrentDefined, Output>,
   ) {
     this._metadata.unique = true;
     this._metadata.index = true;
