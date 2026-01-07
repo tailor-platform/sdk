@@ -40,6 +40,13 @@ type ResolverReturn<
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
   }>;
 
+/**
+ * Create a resolver definition for the Tailor SDK.
+ * @template Input
+ * @template Output
+ * @param {Omit<ResolverInput, "input" | "output" | "body"> & { input?: Input; output: Output; body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>> }} config - Resolver configuration
+ * @returns {ResolverReturn<Input, Output>} Normalized resolver configuration
+ */
 export function createResolver<
   Input extends Record<string, TailorField<any>> | undefined = undefined,
   Output extends TailorField<any> | Record<string, TailorField<any>> = TailorField<any>,

@@ -21,6 +21,11 @@ export interface ResumeWorkflowResultWithWait {
   wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
 }
 
+/**
+ * Resume a suspended workflow execution and return a handle to wait for completion.
+ * @param {ResumeWorkflowOptions} options - Resume options
+ * @returns {Promise<ResumeWorkflowResultWithWait>} Resume result with wait helper
+ */
 export async function resumeWorkflow(
   options: ResumeWorkflowOptions,
 ): Promise<ResumeWorkflowResultWithWait> {

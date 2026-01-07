@@ -12,6 +12,13 @@ import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
+/**
+ * Apply static website changes for the given phase.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {Awaited<ReturnType<typeof planStaticWebsite>>} result - Planned static website changes
+ * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase="create-update"] - Apply phase
+ * @returns {Promise<void>} Promise that resolves when static websites are applied
+ */
 export async function applyStaticWebsite(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planStaticWebsite>>,
@@ -58,6 +65,11 @@ function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
 }
 
+/**
+ * Plan static website changes based on current and desired state.
+ * @param {PlanContext} context - Planning context
+ * @returns {Promise<unknown>} Planned changes
+ */
 export async function planStaticWebsite({
   client,
   workspaceId,

@@ -28,6 +28,11 @@ function secretInfo(secret: SecretManagerSecret): SecretInfo {
   };
 }
 
+/**
+ * List secrets in a Secret Manager vault.
+ * @param {SecretListOptions} options - Secret listing options
+ * @returns {Promise<SecretInfo[]>} List of secrets
+ */
 export async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,

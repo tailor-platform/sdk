@@ -18,6 +18,11 @@ export interface MachineUserTokenInfo {
   expiresAt: string;
 }
 
+/**
+ * Get a machine user access token for the current application.
+ * @param {GetMachineUserTokenOptions} options - Token retrieval options
+ * @returns {Promise<MachineUserTokenInfo>} Machine user token info
+ */
 export async function getMachineUserToken(
   options: GetMachineUserTokenOptions,
 ): Promise<MachineUserTokenInfo> {

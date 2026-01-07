@@ -2,7 +2,10 @@ import { readPackageJSON, type PackageJson } from "pkg-types";
 
 let packageJson: PackageJson | null = null;
 
-// Reads and caches the package.json of the SDK package
+/**
+ * Read and cache the package.json of the SDK package.
+ * @returns {Promise<PackageJson>} Parsed package.json contents
+ */
 export async function readPackageJson() {
   if (packageJson) {
     return packageJson;

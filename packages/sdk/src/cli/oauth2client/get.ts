@@ -14,6 +14,11 @@ export interface GetOAuth2ClientOptions {
   configPath?: string;
 }
 
+/**
+ * Get OAuth2 client credentials for the current application.
+ * @param {GetOAuth2ClientOptions} options - OAuth2 client lookup options
+ * @returns {Promise<OAuth2ClientCredentials>} OAuth2 client credentials
+ */
 export async function getOAuth2Client(
   options: GetOAuth2ClientOptions,
 ): Promise<OAuth2ClientCredentials> {

@@ -38,8 +38,9 @@ const convertHookToExpr = (
 /**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
+ * @param {TailorDBField<unknown, unknown>} field - TailorDB field definition
+ * @returns {OperatorFieldConfig} Parsed operator field configuration
  */
-
 export function parseFieldConfig(field: TailorDBField<any, any>): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;

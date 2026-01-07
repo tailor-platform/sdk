@@ -25,6 +25,13 @@ import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor, Trigger } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
+/**
+ * Apply executor-related changes for the given phase.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {Awaited<ReturnType<typeof planExecutor>>} result - Planned executor changes
+ * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase="create-update"] - Apply phase
+ * @returns {Promise<void>} Promise that resolves when executors are applied
+ */
 export async function applyExecutor(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planExecutor>>,
@@ -71,6 +78,11 @@ function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:executor:${name}`;
 }
 
+/**
+ * Plan executor-related changes based on current and desired state.
+ * @param {PlanContext} context - Planning context
+ * @returns {Promise<ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>>} Planned changes
+ */
 export async function planExecutor({ client, workspaceId, application, forRemoval }: PlanContext) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> = new ChangeSet(
     "Executors",

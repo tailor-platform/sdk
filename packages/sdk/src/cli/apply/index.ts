@@ -59,6 +59,11 @@ export interface PlanContext {
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
+/**
+ * Apply the configured application to the Tailor platform.
+ * @param {ApplyOptions} [options] - Options for apply execution
+ * @returns {Promise<void>} Promise that resolves when apply completes
+ */
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
   const { config, configPath } = await loadConfig(options?.configPath);

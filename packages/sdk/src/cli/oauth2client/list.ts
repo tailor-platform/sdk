@@ -12,6 +12,11 @@ export interface ListOAuth2ClientsOptions {
   configPath?: string;
 }
 
+/**
+ * List OAuth2 clients for the current application.
+ * @param {ListOAuth2ClientsOptions} [options] - OAuth2 client listing options
+ * @returns {Promise<OAuth2ClientInfo[]>} List of OAuth2 clients
+ */
 export async function listOAuth2Clients(
   options?: ListOAuth2ClientsOptions,
 ): Promise<OAuth2ClientInfo[]> {

@@ -527,6 +527,11 @@ export class GenerationManager {
   }
 }
 
+/**
+ * Run code generation using the Tailor configuration and generators.
+ * @param {GenerateOptions} [options] - Generation options
+ * @returns {Promise<void>} Promise that resolves when generation (and watch, if enabled) completes
+ */
 export async function generate(options?: GenerateOptions) {
   // Load and validate options
   const { config, generators, configPath } = await loadConfig(options?.configPath);

@@ -12,6 +12,13 @@ export interface UnmanagedResource {
   resourceName: string;
 }
 
+/**
+ * Confirm reassignment of resources when owner conflicts are detected.
+ * @param {OwnerConflict[]} conflicts - Detected owner conflicts
+ * @param {string} appName - Target application name
+ * @param {boolean} yes - Whether to auto-confirm without prompting
+ * @returns {Promise<void>} Promise that resolves when confirmation completes
+ */
 export async function confirmOwnerConflict(
   conflicts: OwnerConflict[],
   appName: string,
@@ -56,6 +63,13 @@ export async function confirmOwnerConflict(
   }
 }
 
+/**
+ * Confirm allowing tailor-sdk to manage previously unmanaged resources.
+ * @param {UnmanagedResource[]} resources - Unmanaged resources
+ * @param {string} appName - Target application name
+ * @param {boolean} yes - Whether to auto-confirm without prompting
+ * @returns {Promise<void>} Promise that resolves when confirmation completes
+ */
 export async function confirmUnmanagedResources(
   resources: UnmanagedResource[],
   appName: string,
@@ -100,6 +114,12 @@ export interface ImportantResourceDeletion {
   resourceName: string;
 }
 
+/**
+ * Confirm deletion of important resources.
+ * @param {ImportantResourceDeletion[]} resources - Resources scheduled for deletion
+ * @param {boolean} yes - Whether to auto-confirm without prompting
+ * @returns {Promise<void>} Promise that resolves when confirmation completes
+ */
 export async function confirmImportantResourceDeletion(
   resources: ImportantResourceDeletion[],
   yes: boolean,

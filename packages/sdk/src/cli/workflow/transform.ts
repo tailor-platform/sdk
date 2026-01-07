@@ -43,6 +43,11 @@ export interface WorkflowExecutionInfo {
   finishedAt: string;
 }
 
+/**
+ * Convert a workflow execution status enum to a string.
+ * @param {WorkflowExecution_Status} status - Workflow execution status
+ * @returns {string} String representation of the status
+ */
 export function workflowExecutionStatusToString(status: WorkflowExecution_Status): string {
   switch (status) {
     case WorkflowExecution_Status.PENDING:
@@ -60,6 +65,11 @@ export function workflowExecutionStatusToString(status: WorkflowExecution_Status
   }
 }
 
+/**
+ * Convert a workflow job execution status enum to a string.
+ * @param {WorkflowJobExecution_Status} status - Workflow job execution status
+ * @returns {string} String representation of the status
+ */
 export function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status): string {
   switch (status) {
     case WorkflowJobExecution_Status.RUNNING:
@@ -75,6 +85,11 @@ export function workflowJobExecutionStatusToString(status: WorkflowJobExecution_
   }
 }
 
+/**
+ * Convert a Workflow proto to CLI-friendly list info.
+ * @param {Workflow} workflow - Workflow resource
+ * @returns {WorkflowListInfo} Flattened workflow list info
+ */
 export function toWorkflowListInfo(workflow: Workflow): WorkflowListInfo {
   return {
     name: workflow.name,
@@ -84,6 +99,11 @@ export function toWorkflowListInfo(workflow: Workflow): WorkflowListInfo {
   };
 }
 
+/**
+ * Convert a Workflow proto to detailed workflow info for CLI output.
+ * @param {Workflow} workflow - Workflow resource
+ * @returns {WorkflowInfo} Detailed workflow info
+ */
 export function toWorkflowInfo(workflow: Workflow): WorkflowInfo {
   const jobFunctions: Record<string, string> = {};
   for (const [name, version] of Object.entries(workflow.jobFunctions)) {
@@ -100,6 +120,11 @@ export function toWorkflowInfo(workflow: Workflow): WorkflowInfo {
   };
 }
 
+/**
+ * Convert a WorkflowJobExecution proto to CLI-friendly job execution info.
+ * @param {WorkflowJobExecution} jobExecution - Workflow job execution resource
+ * @returns {WorkflowJobExecutionInfo} Flattened job execution info
+ */
 export function toWorkflowJobExecutionInfo(
   jobExecution: WorkflowJobExecution,
 ): WorkflowJobExecutionInfo {
@@ -115,6 +140,11 @@ export function toWorkflowJobExecutionInfo(
   };
 }
 
+/**
+ * Convert a WorkflowExecution proto to CLI-friendly execution info.
+ * @param {WorkflowExecution} execution - Workflow execution resource
+ * @returns {WorkflowExecutionInfo} Flattened execution info
+ */
 export function toWorkflowExecutionInfo(execution: WorkflowExecution): WorkflowExecutionInfo {
   return {
     id: execution.id,
