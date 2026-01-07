@@ -101,7 +101,7 @@
     "eslint-plugin-oxlint": "1.36.0",
     "globals": "17.0.0",
     "oxlint": "1.36.0",
-    "oxlint-tsgolint": "^0.10.1",
+    "oxlint-tsgolint": "0.10.1",
     "sonda": "0.10.1",
     "tsdown": "0.18.4",
     "typescript": "5.9.3",
