@@ -64,6 +64,8 @@ export function defineAuth<
 
 export type AuthExternalConfig = { name: string; external: true };
 
+// We intentionally use `any` placeholders here to avoid re-exporting a large generic surface.
+// oxlint-disable-next-line no-explicit-any
 export type AuthOwnConfig = ReturnType<typeof defineAuth<string, any, any, any, string>>;
 
 export type AuthConfig = AuthOwnConfig | AuthExternalConfig;

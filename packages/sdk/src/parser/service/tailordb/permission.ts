@@ -68,15 +68,16 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
 export function normalizePermission<User extends object = object, Type extends object = object>(
   permission: TailorTypePermission<User, Type>,
 ): StandardTailorTypePermission {
-  return Object.keys(permission).reduce((acc, action) => {
-    (acc as any)[action] = (permission as any)[action].map((p: any) =>
-      normalizeActionPermission(p),
-    );
+  const keys = Object.keys(permission) as Array<keyof typeof permission>;
+  return keys.reduce((acc, action) => {
+    acc[action] = permission[action].map((p) => normalizeActionPermission(p));
     return acc;
-  }, {}) as StandardTailorTypePermission;
+  }, {} as StandardTailorTypePermission);
 }
 
 export function normalizeGqlPermission(
+  // Raw GQL permissions are not strongly typed at parse time
+  // oxlint-disable-next-line no-explicit-any
   permission: TailorTypeGqlPermission<any, any>,
 ): StandardTailorTypeGqlPermission {
   return (permission as readonly GqlPermissionPolicy[]).map((policy) =>

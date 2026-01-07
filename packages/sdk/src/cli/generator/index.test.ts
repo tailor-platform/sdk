@@ -69,6 +69,8 @@ class TestGenerator {
 
 describe("GenerationManager", () => {
   let tempDir: string;
+  // For test-only access to private members
+  // oxlint-disable-next-line no-explicit-any
   let manager: any;
   let mockConfig: AppConfig;
 
@@ -85,6 +87,8 @@ describe("GenerationManager", () => {
       resolver: { main: { files: ["src/resolvers/*.ts"] } },
     };
 
+    // for minimal mock
+    // oxlint-disable-next-line no-explicit-any
     manager = new GenerationManager(mockConfig, [new TestGenerator()] as any);
   });
 
@@ -119,6 +123,8 @@ describe("GenerationManager", () => {
       ]);
       const managerWithKysely = new GenerationManager(mockConfig, [kyselyGen]);
       expect(
+        // For test-only access to private members
+        // oxlint-disable-next-line no-explicit-any
         (managerWithKysely as any).generators.some(
           (gen: unknown) => gen instanceof KyselyGenerator,
         ),
@@ -141,6 +147,8 @@ describe("GenerationManager", () => {
         ...mockConfig,
         name: "single-app",
       };
+      // For test-only access to private members
+      // oxlint-disable-next-line no-explicit-any
       const singleAppManager: any = new GenerationManager(singleAppConfig, []);
 
       await singleAppManager.generate(false);
@@ -577,16 +585,26 @@ describe("GenerationManager", () => {
         async function (this: GenerationManager) {
           // Call the original implementation up to the infinite Promise
           const watcher = new DependencyWatcher();
+          // For test-only access to private members
+          // oxlint-disable-next-line no-explicit-any
           (this as any).watcher = watcher;
 
           watcher.setRestartCallback(() => {
+            // For test-only access to private members
+            // oxlint-disable-next-line no-explicit-any
             (this as any).restartWatchProcess();
           });
 
+          // For test-only access to private members
+          // oxlint-disable-next-line no-explicit-any
           if ((this as any).configPath) {
+            // For test-only access to private members
+            // oxlint-disable-next-line no-explicit-any
             await watcher.addWatchGroup("Config", [(this as any).configPath]);
           }
 
+          // For test-only access to private members
+          // oxlint-disable-next-line no-explicit-any
           const app = (this as any).application;
 
           for (const db of app.tailorDBServices) {
@@ -690,6 +708,8 @@ describe("Integration Tests", () => {
 
   it("complete integration test with multiple generators", async () => {
     const indexModule = await import("./index");
+    // For test-only access to private members
+    // oxlint-disable-next-line no-explicit-any
     const GenerationManager = (indexModule as any).GenerationManager;
     const kyselyGen = GeneratorConfigSchema.parse([
       "@tailor-platform/kysely-type",
@@ -724,6 +744,8 @@ describe("Integration Tests", () => {
         .map(() => new TestGenerator());
 
       const indexModule = await import("./index");
+      // For test-only access to private members
+      // oxlint-disable-next-line no-explicit-any
       const GenerationManager = (indexModule as any).GenerationManager;
       const manager = new GenerationManager(fullConfig, largeGenerators);
 

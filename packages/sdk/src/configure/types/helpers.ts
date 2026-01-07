@@ -26,6 +26,8 @@ export type NullableToOptional<T> = {
 };
 
 // Return Output type for TailorFields.
+// `_output` is intentionally unconstrained across field implementations.
+// oxlint-disable-next-line no-explicit-any
 export type InferFieldsOutput<F extends Record<string, { _output: any; [key: string]: any }>> =
   DeepWritable<
     Prettify<
