@@ -67,7 +67,7 @@ function parseTailorDBType(
     // Process relation if rawRelation is present
     if (rawRelation) {
       validateRelationConfig(rawRelation, context);
-      const relationMetadata = processRelationMetadata(rawRelation, context);
+      const relationMetadata = processRelationMetadata(rawRelation, context, fieldConfig.array);
       fieldConfig = applyRelationMetadataToFieldConfig(fieldConfig, relationMetadata);
     }
 

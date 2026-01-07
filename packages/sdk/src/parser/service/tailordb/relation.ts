@@ -70,6 +70,7 @@ export function validateRelationConfig(
 export function processRelationMetadata(
   rawRelation: RawRelationConfig,
   context: RelationProcessingContext,
+  isArrayField: boolean = false,
 ): ProcessedRelationMetadata {
   const isUnique = relationTypes[rawRelation.type] === "1-1";
   const key = rawRelation.toward.key ?? "id";
@@ -78,11 +79,15 @@ export function processRelationMetadata(
   const targetTypeName =
     rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
 
+  // Index and unique are not supported on array fields
+  const shouldSetIndex = !isArrayField;
+  const shouldSetUnique = !isArrayField && isUnique;
+
   return {
-    index: true,
+    index: shouldSetIndex,
     foreignKey: true,
     relationType: rawRelation.type,
-    unique: isUnique,
+    unique: shouldSetUnique,
     foreignKeyType: targetTypeName,
     foreignKeyField: key,
   };

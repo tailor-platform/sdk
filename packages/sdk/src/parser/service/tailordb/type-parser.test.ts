@@ -272,8 +272,8 @@ describe("parseTypes", () => {
 
       // Missing 'type' property - only TypeScript error, need runtime check
       const post = db.type("Post", {
-        // @ts-expect-error - intentionally missing 'type' to test runtime validation
         userId: db.uuid().relation({
+          // @ts-ignore - intentionally missing 'type' to test runtime validation (tsgo compat)
           toward: { type: user },
         }),
       });
@@ -292,8 +292,9 @@ describe("parseTypes", () => {
 
       const post = db.type("Post", {
         userId: db.uuid().relation({
-          // @ts-expect-error - intentionally invalid 'type' to test runtime validation
+          // @ts-ignore - intentionally invalid 'type' to test runtime validation (tsgo compat)
           type: "invalid-type",
+          // @ts-ignore - user is not a valid type here (tsgo compat)
           toward: { type: user },
         }),
       });
