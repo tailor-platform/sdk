@@ -79,7 +79,8 @@ export function normalizePermission<User extends object = object, Type extends o
   return keys.reduce((acc, action) => {
     acc[action] = permission[action].map((p) => normalizeActionPermission(p));
     return acc;
-  }, {} as StandardTailorTypePermission);
+    // oxlint-disable-next-line no-explicit-any
+  }, {} as any);
 }
 
 /**
