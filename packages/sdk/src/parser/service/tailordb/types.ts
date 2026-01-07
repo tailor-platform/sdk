@@ -2,6 +2,7 @@ import type { TailorTypePermission, TailorTypeGqlPermission } from "@/configure/
 import type { ValueOperand } from "@/parser/service/auth/types";
 
 export type {
+  TailorAnyDBField,
   TailorDBField,
   TailorDBType,
   DBFieldMetadata,

@@ -1,38 +1,37 @@
 import { t, TailorField } from "@/configure/types/type";
-import type { TailorUser } from "@/configure/types";
+import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { ResolverInput } from "@/parser/service/resolver/types";
 
-type Context<Input extends Record<string, TailorField<any>> | undefined> = {
-  input: Input extends Record<string, TailorField<any>> ? InferFieldsOutput<Input> : never;
+type Context<Input extends Record<string, TailorAnyField> | undefined> = {
+  input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
   user: TailorUser;
   env: TailorEnv;
 };
 
-type OutputType<O> =
-  O extends TailorField<any>
-    ? output<O>
-    : O extends Record<string, TailorField<any>>
-      ? InferFieldsOutput<O>
-      : never;
+type OutputType<O> = O extends TailorAnyField
+  ? output<O>
+  : O extends Record<string, TailorAnyField>
+    ? InferFieldsOutput<O>
+    : never;
 
 /**
  * Normalized output type that preserves generic type information.
  * - If Output is already a TailorField, use it as-is
  * - If Output is a Record of fields, wrap it as a nested TailorField
  */
-type NormalizedOutput<Output extends TailorField<any> | Record<string, TailorField<any>>> =
-  Output extends TailorField<any>
+type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyField>> =
+  Output extends TailorAnyField
     ? Output
     : TailorField<
         { type: "nested"; array: false },
-        InferFieldsOutput<Extract<Output, Record<string, TailorField<any>>>>
+        InferFieldsOutput<Extract<Output, Record<string, TailorAnyField>>>
       >;
 
 type ResolverReturn<
-  Input extends Record<string, TailorField<any>> | undefined,
-  Output extends TailorField<any> | Record<string, TailorField<any>>,
+  Input extends Record<string, TailorAnyField> | undefined,
+  Output extends TailorAnyField | Record<string, TailorAnyField>,
 > = Omit<ResolverInput, "input" | "output" | "body"> &
   Readonly<{
     input?: Input;
@@ -41,8 +40,8 @@ type ResolverReturn<
   }>;
 
 export function createResolver<
-  Input extends Record<string, TailorField<any>> | undefined = undefined,
-  Output extends TailorField<any> | Record<string, TailorField<any>> = TailorField<any>,
+  Input extends Record<string, TailorAnyField> | undefined = undefined,
+  Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
   config: Omit<ResolverInput, "input" | "output" | "body"> &
     Readonly<{
