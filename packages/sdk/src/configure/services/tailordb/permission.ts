@@ -45,21 +45,70 @@ type GqlPermissionPolicy<
 type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
 export type PermissionCondition<
-  Level extends "record" | "gql" = "record" | "gql",
+  Level extends "record" | "gql" = "record",
   User extends object = InferredAttributeMap,
   Update extends boolean = boolean,
   Type extends object = object,
 > =
-  | readonly [
-      PermissionOperand<Level, User, Type, Update>,
-      EqPermissionOperator,
-      Exclude<PermissionOperand<Level, User, Type, Update>, unknown[]>,
-    ]
-  | readonly [
-      PermissionOperand<Level, User, Type, Update>,
-      InPermissionOperator,
-      Exclude<PermissionOperand<Level, User, Type, Update>, string | boolean>,
-    ];
+  | PermissionEqCondition<Level, User, Update, Type>
+  | PermissionInCondition<Level, User, Update, Type>;
+
+type PermissionEqCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  PermissionLhsOperand<Level, User, Type, Update> extends infer Lhs
+    ? // Used only as a condition
+      // oxlint-disable-next-line no-explicit-any
+      Lhs extends any
+      ? readonly [Lhs, EqPermissionOperator, EqPermissionRhs<Level, User, Type, Update, Lhs>]
+      : never
+    : never;
+
+type PermissionInCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  PermissionLhsOperand<Level, User, Type, Update> extends infer Lhs
+    ? // Used only as a condition
+      // oxlint-disable-next-line no-explicit-any
+      Lhs extends any
+      ? readonly [Lhs, InPermissionOperator, InPermissionRhs<Level, Lhs>]
+      : never
+    : never;
+
+type PermissionLhsOperand<
+  Level extends "record" | "gql",
+  User extends object,
+  Type extends object,
+  Update extends boolean,
+> = Exclude<PermissionOperand<Level, User, Type, Update>, readonly unknown[]>;
+
+type EqPermissionRhs<
+  Level extends "record" | "gql",
+  User extends object,
+  Type extends object,
+  Update extends boolean,
+  Lhs,
+> = Lhs extends boolean
+  ? boolean
+  : Lhs extends string
+    ? Level extends "gql"
+      ? string | boolean
+      : string
+    : Exclude<PermissionOperand<Level, User, Type, Update>, readonly unknown[]>;
+
+type InPermissionRhs<Level extends "record" | "gql", Lhs> = Lhs extends boolean
+  ? readonly boolean[]
+  : Lhs extends string
+    ? Level extends "gql"
+      ? readonly (string | boolean)[]
+      : readonly string[]
+    : readonly (string | boolean)[];
 
 type UserOperand<User extends object = InferredAttributeMap> = {
   user:
