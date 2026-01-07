@@ -1,6 +1,8 @@
+import type { RelationType } from "./relation";
 import type { TailorTypePermission, TailorTypeGqlPermission } from "@/configure/services/tailordb";
 import type { ValueOperand } from "@/parser/service/auth/types";
 
+export type { RelationType } from "./relation";
 export type {
   TailorAnyDBField,
   TailorDBField,
@@ -30,6 +32,21 @@ interface OperatorFieldHook {
   update?: Script;
 }
 
+/**
+ * Raw relation config stored in configure layer, processed in parser layer.
+ * This is the serialized form of RelationConfig from schema.ts where
+ * the TailorDBType reference is replaced with the type name string.
+ */
+export interface RawRelationConfig {
+  type: RelationType;
+  toward: {
+    type: string;
+    as?: string;
+    key?: string;
+  };
+  backward?: string;
+}
+
 export interface OperatorFieldConfig {
   type: string;
   required?: boolean;
@@ -42,6 +59,7 @@ export interface OperatorFieldConfig {
   foreignKey?: boolean;
   foreignKeyType?: string;
   foreignKeyField?: string;
+  rawRelation?: RawRelationConfig;
   validate?: OperatorValidateConfig[];
   hooks?: OperatorFieldHook;
   serial?: {
@@ -109,7 +127,11 @@ export interface Permissions {
 }
 
 export interface RawPermissions {
+  // Raw permissions are user-provided
+  // oxlint-disable-next-line no-explicit-any
   record?: TailorTypePermission<any, any>;
+  // Raw permissions are user-provided
+  // oxlint-disable-next-line no-explicit-any
   gql?: TailorTypeGqlPermission<any, any>;
 }
 

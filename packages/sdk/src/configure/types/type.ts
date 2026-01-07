@@ -21,11 +21,14 @@ const regex = {
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
 } as const;
 
+// This helper type intentionally uses `any` as a placeholder for unknown field output.
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyField = TailorField<any>;
 
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
+  // Generic default output type (kept loose on purpose for library ergonomics).
+  // oxlint-disable-next-line no-explicit-any
   const Output = any,
   M extends FieldMetadata = FieldMetadata,
   T extends TailorFieldType = TailorFieldType,
@@ -291,6 +294,8 @@ export class TailorField<
    * @returns {StandardSchemaV1.Result<Output>} Validation result
    */
   private _parseInternal(args: {
+    // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
+    // oxlint-disable-next-line no-explicit-any
     value: any;
     data: unknown;
     user: TailorUser;

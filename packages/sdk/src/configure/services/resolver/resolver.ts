@@ -66,4 +66,6 @@ export function createResolver<
   } as ResolverReturn<Input, Output>;
 }
 
+// A loose config alias for userland use-cases
+// oxlint-disable-next-line no-explicit-any
 export type ResolverConfig = ReturnType<typeof createResolver<any, any>>;

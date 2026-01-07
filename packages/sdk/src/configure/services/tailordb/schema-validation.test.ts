@@ -37,8 +37,12 @@ describe("TailorDBType validation functionality", () => {
 
     // Check that validators were set on the fields
 
+    // For test-only access to protected members
+    // oxlint-disable-next-line no-explicit-any
     expect((UserType.fields.name as any)._metadata.validate).toEqual([nameValidator]);
 
+    // For test-only access to protected members
+    // oxlint-disable-next-line no-explicit-any
     expect((UserType.fields.email as any)._metadata.validate).toEqual([emailValidator]);
   });
 
@@ -56,12 +60,18 @@ describe("TailorDBType validation functionality", () => {
 
     // Field-level validator should still be there
 
+    // For test-only access to protected members
+    // oxlint-disable-next-line no-explicit-any
     expect((UserType.fields.name as any)._metadata.validate).toHaveLength(1);
 
+    // For test-only access to protected members
+    // oxlint-disable-next-line no-explicit-any
     expect((UserType.fields.name as any)._metadata.validate[0]).toBeInstanceOf(Function);
 
     // Type-level validator should be set
 
+    // For test-only access to protected members
+    // oxlint-disable-next-line no-explicit-any
     expect((UserType.fields.email as any)._metadata.validate).toEqual([emailValidator]);
   });
 });
