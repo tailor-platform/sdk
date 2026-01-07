@@ -33,6 +33,8 @@ export type FieldValidateInput<O> = FieldValidateFn<O> | FieldValidateConfig<O>;
  * @template ExcludeKeys - Keys to exclude from validation (default: "id" for TailorDB)
  */
 type ValidatorsBase<
+  // Structural constraint only
+  // oxlint-disable-next-line no-explicit-any
   F extends Record<string, { _defined: any; _output: any; [key: string]: any }>,
   ExcludeKeys extends string = "id",
 > = NonEmptyObject<{
@@ -54,5 +56,7 @@ type ValidatorsBase<
  * Can be used with both TailorField and TailorDBField
  */
 export type Validators<
+  // Structural constraint only
+  // oxlint-disable-next-line no-explicit-any
   F extends Record<string, { _defined: any; _output: any; [key: string]: any }>,
 > = ValidatorsBase<F, "id">;

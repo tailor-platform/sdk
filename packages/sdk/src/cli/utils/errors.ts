@@ -22,6 +22,14 @@ export interface CLIError extends Error {
   format(): string;
 }
 
+type CLIErrorInternal = Error & {
+  code?: string;
+  details?: string;
+  suggestion?: string;
+  command?: string;
+  format(): string;
+};
+
 /**
  * Format CLI error for output
  */
@@ -51,12 +59,12 @@ function formatError(error: CLIError): string {
  * Create a CLI error with formatted output
  */
 export function createCLIError(options: CLIErrorOptions): CLIError {
-  const error = new Error(options.message) as CLIError;
+  const error = new Error(options.message) as CLIErrorInternal;
   error.name = "CLIError";
-  (error as any).code = options.code;
-  (error as any).details = options.details;
-  (error as any).suggestion = options.suggestion;
-  (error as any).command = options.command;
+  error.code = options.code;
+  error.details = options.details;
+  error.suggestion = options.suggestion;
+  error.command = options.command;
   error.format = () => formatError(error);
   return error;
 }

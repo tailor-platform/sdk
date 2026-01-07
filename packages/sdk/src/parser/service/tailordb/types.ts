@@ -109,7 +109,11 @@ export interface Permissions {
 }
 
 export interface RawPermissions {
+  // Raw permissions are user-provided
+  // oxlint-disable-next-line no-explicit-any
   record?: TailorTypePermission<any, any>;
+  // Raw permissions are user-provided
+  // oxlint-disable-next-line no-explicit-any
   gql?: TailorTypeGqlPermission<any, any>;
 }
 

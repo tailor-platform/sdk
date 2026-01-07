@@ -65,6 +65,7 @@ interface ReferenceConfig<T extends TailorAnyDBType> {
   nameMap: [string | undefined, string];
 }
 
+// Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyDBField = TailorDBField<any, any>;
 
@@ -114,6 +115,8 @@ export class TailorDBField<
       : TailorField<CurrentDefined, Output>,
     description: string,
   ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output> {
+    // Fluent API: TS can't express the refined return type through the base method.
+    // oxlint-disable-next-line no-explicit-any
     return super.description(description) as any;
   }
 
@@ -380,10 +383,13 @@ function object<
   >;
 }
 
+// Helper alias
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyDBType = TailorDBType<any, any>;
 
 export class TailorDBType<
+  // Default kept loose to avoid forcing callers to supply generics.
+  // oxlint-disable-next-line no-explicit-any
   const Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
 > {
@@ -459,6 +465,8 @@ export class TailorDBType<
   }
 
   hooks(hooks: Hooks<Fields>) {
+    // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
+    // oxlint-disable-next-line no-explicit-any
     Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
       this.fields[fieldName].hooks(fieldHooks);
     });
@@ -576,6 +584,8 @@ export class TailorDBType<
 }
 
 export type TailorDBInstance<
+  // Default kept loose for convenience; callers still get fully inferred types from `db.type()`.
+  // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
 > = InstanceType<typeof TailorDBType<Fields, User>>;
