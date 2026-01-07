@@ -272,10 +272,10 @@ describe("parseTypes", () => {
 
       // Missing 'type' property - only TypeScript error, need runtime check
       const post = db.type("Post", {
+        // @ts-ignore - intentionally missing 'type' to test runtime validation (tsgo/tsc compat)
         userId: db.uuid().relation({
-          // @ts-ignore - intentionally missing 'type' to test runtime validation (tsgo compat)
           toward: { type: user },
-        }),
+        } as any),
       });
 
       expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(
@@ -291,12 +291,11 @@ describe("parseTypes", () => {
       });
 
       const post = db.type("Post", {
+        // @ts-ignore - intentionally invalid 'type' to test runtime validation (tsgo/tsc compat)
         userId: db.uuid().relation({
-          // @ts-ignore - intentionally invalid 'type' to test runtime validation (tsgo compat)
           type: "invalid-type",
-          // @ts-ignore - user is not a valid type here (tsgo compat)
           toward: { type: user },
-        }),
+        } as any),
       });
 
       expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(
