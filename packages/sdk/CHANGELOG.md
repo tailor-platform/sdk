@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.2.3
+
+### Patch Changes
+
+- [#378](https://github.com/tailor-platform/sdk/pull/378) [`20471c1`](https://github.com/tailor-platform/sdk/commit/20471c180df682a2b9ba6382039611b689ccb8e3) Thanks [@riku99](https://github.com/riku99)! - Enable the jsdoc/require-jsdoc rule
+
+- [#362](https://github.com/tailor-platform/sdk/pull/362) [`e500267`](https://github.com/tailor-platform/sdk/commit/e5002677aded90ec8a4ab7113eb074dc537d456a) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor: move relation logic from configure layer to parser layer
+
 ## 1.2.2
 
 ### Patch Changes
