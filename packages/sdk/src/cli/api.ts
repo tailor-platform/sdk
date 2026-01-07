@@ -18,6 +18,8 @@ export interface ApiCallResult {
 /**
  * Call Tailor Platform API endpoints directly.
  * If the endpoint doesn't contain "/", it defaults to `tailor.v1.OperatorService/{endpoint}`.
+ * @param {ApiCallOptions} options - API call options (profile, endpoint, body)
+ * @returns {Promise<ApiCallResult>} Response status and data
  */
 export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
   const accessToken = await loadAccessToken({

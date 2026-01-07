@@ -14,6 +14,8 @@ export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspace
  * Convert a function to a string representation.
  * Handles method shorthand syntax (e.g., `create() { ... }`) by converting it to
  * a function expression (e.g., `function create() { ... }`).
+ * @param {(...args: unknown[]) => unknown} fn - Function to stringify
+ * @returns {string} Stringified function source
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export const stringifyFunction = (fn: Function): string => {
@@ -33,6 +35,8 @@ export const stringifyFunction = (fn: Function): string => {
 
 /**
  * Convert a hook function to a script expression.
+ * @param {NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>} fn - Hook function
+ * @returns {string} JavaScript expression calling the hook
  */
 const convertHookToExpr = (
   fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,

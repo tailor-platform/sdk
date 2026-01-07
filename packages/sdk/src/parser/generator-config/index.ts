@@ -53,6 +53,7 @@ export type * from "./types";
 /**
  * Creates a GeneratorConfigSchema with built-in generator support
  * @param {Map<string, (options: unknown) => CodeGeneratorBase>} builtinGenerators - Map of generator IDs to their constructor functions
+ * @returns {z.ZodEffects<z.ZodUnion<[typeof KyselyTypeConfigSchema, typeof SeedConfigSchema, typeof EnumConstantsConfigSchema, typeof FileUtilsConfigSchema, typeof CodeGeneratorSchema]>, CodeGeneratorBase, unknown> | z.ZodUnion<[typeof KyselyTypeConfigSchema, typeof SeedConfigSchema, typeof EnumConstantsConfigSchema, typeof FileUtilsConfigSchema, typeof CodeGeneratorSchema]>} Generator config schema
  */
 export function createGeneratorConfigSchema(
   builtinGenerators: Map<

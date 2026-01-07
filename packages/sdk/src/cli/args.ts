@@ -33,6 +33,8 @@ export const durationSchema = z
 
 /**
  * Parse a duration string (e.g., "3s", "500ms", "1m") to milliseconds
+ * @param {string} duration - Duration string with unit suffix (ms, s, m)
+ * @returns {number} Duration in milliseconds
  */
 export function parseDuration(duration: string): number {
   return durationSchema.parse(duration);
@@ -116,6 +118,9 @@ export const jsonArgs = {
  * - Environment file loading
  * - Error handling with formatted output
  * - Exit code management
+ * @template T
+ * @param {(args: T) => Promise<void>} handler - Command handler function
+ * @returns {(ctx: { args: T }) => Promise<void>} Wrapped handler
  */
 export const withCommonArgs =
   <T extends ParsedArgs<typeof commonArgs>>(handler: (args: T) => Promise<void>) =>

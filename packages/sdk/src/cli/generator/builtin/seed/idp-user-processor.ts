@@ -19,6 +19,8 @@ export interface IdpUserMetadata {
 
 /**
  * Processes auth configuration to generate IdP user seed metadata
+ * @param {GeneratorAuthInput} auth - Auth configuration from generator
+ * @returns {IdpUserMetadata | undefined} IdP user metadata or undefined if not applicable
  */
 export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | undefined {
   // Only process if idProvider is BuiltInIdP and userProfile is defined
@@ -54,6 +56,9 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
 
 /**
  * Generates the schema file content for IdP users with foreign key
+ * @param {string} usernameField - Username field name
+ * @param {string} userTypeName - TailorDB user type name
+ * @returns {string} Schema file contents
  */
 export function generateIdpUserSchemaFile(usernameField: string, userTypeName: string): string {
   return ml /* ts */ `

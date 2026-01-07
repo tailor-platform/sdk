@@ -32,6 +32,11 @@ export interface BundleWorkflowJobsResult {
  * 3. Creates entry file and bundles with tree-shaking
  *
  * Returns metadata about which jobs each workflow uses.
+ * @param {JobInfo[]} allJobs - All available job infos
+ * @param {string[]} mainJobNames - Names of main jobs
+ * @param {Record<string, string | number | boolean>} [env={}] - Environment variables to inject
+ * @param {TriggerContext} [triggerContext] - Trigger context for transformations
+ * @returns {Promise<BundleWorkflowJobsResult>} Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
   allJobs: JobInfo[],
@@ -89,6 +94,9 @@ interface FilterUsedJobsResult {
  * - It's called via .trigger() from another used job (transitively)
  *
  * Also returns a map of mainJob -> all jobs it depends on (for metadata).
+ * @param {JobInfo[]} allJobs - All available job infos
+ * @param {string[]} mainJobNames - Names of main jobs
+ * @returns {Promise<FilterUsedJobsResult>} Used jobs and main job dependency map
  */
 async function filterUsedJobs(
   allJobs: JobInfo[],

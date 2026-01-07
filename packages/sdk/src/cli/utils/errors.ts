@@ -32,6 +32,8 @@ type CLIErrorInternal = Error & {
 
 /**
  * Format CLI error for output
+ * @param {CLIError} error - CLIError instance to format
+ * @returns {string} Formatted error message
  */
 function formatError(error: CLIError): string {
   const parts: string[] = [
@@ -57,6 +59,8 @@ function formatError(error: CLIError): string {
 
 /**
  * Create a CLI error with formatted output
+ * @param {CLIErrorOptions} options - Options to construct a CLIError
+ * @returns {CLIError} Constructed CLIError instance
  */
 export function createCLIError(options: CLIErrorOptions): CLIError {
   const error = new Error(options.message) as CLIErrorInternal;
@@ -71,6 +75,8 @@ export function createCLIError(options: CLIErrorOptions): CLIError {
 
 /**
  * Type guard to check if an error is a CLIError
+ * @param {unknown} error - Error to check
+ * @returns {error is CLIError} True if the error is a CLIError
  */
 export function isCLIError(error: unknown): error is CLIError {
   return error instanceof Error && error.name === "CLIError";
@@ -85,6 +91,8 @@ export { createCLIError as CLIError };
 export const errors = {
   /**
    * Configuration file not found
+   * @param {string} path - Path to the missing config file
+   * @returns {CLIError} CLI error instance
    */
   configNotFound: (path: string) =>
     createCLIError({
@@ -96,6 +104,7 @@ export const errors = {
 
   /**
    * User not authenticated
+   * @returns {CLIError} CLI error instance
    */
   notLoggedIn: () =>
     createCLIError({
@@ -108,6 +117,8 @@ export const errors = {
 
   /**
    * Workspace not found or not specified
+   * @param {string} [profile] - Profile name that was not found
+   * @returns {CLIError} CLI error instance
    */
   workspaceNotFound: (profile?: string) =>
     createCLIError({
@@ -121,6 +132,9 @@ export const errors = {
 
   /**
    * Resource not found
+   * @param {string} resourceType - Type of the resource
+   * @param {string} resourceName - Name of the resource
+   * @returns {CLIError} CLI error instance
    */
   resourceNotFound: (resourceType: string, resourceName: string) =>
     createCLIError({
@@ -131,6 +145,9 @@ export const errors = {
 
   /**
    * Invalid argument value
+   * @param {string} argName - Argument name
+   * @param {string} message - Validation message
+   * @returns {CLIError} CLI error instance
    */
   invalidArgument: (argName: string, message: string) =>
     createCLIError({
@@ -140,6 +157,7 @@ export const errors = {
 
   /**
    * Operation cancelled by user
+   * @returns {CLIError} CLI error instance
    */
   operationCancelled: () =>
     createCLIError({
@@ -149,6 +167,8 @@ export const errors = {
 
   /**
    * Permission denied
+   * @param {string} [resource] - Optional resource description
+   * @returns {CLIError} CLI error instance
    */
   permissionDenied: (resource?: string) =>
     createCLIError({

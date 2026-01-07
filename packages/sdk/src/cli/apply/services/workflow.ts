@@ -72,6 +72,9 @@ export async function applyWorkflow(
 
 /**
  * Filter job function versions to only include those used by a workflow
+ * @param {{ [key: string]: bigint }} allVersions - Map of job function names to versions
+ * @param {string[]} usedJobNames - Job names used by the workflow
+ * @returns {{ [key: string]: bigint }} Filtered job function versions
  */
 function filterJobFunctionVersions(
   allVersions: { [key: string]: bigint },
@@ -91,6 +94,10 @@ function filterJobFunctionVersions(
  * Only registers jobs that are actually used (based on usedJobNames in changeSet).
  * Uses create for new jobs and update for existing jobs.
  * Sets metadata on used JobFunctions and removes metadata from unused ones.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>} changeSet - Workflow change set
+ * @param {string} appName - Application name
+ * @returns {Promise<{ [key: string]: bigint }>} Map of job function names to versions
  */
 async function registerJobFunctions(
   client: OperatorClient,

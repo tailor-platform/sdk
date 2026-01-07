@@ -30,6 +30,9 @@ export interface TriggerCall {
 
 /**
  * Find all workflow jobs by detecting createWorkflowJob calls from \@tailor-platform/sdk
+ * @param {Program} program - Parsed TypeScript program
+ * @param {string} _sourceText - Source code text (currently unused)
+ * @returns {JobLocation[]} Detected job locations
  */
 export function findAllJobs(program: Program, _sourceText: string): JobLocation[] {
   const jobs: JobLocation[] = [];
@@ -108,6 +111,8 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
 
 /**
  * Build a map from export name to job name from detected jobs
+ * @param {JobLocation[]} jobs - Detected job locations
+ * @returns {Map<string, string>} Map from export name to job name
  */
 export function buildJobNameMap(jobs: JobLocation[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -122,6 +127,9 @@ export function buildJobNameMap(jobs: JobLocation[]): Map<string, string> {
 /**
  * Detect all .trigger() calls in the source code
  * Returns information about each trigger call for transformation
+ * @param {Program} program - Parsed TypeScript program
+ * @param {string} sourceText - Source code text
+ * @returns {TriggerCall[]} Detected trigger calls
  */
 export function detectTriggerCalls(program: Program, sourceText: string): TriggerCall[] {
   const calls: TriggerCall[] = [];
