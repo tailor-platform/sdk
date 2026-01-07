@@ -18,7 +18,7 @@ export default defineConfig([
       reportUnusedDisableDirectives: "off",
     },
     rules: {
-      "jsdoc/require-param-type": "off",
+      "jsdoc/require-param-type": "error",
       "jsdoc/require-returns-type": "off",
       "jsdoc/tag-lines": "off",
       "jsdoc/check-param-names": "error",

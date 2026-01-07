@@ -52,7 +52,7 @@ export type * from "./types";
 
 /**
  * Creates a GeneratorConfigSchema with built-in generator support
- * @param builtinGenerators - Map of generator IDs to their constructor functions
+ * @param {Map<string, (options: any) => CodeGeneratorBase>} builtinGenerators - Map of generator IDs to their constructor functions
  */
 export function createGeneratorConfigSchema(
   builtinGenerators: Map<
