@@ -65,7 +65,15 @@
     "require-yield": "error",
     "use-isnan": "error",
     "valid-typeof": "error",
-    "@typescript-eslint/ban-ts-comment": "error",
+    "@typescript-eslint/ban-ts-comment": [
+      "error",
+      {
+        "ts-ignore": "allow-with-description",
+        "ts-expect-error": "allow-with-description",
+        "ts-nocheck": "ban",
+        "ts-check": "ban"
+      }
+    ],
     "no-array-constructor": "error",
     "@typescript-eslint/no-duplicate-enum-values": "error",
     "@typescript-eslint/no-empty-object-type": "error",

@@ -20,7 +20,8 @@
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "oxlint . && eslint --cache .",
     "lint:fix": "oxlint --fix . && eslint --cache . --fix --quiet",
-    "typecheck": "pnpm generate && tsc --noEmit"
+    "typecheck": "pnpm generate && tsc --noEmit",
+    "typecheck:go": "tsgo"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
@@ -35,6 +36,7 @@
     "@tailor-platform/function-types": "0.8.0",
     "@toiroakr/lines-db": "0.6.1",
     "@types/node": "24.10.4",
+    "@typescript/native-preview": "7.0.0-dev.20260103.1",
     "eslint-plugin-oxlint": "1.36.0",
     "graphql": "16.12.0",
     "graphql-request": "7.4.0",

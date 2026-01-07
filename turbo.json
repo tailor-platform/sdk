@@ -30,14 +30,16 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go"],
       "cache": false
     },
     "lint": {
+      "dependsOn": ["^build"],
       "outputs": [".eslintcache"],
       "cache": true
     },
     "lint:fix": {
+      "dependsOn": ["^build"],
       "outputs": [".eslintcache"],
       "cache": true
     },
@@ -56,6 +58,11 @@
       "cache": true
     },
     "typecheck": {
+      "dependsOn": ["build", "generate"],
+      "outputs": [],
+      "cache": true
+    },
+    "typecheck:go": {
       "dependsOn": ["build", "generate"],
       "outputs": [],
       "cache": true

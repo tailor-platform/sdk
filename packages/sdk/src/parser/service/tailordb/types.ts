@@ -4,6 +4,7 @@ import type { ValueOperand } from "@/parser/service/auth/types";
 
 export type { RelationType } from "./relation";
 export type {
+  TailorAnyDBField,
   TailorDBField,
   TailorDBType,
   DBFieldMetadata,

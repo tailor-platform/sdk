@@ -1,5 +1,5 @@
 import type {
-  TailorDBField,
+  TailorAnyDBField,
   DBFieldMetadata,
   Hook,
   OperatorFieldConfig,
@@ -46,14 +46,13 @@ const convertHookToExpr = (
  * This transforms user-defined functions into script expressions.
  */
 
-export function parseFieldConfig(field: TailorDBField<any, any>): OperatorFieldConfig {
+export function parseFieldConfig(field: TailorAnyDBField): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
   // Access rawRelation via getter (if available)
   const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig }).rawRelation;
 
-  const nestedFields = field.fields as Record<string, TailorDBField<any, any>> | undefined;
-
+  const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
   return {
     type: fieldType,
     ...metadata,
