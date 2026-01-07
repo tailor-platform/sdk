@@ -49,11 +49,17 @@ export type PermissionCondition<
   User extends object = InferredAttributeMap,
   Update extends boolean = boolean,
   Type extends object = object,
-> = readonly [
-  PermissionOperand<Level, User, Type, Update>,
-  PermissionOperator,
-  PermissionOperand<Level, User, Type, Update>,
-];
+> =
+  | readonly [
+      PermissionOperand<Level, User, Type, Update>,
+      EqPermissionOperator,
+      Exclude<PermissionOperand<Level, User, Type, Update>, unknown[]>,
+    ]
+  | readonly [
+      PermissionOperand<Level, User, Type, Update>,
+      InPermissionOperator,
+      Exclude<PermissionOperand<Level, User, Type, Update>, string | boolean>,
+    ];
 
 type UserOperand<User extends object = InferredAttributeMap> = {
   user:
@@ -78,7 +84,8 @@ export type PermissionOperand<
   | ValueOperand
   | (Level extends "record" ? RecordOperand<Type, Update> : never);
 
-type PermissionOperator = "=" | "!=" | "in" | "not in";
+type EqPermissionOperator = "=" | "!=";
+type InPermissionOperator = "in" | "not in";
 
 /**
  * Grants full record-level access without any conditions.
