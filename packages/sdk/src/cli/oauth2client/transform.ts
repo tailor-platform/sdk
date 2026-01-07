@@ -34,6 +34,11 @@ export interface OAuth2ClientCredentials {
   createdAt: string;
 }
 
+/**
+ * Transform an AuthOAuth2Client into CLI-friendly OAuth2 client info.
+ * @param {AuthOAuth2Client} client - OAuth2 client resource
+ * @returns {OAuth2ClientInfo} Flattened OAuth2 client info
+ */
 export function toOAuth2ClientInfo(client: AuthOAuth2Client): OAuth2ClientInfo {
   return {
     name: client.name,
@@ -45,6 +50,11 @@ export function toOAuth2ClientInfo(client: AuthOAuth2Client): OAuth2ClientInfo {
   };
 }
 
+/**
+ * Transform an AuthOAuth2Client into OAuth2 client credentials info.
+ * @param {AuthOAuth2Client} client - OAuth2 client resource
+ * @returns {OAuth2ClientCredentials} OAuth2 client credentials
+ */
 export function toOAuth2ClientCredentials(client: AuthOAuth2Client): OAuth2ClientCredentials {
   return {
     name: client.name,

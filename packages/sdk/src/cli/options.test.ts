@@ -20,7 +20,9 @@ vi.mock("citty", async () => {
 
 type Resolvable<T> = T | Promise<T> | (() => T | Promise<T>);
 
-async function resolveCommand(cmd: Resolvable<CommandDef<any>>): Promise<CommandDef<any>> {
+// The CLI option test only needs the command shape; arg typing is irrelevant here.
+// oxlint-disable-next-line no-explicit-any
+async function resolveCommand<T extends CommandDef<any>>(cmd: Resolvable<T>): Promise<T> {
   if (typeof cmd === "function") {
     return await cmd();
   }
@@ -51,7 +53,9 @@ const checkArgs = (args: CommandArgs, path: string[]) => {
   }
 };
 
-async function walkCommand(cmd: Resolvable<CommandDef<any>>, path: string[] = []) {
+// The CLI option test only needs the command shape; arg typing is irrelevant here.
+// oxlint-disable-next-line no-explicit-any
+async function walkCommand<T extends CommandDef<any>>(cmd: Resolvable<T>, path: string[] = []) {
   const resolved = await resolveCommand(cmd);
   if (resolved.args) {
     checkArgs(resolved.args, path);

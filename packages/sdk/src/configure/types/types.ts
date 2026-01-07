@@ -50,6 +50,8 @@ export interface FieldMetadata {
   required?: boolean;
   array?: boolean;
   allowedValues?: AllowedValue[];
+  // Validation supports any field output type (the field itself remains typed elsewhere).
+  // oxlint-disable-next-line no-explicit-any
   validate?: FieldValidateInput<any>[];
   typeName?: string;
 }

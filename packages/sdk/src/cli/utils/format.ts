@@ -33,6 +33,11 @@ export function formatTableWithHeaders(headers: string[], rows: string[][]): str
   });
 }
 
+/**
+ * Format a 2D array of values into a table string.
+ * @param {unknown} value - Value to format
+ * @returns {string} Human-readable string representation
+ */
 export function formatValue(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
@@ -46,6 +51,11 @@ export function formatValue(value: unknown): string {
   return String(value);
 }
 
+/**
+ * Format an ISO timestamp string as a human-readable relative time.
+ * @param {string} isoString - ISO date string
+ * @returns {string} Relative time (e.g., "5 minutes ago")
+ */
 export function humanizeRelativeTime(isoString: string): string {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) {

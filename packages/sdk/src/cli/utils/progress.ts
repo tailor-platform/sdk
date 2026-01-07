@@ -1,5 +1,11 @@
 import { setTimeout } from "node:timers/promises";
 
+/**
+ * Create a simple progress reporter that writes updates to stderr.
+ * @param {string} label - Label to prefix progress output
+ * @param {number} total - Total number of steps
+ * @returns {{ update: () => void; finish: () => void }} Progress helpers
+ */
 export function createProgress(label: string, total: number) {
   let current = 0;
 
@@ -16,6 +22,14 @@ export function createProgress(label: string, total: number) {
   return { update, finish };
 }
 
+/**
+ * Wrap a promise with a timeout, rejecting if the timeout elapses first.
+ * @template T
+ * @param {Promise<T>} p - Promise to await
+ * @param {number} ms - Timeout in milliseconds
+ * @param {string} message - Error message on timeout
+ * @returns {Promise<T>} Result of the original promise if it completes in time
+ */
 export async function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
   return await Promise.race([
     p,

@@ -39,6 +39,13 @@ type ResolverReturn<
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
   }>;
 
+/**
+ * Create a resolver definition for the Tailor SDK.
+ * @template Input
+ * @template Output
+ * @param {Omit<ResolverInput, "input" | "output" | "body"> & { input?: Input; output: Output; body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>> }} config - Resolver configuration
+ * @returns {ResolverReturn<Input, Output>} Normalized resolver configuration
+ */
 export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
@@ -59,4 +66,6 @@ export function createResolver<
   } as ResolverReturn<Input, Output>;
 }
 
+// A loose config alias for userland use-cases
+// oxlint-disable-next-line no-explicit-any
 export type ResolverConfig = ReturnType<typeof createResolver<any, any>>;

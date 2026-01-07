@@ -65,18 +65,32 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
   return cond.length >= 2 && typeof cond[1] === "string"; // Check if middle element is an operator
 }
 
+/**
+ * Normalize record-level permissions into a standard structure.
+ * @template User
+ * @template Type
+ * @param {TailorTypePermission<User, Type>} permission - Tailor type permission
+ * @returns {StandardTailorTypePermission} Normalized record permissions
+ */
 export function normalizePermission<User extends object = object, Type extends object = object>(
   permission: TailorTypePermission<User, Type>,
 ): StandardTailorTypePermission {
-  return Object.keys(permission).reduce((acc, action) => {
-    (acc as any)[action] = (permission as any)[action].map((p: any) =>
-      normalizeActionPermission(p),
-    );
+  const keys = Object.keys(permission) as Array<keyof typeof permission>;
+  return keys.reduce((acc, action) => {
+    acc[action] = permission[action].map((p) => normalizeActionPermission(p));
     return acc;
-  }, {}) as StandardTailorTypePermission;
+    // oxlint-disable-next-line no-explicit-any
+  }, {} as any);
 }
 
+/**
+ * Normalize GraphQL permissions into a standard structure.
+ * @param {TailorTypeGqlPermission<unknown, unknown>} permission - Tailor GQL permission
+ * @returns {StandardTailorTypeGqlPermission} Normalized GQL permissions
+ */
 export function normalizeGqlPermission(
+  // Raw GQL permissions are not strongly typed at parse time
+  // oxlint-disable-next-line no-explicit-any
   permission: TailorTypeGqlPermission<any, any>,
 ): StandardTailorTypeGqlPermission {
   return (permission as readonly GqlPermissionPolicy[]).map((policy) =>
@@ -96,6 +110,8 @@ function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionP
 /**
  * Parse raw permissions into normalized permissions.
  * This is the main entry point for permission parsing in the parser layer.
+ * @param {RawPermissions} rawPermissions - Raw permissions definition
+ * @returns {Permissions} Normalized permissions
  */
 export function parsePermissions(rawPermissions: RawPermissions): Permissions {
   return {
@@ -108,6 +124,11 @@ export function parsePermissions(rawPermissions: RawPermissions): Permissions {
   };
 }
 
+/**
+ * Normalize a single action permission into the standard format.
+ * @param {unknown} permission - Raw permission definition
+ * @returns {StandardActionPermission} Normalized action permission
+ */
 export function normalizeActionPermission(permission: unknown): StandardActionPermission {
   // object format
   if (isObjectFormat(permission)) {

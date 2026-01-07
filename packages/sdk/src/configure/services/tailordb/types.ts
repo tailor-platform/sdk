@@ -22,6 +22,8 @@ export interface DBFieldMetadata extends FieldMetadata {
   foreignKey?: boolean;
   foreignKeyType?: string;
   foreignKeyField?: string;
+  // Hooks are user-defined and may depend on runtime data.
+  // oxlint-disable-next-line no-explicit-any
   hooks?: Hook<any, any>;
   serial?: SerialConfig;
   relation?: boolean;
@@ -43,6 +45,8 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
 }
 
 export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = {
+  // Nested types depend on generic output; exclude them via a loose match.
+  // oxlint-disable-next-line no-explicit-any
   [K in keyof T]: T[K] extends TailorDBField<{ type: "nested"; array: boolean }, any>
     ? never
     : T[K];

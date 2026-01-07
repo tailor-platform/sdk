@@ -39,6 +39,10 @@ function platformConfigPath() {
   return path.join(xdgConfig, "tailor-platform", "config.yaml");
 }
 
+/**
+ * Read Tailor Platform CLI configuration, migrating from tailorctl if necessary.
+ * @returns {PfConfig} Parsed platform configuration
+ */
 export function readPlatformConfig(): PfConfig {
   const configPath = platformConfigPath();
 
@@ -56,6 +60,11 @@ export function readPlatformConfig(): PfConfig {
   return pfConfigSchema.parse(rawConfig);
 }
 
+/**
+ * Write Tailor Platform CLI configuration to disk.
+ * @param {PfConfig} config - Platform configuration to write
+ * @returns {void}
+ */
 export function writePlatformConfig(config: PfConfig) {
   const configPath = platformConfigPath();
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -139,8 +148,12 @@ function validateUUID(value: string, source: string): string {
   return result.data;
 }
 
-// Load workspace ID from command options, environment variables, or platform config.
-// Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
+/**
+ * Load workspace ID from command options, environment variables, or platform config.
+ * Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
+ * @param {{ workspaceId?: string; profile?: string }} [opts] - Workspace and profile options
+ * @returns {string} Resolved workspace ID
+ */
 export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string }): string {
   // opts/workspaceId
   if (opts?.workspaceId) {
@@ -173,8 +186,12 @@ export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string 
   `);
 }
 
-// Load access token from command options, environment variables, or platform config.
-// Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
+/**
+ * Load access token from command options, environment variables, or platform config.
+ * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
+ * @param {{ useProfile?: boolean; profile?: string }} [opts] - Profile options
+ * @returns {Promise<string>} Resolved access token
+ */
 export async function loadAccessToken(opts?: { useProfile?: boolean; profile?: string }) {
   // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
   if (process.env.TAILOR_PLATFORM_TOKEN) {
@@ -214,6 +231,12 @@ export async function loadAccessToken(opts?: { useProfile?: boolean; profile?: s
   return await fetchLatestToken(pfConfig, user);
 }
 
+/**
+ * Fetch the latest access token, refreshing if necessary.
+ * @param {PfConfig} config - Platform config
+ * @param {string} user - User name
+ * @returns {Promise<string>} Latest access token
+ */
 export async function fetchLatestToken(config: PfConfig, user: string): Promise<string> {
   const tokens = config.users[user];
   if (!tokens) {
@@ -243,8 +266,12 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
 
 const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
 
-// Load config path from command options or environment variables.
-// Priority: opts/config > env/config > search parent directories
+/**
+ * Load config path from command options or environment variables.
+ * Priority: opts/config > env/config > search parent directories
+ * @param {string} [configPath] - Optional explicit config path
+ * @returns {string | undefined} Resolved config path or undefined
+ */
 export function loadConfigPath(configPath?: string): string | undefined {
   if (configPath) {
     return configPath;
@@ -257,8 +284,12 @@ export function loadConfigPath(configPath?: string): string | undefined {
   return findUpSync(DEFAULT_CONFIG_FILENAME);
 }
 
-// Load organization ID from command options or environment variables.
-// Priority: opts/organizationId > env/organizationId > undefined (optional)
+/**
+ * Load organization ID from command options or environment variables.
+ * Priority: opts/organizationId > env/organizationId > undefined (optional)
+ * @param {string} [organizationId] - Organization ID override
+ * @returns {string | undefined} Resolved organization ID or undefined
+ */
 export function loadOrganizationId(organizationId?: string): string | undefined {
   if (organizationId) {
     return validateUUID(organizationId, "--organization-id option");
@@ -272,8 +303,12 @@ export function loadOrganizationId(organizationId?: string): string | undefined 
   return undefined;
 }
 
-// Load folder ID from command options or environment variables.
-// Priority: opts/folderId > env/folderId > undefined (optional)
+/**
+ * Load folder ID from command options or environment variables.
+ * Priority: opts/folderId > env/folderId > undefined (optional)
+ * @param {string} [folderId] - Folder ID override
+ * @returns {string | undefined} Resolved folder ID or undefined
+ */
 export function loadFolderId(folderId?: string): string | undefined {
   if (folderId) {
     return validateUUID(folderId, "--folder-id option");

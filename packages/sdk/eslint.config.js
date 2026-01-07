@@ -24,7 +24,7 @@ export default defineConfig([
       "jsdoc/check-param-names": "error",
       // TODO: Enable these rules after fixing all issues
       // or apply rules per folder
-      "jsdoc/require-jsdoc": ["off", { publicOnly: true }],
+      "jsdoc/require-jsdoc": ["error", { publicOnly: true }],
       "jsdoc/require-param": "off",
       "jsdoc/require-returns": "off",
     },
