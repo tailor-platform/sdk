@@ -1,4 +1,4 @@
-import type { TailorDBField, DBFieldMetadata, Hook, OperatorFieldConfig } from "./types";
+import type { TailorAnyDBField, DBFieldMetadata, Hook, OperatorFieldConfig } from "./types";
 
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.
@@ -38,15 +38,14 @@ const convertHookToExpr = (
 /**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
- * @param {TailorDBField<unknown, unknown>} field - TailorDB field definition
+ * @param {TailorAnyDBField} field - TailorDB field definition
  * @returns {OperatorFieldConfig} Parsed operator field configuration
  */
-export function parseFieldConfig(field: TailorDBField<any, any>): OperatorFieldConfig {
+export function parseFieldConfig(field: TailorAnyDBField): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
 
-  const nestedFields = field.fields as Record<string, TailorDBField<any, any>> | undefined;
-
+  const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
   return {
     type: fieldType,
     ...metadata,

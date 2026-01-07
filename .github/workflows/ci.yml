@@ -45,5 +45,8 @@ jobs:
       - name: Check format
         run: pnpm format:check
 
+      - name: Check type by tsgo
+        run: pnpm typecheck:go
+
       - name: Check type
         run: pnpm typecheck

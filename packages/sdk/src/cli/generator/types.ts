@@ -185,7 +185,6 @@ interface CodeGeneratorCore {
 
 /**
  * Generator interface with dependencies-based conditional methods.
- *
  * @template Deps - Dependencies array (e.g., ['tailordb'], ['tailordb', 'resolver'])
  * @template T - Return type of processType
  * @template R - Return type of processResolver

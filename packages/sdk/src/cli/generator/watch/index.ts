@@ -3,8 +3,7 @@ import * as path from "node:path";
 import chokidar from "chokidar";
 import * as madgeModule from "madge";
 import { logger, styles } from "@/cli/utils/logger";
-
-type MadgeLoader = typeof madgeModule;
+import type { MadgeLoader } from "./types";
 
 /**
  * Types of file change events.

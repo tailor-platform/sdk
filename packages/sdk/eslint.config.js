@@ -18,9 +18,9 @@ export default defineConfig([
       reportUnusedDisableDirectives: "off",
     },
     rules: {
-      "jsdoc/require-param-type": "off",
-      "jsdoc/require-returns-type": "off",
-      "jsdoc/tag-lines": "off",
+      "jsdoc/require-param-type": "error",
+      "jsdoc/require-returns-type": "error",
+      "jsdoc/tag-lines": "error",
       "jsdoc/check-param-names": "error",
       // TODO: Enable these rules after fixing all issues
       // or apply rules per folder
