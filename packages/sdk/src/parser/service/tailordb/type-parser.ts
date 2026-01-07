@@ -52,6 +52,18 @@ function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
     // Use parser function to convert field metadata to config
     const fieldConfig = parseFieldConfig(fieldDef);
 
+    // Validate that index/unique are not set on array fields
+    if (fieldConfig.array && fieldConfig.index) {
+      throw new Error(
+        `Field "${fieldName}" on type "${type.name}": index cannot be set on array fields`,
+      );
+    }
+    if (fieldConfig.array && fieldConfig.unique) {
+      throw new Error(
+        `Field "${fieldName}" on type "${type.name}": unique cannot be set on array fields`,
+      );
+    }
+
     ensureNoExternalVariablesInFieldScripts(type.name, fieldName, fieldConfig);
 
     const parsedField: ParsedField = { name: fieldName, config: fieldConfig };

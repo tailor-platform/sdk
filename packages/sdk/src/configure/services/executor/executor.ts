@@ -34,6 +34,13 @@ type Executor<Args, O> = O extends {
       operation: O;
     };
 
+/**
+ * Create an executor configuration for the Tailor SDK.
+ * @template Args
+ * @template O
+ * @param {Executor<Args, O>} config - Executor configuration
+ * @returns {Executor<Args, O>} The same executor configuration
+ */
 export function createExecutor<
   Args,
   O extends Operation<Args> | { kind: "workflow"; workflow: Workflow },

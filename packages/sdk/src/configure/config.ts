@@ -38,6 +38,12 @@ export const getDistDir = (): string => {
   return distPath;
 };
 
+/**
+ * Define a Tailor SDK application configuration with shallow exactness.
+ * @template Config
+ * @param {Config} config - Application configuration
+ * @returns {Config} The same configuration object
+ */
 export function defineConfig<
   const Config extends AppConfig &
     // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
@@ -46,6 +52,11 @@ export function defineConfig<
   return config;
 }
 
+/**
+ * Define generators to be used with the Tailor SDK.
+ * @param {...GeneratorConfig} configs - Generator configurations
+ * @returns {GeneratorConfig[]} Generator configurations as given
+ */
 export function defineGenerators(...configs: GeneratorConfig[]) {
   return configs;
 }

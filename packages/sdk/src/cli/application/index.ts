@@ -176,6 +176,11 @@ export class Application {
   }
 }
 
+/**
+ * Define a Tailor application from the given configuration.
+ * @param {AppConfig} config - Application configuration object
+ * @returns {Application} Configured application instance
+ */
 export function defineApplication(config: AppConfig) {
   const app = new Application(config.name, config);
   app.defineTailorDB(config.db);

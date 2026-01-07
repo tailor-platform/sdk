@@ -52,6 +52,13 @@ import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
+/**
+ * Apply TailorDB-related changes for the given phase.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {Awaited<ReturnType<typeof planTailorDB>>} result - Planned TailorDB changes
+ * @param {Exclude<ApplyPhase, "delete">} [phase="create-update"] - Apply phase
+ * @returns {Promise<void>} Promise that resolves when TailorDB changes are applied
+ */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
@@ -100,6 +107,11 @@ export async function applyTailorDB(
   }
 }
 
+/**
+ * Plan TailorDB-related changes based on current and desired state.
+ * @param {PlanContext} context - Planning context
+ * @returns {Promise<unknown>} Planned changes
+ */
 export async function planTailorDB({ client, workspaceId, application, forRemoval }: PlanContext) {
   const tailordbs: TailorDBService[] = [];
   if (!forRemoval) {
@@ -413,8 +425,8 @@ function generateTailorDBTypeManifest(
           }),
         })),
         array: fieldConfig.array || false,
-        index: (fieldConfig.index && !fieldConfig.array) || false,
-        unique: (fieldConfig.unique && !fieldConfig.array) || false,
+        index: fieldConfig.index || false,
+        unique: fieldConfig.unique || false,
         foreignKey: fieldConfig.foreignKey || false,
         foreignKeyType: fieldConfig.foreignKeyType,
         foreignKeyField: fieldConfig.foreignKeyField,

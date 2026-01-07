@@ -41,6 +41,18 @@ export type AuthInvoker<M extends string> = Omit<ParserAuthInvoker, "machineUser
   machineUserName: M;
 };
 
+/**
+ * Define an auth service for the Tailor SDK.
+ * @template Name
+ * @template User
+ * @template AttributeMap
+ * @template AttributeList
+ * @template MachineUserNames
+ * @template M
+ * @param {Name} name - Auth service name
+ * @param {AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames>} config - Auth service configuration
+ * @returns {AuthDefinitionBrand & AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames> & { name: string; invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M> }} Defined auth service
+ */
 export function defineAuth<
   const Name extends string,
   const User extends TailorDBInstance,

@@ -102,12 +102,11 @@ function findWorkflowDefaultExport(program: Program): { start: number; end: numb
  * Transform workflow source code
  * - Transform .trigger() calls to tailor.workflow.triggerJobFunction()
  * - Other jobs: remove entire variable declaration
- *
- * @param source - The source code to transform
- * @param targetJobName - The name of the target job (from job config)
- * @param targetJobExportName - The export name of the target job (optional, for enhanced detection)
- * @param otherJobExportNames - Export names of other jobs to remove (optional, for enhanced detection)
- * @param allJobsMap - Map from export name to job name for trigger transformation (optional)
+ * @param {string} source - The source code to transform
+ * @param {string} targetJobName - The name of the target job (from job config)
+ * @param {string} [targetJobExportName] - The export name of the target job (optional, for enhanced detection)
+ * @param {string[]} [otherJobExportNames] - Export names of other jobs to remove (optional, for enhanced detection)
+ * @param {Map<string, string>} [allJobsMap] - Map from export name to job name for trigger transformation (optional)
  */
 export function transformWorkflowSource(
   source: string,

@@ -39,6 +39,11 @@ function applicationInfo(app: Application): ApplicationInfo {
   };
 }
 
+/**
+ * Show applied application information for the current workspace.
+ * @param {ShowOptions} [options] - Show options
+ * @returns {Promise<ApplicationInfo>} Application information
+ */
 export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
   // Load and validate options
   const accessToken = await loadAccessToken({

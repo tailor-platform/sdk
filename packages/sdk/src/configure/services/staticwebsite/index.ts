@@ -5,6 +5,12 @@ type StaticWebsiteDefinitionBrand = {
   readonly [staticWebsiteDefinitionBrand]: true;
 };
 
+/**
+ * Define a static website configuration for the Tailor SDK.
+ * @param {string} name - Static website name
+ * @param {Omit<StaticWebsiteInput, "name">} config - Static website configuration
+ * @returns {StaticWebsiteDefinitionBrand & StaticWebsiteInput & { readonly url: string }} Defined static website
+ */
 export function defineStaticWebSite(name: string, config: Omit<StaticWebsiteInput, "name">) {
   const result = {
     ...config,

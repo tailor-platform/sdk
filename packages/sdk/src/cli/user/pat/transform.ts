@@ -19,6 +19,11 @@ function patScopeToString(scope: PATScope): string {
   }
 }
 
+/**
+ * Transform a PersonalAccessToken into CLI-friendly info.
+ * @param {PersonalAccessToken} pat - Personal access token resource
+ * @returns {PersonalAccessTokenInfo} Flattened token info
+ */
 export function transformPersonalAccessToken(pat: PersonalAccessToken): PersonalAccessTokenInfo {
   return {
     name: pat.name,
@@ -26,6 +31,11 @@ export function transformPersonalAccessToken(pat: PersonalAccessToken): Personal
   };
 }
 
+/**
+ * Get PAT scopes from a write flag.
+ * @param {boolean} write - Whether write access is required
+ * @returns {PATScope[]} Scopes to apply to the token
+ */
 export function getScopesFromWriteFlag(write: boolean): PATScope[] {
   return write ? [PATScope.PAT_SCOPE_READ, PATScope.PAT_SCOPE_WRITE] : [PATScope.PAT_SCOPE_READ];
 }
@@ -34,6 +44,14 @@ function getScopeStringsFromWriteFlag(write: boolean): string[] {
   return write ? ["read", "write"] : ["read"];
 }
 
+/**
+ * Print the created or updated personal access token to the logger.
+ * @param {string} name - Token name
+ * @param {string} token - Token value
+ * @param {boolean} write - Whether the token has write scope
+ * @param {"created" | "updated"} action - Action performed
+ * @returns {void}
+ */
 export function printCreatedToken(
   name: string,
   token: string,

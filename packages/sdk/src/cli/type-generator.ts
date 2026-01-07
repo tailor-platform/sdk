@@ -21,6 +21,13 @@ function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   return collectAttributesFromConfig(config);
 }
 
+/**
+ * Generate the contents of the user-defined type definition file.
+ * @param {AttributeMapConfig | undefined} attributeMap - Attribute map configuration
+ * @param {AttributeListConfig | undefined} attributeList - Attribute list configuration
+ * @param {Record<string, string | number | boolean>} [env] - Environment configuration
+ * @returns {string} Generated type definition source
+ */
 export function generateTypeDefinition(
   attributeMap: AttributeMapConfig | undefined,
   attributeList: AttributeListConfig | undefined,
@@ -157,6 +164,11 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   return {};
 }
 
+/**
+ * Resolve the output path for the generated type definition file.
+ * @param {string} configPath - Path to Tailor config file
+ * @returns {string} Absolute path to the type definition file
+ */
 export function resolveTypeDefinitionPath(configPath: string): string {
   // Check for environment variable override
   const typePath = process.env.TAILOR_PLATFORM_SDK_TYPE_PATH;
@@ -181,6 +193,12 @@ export function resolveTypeDefinitionPath(configPath: string): string {
   return path.join(packageDir, "dist", "user-defined.d.ts");
 }
 
+/**
+ * Generate user type definitions from the app config and write them to disk.
+ * @param {AppConfig} config - Application config
+ * @param {string} configPath - Path to Tailor config file
+ * @returns {Promise<void>} Promise that resolves when types are generated
+ */
 export async function generateUserTypes(config: AppConfig, configPath: string): Promise<void> {
   try {
     const { attributeMap, attributeList } = extractAttributesFromConfig(config);

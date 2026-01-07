@@ -152,9 +152,12 @@ export class TailorDBField<
       : TailorDBField<CurrentDefined, Output>,
     config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
   ): TailorDBField<DefinedDBFieldMetadata, Output> {
-    this._metadata.index = true;
+    // Index and unique are not supported on array fields
+    if (!this._metadata.array) {
+      this._metadata.index = true;
+      this._metadata.unique = ["oneToOne", "1-1"].includes(config.type);
+    }
     this._metadata.foreignKey = true;
-    this._metadata.unique = ["oneToOne", "1-1"].includes(config.type);
 
     const key = config.toward.key ?? "id";
     const backward = config.backward ?? "";
@@ -187,7 +190,11 @@ export class TailorDBField<
   }
 
   index<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { index: unknown } ? never : TailorDBField<CurrentDefined, Output>,
+    this: CurrentDefined extends { index: unknown }
+      ? never
+      : CurrentDefined extends { array: true }
+        ? never
+        : TailorDBField<CurrentDefined, Output>,
   ) {
     this._metadata.index = true;
     return this as TailorDBField<Prettify<CurrentDefined & { index: true }>, Output>;
@@ -196,7 +203,9 @@ export class TailorDBField<
   unique<CurrentDefined extends Defined>(
     this: CurrentDefined extends { unique: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output>,
+      : CurrentDefined extends { array: true }
+        ? never
+        : TailorDBField<CurrentDefined, Output>,
   ) {
     this._metadata.unique = true;
     this._metadata.index = true;
@@ -271,8 +280,8 @@ export class TailorDBField<
 
   /**
    * Clone the field with optional overrides for field options
-   * @param options - Optional field options to override
-   * @returns A new TailorDBField instance with the same configuration
+   * @param {FieldOptions} [options] - Optional field options to override
+   * @returns {TailorDBField<unknown, unknown>} A new TailorDBField instance with the same configuration
    */
   clone<const NewOpt extends FieldOptions>(
     options?: NewOpt,
@@ -531,9 +540,9 @@ export class TailorDBType<
 
   /**
    * Pick specific fields from the type
-   * @param keys - Array of field keys to pick
-   * @param options - Optional field options to apply to picked fields
-   * @returns An object containing only the specified fields
+   * @param {(keyof Fields)[]} keys - Array of field keys to pick
+   * @param {FieldOptions} options - Optional field options to apply to picked fields
+   * @returns {Record<string, TailorDBField<unknown, unknown>>} An object containing only the specified fields
    */
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options: Opt) {
     const result = {} as Record<K, TailorAnyDBField>;
@@ -558,8 +567,9 @@ export class TailorDBType<
 
   /**
    * Omit specific fields from the type
-   * @param keys - Array of field keys to omit
-   * @returns An object containing all fields except the specified ones
+   * @template K
+   * @param {(keyof Fields)[]} keys - Array of field keys to omit
+   * @returns {Omit<Fields, K>} An object containing all fields except the specified ones
    */
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K> {
     const keysSet = new Set(keys);
@@ -588,9 +598,9 @@ type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = Tailo
 
 /**
  * Creates a new database type with the specified fields
- * @param name - The name of the type, or a tuple of [name, pluralForm]
- * @param fields - The field definitions for the type
- * @returns A new TailorDBType instance
+ * @param {string | [string, string]} name - The name of the type, or a tuple of [name, pluralForm]
+ * @param {Record<string, TailorDBField<unknown, unknown>>} fields - The field definitions for the type
+ * @returns {DBType<F>} A new TailorDBType instance
  */
 function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
@@ -598,10 +608,10 @@ function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField
 ): DBType<F>;
 /**
  * Creates a new database type with the specified fields and description
- * @param name - The name of the type, or a tuple of [name, pluralForm]
- * @param description - A description of the type
- * @param fields - The field definitions for the type
- * @returns A new TailorDBType instance
+ * @param {string | [string, string]} name - The name of the type, or a tuple of [name, pluralForm]
+ * @param {string} description - A description of the type
+ * @param {Record<string, TailorDBField<unknown, unknown>>} fields - The field definitions for the type
+ * @returns {DBType<F>} A new TailorDBType instance
  */
 function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
