@@ -46,6 +46,22 @@ tailor-sdk apply [options]
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-d, --dry-run` - Run the command without making any changes
 - `-y, --yes` - Skip confirmation prompt
+- `--no-schema-check` - Skip schema diff check against migration snapshots
+
+**Migration Handling:**
+
+When migrations are configured (`db.tailordb.migration` in config), the `apply` command automatically:
+
+1. Detects pending migration scripts that haven't been executed
+2. Applies schema changes in a safe order (pre-migration → script execution → post-migration)
+3. Executes migration scripts via TestExecScript API
+4. Updates migration state labels in TailorDB metadata
+
+See [TailorDB Commands](./tailordb.md#automatic-migration-execution) for details on automatic migration execution.
+
+**Schema Check:**
+
+By default, `apply` verifies that local schema changes match the migration files. This ensures migrations are properly generated before deployment. Use `--no-schema-check` to skip this verification (not recommended for production).
 
 ## remove
 
@@ -76,61 +92,3 @@ tailor-sdk show [options]
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-j, --json` - Output as JSON
-
-## tailordb
-
-Manage TailorDB tables and data.
-
-```bash
-tailor-sdk tailordb <subcommand> [options]
-```
-
-### tailordb truncate
-
-Truncate (delete all records from) TailorDB tables.
-
-```bash
-tailor-sdk tailordb truncate [types...] [options]
-```
-
-**Arguments:**
-
-- `types...` - Space-separated list of type names to truncate (optional)
-
-**Options:**
-
-- `-a, --all` - Truncate all tables in all namespaces
-- `-n, --namespace` - Truncate all tables in the specified namespace
-- `-y, --yes` - Skip confirmation prompt
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-
-**Usage Examples:**
-
-```bash
-# Truncate all tables in all namespaces (requires confirmation)
-tailor-sdk tailordb truncate --all
-
-# Truncate all tables in all namespaces (skip confirmation)
-tailor-sdk tailordb truncate --all --yes
-
-# Truncate all tables in a specific namespace
-tailor-sdk tailordb truncate --namespace myNamespace
-
-# Truncate specific types (namespace is auto-detected)
-tailor-sdk tailordb truncate User Post Comment
-
-# Truncate specific types with confirmation skipped
-tailor-sdk tailordb truncate User Post --yes
-```
-
-**Notes:**
-
-- You must specify exactly one of: `--all`, `--namespace`, or type names
-- When truncating specific types, the namespace is automatically detected from your config
-- Confirmation prompts vary based on the operation:
-  - `--all`: requires typing `truncate all`
-  - `--namespace`: requires typing `truncate <namespace-name>`
-  - Specific types: requires typing `yes`
-- Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)

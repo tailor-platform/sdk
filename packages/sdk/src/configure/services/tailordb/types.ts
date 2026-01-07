@@ -78,7 +78,24 @@ export type Hooks<
       : K]?: Hook<TData, output<F[K]>>;
 }>;
 
-export type TailorDBServiceConfig = { files: string[]; ignores?: string[] };
+/**
+ * Migration configuration for TailorDB
+ */
+export type TailorDBMigrationConfig = {
+  /** Directory path for migration files */
+  directory: string;
+  /** Machine user name for executing migration scripts (must be defined in auth.machineUsers) */
+  machineUser?: string;
+  /** Timeout for migration script execution in milliseconds (default: 10 minutes) */
+  timeout?: number;
+};
+
+export type TailorDBServiceConfig = {
+  files: string[];
+  ignores?: string[];
+  /** Migration configuration */
+  migration?: TailorDBMigrationConfig;
+};
 
 export type TailorDBExternalConfig = { external: true };
 

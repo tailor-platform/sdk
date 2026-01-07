@@ -7,7 +7,7 @@ import jsdoc from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
-  globalIgnores(["dist/"]),
+  globalIgnores(["dist/", "user-defined.d.ts"]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,

@@ -76,3 +76,41 @@ export type {
 } from "./workflow/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
+
+// Migration exports
+export {
+  generate as migrateGenerate,
+  type GenerateOptions as MigrateGenerateOptions,
+} from "./tailordb/migrate/generate";
+export {
+  createSnapshotFromLocalTypes,
+  reconstructSnapshotFromMigrations,
+  compareSnapshots,
+  getNextMigrationNumber,
+  getLatestMigrationNumber,
+  getMigrationFiles,
+  compareLocalTypesWithSnapshot,
+} from "./tailordb/migrate/snapshot";
+export {
+  hasChanges,
+  formatMigrationDiff,
+  formatDiffSummary,
+} from "./tailordb/migrate/diff-calculator";
+export {
+  MIGRATION_LABEL_KEY,
+  SCHEMA_FILE_NAME,
+  DIFF_FILE_NAME,
+  MIGRATE_FILE_NAME,
+  DB_TYPES_FILE_NAME,
+  INITIAL_SCHEMA_NUMBER,
+  getMigrationDirPath,
+  getMigrationFilePath,
+  getNamespacesWithMigrations,
+  type SchemaSnapshot,
+  type MigrationDiff,
+  type SnapshotType,
+  type SnapshotFieldConfig,
+  type BreakingChangeInfo,
+  type NamespaceWithMigrations,
+  type MigrationInfo,
+} from "./tailordb/migrate/types";

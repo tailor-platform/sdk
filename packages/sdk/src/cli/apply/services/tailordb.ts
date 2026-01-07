@@ -45,10 +45,25 @@ import {
   type ParsedTailorDBType,
 } from "@/parser/service/tailordb/types";
 import { fetchAll, type OperatorClient } from "../../client";
+import {
+  hasChanges,
+  formatMigrationDiff,
+  formatDiffSummary,
+} from "../../tailordb/migrate/diff-calculator";
+import {
+  reconstructSnapshotFromMigrations,
+  compareLocalTypesWithSnapshot,
+} from "../../tailordb/migrate/snapshot";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "./label";
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type {
+  NamespaceWithMigrations,
+  MigrationDiff,
+  PendingMigration,
+  DiffChange,
+} from "../../tailordb/migrate/types";
 import type { Executor } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -57,14 +72,17 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * @param {OperatorClient} client - Operator client instance
  * @param {Awaited<ReturnType<typeof planTailorDB>>} result - Planned TailorDB changes
  * @param {Exclude<ApplyPhase, "delete">} [phase] - Apply phase (defaults to "create-update")
+ * @param {PendingMigration[]} [pendingMigrations] - Pending migrations for 2-stage updates
  * @returns {Promise<void>} Promise that resolves when TailorDB changes are applied
  */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
   phase: Exclude<ApplyPhase, "delete"> = "create-update",
+  pendingMigrations: PendingMigration[] = [],
 ) {
   const { changeSet } = result;
+
   if (phase === "create-update") {
     // Services
     await Promise.all([
@@ -90,6 +108,58 @@ export async function applyTailorDB(
         client.updateTailorDBGQLPermission(update.request),
       ),
     ]);
+  } else if (phase === "pre-migration") {
+    // Pre-migration phase: Create/update types with breaking fields as optional
+    // NO deletions in this phase
+
+    // Services - same as create-update
+    await Promise.all([
+      ...changeSet.service.creates.map(async (create) => {
+        await client.createTailorDBService(create.request);
+        await client.setMetadata(create.metaRequest);
+      }),
+      ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
+    ]);
+
+    // Build breaking changes map from pending migrations
+    const breakingChanges = buildBreakingChangesMap(pendingMigrations);
+
+    // Types - modify manifests to make breaking fields optional
+    await Promise.all([
+      ...changeSet.type.creates.map((create) => {
+        const modified = modifyManifestForPreMigration(create.request, breakingChanges);
+        return client.createTailorDBType(modified);
+      }),
+      ...changeSet.type.updates.map((update) => {
+        const modified = modifyManifestForPreMigration(update.request, breakingChanges);
+        return client.updateTailorDBType(modified);
+      }),
+    ]);
+
+    // GQLPermissions - same as create-update
+    await Promise.all([
+      ...changeSet.gqlPermission.creates.map((create) =>
+        client.createTailorDBGQLPermission(create.request),
+      ),
+      ...changeSet.gqlPermission.updates.map((update) =>
+        client.updateTailorDBGQLPermission(update.request),
+      ),
+    ]);
+  } else if (phase === "post-migration") {
+    // Post-migration phase: Apply full changes and deletions
+
+    // Types - apply final manifest (with required: true)
+    await Promise.all([
+      ...changeSet.type.updates.map((update) => client.updateTailorDBType(update.request)),
+    ]);
+
+    // GQLPermissions deletions
+    await Promise.all(
+      changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
+    );
+
+    // Type deletions
+    await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
   } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // GQLPermissions
@@ -105,6 +175,166 @@ export async function applyTailorDB(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
     );
   }
+}
+
+// ============================================================================
+// Pre-Migration Support
+// ============================================================================
+
+/**
+ * Map of breaking changes: typeName -> fieldName -> change kind
+ */
+type BreakingChangesMap = Map<string, Map<string, DiffChange>>;
+
+/**
+ * Build a map of breaking field changes from pending migrations
+ * @param {PendingMigration[]} pendingMigrations - Pending migrations
+ * @returns {BreakingChangesMap} Map of breaking changes
+ */
+function buildBreakingChangesMap(pendingMigrations: PendingMigration[]): BreakingChangesMap {
+  const map: BreakingChangesMap = new Map();
+
+  for (const migration of pendingMigrations) {
+    for (const change of migration.diff.changes) {
+      // We care about field changes that affect required status
+      if (
+        change.kind === "field_added" ||
+        change.kind === "field_modified" ||
+        change.kind === "field_removed"
+      ) {
+        if (!change.fieldName) continue;
+
+        if (!map.has(change.typeName)) {
+          map.set(change.typeName, new Map());
+        }
+        map.get(change.typeName)!.set(change.fieldName, change);
+      }
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Field config type for breaking change detection
+ */
+interface FieldConfig {
+  required?: boolean;
+  unique?: boolean;
+  allowedValues?: string[];
+}
+
+/**
+ * Check if a field change requires pre/post-migration handling
+ * - Adding a required field (pre: add as optional, post: make required)
+ * - Changing optional to required (post: make required)
+ * - Adding unique constraint (post: add unique)
+ * - Removing enum values (pre: add new values only, post: remove old values)
+ * @param {DiffChange} change - Diff change to check
+ * @returns {boolean} True if the change requires pre/post-migration handling
+ */
+function isBreakingChange(change: DiffChange): boolean {
+  const before = change.before as FieldConfig | undefined;
+  const after = change.after as FieldConfig | undefined;
+
+  if (change.kind === "field_added") {
+    return after?.required === true;
+  }
+
+  if (change.kind !== "field_modified") {
+    return false;
+  }
+
+  // Optional to required
+  if (!before?.required && after?.required) {
+    return true;
+  }
+
+  // Unique constraint added
+  if (!(before?.unique ?? false) && (after?.unique ?? false)) {
+    return true;
+  }
+
+  // Enum values removed
+  if (before?.allowedValues && after?.allowedValues) {
+    return before.allowedValues.some((v) => !after.allowedValues!.includes(v));
+  }
+
+  return false;
+}
+
+/**
+ * Type request with TailorDB type manifest
+ */
+type TypeRequestWithManifest = {
+  tailordbType?: MessageInitShape<typeof TailorDBTypeSchema>;
+  [key: string]: unknown;
+};
+
+/**
+ * Modify a type manifest for pre-migration phase
+ * - Makes breaking required fields optional
+ * - Keeps unique=false for fields with new unique constraint
+ * - Keeps old allowedValues + adds new ones (no deletion)
+ * @param {T} request - Type request with manifest
+ * @param {BreakingChangesMap} breakingChanges - Map of breaking changes
+ * @returns {T} Modified request with pre-migration safe values
+ */
+function modifyManifestForPreMigration<T extends TypeRequestWithManifest>(
+  request: T,
+  breakingChanges: BreakingChangesMap,
+): T {
+  const typeName = request.tailordbType?.name;
+  if (!typeName) return request;
+
+  const typeChanges = breakingChanges.get(typeName);
+  if (!typeChanges || typeChanges.size === 0) return request;
+
+  // Deep clone the request to avoid modifying the original
+  const modifiedRequest = structuredClone(request);
+
+  if (!modifiedRequest.tailordbType?.schema?.fields) return modifiedRequest;
+
+  const fields = modifiedRequest.tailordbType.schema.fields;
+  for (const [fieldName, change] of typeChanges) {
+    if (!isBreakingChange(change) || !fields[fieldName]) continue;
+
+    const before = change.before as FieldConfig | undefined;
+    const after = change.after as FieldConfig | undefined;
+
+    // Required field added: make optional for pre-migration
+    if (change.kind === "field_added" && after?.required) {
+      fields[fieldName].required = false;
+    }
+
+    // Optional to required: keep optional for pre-migration (no action needed, field already exists)
+    // The required=true will be applied in post-migration
+
+    // Unique constraint added: keep unique=false for pre-migration
+    if (
+      change.kind === "field_modified" &&
+      !(before?.unique ?? false) &&
+      (after?.unique ?? false)
+    ) {
+      fields[fieldName].unique = false;
+    }
+
+    // Enum values removed: keep old values + add new values (union)
+    if (change.kind === "field_modified" && before?.allowedValues && after?.allowedValues) {
+      const removedValues = before.allowedValues.filter((v) => !after.allowedValues!.includes(v));
+      if (removedValues.length > 0) {
+        // Union of old and new allowedValues
+        const unionValues = [...new Set([...before.allowedValues, ...after.allowedValues])];
+        // Convert string[] to TailorDBType_Value[] format
+        fields[fieldName].allowedValues = unionValues.map((v) => ({
+          value: v,
+          description: "",
+        }));
+      }
+    }
+  }
+
+  return modifiedRequest;
 }
 
 /**
@@ -384,6 +614,12 @@ async function planTypes(
 
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
 // This will need refactoring later.
+/**
+ * Generate a TailorDB type manifest from parsed type
+ * @param {ParsedTailorDBType} type - Parsed TailorDB type
+ * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
+ * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
+ */
 function generateTailorDBTypeManifest(
   type: ParsedTailorDBType,
   executorUsedTypes: ReadonlySet<string>,
@@ -916,4 +1152,103 @@ function protoGqlOperand(
       value: fromJson(ValueSchema, operand),
     },
   };
+}
+
+// ============================================================================
+// Migration Integration
+// ============================================================================
+
+export interface MigrationCheckResult {
+  namespace: string;
+  migrationsDir: string;
+  hasDiff: boolean;
+  diff?: MigrationDiff;
+}
+
+/**
+ * Check if there are schema differences between migration snapshots and local definitions
+ * @param {TailorDBService[]} tailordbServices - TailorDB services to check
+ * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
+ * @returns {Promise<MigrationCheckResult[]>} Results for each namespace
+ */
+export async function checkMigrationDiffs(
+  tailordbServices: readonly TailorDBService[],
+  namespacesWithMigrations: NamespaceWithMigrations[],
+): Promise<MigrationCheckResult[]> {
+  const results: MigrationCheckResult[] = [];
+
+  for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+    const tailordbService = tailordbServices.find((s) => s.namespace === namespace);
+    if (!tailordbService) {
+      continue;
+    }
+
+    // Try to reconstruct snapshot from migrations
+    let previousSnapshot;
+    try {
+      previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir);
+    } catch {
+      // No migrations directory - this is fine, no check needed
+      results.push({
+        namespace,
+        migrationsDir,
+        hasDiff: false,
+      });
+      continue;
+    }
+
+    if (!previousSnapshot) {
+      // No snapshots yet - user should run migrate generate first
+      results.push({
+        namespace,
+        migrationsDir,
+        hasDiff: true,
+        diff: undefined, // Indicates no snapshot exists
+      });
+      continue;
+    }
+
+    // Compare with local types
+    const localTypes = tailordbService.getTypes();
+    const diff = compareLocalTypesWithSnapshot(previousSnapshot, localTypes, namespace);
+
+    results.push({
+      namespace,
+      migrationsDir,
+      hasDiff: hasChanges(diff),
+      diff: hasChanges(diff) ? diff : undefined,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Format migration check results for display
+ * @param {MigrationCheckResult[]} results - Migration check results
+ * @returns {string} Formatted results string
+ */
+export function formatMigrationCheckResults(results: MigrationCheckResult[]): string {
+  const lines: string[] = [];
+
+  for (const result of results) {
+    if (!result.hasDiff) {
+      continue;
+    }
+
+    lines.push(`Namespace: ${result.namespace}`);
+
+    if (!result.diff) {
+      lines.push(
+        "  No migration snapshot found. Run 'tailor-sdk tailordb migrate generate' first.",
+      );
+    } else {
+      lines.push(`  ${formatDiffSummary(result.diff)}`);
+      lines.push("");
+      lines.push(formatMigrationDiff(result.diff));
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
