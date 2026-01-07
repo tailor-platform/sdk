@@ -111,6 +111,7 @@ function findWorkflowDefaultExport(program: Program): { start: number; end: numb
  * @param {string} [targetJobExportName] - The export name of the target job (optional, for enhanced detection)
  * @param {string[]} [otherJobExportNames] - Export names of other jobs to remove (optional, for enhanced detection)
  * @param {Map<string, string>} [allJobsMap] - Map from export name to job name for trigger transformation (optional)
+ * @returns {string} Transformed workflow source code
  */
 export function transformWorkflowSource(
   source: string,

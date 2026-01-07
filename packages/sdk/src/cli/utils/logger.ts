@@ -287,6 +287,7 @@ export const logger = {
    * @param {string} message - Prompt message
    * @param {T} [options] - Prompt options
    * @throws {CIPromptError} When called in a CI environment
+   * @returns {unknown} Prompt result
    */
   prompt<T extends PromptOptions>(
     message: string,

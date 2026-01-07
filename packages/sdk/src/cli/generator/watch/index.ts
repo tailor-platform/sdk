@@ -227,6 +227,7 @@ export class DependencyGraphManager {
 
   /**
    * Detect circular dependencies.
+   * @returns {string[][]} List of circular dependency cycles
    */
   findCircularDependencies(): string[][] {
     if (!this.madgeInstance) return [];
@@ -281,6 +282,7 @@ export class DependencyGraphManager {
 
   /**
    * Get graph statistics.
+   * @returns {GraphStats} Current dependency graph statistics
    */
   getGraphStats(): GraphStats {
     let edgeCount = 0;
@@ -526,6 +528,7 @@ class DependencyWatcher {
   /**
    * Compute the impact scope of a specific file.
    * @param {string} filePath - File path to analyze
+   * @returns {ImpactAnalysisResult} Impact analysis result for the file
    */
   calculateImpact(filePath: string): ImpactAnalysisResult {
     const cacheKey = `impact:${filePath}`;
@@ -549,6 +552,7 @@ class DependencyWatcher {
 
   /**
    * Detect circular dependencies.
+   * @returns {string[][]} List of circular dependency cycles
    */
   detectCircularDependencies(): string[][] {
     return this.dependencyGraphManager.findCircularDependencies();
@@ -556,6 +560,7 @@ class DependencyWatcher {
 
   /**
    * Retrieve the current watcher status.
+   * @returns {WatchStatus} Snapshot of the current watcher status
    */
   getWatchStatus(): WatchStatus {
     let fileCount = 0;
@@ -709,6 +714,7 @@ class DependencyWatcher {
 
   /**
    * Register signal handlers.
+   * @returns {void}
    */
   private setupSignalHandlers(): void {
     if (this.signalHandlersRegistered) return;
@@ -731,6 +737,7 @@ class DependencyWatcher {
 
   /**
    * Remove signal handlers.
+   * @returns {void}
    */
   private removeSignalHandlers(): void {
     if (!this.signalHandlersRegistered) return;
