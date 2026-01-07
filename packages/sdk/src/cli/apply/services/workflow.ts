@@ -10,6 +10,13 @@ import type { Workflow } from "@/parser/service/workflow";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
+/**
+ * Apply workflow changes for the given phase.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {Awaited<ReturnType<typeof planWorkflow>>} result - Planned workflow changes
+ * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase="create-update"] - Apply phase
+ * @returns {Promise<void>} Promise that resolves when workflows are applied
+ */
 export async function applyWorkflow(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planWorkflow>>,
@@ -214,6 +221,15 @@ function jobFunctionTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:workflow_job_function:${name}`;
 }
 
+/**
+ * Plan workflow changes and job functions based on current and desired state.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {string} workspaceId - Workspace ID
+ * @param {string} appName - Application name
+ * @param {Record<string, Workflow>} workflows - Parsed workflows
+ * @param {Record<string, string[]>} mainJobDeps - Main job dependencies by workflow
+ * @returns {Promise<unknown>} Planned workflow changes
+ */
 export async function planWorkflow(
   client: OperatorClient,
   workspaceId: string,

@@ -18,6 +18,10 @@ export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.t
 const oauth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
 
+/**
+ * Initialize an OAuth2 client for Tailor Platform.
+ * @returns {OAuth2Client} Configured OAuth2 client
+ */
 export function initOAuth2Client() {
   return new OAuth2Client({
     clientId: oauth2ClientId,
@@ -28,6 +32,11 @@ export function initOAuth2Client() {
 
 export type OperatorClient = Client<typeof OperatorService>;
 
+/**
+ * Initialize an Operator client with the given access token.
+ * @param {string} accessToken - Access token for authentication
+ * @returns {Promise<OperatorClient>} Configured Operator client
+ */
 export async function initOperatorClient(accessToken: string) {
   const transport = createConnectTransport({
     httpVersion: "2",
@@ -42,6 +51,10 @@ export async function initOperatorClient(accessToken: string) {
   return createClient(OperatorService, transport);
 }
 
+/**
+ * Create an interceptor that sets a User-Agent header.
+ * @returns {Promise<Interceptor>} User-Agent interceptor
+ */
 async function userAgentInterceptor(): Promise<Interceptor> {
   const ua = await userAgent();
   return (next) => async (req) => {
@@ -50,11 +63,20 @@ async function userAgentInterceptor(): Promise<Interceptor> {
   };
 }
 
+/**
+ * Build the User-Agent string for CLI requests.
+ * @returns {Promise<string>} User-Agent header value
+ */
 export async function userAgent() {
   const packageJson = await readPackageJson();
   return `tailor-sdk/${packageJson.version ?? "unknown"}`;
 }
 
+/**
+ * Create an interceptor that sets the Authorization bearer token.
+ * @param {string} accessToken - Access token to use
+ * @returns {Promise<Interceptor>} Bearer token interceptor
+ */
 async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor> {
   return (next) => async (req) => {
     req.header.set("Authorization", `Bearer ${accessToken}`);
@@ -62,6 +84,10 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
   };
 }
 
+/**
+ * Create an interceptor that retries idempotent requests with backoff.
+ * @returns {Interceptor} Retry interceptor
+ */
 function retryInterceptor(): Interceptor {
   return (next) => async (req) => {
     if (req.stream) {
@@ -88,6 +114,11 @@ function retryInterceptor(): Interceptor {
   };
 }
 
+/**
+ * Wait for an exponential backoff delay with jitter.
+ * @param {number} attempt - Current retry attempt number (1-based)
+ * @returns {Promise<void>} Promise that resolves after the delay
+ */
 function waitRetryBackoff(attempt: number) {
   const base = 50 * 2 ** (attempt - 1);
   const jitter = 0.1 * (Math.random() * 2 - 1);
@@ -95,6 +126,12 @@ function waitRetryBackoff(attempt: number) {
   return new Promise((resolve) => setTimeout(resolve, backoff));
 }
 
+/**
+ * Determine whether the given error is retriable for the method idempotency.
+ * @param {unknown} error - Error thrown by the request
+ * @param {MethodOptions_IdempotencyLevel} idempotency - Method idempotency level
+ * @returns {boolean} True if the error should be retried
+ */
 function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel) {
   if (!(error instanceof ConnectError)) {
     return false;
@@ -113,6 +150,10 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
   }
 }
 
+/**
+ * Create an interceptor that enhances error messages from the Operator API.
+ * @returns {Interceptor} Error handling interceptor
+ */
 function errorHandlingInterceptor(): Interceptor {
   return (next) => async (req) => {
     try {
@@ -165,6 +206,12 @@ export function formatRequestParams(message: unknown): string {
   }
 }
 
+/**
+ * Fetch all paginated resources by repeatedly calling the given function.
+ * @template T
+ * @param {(pageToken: string) => Promise<[T[], string]>} fn - Page fetcher returning items and next page token
+ * @returns {Promise<T[]>} All fetched items
+ */
 export async function fetchAll<T>(fn: (pageToken: string) => Promise<[T[], string]>) {
   const items: T[] = [];
   let pageToken = "";
@@ -178,6 +225,11 @@ export async function fetchAll<T>(fn: (pageToken: string) => Promise<[T[], strin
   return items;
 }
 
+/**
+ * Fetch user info from the Tailor Platform userinfo endpoint.
+ * @param {string} accessToken - Access token for the current user
+ * @returns {Promise<{ email: string }>} Parsed user info
+ */
 export async function fetchUserInfo(accessToken: string) {
   const userInfoUrl = new URL("/auth/platform/userinfo", platformBaseUrl).href;
   const resp = await fetch(userInfoUrl, {
@@ -198,6 +250,14 @@ export async function fetchUserInfo(accessToken: string) {
 }
 
 // Converting "name:url" patterns to actual Static Website URLs
+/**
+ * Resolve "name:url" patterns to actual Static Website URLs.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {string} workspaceId - Workspace ID
+ * @param {string[] | undefined} urls - URLs or name:url patterns
+ * @param {string} context - Logging context (e.g., "CORS", "OAuth2 redirect URIs")
+ * @returns {Promise<string[]>} Resolved URLs
+ */
 export async function resolveStaticWebsiteUrls(
   client: OperatorClient,
   workspaceId: string,
@@ -245,6 +305,13 @@ export async function resolveStaticWebsiteUrls(
   return results.flat();
 }
 
+/**
+ * Fetch an OAuth2 access token for a machine user.
+ * @param {string} url - OAuth2 server base URL
+ * @param {string} clientId - Client ID for the machine user
+ * @param {string} clientSecret - Client secret for the machine user
+ * @returns {Promise<string>} Access token
+ */
 export async function fetchMachineUserToken(url: string, clientId: string, clientSecret: string) {
   const tokenEndpoint = new URL("/oauth2/token", url).href;
   const formData = new URLSearchParams();

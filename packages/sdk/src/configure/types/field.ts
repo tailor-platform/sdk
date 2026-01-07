@@ -4,6 +4,11 @@ export type AllowedValue = EnumValue;
 
 export type AllowedValues = [string | EnumValue, ...(string | EnumValue)[]];
 
+/**
+ * Normalize allowed values into EnumValue objects with descriptions.
+ * @param {AllowedValues} values - Allowed values as strings or EnumValue objects
+ * @returns {AllowedValue[]} Normalized allowed values
+ */
 export function mapAllowedValues(values: AllowedValues): AllowedValue[] {
   return values.map((value) => {
     if (typeof value === "string") {

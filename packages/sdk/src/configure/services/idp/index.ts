@@ -4,6 +4,13 @@ import type { IdPInput } from "@/parser/service/idp/types";
 declare const idpDefinitionBrand: unique symbol;
 type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };
 
+/**
+ * Define an IdP service configuration for the Tailor SDK.
+ * @template TClients
+ * @param {string} name - IdP service name
+ * @param {Omit<IdPInput, "name" | "clients"> & { clients: TClients }} config - IdP configuration
+ * @returns {IdpDefinitionBrand & IdPInput} Defined IdP service
+ */
 export function defineIdp<const TClients extends string[]>(
   name: string,
   config: Omit<IdPInput, "name" | "clients"> & { clients: TClients },

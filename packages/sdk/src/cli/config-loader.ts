@@ -31,6 +31,11 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
 
 export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
 
+/**
+ * Load Tailor configuration file and associated generators.
+ * @param {string} [configPath] - Optional explicit config path
+ * @returns {Promise<{ config: AppConfig; generators: Generator[]; configPath: string }>} Loaded config and generators
+ */
 export async function loadConfig(
   configPath?: string,
 ): Promise<{ config: AppConfig; generators: Generator[]; configPath: string }> {

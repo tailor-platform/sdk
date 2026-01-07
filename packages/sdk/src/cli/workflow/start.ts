@@ -64,6 +64,11 @@ export interface WaitForExecutionOptions {
   trackJobs?: boolean;
 }
 
+/**
+ * Wait for a workflow execution to reach a terminal state, optionally showing progress.
+ * @param {WaitForExecutionOptions} options - Wait options
+ * @returns {Promise<WorkflowExecutionInfo>} Final workflow execution info
+ */
 export async function waitForExecution(
   options: WaitForExecutionOptions,
 ): Promise<WorkflowExecutionInfo> {
@@ -161,6 +166,11 @@ export interface StartWorkflowResultWithWait {
   wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
 }
 
+/**
+ * Start a workflow and return a handle to wait for completion.
+ * @param {StartWorkflowOptions} options - Start options
+ * @returns {Promise<StartWorkflowResultWithWait>} Start result with wait helper
+ */
 export async function startWorkflow(
   options: StartWorkflowOptions,
 ): Promise<StartWorkflowResultWithWait> {
