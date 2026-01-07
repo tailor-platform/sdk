@@ -303,10 +303,17 @@ describe("TailorDBField RelationConfig option field tests", () => {
   });
 
   it("specifying non-existent field name for toward.key causes type error", () => {
-    // @ts-expect-error 'nonExisting' does not exist on type 'Customer'
+    // @ts-ignore 'nonExisting' does not exist on type 'Customer'
+    // NOTE: This is required for tsc/tsgo compatibility.
+    // tsc and tsgo (TypeScript v7) report the same type error on different nodes.
+    // Because tsgo does not report an error on this specific line,
+    // using @ts-expect-error would fail under tsgo.
+    // Therefore, @ts-ignore is used to suppress the error in both cases.
     db.uuid().relation({
       type: "oneToOne",
       toward: {
+        // @ts-ignore Suppress tsgo error for tsc/tsgo compatibility.
+        // tsgo (TypeScript v7) reports an error here, while tsc reports it elsewhere.
         type: Customer,
         key: "nonExisting",
       },
