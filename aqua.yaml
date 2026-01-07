@@ -11,4 +11,4 @@ registries:
 packages:
   - name: rhysd/actionlint@v1.7.10
   - name: suzuki-shunsuke/ghalint@v1.5.4
-  - name: bufbuild/buf@v1.62.1
+  - name: bufbuild/buf@v1.63.0
