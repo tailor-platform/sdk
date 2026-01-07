@@ -72,7 +72,6 @@ function extractAuthInvokerInfo(
 /**
  * Detect .trigger() calls for known workflows and jobs
  * Only detects calls where the identifier is in workflowNames or jobNames
- *
  * @param {Program} program - The parsed AST program
  * @param {string} sourceText - The source code text
  * @param {Set<string>} workflowNames - Set of known workflow identifier names
@@ -177,7 +176,6 @@ function detectExtendedTriggerCalls(
 /**
  * Transform trigger calls for resolver/executor/workflow functions
  * Handles both job.trigger() and workflow.trigger() calls
- *
  * @param {string} source - The source code to transform
  * @param {Map<string, string>} workflowNameMap - Map from variable name to workflow name
  * @param {Map<string, string>} jobNameMap - Map from variable name to job name

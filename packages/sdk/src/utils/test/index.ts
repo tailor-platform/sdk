@@ -17,7 +17,6 @@ export const unauthenticatedTailorUser = {
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
- *
  * @template T - The output type of the hook function
  * @param {TailorDBType<unknown, unknown>} type - TailorDB type definition
  * @returns {(data: unknown) => Partial<output<T>>} A function that transforms input data according to field hooks
@@ -61,7 +60,6 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
 /**
  * Creates the standard schema definition for lines-db
  * This returns the first argument for defineSchema with the ~standard section
- *
  * @template T - The output type after validation
  * @param {TailorField<unknown, T>} schemaType - TailorDB field schema for validation
  * @param {(data: unknown) => Partial<T>} hook - Hook function to transform data before validation
