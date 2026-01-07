@@ -1,4 +1,3 @@
-import { clone } from "es-toolkit";
 import { type AllowedValues, type AllowedValuesOutput } from "@/configure/types/field";
 import { TailorField } from "@/configure/types/type";
 import {
@@ -7,7 +6,12 @@ import {
   type TailorFieldType,
   type TailorToTs,
 } from "@/configure/types/types";
-import { type TailorDBTypeMetadata, type RawPermissions } from "@/parser/service/tailordb/types";
+import {
+  type TailorDBTypeMetadata,
+  type RawPermissions,
+  type RawRelationConfig,
+  type RelationType,
+} from "@/parser/service/tailordb/types";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
   type DBFieldMetadata,
@@ -22,8 +26,6 @@ import {
 import type { InferredAttributeMap } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
-
-type RelationType = "oneToOne" | "1-1" | "manyToOne" | "n-1" | "N-1" | "keyOnly";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -46,23 +48,10 @@ type RelationSelfConfig = {
   backward?: string;
 };
 
-interface PendingSelfRelation {
-  type: RelationType;
-  as?: string;
-  key: string;
-  backward: string;
-}
-
 function isRelationSelfConfig(
   config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
 ): config is RelationSelfConfig {
   return config.toward.type === "self";
-}
-
-interface ReferenceConfig<T extends TailorAnyDBType> {
-  type: TailorAnyDBType;
-  key: keyof T["fields"] & string;
-  nameMap: [string | undefined, string];
 }
 
 // Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
@@ -73,11 +62,12 @@ export class TailorDBField<
   const Defined extends DefinedDBFieldMetadata,
   const Output,
 > extends TailorField<Defined, Output, DBFieldMetadata> {
-  private _ref: ReferenceConfig<TailorDBType> | undefined = undefined;
-  private _pendingSelfRelation: PendingSelfRelation | undefined = undefined;
+  private _rawRelation: RawRelationConfig | undefined = undefined;
 
-  get reference(): Readonly<ReferenceConfig<TailorDBType>> | undefined {
-    return clone(this._ref);
+  get rawRelation(): Readonly<RawRelationConfig> | undefined {
+    return this._rawRelation
+      ? { ...this._rawRelation, toward: { ...this._rawRelation.toward } }
+      : undefined;
   }
 
   get metadata() {
@@ -152,40 +142,17 @@ export class TailorDBField<
       : TailorDBField<CurrentDefined, Output>,
     config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
   ): TailorDBField<DefinedDBFieldMetadata, Output> {
-    // Index and unique are not supported on array fields
-    if (!this._metadata.array) {
-      this._metadata.index = true;
-      this._metadata.unique = ["oneToOne", "1-1"].includes(config.type);
-    }
-    this._metadata.foreignKey = true;
-
-    const key = config.toward.key ?? "id";
-    const backward = config.backward ?? "";
-
-    if (isRelationSelfConfig(config)) {
-      // Defer resolving the self reference until the type is constructed
-      this._pendingSelfRelation = {
-        type: config.type,
+    // Store raw relation config - all processing happens in parser layer
+    const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
+    this._rawRelation = {
+      type: config.type,
+      toward: {
+        type: targetType,
         as: config.toward.as,
-        key,
-        backward,
-      };
-      return this;
-    }
-
-    this._metadata.foreignKeyType = config.toward.type.name;
-    this._metadata.foreignKeyField = key;
-    if (config.type === "keyOnly") {
-      return this;
-    }
-
-    const forward = config.toward.as;
-    this._ref = {
-      type: config.toward.type,
-      nameMap: [forward, backward],
-      key,
+        key: config.toward.key,
+      },
+      backward: config.backward,
     };
-    this._metadata.relation = true;
     return this;
   }
 
@@ -319,11 +286,11 @@ export class TailorDBField<
     }
 
     // Copy internal state
-    if (this._ref) {
-      clonedField._ref = clone(this._ref);
-    }
-    if (this._pendingSelfRelation) {
-      clonedField._pendingSelfRelation = { ...this._pendingSelfRelation };
+    if (this._rawRelation) {
+      clonedField._rawRelation = {
+        ...this._rawRelation,
+        toward: { ...this._rawRelation.toward },
+      };
     }
 
     return clonedField as TailorAnyDBField;
@@ -413,31 +380,6 @@ export class TailorDBType<
       }
       this._settings.pluralForm = options.pluralForm;
     }
-
-    // Resolve any pending self-references now that the type is constructed
-    Object.entries(this.fields).forEach(([fieldName, field]) => {
-      const f = field as unknown as {
-        _pendingSelfRelation: PendingSelfRelation | undefined;
-        _metadata: DBFieldMetadata;
-        _ref: ReferenceConfig<TailorAnyDBType>;
-      };
-      const pending = f._pendingSelfRelation;
-      if (pending) {
-        f._metadata.foreignKeyType = this.name;
-        f._metadata.foreignKeyField = pending.key;
-        if (pending.type === "keyOnly") {
-          return this;
-        }
-
-        const forward = pending.as ?? fieldName.replace(/(ID|Id|id)$/u, "");
-        // Type conversion for manipulating private _ref.
-        f._ref = {
-          type: this,
-          nameMap: [forward, pending.backward],
-          key: pending.key,
-        };
-      }
-    });
   }
 
   get metadata(): TailorDBTypeMetadata {

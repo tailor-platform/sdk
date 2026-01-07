@@ -232,13 +232,14 @@ describe("TailorDBField RelationConfig option field tests", () => {
       },
     });
 
-    expect(userField.reference!.nameMap[0]).toBeUndefined();
-    expect(userField.reference!.nameMap[1]).toEqual("");
-    expect(userField.metadata.foreignKeyType).toEqual("User");
-    expect(userField.metadata.foreignKeyField).toEqual("id");
+    // Raw relation config is stored, processing happens in parser layer
+    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.as).toBeUndefined();
+    expect(userField.rawRelation!.toward.key).toEqual("id");
+    expect(userField.rawRelation!.backward).toBeUndefined();
   });
 
-  it('when toward.key is omitted, "id" is used by default', () => {
+  it('when toward.key is omitted, undefined is stored (default "id" is computed in parser layer)', () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
@@ -247,9 +248,10 @@ describe("TailorDBField RelationConfig option field tests", () => {
       },
     });
 
-    expect(userField.reference!.key).toEqual("id");
-    expect(userField.metadata.foreignKeyType).toEqual("User");
-    expect(userField.metadata.foreignKeyField).toEqual("id");
+    // Raw relation config is stored, processing happens in parser layer
+    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.as).toEqual("owner");
+    expect(userField.rawRelation!.toward.key).toBeUndefined();
   });
 
   it("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
@@ -263,11 +265,11 @@ describe("TailorDBField RelationConfig option field tests", () => {
       backward: "subordinates",
     });
 
-    expect(managerField.reference!.nameMap[0]).toEqual("manager");
-    expect(managerField.reference!.key).toEqual("email");
-    expect(managerField.reference!.nameMap[1]).toEqual("subordinates");
-    expect(managerField.metadata.foreignKeyType).toEqual("User");
-    expect(managerField.metadata.foreignKeyField).toEqual("email");
+    // Raw relation config is stored
+    expect(managerField.rawRelation!.toward.type).toEqual("User");
+    expect(managerField.rawRelation!.toward.as).toEqual("manager");
+    expect(managerField.rawRelation!.toward.key).toEqual("email");
+    expect(managerField.rawRelation!.backward).toEqual("subordinates");
   });
 
   it("behavior when only toward.as is explicitly specified", () => {
@@ -279,11 +281,11 @@ describe("TailorDBField RelationConfig option field tests", () => {
       },
     });
 
-    expect(userField.reference!.nameMap[0]).toEqual("owner");
-    expect(userField.reference!.key).toEqual("id");
-    expect(userField.reference!.nameMap[1]).toEqual("");
-    expect(userField.metadata.foreignKeyType).toEqual("User");
-    expect(userField.metadata.foreignKeyField).toEqual("id");
+    // Raw relation config is stored
+    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.as).toEqual("owner");
+    expect(userField.rawRelation!.toward.key).toBeUndefined();
+    expect(userField.rawRelation!.backward).toBeUndefined();
   });
 
   it("behavior when only toward.key is explicitly specified", () => {
@@ -295,11 +297,11 @@ describe("TailorDBField RelationConfig option field tests", () => {
       },
     });
 
-    expect(customerField.reference!.nameMap[0]).toBeUndefined();
-    expect(customerField.reference!.key).toEqual("customerId");
-    expect(customerField.reference!.nameMap[1]).toEqual("");
-    expect(customerField.metadata.foreignKeyType).toEqual("Customer");
-    expect(customerField.metadata.foreignKeyField).toEqual("customerId");
+    // Raw relation config is stored
+    expect(customerField.rawRelation!.toward.type).toEqual("Customer");
+    expect(customerField.rawRelation!.toward.as).toBeUndefined();
+    expect(customerField.rawRelation!.toward.key).toEqual("customerId");
+    expect(customerField.rawRelation!.backward).toBeUndefined();
   });
 
   it("specifying non-existent field name for toward.key causes type error", () => {
@@ -329,11 +331,11 @@ describe("TailorDBField RelationConfig option field tests", () => {
       backward: "relatedItems",
     });
 
-    expect(userField.reference!.nameMap[0]).toBeUndefined();
-    expect(userField.reference!.key).toEqual("id");
-    expect(userField.reference!.nameMap[1]).toEqual("relatedItems");
-    expect(userField.metadata.foreignKeyType).toEqual("User");
-    expect(userField.metadata.foreignKeyField).toEqual("id");
+    // Raw relation config is stored
+    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.as).toBeUndefined();
+    expect(userField.rawRelation!.toward.key).toBeUndefined();
+    expect(userField.rawRelation!.backward).toEqual("relatedItems");
   });
 
   it("type inference verification for manyToOne relation", () => {
@@ -347,11 +349,11 @@ describe("TailorDBField RelationConfig option field tests", () => {
       backward: "posts",
     });
 
-    expect(userField.reference!.nameMap[0]).toEqual("author");
-    expect(userField.reference!.key).toEqual("email");
-    expect(userField.reference!.nameMap[1]).toEqual("posts");
-    expect(userField.metadata.foreignKeyType).toEqual("User");
-    expect(userField.metadata.foreignKeyField).toEqual("email");
+    // Raw relation config is stored
+    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.as).toEqual("author");
+    expect(userField.rawRelation!.toward.key).toEqual("email");
+    expect(userField.rawRelation!.backward).toEqual("posts");
   });
 });
 
@@ -726,7 +728,7 @@ describe("TailorDBType type consistency tests", () => {
 });
 
 describe("TailorDBType self relation tests", () => {
-  it("when toward.type is self, forward name is derived from field name/alias, backward name is resolved as specified", () => {
+  it("when toward.type is self, rawRelation stores the config (processing happens in parser layer)", () => {
     const TestType = db.type("TestType", {
       name: db.string(),
       parentID: db.uuid().relation({
@@ -745,28 +747,24 @@ describe("TailorDBType self relation tests", () => {
       }),
     });
 
-    // parentID: forward name is parent (default with ID suffix removed)
-    const parentRef = TestType.fields.parentID.reference!;
-    expect(parentRef.type.name).toBe("TestType");
-    expect(parentRef.nameMap[0]).toBe("parent");
-    expect(parentRef.key).toBe("id");
+    // Raw relation config is stored (reference was removed, only rawRelation exists)
+    const parentRaw = TestType.fields.parentID.rawRelation!;
+    expect(parentRaw.toward.type).toBe("self");
+    expect(parentRaw.type).toBe("n-1");
+    expect(parentRaw.backward).toBe("children");
 
-    // dependId: forward name is dependsOn as specified by 'as', unique is set because it's 1-1
-    const dependsRef = TestType.fields.dependId.reference!;
-    expect(dependsRef.type.name).toBe("TestType");
-    expect(dependsRef.nameMap[0]).toBe("dependsOn");
-    expect(TestType.fields.dependId.metadata.unique).toBe(true);
+    const dependRaw = TestType.fields.dependId.rawRelation!;
+    expect(dependRaw.toward.type).toBe("self");
+    expect(dependRaw.toward.as).toBe("dependsOn");
+    expect(dependRaw.type).toBe("1-1");
+    expect(dependRaw.backward).toBe("dependedBy");
 
-    // Foreign key metadata is set with its own type name
-    expect(TestType.fields.parentID.metadata.foreignKeyType).toBe("TestType");
-    expect(TestType.fields.parentID.metadata.foreignKeyField).toBe("id");
-    expect(TestType.fields.dependId.metadata.foreignKeyType).toBe("TestType");
-    expect(TestType.fields.dependId.metadata.foreignKeyField).toBe("id");
-    expect(TestType.fields.keyID.metadata.foreignKeyType).toBe("TestType");
-    expect(TestType.fields.keyID.metadata.foreignKeyField).toBe("id");
+    const keyRaw = TestType.fields.keyID.rawRelation!;
+    expect(keyRaw.toward.type).toBe("self");
+    expect(keyRaw.type).toBe("keyOnly");
   });
 
-  it("when backward is not specified, empty string is set in configure (forward for self relation is generated by removing ID suffix)", () => {
+  it("when backward is not specified, undefined is stored in rawRelation (inflection happens in parser layer)", () => {
     const A = db.type("Node", {
       // Many-to-one (non-unique): backward is plural (nodes)
       parentID: db.uuid().relation({ type: "n-1", toward: { type: "self" } }),
@@ -774,17 +772,11 @@ describe("TailorDBType self relation tests", () => {
       pairId: db.uuid().relation({ type: "1-1", toward: { type: "self" } }),
     });
 
-    // forward name for self-relations is derived from field name by stripping ID suffix
-    expect(A.fields.parentID.reference!.nameMap[0]).toBe("parent");
-    expect(A.fields.parentID.metadata.foreignKeyType).toBe("Node");
-    expect(A.fields.parentID.metadata.foreignKeyField).toBe("id");
-    expect(A.fields.pairId.reference!.nameMap[0]).toBe("pair");
-    expect(A.fields.pairId.metadata.foreignKeyType).toBe("Node");
-    expect(A.fields.pairId.metadata.foreignKeyField).toBe("id");
-
-    // backward is empty string when not specified (inflection for backward happens in parser)
-    expect(A.fields.parentID.reference!.nameMap[1]).toBe("");
-    expect(A.fields.pairId.reference!.nameMap[1]).toBe("");
+    // rawRelation stores the config, backward is undefined when not specified
+    expect(A.fields.parentID.rawRelation!.toward.type).toBe("self");
+    expect(A.fields.parentID.rawRelation!.backward).toBeUndefined();
+    expect(A.fields.pairId.rawRelation!.toward.type).toBe("self");
+    expect(A.fields.pairId.rawRelation!.backward).toBeUndefined();
   });
 });
 
