@@ -30,7 +30,7 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go"],
       "cache": false
     },
     "lint": {
