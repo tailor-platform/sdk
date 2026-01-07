@@ -19,8 +19,8 @@ export const unauthenticatedTailorUser = {
  * - Executes hooks.create for fields with create hooks
  *
  * @template T - The output type of the hook function
- * @param {TailorDBType<any, any>} type - TailorDB type definition
- * @returns A function that transforms input data according to field hooks
+ * @param {TailorDBType<unknown, unknown>} type - TailorDB type definition
+ * @returns {(data: unknown) => Partial<output<T>>} A function that transforms input data according to field hooks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
@@ -63,9 +63,9 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
  * This returns the first argument for defineSchema with the ~standard section
  *
  * @template T - The output type after validation
- * @param {TailorField<any, T>} schemaType - TailorDB field schema for validation
+ * @param {TailorField<unknown, T>} schemaType - TailorDB field schema for validation
  * @param {(data: unknown) => Partial<T>} hook - Hook function to transform data before validation
- * @returns Schema object with ~standard section for defineSchema
+ * @returns {{ "~standard": StandardSchemaV1<T>["~standard"] }} Schema object with ~standard section for defineSchema
  */
 export function createStandardSchema<T = Record<string, unknown>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

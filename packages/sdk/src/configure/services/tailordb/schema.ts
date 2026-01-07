@@ -270,7 +270,7 @@ export class TailorDBField<
   /**
    * Clone the field with optional overrides for field options
    * @param {FieldOptions} [options] - Optional field options to override
-   * @returns A new TailorDBField instance with the same configuration
+   * @returns {TailorDBField<unknown, unknown>} A new TailorDBField instance with the same configuration
    */
   clone<const NewOpt extends FieldOptions>(
     options?: NewOpt,
@@ -523,7 +523,7 @@ export class TailorDBType<
    * Pick specific fields from the type
    * @param {(keyof Fields)[]} keys - Array of field keys to pick
    * @param {FieldOptions} options - Optional field options to apply to picked fields
-   * @returns An object containing only the specified fields
+   * @returns {Record<string, TailorDBField<unknown, unknown>>} An object containing only the specified fields
    */
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options: Opt) {
     const result = {} as Record<K, TailorDBField<any, any>>;
@@ -548,8 +548,9 @@ export class TailorDBType<
 
   /**
    * Omit specific fields from the type
+   * @template K
    * @param {(keyof Fields)[]} keys - Array of field keys to omit
-   * @returns An object containing all fields except the specified ones
+   * @returns {Omit<Fields, K>} An object containing all fields except the specified ones
    */
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K> {
     const keysSet = new Set(keys);
@@ -577,8 +578,8 @@ type DBType<F extends { id?: never } & Record<string, TailorDBField<any, any>>> 
 /**
  * Creates a new database type with the specified fields
  * @param {string | [string, string]} name - The name of the type, or a tuple of [name, pluralForm]
- * @param {Record<string, TailorDBField<any, any>>} fields - The field definitions for the type
- * @returns A new TailorDBType instance
+ * @param {Record<string, TailorDBField<unknown, unknown>>} fields - The field definitions for the type
+ * @returns {DBType<F>} A new TailorDBType instance
  */
 function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
   name: string | [string, string],
@@ -588,8 +589,8 @@ function dbType<const F extends { id?: never } & Record<string, TailorDBField<an
  * Creates a new database type with the specified fields and description
  * @param {string | [string, string]} name - The name of the type, or a tuple of [name, pluralForm]
  * @param {string} description - A description of the type
- * @param {Record<string, TailorDBField<any, any>>} fields - The field definitions for the type
- * @returns A new TailorDBType instance
+ * @param {Record<string, TailorDBField<unknown, unknown>>} fields - The field definitions for the type
+ * @returns {DBType<F>} A new TailorDBType instance
  */
 function dbType<const F extends { id?: never } & Record<string, TailorDBField<any, any>>>(
   name: string | [string, string],
