@@ -15,6 +15,8 @@ export interface StaticWebsiteInfo {
 /**
  * List static websites in the workspace.
  * @param {{ workspaceId?: string; profile?: string }} [options] - Static website listing options
+ * @param {string} [options.workspaceId] - Workspace ID
+ * @param {string} [options.profile] - Workspace profile
  * @returns {Promise<StaticWebsiteInfo[]>} List of static websites
  */
 export async function listStaticWebsites(options?: {

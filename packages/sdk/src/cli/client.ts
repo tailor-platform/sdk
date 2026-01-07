@@ -178,6 +178,8 @@ function errorHandlingInterceptor(): Interceptor {
 
 /**
  * @internal
+ * @param {string} methodName - RPC method name (e.g., "CreateWorkspace")
+ * @returns {{ operation: string; resourceType: string }} Parsed operation and resource type
  */
 export function parseMethodName(methodName: string): {
   operation: string;
@@ -194,6 +196,8 @@ export function parseMethodName(methodName: string): {
 
 /**
  * @internal
+ * @param {unknown} message - Request message to format
+ * @returns {string} Pretty-printed JSON or error placeholder
  */
 export function formatRequestParams(message: unknown): string {
   try {

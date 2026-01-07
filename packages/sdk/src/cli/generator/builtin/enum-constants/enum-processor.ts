@@ -50,6 +50,8 @@ export class EnumProcessor {
 
   /**
    * Generate enum constant definitions from collected metadata.
+   * @param {EnumDefinition[]} allEnums - All collected enum definitions
+   * @returns {string} Generated enum constant definitions
    */
   static generateUnifiedEnumConstants(allEnums: EnumDefinition[]): string {
     if (allEnums.length === 0) {

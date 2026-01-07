@@ -37,6 +37,8 @@ async function createTempDir(): Promise<string> {
 
 /**
  * Create files for testing
+ * @param {string} filePath - Path of the file to create
+ * @param {string} content - File contents
  */
 async function createTestFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });

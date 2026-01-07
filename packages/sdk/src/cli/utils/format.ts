@@ -6,6 +6,9 @@ import type { TableUserConfig } from "table";
 /**
  * Formats a table with consistent single-line border style.
  * Use this instead of importing `table` directly.
+ * @param {unknown[][]} data - Table data
+ * @param {TableUserConfig} [config] - Table configuration
+ * @returns {string} Formatted table string
  */
 export function formatTable(data: unknown[][], config?: TableUserConfig): string {
   return table(data, {
@@ -16,6 +19,8 @@ export function formatTable(data: unknown[][], config?: TableUserConfig): string
 
 /**
  * Formats a key-value table with single-line border style.
+ * @param {[string, string][]} data - Key-value pairs
+ * @returns {string} Formatted key-value table string
  */
 export function formatKeyValueTable(data: [string, string][]): string {
   return formatTable(data, { singleLine: true });
@@ -24,6 +29,9 @@ export function formatKeyValueTable(data: [string, string][]): string {
 /**
  * Formats a table with headers, using single-line border style.
  * Draws horizontal lines only at top, after header, and bottom.
+ * @param {string[]} headers - Table header labels
+ * @param {string[][]} rows - Table rows
+ * @returns {string} Formatted table string with headers
  */
 export function formatTableWithHeaders(headers: string[], rows: string[][]): string {
   return formatTable([headers, ...rows], {

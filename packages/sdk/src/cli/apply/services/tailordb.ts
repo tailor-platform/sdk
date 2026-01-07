@@ -56,7 +56,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * Apply TailorDB-related changes for the given phase.
  * @param {OperatorClient} client - Operator client instance
  * @param {Awaited<ReturnType<typeof planTailorDB>>} result - Planned TailorDB changes
- * @param {Exclude<ApplyPhase, "delete">} [phase="create-update"] - Apply phase
+ * @param {Exclude<ApplyPhase, "delete">} [phase] - Apply phase (defaults to "create-update")
  * @returns {Promise<void>} Promise that resolves when TailorDB changes are applied
  */
 export async function applyTailorDB(

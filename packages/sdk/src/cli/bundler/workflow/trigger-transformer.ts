@@ -32,6 +32,9 @@ interface ExtendedTriggerCall {
 /**
  * Extract authInvoker info from a config object expression
  * Returns the authInvoker value text and whether it's a shorthand property
+ * @param {unknown} configArg - Config argument node
+ * @param {string} sourceText - Source code text
+ * @returns {AuthInvokerInfo | undefined} Extracted authInvoker info, if any
  */
 function extractAuthInvokerInfo(
   configArg: unknown,

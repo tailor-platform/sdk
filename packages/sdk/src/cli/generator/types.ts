@@ -265,7 +265,14 @@ export type FullCodeGenerator<
 // Runtime utility
 // ========================================
 
-/** Type guard to check if a generator has a specific dependency */
+/**
+ * Type guard to check if a generator has a specific dependency.
+ * @template D
+ * @param {{ dependencies: readonly DependencyKind[] }} generator - Code generator instance
+ * @param {readonly DependencyKind[]} generator.dependencies - Generator dependencies
+ * @param {D} dependency - Dependency kind to check
+ * @returns {boolean} True if the generator has the dependency
+ */
 export function hasDependency<D extends DependencyKind>(
   generator: { dependencies: readonly DependencyKind[] },
   dependency: D,

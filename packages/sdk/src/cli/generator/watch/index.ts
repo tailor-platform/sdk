@@ -132,6 +132,8 @@ export class DependencyGraphManager {
 
   /**
    * Build the dependency graph from the given files.
+   * @param {string[]} filePaths - File paths to analyze
+   * @returns {Promise<void>} Promise that resolves when the graph is built
    */
   async buildGraph(filePaths: string[]): Promise<void> {
     try {
@@ -205,6 +207,8 @@ export class DependencyGraphManager {
 
   /**
    * Get every file that depends on the specified file (all levels).
+   * @param {string} filePath - File path to inspect
+   * @returns {string[]} List of dependent files
    */
   getDependents(filePath: string): string[] {
     const visited = new Set<string>();
@@ -213,6 +217,8 @@ export class DependencyGraphManager {
 
   /**
    * Get every file the specified file depends on (all levels).
+   * @param {string} filePath - File path to inspect
+   * @returns {string[]} List of dependency files
    */
   getDependencies(filePath: string): string[] {
     const visited = new Set<string>();
@@ -234,6 +240,7 @@ export class DependencyGraphManager {
 
   /**
    * Add a node to the graph.
+   * @param {string} filePath - File path to add as a node
    */
   addNode(filePath: string): void {
     const absolutePath = path.resolve(filePath);
@@ -248,6 +255,7 @@ export class DependencyGraphManager {
 
   /**
    * Remove a node from the graph.
+   * @param {string} filePath - File path to remove from the graph
    */
   removeNode(filePath: string): void {
     const absolutePath = path.resolve(filePath);
@@ -400,6 +408,9 @@ class DependencyWatcher {
 
   /**
    * Add a watch group.
+   * @param {string} groupId - Group identifier
+   * @param {string[]} patterns - Glob patterns to watch
+   * @returns {Promise<void>} Promise that resolves when the group is added
    */
   async addWatchGroup(groupId: string, patterns: string[]): Promise<void> {
     this.validateWatchGroup(groupId, patterns);
@@ -436,6 +447,8 @@ class DependencyWatcher {
 
   /**
    * Remove a watch group.
+   * @param {string} groupId - Group identifier
+   * @returns {Promise<void>} Promise that resolves when the group is removed
    */
   async removeWatchGroup(groupId: string): Promise<void> {
     const watchGroup = this.watchGroups.get(groupId);
@@ -483,6 +496,8 @@ class DependencyWatcher {
 
   /**
    * Set the error handling callback.
+   * @param {ErrorCallback} callback - Error callback
+   * @returns {void}
    */
   onError(callback: ErrorCallback): void {
     this.errorCallback = callback;
@@ -510,6 +525,7 @@ class DependencyWatcher {
 
   /**
    * Compute the impact scope of a specific file.
+   * @param {string} filePath - File path to analyze
    */
   calculateImpact(filePath: string): ImpactAnalysisResult {
     const cacheKey = `impact:${filePath}`;
@@ -576,6 +592,7 @@ class DependencyWatcher {
 
   /**
    * Set the restart callback to be called when a file change is detected.
+   * @param {() => void} callback - Restart callback
    */
   setRestartCallback(callback: () => void): void {
     this.restartCallback = callback;
