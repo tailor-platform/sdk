@@ -27,13 +27,10 @@ export type OIDC = z.output<typeof OIDCSchema>;
 export type SAML = z.output<typeof SAMLSchema>;
 export type IDToken = z.output<typeof IDTokenSchema>;
 export type BuiltinIdP = z.output<typeof BuiltinIdPSchema>;
-export type IdProviderConfigInput = z.input<typeof IdProviderSchema>;
 export type IdProviderConfig = z.output<typeof IdProviderSchema>;
 export type OAuth2ClientGrantType = z.output<typeof OAuth2ClientGrantTypeSchema>;
 // OAuth2Client input type (before transform) for configure layer
 export type OAuth2ClientInput = z.input<typeof OAuth2ClientSchema>;
-// OAuth2Client output type (after transform) for parser/cli layers
-export type OAuth2Client = z.output<typeof OAuth2ClientSchema>;
 export type SCIMAuthorization = z.output<typeof SCIMAuthorizationSchema>;
 export type SCIMAttributeType = z.output<typeof SCIMAttributeTypeSchema>;
 export type SCIMAttribute = z.output<typeof SCIMAttributeSchema>;
