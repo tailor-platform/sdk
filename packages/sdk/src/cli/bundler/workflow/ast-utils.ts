@@ -169,32 +169,6 @@ export function findStatementEnd(source: string, position: number): number {
 }
 
 /**
- * Walk through all AST nodes and invoke callback for each node
- * @param {ASTNode | null | undefined} node - Root AST node
- * @param {(node: ASTNode, parents: ASTNode[]) => void} callback - Callback invoked for each node
- * @param {ASTNode[]} [parents=[]] - Parent node stack
- */
-export function walkASTNodes(
-  node: ASTNode | null | undefined,
-  callback: (node: ASTNode, parents: ASTNode[]) => void,
-  parents: ASTNode[] = [],
-): void {
-  if (!node || typeof node !== "object") return;
-
-  callback(node, parents);
-
-  const newParents = [...parents, node];
-  for (const key of Object.keys(node)) {
-    const child = node[key] as unknown;
-    if (Array.isArray(child)) {
-      child.forEach((c: unknown) => walkASTNodes(c as ASTNode | null, callback, newParents));
-    } else if (child && typeof child === "object") {
-      walkASTNodes(child as ASTNode, callback, newParents);
-    }
-  }
-}
-
-/**
  * Resolve a relative path from a base directory
  * Simple implementation that handles ./ and ../ prefixes
  * @param {string} baseDir - Base directory

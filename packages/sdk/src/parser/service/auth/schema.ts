@@ -122,7 +122,7 @@ export const SCIMAttributeSchema = z.object({
   },
 });
 
-export const SCIMSchemaSchema = z.object({
+const SCIMSchemaSchema = z.object({
   name: z.string(),
   attributes: z.array(SCIMAttributeSchema),
 });

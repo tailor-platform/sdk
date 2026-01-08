@@ -32,19 +32,6 @@ export type TailorToTs = {
   nested: Record<string, unknown>;
 } & Record<TailorFieldType, unknown>;
 
-export const tailorToManifestScalar = {
-  string: "string",
-  integer: "integer",
-  float: "float",
-  boolean: "boolean",
-  uuid: "uuid",
-  date: "date",
-  datetime: "datetime",
-  time: "time",
-  enum: "enum",
-  nested: "nested",
-} as const;
-
 export interface FieldMetadata {
   description?: string;
   required?: boolean;
