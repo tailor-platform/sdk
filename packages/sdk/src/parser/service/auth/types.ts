@@ -1,5 +1,4 @@
 import type {
-  AuthConfigSchema,
   AuthInvokerSchema,
   BuiltinIdPSchema,
   IDTokenSchema,
@@ -42,7 +41,6 @@ export type SCIMAttributeMapping = z.output<typeof SCIMAttributeMappingSchema>;
 export type SCIMResource = z.output<typeof SCIMResourceSchema>;
 export type SCIMConfig = z.output<typeof SCIMSchemaType>;
 export type TenantProviderConfig = z.output<typeof TenantProviderSchema>;
-export type AuthConfig = z.output<typeof AuthConfigSchema>;
 
 // Helper types for ValueOperand
 export type ValueOperand = string | boolean | string[] | boolean[];
@@ -205,21 +203,6 @@ export type AuthServiceInput<
   machineUsers?: Record<MachineUserNames, MachineUser<User, AttributeMap, AttributeList>>;
   oauth2Clients?: Record<string, OAuth2ClientInput>;
   idProvider?: IdProviderConfig;
-  scim?: SCIMConfig;
-  tenantProvider?: TenantProviderConfig;
-};
-
-// Output type (after parsing) - used by cli/parser layers
-export type AuthServiceOutput<
-  User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User>,
-  AttributeList extends UserAttributeListKey<User>[],
-  MachineUserNames extends string,
-> = {
-  userProfile?: UserProfile<User, AttributeMap, AttributeList>;
-  machineUsers?: Record<MachineUserNames, MachineUser<User, AttributeMap, AttributeList>>;
-  oauth2Clients?: Record<string, OAuth2Client>;
-  idProvider?: IdProviderConfigInput;
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
 };

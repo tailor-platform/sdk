@@ -196,11 +196,3 @@ export interface ParsedTailorDBType {
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
 }
-
-/**
- * Parsed TailorDB namespace containing all types
- */
-export interface ParsedTailorDBNamespace {
-  namespace: string;
-  types: Record<string, ParsedTailorDBType>;
-}
