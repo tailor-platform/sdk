@@ -32,6 +32,9 @@ importers:
       globals:
         specifier: 17.0.0
         version: 17.0.0
+      knip:
+        specifier: 5.79.0
+        version: 5.79.0(@types/node@24.10.4)(typescript@5.9.3)
       lefthook:
         specifier: 2.0.13
         version: 2.0.13
@@ -330,6 +333,9 @@ importers:
       '@connectrpc/connect-node':
         specifier: 2.1.1
         version: 2.1.1(@bufbuild/protobuf@2.10.2)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.2))
+      '@oxc-project/types':
+        specifier: 0.106.0
+        version: 0.106.0
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
@@ -387,6 +393,9 @@ importers:
       rolldown:
         specifier: 1.0.0-beta.58
         version: 1.0.0-beta.58
+      std-env:
+        specifier: 3.10.0
+        version: 3.10.0
       table:
         specifier: 6.9.0
         version: 6.9.0
@@ -412,6 +421,9 @@ importers:
       '@tailor-platform/function-types':
         specifier: 0.8.0
         version: 0.8.0
+      '@toiroakr/lines-db':
+        specifier: 0.6.1
+        version: 0.6.1
       '@types/madge':
         specifier: 5.0.3
         version: 5.0.3
@@ -442,9 +454,6 @@ importers:
       globals:
         specifier: 17.0.0
         version: 17.0.0
-      knip:
-        specifier: ^5.79.0
-        version: 5.79.0(@types/node@24.10.4)(typescript@5.9.3)
       oxlint:
         specifier: 1.36.0
         version: 1.36.0(oxlint-tsgolint@0.10.1)
