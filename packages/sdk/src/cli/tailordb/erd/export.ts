@@ -1,9 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
-import { fetchAll, initOperatorClient } from "../client";
-import { loadAccessToken, loadWorkspaceId } from "../context";
-import { logger } from "../utils/logger";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
+import { fetchAll, initOperatorClient } from "../../client";
+import { loadConfig } from "../../config-loader";
+import { loadAccessToken, loadWorkspaceId } from "../../context";
+import { logger } from "../../utils/logger";
 import type {
   TailorDBType as TailorDBProtoType,
   TailorDBType_FieldConfig,
@@ -14,7 +15,7 @@ export interface TailorDBSchemaOptions {
   workspaceId?: string;
   profile?: string;
   configPath?: string;
-  namespace: string;
+  namespace?: string;
 }
 
 interface TblsColumn {
@@ -41,8 +42,8 @@ interface TblsRelation {
   columns: string[];
   parent_table: string;
   parent_columns: string[];
-  cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more" | "";
-  parent_cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more" | "";
+  cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more";
+  parent_cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more";
   def: string;
 }
 
@@ -66,6 +67,43 @@ interface TblsSchema {
   tables: TblsTable[];
   relations: TblsRelation[];
   enums: TblsEnum[];
+}
+
+async function getAllNamespaces(configPath?: string): Promise<string[]> {
+  const { config } = await loadConfig(configPath);
+  const namespaces = new Set<string>();
+
+  if (config.db) {
+    for (const [namespaceName] of Object.entries(config.db)) {
+      namespaces.add(namespaceName);
+    }
+  }
+
+  return Array.from(namespaces);
+}
+
+async function resolveNamespace(configPath?: string, explicitNamespace?: string): Promise<string> {
+  if (explicitNamespace) {
+    return explicitNamespace;
+  }
+
+  const namespaces = await getAllNamespaces(configPath);
+
+  if (namespaces.length === 0) {
+    throw new Error(
+      "No TailorDB namespaces found in config. Please define db services in tailor.config.ts or pass --namespace.",
+    );
+  }
+
+  if (namespaces.length > 1) {
+    throw new Error(
+      `Multiple TailorDB namespaces found in config: ${namespaces.join(
+        ", ",
+      )}. Please specify one using --namespace.`,
+    );
+  }
+
+  return namespaces[0]!;
 }
 
 /**
@@ -140,7 +178,7 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
           }
         }
 
-        // Foreign key -> relation
+        // Foreign key -> relation + constraint
         if (fieldConfig.foreignKey && fieldConfig.foreignKeyType) {
           const foreignTable = fieldConfig.foreignKeyType;
           const foreignColumn = fieldConfig.foreignKeyField || "id";
@@ -235,11 +273,13 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
     profile: options.profile,
   });
 
+  const namespace = await resolveNamespace(options.configPath, options.namespace);
+
   const types = await fetchAll(async (pageToken) => {
     try {
       const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
         workspaceId,
-        namespaceName: options.namespace,
+        namespaceName: namespace,
         pageToken,
       });
       return [tailordbTypes, nextPageToken];
@@ -257,13 +297,13 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
     );
   }
 
-  return buildTblsSchema(types, options.namespace);
+  return buildTblsSchema(types, namespace);
 }
 
-export const schemaCommand = defineCommand({
+export const erdExportCommand = defineCommand({
   meta: {
-    name: "schema",
-    description: "Export applied TailorDB schema as tbls-compatible JSON",
+    name: "export",
+    description: "Export applied TailorDB schema as tbls-compatible JSON for ERD tools",
   },
   args: {
     ...commonArgs,
@@ -271,9 +311,8 @@ export const schemaCommand = defineCommand({
     ...jsonArgs,
     namespace: {
       type: "string",
-      description: "TailorDB namespace name",
+      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
       alias: "n",
-      required: true,
     },
   },
   run: withCommonArgs(async (args) => {
