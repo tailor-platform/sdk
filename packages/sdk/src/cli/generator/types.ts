@@ -199,7 +199,7 @@ export type CodeGenerator<
   };
 
 // ========================================
-// Aggregate input helper types & common patterns
+// Helper types for common generator patterns
 // ========================================
 
 /** TailorDB-only generator */

@@ -84,6 +84,3 @@ export function isCLIError(error: unknown): error is CLIError {
 
 // Re-export createCLIError as CLIError for backward compatibility
 export { createCLIError as CLIError };
-
-// Pre-defined error factories existed here previously (configNotFound, notLoggedIn, etc.).
-// They were removed because they were unused and caused lint errors.
