@@ -86,7 +86,7 @@
     "tsx": "4.21.0",
     "type-fest": "5.3.1",
     "xdg-basedir": "5.1.0",
-    "zod": "4.3.4"
+    "zod": "4.3.5"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
@@ -95,7 +95,7 @@
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.10.4",
-    "@typescript/native-preview": "7.0.0-dev.20260103.1",
+    "@typescript/native-preview": "7.0.0-dev.20260106.1",
     "@vitest/coverage-v8": "4.0.16",
     "cross-env": "10.1.0",
     "eslint": "9.39.2",
@@ -107,7 +107,7 @@
     "sonda": "0.10.1",
     "tsdown": "0.18.4",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.51.0",
+    "typescript-eslint": "8.52.0",
     "vitest": "4.0.16"
   }
 }
