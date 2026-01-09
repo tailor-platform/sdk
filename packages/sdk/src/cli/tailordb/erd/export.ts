@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
@@ -300,6 +302,27 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
   return buildTblsSchema(types, namespace);
 }
 
+interface WriteSchemaOptions extends TailorDBSchemaOptions {
+  outputPath: string;
+  printJson: boolean;
+}
+
+async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void> {
+  const schema = await exportTailorDBSchema(options);
+  const json = JSON.stringify(schema, null, 2);
+
+  fs.mkdirSync(path.dirname(options.outputPath), { recursive: true });
+  fs.writeFileSync(options.outputPath, json, "utf8");
+
+  const relativePath = path.relative(process.cwd(), options.outputPath);
+  logger.success(`Wrote ERD schema to ${relativePath}`);
+
+  if (options.printJson) {
+    // eslint-disable-next-line no-restricted-syntax
+    console.log(json);
+  }
+}
+
 export const erdExportCommand = defineCommand({
   meta: {
     name: "export",
@@ -314,24 +337,23 @@ export const erdExportCommand = defineCommand({
       description: "TailorDB namespace name (optional if only one namespace is defined in config)",
       alias: "n",
     },
+    output: {
+      type: "string",
+      description: "Output file path for tbls-compatible ERD JSON",
+      alias: "o",
+      default: "schema.json",
+    },
   },
   run: withCommonArgs(async (args) => {
-    const schema = await exportTailorDBSchema({
+    const outputPath = path.resolve(process.cwd(), String(args.output));
+
+    await writeTblsSchemaToFile({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
       namespace: args.namespace,
+      outputPath,
+      printJson: Boolean(args.json),
     });
-
-    const json = JSON.stringify(schema, null, 2);
-
-    if (args.json) {
-      // In JSON mode, write raw JSON to stdout
-      // eslint-disable-next-line no-restricted-syntax
-      console.log(json);
-    } else {
-      // When not in JSON mode, still output JSON but via logger for consistency
-      logger.log(json);
-    }
   }),
 });
