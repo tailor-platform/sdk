@@ -169,7 +169,7 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
  * @param {string} configPath - Path to Tailor config file
  * @returns {string} Absolute path to the type definition file
  */
-export function resolveTypeDefinitionPath(configPath: string): string {
+function resolveTypeDefinitionPath(configPath: string): string {
   // Check for environment variable override
   const typePath = process.env.TAILOR_PLATFORM_SDK_TYPE_PATH;
   if (typePath) {

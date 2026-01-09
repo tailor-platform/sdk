@@ -19,7 +19,7 @@ export interface StaticWebsiteInfo {
  * @param {string} [options.profile] - Workspace profile
  * @returns {Promise<StaticWebsiteInfo[]>} List of static websites
  */
-export async function listStaticWebsites(options?: {
+async function listStaticWebsites(options?: {
   workspaceId?: string;
   profile?: string;
 }): Promise<StaticWebsiteInfo[]> {

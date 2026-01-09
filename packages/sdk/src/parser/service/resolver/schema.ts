@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
 
-export const TailorFieldTypeSchema = z.enum([
+const TailorFieldTypeSchema = z.enum([
   "uuid",
   "string",
   "boolean",
@@ -16,12 +16,12 @@ export const TailorFieldTypeSchema = z.enum([
 
 export const QueryTypeSchema = z.union([z.literal("query"), z.literal("mutation")]);
 
-export const AllowedValueSchema = z.object({
+const AllowedValueSchema = z.object({
   value: z.string(),
   description: z.string().optional(),
 });
 
-export const FieldMetadataSchema = z.object({
+const FieldMetadataSchema = z.object({
   required: z.boolean().optional(),
   array: z.boolean().optional(),
   description: z.string().optional(),

@@ -48,7 +48,7 @@ export interface WorkflowExecutionInfo {
  * @param {WorkflowExecution_Status} status - Workflow execution status
  * @returns {string} String representation of the status
  */
-export function workflowExecutionStatusToString(status: WorkflowExecution_Status): string {
+function workflowExecutionStatusToString(status: WorkflowExecution_Status): string {
   switch (status) {
     case WorkflowExecution_Status.PENDING:
       return "PENDING";
@@ -70,7 +70,7 @@ export function workflowExecutionStatusToString(status: WorkflowExecution_Status
  * @param {WorkflowJobExecution_Status} status - Workflow job execution status
  * @returns {string} String representation of the status
  */
-export function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status): string {
+function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status): string {
   switch (status) {
     case WorkflowJobExecution_Status.RUNNING:
       return "RUNNING";

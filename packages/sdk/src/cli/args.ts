@@ -22,7 +22,7 @@ const unitToMs: Record<DurationUnit, number> = {
  * Schema for duration string validation (e.g., "3s", "500ms", "1m")
  * Transforms the string to milliseconds
  */
-export const durationSchema = z
+const durationSchema = z
   .templateLiteral([z.number().int().positive(), z.enum(durationUnits)])
   .transform((duration) => {
     const match = duration.match(/^(\d+)(ms|s|m)$/)!;

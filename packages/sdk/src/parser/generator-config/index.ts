@@ -2,26 +2,26 @@ import { z } from "zod";
 import type { CodeGeneratorBase } from "./types";
 
 // Dependency kind enum for generators
-export const DependencyKindSchema = z.enum(["tailordb", "resolver", "executor"]);
+const DependencyKindSchema = z.enum(["tailordb", "resolver", "executor"]);
 export type DependencyKind = z.infer<typeof DependencyKindSchema>;
 
 // Literal-based schemas for each generator
-export const KyselyTypeConfigSchema = z.tuple([
+const KyselyTypeConfigSchema = z.tuple([
   z.literal("@tailor-platform/kysely-type"),
   z.object({ distPath: z.string() }),
 ]);
 
-export const SeedConfigSchema = z.tuple([
+const SeedConfigSchema = z.tuple([
   z.literal("@tailor-platform/seed"),
   z.object({ distPath: z.string(), machineUserName: z.string().optional() }),
 ]);
 
-export const EnumConstantsConfigSchema = z.tuple([
+const EnumConstantsConfigSchema = z.tuple([
   z.literal("@tailor-platform/enum-constants"),
   z.object({ distPath: z.string() }),
 ]);
 
-export const FileUtilsConfigSchema = z.tuple([
+const FileUtilsConfigSchema = z.tuple([
   z.literal("@tailor-platform/file-utils"),
   z.object({ distPath: z.string() }),
 ]);
