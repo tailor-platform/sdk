@@ -7,6 +7,7 @@ import oxlint from "eslint-plugin-oxlint";
 export default defineConfig([
   globalIgnores([
     ".tailor-sdk/",
+    "dist/",
     "generated/",
     "tests/fixtures/",
     "generated-perf",

@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { schemaCommand } from "./schema";
 import { truncateCommand } from "./truncate";
 
 export const tailordbCommand = defineCommand({
@@ -8,5 +9,6 @@ export const tailordbCommand = defineCommand({
   },
   subCommands: {
     truncate: truncateCommand,
+    schema: schemaCommand,
   },
 });
