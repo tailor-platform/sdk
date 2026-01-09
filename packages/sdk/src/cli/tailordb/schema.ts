@@ -30,7 +30,7 @@ interface TblsTable {
   comment: string;
   columns: TblsColumn[];
   indexes: unknown[];
-  constraints: unknown[];
+  constraints: TblsConstraint[];
   triggers: unknown[];
   def: string;
   referenced_tables: string[];
@@ -39,8 +39,21 @@ interface TblsTable {
 interface TblsRelation {
   table: string;
   columns: string[];
-  foreign_table: string;
-  foreign_columns: string[];
+  parent_table: string;
+  parent_columns: string[];
+  cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more" | "";
+  parent_cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more" | "";
+  def: string;
+}
+
+interface TblsConstraint {
+  name: string;
+  type: "PRIMARY KEY" | "FOREIGN KEY" | string;
+  def: string;
+  table: string;
+  columns: string[];
+  referenced_table?: string;
+  referenced_columns?: string[];
 }
 
 interface TblsEnum {
@@ -83,6 +96,7 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
   const tables: TblsTable[] = [];
   const relations: TblsRelation[] = [];
   const referencedByTable: Record<string, Set<string>> = {};
+  const constraintsByTable: Record<string, TblsConstraint[]> = {};
   const enumsMap: Map<string, Set<string>> = new Map();
 
   for (const type of types) {
@@ -90,6 +104,7 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
     const schema = type.schema;
 
     const columns: TblsColumn[] = [];
+    const tableConstraints: TblsConstraint[] = [];
 
     // Implicit primary key column
     columns.push({
@@ -97,6 +112,14 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
       type: "uuid",
       nullable: false,
       comment: "",
+    });
+
+    tableConstraints.push({
+      name: `pk_${tableName}`,
+      type: "PRIMARY KEY",
+      def: "",
+      table: tableName,
+      columns: ["id"],
     });
 
     if (schema) {
@@ -122,11 +145,33 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
           const foreignTable = fieldConfig.foreignKeyType;
           const foreignColumn = fieldConfig.foreignKeyField || "id";
 
+          // Cardinality:
+          // - child side: exactly_one if non-nullable, zero_or_one if nullable FK
+          // - parent side: zero_or_more (a parent can have many children)
+          const childCardinality = fieldConfig.required ? "exactly_one" : "zero_or_one";
+          const parentCardinality = "zero_or_more";
+
+          // tbls RelationJSON:
+          // - table/columns: child side (FK owner)
+          // - parent_table/parent_columns: referenced side
           relations.push({
             table: tableName,
             columns: [fieldName],
-            foreign_table: foreignTable,
-            foreign_columns: [foreignColumn],
+            parent_table: foreignTable,
+            parent_columns: [foreignColumn],
+            cardinality: childCardinality,
+            parent_cardinality: parentCardinality,
+            def: "",
+          });
+
+          tableConstraints.push({
+            name: `fk_${tableName}_${fieldName}`,
+            type: "FOREIGN KEY",
+            def: "",
+            table: tableName,
+            columns: [fieldName],
+            referenced_table: foreignTable,
+            referenced_columns: [foreignColumn],
           });
 
           if (!referencedByTable[tableName]) {
@@ -137,13 +182,15 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
       }
     }
 
+    constraintsByTable[tableName] = tableConstraints;
+
     tables.push({
       name: tableName,
       type: "table",
       comment: schema?.description ?? "",
       columns,
       indexes: [],
-      constraints: [],
+      constraints: constraintsByTable[tableName] ?? [],
       triggers: [],
       def: "",
       referenced_tables: [],
