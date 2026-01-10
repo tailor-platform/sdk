@@ -450,7 +450,7 @@ describe("t.object tests", () => {
   });
 });
 
-describe.skip("TailorField runtime validation tests", () => {
+describe("TailorField runtime validation tests", () => {
   const user: TailorUser = {
     id: "test",
     type: "user",
