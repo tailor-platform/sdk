@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.2.4
+
+### Patch Changes
+
+- [#382](https://github.com/tailor-platform/sdk/pull/382) [`a2d0eb8`](https://github.com/tailor-platform/sdk/commit/a2d0eb86b8e606d59a1735289d7c2c6e74398039) Thanks [@riku99](https://github.com/riku99)! - Enable jsdoc/require-param and jsdoc/require-returns
+
+- [#386](https://github.com/tailor-platform/sdk/pull/386) [`6ff9aee`](https://github.com/tailor-platform/sdk/commit/6ff9aeea68ee391e9aeb78c8081ee0a7a7e04729) Thanks [@riku99](https://github.com/riku99)! - Introduce Knip
+
+- [#380](https://github.com/tailor-platform/sdk/pull/380) [`2718b7a`](https://github.com/tailor-platform/sdk/commit/2718b7abd8a3c2603c8cfbd234ada41bcf4d0061) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.3.5
+
+- [#381](https://github.com/tailor-platform/sdk/pull/381) [`dddd908`](https://github.com/tailor-platform/sdk/commit/dddd908fce87f0dc46a96480136f847ae67a7f31) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260104.1
+
+- [#385](https://github.com/tailor-platform/sdk/pull/385) [`1481cbd`](https://github.com/tailor-platform/sdk/commit/1481cbd9c2c2dfda7ee61af45b8d4881716db67e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.452.0
+
+- [#387](https://github.com/tailor-platform/sdk/pull/387) [`8d415c9`](https://github.com/tailor-platform/sdk/commit/8d415c9813f0bc7f4e9df67206081e9af10991cf) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.7.3
+
+- [#388](https://github.com/tailor-platform/sdk/pull/388) [`c37287c`](https://github.com/tailor-platform/sdk/commit/c37287c254bb08cebc3e97fc96192a864f9f2999) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.52.0
+
+- [#389](https://github.com/tailor-platform/sdk/pull/389) [`866596d`](https://github.com/tailor-platform/sdk/commit/866596d8648c7ada3d549c9ea68ec59c3960ba7d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.56.2
+
+- [#391](https://github.com/tailor-platform/sdk/pull/391) [`b6186e0`](https://github.com/tailor-platform/sdk/commit/b6186e07f8bf8b1f78b827a871d28b6ac97b1967) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260106.1
+
+- [#393](https://github.com/tailor-platform/sdk/pull/393) [`737518e`](https://github.com/tailor-platform/sdk/commit/737518e99bfbce7c3237e7344910a1510f4c16ea) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.453.0
+
 ## 1.2.3
 
 ### Patch Changes
