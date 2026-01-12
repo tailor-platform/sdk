@@ -53,6 +53,47 @@ export type PermissionCondition<
   | PermissionEqCondition<Level, User, Update, Type>
   | PermissionInCondition<Level, User, Update, Type>;
 
+type OperandValue<User extends object, Type extends object, Operand> = Operand extends {
+  user: infer K;
+}
+  ? UserOperandValue<User, K>
+  : Operand extends RecordRef<infer K>
+    ? RecordOperandValue<Type, K>
+    : Operand;
+
+type RecordRef<K = unknown> = { record: K } | { oldRecord: K } | { newRecord: K };
+
+type UserOperandValue<User extends object, K> = K extends "_loggedIn"
+  ? boolean
+  : K extends keyof User
+    ? User[K]
+    : never;
+
+type RecordOperandValue<Type extends object, K> = K extends "id"
+  ? string
+  : K extends keyof Type
+    ? Type[K]
+    : never;
+
+type NonArray<T> = Exclude<T, readonly unknown[]>;
+
+type OperandWhoseValueExtends<
+  Level extends "record" | "gql",
+  User extends object,
+  Type extends object,
+  Update extends boolean,
+  Wanted,
+> =
+  PermissionOperand<Level, User, Type, Update> extends infer Op
+    ? // Used only as a type-level filter
+      // oxlint-disable-next-line no-explicit-any
+      Op extends any
+      ? OperandValue<User, Type, Op> extends Wanted
+        ? Op
+        : never
+      : never
+    : never;
+
 type PermissionEqCondition<
   Level extends "record" | "gql",
   User extends object,
@@ -77,7 +118,7 @@ type PermissionInCondition<
     ? // Used only as a condition
       // oxlint-disable-next-line no-explicit-any
       Lhs extends any
-      ? readonly [Lhs, InPermissionOperator, InPermissionRhs<Level, Lhs>]
+      ? readonly [Lhs, InPermissionOperator, InPermissionRhs<Level, User, Type, Update, Lhs>]
       : never
     : never;
 
@@ -94,34 +135,80 @@ type EqPermissionRhs<
   Type extends object,
   Update extends boolean,
   Lhs,
-> = Lhs extends boolean
+> =
+  OperandValue<User, Type, Lhs> extends infer V
+    ? // Used only as a conditional discriminator
+      // oxlint-disable-next-line no-explicit-any
+      V extends any
+      ?
+          | EqPermissionRhsValue<Level, NonArray<V>>
+          | OperandWhoseValueExtends<
+              Level,
+              User,
+              Type,
+              Update,
+              EqPermissionRhsValue<Level, NonArray<V>>
+            >
+      : never
+    : never;
+
+type EqPermissionRhsValue<Level extends "record" | "gql", LhsValue> = LhsValue extends boolean
   ? boolean
-  : Lhs extends string
+  : LhsValue extends string
     ? Level extends "gql"
       ? string | boolean
       : string
-    : Exclude<PermissionOperand<Level, User, Type, Update>, readonly unknown[]>;
+    : NonArray<LhsValue>;
 
-type InPermissionRhs<Level extends "record" | "gql", Lhs> = Lhs extends boolean
+type InPermissionRhs<
+  Level extends "record" | "gql",
+  User extends object,
+  Type extends object,
+  Update extends boolean,
+  Lhs,
+> =
+  OperandValue<User, Type, Lhs> extends infer V
+    ? // Used only as a conditional discriminator
+      // oxlint-disable-next-line no-explicit-any
+      V extends any
+      ?
+          | InPermissionRhsValue<Level, NonArray<V>>
+          | OperandWhoseValueExtends<
+              Level,
+              User,
+              Type,
+              Update,
+              InPermissionRhsValue<Level, NonArray<V>>
+            >
+      : never
+    : never;
+
+type InPermissionRhsValue<Level extends "record" | "gql", LhsValue> = LhsValue extends boolean
   ? readonly boolean[]
-  : Lhs extends string
+  : LhsValue extends string
     ? Level extends "gql"
       ? readonly (string | boolean)[]
       : readonly string[]
     : readonly (string | boolean)[];
 
+type UserOperandKeys<User extends object> =
+  | {
+      [K in keyof User]: User[K] extends string | string[] | boolean | boolean[] ? K : never;
+    }[keyof User]
+  | "id"
+  | "_loggedIn";
+
 type UserOperand<User extends object = InferredAttributeMap> = {
-  user:
-    | {
-        [K in keyof User]: User[K] extends string | string[] | boolean | boolean[] ? K : never;
-      }[keyof User]
-    | "id"
-    | "_loggedIn";
-};
+  [K in UserOperandKeys<User>]: { user: K };
+}[UserOperandKeys<User>];
+
+type RecordKeys<Type extends object> = (keyof Type & string) | "id";
 
 type RecordOperand<Type extends object, Update extends boolean = false> = Update extends true
-  ? { oldRecord: (keyof Type & string) | "id" } | { newRecord: (keyof Type & string) | "id" }
-  : { record: (keyof Type & string) | "id" };
+  ?
+      | { [K in RecordKeys<Type>]: { oldRecord: K } }[RecordKeys<Type>]
+      | { [K in RecordKeys<Type>]: { newRecord: K } }[RecordKeys<Type>]
+  : { [K in RecordKeys<Type>]: { record: K } }[RecordKeys<Type>];
 
 export type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
