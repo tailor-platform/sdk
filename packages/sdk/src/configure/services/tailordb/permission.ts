@@ -44,171 +44,59 @@ type GqlPermissionPolicy<
 
 type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
-export type PermissionCondition<
-  Level extends "record" | "gql" = "record",
-  User extends object = InferredAttributeMap,
-  Update extends boolean = boolean,
-  Type extends object = object,
-> =
-  | PermissionEqCondition<Level, User, Update, Type>
-  | PermissionInCondition<Level, User, Update, Type>;
+type EqualityOperator = "=" | "!=";
+type ContainsOperator = "in" | "not in";
 
-type OperandValue<User extends object, Type extends object, Operand> = Operand extends {
-  user: infer K;
-}
-  ? UserOperandValue<User, K>
-  : Operand extends RecordRef<infer K>
-    ? RecordOperandValue<Type, K>
-    : Operand;
+// Helper types for User field extraction
+type StringFieldKeys<User extends object> = {
+  [K in keyof User]: User[K] extends string ? K : never;
+}[keyof User];
 
-type RecordRef<K = unknown> = { record: K } | { oldRecord: K } | { newRecord: K };
+type StringArrayFieldKeys<User extends object> = {
+  [K in keyof User]: User[K] extends string[] ? K : never;
+}[keyof User];
 
-type UserOperandValue<User extends object, K> = K extends "_loggedIn"
-  ? boolean
-  : K extends keyof User
-    ? User[K]
-    : never;
+type BooleanFieldKeys<User extends object> = {
+  [K in keyof User]: User[K] extends boolean ? K : never;
+}[keyof User];
 
-type RecordOperandValue<Type extends object, K> = K extends "id"
-  ? string
-  : K extends keyof Type
-    ? Type[K]
-    : never;
+type BooleanArrayFieldKeys<User extends object> = {
+  [K in keyof User]: User[K] extends boolean[] ? K : never;
+}[keyof User];
 
-type NonArray<T> = Exclude<T, readonly unknown[]>;
+// GQL string reference types based on User fields
+// e.g., User = { id: string, roles: string[] } => "user.id" | "user.roles"
+type GqlUserStringRef<User extends object> = `user.${StringFieldKeys<User> & string}` | "user.id";
+type GqlUserBooleanRef<User extends object> = `user.${BooleanFieldKeys<User> & string}`;
 
-type OperandWhoseValueExtends<
-  Level extends "record" | "gql",
-  User extends object,
-  Type extends object,
-  Update extends boolean,
-  Wanted,
-> =
-  PermissionOperand<Level, User, Type, Update> extends infer Op
-    ? // Used only as a type-level filter
-      // oxlint-disable-next-line no-explicit-any
-      Op extends any
-      ? OperandValue<User, Type, Op> extends Wanted
-        ? Op
-        : never
-      : never
-    : never;
+type UserStringOperand<User extends object = InferredAttributeMap> = {
+  user: StringFieldKeys<User> | "id";
+};
 
-type PermissionEqCondition<
-  Level extends "record" | "gql",
-  User extends object,
-  Update extends boolean,
-  Type extends object,
-> =
-  PermissionLhsOperand<Level, User, Type, Update> extends infer Lhs
-    ? // Used only as a condition
-      // oxlint-disable-next-line no-explicit-any
-      Lhs extends any
-      ? readonly [Lhs, EqPermissionOperator, EqPermissionRhs<Level, User, Type, Update, Lhs>]
-      : never
-    : never;
+type UserStringArrayOperand<User extends object = InferredAttributeMap> = {
+  user: StringArrayFieldKeys<User>;
+};
 
-type PermissionInCondition<
-  Level extends "record" | "gql",
-  User extends object,
-  Update extends boolean,
-  Type extends object,
-> =
-  PermissionLhsOperand<Level, User, Type, Update> extends infer Lhs
-    ? // Used only as a condition
-      // oxlint-disable-next-line no-explicit-any
-      Lhs extends any
-      ? readonly [Lhs, InPermissionOperator, InPermissionRhs<Level, User, Type, Update, Lhs>]
-      : never
-    : never;
+type UserBooleanOperand<User extends object = InferredAttributeMap> = {
+  user: BooleanFieldKeys<User> | "_loggedIn";
+};
 
-type PermissionLhsOperand<
-  Level extends "record" | "gql",
-  User extends object,
-  Type extends object,
-  Update extends boolean,
-> = Exclude<PermissionOperand<Level, User, Type, Update>, readonly unknown[]>;
-
-type EqPermissionRhs<
-  Level extends "record" | "gql",
-  User extends object,
-  Type extends object,
-  Update extends boolean,
-  Lhs,
-> =
-  OperandValue<User, Type, Lhs> extends infer V
-    ? // Used only as a conditional discriminator
-      // oxlint-disable-next-line no-explicit-any
-      V extends any
-      ?
-          | EqPermissionRhsValue<Level, NonArray<V>>
-          | OperandWhoseValueExtends<
-              Level,
-              User,
-              Type,
-              Update,
-              EqPermissionRhsValue<Level, NonArray<V>>
-            >
-      : never
-    : never;
-
-type EqPermissionRhsValue<Level extends "record" | "gql", LhsValue> = LhsValue extends boolean
-  ? boolean
-  : LhsValue extends string
-    ? Level extends "gql"
-      ? string | boolean
-      : string
-    : NonArray<LhsValue>;
-
-type InPermissionRhs<
-  Level extends "record" | "gql",
-  User extends object,
-  Type extends object,
-  Update extends boolean,
-  Lhs,
-> =
-  OperandValue<User, Type, Lhs> extends infer V
-    ? // Used only as a conditional discriminator
-      // oxlint-disable-next-line no-explicit-any
-      V extends any
-      ?
-          | InPermissionRhsValue<Level, NonArray<V>>
-          | OperandWhoseValueExtends<
-              Level,
-              User,
-              Type,
-              Update,
-              InPermissionRhsValue<Level, NonArray<V>>
-            >
-      : never
-    : never;
-
-type InPermissionRhsValue<Level extends "record" | "gql", LhsValue> = LhsValue extends boolean
-  ? readonly boolean[]
-  : LhsValue extends string
-    ? Level extends "gql"
-      ? readonly (string | boolean)[]
-      : readonly string[]
-    : readonly (string | boolean)[];
-
-type UserOperandKeys<User extends object> =
-  | {
-      [K in keyof User]: User[K] extends string | string[] | boolean | boolean[] ? K : never;
-    }[keyof User]
-  | "id"
-  | "_loggedIn";
+type UserBooleanArrayOperand<User extends object = InferredAttributeMap> = {
+  user: BooleanArrayFieldKeys<User>;
+};
 
 type UserOperand<User extends object = InferredAttributeMap> = {
-  [K in UserOperandKeys<User>]: { user: K };
-}[UserOperandKeys<User>];
-
-type RecordKeys<Type extends object> = (keyof Type & string) | "id";
+  user:
+    | {
+        [K in keyof User]: User[K] extends string | string[] | boolean | boolean[] ? K : never;
+      }[keyof User]
+    | "id"
+    | "_loggedIn";
+};
 
 type RecordOperand<Type extends object, Update extends boolean = false> = Update extends true
-  ?
-      | { [K in RecordKeys<Type>]: { oldRecord: K } }[RecordKeys<Type>]
-      | { [K in RecordKeys<Type>]: { newRecord: K } }[RecordKeys<Type>]
-  : { [K in RecordKeys<Type>]: { record: K } }[RecordKeys<Type>];
+  ? { oldRecord: (keyof Type & string) | "id" } | { newRecord: (keyof Type & string) | "id" }
+  : { record: (keyof Type & string) | "id" };
 
 export type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
@@ -220,8 +108,151 @@ export type PermissionOperand<
   | ValueOperand
   | (Level extends "record" ? RecordOperand<Type, Update> : never);
 
-type EqPermissionOperator = "=" | "!=";
-type InPermissionOperator = "in" | "not in";
+type StringEqualityCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | (Level extends "record" ? readonly [string, EqualityOperator, string] : never)
+  | readonly [UserStringOperand<User>, EqualityOperator, string]
+  | readonly [string, EqualityOperator, UserStringOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              EqualityOperator,
+              string | UserStringOperand<User>,
+            ]
+          | readonly [
+              string | UserStringOperand<User>,
+              EqualityOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type BooleanEqualityCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | readonly [boolean, EqualityOperator, boolean]
+  | readonly [UserBooleanOperand<User>, EqualityOperator, boolean]
+  | readonly [boolean, EqualityOperator, UserBooleanOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              EqualityOperator,
+              boolean | UserBooleanOperand<User>,
+            ]
+          | readonly [
+              boolean | UserBooleanOperand<User>,
+              EqualityOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type EqualityCondition<
+  Level extends "record" | "gql" = "record",
+  User extends object = InferredAttributeMap,
+  Update extends boolean = boolean,
+  Type extends object = object,
+> =
+  | StringEqualityCondition<Level, User, Update, Type>
+  | BooleanEqualityCondition<Level, User, Update, Type>
+  | (Level extends "gql"
+      ?
+          | readonly [GqlUserBooleanRef<User>, EqualityOperator, boolean]
+          | readonly [GqlUserStringRef<User>, EqualityOperator, string]
+      : never);
+
+type StringContainsCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | (Level extends "record" ? readonly [string, ContainsOperator, string[]] : never)
+  | readonly [UserStringOperand<User>, ContainsOperator, string[]]
+  | readonly [string, ContainsOperator, UserStringArrayOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              ContainsOperator,
+              string[] | UserStringArrayOperand<User>,
+            ]
+          | readonly [
+              string | UserStringOperand<User>,
+              ContainsOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type BooleanContainsCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | readonly [boolean, ContainsOperator, boolean[]]
+  | readonly [UserBooleanOperand<User>, ContainsOperator, boolean[]]
+  | readonly [boolean, ContainsOperator, UserBooleanArrayOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              ContainsOperator,
+              boolean[] | UserBooleanArrayOperand<User>,
+            ]
+          | readonly [
+              boolean | UserBooleanOperand<User>,
+              ContainsOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type ContainsCondition<
+  Level extends "record" | "gql" = "record",
+  User extends object = InferredAttributeMap,
+  Update extends boolean = boolean,
+  Type extends object = object,
+> =
+  | StringContainsCondition<Level, User, Update, Type>
+  | BooleanContainsCondition<Level, User, Update, Type>
+  | (Level extends "gql"
+      ?
+          | readonly [GqlUserBooleanRef<User>, ContainsOperator, boolean[]]
+          | readonly [GqlUserStringRef<User>, ContainsOperator, string[]]
+      : never);
+
+/**
+ * Type representing a permission condition that combines user attributes, record fields, and literal values using comparison operators.
+ *
+ * The User type is extended by `user-defined.d.ts`, which is automatically generated when running `tailor-sdk generate`.
+ * Attributes enabled in the config file's `auth.userProfile.attributes` become available as types.
+ * @example
+ * ```ts
+ * // tailor.config.ts
+ * export const auth = defineAuth("my-auth", {
+ *   userProfile: {
+ *     type: user,
+ *     attributes: {
+ *       isAdmin: true,
+ *       roles: true,
+ *     }
+ *   }
+ * });
+ * ```
+ */
+export type PermissionCondition<
+  Level extends "record" | "gql" = "record",
+  User extends object = InferredAttributeMap,
+  Update extends boolean = boolean,
+  Type extends object = object,
+> = EqualityCondition<Level, User, Update, Type> | ContainsCondition<Level, User, Update, Type>;
 
 /**
  * Grants full record-level access without any conditions.
