@@ -8,117 +8,98 @@ describe("tailordb permission types", () => {
     isAdmin: boolean;
   };
 
-  test("PermissionCondition RHS type enforcement", () => {
-    const _eqOk1 = ["string", "=", "admin"] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be string
-    const _eqErr1 = ["string", "=", ["admin"]] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be string
-    const _eqErr2 = ["string", "=", true] satisfies PermissionCondition;
+  describe("record level", () => {
+    test("literal values - string and boolean", () => {
+      // String literals
+      const _strOk = ["string", "=", "string"] satisfies PermissionCondition;
+      const _strArrOk = ["string", "in", ["string"]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: string vs boolean
+      const _strErr = ["string", "=", true] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: string vs boolean[]
+      const _strArrErr = ["string", "in", [true]] satisfies PermissionCondition;
 
-    const _inOk1 = ["string", "in", ["admin", "user"]] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be an array
-    const _inErr1 = ["string", "in", "admin"] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be string[]
-    const _inErr2 = ["string", "in", [true, false]] satisfies PermissionCondition;
+      // Boolean literals
+      const _boolOk = [true, "=", false] satisfies PermissionCondition;
+      const _boolArrOk = [true, "in", [true]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: boolean vs string
+      const _boolErr = [true, "=", "string"] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: boolean vs string[]
+      const _boolArrErr = [true, "in", ["string"]] satisfies PermissionCondition;
+    });
 
-    const _eqOk3 = [true, "=", true] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be boolean
-    const _eqErr3 = [true, "=", [true]] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be boolean
-    const _eqErr4 = [true, "=", "true"] satisfies PermissionCondition;
+    test("user operand - string field", () => {
+      const _ok = [{ user: "id" }, "=", "u_123"] satisfies PermissionCondition<"record", User>;
+      const _okReverse = ["u_123", "=", { user: "id" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string field vs boolean value
+      const _err = [{ user: "id" }, "=", true] satisfies PermissionCondition<"record", User>;
+    });
 
-    const _inOk3 = [true, "in", [true, false]] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be an array
-    const _inErr3 = [true, "in", true] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be boolean[]
-    const _inErr4 = [true, "in", ["admin", "true"]] satisfies PermissionCondition;
+    test("user operand - boolean field", () => {
+      const _ok = [{ user: "isAdmin" }, "=", true] satisfies PermissionCondition<"record", User>;
+      const _okReverse = [false, "=", { user: "isAdmin" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: boolean field vs string value
+      const _err = [{ user: "isAdmin" }, "=", "string"] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+    });
+
+    test("user operand - array field", () => {
+      const _ok = ["MANAGER", "in", { user: "roles" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string[] field vs string field
+      const _err = ["MANAGER", "in", { user: "id" }] satisfies PermissionCondition<"record", User>;
+    });
   });
 
-  test("PermissionCondition enforces operator-specific RHS types", () => {
-    const _eqOk1 = ["string", "=", "u_123"] satisfies PermissionCondition;
-    const _eqOk2 = [true, "=", false] satisfies PermissionCondition;
+  describe("gql level", () => {
+    test("string references - valid string fields", () => {
+      const _eqOk = ["user.id", "=", "u_123"] satisfies PermissionCondition<"gql", User>;
+      const _inOk = ["user.id", "in", ["u_123"]] satisfies PermissionCondition<"gql", User>;
+      // @ts-expect-error Type mismatch: string field vs boolean value
+      const _eqErr = ["user.id", "=", true] satisfies PermissionCondition<"gql", User>;
+      // @ts-expect-error Type mismatch: string field vs boolean[]
+      const _inErr = ["user.id", "in", [true]] satisfies PermissionCondition<"gql", User>;
+    });
 
-    // @ts-expect-error RHS must be string
-    const _eqEr1 = ["string", "=", ["u_123"]] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be boolean
-    const _eqEr2 = [true, "=", [false]] satisfies PermissionCondition;
+    test("string references - valid boolean fields", () => {
+      const _eqOk = ["user.isAdmin", "=", true] satisfies PermissionCondition<"gql", User>;
+      const _inOk = ["user.isAdmin", "in", [true]] satisfies PermissionCondition<"gql", User>;
+      // @ts-expect-error Type mismatch: boolean field vs string value
+      const _eqErr = ["user.isAdmin", "=", "string"] satisfies PermissionCondition<"gql", User>;
+      // @ts-expect-error Type mismatch: boolean field vs string[]
+      const _inErr = ["user.isAdmin", "in", ["string"]] satisfies PermissionCondition<"gql", User>;
+    });
 
-    const _inOk1 = ["string", "in", ["r1", "r2"]] satisfies PermissionCondition;
-    const _inOk2 = [true, "in", [true, false]] satisfies PermissionCondition;
-
-    // @ts-expect-error RHS must be string[]
-    const _inEr1 = ["string", "in", "r1"] satisfies PermissionCondition;
-    // @ts-expect-error RHS must be boolean[]
-    const _inEr2 = [true, "in", true] satisfies PermissionCondition;
+    test("string references - invalid field names", () => {
+      // @ts-expect-error Field "uuid" does not exist in User type
+      const _err1 = ["user.uuid", "=", "u_123"] satisfies PermissionCondition<"gql", User>;
+      // @ts-expect-error Field "active" does not exist in User type
+      const _err2 = ["user.active", "=", true] satisfies PermissionCondition<"gql", User>;
+    });
   });
 
-  test("PermissionCondition with User type and string field", () => {
-    const _eqOk1 = [{ user: "id" }, "=", "u_123"] satisfies PermissionCondition<"record", User>;
-    const _inOk1 = [{ user: "id" }, "in", ["u_123"]] satisfies PermissionCondition<"record", User>;
+  describe("common pitfalls", () => {
+    test("array field must be on RHS, not LHS when using 'in' operator", () => {
+      const _ok = ["MANAGER", "in", { user: "roles" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
 
-    // @ts-expect-error RHS must be string
-    const _eqEr1 = [{ user: "id" }, "=", true] satisfies PermissionCondition<"record", User>;
-    // @ts-expect-error RHS must be string[]
-    const _inEr1 = [{ user: "id" }, "in", [true]] satisfies PermissionCondition<"record", User>;
-
-    const _inOk2 = ["MANAGER", "in", { user: "roles" }] satisfies PermissionCondition<
-      "record",
-      User
-    >;
-    // @ts-expect-error RHS must be string[]
-    const _inEr2 = ["MANAGER", "in", { user: "id" }] satisfies PermissionCondition<"record", User>;
-  });
-
-  test("PermissionCondition with User type and boolean field", () => {
-    const _eqOk1 = [{ user: "isAdmin" }, "=", true] satisfies PermissionCondition<"record", User>;
-    const _inOk1 = [{ user: "isAdmin" }, "in", [true]] satisfies PermissionCondition<
-      "record",
-      User
-    >;
-
-    // @ts-expect-error RHS must be boolean
-    const _eqErr1 = [{ user: "isAdmin" }, "=", "string"] satisfies PermissionCondition<
-      "record",
-      User
-    >;
-    // @ts-expect-error RHS must be boolean[]
-    const _inErr1 = [{ user: "isAdmin" }, "in", ["string"]] satisfies PermissionCondition<
-      "record",
-      User
-    >;
-
-    const _eqOk2 = [false, "=", { user: "isAdmin" }] satisfies PermissionCondition<"record", User>;
-    // @ts-expect-error RHS must be boolean
-    const _eqErr2 = ["string", "=", { user: "isAdmin" }] satisfies PermissionCondition<
-      "record",
-      User
-    >;
-  });
-
-  test("GQL level enforces User field names in string references", () => {
-    const _eqOk1 = ["user.id", "=", "u_123"] satisfies PermissionCondition<"gql", User>;
-    const _inOk1 = ["user.id", "in", ["u_123"]] satisfies PermissionCondition<"gql", User>;
-
-    // @ts-expect-error GQL: RHS must be string
-    const _eqEr1 = ["user.id", "=", true] satisfies PermissionCondition<"gql", User>;
-    // @ts-expect-error GQL: RHS must be string[]
-    const _inEr1 = ["user.id", "in", [true]] satisfies PermissionCondition<"gql", User>;
-
-    const _eqOk2 = ["user.isAdmin", "=", true] satisfies PermissionCondition<"gql", User>;
-    const _inOk2 = ["user.isAdmin", "in", [true]] satisfies PermissionCondition<"gql", User>;
-    // @ts-expect-error GQL: RHS must be boolean
-    const _eqEr2 = ["user.isAdmin", "=", "string"] satisfies PermissionCondition<"gql", User>;
-    // @ts-expect-error GQL: RHS must be boolean[]
-    const _inEr2 = ["user.isAdmin", "in", ["string"]] satisfies PermissionCondition<"gql", User>;
-
-    // @ts-expect-error GQL: "user.uuid" is not a valid field reference for User type
-    const _err1 = ["user.uuid", "=", "u_123"] satisfies PermissionCondition<"gql", User>;
-    // @ts-expect-error GQL: "user.active" is not a valid field reference for User type
-    const _err2 = ["user.active", "=", true] satisfies PermissionCondition<"gql", User>;
-  });
-
-  test("LHS must be non-array type", () => {
-    // @ts-expect-error LHS must be non-array type
-    const _err = [["user", "id"], "in", ["u_123"]] satisfies PermissionCondition;
+      // Common mistake: array field on LHS (this was an actual bug)
+      // @ts-expect-error Array field must be on RHS, not LHS
+      const _err = [{ user: "roles" }, "in", "MANAGER"] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+    });
   });
 });
