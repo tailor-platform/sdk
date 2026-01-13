@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -323,6 +324,58 @@ async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void>
   }
 }
 
+async function runLiamCli(schemaPath: string): Promise<void> {
+  return await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      "pnpm",
+      ["dlx", "@liam-hq/cli", "erd", "build", "--format", "tbls", "--input", schemaPath],
+      {
+        stdio: "inherit",
+      },
+    );
+
+    child.on("error", (error) => {
+      logger.error("Failed to run `pnpm dlx @liam-hq/cli ...`. Ensure pnpm is installed.");
+      reject(error);
+    });
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        logger.error(
+          "liam CLI exited with a non-zero code. Ensure `pnpm dlx @liam-hq/cli erd build --format tbls --input schema.json` works in your project.",
+        );
+        reject(new Error(`liam CLI exited with code ${code ?? 1}`));
+      }
+    });
+  });
+}
+
+async function runServeDist(): Promise<void> {
+  return await new Promise<void>((resolve, reject) => {
+    const child = spawn("pnpm", ["dlx", "serve", "dist"], {
+      stdio: "inherit",
+    });
+
+    child.on("error", (error) => {
+      logger.error("Failed to run `pnpm dlx serve dist`. Ensure pnpm is installed.");
+      reject(error);
+    });
+
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        logger.error(
+          "serve CLI exited with a non-zero code. Ensure `pnpm dlx serve dist` works in your project.",
+        );
+        reject(new Error(`serve CLI exited with code ${code ?? 1}`));
+      }
+    });
+  });
+}
+
 export const erdExportCommand = defineCommand({
   meta: {
     name: "export",
@@ -343,6 +396,11 @@ export const erdExportCommand = defineCommand({
       alias: "o",
       default: "schema.json",
     },
+    serve: {
+      type: "boolean",
+      description: "Serve built ERD using `pnpm dlx serve dist`",
+      default: false,
+    },
   },
   run: withCommonArgs(async (args) => {
     const outputPath = path.resolve(process.cwd(), String(args.output));
@@ -355,5 +413,13 @@ export const erdExportCommand = defineCommand({
       outputPath,
       printJson: Boolean(args.json),
     });
+
+    // Always build ERD (dist) via liam
+    await runLiamCli(outputPath);
+
+    // Optionally serve dist locally
+    if (args.serve) {
+      await runServeDist();
+    }
   }),
 });

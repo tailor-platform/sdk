@@ -1,6 +1,5 @@
 import { defineCommand } from "citty";
 import { erdExportCommand } from "./export";
-import { erdServeCommand } from "./serve";
 
 export const erdCommand = defineCommand({
   meta: {
@@ -9,6 +8,5 @@ export const erdCommand = defineCommand({
   },
   subCommands: {
     export: erdExportCommand,
-    serve: erdServeCommand,
   },
 });
