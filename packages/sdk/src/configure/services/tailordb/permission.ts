@@ -63,11 +63,6 @@ type BooleanArrayFieldKeys<User extends object> = {
   [K in keyof User]: User[K] extends boolean[] ? K : never;
 }[keyof User];
 
-// GQL string reference types based on User fields
-// e.g., User = { id: string, roles: string[] } => "user.id" | "user.roles"
-type GqlUserStringRef<User extends object> = `user.${StringFieldKeys<User> & string}` | "user.id";
-type GqlUserBooleanRef<User extends object> = `user.${BooleanFieldKeys<User> & string}`;
-
 type UserStringOperand<User extends object = InferredAttributeMap> = {
   user: StringFieldKeys<User> | "id";
 };
@@ -94,7 +89,8 @@ type StringEqualityCondition<
   Update extends boolean,
   Type extends object,
 > =
-  | (Level extends "record" ? readonly [string, EqualityOperator, string] : never)
+  | (Level extends "gql" ? readonly [string, EqualityOperator, boolean] : never)
+  | readonly [string, EqualityOperator, string]
   | readonly [UserStringOperand<User>, EqualityOperator, string]
   | readonly [string, EqualityOperator, UserStringOperand<User>]
   | (Level extends "record"
@@ -141,12 +137,7 @@ type EqualityCondition<
   Type extends object = object,
 > =
   | StringEqualityCondition<Level, User, Update, Type>
-  | BooleanEqualityCondition<Level, User, Update, Type>
-  | (Level extends "gql"
-      ?
-          | readonly [GqlUserBooleanRef<User>, EqualityOperator, boolean]
-          | readonly [GqlUserStringRef<User>, EqualityOperator, string]
-      : never);
+  | BooleanEqualityCondition<Level, User, Update, Type>;
 
 type StringContainsCondition<
   Level extends "record" | "gql",
@@ -154,7 +145,7 @@ type StringContainsCondition<
   Update extends boolean,
   Type extends object,
 > =
-  | (Level extends "record" ? readonly [string, ContainsOperator, string[]] : never)
+  | readonly [string, ContainsOperator, string[]]
   | readonly [UserStringOperand<User>, ContainsOperator, string[]]
   | readonly [string, ContainsOperator, UserStringArrayOperand<User>]
   | (Level extends "record"
@@ -177,6 +168,7 @@ type BooleanContainsCondition<
   Update extends boolean,
   Type extends object,
 > =
+  | (Level extends "gql" ? readonly [string, ContainsOperator, boolean[]] : never)
   | readonly [boolean, ContainsOperator, boolean[]]
   | readonly [UserBooleanOperand<User>, ContainsOperator, boolean[]]
   | readonly [boolean, ContainsOperator, UserBooleanArrayOperand<User>]
@@ -201,12 +193,7 @@ type ContainsCondition<
   Type extends object = object,
 > =
   | StringContainsCondition<Level, User, Update, Type>
-  | BooleanContainsCondition<Level, User, Update, Type>
-  | (Level extends "gql"
-      ?
-          | readonly [GqlUserBooleanRef<User>, ContainsOperator, boolean[]]
-          | readonly [GqlUserStringRef<User>, ContainsOperator, string[]]
-      : never);
+  | BooleanContainsCondition<Level, User, Update, Type>;
 
 /**
  * Type representing a permission condition that combines user attributes, record fields, and literal values using comparison operators.

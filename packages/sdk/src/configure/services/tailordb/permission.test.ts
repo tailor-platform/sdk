@@ -60,33 +60,6 @@ describe("tailordb permission types", () => {
     });
   });
 
-  describe("gql level", () => {
-    test("string references - valid string fields", () => {
-      const _eqOk = ["user.id", "=", "u_123"] satisfies PermissionCondition<"gql", User>;
-      const _inOk = ["user.id", "in", ["u_123"]] satisfies PermissionCondition<"gql", User>;
-      // @ts-expect-error Type mismatch: string field vs boolean value
-      const _eqErr = ["user.id", "=", true] satisfies PermissionCondition<"gql", User>;
-      // @ts-expect-error Type mismatch: string field vs boolean[]
-      const _inErr = ["user.id", "in", [true]] satisfies PermissionCondition<"gql", User>;
-    });
-
-    test("string references - valid boolean fields", () => {
-      const _eqOk = ["user.isAdmin", "=", true] satisfies PermissionCondition<"gql", User>;
-      const _inOk = ["user.isAdmin", "in", [true]] satisfies PermissionCondition<"gql", User>;
-      // @ts-expect-error Type mismatch: boolean field vs string value
-      const _eqErr = ["user.isAdmin", "=", "string"] satisfies PermissionCondition<"gql", User>;
-      // @ts-expect-error Type mismatch: boolean field vs string[]
-      const _inErr = ["user.isAdmin", "in", ["string"]] satisfies PermissionCondition<"gql", User>;
-    });
-
-    test("string references - invalid field names", () => {
-      // @ts-expect-error Field "uuid" does not exist in User type
-      const _err1 = ["user.uuid", "=", "u_123"] satisfies PermissionCondition<"gql", User>;
-      // @ts-expect-error Field "active" does not exist in User type
-      const _err2 = ["user.active", "=", true] satisfies PermissionCondition<"gql", User>;
-    });
-  });
-
   describe("common pitfalls", () => {
     test("array field must be on RHS, not LHS when using 'in' operator", () => {
       const _ok = ["MANAGER", "in", { user: "roles" }] satisfies PermissionCondition<
