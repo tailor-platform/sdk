@@ -1,5 +1,4 @@
 import type { InferredAttributeMap } from "../../types";
-import type { ValueOperand } from "../auth";
 
 export type TailorTypePermission<
   User extends object = InferredAttributeMap,
@@ -85,28 +84,9 @@ type UserBooleanArrayOperand<User extends object = InferredAttributeMap> = {
   user: BooleanArrayFieldKeys<User>;
 };
 
-type UserOperand<User extends object = InferredAttributeMap> = {
-  user:
-    | {
-        [K in keyof User]: User[K] extends string | string[] | boolean | boolean[] ? K : never;
-      }[keyof User]
-    | "id"
-    | "_loggedIn";
-};
-
 type RecordOperand<Type extends object, Update extends boolean = false> = Update extends true
   ? { oldRecord: (keyof Type & string) | "id" } | { newRecord: (keyof Type & string) | "id" }
   : { record: (keyof Type & string) | "id" };
-
-export type PermissionOperand<
-  Level extends "record" | "gql" = "record" | "gql",
-  User extends object = InferredAttributeMap,
-  Type extends object = object,
-  Update extends boolean = boolean,
-> =
-  | UserOperand<User>
-  | ValueOperand
-  | (Level extends "record" ? RecordOperand<Type, Update> : never);
 
 type StringEqualityCondition<
   Level extends "record" | "gql",
