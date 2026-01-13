@@ -16,6 +16,8 @@ export const SeedGeneratorID = "@tailor-platform/seed";
 /**
  * Converts a path to POSIX format (forward slashes).
  * This ensures consistent import paths across platforms.
+ * @param {string} p - Path to convert
+ * @returns {string} POSIX-style path
  */
 function toPosixPath(p: string): string {
   return p.split(path.sep).join(path.posix.sep);
@@ -23,6 +25,9 @@ function toPosixPath(p: string): string {
 
 /**
  * Generates the exec.mjs script content (Node.js executable)
+ * @param {string} machineUserName - Machine user name for token retrieval
+ * @param {string} relativeConfigPath - Config path relative to exec script
+ * @returns {string} exec.mjs file contents
  */
 function generateExecScript(machineUserName: string, relativeConfigPath: string): string {
   return ml /* js */ `
@@ -61,6 +66,10 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
 /**
  * Factory function to create a Seed generator.
  * Combines GraphQL Ingest and lines-db schema generation.
+ * @param {{ distPath: string; machineUserName?: string }} options - Seed generator options
+ * @param {string} options.distPath - Output directory for generated files
+ * @param {string} [options.machineUserName] - Machine user name for seeding
+ * @returns {TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>>} Seed generator
  */
 export function createSeedGenerator(options: {
   distPath: string;

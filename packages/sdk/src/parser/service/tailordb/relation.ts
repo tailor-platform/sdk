@@ -39,7 +39,9 @@ function fieldRef(context: RelationProcessingContext): string {
 }
 
 /**
- * Validate relation configuration
+ * Validate relation configuration.
+ * @param {RawRelationConfig} rawRelation - Raw relation configuration from TailorDB type definition
+ * @param {RelationProcessingContext} context - Context information for the relation (type name, field name, all type names)
  */
 export function validateRelationConfig(
   rawRelation: RawRelationConfig,
@@ -65,7 +67,11 @@ export function validateRelationConfig(
 }
 
 /**
- * Process raw relation config and compute derived metadata values
+ * Process raw relation config and compute derived metadata values.
+ * @param {RawRelationConfig} rawRelation - Raw relation configuration
+ * @param {RelationProcessingContext} context - Context information for the relation
+ * @param {boolean} [isArrayField=false] - Whether the target field is an array field
+ * @returns {ProcessedRelationMetadata} Computed relation metadata to apply to field config
  */
 export function processRelationMetadata(
   rawRelation: RawRelationConfig,
@@ -94,8 +100,11 @@ export function processRelationMetadata(
 }
 
 /**
- * Build relation info for creating forward/backward relationships
- * Returns undefined for keyOnly relations
+ * Build relation info for creating forward/backward relationships.
+ * Returns undefined for keyOnly relations.
+ * @param {RawRelationConfig} rawRelation - Raw relation configuration
+ * @param {RelationProcessingContext} context - Context information for the relation
+ * @returns {RelationInfo | undefined} Relation information or undefined for keyOnly relations
  */
 export function buildRelationInfo(
   rawRelation: RawRelationConfig,
@@ -135,7 +144,10 @@ export function buildRelationInfo(
 }
 
 /**
- * Apply processed relation metadata to field config
+ * Apply processed relation metadata to field config.
+ * @param {OperatorFieldConfig} fieldConfig - Original operator field configuration
+ * @param {ProcessedRelationMetadata} metadata - Processed relation metadata to apply
+ * @returns {OperatorFieldConfig} Field config with relation metadata applied
  */
 export function applyRelationMetadataToFieldConfig(
   fieldConfig: OperatorFieldConfig,

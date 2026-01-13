@@ -29,7 +29,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * Apply executor-related changes for the given phase.
  * @param {OperatorClient} client - Operator client instance
  * @param {Awaited<ReturnType<typeof planExecutor>>} result - Planned executor changes
- * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase="create-update"] - Apply phase
+ * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase] - Apply phase (defaults to "create-update")
  * @returns {Promise<void>} Promise that resolves when executors are applied
  */
 export async function applyExecutor(
@@ -180,6 +180,8 @@ export async function planExecutor({ client, workspaceId, application, forRemova
 /**
  * Build args expression for resolverExecuted trigger.
  * Transforms server's succeeded/failed fields to success/result/error fields.
+ * @param {string} [additionalFields] - Additional fields to include in the args expression
+ * @returns {string} JavaScript expression for resolverExecuted trigger args
  */
 function buildResolverExecutedArgsExpr(additionalFields?: string): string {
   const baseFields = `...args, appNamespace: args.namespaceName, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error`;

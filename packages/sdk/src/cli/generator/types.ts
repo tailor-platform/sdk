@@ -140,18 +140,6 @@ type SelectInput<Deps extends readonly DependencyKind[], Ts, Rs, E> = (HasDepend
   (HasDependency<Deps, "executor"> extends true ? ExecutorInputPart<E> : object) &
   AuthPart;
 
-// ========================================
-// Aggregate input helper types
-// ========================================
-
-/** Input type for aggregate method - use with dependencies */
-export type AggregateInput<
-  Deps extends readonly DependencyKind[],
-  Ts = unknown,
-  Rs = unknown,
-  E = unknown,
-> = SelectInput<Deps, Ts, Rs, E>;
-
 /** Input type for TailorDB-only generators */
 export type TailorDBInput<Ts> = TailorDBInputPart<Ts> & AuthPart;
 
@@ -265,7 +253,14 @@ export type FullCodeGenerator<
 // Runtime utility
 // ========================================
 
-/** Type guard to check if a generator has a specific dependency */
+/**
+ * Type guard to check if a generator has a specific dependency.
+ * @template D
+ * @param {{ dependencies: readonly DependencyKind[] }} generator - Code generator instance
+ * @param {readonly DependencyKind[]} generator.dependencies - Generator dependencies
+ * @param {D} dependency - Dependency kind to check
+ * @returns {boolean} True if the generator has the dependency
+ */
 export function hasDependency<D extends DependencyKind>(
   generator: { dependencies: readonly DependencyKind[] },
   dependency: D,

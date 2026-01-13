@@ -266,7 +266,11 @@ export const logger = {
           return "";
         }
         if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
-          return formatDistanceToNowStrict(new Date(value), { addSuffix: true });
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) {
+            return value;
+          }
+          return formatDistanceToNowStrict(date, { addSuffix: true });
         }
         return String(value);
       }),
@@ -282,7 +286,12 @@ export const logger = {
   },
 
   /**
+   * Prompt the user for input unless running in CI.
+   * @template T
+   * @param {string} message - Prompt message
+   * @param {T} [options] - Prompt options
    * @throws {CIPromptError} When called in a CI environment
+   * @returns {unknown} Prompt result
    */
   prompt<T extends PromptOptions>(
     message: string,

@@ -79,7 +79,7 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
  * @param {TailorTypePermission<User, Type>} permission - Tailor type permission
  * @returns {StandardTailorTypePermission} Normalized record permissions
  */
-export function normalizePermission<User extends object = object, Type extends object = object>(
+function normalizePermission<User extends object = object, Type extends object = object>(
   permission: TailorTypePermission<User, Type>,
 ): StandardTailorTypePermission {
   const keys = Object.keys(permission) as Array<keyof typeof permission>;

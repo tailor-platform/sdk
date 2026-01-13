@@ -1,5 +1,4 @@
 import type {
-  AuthConfigSchema,
   AuthInvokerSchema,
   BuiltinIdPSchema,
   IDTokenSchema,
@@ -28,13 +27,10 @@ export type OIDC = z.output<typeof OIDCSchema>;
 export type SAML = z.output<typeof SAMLSchema>;
 export type IDToken = z.output<typeof IDTokenSchema>;
 export type BuiltinIdP = z.output<typeof BuiltinIdPSchema>;
-export type IdProviderConfigInput = z.input<typeof IdProviderSchema>;
 export type IdProviderConfig = z.output<typeof IdProviderSchema>;
 export type OAuth2ClientGrantType = z.output<typeof OAuth2ClientGrantTypeSchema>;
 // OAuth2Client input type (before transform) for configure layer
 export type OAuth2ClientInput = z.input<typeof OAuth2ClientSchema>;
-// OAuth2Client output type (after transform) for parser/cli layers
-export type OAuth2Client = z.output<typeof OAuth2ClientSchema>;
 export type SCIMAuthorization = z.output<typeof SCIMAuthorizationSchema>;
 export type SCIMAttributeType = z.output<typeof SCIMAttributeTypeSchema>;
 export type SCIMAttribute = z.output<typeof SCIMAttributeSchema>;
@@ -42,7 +38,6 @@ export type SCIMAttributeMapping = z.output<typeof SCIMAttributeMappingSchema>;
 export type SCIMResource = z.output<typeof SCIMResourceSchema>;
 export type SCIMConfig = z.output<typeof SCIMSchemaType>;
 export type TenantProviderConfig = z.output<typeof TenantProviderSchema>;
-export type AuthConfig = z.output<typeof AuthConfigSchema>;
 
 // Helper types for ValueOperand
 export type ValueOperand = string | boolean | string[] | boolean[];
@@ -205,21 +200,6 @@ export type AuthServiceInput<
   machineUsers?: Record<MachineUserNames, MachineUser<User, AttributeMap, AttributeList>>;
   oauth2Clients?: Record<string, OAuth2ClientInput>;
   idProvider?: IdProviderConfig;
-  scim?: SCIMConfig;
-  tenantProvider?: TenantProviderConfig;
-};
-
-// Output type (after parsing) - used by cli/parser layers
-export type AuthServiceOutput<
-  User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User>,
-  AttributeList extends UserAttributeListKey<User>[],
-  MachineUserNames extends string,
-> = {
-  userProfile?: UserProfile<User, AttributeMap, AttributeList>;
-  machineUsers?: Record<MachineUserNames, MachineUser<User, AttributeMap, AttributeList>>;
-  oauth2Clients?: Record<string, OAuth2Client>;
-  idProvider?: IdProviderConfigInput;
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
 };

@@ -12,6 +12,8 @@ import type {
 /**
  * Find variable declarations by export names
  * Returns a map of export name to statement range
+ * @param {Program} program - Parsed TypeScript program
+ * @returns {Map<string, { start: number; end: number }>} Map of export name to statement range
  */
 function findVariableDeclarationsByName(
   program: Program,
@@ -73,6 +75,8 @@ function findVariableDeclarationsByName(
 /**
  * Find createWorkflow default export declarations
  * Returns the range of the export statement to remove
+ * @param {Program} program - Parsed TypeScript program
+ * @returns {{ start: number; end: number } | null} Range of the default export statement or null
  */
 function findWorkflowDefaultExport(program: Program): { start: number; end: number } | null {
   const bindings = collectSdkBindings(program, "createWorkflow");
@@ -107,6 +111,7 @@ function findWorkflowDefaultExport(program: Program): { start: number; end: numb
  * @param {string} [targetJobExportName] - The export name of the target job (optional, for enhanced detection)
  * @param {string[]} [otherJobExportNames] - Export names of other jobs to remove (optional, for enhanced detection)
  * @param {Map<string, string>} [allJobsMap] - Map from export name to job name for trigger transformation (optional)
+ * @returns {string} Transformed workflow source code
  */
 export function transformWorkflowSource(
   source: string,

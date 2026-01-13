@@ -32,6 +32,9 @@ interface ExtendedTriggerCall {
 /**
  * Extract authInvoker info from a config object expression
  * Returns the authInvoker value text and whether it's a shorthand property
+ * @param {unknown} configArg - Config argument node
+ * @param {string} sourceText - Source code text
+ * @returns {AuthInvokerInfo | undefined} Extracted authInvoker info, if any
  */
 function extractAuthInvokerInfo(
   configArg: unknown,
@@ -76,6 +79,7 @@ function extractAuthInvokerInfo(
  * @param {string} sourceText - The source code text
  * @param {Set<string>} workflowNames - Set of known workflow identifier names
  * @param {Set<string>} jobNames - Set of known job identifier names
+ * @returns {ExtendedTriggerCall[]} Detected trigger call metadata
  */
 function detectExtendedTriggerCalls(
   program: Program,
@@ -181,6 +185,7 @@ function detectExtendedTriggerCalls(
  * @param {Map<string, string>} jobNameMap - Map from variable name to job name
  * @param {Map<string, string>} [workflowFileMap] - Map from file path (without extension) to workflow name for default exports
  * @param {string} [currentFilePath] - Path of the current file being transformed (for resolving relative imports)
+ * @returns {string} Transformed source code with trigger calls rewritten
  */
 export function transformFunctionTriggers(
   source: string,

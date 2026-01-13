@@ -1,16 +1,6 @@
-import type {
-  AllowedValueSchema,
-  FieldMetadataSchema,
-  QueryTypeSchema,
-  ResolverSchema,
-  TailorFieldSchema,
-  TailorFieldTypeSchema,
-} from "./schema";
+import type { QueryTypeSchema, ResolverSchema, TailorFieldSchema } from "./schema";
 import type { z } from "zod";
 
-export type TailorFieldType = z.output<typeof TailorFieldTypeSchema>;
-export type AllowedValue = z.output<typeof AllowedValueSchema>;
-export type FieldMetadata = z.output<typeof FieldMetadataSchema>;
 export type TailorField = z.output<typeof TailorFieldSchema>;
 export type TailorFieldInput = z.input<typeof TailorFieldSchema>;
 export type QueryType = z.output<typeof QueryTypeSchema>;
