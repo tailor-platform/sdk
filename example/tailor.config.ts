@@ -78,7 +78,7 @@ export default defineConfig({
   workflow: {
     files: ["./workflows/**/*.ts"],
   },
-  staticWebsites: [website, erdSite],
+  staticWebsites: [website],
 });
 
 export const generators = defineGenerators(

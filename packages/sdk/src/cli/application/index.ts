@@ -164,7 +164,7 @@ export class Application {
   }
 
   defineStaticWebsites(websites?: readonly StaticWebsiteInput[]) {
-    const websiteNames = new Set<string>(this._staticWebsiteServices.map((w) => w.name));
+    const websiteNames = new Set<string>();
     (websites ?? []).forEach((config) => {
       const website = StaticWebsiteSchema.parse(config);
       if (websiteNames.has(website.name)) {
@@ -189,6 +189,17 @@ export function defineApplication(config: AppConfig) {
   app.defineAuth(config.auth);
   app.defineExecutor(config.executor);
   app.defineWorkflow(config.workflow);
-  app.defineStaticWebsites(config.staticWebsites);
+  const erdWebsites =
+    config.db == null
+      ? []
+      : Object.values(config.db)
+          .filter(
+            (
+              serviceConfig,
+            ): serviceConfig is TailorDBServiceInput[string] & { erdSite?: StaticWebsiteInput } =>
+              typeof serviceConfig === "object" && !("external" in serviceConfig),
+          )
+          .flatMap((serviceConfig) => (serviceConfig.erdSite ? [serviceConfig.erdSite] : []));
+  app.defineStaticWebsites([...erdWebsites, ...(config.staticWebsites ?? [])]);
   return app;
 }
