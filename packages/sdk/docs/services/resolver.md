@@ -127,10 +127,7 @@ createResolver({
       .string()
       .validate(
         ({ value }) => value.includes("@"),
-        [
-          ({ value }) => value.length <= 255,
-          "Email must be 255 characters or less",
-        ],
+        [({ value }) => value.length <= 255, "Email must be 255 characters or less"],
       ),
     age: t.int().validate(({ value }) => value >= 0 && value <= 150),
   },

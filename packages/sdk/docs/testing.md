@@ -104,10 +104,7 @@ import { getDB } from "generated/tailordb";
 
 export interface DbOperations {
   transaction: (fn: (ops: DbOperations) => Promise<unknown>) => Promise<void>;
-  getUser: (
-    email: string,
-    forUpdate: boolean,
-  ) => Promise<{ email: string; age: number }>;
+  getUser: (email: string, forUpdate: boolean) => Promise<{ email: string; age: number }>;
   updateUser: (user: { email: string; age: number }) => Promise<void>;
 }
 
@@ -144,32 +141,23 @@ export default createResolver({
 Then test by mocking the interface:
 
 ```typescript
-import {
-  DbOperations,
-  decrementUserAge,
-} from "../src/resolver/decrementUserAge";
+import { DbOperations, decrementUserAge } from "../src/resolver/decrementUserAge";
 
 describe("decrementUserAge resolver", () => {
   test("basic functionality", async () => {
     // Mock DbOperations implementation
     const dbOperations = {
       transaction: vi.fn(
-        async (fn: (ops: DbOperations) => Promise<unknown>) =>
-          await fn(dbOperations),
+        async (fn: (ops: DbOperations) => Promise<unknown>) => await fn(dbOperations),
       ),
-      getUser: vi
-        .fn()
-        .mockResolvedValue({ email: "test@example.com", age: 30 }),
+      getUser: vi.fn().mockResolvedValue({ email: "test@example.com", age: 30 }),
       updateUser: vi.fn(),
     } as DbOperations;
 
     const result = await decrementUserAge("test@example.com", dbOperations);
 
     expect(result).toEqual({ oldAge: 30, newAge: 29 });
-    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith(
-      "test@example.com",
-      true,
-    );
+    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith("test@example.com", true);
     expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ age: 29 }),
     );

@@ -206,10 +206,7 @@ Function arguments include: `value` (field value), `data` (entire record value),
 ```typescript
 db.string().validate(
   ({ value }) => value.length > 5,
-  [
-    ({ value }) => value.length < 10,
-    "Value must be shorter than 10 characters",
-  ],
+  [({ value }) => value.length < 10, "Value must be shorter than 10 characters"],
 );
 ```
 
