@@ -92,6 +92,17 @@ const TYPE_ICONS: Record<string, string> = {
   log: "",
 };
 
+// Color functions for icon and message text
+const TYPE_COLORS: Record<string, (text: string) => string> = {
+  info: chalk.cyan,
+  success: chalk.green,
+  warn: chalk.yellow,
+  error: chalk.red,
+  debug: chalk.gray,
+  trace: chalk.gray,
+  log: (text) => text,
+};
+
 class IconReporter {
   log(
     logObj: { type: string; tag?: string; args: unknown[]; level: number; date?: Date },
@@ -114,9 +125,13 @@ class IconReporter {
     const icon = TYPE_ICONS[logObj.type] || "";
     const prefix = icon ? `${icon} ` : "";
 
+    // Apply color to both icon and message
+    const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
+    const coloredOutput = colorFn(`${prefix}${message}`);
+
     const timestamp =
       formatOptions.date && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
-    stderr.write(`${timestamp}${prefix}${message}\n`);
+    stderr.write(`${timestamp}${coloredOutput}\n`);
   }
 }
 
@@ -230,7 +245,9 @@ export const logger = {
   },
 
   debug(message: string): void {
-    plainLogger.log(styles.dim(message));
+    if (process.env.DEBUG === "true") {
+      plainLogger.log(styles.dim(message));
+    }
   },
 
   out(data: string | object | object[]): void {
