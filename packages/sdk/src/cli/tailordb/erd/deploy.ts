@@ -8,6 +8,7 @@ import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { logger } from "../../utils/logger";
 import { exportTailorDBSchema } from "./export";
+import { runLiamBuild } from "./liam";
 import type { TailorDBSchemaOptions } from "./export";
 
 async function resolveNamespace(configPath?: string, explicitNamespace?: string): Promise<string> {
@@ -119,6 +120,9 @@ export const erdDeployCommand = defineCommand({
     });
 
     const distDir = path.resolve(process.cwd(), String(args.dist));
+    const erdDir = path.dirname(distDir);
+    await runLiamBuild(schemaOutputPath, erdDir);
+
     if (!fs.existsSync(distDir) || !fs.statSync(distDir).isDirectory()) {
       throw new Error(`Directory not found or not a directory: ${distDir}`);
     }

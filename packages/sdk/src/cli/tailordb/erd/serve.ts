@@ -5,6 +5,7 @@ import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { exportTailorDBSchema } from "./export";
+import { runLiamBuild } from "./liam";
 import type { TailorDBSchemaOptions } from "./export";
 
 async function writeTblsSchemaAndReturnPath(
@@ -23,38 +24,6 @@ async function writeTblsSchemaAndReturnPath(
   logger.success(`Wrote ERD schema to ${relativePath}`);
 
   return outputPath;
-}
-
-async function runLiamCli(schemaPath: string): Promise<void> {
-  const erdDir = path.resolve(process.cwd(), ".tailor-sdk", "erd");
-  fs.mkdirSync(erdDir, { recursive: true });
-
-  return await new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      "pnpm",
-      ["dlx", "@liam-hq/cli", "erd", "build", "--format", "tbls", "--input", schemaPath],
-      {
-        stdio: "inherit",
-        cwd: erdDir,
-      },
-    );
-
-    child.on("error", (error) => {
-      logger.error("Failed to run `pnpm dlx @liam-hq/cli ...`. Ensure pnpm is installed.");
-      reject(error);
-    });
-
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        logger.error(
-          "liam CLI exited with a non-zero code. Ensure `pnpm dlx @liam-hq/cli erd build --format tbls --input schema.json` works in your project.",
-        );
-        reject(new Error(`liam CLI exited with code ${code ?? 1}`));
-      }
-    });
-  });
 }
 
 async function runServeDist(): Promise<void> {
@@ -114,7 +83,8 @@ export const erdServeCommand = defineCommand({
       output: args.output,
     });
 
-    await runLiamCli(schemaPath);
+    const erdDir = path.resolve(process.cwd(), ".tailor-sdk", "erd");
+    await runLiamBuild(schemaPath, erdDir);
     await runServeDist();
   }),
 });
