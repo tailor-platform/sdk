@@ -15,7 +15,8 @@ import { readPackageJson } from "./utils/package-json";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
-const oauth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
+const oauth2ClientId =
+  process.env.PLATFORM_OAUTH2_CLIENT_ID ?? "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
 
 /**
