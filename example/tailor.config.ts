@@ -11,6 +11,10 @@ const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",
 });
 
+const erdSite = defineStaticWebSite("my-erd-site", {
+  description: "ERD site for TailorDB",
+});
+
 const idp = defineIdp("my-idp", {
   authorization: "loggedIn",
   clients: ["default-idp-client"],
@@ -62,7 +66,7 @@ export default defineConfig({
     website.url, // This will be replaced with the actual Static Website URL
   ],
   db: {
-    tailordb: { files: ["./tailordb/*.ts"] },
+    tailordb: { files: ["./tailordb/*.ts"], erdSite: erdSite.name },
     analyticsdb: { files: ["./analyticsdb/*.ts"] },
   },
   resolver: {
@@ -74,7 +78,7 @@ export default defineConfig({
   workflow: {
     files: ["./workflows/**/*.ts"],
   },
-  staticWebsites: [website],
+  staticWebsites: [website, erdSite],
 });
 
 export const generators = defineGenerators(
