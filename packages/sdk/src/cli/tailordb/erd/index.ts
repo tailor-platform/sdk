@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { erdDeployCommand } from "./deploy";
 import { erdExportCommand } from "./export";
 import { erdServeCommand } from "./serve";
 
@@ -10,5 +11,6 @@ export const erdCommand = defineCommand({
   subCommands: {
     export: erdExportCommand,
     serve: erdServeCommand,
+    deploy: erdDeployCommand,
   },
 });

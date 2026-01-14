@@ -94,6 +94,16 @@ export class Application {
       } else {
         const tailorDB = new TailorDBService(namespace, serviceConfig);
         this._tailorDBServices.push(tailorDB);
+
+        // Auto-register ERD static website from TailorDB config, if configured.
+        if (serviceConfig.erdSite) {
+          const website = StaticWebsiteSchema.parse({
+            name: serviceConfig.erdSite,
+            description: `${namespace} ERD site`,
+            allowedIpAddresses: [],
+          });
+          this._staticWebsiteServices.push(website);
+        }
       }
       this.addSubgraph("tailordb", namespace);
     }
@@ -164,7 +174,7 @@ export class Application {
   }
 
   defineStaticWebsites(websites?: readonly StaticWebsiteInput[]) {
-    const websiteNames = new Set<string>();
+    const websiteNames = new Set<string>(this._staticWebsiteServices.map((w) => w.name));
     (websites ?? []).forEach((config) => {
       const website = StaticWebsiteSchema.parse(config);
       if (websiteNames.has(website.name)) {
