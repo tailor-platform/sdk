@@ -10,7 +10,6 @@ import { logger } from "../../utils/logger";
 import type {
   TailorDBType as TailorDBProtoType,
   TailorDBType_FieldConfig,
-  TailorDBType_Value,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 export interface TailorDBSchemaOptions {
@@ -175,7 +174,7 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
             values = new Set<string>();
             enumsMap.set(enumName, values);
           }
-          for (const value of fieldConfig.allowedValues as TailorDBType_Value[]) {
+          for (const value of fieldConfig.allowedValues) {
             values.add(value.value);
           }
         }
