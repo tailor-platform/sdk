@@ -10,7 +10,8 @@ import type { TailorDBSchemaOptions } from "./export";
 async function writeTblsSchemaAndReturnPath(
   options: TailorDBSchemaOptions & { output?: string },
 ): Promise<string> {
-  const outputPath = path.resolve(process.cwd(), options.output ?? "schema.json");
+  const defaultOutput = path.join(".tailor-sdk", "erd", "schema.json");
+  const outputPath = path.resolve(process.cwd(), options.output ?? defaultOutput);
   const schema = await exportTailorDBSchema(options);
   const json = JSON.stringify(schema, null, 2);
 
@@ -25,12 +26,16 @@ async function writeTblsSchemaAndReturnPath(
 }
 
 async function runLiamCli(schemaPath: string): Promise<void> {
+  const erdDir = path.resolve(process.cwd(), ".tailor-sdk", "erd");
+  fs.mkdirSync(erdDir, { recursive: true });
+
   return await new Promise<void>((resolve, reject) => {
     const child = spawn(
       "pnpm",
       ["dlx", "@liam-hq/cli", "erd", "build", "--format", "tbls", "--input", schemaPath],
       {
         stdio: "inherit",
+        cwd: erdDir,
       },
     );
 
@@ -53,9 +58,13 @@ async function runLiamCli(schemaPath: string): Promise<void> {
 }
 
 async function runServeDist(): Promise<void> {
+  const erdDir = path.resolve(process.cwd(), ".tailor-sdk", "erd");
+  fs.mkdirSync(erdDir, { recursive: true });
+
   return await new Promise<void>((resolve, reject) => {
     const child = spawn("pnpm", ["dlx", "serve", "dist"], {
       stdio: "inherit",
+      cwd: erdDir,
     });
 
     child.on("error", (error) => {
@@ -93,7 +102,7 @@ export const erdServeCommand = defineCommand({
       type: "string",
       description: "Output file path for tbls-compatible ERD JSON",
       alias: "o",
-      default: "schema.json",
+      default: ".tailor-sdk/erd/schema.json",
     },
   },
   run: withCommonArgs(async (args) => {

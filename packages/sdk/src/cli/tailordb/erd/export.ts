@@ -333,7 +333,7 @@ export const erdExportCommand = defineCommand({
       type: "string",
       description: "Output file path for tbls-compatible ERD JSON",
       alias: "o",
-      default: "schema.json",
+      default: ".tailor-sdk/erd/schema.json",
     },
   },
   run: withCommonArgs(async (args) => {

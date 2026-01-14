@@ -71,13 +71,13 @@ export const erdDeployCommand = defineCommand({
       type: "string",
       description: "Output file path for tbls-compatible ERD JSON",
       alias: "o",
-      default: "schema.json",
+      default: ".tailor-sdk/erd/schema.json",
     },
     dist: {
       type: "string",
       description: "Path to ERD static site files (built by liam)",
       alias: "d",
-      default: "dist",
+      default: ".tailor-sdk/erd/dist",
     },
   },
   run: withCommonArgs(async (args) => {
