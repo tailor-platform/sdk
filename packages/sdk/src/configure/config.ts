@@ -10,7 +10,7 @@ import type { GeneratorConfig } from "@/parser/generator-config/types";
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
   Idp extends IdPConfig[] = IdPConfig[],
-  StaticWebsites extends readonly StaticWebsiteConfig[] = StaticWebsiteConfig[],
+  StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
   Env extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
 > {
   name: string;
@@ -48,7 +48,7 @@ export function defineConfig<
   const Config extends AppConfig &
     // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
     Record<Exclude<keyof Config, keyof AppConfig>, never>,
->(config: Config): Config {
+>(config: Config) {
   return config;
 }
 
