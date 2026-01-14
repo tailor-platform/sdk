@@ -124,12 +124,7 @@ This is a **monorepo** managed by pnpm workspaces and Turbo. The main SDK packag
 **Configuration Pattern:**
 
 ```typescript
-import {
-  defineConfig,
-  defineAuth,
-  defineIdp,
-  defineStaticWebSite,
-} from "@tailor-platform/sdk";
+import { defineConfig, defineAuth, defineIdp, defineStaticWebSite } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -190,9 +185,7 @@ import { db } from "@tailor-platform/sdk";
 
 export const modelName = db.type("ModelName", {
   field: db.string(),
-  relatedId: db
-    .uuid()
-    .relation({ type: "n-1", toward: { type: relatedModel } }),
+  relatedId: db.uuid().relation({ type: "n-1", toward: { type: relatedModel } }),
   ...db.fields.timestamps(),
 });
 ```
@@ -239,12 +232,7 @@ export const auth = defineAuth("my-auth", {
 **Static Website Configuration Pattern:**
 
 ```typescript
-import {
-  defineStaticWebSite,
-  defineIdp,
-  defineAuth,
-  defineConfig,
-} from "@tailor-platform/sdk";
+import { defineStaticWebSite, defineIdp, defineAuth, defineConfig } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 // Define a static website with type-safe URL references
@@ -383,11 +371,7 @@ export const fetchData = createWorkflowJob({
   name: "fetch-data",
   body: async (input: { id: string }) => {
     const db = getDB("tailordb");
-    return await db
-      .selectFrom("Table")
-      .selectAll()
-      .where("id", "=", input.id)
-      .executeTakeFirst();
+    return await db.selectFrom("Table").selectAll().where("id", "=", input.id).executeTakeFirst();
   },
 });
 

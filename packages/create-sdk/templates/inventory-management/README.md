@@ -88,10 +88,7 @@ mutation createCategory {
 ```graphql
 mutation createProduct {
   createProduct(
-    input: {
-      name: "Ergonomic Office Chair"
-      categoryId: "f7c9a16a-d69c-4570-a6b9-571f97f728fd"
-    }
+    input: { name: "Ergonomic Office Chair", categoryId: "f7c9a16a-d69c-4570-a6b9-571f97f728fd" }
   ) {
     id
     name
@@ -115,9 +112,7 @@ mutation createContact {
     id
     name
   }
-  b: createContact(
-    input: { name: "Jane Smith", email: "jane.smith@example.com" }
-  ) {
+  b: createContact(input: { name: "Jane Smith", email: "jane.smith@example.com" }) {
     id
     name
   }
@@ -148,13 +143,7 @@ mutation registerOrder {
         orderDate: "2025-09-01T00:00:00Z"
         contactId: "82596a87-d0b0-47d6-8535-e70e4600c3c1"
       }
-      items: [
-        {
-          productId: "54ed76c5-30e5-4b36-a82f-3c03d6436323"
-          unitPrice: 200
-          quantity: 20
-        }
-      ]
+      items: [{ productId: "54ed76c5-30e5-4b36-a82f-3c03d6436323", unitPrice: 200, quantity: 20 }]
     }
   ) {
     success
@@ -167,13 +156,7 @@ mutation registerOrder {
         orderDate: "2025-10-01T00:00:00Z"
         contactId: "87cfb619-b6a5-4ad6-9b62-7de15b8bd5b9"
       }
-      items: [
-        {
-          productId: "54ed76c5-30e5-4b36-a82f-3c03d6436323"
-          unitPrice: 300
-          quantity: 15
-        }
-      ]
+      items: [{ productId: "54ed76c5-30e5-4b36-a82f-3c03d6436323", unitPrice: 300, quantity: 15 }]
     }
   ) {
     success

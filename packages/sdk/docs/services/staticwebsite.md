@@ -90,12 +90,7 @@ const auth = defineAuth("my-auth", {
 ## Complete Example
 
 ```typescript
-import {
-  defineConfig,
-  defineAuth,
-  defineIdp,
-  defineStaticWebSite,
-} from "@tailor-platform/sdk";
+import { defineConfig, defineAuth, defineIdp, defineStaticWebSite } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
