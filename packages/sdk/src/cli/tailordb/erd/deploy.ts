@@ -106,7 +106,7 @@ export const erdDeployCommand = defineCommand({
       throw new Error(`TailorDB namespace "${namespace}" not found in config.db.`);
     }
 
-    const erdSiteName = dbConfig.erdSite;
+    const erdSiteName = dbConfig.erdSite?.name;
 
     if (!erdSiteName) {
       throw new Error(

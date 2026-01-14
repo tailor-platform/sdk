@@ -2,6 +2,7 @@ import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
+import type { StaticWebsiteDefinition } from "@/configure/services/staticwebsite";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
@@ -81,7 +82,7 @@ export type Hooks<
 export type TailorDBServiceConfig = {
   files: string[];
   ignores?: string[];
-  erdSite?: string;
+  erdSite?: StaticWebsiteDefinition;
 };
 
 export type TailorDBExternalConfig = { external: true };

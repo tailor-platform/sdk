@@ -27,6 +27,10 @@ export function defineStaticWebSite<const Name extends string>(
   return result as typeof result & StaticWebsiteDefinitionBrand;
 }
 
+export type StaticWebsiteDefinition<Name extends string = string> = ReturnType<
+  typeof defineStaticWebSite<Name>
+>;
+
 export type StaticWebsiteConfig<Name extends string = string> = Omit<StaticWebsiteInput, "name"> & {
   name: Name;
 };
