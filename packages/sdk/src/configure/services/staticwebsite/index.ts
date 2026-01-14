@@ -7,20 +7,26 @@ type StaticWebsiteDefinitionBrand = {
 
 /**
  * Define a static website configuration for the Tailor SDK.
- * @param {string} name - Static website name
+ * @template Name
+ * @param {Name} name - Static website name
  * @param {Omit<StaticWebsiteInput, "name">} config - Static website configuration
- * @returns {StaticWebsiteDefinitionBrand & StaticWebsiteInput & { readonly url: string }} Defined static website
+ * @returns {StaticWebsiteDefinitionBrand & StaticWebsiteInput & { readonly name: Name; readonly url: string }} Defined static website
  */
-export function defineStaticWebSite(name: string, config: Omit<StaticWebsiteInput, "name">) {
+export function defineStaticWebSite<const Name extends string>(
+  name: Name,
+  config: Omit<StaticWebsiteInput, "name">,
+) {
   const result = {
     ...config,
     name,
     get url() {
       return `${name}:url` as const;
     },
-  } as const satisfies StaticWebsiteInput & { readonly url: string };
+  } as const;
 
   return result as typeof result & StaticWebsiteDefinitionBrand;
 }
 
-export type StaticWebsiteConfig = Omit<ReturnType<typeof defineStaticWebSite>, "url">;
+export type StaticWebsiteConfig<Name extends string = string> = Omit<StaticWebsiteInput, "name"> & {
+  name: Name;
+};

@@ -10,7 +10,7 @@ import type { GeneratorConfig } from "@/parser/generator-config/types";
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
   Idp extends IdPConfig[] = IdPConfig[],
-  StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
+  StaticWebsites extends readonly StaticWebsiteConfig[] = StaticWebsiteConfig[],
   Env extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
 > {
   name: string;
@@ -38,8 +38,25 @@ export const getDistDir = (): string => {
   return distPath;
 };
 
+type StaticWebsiteNames<Config extends AppConfig> =
+  Config["staticWebsites"] extends readonly (infer Site)[]
+    ? Site extends { name: infer Name extends string }
+      ? Name
+      : never
+    : never;
+
+type TailorDBServiceInputWithErd<Config extends AppConfig> =
+  StaticWebsiteNames<Config> extends never
+    ? TailorDBServiceInput
+    : {
+        [N in keyof TailorDBServiceInput]: TailorDBServiceInput[N] extends { external: true }
+          ? TailorDBServiceInput[N]
+          : TailorDBServiceInput[N] & { erdSite?: StaticWebsiteNames<Config> };
+      };
+
 /**
  * Define a Tailor SDK application configuration with shallow exactness.
+ * When staticWebsites are provided, TailorDB erdSite is constrained to one of the static website names.
  * @template Config
  * @param {Config} config - Application configuration
  * @returns {Config} The same configuration object
@@ -48,7 +65,7 @@ export function defineConfig<
   const Config extends AppConfig &
     // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
     Record<Exclude<keyof Config, keyof AppConfig>, never>,
->(config: Config) {
+>(config: Config & { db?: TailorDBServiceInputWithErd<Config> }): Config {
   return config;
 }
 
