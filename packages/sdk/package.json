@@ -79,7 +79,7 @@
     "oxc-parser": "0.106.0",
     "p-limit": "7.2.0",
     "pkg-types": "2.3.0",
-    "rolldown": "1.0.0-beta.58",
+    "rolldown": "1.0.0-beta.59",
     "std-env": "3.10.0",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
