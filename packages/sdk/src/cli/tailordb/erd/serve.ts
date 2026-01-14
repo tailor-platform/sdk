@@ -2,13 +2,13 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
+import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { exportTailorDBSchema } from "./export";
 import type { TailorDBSchemaOptions } from "./export";
 
 async function writeTblsSchemaAndReturnPath(
-  options: TailorDBSchemaOptions & { output?: string; printJson?: boolean },
+  options: TailorDBSchemaOptions & { output?: string },
 ): Promise<string> {
   const outputPath = path.resolve(process.cwd(), options.output ?? "schema.json");
   const schema = await exportTailorDBSchema(options);
@@ -20,10 +20,6 @@ async function writeTblsSchemaAndReturnPath(
 
   const relativePath = path.relative(process.cwd(), outputPath);
   logger.success(`Wrote ERD schema to ${relativePath}`);
-
-  if (options.printJson) {
-    logger.out(schema);
-  }
 
   return outputPath;
 }
@@ -88,7 +84,6 @@ export const erdServeCommand = defineCommand({
   args: {
     ...commonArgs,
     ...deploymentArgs,
-    ...jsonArgs,
     namespace: {
       type: "string",
       description: "TailorDB namespace name (optional if only one namespace is defined in config)",
@@ -108,7 +103,6 @@ export const erdServeCommand = defineCommand({
       configPath: args.config,
       namespace: args.namespace,
       output: args.output,
-      printJson: Boolean(args.json),
     });
 
     await runLiamCli(schemaPath);

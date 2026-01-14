@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
+import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -303,7 +303,6 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
 
 interface WriteSchemaOptions extends TailorDBSchemaOptions {
   outputPath: string;
-  printJson: boolean;
 }
 
 async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void> {
@@ -315,10 +314,6 @@ async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void>
 
   const relativePath = path.relative(process.cwd(), options.outputPath);
   logger.success(`Wrote ERD schema to ${relativePath}`);
-
-  if (options.printJson) {
-    logger.out(schema);
-  }
 }
 
 export const erdExportCommand = defineCommand({
@@ -329,7 +324,6 @@ export const erdExportCommand = defineCommand({
   args: {
     ...commonArgs,
     ...deploymentArgs,
-    ...jsonArgs,
     namespace: {
       type: "string",
       description: "TailorDB namespace name (optional if only one namespace is defined in config)",
@@ -351,7 +345,6 @@ export const erdExportCommand = defineCommand({
       configPath: args.config,
       namespace: args.namespace,
       outputPath,
-      printJson: Boolean(args.json),
     });
   }),
 });

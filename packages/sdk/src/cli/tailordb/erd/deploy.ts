@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
 import { loadConfig } from "@/cli/config-loader";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
+import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
@@ -42,7 +42,7 @@ async function resolveNamespace(configPath?: string, explicitNamespace?: string)
 }
 
 async function writeTblsSchema(
-  options: TailorDBSchemaOptions & { outputPath: string; printJson: boolean },
+  options: TailorDBSchemaOptions & { outputPath: string },
 ): Promise<void> {
   const schema = await exportTailorDBSchema(options);
   const json = JSON.stringify(schema, null, 2);
@@ -52,10 +52,6 @@ async function writeTblsSchema(
 
   const relativePath = path.relative(process.cwd(), options.outputPath);
   logger.success(`Wrote ERD schema to ${relativePath}`);
-
-  if (options.printJson) {
-    logger.out(schema);
-  }
 }
 
 export const erdDeployCommand = defineCommand({
@@ -66,7 +62,6 @@ export const erdDeployCommand = defineCommand({
   args: {
     ...commonArgs,
     ...deploymentArgs,
-    ...jsonArgs,
     namespace: {
       type: "string",
       description: "TailorDB namespace name (optional if only one namespace is defined in config)",
@@ -121,7 +116,6 @@ export const erdDeployCommand = defineCommand({
       configPath: args.config,
       namespace,
       outputPath: schemaOutputPath,
-      printJson: Boolean(args.json),
     });
 
     const distDir = path.resolve(process.cwd(), String(args.dist));
@@ -134,14 +128,10 @@ export const erdDeployCommand = defineCommand({
       workspaceId,
       erdSiteName,
       distDir,
-      !args.json,
+      true,
     );
 
-    if (args.json) {
-      logger.out({ name: erdSiteName, workspaceId, url, skippedFiles });
-    } else {
-      logger.success(`ERD site "${erdSiteName}" deployed successfully. URL: ${url}`);
-      logSkippedFiles(skippedFiles);
-    }
+    logger.success(`ERD site "${erdSiteName}" deployed successfully. URL: ${url}`);
+    logSkippedFiles(skippedFiles);
   }),
 });
