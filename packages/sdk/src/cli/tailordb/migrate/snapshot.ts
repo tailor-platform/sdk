@@ -145,7 +145,11 @@ export function getMigrationFiles(
   }
 
   const entries = fs.readdirSync(migrationsDir, { withFileTypes: true });
-  const migrations: { number: number; type: "schema" | "diff"; path: string }[] = [];
+  const migrations: {
+    number: number;
+    type: "schema" | "diff";
+    path: string;
+  }[] = [];
 
   for (const entry of entries) {
     // Only process directories with valid migration numbers (e.g., "0000", "0001")
@@ -255,7 +259,9 @@ export function reconstructSnapshotFromMigrations(migrationsDir: string): Schema
   const schemaFile = files.find((f) => f.type === "schema" && f.number === INITIAL_SCHEMA_NUMBER);
   if (!schemaFile) {
     throw new Error(
-      `No initial schema file found in ${migrationsDir}. Expected ${formatMigrationNumber(INITIAL_SCHEMA_NUMBER)}/schema.json`,
+      `No initial schema file found in ${migrationsDir}. Expected ${formatMigrationNumber(
+        INITIAL_SCHEMA_NUMBER,
+      )}/schema.json`,
     );
   }
 
@@ -395,15 +401,104 @@ function isBreakingFieldChange(
 }
 
 /**
+ * Context for collecting diff changes and breaking changes
+ */
+interface DiffContext {
+  changes: DiffChange[];
+  breakingChanges: BreakingChangeInfo[];
+}
+
+function addChange(
+  ctx: DiffContext,
+  change: DiffChange,
+  oldField: SnapshotFieldConfig | undefined,
+  newField: SnapshotFieldConfig | undefined,
+): void {
+  ctx.changes.push(change);
+
+  if (change.fieldName) {
+    const breaking = isBreakingFieldChange(change.typeName, change.fieldName, oldField, newField);
+    if (breaking) {
+      ctx.breakingChanges.push(breaking);
+    }
+  }
+}
+
+function compareTypeFields(
+  ctx: DiffContext,
+  typeName: string,
+  prevType: SnapshotType,
+  currType: SnapshotType,
+): void {
+  const prevFieldNames = new Set(Object.keys(prevType.fields));
+  const currFieldNames = new Set(Object.keys(currType.fields));
+
+  // Check for added fields
+  for (const fieldName of currFieldNames) {
+    if (!prevFieldNames.has(fieldName)) {
+      addChange(
+        ctx,
+        {
+          kind: "field_added",
+          typeName,
+          fieldName,
+          after: currType.fields[fieldName],
+        },
+        undefined,
+        currType.fields[fieldName],
+      );
+    }
+  }
+
+  // Check for removed fields
+  for (const fieldName of prevFieldNames) {
+    if (!currFieldNames.has(fieldName)) {
+      addChange(
+        ctx,
+        {
+          kind: "field_removed",
+          typeName,
+          fieldName,
+          before: prevType.fields[fieldName],
+        },
+        prevType.fields[fieldName],
+        undefined,
+      );
+    }
+  }
+
+  // Check for modified fields
+  for (const fieldName of currFieldNames) {
+    if (!prevFieldNames.has(fieldName)) continue;
+
+    const prevField = prevType.fields[fieldName];
+    const currField = currType.fields[fieldName];
+
+    if (areFieldsDifferent(prevField, currField)) {
+      addChange(
+        ctx,
+        {
+          kind: "field_modified",
+          typeName,
+          fieldName,
+          before: prevField,
+          after: currField,
+        },
+        prevField,
+        currField,
+      );
+    }
+  }
+}
+
+/**
  * Compare two snapshots and generate a diff
  * @param {SchemaSnapshot} previous - Previous schema snapshot
  * @param {SchemaSnapshot} current - Current schema snapshot
  * @returns {MigrationDiff} Migration diff between snapshots
  */
 export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapshot): MigrationDiff {
-  const changes: DiffChange[] = [];
-  const breakingChanges: BreakingChangeInfo[] = [];
-  let hasBreakingChanges = false;
+  const ctx: DiffContext = { changes: [], breakingChanges: [] };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
   const currentTypeNames = new Set(Object.keys(current.types));
@@ -411,7 +506,7 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
   // Check for added types
   for (const typeName of currentTypeNames) {
     if (!previousTypeNames.has(typeName)) {
-      changes.push({
+      ctx.changes.push({
         kind: "type_added",
         typeName,
         after: current.types[typeName],
@@ -422,7 +517,7 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
   // Check for removed types
   for (const typeName of previousTypeNames) {
     if (!currentTypeNames.has(typeName)) {
-      changes.push({
+      ctx.changes.push({
         kind: "type_removed",
         typeName,
         before: previous.types[typeName],
@@ -433,94 +528,17 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
   // Check for modified types
   for (const typeName of currentTypeNames) {
     if (!previousTypeNames.has(typeName)) continue;
-
-    const prevType = previous.types[typeName];
-    const currType = current.types[typeName];
-    const prevFieldNames = new Set(Object.keys(prevType.fields));
-    const currFieldNames = new Set(Object.keys(currType.fields));
-
-    // Check for added fields
-    for (const fieldName of currFieldNames) {
-      if (!prevFieldNames.has(fieldName)) {
-        changes.push({
-          kind: "field_added",
-          typeName,
-          fieldName,
-          after: currType.fields[fieldName],
-        });
-
-        const breaking = isBreakingFieldChange(
-          typeName,
-          fieldName,
-          undefined,
-          currType.fields[fieldName],
-        );
-        if (breaking) {
-          hasBreakingChanges = true;
-          breakingChanges.push(breaking);
-        }
-      }
-    }
-
-    // Check for removed fields
-    for (const fieldName of prevFieldNames) {
-      if (!currFieldNames.has(fieldName)) {
-        changes.push({
-          kind: "field_removed",
-          typeName,
-          fieldName,
-          before: prevType.fields[fieldName],
-        });
-
-        const breaking = isBreakingFieldChange(
-          typeName,
-          fieldName,
-          prevType.fields[fieldName],
-          undefined,
-        );
-        if (breaking) {
-          hasBreakingChanges = true;
-          breakingChanges.push(breaking);
-        }
-      }
-    }
-
-    // Check for modified fields
-    for (const fieldName of currFieldNames) {
-      if (!prevFieldNames.has(fieldName)) continue;
-
-      const prevField = prevType.fields[fieldName];
-      const currField = currType.fields[fieldName];
-
-      if (areFieldsDifferent(prevField, currField)) {
-        changes.push({
-          kind: "field_modified",
-          typeName,
-          fieldName,
-          before: prevField,
-          after: currField,
-        });
-
-        const breaking = isBreakingFieldChange(typeName, fieldName, prevField, currField);
-        if (breaking) {
-          hasBreakingChanges = true;
-          breakingChanges.push(breaking);
-        }
-      }
-    }
+    compareTypeFields(ctx, typeName, previous.types[typeName], current.types[typeName]);
   }
-
-  // Migration script is required if there are any breaking changes
-  const requiresMigrationScript = breakingChanges.length > 0;
 
   return {
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace: current.namespace,
     createdAt: new Date().toISOString(),
-    changes,
-    hasBreakingChanges,
-    breakingChanges,
-    requiresMigrationScript,
+    changes: ctx.changes,
+    hasBreakingChanges: ctx.breakingChanges.length > 0,
+    breakingChanges: ctx.breakingChanges,
+    requiresMigrationScript: ctx.breakingChanges.length > 0,
   };
 }
 
@@ -633,7 +651,9 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
   if (!schemaFiles.includes(INITIAL_SCHEMA_NUMBER)) {
     errors.push({
       type: "missing_schema",
-      message: `Initial schema snapshot (${formatMigrationNumber(INITIAL_SCHEMA_NUMBER)}/schema.json) is missing`,
+      message: `Initial schema snapshot (${formatMigrationNumber(
+        INITIAL_SCHEMA_NUMBER,
+      )}/schema.json) is missing`,
       migrationNumber: INITIAL_SCHEMA_NUMBER,
     });
   }
@@ -643,7 +663,9 @@ export function validateMigrationFiles(migrationsDir: string): MigrationValidati
     if (num !== INITIAL_SCHEMA_NUMBER) {
       errors.push({
         type: "invalid_schema_number",
-        message: `Schema file found at migration ${formatMigrationNumber(num)}, but schema should only exist at ${formatMigrationNumber(INITIAL_SCHEMA_NUMBER)}`,
+        message: `Schema file found at migration ${formatMigrationNumber(
+          num,
+        )}, but schema should only exist at ${formatMigrationNumber(INITIAL_SCHEMA_NUMBER)}`,
         migrationNumber: num,
       });
     }

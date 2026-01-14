@@ -254,6 +254,53 @@ function generateTableType(
   return { typeDef, usedTimestamp, usedColumnType };
 }
 
+function mapToTsType(fieldType: string): {
+  type: string;
+  usedTimestamp: boolean;
+} {
+  switch (fieldType) {
+    case "uuid":
+    case "string":
+      return { type: "string", usedTimestamp: false };
+    case "integer":
+    case "float":
+    case "number":
+      return { type: "number", usedTimestamp: false };
+    case "date":
+    case "datetime":
+      return { type: "Timestamp", usedTimestamp: true };
+    case "bool":
+    case "boolean":
+      return { type: "boolean", usedTimestamp: false };
+    default:
+      return { type: "string", usedTimestamp: false };
+  }
+}
+
+function formatEnumUnion(values: string[]): string {
+  return values.map((v) => `"${v}"`).join(" | ");
+}
+
+function generateEnumChangeColumnType(
+  enumValueChange: EnumValueChange,
+  config: SnapshotFieldConfig,
+): string {
+  const allValues = [...new Set([...enumValueChange.beforeValues, ...enumValueChange.afterValues])];
+  const selectType = formatEnumUnion(allValues);
+  const afterType = formatEnumUnion(enumValueChange.afterValues);
+
+  if (config.array && !config.required) {
+    return `ColumnType<(${selectType})[] | null, (${afterType})[] | null, (${afterType})[] | null>`;
+  }
+  if (config.array) {
+    return `ColumnType<(${selectType})[], (${afterType})[], (${afterType})[]>`;
+  }
+  if (!config.required) {
+    return `ColumnType<(${selectType}) | null, (${afterType}) | null, (${afterType}) | null>`;
+  }
+  return `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
+}
+
 /**
  * Generate field type from snapshot field config
  * @param {SnapshotFieldConfig} config - Field configuration
@@ -270,77 +317,33 @@ function generateFieldType(
   usedTimestamp: boolean;
   usedColumnType: boolean;
 } {
-  let usedTimestamp = false;
-  let usedColumnType = false;
-
   // Handle enum value changes specially
   if (enumValueChange) {
-    // Union of before and after values (for SELECT - existing data might have old values)
-    const allValues = [
-      ...new Set([...enumValueChange.beforeValues, ...enumValueChange.afterValues]),
-    ];
-    const selectType = allValues.map((v) => `"${v}"`).join(" | ");
-    const afterType = enumValueChange.afterValues.map((v) => `"${v}"`).join(" | ");
-
-    // For enum value changes:
-    // SELECT returns before ∪ after (existing data might have old values)
-    // INSERT/UPDATE requires after (must use new values)
-    usedColumnType = true;
-    let type = `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
-
-    // Apply array modifier
-    if (config.array) {
-      type = `ColumnType<(${selectType})[], (${afterType})[], (${afterType})[]>`;
-    }
-
-    // Handle nullable modifier
-    if (!config.required) {
-      type = `ColumnType<(${selectType}) | null, (${afterType}) | null, (${afterType}) | null>`;
-      if (config.array) {
-        type = `ColumnType<(${selectType})[] | null, (${afterType})[] | null, (${afterType})[] | null>`;
-      }
-    }
-
-    return { type, usedTimestamp, usedColumnType };
+    return {
+      type: generateEnumChangeColumnType(enumValueChange, config),
+      usedTimestamp: false,
+      usedColumnType: true,
+    };
   }
 
   // Get base type
   let baseType: string;
-  switch (config.type) {
-    case "uuid":
-    case "string":
-      baseType = "string";
-      break;
-    case "integer":
-    case "float":
-    case "number":
-      baseType = "number";
-      break;
-    case "date":
-    case "datetime":
-      baseType = "Timestamp";
-      usedTimestamp = true;
-      break;
-    case "bool":
-    case "boolean":
-      baseType = "boolean";
-      break;
-    case "enum":
-      if (config.allowedValues && config.allowedValues.length > 0) {
-        baseType = config.allowedValues.map((v) => `"${v}"`).join(" | ");
-      } else {
-        baseType = "string";
-      }
-      break;
-    default:
-      baseType = "string";
-      break;
+  let usedTimestamp = false;
+
+  if (config.type === "enum") {
+    baseType =
+      config.allowedValues && config.allowedValues.length > 0
+        ? formatEnumUnion(config.allowedValues)
+        : "string";
+  } else {
+    const mapped = mapToTsType(config.type);
+    baseType = mapped.type;
+    usedTimestamp = mapped.usedTimestamp;
   }
 
   // Apply array modifier
   let type = baseType;
   if (config.array) {
-    // Wrap enum types in parentheses
     const needsParens =
       config.type === "enum" && config.allowedValues && config.allowedValues.length > 0;
     type = needsParens ? `(${baseType})[]` : `${baseType}[]`;
@@ -351,13 +354,18 @@ function generateFieldType(
     // For fields changing from optional to required:
     // SELECT returns T | null (existing data might be null)
     // INSERT/UPDATE requires T (must provide a value)
-    usedColumnType = true;
-    type = `ColumnType<${type} | null, ${type}, ${type}>`;
-  } else if (!config.required) {
+    return {
+      type: `ColumnType<${type} | null, ${type}, ${type}>`,
+      usedTimestamp,
+      usedColumnType: true,
+    };
+  }
+
+  if (!config.required) {
     type = `${type} | null`;
   }
 
-  return { type, usedTimestamp, usedColumnType };
+  return { type, usedTimestamp, usedColumnType: false };
 }
 
 /**
