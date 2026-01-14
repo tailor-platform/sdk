@@ -266,7 +266,11 @@ export const logger = {
           return "";
         }
         if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
-          return formatDistanceToNowStrict(new Date(value), { addSuffix: true });
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) {
+            return value;
+          }
+          return formatDistanceToNowStrict(date, { addSuffix: true });
         }
         return String(value);
       }),

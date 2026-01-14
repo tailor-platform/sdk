@@ -4,7 +4,7 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
-export const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string => {
+const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string => {
   switch (grantType) {
     case AuthOAuth2Client_GrantType.AUTHORIZATION_CODE:
       return "authorization_code";

@@ -140,18 +140,6 @@ type SelectInput<Deps extends readonly DependencyKind[], Ts, Rs, E> = (HasDepend
   (HasDependency<Deps, "executor"> extends true ? ExecutorInputPart<E> : object) &
   AuthPart;
 
-// ========================================
-// Aggregate input helper types
-// ========================================
-
-/** Input type for aggregate method - use with dependencies */
-export type AggregateInput<
-  Deps extends readonly DependencyKind[],
-  Ts = unknown,
-  Rs = unknown,
-  E = unknown,
-> = SelectInput<Deps, Ts, Rs, E>;
-
 /** Input type for TailorDB-only generators */
 export type TailorDBInput<Ts> = TailorDBInputPart<Ts> & AuthPart;
 

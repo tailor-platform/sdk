@@ -254,11 +254,19 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
   }
 
   const client = initOAuth2Client();
-  const resp = await client.refreshToken({
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    expiresAt: Date.parse(tokens.token_expires_at),
-  });
+  let resp;
+  try {
+    resp = await client.refreshToken({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresAt: Date.parse(tokens.token_expires_at),
+    });
+  } catch {
+    throw new Error(ml`
+      Failed to refresh token. Your session may have expired.
+      Please run 'tailor-sdk login' and try again.
+    `);
+  }
   config.users[user] = {
     access_token: resp.accessToken,
     refresh_token: resp.refreshToken!,

@@ -37,7 +37,7 @@ jobs:
 
       - name: Commit changes
         if: steps.changes.outputs.files != ''
-        uses: suzuki-shunsuke/commit-action@87b297f0ce551411b43d1880f4fb3cbc60381055 # v0.0.14
+        uses: suzuki-shunsuke/commit-action@f28421acc277a6d6a9c1f94ea449076ad77dba67 # v0.1.0
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
           app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}

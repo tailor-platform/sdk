@@ -13,12 +13,19 @@ import type {
 // Raw permission types for normalize function parameters
 type PermissionOperator = "=" | "!=" | "in" | "not in";
 
-type PermissionOperand =
+type ObjectOperand =
   | { user: string }
   | { record: string }
   | { oldRecord: string }
   | { newRecord: string }
   | { value: unknown };
+
+type ValueOperand = string | boolean | string[] | boolean[];
+
+// GQL string reference pattern (e.g., "user.id", "user.roles")
+type GqlStringRef = `user.${string}`;
+
+type PermissionOperand = ObjectOperand | ValueOperand | GqlStringRef;
 
 type PermissionCondition = readonly [PermissionOperand, PermissionOperator, PermissionOperand];
 
@@ -72,7 +79,7 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
  * @param {TailorTypePermission<User, Type>} permission - Tailor type permission
  * @returns {StandardTailorTypePermission} Normalized record permissions
  */
-export function normalizePermission<User extends object = object, Type extends object = object>(
+function normalizePermission<User extends object = object, Type extends object = object>(
   permission: TailorTypePermission<User, Type>,
 ): StandardTailorTypePermission {
   const keys = Object.keys(permission) as Array<keyof typeof permission>;

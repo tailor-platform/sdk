@@ -51,10 +51,7 @@ body: async (context) => {
 // In executors
 body: async ({ newRecord }) => {
   const db = getDB("tailordb");
-  await db
-    .insertInto("AuditLog")
-    .values({ userId: newRecord.id, action: "created" })
-    .execute();
+  await db.insertInto("AuditLog").values({ userId: newRecord.id, action: "created" }).execute();
 };
 
 // In workflow jobs

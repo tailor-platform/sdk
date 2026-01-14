@@ -99,6 +99,7 @@ jobs:
       - name: Seed data
         working-directory: example
         run: |
+          pnpm run seed:validate
           pnpm run seed
           pnpm run seed:truncate -y
         env:

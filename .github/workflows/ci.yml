@@ -50,3 +50,6 @@ jobs:
 
       - name: Check type
         run: pnpm typecheck
+
+      - name: Check unused code (knip)
+        run: pnpm knip:sdk

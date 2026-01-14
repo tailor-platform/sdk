@@ -37,13 +37,6 @@ export interface GetWorkflowExecutionOptions {
   logs?: boolean;
 }
 
-export interface JobExecutionLog {
-  jobName: string;
-  status: string;
-  logs: string;
-  result: string;
-}
-
 export interface WorkflowExecutionDetailInfo extends WorkflowExecutionInfo {
   jobDetails?: (WorkflowJobExecutionInfo & {
     logs?: string;

@@ -77,7 +77,7 @@ export const WorkflowOperationSchema = z.preprocess(
   }),
 );
 
-export const OperationSchema = z.union([
+const OperationSchema = z.union([
   FunctionOperationSchema,
   GqlOperationSchema,
   WebhookOperationSchema,

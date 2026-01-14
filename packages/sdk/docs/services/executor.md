@@ -297,8 +297,7 @@ export default createExecutor({
   name: "order-status-changed",
   trigger: recordUpdatedTrigger({
     type: order,
-    condition: ({ oldRecord, newRecord }) =>
-      oldRecord.status !== newRecord.status,
+    condition: ({ oldRecord, newRecord }) => oldRecord.status !== newRecord.status,
   }),
   operation: {
     kind: "function",

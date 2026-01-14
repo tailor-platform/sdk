@@ -1,11 +1,6 @@
 import { type AllowedValue } from "./field";
 import type { FieldValidateInput } from "./validation";
 
-export interface SecretValue {
-  vaultName: string;
-  secretKey: string;
-}
-
 export type TailorFieldType =
   | "uuid"
   | "string"
@@ -31,19 +26,6 @@ export type TailorToTs = {
   object: Record<string, unknown>;
   nested: Record<string, unknown>;
 } & Record<TailorFieldType, unknown>;
-
-export const tailorToManifestScalar = {
-  string: "string",
-  integer: "integer",
-  float: "float",
-  boolean: "boolean",
-  uuid: "uuid",
-  date: "date",
-  datetime: "datetime",
-  time: "time",
-  enum: "enum",
-  nested: "nested",
-} as const;
 
 export interface FieldMetadata {
   description?: string;

@@ -18,10 +18,7 @@ interface CodeGenerator<T, R, E, Ts, Rs> {
     source: { filePath: string; exportName: string };
   }): T | Promise<T>;
 
-  processResolver(args: {
-    resolver: Resolver;
-    namespace: string;
-  }): R | Promise<R>;
+  processResolver(args: { resolver: Resolver; namespace: string }): R | Promise<R>;
 
   processExecutor(executor: Executor): E | Promise<E>;
 
