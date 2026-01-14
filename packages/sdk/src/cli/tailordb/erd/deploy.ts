@@ -54,8 +54,7 @@ async function writeTblsSchema(
   logger.success(`Wrote ERD schema to ${relativePath}`);
 
   if (options.printJson) {
-    // eslint-disable-next-line no-restricted-syntax
-    console.log(json);
+    logger.out(schema);
   }
 }
 
