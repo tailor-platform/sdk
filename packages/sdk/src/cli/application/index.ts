@@ -189,17 +189,6 @@ export function defineApplication(config: AppConfig) {
   app.defineAuth(config.auth);
   app.defineExecutor(config.executor);
   app.defineWorkflow(config.workflow);
-  const erdWebsites =
-    config.db == null
-      ? []
-      : Object.values(config.db)
-          .filter(
-            (
-              serviceConfig,
-            ): serviceConfig is TailorDBServiceInput[string] & { erdSite?: StaticWebsiteInput } =>
-              typeof serviceConfig === "object" && !("external" in serviceConfig),
-          )
-          .flatMap((serviceConfig) => (serviceConfig.erdSite ? [serviceConfig.erdSite] : []));
-  app.defineStaticWebsites([...erdWebsites, ...(config.staticWebsites ?? [])]);
+  app.defineStaticWebsites(config.staticWebsites);
   return app;
 }

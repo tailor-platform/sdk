@@ -23,6 +23,4 @@ export function defineStaticWebSite(name: string, config: Omit<StaticWebsiteInpu
   return result as typeof result & StaticWebsiteDefinitionBrand;
 }
 
-export type StaticWebsiteDefinition = ReturnType<typeof defineStaticWebSite>;
-
 export type StaticWebsiteConfig = Omit<ReturnType<typeof defineStaticWebSite>, "url">;

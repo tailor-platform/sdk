@@ -66,7 +66,7 @@ export default defineConfig({
     website.url, // This will be replaced with the actual Static Website URL
   ],
   db: {
-    tailordb: { files: ["./tailordb/*.ts"], erdSite },
+    tailordb: { files: ["./tailordb/*.ts"], erdSite: erdSite.name },
     analyticsdb: { files: ["./analyticsdb/*.ts"] },
   },
   resolver: {
