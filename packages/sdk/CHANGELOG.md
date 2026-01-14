@@ -1,5 +1,45 @@
 # @tailor-platform/sdk
 
+## 1.2.4
+
+### Patch Changes
+
+- [#382](https://github.com/tailor-platform/sdk/pull/382) [`a2d0eb8`](https://github.com/tailor-platform/sdk/commit/a2d0eb86b8e606d59a1735289d7c2c6e74398039) Thanks [@riku99](https://github.com/riku99)! - Enable jsdoc/require-param and jsdoc/require-returns
+
+- [#386](https://github.com/tailor-platform/sdk/pull/386) [`6ff9aee`](https://github.com/tailor-platform/sdk/commit/6ff9aeea68ee391e9aeb78c8081ee0a7a7e04729) Thanks [@riku99](https://github.com/riku99)! - Introduce Knip
+
+- [#380](https://github.com/tailor-platform/sdk/pull/380) [`2718b7a`](https://github.com/tailor-platform/sdk/commit/2718b7abd8a3c2603c8cfbd234ada41bcf4d0061) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.3.5
+
+- [#381](https://github.com/tailor-platform/sdk/pull/381) [`dddd908`](https://github.com/tailor-platform/sdk/commit/dddd908fce87f0dc46a96480136f847ae67a7f31) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260104.1
+
+- [#385](https://github.com/tailor-platform/sdk/pull/385) [`1481cbd`](https://github.com/tailor-platform/sdk/commit/1481cbd9c2c2dfda7ee61af45b8d4881716db67e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.452.0
+
+- [#387](https://github.com/tailor-platform/sdk/pull/387) [`8d415c9`](https://github.com/tailor-platform/sdk/commit/8d415c9813f0bc7f4e9df67206081e9af10991cf) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.7.3
+
+- [#388](https://github.com/tailor-platform/sdk/pull/388) [`c37287c`](https://github.com/tailor-platform/sdk/commit/c37287c254bb08cebc3e97fc96192a864f9f2999) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.52.0
+
+- [#389](https://github.com/tailor-platform/sdk/pull/389) [`866596d`](https://github.com/tailor-platform/sdk/commit/866596d8648c7ada3d549c9ea68ec59c3960ba7d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.56.2
+
+- [#391](https://github.com/tailor-platform/sdk/pull/391) [`b6186e0`](https://github.com/tailor-platform/sdk/commit/b6186e07f8bf8b1f78b827a871d28b6ac97b1967) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260106.1
+
+- [#393](https://github.com/tailor-platform/sdk/pull/393) [`737518e`](https://github.com/tailor-platform/sdk/commit/737518e99bfbce7c3237e7344910a1510f4c16ea) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.453.0
+
+- [#394](https://github.com/tailor-platform/sdk/pull/394) [`b70bdea`](https://github.com/tailor-platform/sdk/commit/b70bdeacdfcef6e042311592bd37ae79bb1f7372) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v5.80.0
+
+- [#399](https://github.com/tailor-platform/sdk/pull/399) [`ec073a1`](https://github.com/tailor-platform/sdk/commit/ec073a1346066b195459976e16579adc6fef1173) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.454.0
+
+- [#401](https://github.com/tailor-platform/sdk/pull/401) [`5744ef5`](https://github.com/tailor-platform/sdk/commit/5744ef5a6b1930e8d98aeaa92a189c5e49c21581) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update suzuki-shunsuke/commit-action action to v0.1.0
+
+- [#402](https://github.com/tailor-platform/sdk/pull/402) [`e8e7105`](https://github.com/tailor-platform/sdk/commit/e8e7105c8553f9f258f602923e976b1455e06343) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint-tsgolint to v0.11.0
+
+- [#406](https://github.com/tailor-platform/sdk/pull/406) [`5377f2a`](https://github.com/tailor-platform/sdk/commit/5377f2a7bca9d4090f44c502b49d82f3e253b536) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v5.80.2
+
+- [#411](https://github.com/tailor-platform/sdk/pull/411) [`634b81d`](https://github.com/tailor-platform/sdk/commit/634b81d3beb9ced4d16b695c2c945a1af667694a) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint-plugin-jsdoc to v62
+
+- [#407](https://github.com/tailor-platform/sdk/pull/407) [`49cefda`](https://github.com/tailor-platform/sdk/commit/49cefda3d868a66122a02a5e011f5b5379f37035) Thanks [@remiposo](https://github.com/remiposo)! - Made it possible to change the OAuth2 Client ID
+
+  By setting PLATFORM_OAUTH2_CLIENT_ID, you can now change the OAuth2 Client ID used for logging into Tailor Platform. Using it in combination with PLATFORM_URL makes it easier to log into non-production Tailor Platform environments for testing. This is for internal debugging purposes and is not intended to be set by regular users.
+
 ## 1.2.3
 
 ### Patch Changes
