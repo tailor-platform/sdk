@@ -35,7 +35,7 @@
     "@tailor-platform/function-kysely-tailordb": "0.1.3",
     "@tailor-platform/function-types": "0.8.0",
     "@toiroakr/lines-db": "0.6.1",
-    "@types/node": "24.10.4",
+    "@types/node": "24.10.7",
     "@typescript/native-preview": "7.0.0-dev.20260109.1",
     "eslint-plugin-oxlint": "1.36.0",
     "graphql": "16.12.0",
