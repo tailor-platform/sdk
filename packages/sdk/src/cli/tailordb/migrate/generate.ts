@@ -254,11 +254,14 @@ async function openInEditor(filePath: string): Promise<void> {
     return;
   }
 
+  // Parse editor command and arguments
+  const [command, ...args] = editor.trim().split(/\s+/);
+
   logger.newline();
   logger.info(`Opening ${path.basename(filePath)} in ${editor}...`);
 
-  // Spawn editor as detached process
-  const child = spawn(editor, [filePath], {
+  // Spawn editor with parsed command and arguments
+  const child = spawn(command, [...args, filePath], {
     stdio: "inherit",
     detached: false,
   });
