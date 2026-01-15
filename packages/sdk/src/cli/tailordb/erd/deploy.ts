@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
+import { loadConfig } from "@/cli/config-loader";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -54,7 +55,8 @@ export const erdDeployCommand = defineCommand({
     const erdDir = path.dirname(distDir);
 
     // Resolve namespace and validate erdSite once at command level
-    const { namespace, dbConfig } = await resolveDbConfig(args.config, args.namespace);
+    const { config } = await loadConfig(args.config);
+    const { namespace, dbConfig } = resolveDbConfig(config, args.namespace);
     const erdSiteName = dbConfig.erdSite;
 
     await prepareErdBuild({

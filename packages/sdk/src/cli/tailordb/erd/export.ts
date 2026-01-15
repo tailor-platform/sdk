@@ -4,11 +4,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
+import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { DEFAULT_SCHEMA_OUTPUT } from "./constants";
-import { resolveSingleNamespace } from "./namespace";
+import { resolveDbConfig } from "./namespace";
 import type { OperatorClient } from "../../client";
 import type {
   TailorDBType as TailorDBProtoType,
@@ -307,7 +308,8 @@ export const erdExportCommand = defineCommand({
     const outputPath = path.resolve(process.cwd(), String(args.output));
 
     // Resolve namespace once at command level
-    const namespace = args.namespace ?? (await resolveSingleNamespace(args.config));
+    const { config } = await loadConfig(args.config);
+    const { namespace } = resolveDbConfig(config, args.namespace);
 
     await writeTblsSchemaToFile({
       workspaceId,

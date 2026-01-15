@@ -2,13 +2,14 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
+import { loadConfig } from "@/cli/config-loader";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { DEFAULT_DIST_DIR } from "./constants";
-import { resolveSingleNamespace } from "./namespace";
+import { resolveDbConfig } from "./namespace";
 import { prepareErdBuild } from "./prepare";
 import { resolveCliBinPath } from "./resolve-cli-bin";
 
@@ -88,7 +89,8 @@ export const erdServeCommand = defineCommand({
     const erdDir = path.dirname(path.resolve(process.cwd(), DEFAULT_DIST_DIR));
 
     // Resolve namespace once at command level
-    const namespace = args.namespace ?? (await resolveSingleNamespace(args.config));
+    const { config } = await loadConfig(args.config);
+    const { namespace } = resolveDbConfig(config, args.namespace);
 
     await prepareErdBuild({
       workspaceId,
