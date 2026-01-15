@@ -83,9 +83,7 @@ export class GenerationManager {
           sourceInfo: db.getTypeSourceInfo(),
         };
       } catch (error) {
-        logger.error(
-          `${styles.error("Error loading types for TailorDB service")} ${styles.errorBright(namespace)}`,
-        );
+        logger.error(`Error loading types for TailorDB service ${styles.bold(namespace)}`);
         logger.error(String(error));
         if (!watch) {
           throw error;
@@ -122,9 +120,7 @@ export class GenerationManager {
           this.services.resolver[namespace][resolver.name] = resolver;
         });
       } catch (error) {
-        logger.error(
-          `${styles.error("Error loading resolvers for Resolver service")} ${styles.errorBright(namespace)}`,
-        );
+        logger.error(`Error loading resolvers for Resolver service ${styles.bold(namespace)}`);
         logger.error(String(error));
         if (!watch) {
           throw error;
@@ -163,9 +159,7 @@ export class GenerationManager {
         try {
           await this.processGenerator(gen as AnyCodeGenerator);
         } catch (error) {
-          logger.error(
-            `${styles.error("Error processing generator")} ${styles.errorBright(gen.id)}`,
-          );
+          logger.error(`Error processing generator ${styles.bold(gen.id)}`);
           logger.error(String(error));
           if (!watch) {
             throw error;
@@ -239,7 +233,7 @@ export class GenerationManager {
           });
         } catch (error) {
           logger.error(
-            `${styles.error(`Error processing type`)} ${styles.errorBright(typeName)} ${styles.error(`in ${namespace} with generator ${gen.id}`)}`,
+            `Error processing type ${styles.bold(typeName)} in ${namespace} with generator ${gen.id}`,
           );
           logger.error(String(error));
         }
@@ -255,7 +249,7 @@ export class GenerationManager {
         });
       } catch (error) {
         logger.error(
-          `${styles.error(`Error processing TailorDB namespace`)} ${styles.errorBright(namespace)} ${styles.error(`with generator ${gen.id}`)}`,
+          `Error processing TailorDB namespace ${styles.bold(namespace)} with generator ${gen.id}`,
         );
         logger.error(String(error));
       }
@@ -288,7 +282,7 @@ export class GenerationManager {
           });
         } catch (error) {
           logger.error(
-            `${styles.error(`Error processing resolver`)} ${styles.errorBright(resolverName)} ${styles.error(`in ${namespace} with generator ${gen.id}`)}`,
+            `Error processing resolver ${styles.bold(resolverName)} in ${namespace} with generator ${gen.id}`,
           );
           logger.error(String(error));
         }
@@ -304,7 +298,7 @@ export class GenerationManager {
         });
       } catch (error) {
         logger.error(
-          `${styles.error(`Error processing Resolver namespace`)} ${styles.errorBright(namespace)} ${styles.error(`with generator ${gen.id}`)}`,
+          `Error processing Resolver namespace ${styles.bold(namespace)} with generator ${gen.id}`,
         );
         logger.error(String(error));
       }
@@ -329,7 +323,7 @@ export class GenerationManager {
           results.executorResults[executorId] = await processExecutor(executor);
         } catch (error) {
           logger.error(
-            `${styles.error(`Error processing executor`)} ${styles.errorBright(executor.name)} ${styles.error(`with generator ${gen.id}`)}`,
+            `Error processing executor ${styles.bold(executor.name)} with generator ${gen.id}`,
           );
           logger.error(String(error));
         }
@@ -415,9 +409,7 @@ export class GenerationManager {
           fs.writeFile(file.path, file.content, (err) => {
             if (err) {
               const relativePath = path.relative(process.cwd(), file.path);
-              logger.error(
-                `${styles.error("Error writing file")} ${styles.errorBright(relativePath)}`,
-              );
+              logger.error(`Error writing file ${styles.bold(relativePath)}`);
               logger.error(String(err));
               reject(err);
             } else {
@@ -429,7 +421,7 @@ export class GenerationManager {
                   if (chmodErr) {
                     const relativePath = path.relative(process.cwd(), file.path);
                     logger.error(
-                      `${styles.error("Error setting executable permission on")} ${styles.errorBright(relativePath)}`,
+                      `Error setting executable permission on ${styles.bold(relativePath)}`,
                     );
                     logger.error(String(chmodErr));
                     reject(chmodErr);
