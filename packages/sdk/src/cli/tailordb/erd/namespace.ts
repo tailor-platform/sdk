@@ -1,12 +1,12 @@
-import { loadConfig } from "../../config-loader";
+import type { AppConfig } from "@/configure/config";
+import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 
 /**
- * Read all TailorDB namespaces from config.
- * @param {string | undefined} configPath - Optional path to the SDK config file.
- * @returns {Promise<string[]>} List of TailorDB namespaces.
+ * Resolve a single TailorDB namespace from a config object.
+ * @param {AppConfig} config - Loaded Tailor SDK config.
+ * @returns {string} The resolved namespace.
  */
-async function getAllNamespaces(configPath?: string): Promise<string[]> {
-  const { config } = await loadConfig(configPath);
+export function resolveSingleNamespace(config: AppConfig): string {
   const namespaces = new Set<string>();
 
   if (config.db) {
@@ -15,30 +15,41 @@ async function getAllNamespaces(configPath?: string): Promise<string[]> {
     }
   }
 
-  return Array.from(namespaces);
-}
+  const namespaceList = Array.from(namespaces);
 
-/**
- * Resolve a single TailorDB namespace from config.
- * @param {string | undefined} configPath - Optional path to the SDK config file.
- * @returns {Promise<string>} The resolved namespace.
- */
-export async function resolveSingleNamespace(configPath?: string): Promise<string> {
-  const namespaces = await getAllNamespaces(configPath);
-
-  if (namespaces.length === 0) {
+  if (namespaceList.length === 0) {
     throw new Error(
       "No TailorDB namespaces found in config. Please define db services in tailor.config.ts or pass --namespace.",
     );
   }
 
-  if (namespaces.length > 1) {
+  if (namespaceList.length > 1) {
     throw new Error(
-      `Multiple TailorDB namespaces found in config: ${namespaces.join(
+      `Multiple TailorDB namespaces found in config: ${namespaceList.join(
         ", ",
       )}. Please specify one using --namespace.`,
     );
   }
 
-  return namespaces[0]!;
+  return namespaceList[0]!;
+}
+
+/**
+ * Resolve TailorDB config and namespace.
+ * @param {AppConfig} config - Loaded Tailor SDK config.
+ * @param {string | undefined} explicitNamespace - Namespace override.
+ * @returns {{ namespace: string; dbConfig: TailorDBServiceConfig }} Resolved namespace and config.
+ */
+export function resolveDbConfig(
+  config: AppConfig,
+  explicitNamespace?: string,
+): { namespace: string; dbConfig: TailorDBServiceConfig } {
+  const namespace = explicitNamespace ?? resolveSingleNamespace(config);
+  const dbConfig = config.db?.[namespace];
+
+  if (!dbConfig || typeof dbConfig !== "object" || "external" in dbConfig) {
+    throw new Error(`TailorDB namespace "${namespace}" not found in config.db.`);
+  }
+
+  return { namespace, dbConfig };
 }

@@ -8,23 +8,9 @@ import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
-import { exportTailorDBSchema } from "./export";
-import { runLiamBuild } from "./liam";
-import { resolveSingleNamespace } from "./namespace";
-import type { TailorDBSchemaOptions } from "./export";
-
-async function writeTblsSchema(
-  options: TailorDBSchemaOptions & { outputPath: string },
-): Promise<void> {
-  const schema = await exportTailorDBSchema(options);
-  const json = JSON.stringify(schema, null, 2);
-
-  fs.mkdirSync(path.dirname(options.outputPath), { recursive: true });
-  fs.writeFileSync(options.outputPath, json, "utf8");
-
-  const relativePath = path.relative(process.cwd(), options.outputPath);
-  logger.success(`Wrote ERD schema to ${relativePath}`);
-}
+import { DEFAULT_DIST_DIR, DEFAULT_SCHEMA_OUTPUT } from "./constants";
+import { resolveDbConfig } from "./namespace";
+import { prepareErdBuild } from "./prepare";
 
 export const erdDeployCommand = defineCommand({
   meta: {
@@ -43,13 +29,13 @@ export const erdDeployCommand = defineCommand({
       type: "string",
       description: "Output file path for tbls-compatible ERD JSON",
       alias: "o",
-      default: ".tailor-sdk/erd/schema.json",
+      default: DEFAULT_SCHEMA_OUTPUT,
     },
     dist: {
       type: "string",
       description: "Path to ERD static site files (built by liam)",
       alias: "d",
-      default: ".tailor-sdk/erd/dist",
+      default: DEFAULT_DIST_DIR,
     },
   },
   run: withCommonArgs(async (args) => {
@@ -64,14 +50,8 @@ export const erdDeployCommand = defineCommand({
       profile: args.profile,
     });
 
-    const namespace = args.namespace ?? (await resolveSingleNamespace(args.config));
-
     const { config } = await loadConfig(args.config);
-    const dbConfig = config.db?.[namespace];
-
-    if (!dbConfig || typeof dbConfig !== "object" || "external" in dbConfig) {
-      throw new Error(`TailorDB namespace "${namespace}" not found in config.db.`);
-    }
+    const { namespace, dbConfig } = resolveDbConfig(config, args.namespace);
 
     const erdSiteName = dbConfig.erdSite;
 
@@ -83,17 +63,17 @@ export const erdDeployCommand = defineCommand({
     }
 
     const schemaOutputPath = path.resolve(process.cwd(), String(args.output));
-    await writeTblsSchema({
+    const distDir = path.resolve(process.cwd(), String(args.dist));
+    const erdDir = path.dirname(distDir);
+
+    await prepareErdBuild({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
       namespace,
       outputPath: schemaOutputPath,
+      erdDir,
     });
-
-    const distDir = path.resolve(process.cwd(), String(args.dist));
-    const erdDir = path.dirname(distDir);
-    await runLiamBuild(schemaOutputPath, erdDir);
 
     if (!fs.existsSync(distDir) || !fs.statSync(distDir).isDirectory()) {
       throw new Error(`Directory not found or not a directory: ${distDir}`);

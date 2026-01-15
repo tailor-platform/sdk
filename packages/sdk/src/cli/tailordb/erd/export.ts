@@ -4,6 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
+import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
@@ -238,7 +239,8 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
     profile: options.profile,
   });
 
-  const namespace = options.namespace ?? (await resolveSingleNamespace(options.configPath));
+  const namespace =
+    options.namespace ?? resolveSingleNamespace((await loadConfig(options.configPath)).config);
 
   const types = await fetchAll(async (pageToken) => {
     try {

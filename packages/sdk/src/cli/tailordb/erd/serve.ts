@@ -5,31 +5,11 @@ import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
-import { exportTailorDBSchema } from "./export";
-import { runLiamBuild } from "./liam";
+import { DEFAULT_DIST_DIR } from "./constants";
+import { prepareErdBuild } from "./prepare";
 import { resolveCliBinPath } from "./resolve-cli-bin";
-import type { TailorDBSchemaOptions } from "./export";
 
-async function writeTblsSchemaAndReturnPath(
-  options: TailorDBSchemaOptions & { output?: string },
-): Promise<string> {
-  const defaultOutput = path.join(".tailor-sdk", "erd", "schema.json");
-  const outputPath = path.resolve(process.cwd(), options.output ?? defaultOutput);
-  const schema = await exportTailorDBSchema(options);
-  const json = JSON.stringify(schema, null, 2);
-
-  const dir = path.dirname(outputPath);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(outputPath, json, "utf8");
-
-  const relativePath = path.relative(process.cwd(), outputPath);
-  logger.success(`Wrote ERD schema to ${relativePath}`);
-
-  return outputPath;
-}
-
-async function runServeDist(): Promise<void> {
-  const erdDir = path.resolve(process.cwd(), ".tailor-sdk", "erd");
+async function runServeDist(erdDir: string): Promise<void> {
   fs.mkdirSync(erdDir, { recursive: true });
 
   return await new Promise<void>((resolve, reject) => {
@@ -92,16 +72,18 @@ export const erdServeCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     logErdBetaWarning();
-    const schemaPath = await writeTblsSchemaAndReturnPath({
+    const outputPath = path.resolve(process.cwd(), String(args.output));
+    const erdDir = path.dirname(path.resolve(process.cwd(), DEFAULT_DIST_DIR));
+
+    await prepareErdBuild({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
       namespace: args.namespace,
-      output: args.output,
+      outputPath,
+      erdDir,
     });
 
-    const erdDir = path.resolve(process.cwd(), ".tailor-sdk", "erd");
-    await runLiamBuild(schemaPath, erdDir);
-    await runServeDist();
+    await runServeDist(erdDir);
   }),
 });
