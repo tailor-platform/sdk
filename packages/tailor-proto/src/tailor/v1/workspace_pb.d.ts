@@ -854,6 +854,12 @@ export declare type GrantOrganizationAccessRequest = Message<"tailor.v1.GrantOrg
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 5;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 
@@ -904,6 +910,12 @@ export declare type UpdateOrganizationAccessRequest = Message<"tailor.v1.UpdateO
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 5;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 
@@ -949,6 +961,12 @@ export declare type RevokeOrganizationAccessRequest = Message<"tailor.v1.RevokeO
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 4;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 
@@ -1051,6 +1069,12 @@ export declare type GetOrganizationAccessRequest = Message<"tailor.v1.GetOrganiz
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 4;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 
@@ -1331,6 +1355,12 @@ export declare type GrantOrganizationFolderAccessRequest = Message<"tailor.v1.Gr
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 6;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 
@@ -1386,6 +1416,12 @@ export declare type UpdateOrganizationFolderAccessRequest = Message<"tailor.v1.U
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 6;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 
@@ -1436,6 +1472,12 @@ export declare type RevokeOrganizationFolderAccessRequest = Message<"tailor.v1.R
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 5;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 
@@ -1548,6 +1590,12 @@ export declare type GetOrganizationFolderAccessRequest = Message<"tailor.v1.GetO
      */
     value: string;
     case: "email";
+  } | {
+    /**
+     * @generated from field: string machine_user_id = 5;
+     */
+    value: string;
+    case: "machineUserId";
   } | { case: undefined; value?: undefined };
 };
 

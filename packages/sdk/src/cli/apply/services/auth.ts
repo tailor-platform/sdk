@@ -1106,6 +1106,7 @@ function protoOAuth2Client(
     )[parsed.clientType ?? "confidential"],
     accessTokenLifetime: parsed.accessTokenLifetimeSeconds,
     refreshTokenLifetime: parsed.refreshTokenLifetimeSeconds,
+    requireDpop: parsed.requireDpop,
   };
 }
 

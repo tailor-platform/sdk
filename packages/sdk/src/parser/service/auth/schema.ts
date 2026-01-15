@@ -91,6 +91,7 @@ export const OAuth2ClientSchema = z.object({
     .max(604800, "Maximum refresh token lifetime is 7 days (604800 seconds)")
     .optional()
     .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+  requireDpop: z.boolean().optional(),
 });
 
 export const SCIMAuthorizationSchema = z.object({

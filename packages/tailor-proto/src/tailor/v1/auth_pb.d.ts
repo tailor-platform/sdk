@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { AuthConnection, AuthIDPConfig, AuthOAuth2Client, AuthSCIMConfig, AuthSCIMResource, AuthService, MachineUser, PATScope, PersonalAccessToken, TenantProviderConfig, UserProfileProviderConfig } from "./auth_resource_pb";
+import type { AuthConnection, AuthIDPConfig, AuthOAuth2Client, AuthSCIMConfig, AuthSCIMResource, AuthService, ControlplaneMachineUser, MachineUser, PATScope, PersonalAccessToken, TenantProviderConfig, UserProfileProviderConfig } from "./auth_resource_pb";
 import type { PageDirection } from "./resource_pb";
 import type { Timestamp, Value } from "@bufbuild/protobuf/wkt";
 
@@ -1868,4 +1868,245 @@ export declare type ListAuthOAuth2ClientsResponse = Message<"tailor.v1.ListAuthO
  * Use `create(ListAuthOAuth2ClientsResponseSchema)` to create a new message.
  */
 export declare const ListAuthOAuth2ClientsResponseSchema: GenMessage<ListAuthOAuth2ClientsResponse>;
+
+/**
+ * @generated from message tailor.v1.CreateControlplaneMachineUserRequest
+ */
+export declare type CreateControlplaneMachineUserRequest = Message<"tailor.v1.CreateControlplaneMachineUserRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string description = 4;
+   */
+  description: string;
+};
+
+/**
+ * Describes the message tailor.v1.CreateControlplaneMachineUserRequest.
+ * Use `create(CreateControlplaneMachineUserRequestSchema)` to create a new message.
+ */
+export declare const CreateControlplaneMachineUserRequestSchema: GenMessage<CreateControlplaneMachineUserRequest>;
+
+/**
+ * @generated from message tailor.v1.CreateControlplaneMachineUserResponse
+ */
+export declare type CreateControlplaneMachineUserResponse = Message<"tailor.v1.CreateControlplaneMachineUserResponse"> & {
+  /**
+   * @generated from field: tailor.v1.ControlplaneMachineUser machine_user = 1;
+   */
+  machineUser?: ControlplaneMachineUser;
+};
+
+/**
+ * Describes the message tailor.v1.CreateControlplaneMachineUserResponse.
+ * Use `create(CreateControlplaneMachineUserResponseSchema)` to create a new message.
+ */
+export declare const CreateControlplaneMachineUserResponseSchema: GenMessage<CreateControlplaneMachineUserResponse>;
+
+/**
+ * @generated from message tailor.v1.UpdateControlplaneMachineUserRequest
+ */
+export declare type UpdateControlplaneMachineUserRequest = Message<"tailor.v1.UpdateControlplaneMachineUserRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string machine_user_id = 3;
+   */
+  machineUserId: string;
+
+  /**
+   * @generated from field: optional string name = 4;
+   */
+  name?: string;
+
+  /**
+   * @generated from field: optional string description = 5;
+   */
+  description?: string;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateControlplaneMachineUserRequest.
+ * Use `create(UpdateControlplaneMachineUserRequestSchema)` to create a new message.
+ */
+export declare const UpdateControlplaneMachineUserRequestSchema: GenMessage<UpdateControlplaneMachineUserRequest>;
+
+/**
+ * @generated from message tailor.v1.UpdateControlplaneMachineUserResponse
+ */
+export declare type UpdateControlplaneMachineUserResponse = Message<"tailor.v1.UpdateControlplaneMachineUserResponse"> & {
+  /**
+   * @generated from field: tailor.v1.ControlplaneMachineUser machine_user = 1;
+   */
+  machineUser?: ControlplaneMachineUser;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateControlplaneMachineUserResponse.
+ * Use `create(UpdateControlplaneMachineUserResponseSchema)` to create a new message.
+ */
+export declare const UpdateControlplaneMachineUserResponseSchema: GenMessage<UpdateControlplaneMachineUserResponse>;
+
+/**
+ * @generated from message tailor.v1.GetControlplaneMachineUserRequest
+ */
+export declare type GetControlplaneMachineUserRequest = Message<"tailor.v1.GetControlplaneMachineUserRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string machine_user_id = 3;
+   */
+  machineUserId: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetControlplaneMachineUserRequest.
+ * Use `create(GetControlplaneMachineUserRequestSchema)` to create a new message.
+ */
+export declare const GetControlplaneMachineUserRequestSchema: GenMessage<GetControlplaneMachineUserRequest>;
+
+/**
+ * @generated from message tailor.v1.GetControlplaneMachineUserResponse
+ */
+export declare type GetControlplaneMachineUserResponse = Message<"tailor.v1.GetControlplaneMachineUserResponse"> & {
+  /**
+   * @generated from field: tailor.v1.ControlplaneMachineUser machine_user = 1;
+   */
+  machineUser?: ControlplaneMachineUser;
+};
+
+/**
+ * Describes the message tailor.v1.GetControlplaneMachineUserResponse.
+ * Use `create(GetControlplaneMachineUserResponseSchema)` to create a new message.
+ */
+export declare const GetControlplaneMachineUserResponseSchema: GenMessage<GetControlplaneMachineUserResponse>;
+
+/**
+ * @generated from message tailor.v1.ListControlplaneMachineUsersRequest
+ */
+export declare type ListControlplaneMachineUsersRequest = Message<"tailor.v1.ListControlplaneMachineUsersRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string page_token = 3;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 4;
+   */
+  pageSize: number;
+
+  /**
+   * @generated from field: tailor.v1.PageDirection page_direction = 5;
+   */
+  pageDirection: PageDirection;
+};
+
+/**
+ * Describes the message tailor.v1.ListControlplaneMachineUsersRequest.
+ * Use `create(ListControlplaneMachineUsersRequestSchema)` to create a new message.
+ */
+export declare const ListControlplaneMachineUsersRequestSchema: GenMessage<ListControlplaneMachineUsersRequest>;
+
+/**
+ * @generated from message tailor.v1.ListControlplaneMachineUsersResponse
+ */
+export declare type ListControlplaneMachineUsersResponse = Message<"tailor.v1.ListControlplaneMachineUsersResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.ControlplaneMachineUser machine_users = 1;
+   */
+  machineUsers: ControlplaneMachineUser[];
+
+  /**
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListControlplaneMachineUsersResponse.
+ * Use `create(ListControlplaneMachineUsersResponseSchema)` to create a new message.
+ */
+export declare const ListControlplaneMachineUsersResponseSchema: GenMessage<ListControlplaneMachineUsersResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteControlplaneMachineUserRequest
+ */
+export declare type DeleteControlplaneMachineUserRequest = Message<"tailor.v1.DeleteControlplaneMachineUserRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string machine_user_id = 3;
+   */
+  machineUserId: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteControlplaneMachineUserRequest.
+ * Use `create(DeleteControlplaneMachineUserRequestSchema)` to create a new message.
+ */
+export declare const DeleteControlplaneMachineUserRequestSchema: GenMessage<DeleteControlplaneMachineUserRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteControlplaneMachineUserResponse
+ */
+export declare type DeleteControlplaneMachineUserResponse = Message<"tailor.v1.DeleteControlplaneMachineUserResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteControlplaneMachineUserResponse.
+ * Use `create(DeleteControlplaneMachineUserResponseSchema)` to create a new message.
+ */
+export declare const DeleteControlplaneMachineUserResponseSchema: GenMessage<DeleteControlplaneMachineUserResponse>;
 

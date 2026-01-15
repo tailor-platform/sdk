@@ -190,6 +190,7 @@ oauth2Clients: {
     grantTypes: ["authorization_code", "refresh_token"],
     accessTokenLifetimeSeconds: 3600,    // 1 hour
     refreshTokenLifetimeSeconds: 604800, // 7 days
+    requireDpop: true,                   // Require DPoP for this client
   },
 },
 ```
@@ -206,6 +207,8 @@ oauth2Clients: {
 **accessTokenLifetimeSeconds**: Optional access token lifetime in seconds. Minimum: 60 seconds, Maximum: 86400 seconds (1 day). If not specified, uses platform default.
 
 **refreshTokenLifetimeSeconds**: Optional refresh token lifetime in seconds. Minimum: 60 seconds, Maximum: 604800 seconds (7 days). If not specified, uses platform default.
+
+**requireDpop**: Optional boolean to require DPoP (Demonstrating Proof of Possession) for this client. When set to `true`, the client must use DPoP tokens for authentication. If not specified, DPoP is not required.
 
 Get OAuth2 client credentials using the CLI:
 

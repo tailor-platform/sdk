@@ -866,6 +866,24 @@ export declare type AuthConnection_AuthConnectionOAuth2Config = Message<"tailor.
    * @generated from field: string client_secret = 4;
    */
   clientSecret: string;
+
+  /**
+   * Optional override for the OAuth2 authorization endpoint. If unset, the default
+   * authorization URL derived from the provider's metadata (e.g. via provider_url)
+   * will be used. Must be an HTTPS URL with a hostname (no IP literals).
+   *
+   * @generated from field: string auth_url = 5;
+   */
+  authUrl: string;
+
+  /**
+   * Optional override for the OAuth2 token endpoint. If unset, the default token URL
+   * derived from the provider's metadata (e.g. via provider_url) will be used. Must be
+   * an HTTPS URL with a hostname (no IP literals).
+   *
+   * @generated from field: string token_url = 6;
+   */
+  tokenUrl: string;
 };
 
 /**
@@ -953,6 +971,14 @@ export declare type AuthOAuth2Client = Message<"tailor.v1.AuthOAuth2Client"> & {
    * @generated from field: google.protobuf.Duration refresh_token_lifetime = 10;
    */
   refreshTokenLifetime?: Duration;
+
+  /**
+   * When true, DPoP proof is required for token requests.
+   * Cannot be set to true for browser clients as they don't support DPoP.
+   *
+   * @generated from field: bool require_dpop = 11;
+   */
+  requireDpop: boolean;
 };
 
 /**
@@ -1015,6 +1041,52 @@ export enum AuthOAuth2Client_ClientType {
  * Describes the enum tailor.v1.AuthOAuth2Client.ClientType.
  */
 export declare const AuthOAuth2Client_ClientTypeSchema: GenEnum<AuthOAuth2Client_ClientType>;
+
+/**
+ * @generated from message tailor.v1.ControlplaneMachineUser
+ */
+export declare type ControlplaneMachineUser = Message<"tailor.v1.ControlplaneMachineUser"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string description = 3;
+   */
+  description: string;
+
+  /**
+   * @generated from field: string organization_id = 4;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 5;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string client_id = 6;
+   */
+  clientId: string;
+
+  /**
+   * @generated from field: string client_secret = 7;
+   */
+  clientSecret: string;
+};
+
+/**
+ * Describes the message tailor.v1.ControlplaneMachineUser.
+ * Use `create(ControlplaneMachineUserSchema)` to create a new message.
+ */
+export declare const ControlplaneMachineUserSchema: GenMessage<ControlplaneMachineUser>;
 
 /**
  * @generated from enum tailor.v1.PATScope

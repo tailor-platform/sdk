@@ -11,9 +11,10 @@ import type { ComposePipelineSDLRequestSchema, ComposePipelineSDLResponseSchema,
 import type { CreateStateflowServiceRequestSchema, CreateStateflowServiceResponseSchema, DeleteStateflowServiceRequestSchema, DeleteStateflowServiceResponseSchema, GetStateflowServiceRequestSchema, GetStateflowServiceResponseSchema, ListStateflowServicesRequestSchema, ListStateflowServicesResponseSchema, UpdateStateflowServiceRequestSchema, UpdateStateflowServiceResponseSchema } from "./stateflow_pb";
 import type { CreateExecutorExecutorRequestSchema, CreateExecutorExecutorResponseSchema, DeleteExecutorExecutorRequestSchema, DeleteExecutorExecutorResponseSchema, GetExecutorExecutorRequestSchema, GetExecutorExecutorResponseSchema, GetExecutorIncomingWebhookRequestSchema, GetExecutorIncomingWebhookResponseSchema, GetExecutorJobRequestSchema, GetExecutorJobResponseSchema, ListExecutorExecutorsRequestSchema, ListExecutorExecutorsResponseSchema, ListExecutorIncomingWebhooksRequestSchema, ListExecutorIncomingWebhooksResponseSchema, ListExecutorJobAttemptsRequestSchema, ListExecutorJobAttemptsResponseSchema, ListExecutorJobsRequestSchema, ListExecutorJobsResponseSchema, TriggerExecutorRequestSchema, TriggerExecutorResponseSchema, UpdateExecutorExecutorRequestSchema, UpdateExecutorExecutorResponseSchema } from "./executor_pb";
 import type { CreateSecretManagerSecretRequestSchema, CreateSecretManagerSecretResponseSchema, CreateSecretManagerVaultRequestSchema, CreateSecretManagerVaultResponseSchema, DeleteSecretManagerSecretRequestSchema, DeleteSecretManagerSecretResponseSchema, DeleteSecretManagerVaultRequestSchema, DeleteSecretManagerVaultResponseSchema, GetSecretManagerSecretRequestSchema, GetSecretManagerSecretResponseSchema, GetSecretManagerVaultRequestSchema, GetSecretManagerVaultResponseSchema, ListSecretManagerSecretsRequestSchema, ListSecretManagerSecretsResponseSchema, ListSecretManagerVaultsRequestSchema, ListSecretManagerVaultsResponseSchema, UpdateSecretManagerSecretRequestSchema, UpdateSecretManagerSecretResponseSchema } from "./secret_manager_pb";
-import type { CreateAuthConnectionRequestSchema, CreateAuthConnectionResponseSchema, CreateAuthIDPConfigRequestSchema, CreateAuthIDPConfigResponseSchema, CreateAuthMachineUserRequestSchema, CreateAuthMachineUserResponseSchema, CreateAuthOAuth2ClientRequestSchema, CreateAuthOAuth2ClientResponseSchema, CreateAuthSCIMConfigRequestSchema, CreateAuthSCIMConfigResponseSchema, CreateAuthSCIMResourceRequestSchema, CreateAuthSCIMResourceResponseSchema, CreateAuthServiceRequestSchema, CreateAuthServiceResponseSchema, CreatePersonalAccessTokenRequestSchema, CreatePersonalAccessTokenResponseSchema, CreateTenantConfigRequestSchema, CreateTenantConfigResponseSchema, CreateUserProfileConfigRequestSchema, CreateUserProfileConfigResponseSchema, DeleteAuthIDPConfigRequestSchema, DeleteAuthIDPConfigResponseSchema, DeleteAuthMachineUserRequestSchema, DeleteAuthMachineUserResponseSchema, DeleteAuthOAuth2ClientRequestSchema, DeleteAuthOAuth2ClientResponseSchema, DeleteAuthSCIMConfigRequestSchema, DeleteAuthSCIMConfigResponseSchema, DeleteAuthSCIMResourceRequestSchema, DeleteAuthSCIMResourceResponseSchema, DeleteAuthServiceRequestSchema, DeleteAuthServiceResponseSchema, DeletePersonalAccessTokenRequestSchema, DeletePersonalAccessTokenResponseSchema, DeleteTenantConfigRequestSchema, DeleteTenantConfigResponseSchema, DeleteUserProfileConfigRequestSchema, DeleteUserProfileConfigResponseSchema, ExchangeAuthConnectionAuthorizationCodeRequestSchema, ExchangeAuthConnectionAuthorizationCodeResponseSchema, GetAuthIDPConfigRequestSchema, GetAuthIDPConfigResponseSchema, GetAuthMachineUserRequestSchema, GetAuthMachineUserResponseSchema, GetAuthOAuth2ClientRequestSchema, GetAuthOAuth2ClientResponseSchema, GetAuthSCIMConfigRequestSchema, GetAuthSCIMConfigResponseSchema, GetAuthSCIMResourceRequestSchema, GetAuthSCIMResourceResponseSchema, GetAuthSCIMResourcesRequestSchema, GetAuthSCIMResourcesResponseSchema, GetAuthServiceRequestSchema, GetAuthServiceResponseSchema, GetTenantConfigRequestSchema, GetTenantConfigResponseSchema, GetUserProfileConfigRequestSchema, GetUserProfileConfigResponseSchema, ListAuthConnectionsRequestSchema, ListAuthConnectionsResponseSchema, ListAuthIDPConfigsRequestSchema, ListAuthIDPConfigsResponseSchema, ListAuthMachineUsersRequestSchema, ListAuthMachineUsersResponseSchema, ListAuthOAuth2ClientsRequestSchema, ListAuthOAuth2ClientsResponseSchema, ListAuthServicesRequestSchema, ListAuthServicesResponseSchema, ListPersonalAccessTokensRequestSchema, ListPersonalAccessTokensResponseSchema, RegisterAuthConnectionSessionRequestSchema, RegisterAuthConnectionSessionResponseSchema, RevokeAuthConnectionRequestSchema, RevokeAuthConnectionResponseSchema, UpdateAuthIDPConfigRequestSchema, UpdateAuthIDPConfigResponseSchema, UpdateAuthMachineUserRequestSchema, UpdateAuthMachineUserResponseSchema, UpdateAuthOAuth2ClientRequestSchema, UpdateAuthOAuth2ClientResponseSchema, UpdateAuthSCIMConfigRequestSchema, UpdateAuthSCIMConfigResponseSchema, UpdateAuthSCIMResourceRequestSchema, UpdateAuthSCIMResourceResponseSchema, UpdateTenantConfigRequestSchema, UpdateTenantConfigResponseSchema, UpdateUserProfileConfigRequestSchema, UpdateUserProfileConfigResponseSchema } from "./auth_pb";
+import type { CreateAuthConnectionRequestSchema, CreateAuthConnectionResponseSchema, CreateAuthIDPConfigRequestSchema, CreateAuthIDPConfigResponseSchema, CreateAuthMachineUserRequestSchema, CreateAuthMachineUserResponseSchema, CreateAuthOAuth2ClientRequestSchema, CreateAuthOAuth2ClientResponseSchema, CreateAuthSCIMConfigRequestSchema, CreateAuthSCIMConfigResponseSchema, CreateAuthSCIMResourceRequestSchema, CreateAuthSCIMResourceResponseSchema, CreateAuthServiceRequestSchema, CreateAuthServiceResponseSchema, CreateControlplaneMachineUserRequestSchema, CreateControlplaneMachineUserResponseSchema, CreatePersonalAccessTokenRequestSchema, CreatePersonalAccessTokenResponseSchema, CreateTenantConfigRequestSchema, CreateTenantConfigResponseSchema, CreateUserProfileConfigRequestSchema, CreateUserProfileConfigResponseSchema, DeleteAuthIDPConfigRequestSchema, DeleteAuthIDPConfigResponseSchema, DeleteAuthMachineUserRequestSchema, DeleteAuthMachineUserResponseSchema, DeleteAuthOAuth2ClientRequestSchema, DeleteAuthOAuth2ClientResponseSchema, DeleteAuthSCIMConfigRequestSchema, DeleteAuthSCIMConfigResponseSchema, DeleteAuthSCIMResourceRequestSchema, DeleteAuthSCIMResourceResponseSchema, DeleteAuthServiceRequestSchema, DeleteAuthServiceResponseSchema, DeleteControlplaneMachineUserRequestSchema, DeleteControlplaneMachineUserResponseSchema, DeletePersonalAccessTokenRequestSchema, DeletePersonalAccessTokenResponseSchema, DeleteTenantConfigRequestSchema, DeleteTenantConfigResponseSchema, DeleteUserProfileConfigRequestSchema, DeleteUserProfileConfigResponseSchema, ExchangeAuthConnectionAuthorizationCodeRequestSchema, ExchangeAuthConnectionAuthorizationCodeResponseSchema, GetAuthIDPConfigRequestSchema, GetAuthIDPConfigResponseSchema, GetAuthMachineUserRequestSchema, GetAuthMachineUserResponseSchema, GetAuthOAuth2ClientRequestSchema, GetAuthOAuth2ClientResponseSchema, GetAuthSCIMConfigRequestSchema, GetAuthSCIMConfigResponseSchema, GetAuthSCIMResourceRequestSchema, GetAuthSCIMResourceResponseSchema, GetAuthSCIMResourcesRequestSchema, GetAuthSCIMResourcesResponseSchema, GetAuthServiceRequestSchema, GetAuthServiceResponseSchema, GetControlplaneMachineUserRequestSchema, GetControlplaneMachineUserResponseSchema, GetTenantConfigRequestSchema, GetTenantConfigResponseSchema, GetUserProfileConfigRequestSchema, GetUserProfileConfigResponseSchema, ListAuthConnectionsRequestSchema, ListAuthConnectionsResponseSchema, ListAuthIDPConfigsRequestSchema, ListAuthIDPConfigsResponseSchema, ListAuthMachineUsersRequestSchema, ListAuthMachineUsersResponseSchema, ListAuthOAuth2ClientsRequestSchema, ListAuthOAuth2ClientsResponseSchema, ListAuthServicesRequestSchema, ListAuthServicesResponseSchema, ListControlplaneMachineUsersRequestSchema, ListControlplaneMachineUsersResponseSchema, ListPersonalAccessTokensRequestSchema, ListPersonalAccessTokensResponseSchema, RegisterAuthConnectionSessionRequestSchema, RegisterAuthConnectionSessionResponseSchema, RevokeAuthConnectionRequestSchema, RevokeAuthConnectionResponseSchema, UpdateAuthIDPConfigRequestSchema, UpdateAuthIDPConfigResponseSchema, UpdateAuthMachineUserRequestSchema, UpdateAuthMachineUserResponseSchema, UpdateAuthOAuth2ClientRequestSchema, UpdateAuthOAuth2ClientResponseSchema, UpdateAuthSCIMConfigRequestSchema, UpdateAuthSCIMConfigResponseSchema, UpdateAuthSCIMResourceRequestSchema, UpdateAuthSCIMResourceResponseSchema, UpdateControlplaneMachineUserRequestSchema, UpdateControlplaneMachineUserResponseSchema, UpdateTenantConfigRequestSchema, UpdateTenantConfigResponseSchema, UpdateUserProfileConfigRequestSchema, UpdateUserProfileConfigResponseSchema } from "./auth_pb";
 import type { ListControlplaneActivityLogsRequestSchema, ListControlplaneActivityLogsResponseSchema, ListDataplaneEventsRequestSchema, ListDataplaneEventsResponseSchema } from "./events_pb";
 import type { GetFunctionExecutionRequestSchema, GetFunctionExecutionResponseSchema, ListFunctionExecutionsRequestSchema, ListFunctionExecutionsResponseSchema, TestExecScriptRequestSchema, TestExecScriptResponseSchema } from "./function_pb";
+import type { CreateFunctionRegistryRequestSchema, CreateFunctionRegistryResponseSchema, DeleteFunctionRegistryRequestSchema, DeleteFunctionRegistryResponseSchema, DownloadFunctionRegistryScriptRequestSchema, DownloadFunctionRegistryScriptResponseSchema, GetFunctionRegistryRequestSchema, GetFunctionRegistryResponseSchema, ListFunctionRegistriesRequestSchema, ListFunctionRegistriesResponseSchema, UpdateFunctionRegistryRequestSchema, UpdateFunctionRegistryResponseSchema } from "./function_registry_pb";
 import type { ListMeterEventCountsRequestSchema, ListMeterEventCountsResponseSchema, ListMeterExecutionCountsRequestSchema, ListMeterExecutionCountsResponseSchema, ListMeterRequestCountsRequestSchema, ListMeterRequestCountsResponseSchema } from "./meter_pb";
 import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, CreateIdPServiceRequestSchema, CreateIdPServiceResponseSchema, DeleteIdPClientRequestSchema, DeleteIdPClientResponseSchema, DeleteIdPServiceRequestSchema, DeleteIdPServiceResponseSchema, GetIdPClientRequestSchema, GetIdPClientResponseSchema, GetIdPServiceRequestSchema, GetIdPServiceResponseSchema, ListIdPClientsRequestSchema, ListIdPClientsResponseSchema, ListIdPServicesRequestSchema, ListIdPServicesResponseSchema, UpdateIdPServiceRequestSchema, UpdateIdPServiceResponseSchema } from "./idp_pb";
 import type { CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
@@ -2255,6 +2256,99 @@ export declare const OperatorService: GenService<{
     output: typeof ListFunctionExecutionsResponseSchema;
   },
   /**
+   * CreateFunctionRegistry creates a new function using client streaming.
+   * Supports scripts up to 20MB. Returns ALREADY_EXISTS error if name already exists.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   * - AlreadyExists: function with the same name already exists
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateFunctionRegistry
+   */
+  createFunctionRegistry: {
+    methodKind: "client_streaming";
+    input: typeof CreateFunctionRegistryRequestSchema;
+    output: typeof CreateFunctionRegistryResponseSchema;
+  },
+  /**
+   * UpdateFunctionRegistry updates an existing function using client streaming.
+   * Supports scripts up to 20MB. Returns NOT_FOUND error if name does not exist.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: function or workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.UpdateFunctionRegistry
+   */
+  updateFunctionRegistry: {
+    methodKind: "client_streaming";
+    input: typeof UpdateFunctionRegistryRequestSchema;
+    output: typeof UpdateFunctionRegistryResponseSchema;
+  },
+  /**
+   * GetFunctionRegistry retrieves a function by name.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: function does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetFunctionRegistry
+   */
+  getFunctionRegistry: {
+    methodKind: "unary";
+    input: typeof GetFunctionRegistryRequestSchema;
+    output: typeof GetFunctionRegistryResponseSchema;
+  },
+  /**
+   * ListFunctionRegistries lists functions in the registry with pagination and filtering.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListFunctionRegistries
+   */
+  listFunctionRegistries: {
+    methodKind: "unary";
+    input: typeof ListFunctionRegistriesRequestSchema;
+    output: typeof ListFunctionRegistriesResponseSchema;
+  },
+  /**
+   * DeleteFunctionRegistry deletes a function by name.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: function does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeleteFunctionRegistry
+   */
+  deleteFunctionRegistry: {
+    methodKind: "unary";
+    input: typeof DeleteFunctionRegistryRequestSchema;
+    output: typeof DeleteFunctionRegistryResponseSchema;
+  },
+  /**
+   * DownloadFunctionRegistryScript downloads a script using server streaming.
+   * Supports scripts up to 20MB. First message contains metadata, subsequent messages contain chunks.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: function does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.DownloadFunctionRegistryScript
+   */
+  downloadFunctionRegistryScript: {
+    methodKind: "server_streaming";
+    input: typeof DownloadFunctionRegistryScriptRequestSchema;
+    output: typeof DownloadFunctionRegistryScriptResponseSchema;
+  },
+  /**
    * ListMeterRequestCounts returns request counts per application in a workspace.
    *
    * @generated from rpc tailor.v1.OperatorService.ListMeterRequestCounts
@@ -2791,6 +2885,87 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof GetMetadataRequestSchema;
     output: typeof GetMetadataResponseSchema;
+  },
+  /**
+   * CreateControlplaneMachineUser creates a Controlplane Machine User for organization or folder.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: no permission to create machine user on the parent resource
+   * - NotFound: parent resource (organization or folder) does not exist
+   * - AlreadyExists: machine user with the same name already exists in the parent
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateControlplaneMachineUser
+   */
+  createControlplaneMachineUser: {
+    methodKind: "unary";
+    input: typeof CreateControlplaneMachineUserRequestSchema;
+    output: typeof CreateControlplaneMachineUserResponseSchema;
+  },
+  /**
+   * UpdateControlplaneMachineUser updates a Controlplane Machine User.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: no permission to update machine user on the parent resource
+   * - NotFound: machine user does not exist
+   *
+   * @generated from rpc tailor.v1.OperatorService.UpdateControlplaneMachineUser
+   */
+  updateControlplaneMachineUser: {
+    methodKind: "unary";
+    input: typeof UpdateControlplaneMachineUserRequestSchema;
+    output: typeof UpdateControlplaneMachineUserResponseSchema;
+  },
+  /**
+   * GetControlplaneMachineUser returns a Controlplane Machine User.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: no permission to view machine user on the parent resource
+   * - NotFound: machine user does not exist
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetControlplaneMachineUser
+   */
+  getControlplaneMachineUser: {
+    methodKind: "unary";
+    input: typeof GetControlplaneMachineUserRequestSchema;
+    output: typeof GetControlplaneMachineUserResponseSchema;
+  },
+  /**
+   * ListControlplaneMachineUsers lists Controlplane Machine Users in organization or folder.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: no permission to list machine users on the parent resource
+   * - NotFound: parent resource does not exist
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListControlplaneMachineUsers
+   */
+  listControlplaneMachineUsers: {
+    methodKind: "unary";
+    input: typeof ListControlplaneMachineUsersRequestSchema;
+    output: typeof ListControlplaneMachineUsersResponseSchema;
+  },
+  /**
+   * DeleteControlplaneMachineUser deletes a Controlplane Machine User.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: no permission to delete machine user on the parent resource
+   * - NotFound: machine user does not exist
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeleteControlplaneMachineUser
+   */
+  deleteControlplaneMachineUser: {
+    methodKind: "unary";
+    input: typeof DeleteControlplaneMachineUserRequestSchema;
+    output: typeof DeleteControlplaneMachineUserResponseSchema;
   },
 }>;
 

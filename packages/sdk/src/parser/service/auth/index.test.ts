@@ -236,4 +236,33 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.accessTokenLifetimeSeconds).toBeUndefined();
     expect(result.refreshTokenLifetimeSeconds).toBeUndefined();
   });
+
+  it("accepts requireDpop set to true", () => {
+    const clientWithDpop = {
+      redirectURIs: ["https://example.com/callback"],
+      requireDpop: true,
+    };
+
+    const result = OAuth2ClientSchema.parse(clientWithDpop);
+    expect(result.requireDpop).toBe(true);
+  });
+
+  it("accepts requireDpop set to false", () => {
+    const clientWithDpop = {
+      redirectURIs: ["https://example.com/callback"],
+      requireDpop: false,
+    };
+
+    const result = OAuth2ClientSchema.parse(clientWithDpop);
+    expect(result.requireDpop).toBe(false);
+  });
+
+  it("accepts client without requireDpop field", () => {
+    const clientWithoutDpop = {
+      redirectURIs: ["https://example.com/callback"],
+    };
+
+    const result = OAuth2ClientSchema.parse(clientWithoutDpop);
+    expect(result.requireDpop).toBeUndefined();
+  });
 });

@@ -508,6 +508,10 @@ export declare const TriggerExecutorRequestSchema: GenMessage<TriggerExecutorReq
  * @generated from message tailor.v1.TriggerExecutorResponse
  */
 export declare type TriggerExecutorResponse = Message<"tailor.v1.TriggerExecutorResponse"> & {
+  /**
+   * @generated from field: string job_id = 1;
+   */
+  jobId: string;
 };
 
 /**
