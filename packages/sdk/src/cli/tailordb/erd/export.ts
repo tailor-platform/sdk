@@ -4,10 +4,10 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
-import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
+import { resolveSingleNamespace } from "./namespace";
 import type {
   TailorDBType as TailorDBProtoType,
   TailorDBType_FieldConfig,
@@ -69,43 +69,6 @@ interface TblsSchema {
   tables: TblsTable[];
   relations: TblsRelation[];
   enums: TblsEnum[];
-}
-
-async function getAllNamespaces(configPath?: string): Promise<string[]> {
-  const { config } = await loadConfig(configPath);
-  const namespaces = new Set<string>();
-
-  if (config.db) {
-    for (const [namespaceName] of Object.entries(config.db)) {
-      namespaces.add(namespaceName);
-    }
-  }
-
-  return Array.from(namespaces);
-}
-
-async function resolveNamespace(configPath?: string, explicitNamespace?: string): Promise<string> {
-  if (explicitNamespace) {
-    return explicitNamespace;
-  }
-
-  const namespaces = await getAllNamespaces(configPath);
-
-  if (namespaces.length === 0) {
-    throw new Error(
-      "No TailorDB namespaces found in config. Please define db services in tailor.config.ts or pass --namespace.",
-    );
-  }
-
-  if (namespaces.length > 1) {
-    throw new Error(
-      `Multiple TailorDB namespaces found in config: ${namespaces.join(
-        ", ",
-      )}. Please specify one using --namespace.`,
-    );
-  }
-
-  return namespaces[0]!;
 }
 
 /**
@@ -275,7 +238,7 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
     profile: options.profile,
   });
 
-  const namespace = await resolveNamespace(options.configPath, options.namespace);
+  const namespace = options.namespace ?? (await resolveSingleNamespace(options.configPath));
 
   const types = await fetchAll(async (pageToken) => {
     try {
@@ -294,9 +257,7 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
   });
 
   if (types.length === 0) {
-    logger.warn(
-      `No TailorDB types found in namespace "${options.namespace}". Returning empty schema.`,
-    );
+    logger.warn(`No TailorDB types found in namespace "${namespace}". Returning empty schema.`);
   }
 
   return buildTblsSchema(types, namespace);

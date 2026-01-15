@@ -10,38 +10,8 @@ import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { exportTailorDBSchema } from "./export";
 import { runLiamBuild } from "./liam";
+import { resolveSingleNamespace } from "./namespace";
 import type { TailorDBSchemaOptions } from "./export";
-
-async function resolveNamespace(configPath?: string, explicitNamespace?: string): Promise<string> {
-  if (explicitNamespace) {
-    return explicitNamespace;
-  }
-
-  const { config } = await loadConfig(configPath);
-  const namespaces = new Set<string>();
-
-  if (config.db) {
-    for (const [namespaceName] of Object.entries(config.db)) {
-      namespaces.add(namespaceName);
-    }
-  }
-
-  if (namespaces.size === 0) {
-    throw new Error(
-      "No TailorDB namespaces found in config. Please define db services in tailor.config.ts or pass --namespace.",
-    );
-  }
-
-  if (namespaces.size > 1) {
-    throw new Error(
-      `Multiple TailorDB namespaces found in config: ${Array.from(namespaces).join(
-        ", ",
-      )}. Please specify one using --namespace.`,
-    );
-  }
-
-  return Array.from(namespaces)[0]!;
-}
 
 async function writeTblsSchema(
   options: TailorDBSchemaOptions & { outputPath: string },
@@ -94,7 +64,7 @@ export const erdDeployCommand = defineCommand({
       profile: args.profile,
     });
 
-    const namespace = await resolveNamespace(args.config, args.namespace);
+    const namespace = args.namespace ?? (await resolveSingleNamespace(args.config));
 
     const { config } = await loadConfig(args.config);
     const dbConfig = config.db?.[namespace];
