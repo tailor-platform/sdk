@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
-import { loadConfig } from "@/cli/config-loader";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -54,10 +53,17 @@ export const erdDeployCommand = defineCommand({
     const distDir = path.resolve(process.cwd(), String(args.dist));
     const erdDir = path.dirname(distDir);
 
-    const { config } = await loadConfig(args.config);
-    const { namespace, dbConfig } = resolveDbConfig(config, args.namespace);
-
+    // Resolve namespace and validate erdSite once at command level
+    const { namespace, dbConfig } = await resolveDbConfig(args.config, args.namespace);
     const erdSiteName = dbConfig.erdSite;
+
+    await prepareErdBuild({
+      namespace,
+      client,
+      workspaceId,
+      outputPath: schemaOutputPath,
+      erdDir,
+    });
 
     if (!erdSiteName) {
       throw new Error(
@@ -65,15 +71,6 @@ export const erdDeployCommand = defineCommand({
           `Add erdSite: "<static-website-name>" to db.${namespace} in tailor.config.ts.`,
       );
     }
-
-    await prepareErdBuild({
-      configPath: args.config,
-      namespace,
-      client,
-      workspaceId,
-      outputPath: schemaOutputPath,
-      erdDir,
-    });
 
     if (!fs.existsSync(distDir) || !fs.statSync(distDir).isDirectory()) {
       throw new Error(`Directory not found or not a directory: ${distDir}`);

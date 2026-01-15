@@ -1,7 +1,4 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-import { logger } from "../../utils/logger";
-import { exportTailorDBSchema } from "./export";
+import { writeTblsSchemaToFile } from "./export";
 import { runLiamBuild } from "./liam";
 import type { TailorDBSchemaOptions } from "./export";
 
@@ -13,14 +10,7 @@ import type { TailorDBSchemaOptions } from "./export";
 export async function prepareErdBuild(
   options: TailorDBSchemaOptions & { outputPath: string; erdDir: string },
 ): Promise<{ schemaPath: string; erdDir: string }> {
-  const schema = await exportTailorDBSchema(options);
-  const json = JSON.stringify(schema, null, 2);
-
-  fs.mkdirSync(path.dirname(options.outputPath), { recursive: true });
-  fs.writeFileSync(options.outputPath, json, "utf8");
-
-  const relativePath = path.relative(process.cwd(), options.outputPath);
-  logger.success(`Wrote ERD schema to ${relativePath}`);
+  await writeTblsSchemaToFile(options);
 
   await runLiamBuild(options.outputPath, options.erdDir);
 

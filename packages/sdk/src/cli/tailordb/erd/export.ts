@@ -4,10 +4,10 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
-import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
+import { DEFAULT_SCHEMA_OUTPUT } from "./constants";
 import { resolveSingleNamespace } from "./namespace";
 import type { OperatorClient } from "../../client";
 import type {
@@ -17,8 +17,7 @@ import type {
 
 export interface TailorDBSchemaOptions {
   workspaceId: string;
-  configPath?: string;
-  namespace?: string;
+  namespace: string;
   client: OperatorClient;
 }
 
@@ -229,11 +228,8 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
  * @param {TailorDBSchemaOptions} options - Export options
  * @returns {Promise<TblsSchema>} tbls schema representation
  */
-export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Promise<TblsSchema> {
-  const { client, workspaceId } = options;
-
-  const namespace =
-    options.namespace ?? resolveSingleNamespace((await loadConfig(options.configPath)).config);
+async function exportTailorDBSchema(options: TailorDBSchemaOptions): Promise<TblsSchema> {
+  const { client, workspaceId, namespace } = options;
 
   const types = await fetchAll(async (pageToken) => {
     try {
@@ -258,11 +254,15 @@ export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Prom
   return buildTblsSchema(types, namespace);
 }
 
-interface WriteSchemaOptions extends TailorDBSchemaOptions {
+export interface WriteSchemaOptions extends TailorDBSchemaOptions {
   outputPath: string;
 }
 
-async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void> {
+/**
+ * Writes the TailorDB schema to a file in tbls-compatible JSON format.
+ * @param {WriteSchemaOptions} options - The options for writing the schema file.
+ */
+export async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void> {
   const schema = await exportTailorDBSchema(options);
   const json = JSON.stringify(schema, null, 2);
 
@@ -290,7 +290,7 @@ export const erdExportCommand = defineCommand({
       type: "string",
       description: "Output file path for tbls-compatible ERD JSON",
       alias: "o",
-      default: ".tailor-sdk/erd/schema.json",
+      default: DEFAULT_SCHEMA_OUTPUT,
     },
   },
   run: withCommonArgs(async (args) => {
@@ -306,10 +306,12 @@ export const erdExportCommand = defineCommand({
     });
     const outputPath = path.resolve(process.cwd(), String(args.output));
 
+    // Resolve namespace once at command level
+    const namespace = args.namespace ?? (await resolveSingleNamespace(args.config));
+
     await writeTblsSchemaToFile({
       workspaceId,
-      configPath: args.config,
-      namespace: args.namespace,
+      namespace,
       client,
       outputPath,
     });

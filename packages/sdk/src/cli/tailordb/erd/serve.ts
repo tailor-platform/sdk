@@ -8,6 +8,7 @@ import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { DEFAULT_DIST_DIR } from "./constants";
+import { resolveSingleNamespace } from "./namespace";
 import { prepareErdBuild } from "./prepare";
 import { resolveCliBinPath } from "./resolve-cli-bin";
 
@@ -86,10 +87,12 @@ export const erdServeCommand = defineCommand({
     const outputPath = path.resolve(process.cwd(), String(args.output));
     const erdDir = path.dirname(path.resolve(process.cwd(), DEFAULT_DIST_DIR));
 
+    // Resolve namespace once at command level
+    const namespace = args.namespace ?? (await resolveSingleNamespace(args.config));
+
     await prepareErdBuild({
       workspaceId,
-      configPath: args.config,
-      namespace: args.namespace,
+      namespace,
       client,
       outputPath,
       erdDir,
