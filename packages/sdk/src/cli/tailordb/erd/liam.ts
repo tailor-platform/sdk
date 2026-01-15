@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { logger } from "../../utils/logger";
+import { resolveCliBinPath } from "./resolve-cli-bin";
 
 /**
  * Run the liam CLI to build an ERD static site from a schema file.
@@ -12,9 +13,23 @@ export async function runLiamBuild(schemaPath: string, cwd: string): Promise<voi
   fs.mkdirSync(cwd, { recursive: true });
 
   return await new Promise<void>((resolve, reject) => {
+    let liamBinPath: string;
+    try {
+      liamBinPath = resolveCliBinPath({
+        cwd,
+        packageName: "@liam-hq/cli",
+        binName: "liam",
+        installHint: "npm i -D @liam-hq/cli",
+      });
+    } catch (error) {
+      logger.error(String(error));
+      reject(error);
+      return;
+    }
+
     const child = spawn(
-      "pnpm",
-      ["dlx", "@liam-hq/cli", "erd", "build", "--format", "tbls", "--input", schemaPath],
+      process.execPath,
+      [liamBinPath, "erd", "build", "--format", "tbls", "--input", schemaPath],
       {
         stdio: "inherit",
         cwd,
@@ -22,7 +37,7 @@ export async function runLiamBuild(schemaPath: string, cwd: string): Promise<voi
     );
 
     child.on("error", (error) => {
-      logger.error("Failed to run `pnpm dlx @liam-hq/cli ...`. Ensure pnpm is installed.");
+      logger.error("Failed to run `@liam-hq/cli`. Ensure it is installed in your project.");
       reject(error);
     });
 
@@ -31,7 +46,7 @@ export async function runLiamBuild(schemaPath: string, cwd: string): Promise<voi
         resolve();
       } else {
         logger.error(
-          "liam CLI exited with a non-zero code. Ensure `pnpm dlx @liam-hq/cli erd build --format tbls --input schema.json` works in your project.",
+          "liam CLI exited with a non-zero code. Ensure `@liam-hq/cli erd build --format tbls --input schema.json` works in your project.",
         );
         reject(new Error(`liam CLI exited with code ${code ?? 1}`));
       }

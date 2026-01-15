@@ -6,6 +6,7 @@ import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { exportTailorDBSchema } from "./export";
 import { runLiamBuild } from "./liam";
+import { resolveCliBinPath } from "./resolve-cli-bin";
 import type { TailorDBSchemaOptions } from "./export";
 
 async function writeTblsSchemaAndReturnPath(
@@ -31,13 +32,27 @@ async function runServeDist(): Promise<void> {
   fs.mkdirSync(erdDir, { recursive: true });
 
   return await new Promise<void>((resolve, reject) => {
-    const child = spawn("pnpm", ["dlx", "serve", "dist"], {
+    let serveBinPath: string;
+    try {
+      serveBinPath = resolveCliBinPath({
+        cwd: erdDir,
+        packageName: "serve",
+        binName: "serve",
+        installHint: "npm i -D serve",
+      });
+    } catch (error) {
+      logger.error(String(error));
+      reject(error);
+      return;
+    }
+
+    const child = spawn(process.execPath, [serveBinPath, "dist"], {
       stdio: "inherit",
       cwd: erdDir,
     });
 
     child.on("error", (error) => {
-      logger.error("Failed to run `pnpm dlx serve dist`. Ensure pnpm is installed.");
+      logger.error("Failed to run `serve dist`. Ensure `serve` is installed in your project.");
       reject(error);
     });
 
@@ -46,7 +61,7 @@ async function runServeDist(): Promise<void> {
         resolve();
       } else {
         logger.error(
-          "serve CLI exited with a non-zero code. Ensure `pnpm dlx serve dist` works in your project.",
+          "serve CLI exited with a non-zero code. Ensure `serve dist` works in your project.",
         );
         reject(new Error(`serve CLI exited with code ${code ?? 1}`));
       }
@@ -57,7 +72,7 @@ async function runServeDist(): Promise<void> {
 export const erdServeCommand = defineCommand({
   meta: {
     name: "serve",
-    description: "Generate and serve ERD (liam build + `pnpm dlx serve dist`)",
+    description: "Generate and serve ERD (liam build + `serve dist`)",
   },
   args: {
     ...commonArgs,
