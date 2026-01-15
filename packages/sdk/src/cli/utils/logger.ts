@@ -1,6 +1,12 @@
 import { formatWithOptions, type InspectOptions } from "node:util";
 import chalk from "chalk";
-import { createConsola, type PromptOptions } from "consola";
+import {
+  createConsola,
+  type ConsolaOptions,
+  type ConsolaReporter,
+  type LogObject,
+  type PromptOptions,
+} from "consola";
 import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
 import { getBorderCharacters, table } from "table";
@@ -103,17 +109,19 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
   log: (text) => text,
 };
 
-class IconReporter {
-  log(
-    logObj: { type: string; tag?: string; args: unknown[]; level: number; date?: Date },
-    ctx: {
-      options: {
-        stdout?: NodeJS.WriteStream;
-        stderr?: NodeJS.WriteStream;
-        formatOptions: { date?: boolean; compact?: boolean | number };
-      };
-    },
-  ) {
+/**
+ * Reporter that handles all log output modes.
+ *
+ * Supports three modes controlled via logObj.tag:
+ * - "default": Colored icons and messages, no timestamp, dynamic line wrapping
+ * - "stream": Colored icons with timestamps, for streaming/polling operations
+ * - "plain": No icons or colors, fixed line wrapping (100 chars)
+ *
+ * The mode is passed via logObj.tag from the logger methods.
+ */
+class Reporter implements ConsolaReporter {
+  log(logObj: LogObject, ctx: { options: ConsolaOptions }) {
+    const mode = (logObj.tag as string) || "default";
     const stdout = ctx.options.stdout || process.stdout;
     const stderr = ctx.options.stderr || process.stderr;
     const formatOptions = ctx.options.formatOptions;
@@ -122,6 +130,14 @@ class IconReporter {
       compact: formatOptions.compact,
     };
     const message = formatWithOptions(inspectOpts, ...logObj.args);
+
+    // Plain mode: no icon, no color
+    if (mode === "plain") {
+      stderr.write(`${message}\n`);
+      return;
+    }
+
+    // Default/Stream mode: with icon and color
     const icon = TYPE_ICONS[logObj.type] || "";
     const prefix = icon ? `${icon} ` : "";
 
@@ -129,43 +145,16 @@ class IconReporter {
     const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
     const coloredOutput = colorFn(`${prefix}${message}`);
 
+    // Add timestamp for stream mode
     const timestamp =
-      formatOptions.date && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
+      mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
     stderr.write(`${timestamp}${coloredOutput}\n`);
   }
 }
 
-class PlainReporter {
-  log(
-    logObj: { type: string; tag?: string; args: unknown[]; level: number },
-    ctx: {
-      options: { stderr?: NodeJS.WriteStream; formatOptions: object };
-    },
-  ) {
-    const stderr = ctx.options.stderr || process.stderr;
-    const formatOptions = ctx.options.formatOptions as { compact?: boolean | number };
-    const inspectOpts: InspectOptions = {
-      breakLength: 100,
-      compact: formatOptions.compact,
-    };
-    const message = formatWithOptions(inspectOpts, ...logObj.args);
-    stderr.write(`${message}\n`);
-  }
-}
-
-const defaultLogger = createConsola({
-  reporters: [new IconReporter()],
-  formatOptions: { date: false },
-});
-
-const streamLogger = createConsola({
-  reporters: [new IconReporter()],
+const consola = createConsola({
+  reporters: [new Reporter()],
   formatOptions: { date: true },
-});
-
-const plainLogger = createConsola({
-  reporters: [new PlainReporter()],
-  formatOptions: { date: false, compact: true },
 });
 
 export const logger = {
@@ -178,75 +167,47 @@ export const logger = {
 
   info(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
-
-    switch (mode) {
-      case "stream":
-        streamLogger.info(message);
-        break;
-      case "plain":
-        plainLogger.log(message);
-        break;
-      default:
-        defaultLogger.info(message);
-    }
+    consola.withTag(mode).info(message);
   },
 
   success(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
-
-    switch (mode) {
-      case "stream":
-        streamLogger.success(message);
-        break;
-      case "plain":
-        plainLogger.log(styles.success(message));
-        break;
-      default:
-        defaultLogger.success(message);
+    if (mode === "plain") {
+      consola.withTag(mode).log(styles.success(message));
+    } else {
+      consola.withTag(mode).success(message);
     }
   },
 
   warn(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
-
-    switch (mode) {
-      case "stream":
-        streamLogger.warn(message);
-        break;
-      case "plain":
-        plainLogger.log(styles.warning(message));
-        break;
-      default:
-        defaultLogger.warn(message);
+    if (mode === "plain") {
+      consola.withTag(mode).log(styles.warning(message));
+    } else {
+      consola.withTag(mode).warn(message);
     }
   },
 
   error(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
-
-    switch (mode) {
-      case "stream":
-        streamLogger.error(message);
-        break;
-      case "plain":
-        plainLogger.error(styles.error(message));
-        break;
-      default:
-        defaultLogger.error(message);
+    if (mode === "plain") {
+      consola.withTag(mode).log(styles.error(message));
+    } else {
+      consola.withTag(mode).error(message);
     }
   },
 
   log(message: string): void {
-    plainLogger.log(message);
+    consola.withTag("plain").log(message);
   },
 
   newline(): void {
-    plainLogger.log("");
+    consola.withTag("plain").log("");
   },
 
   debug(message: string): void {
     if (process.env.DEBUG === "true") {
-      plainLogger.log(styles.dim(message));
+      consola.withTag("plain").log(styles.dim(message));
     }
   },
 
@@ -313,10 +274,10 @@ export const logger = {
   prompt<T extends PromptOptions>(
     message: string,
     options?: T,
-  ): ReturnType<typeof defaultLogger.prompt<T>> {
+  ): ReturnType<typeof consola.prompt<T>> {
     if (isCI) {
       throw new CIPromptError();
     }
-    return defaultLogger.prompt(message, options);
+    return consola.prompt(message, options);
   },
 };
