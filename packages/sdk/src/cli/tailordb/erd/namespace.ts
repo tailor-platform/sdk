@@ -26,3 +26,22 @@ export function resolveDbConfig(
 
   return { namespace, erdSite: dbConfig.erdSite };
 }
+
+/**
+ * Get all namespaces with erdSite configured.
+ * @param {AppConfig} config - Loaded Tailor SDK config.
+ * @returns {Array<{ namespace: string; erdSite: string }>} Namespaces with erdSite.
+ */
+export function resolveAllErdSites(
+  config: AppConfig,
+): Array<{ namespace: string; erdSite: string }> {
+  const results: Array<{ namespace: string; erdSite: string }> = [];
+
+  for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
+    if (dbConfig && typeof dbConfig === "object" && !("external" in dbConfig) && dbConfig.erdSite) {
+      results.push({ namespace, erdSite: dbConfig.erdSite });
+    }
+  }
+
+  return results;
+}
