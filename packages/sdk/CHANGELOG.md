@@ -1,5 +1,24 @@
 # @tailor-platform/sdk
 
+## 1.2.5
+
+### Patch Changes
+
+- [#410](https://github.com/tailor-platform/sdk/pull/410) [`2ec1a6e`](https://github.com/tailor-platform/sdk/commit/2ec1a6ef2e4f6f0b588c427aa827b3a15cd22b12) Thanks [@remiposo](https://github.com/remiposo)! - Improve message on refresh token error
+
+  Improved to guide users to run `tailor-sdk login` and try again instead of showing the internal unclear message.
+
+- [#415](https://github.com/tailor-platform/sdk/pull/415) [`0d00604`](https://github.com/tailor-platform/sdk/commit/0d0060476b704dd7d3009d52bb3d2433d322e524) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: add colored output to logger icons and messages
+
+  - Apply colors (cyan, green, yellow, red, gray) based on log type
+  - Gate logger.debug() output with DEBUG=true environment variable
+
+- [#408](https://github.com/tailor-platform/sdk/pull/408) [`273873d`](https://github.com/tailor-platform/sdk/commit/273873da1c211055a3d2a9a14de5d247e0d80ac5) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.56.3
+
+- [#409](https://github.com/tailor-platform/sdk/pull/409) [`6c24562`](https://github.com/tailor-platform/sdk/commit/6c2456225cc6e2dcd5d4df54e4fb9831b3a3abfe) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.19.0
+
+- [#416](https://github.com/tailor-platform/sdk/pull/416) [`2a8be27`](https://github.com/tailor-platform/sdk/commit/2a8be270471743d3e937184c02d4af27eb1bb57f) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.7.4
+
 ## 1.2.4
 
 ### Patch Changes
