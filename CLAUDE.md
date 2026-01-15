@@ -433,11 +433,14 @@ logger.info("message", { mode: "stream" }); // Timestamp prefix (for watch/polli
 logger.info("message", { mode: "plain" }); // No prefix (for list items)
 ```
 
-| Mode      | Symbol | Timestamp | Use Case                           |
-| --------- | ------ | --------- | ---------------------------------- |
-| `default` | ✅     | ❌        | Normal output (command results)    |
-| `stream`  | ❌     | ✅        | Log streams (watch mode, polling)  |
-| `plain`   | ❌     | ❌        | Subdued info (list items, details) |
+| Mode      | Symbol | Timestamp | Color | Use Case                           |
+| --------- | ------ | --------- | ----- | ---------------------------------- |
+| `default` | ✅     | ❌        | ✅    | Normal output (command results)    |
+| `stream`  | ✅     | ✅        | ✅    | Log streams (watch mode, polling)  |
+| `plain`   | ❌     | ❌        | ✅    | Subdued info (list items, details) |
+
+Colors in plain mode are semantic (success=green, error=red, info=cyan, warn=yellow)
+and provide important visual distinction without structural decoration (icons/timestamps).
 
 **Styles for Text Formatting:**
 

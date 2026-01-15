@@ -89,9 +89,7 @@ export class TailorDBService {
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);
-      logger.error(
-        `${styles.error("Failed to load type from")} ${styles.errorBright(relativePath)}`,
-      );
+      logger.error(`Failed to load type from ${styles.bold(relativePath)}`);
       logger.error(String(error));
       throw error;
     }
