@@ -9,7 +9,7 @@ import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { DEFAULT_DIST_DIR, DEFAULT_ERD_BASE_DIR, DEFAULT_SCHEMA_OUTPUT } from "./constants";
-import { resolveAllErdSites, resolveDbConfig } from "./namespace";
+import { resolveAllErdSites, resolveDbConfig } from "./db-config";
 import { prepareErdBuild } from "./prepare";
 import type { OperatorClient } from "../../client";
 

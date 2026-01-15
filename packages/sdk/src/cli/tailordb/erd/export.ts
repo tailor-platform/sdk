@@ -9,7 +9,7 @@ import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { DEFAULT_SCHEMA_OUTPUT } from "./constants";
-import { resolveDbConfig } from "./namespace";
+import { resolveDbConfig } from "./db-config";
 import type { OperatorClient } from "../../client";
 import type {
   TailorDBType as TailorDBProtoType,

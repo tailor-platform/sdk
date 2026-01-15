@@ -9,7 +9,7 @@ import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { DEFAULT_DIST_DIR } from "./constants";
-import { resolveDbConfig } from "./namespace";
+import { resolveDbConfig } from "./db-config";
 import { prepareErdBuild } from "./prepare";
 import { resolveCliBinPath } from "./resolve-cli-bin";
 
