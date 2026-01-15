@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
+import { logErdBetaWarning } from "./beta";
 import { exportTailorDBSchema } from "./export";
 import { runLiamBuild } from "./liam";
 import { resolveCliBinPath } from "./resolve-cli-bin";
@@ -72,7 +73,7 @@ async function runServeDist(): Promise<void> {
 export const erdServeCommand = defineCommand({
   meta: {
     name: "serve",
-    description: "Generate and serve ERD (liam build + `serve dist`)",
+    description: "Generate and serve ERD (liam build + `serve dist`) (beta)",
   },
   args: {
     ...commonArgs,
@@ -90,6 +91,7 @@ export const erdServeCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
+    logErdBetaWarning();
     const schemaPath = await writeTblsSchemaAndReturnPath({
       workspaceId: args["workspace-id"],
       profile: args.profile,

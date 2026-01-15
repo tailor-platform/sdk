@@ -6,7 +6,7 @@ import { erdServeCommand } from "./serve";
 export const erdCommand = defineCommand({
   meta: {
     name: "erd",
-    description: "ERD utilities for TailorDB",
+    description: "ERD utilities for TailorDB (beta)",
   },
   subCommands: {
     export: erdExportCommand,

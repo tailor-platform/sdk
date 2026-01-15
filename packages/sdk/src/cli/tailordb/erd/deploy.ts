@@ -7,6 +7,7 @@ import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { logger } from "../../utils/logger";
+import { logErdBetaWarning } from "./beta";
 import { exportTailorDBSchema } from "./export";
 import { runLiamBuild } from "./liam";
 import type { TailorDBSchemaOptions } from "./export";
@@ -58,7 +59,7 @@ async function writeTblsSchema(
 export const erdDeployCommand = defineCommand({
   meta: {
     name: "deploy",
-    description: "Deploy ERD static website for a TailorDB namespace",
+    description: "Deploy ERD static website for a TailorDB namespace (beta)",
   },
   args: {
     ...commonArgs,
@@ -82,6 +83,7 @@ export const erdDeployCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
+    logErdBetaWarning();
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,

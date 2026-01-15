@@ -134,3 +134,21 @@ tailor-sdk tailordb truncate User Post --yes
   - `--namespace`: requires typing `truncate <namespace-name>`
   - Specific types: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
+
+### tailordb erd (beta)
+
+Generate ERD artifacts for TailorDB namespaces.
+
+```bash
+tailor-sdk tailordb erd <subcommand> [options]
+```
+
+**Subcommands:**
+
+- `export` - Export applied TailorDB schema as tbls-compatible JSON
+- `serve` - Generate and serve ERD locally (liam build + `serve dist`)
+- `deploy` - Deploy ERD static website for a TailorDB namespace
+
+**Notes:**
+
+- This command is a beta feature and may introduce breaking changes in future releases

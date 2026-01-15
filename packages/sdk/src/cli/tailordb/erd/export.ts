@@ -7,6 +7,7 @@ import { fetchAll, initOperatorClient } from "../../client";
 import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
+import { logErdBetaWarning } from "./beta";
 import type {
   TailorDBType as TailorDBProtoType,
   TailorDBType_FieldConfig,
@@ -319,7 +320,7 @@ async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void>
 export const erdExportCommand = defineCommand({
   meta: {
     name: "export",
-    description: "Export applied TailorDB schema as tbls-compatible JSON for ERD tools",
+    description: "Export applied TailorDB schema as tbls-compatible JSON for ERD tools (beta)",
   },
   args: {
     ...commonArgs,
@@ -337,6 +338,7 @@ export const erdExportCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
+    logErdBetaWarning();
     const outputPath = path.resolve(process.cwd(), String(args.output));
 
     await writeTblsSchemaToFile({
