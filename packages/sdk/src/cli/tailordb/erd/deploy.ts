@@ -56,8 +56,7 @@ export const erdDeployCommand = defineCommand({
 
     // Resolve namespace and validate erdSite once at command level
     const { config } = await loadConfig(args.config);
-    const { namespace, dbConfig } = resolveDbConfig(config, args.namespace);
-    const erdSiteName = dbConfig.erdSite;
+    const { namespace, erdSite } = resolveDbConfig(config, args.namespace);
 
     await prepareErdBuild({
       namespace,
@@ -67,7 +66,7 @@ export const erdDeployCommand = defineCommand({
       erdDir,
     });
 
-    if (!erdSiteName) {
+    if (!erdSite) {
       throw new Error(
         `No erdSite configured for TailorDB namespace "${namespace}". ` +
           `Add erdSite: "<static-website-name>" to db.${namespace} in tailor.config.ts.`,
@@ -81,12 +80,12 @@ export const erdDeployCommand = defineCommand({
     const { url, skippedFiles } = await deployStaticWebsite(
       client,
       workspaceId,
-      erdSiteName,
+      erdSite,
       distDir,
       true,
     );
 
-    logger.success(`ERD site "${erdSiteName}" deployed successfully. URL: ${url}`);
+    logger.success(`ERD site "${erdSite}" deployed successfully. URL: ${url}`);
     logSkippedFiles(skippedFiles);
   }),
 });
