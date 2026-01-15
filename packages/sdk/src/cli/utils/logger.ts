@@ -115,9 +115,7 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
  * Supports three modes controlled via logObj.tag:
  * - "default": Colored icons and messages, no timestamp, dynamic line wrapping
  * - "stream": Colored icons with timestamps, for streaming/polling operations
- * - "plain": No icons or colors, fixed line wrapping (100 chars)
- *
- * The mode is passed via logObj.tag from the logger methods.
+ * - "plain": Colored messages only, no icons, no timestamp
  */
 class Reporter implements ConsolaReporter {
   log(logObj: LogObject, ctx: { options: ConsolaOptions }) {
@@ -131,18 +129,18 @@ class Reporter implements ConsolaReporter {
     };
     const message = formatWithOptions(inspectOpts, ...logObj.args);
 
-    // Plain mode: no icon, no color
+    // Apply color based on log type
+    const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
+
+    // Plain mode: color only, no icon, no timestamp
     if (mode === "plain") {
-      stderr.write(`${message}\n`);
+      stderr.write(`${colorFn(message)}\n`);
       return;
     }
 
     // Default/Stream mode: with icon and color
     const icon = TYPE_ICONS[logObj.type] || "";
     const prefix = icon ? `${icon} ` : "";
-
-    // Apply color to both icon and message
-    const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
     const coloredOutput = colorFn(`${prefix}${message}`);
 
     // Add timestamp for stream mode
@@ -172,29 +170,17 @@ export const logger = {
 
   success(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
-    if (mode === "plain") {
-      consola.withTag(mode).log(styles.success(message));
-    } else {
-      consola.withTag(mode).success(message);
-    }
+    consola.withTag(mode).success(message);
   },
 
   warn(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
-    if (mode === "plain") {
-      consola.withTag(mode).log(styles.warning(message));
-    } else {
-      consola.withTag(mode).warn(message);
-    }
+    consola.withTag(mode).warn(message);
   },
 
   error(message: string, opts?: LogOptions): void {
     const mode = opts?.mode ?? "default";
-    if (mode === "plain") {
-      consola.withTag(mode).log(styles.error(message));
-    } else {
-      consola.withTag(mode).error(message);
-    }
+    consola.withTag(mode).error(message);
   },
 
   log(message: string): void {
