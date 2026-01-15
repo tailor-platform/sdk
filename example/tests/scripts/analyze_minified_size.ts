@@ -148,7 +148,7 @@ async function minifyCode(
       minify: true,
       clean: false,
       dts: false,
-      silent: true,
+      logLevel: "silent",
     });
 
     // Read minified output
