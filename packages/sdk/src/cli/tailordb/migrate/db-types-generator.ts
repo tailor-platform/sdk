@@ -237,13 +237,11 @@ function generateTableType(
     usedColumnType = usedColumnType || result.usedColumnType;
   }
 
-  // Add newly added required fields as optional (T | null)
-  // These fields will be added to DB as optional first, then migration script sets values,
-  // then the field becomes required. At migration script execution time, the field is optional.
+  // Add newly added required fields with ColumnType (same as optional→required)
+  // These fields are added as nullable in pre-migration, then become required in post-migration
   for (const [fieldName, fieldConfig] of addedRequiredFields) {
-    // Treat as optional field (required: false) for migration script
-    const optionalConfig = { ...fieldConfig, required: false };
-    const result = generateFieldType(optionalConfig, false, undefined);
+    // Treat as optional→required change (isOptionalToRequired: true)
+    const result = generateFieldType(fieldConfig, true, undefined);
     fieldLines.push(`    ${fieldName}: ${result.type};`);
     usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;

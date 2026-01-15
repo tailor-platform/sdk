@@ -172,7 +172,7 @@ export async function apply(options?: ApplyOptions) {
         logger.error("Schema changes detected that are not in migration files:");
         logger.log(formatMigrationCheckResults(migrationResults));
         logger.newline();
-        logger.info("Run 'tailor-sdk tailordb migrate generate' to create migration files.");
+        logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
         logger.info("Or use '--no-schema-check' to skip this check.");
         throw new Error("Schema migration check failed");
       }
@@ -508,7 +508,7 @@ export const applyCommand = defineCommand({
       configPath: args.config,
       dryRun: args["dry-run"],
       yes: args.yes,
-      noSchemaCheck: args["no-schema-check"],
+      noSchemaCheck: args["schema-check"] === false,
     });
   }),
 });

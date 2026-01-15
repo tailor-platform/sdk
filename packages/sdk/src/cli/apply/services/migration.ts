@@ -307,34 +307,29 @@ export async function executeMigrations(
       prefixText: "",
     }).start();
 
-    try {
-      const result = await executeSingleMigration(options, migration);
+    const result = await executeSingleMigration(options, migration);
 
-      if (result.success) {
-        // Update the migration label
-        await updateMigrationLabel(
-          options.client,
-          options.workspaceId,
-          migration.namespace,
-          migration.number,
-        );
+    if (result.success) {
+      // Update the migration label
+      await updateMigrationLabel(
+        options.client,
+        options.workspaceId,
+        migration.namespace,
+        migration.number,
+      );
 
-        spinner.succeed(`Migration ${migrationLabel} completed successfully`);
+      spinner.succeed(`Migration ${migrationLabel} completed successfully`);
 
-        // Show logs if any
-        if (result.logs && result.logs.trim()) {
-          logger.debug(`Logs:\n${result.logs}`);
-        }
-      } else {
-        spinner.fail(`Migration ${migrationLabel} failed`);
-        if (result.logs) {
-          logger.error(`Logs:\n${result.logs}`);
-        }
-        throw new Error(result.error ?? "Migration failed");
+      // Show logs if any
+      if (result.logs && result.logs.trim()) {
+        logger.debug(`Logs:\n${result.logs}`);
       }
-    } catch (error) {
+    } else {
       spinner.fail(`Migration ${migrationLabel} failed`);
-      throw error;
+      if (result.logs) {
+        logger.error(`Logs:\n${result.logs}`);
+      }
+      throw new Error(result.error ?? "Migration failed");
     }
   }
 

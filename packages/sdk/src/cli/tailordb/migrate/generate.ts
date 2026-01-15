@@ -7,7 +7,8 @@
  */
 
 import { spawn } from "node:child_process";
-import * as fs from "node:fs/promises";
+import * as fs from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import * as path from "node:path";
 import { defineCommand } from "citty";
 import { commonArgs, withCommonArgs } from "../../args";
@@ -34,6 +35,66 @@ export interface GenerateOptions {
   configPath?: string;
   name?: string;
   yes?: boolean;
+  init?: boolean;
+}
+
+/**
+ * Handle --init option: delete existing migrations directories
+ * @param {NamespaceWithMigrations[]} namespaces - Namespaces with migrations
+ * @param {boolean} skipConfirmation - Whether to skip confirmation prompt
+ * @returns {Promise<void>}
+ */
+async function handleInitOption(
+  namespaces: NamespaceWithMigrations[],
+  skipConfirmation?: boolean,
+): Promise<void> {
+  // Find directories that exist
+  const existingDirs = namespaces.filter(({ migrationsDir }) => fs.existsSync(migrationsDir));
+
+  if (existingDirs.length === 0) {
+    logger.info("No existing migration directories found.");
+    return;
+  }
+
+  // Show warning
+  logger.newline();
+  logger.warn("⚠️  This will DELETE all existing migration files:");
+  for (const { namespace, migrationsDir } of existingDirs) {
+    logger.log(`  - ${namespace}: ${migrationsDir}`);
+  }
+  logger.newline();
+
+  // Confirmation prompt
+  if (!skipConfirmation) {
+    const confirmation = await logger.prompt(
+      "Are you sure you want to delete these directories and start fresh?",
+      {
+        type: "confirm",
+        initial: false,
+      },
+    );
+
+    if (!confirmation) {
+      logger.info("Operation cancelled.");
+      process.exit(0);
+    }
+    logger.newline();
+  }
+
+  // Delete directories
+  for (const { namespace, migrationsDir } of existingDirs) {
+    try {
+      await fsPromises.rm(migrationsDir, { recursive: true, force: true });
+      logger.success(`Deleted migration directory for ${styles.bold(namespace)}`);
+    } catch (error) {
+      logger.error(`Failed to delete ${migrationsDir}: ${error}`);
+      throw error;
+    }
+  }
+
+  logger.newline();
+  logger.info("Migration directories cleared. Generating initial snapshot...");
+  logger.newline();
 }
 
 /**
@@ -56,6 +117,11 @@ export async function generate(options: GenerateOptions): Promise<void> {
     logger.warn("No TailorDB namespaces with migrations config found.");
     logger.info('Add "migrations" field to your db config to enable migrations.');
     return;
+  }
+
+  // Handle --init option: delete existing migrations directory
+  if (options.init) {
+    await handleInitOption(namespacesWithMigrations, options.yes);
   }
 
   // Load application and all types
@@ -249,7 +315,7 @@ async function openInEditor(filePath: string): Promise<void> {
   }
 
   try {
-    await fs.access(filePath);
+    await fsPromises.access(filePath);
   } catch {
     return;
   }
@@ -294,12 +360,18 @@ export const generateCommand = defineCommand({
       alias: "y",
       default: false,
     },
+    init: {
+      type: "boolean",
+      description: "Delete existing migrations and start fresh",
+      default: false,
+    },
   },
   run: withCommonArgs(async (args) => {
     await generate({
       configPath: typeof args.config === "string" ? args.config : undefined,
       name: typeof args.name === "string" ? args.name : undefined,
       yes: Boolean(args.yes),
+      init: Boolean(args.init),
     });
   }),
 });

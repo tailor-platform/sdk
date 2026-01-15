@@ -1240,7 +1240,7 @@ export function formatMigrationCheckResults(results: MigrationCheckResult[]): st
 
     if (!result.diff) {
       lines.push(
-        "  No migration snapshot found. Run 'tailor-sdk tailordb migrate generate' first.",
+        "  No migration snapshot found. Run 'tailor-sdk tailordb migration generate' first.",
       );
     } else {
       lines.push(`  ${formatDiffSummary(result.diff)}`);
