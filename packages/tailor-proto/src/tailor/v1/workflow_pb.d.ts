@@ -289,6 +289,13 @@ export declare type CreateWorkflowJobFunctionRequest = Message<"tailor.v1.Create
    * @generated from field: string script = 3;
    */
   script: string;
+
+  /**
+   * Reference to a function in the Function Registry
+   *
+   * @generated from field: optional string script_ref = 4;
+   */
+  scriptRef?: string;
 };
 
 /**
@@ -331,6 +338,13 @@ export declare type UpdateWorkflowJobFunctionRequest = Message<"tailor.v1.Update
    * @generated from field: string script = 3;
    */
   script: string;
+
+  /**
+   * Reference to a function in the Function Registry
+   *
+   * @generated from field: optional string script_ref = 4;
+   */
+  scriptRef?: string;
 };
 
 /**

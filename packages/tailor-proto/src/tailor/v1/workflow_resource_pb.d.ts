@@ -39,6 +39,13 @@ export declare type WorkflowJobFunction = Message<"tailor.v1.WorkflowJobFunction
    * @generated from field: google.protobuf.Timestamp created_at = 5;
    */
   createdAt?: Timestamp;
+
+  /**
+   * Reference to a function in the Function Registry
+   *
+   * @generated from field: optional string script_ref = 6;
+   */
+  scriptRef?: string;
 };
 
 /**

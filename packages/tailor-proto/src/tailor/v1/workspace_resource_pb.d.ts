@@ -71,6 +71,12 @@ export declare type OrganizationAccess = Message<"tailor.v1.OrganizationAccess">
      */
     value: OrganizationAccess_PlatformUser;
     case: "platformUser";
+  } | {
+    /**
+     * @generated from field: tailor.v1.OrganizationAccess.MachineUser machine_user = 5;
+     */
+    value: OrganizationAccess_MachineUser;
+    case: "machineUser";
   } | { case: undefined; value?: undefined };
 };
 
@@ -121,6 +127,27 @@ export declare type OrganizationAccess_Team = Message<"tailor.v1.OrganizationAcc
  * Use `create(OrganizationAccess_TeamSchema)` to create a new message.
  */
 export declare const OrganizationAccess_TeamSchema: GenMessage<OrganizationAccess_Team>;
+
+/**
+ * @generated from message tailor.v1.OrganizationAccess.MachineUser
+ */
+export declare type OrganizationAccess_MachineUser = Message<"tailor.v1.OrganizationAccess.MachineUser"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.OrganizationAccess.MachineUser.
+ * Use `create(OrganizationAccess_MachineUserSchema)` to create a new message.
+ */
+export declare const OrganizationAccess_MachineUserSchema: GenMessage<OrganizationAccess_MachineUser>;
 
 /**
  * @generated from message tailor.v1.Folder
@@ -199,6 +226,12 @@ export declare type FolderAccess = Message<"tailor.v1.FolderAccess"> & {
      */
     value: FolderAccess_PlatformUser;
     case: "platformUser";
+  } | {
+    /**
+     * @generated from field: tailor.v1.FolderAccess.MachineUser machine_user = 5;
+     */
+    value: FolderAccess_MachineUser;
+    case: "machineUser";
   } | { case: undefined; value?: undefined };
 };
 
@@ -249,6 +282,27 @@ export declare type FolderAccess_Team = Message<"tailor.v1.FolderAccess.Team"> &
  * Use `create(FolderAccess_TeamSchema)` to create a new message.
  */
 export declare const FolderAccess_TeamSchema: GenMessage<FolderAccess_Team>;
+
+/**
+ * @generated from message tailor.v1.FolderAccess.MachineUser
+ */
+export declare type FolderAccess_MachineUser = Message<"tailor.v1.FolderAccess.MachineUser"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.FolderAccess.MachineUser.
+ * Use `create(FolderAccess_MachineUserSchema)` to create a new message.
+ */
+export declare const FolderAccess_MachineUserSchema: GenMessage<FolderAccess_MachineUser>;
 
 /**
  * @generated from message tailor.v1.Team
