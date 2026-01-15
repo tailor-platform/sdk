@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.2.6
+
+### Patch Changes
+
+- [#419](https://github.com/tailor-platform/sdk/pull/419) [`e8b3184`](https://github.com/tailor-platform/sdk/commit/e8b31847c043084ee6826471805225fc9e44b156) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support `requireDpop` for auth oauth2 client
+
 ## 1.2.5
 
 ### Patch Changes
