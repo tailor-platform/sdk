@@ -50,6 +50,10 @@ export const erdDeployCommand = defineCommand({
       profile: args.profile,
     });
 
+    const schemaOutputPath = path.resolve(process.cwd(), String(args.output));
+    const distDir = path.resolve(process.cwd(), String(args.dist));
+    const erdDir = path.dirname(distDir);
+
     const { config } = await loadConfig(args.config);
     const { namespace, dbConfig } = resolveDbConfig(config, args.namespace);
 
@@ -62,15 +66,11 @@ export const erdDeployCommand = defineCommand({
       );
     }
 
-    const schemaOutputPath = path.resolve(process.cwd(), String(args.output));
-    const distDir = path.resolve(process.cwd(), String(args.dist));
-    const erdDir = path.dirname(distDir);
-
     await prepareErdBuild({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
       configPath: args.config,
       namespace,
+      client,
+      workspaceId,
       outputPath: schemaOutputPath,
       erdDir,
     });

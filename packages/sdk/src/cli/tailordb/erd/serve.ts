@@ -3,6 +3,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
+import { initOperatorClient } from "../../client";
+import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { DEFAULT_DIST_DIR } from "./constants";
@@ -72,14 +74,23 @@ export const erdServeCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     logErdBetaWarning();
+    const accessToken = await loadAccessToken({
+      useProfile: true,
+      profile: args.profile,
+    });
+    const client = await initOperatorClient(accessToken);
+    const workspaceId = loadWorkspaceId({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+    });
     const outputPath = path.resolve(process.cwd(), String(args.output));
     const erdDir = path.dirname(path.resolve(process.cwd(), DEFAULT_DIST_DIR));
 
     await prepareErdBuild({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
+      workspaceId,
       configPath: args.config,
       namespace: args.namespace,
+      client,
       outputPath,
       erdDir,
     });

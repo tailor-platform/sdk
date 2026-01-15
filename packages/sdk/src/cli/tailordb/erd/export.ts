@@ -9,16 +9,17 @@ import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
 import { logErdBetaWarning } from "./beta";
 import { resolveSingleNamespace } from "./namespace";
+import type { OperatorClient } from "../../client";
 import type {
   TailorDBType as TailorDBProtoType,
   TailorDBType_FieldConfig,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 export interface TailorDBSchemaOptions {
-  workspaceId?: string;
-  profile?: string;
+  workspaceId: string;
   configPath?: string;
   namespace?: string;
+  client: OperatorClient;
 }
 
 interface TblsColumn {
@@ -229,15 +230,7 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
  * @returns {Promise<TblsSchema>} tbls schema representation
  */
 export async function exportTailorDBSchema(options: TailorDBSchemaOptions): Promise<TblsSchema> {
-  const accessToken = await loadAccessToken({
-    useProfile: true,
-    profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
-    workspaceId: options.workspaceId,
-    profile: options.profile,
-  });
+  const { client, workspaceId } = options;
 
   const namespace =
     options.namespace ?? resolveSingleNamespace((await loadConfig(options.configPath)).config);
@@ -302,13 +295,22 @@ export const erdExportCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     logErdBetaWarning();
+    const accessToken = await loadAccessToken({
+      useProfile: true,
+      profile: args.profile,
+    });
+    const client = await initOperatorClient(accessToken);
+    const workspaceId = loadWorkspaceId({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+    });
     const outputPath = path.resolve(process.cwd(), String(args.output));
 
     await writeTblsSchemaToFile({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
+      workspaceId,
       configPath: args.config,
       namespace: args.namespace,
+      client,
       outputPath,
     });
   }),
