@@ -86,8 +86,6 @@ export type TailorDBMigrationConfig = {
   directory: string;
   /** Machine user name for executing migration scripts (must be defined in auth.machineUsers) */
   machineUser?: string;
-  /** Timeout for migration script execution in milliseconds (default: 10 minutes) */
-  timeout?: number;
 };
 
 export type TailorDBServiceConfig = {

@@ -39,7 +39,6 @@ import {
   detectPendingMigrations,
   executeMigrations,
   getMigrationMachineUser,
-  getMigrationTimeout,
 } from "./services/migration";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
@@ -430,9 +429,6 @@ async function executePendingMigrations(
     );
   }
 
-  // Get timeout
-  const timeout = getMigrationTimeout(migrationConfig);
-
   // Get generated TailorDB path from kysely generator
   const kyselyGenerator = generators.find(
     (g) => g.id === KyselyGeneratorID || (g as { id?: string }).id === KyselyGeneratorID,
@@ -457,7 +453,6 @@ async function executePendingMigrations(
       authNamespace,
       machineUserName,
       generatedTailorDBPath,
-      timeout,
     },
     pendingMigrations,
   );

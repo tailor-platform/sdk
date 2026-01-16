@@ -29,8 +29,9 @@ db: {
     files: ["./tailordb/*.ts"],
     migration: {
       directory: "./migrations",
-      machineUser: "admin-machine-user", // optional
-      timeout: 600000, // optional
+      // Optional: specify machine user for migration execution
+      // If not specified, the first machine user from auth.machineUsers is used
+      machineUser: "admin-machine-user",
     },
   },
 }

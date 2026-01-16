@@ -16,11 +16,6 @@ import type { AppConfig } from "@/configure/config";
 export const MAX_LABEL_LENGTH = 63;
 
 /**
- * Default migration execution timeout in milliseconds (10 minutes)
- */
-export const DEFAULT_MIGRATION_TIMEOUT = 10 * 60 * 1000;
-
-/**
  * Default polling interval for migration execution status in milliseconds (1 second)
  */
 export const MIGRATION_POLL_INTERVAL = 1000;

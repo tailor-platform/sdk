@@ -16,7 +16,6 @@ import {
   type PendingMigration,
   type NamespaceWithMigrations,
   MIGRATION_LABEL_KEY,
-  DEFAULT_MIGRATION_TIMEOUT,
   MIGRATION_POLL_INTERVAL,
   formatMigrationNumber,
   parseMigrationLabelNumber,
@@ -35,7 +34,6 @@ export interface MigrationExecutionOptions {
   authNamespace: string;
   machineUserName: string;
   generatedTailorDBPath: string;
-  timeout?: number;
 }
 
 interface ExecutionResult {
@@ -149,17 +147,13 @@ export async function detectPendingMigrations(
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {string} executionId - Execution ID to wait for
- * @param {number} timeout - Timeout in milliseconds
  * @returns {Promise<{ status: FunctionExecution_Status; logs: string; result: string }>} Execution result
  */
 async function waitForExecution(
   client: OperatorClient,
   workspaceId: string,
   executionId: string,
-  timeout: number,
 ): Promise<{ status: FunctionExecution_Status; logs: string; result: string }> {
-  const startTime = Date.now();
-
   while (true) {
     const { execution } = await client.getFunctionExecution({
       workspaceId,
@@ -182,11 +176,6 @@ async function waitForExecution(
       };
     }
 
-    // Check timeout
-    if (Date.now() - startTime > timeout) {
-      throw new Error(`Migration execution timed out after ${timeout}ms`);
-    }
-
     // Wait before polling again
     await new Promise((resolve) => setTimeout(resolve, MIGRATION_POLL_INTERVAL));
   }
@@ -202,10 +191,8 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, authNamespace, machineUserName, generatedTailorDBPath, timeout } =
-    options;
+  const { client, workspaceId, authNamespace, machineUserName, generatedTailorDBPath } = options;
 
-  const migrationTimeout = timeout ?? DEFAULT_MIGRATION_TIMEOUT;
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
   // Bundle the migration script
@@ -232,7 +219,7 @@ async function executeSingleMigration(
   });
 
   // Wait for completion
-  const result = await waitForExecution(client, workspaceId, executionId, migrationTimeout);
+  const result = await waitForExecution(client, workspaceId, executionId);
 
   if (result.status === FunctionExecution_Status.SUCCESS) {
     return {
@@ -362,13 +349,4 @@ export function getMigrationMachineUser(
   }
 
   return undefined;
-}
-
-/**
- * Get the migration timeout for a namespace
- * @param {object | undefined} migrationConfig - Migration config for namespace
- * @returns {number} Timeout in milliseconds
- */
-export function getMigrationTimeout(migrationConfig: { timeout?: number } | undefined): number {
-  return migrationConfig?.timeout ?? DEFAULT_MIGRATION_TIMEOUT;
 }

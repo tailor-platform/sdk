@@ -244,9 +244,8 @@ export default defineConfig({
       migration: {
         directory: "./migrations",
         // Optional: specify machine user for migration script execution
+        // If not specified, the first machine user from auth.machineUsers is used
         machineUser: "admin-machine-user",
-        // Optional: timeout for migration execution in milliseconds (default: 10 minutes)
-        timeout: 600000,
       },
     },
   },
@@ -255,13 +254,12 @@ export default defineConfig({
 
 ### Configuration Options
 
-| Option                  | Type     | Description                                                                      |
-| ----------------------- | -------- | -------------------------------------------------------------------------------- |
-| `files`                 | string[] | Glob patterns for TailorDB type definition files                                 |
-| `ignores`               | string[] | Glob patterns to ignore                                                          |
-| `migration.directory`   | string   | Directory path for migration files                                               |
-| `migration.machineUser` | string   | Machine user name for migration script execution (overrides auto-selection)      |
-| `migration.timeout`     | number   | Timeout for migration script execution in milliseconds (default: 600000 / 10min) |
+| Option                  | Type     | Description                                                                                                        |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `files`                 | string[] | Glob patterns for TailorDB type definition files                                                                   |
+| `ignores`               | string[] | Glob patterns to ignore                                                                                            |
+| `migration.directory`   | string   | Directory path for migration files                                                                                 |
+| `migration.machineUser` | string   | Machine user name for migration script execution (optional, defaults to first machine user from auth.machineUsers) |
 
 ### Machine User Selection
 
