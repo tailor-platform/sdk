@@ -219,7 +219,6 @@ export const customer = db
     firstName: db.string(),
     lastName: db.string(),
     fullName: db.string(),
-    ...db.fields.timestamps(),
   })
   .hooks({
     fullName: {
@@ -282,8 +281,6 @@ export const user = db
   .type("User", {
     name: db.string(),
     email: db.string(),
-    age: db.int(),
-    ...db.fields.timestamps(),
   })
   .validate({
     name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
@@ -291,7 +288,6 @@ export const user = db
       ({ value }) => value.includes("@"),
       [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
     ],
-    age: [({ value }) => value >= 0 && value <= 150, "Age must be between 0 and 150"],
   });
 ```
 
