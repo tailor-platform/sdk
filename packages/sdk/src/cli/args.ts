@@ -50,10 +50,17 @@ type EnvFileArg = string | string[] | undefined;
 /**
  * Load env files from parsed arguments.
  * Processes --env-file first, then --env-file-if-exists.
+ *
+ * Follows Node.js --env-file behavior:
+ * - Variables already set in the environment are NOT overwritten
+ * - Variables from later files override those from earlier files
  * @param {EnvFileArg} envFiles - Required env file path(s) that must exist
  * @param {EnvFileArg} envFilesIfExists - Optional env file path(s) that are loaded if they exist
  */
-function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg): void {
+export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg): void {
+  // Snapshot of originally set environment variables (before loading any files)
+  const originalEnvKeys = new Set(Object.keys(process.env));
+
   const load = (files: EnvFileArg, required: boolean) => {
     for (const file of [files ?? []].flat()) {
       const envPath = path.resolve(process.cwd(), file);
@@ -63,10 +70,14 @@ function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg): void 
         }
         continue;
       }
-      // parseEnv + manual assign to allow overwriting (loadEnvFile doesn't overwrite)
       const content = fs.readFileSync(envPath, "utf-8");
       const parsed = parseEnv(content);
       for (const [key, value] of Object.entries(parsed)) {
+        // Skip if the variable was originally set in the environment
+        if (originalEnvKeys.has(key)) {
+          continue;
+        }
+        // Allow overwriting between env files
         process.env[key] = value;
       }
     }
