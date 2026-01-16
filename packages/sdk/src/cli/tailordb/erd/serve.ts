@@ -4,8 +4,9 @@ import * as path from "node:path";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
-import { DEFAULT_SCHEMA_OUTPUT } from "./constants";
-import { prepareErdBuilds } from "./liam";
+import { DEFAULT_ERD_BASE_DIR } from "./constants";
+import { resolveDbConfig } from "./db-config";
+import { prepareErdBuild } from "./liam";
 import { resolveCliBinPath } from "./resolve-cli-bin";
 import { initErdContext } from "./utils";
 
@@ -60,28 +61,24 @@ export const erdServeCommand = defineCommand({
     ...deploymentArgs,
     namespace: {
       type: "string",
-      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
+      description: "TailorDB namespace name (uses first namespace in config if not specified)",
       alias: "n",
-    },
-    output: {
-      type: "string",
-      description: "Output file path for tbls-compatible ERD JSON",
-      alias: "o",
-      default: DEFAULT_SCHEMA_OUTPUT,
     },
   },
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
-    const outputDir = path.dirname(path.resolve(process.cwd(), String(args.output)));
+    const { namespace } = resolveDbConfig(config, args.namespace);
+    const erdDir = path.resolve(process.cwd(), DEFAULT_ERD_BASE_DIR, namespace);
+    const schemaOutputPath = path.join(erdDir, "schema.json");
 
-    const [result] = await prepareErdBuilds({
+    await prepareErdBuild({
       client,
       workspaceId,
-      config,
-      namespace: args.namespace,
-      outputDir,
+      namespace,
+      outputPath: schemaOutputPath,
+      erdDir,
     });
 
-    await runServeDist(result.erdDir);
+    await runServeDist(erdDir);
   }),
 });
