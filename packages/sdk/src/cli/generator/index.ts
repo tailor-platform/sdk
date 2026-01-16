@@ -399,11 +399,11 @@ export class GenerationManager {
     await Promise.all(
       result.files.map(async (file) => {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
-        return new Promise<void>((resolvePromise, reject) => {
+        return new Promise<void>((resolve, reject) => {
           if (file.skipIfExists && fs.existsSync(file.path)) {
             const relativePath = path.relative(process.cwd(), file.path);
             logger.debug(`${gen.id} | skip existing: ${relativePath}`);
-            return resolvePromise();
+            return resolve();
           }
 
           fs.writeFile(file.path, file.content, (err) => {
@@ -426,11 +426,11 @@ export class GenerationManager {
                     logger.error(String(chmodErr));
                     reject(chmodErr);
                   } else {
-                    resolvePromise();
+                    resolve();
                   }
                 });
               } else {
-                resolvePromise();
+                resolve();
               }
             }
           });

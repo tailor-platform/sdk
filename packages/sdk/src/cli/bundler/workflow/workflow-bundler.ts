@@ -233,7 +233,6 @@ async function bundleSingleJob(
 ): Promise<void> {
   // Step 1: Create entry file that imports job by named export
   const entryPath = path.join(outputDir, `${job.name}.entry.js`);
-  // pathe already returns POSIX-style paths with forward slashes
   const absoluteSourcePath = path.resolve(job.sourceFile);
 
   const entryContent = ml /* js */ `

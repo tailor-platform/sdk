@@ -125,7 +125,6 @@ export function createSeedGenerator(options: {
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
-          // pathe already returns POSIX-style paths with forward slashes
           const importPath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
           const normalizedImportPath = importPath.replace(/\.ts$/, "").startsWith(".")
             ? importPath.replace(/\.ts$/, "")
@@ -193,7 +192,6 @@ export function createSeedGenerator(options: {
 
         // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
-          // pathe already returns POSIX-style paths with forward slashes
           const relativeConfigPath = path.relative(outputDir, configPath);
           files.push({
             path: path.join(outputDir, "exec.mjs"),

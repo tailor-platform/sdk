@@ -131,13 +131,10 @@ async function uploadSingleFile(
   workspaceId: string,
   deploymentId: string,
   rootDir: string,
-  relativePath: string,
+  filePath: string,
   skippedFiles: string[],
 ): Promise<void> {
-  const absPath = path.join(rootDir, relativePath);
-
-  // pathe already returns POSIX-style paths with forward slashes
-  const filePath = relativePath;
+  const absPath = path.join(rootDir, filePath);
 
   const mime = mimeLookup(filePath);
 
