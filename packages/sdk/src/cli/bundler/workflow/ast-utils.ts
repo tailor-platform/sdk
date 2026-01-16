@@ -1,4 +1,3 @@
-import * as path from "pathe";
 import type {
   Expression,
   AwaitExpression,
@@ -171,12 +170,30 @@ export function findStatementEnd(source: string, position: number): number {
 
 /**
  * Resolve a relative path from a base directory
- * Uses pathe for cross-platform path resolution with POSIX-style output
+ * Simple implementation that handles ./ and ../ prefixes
  * @param {string} baseDir - Base directory
  * @param {string} relativePath - Relative path to resolve
- * @returns {string} Resolved absolute path with forward slashes
+ * @returns {string} Resolved absolute path
  */
 export function resolvePath(baseDir: string, relativePath: string): string {
-  // pathe automatically normalizes paths to POSIX-style forward slashes
-  return path.resolve(baseDir, relativePath);
+  // Normalize separators to forward slash
+  const normalized = relativePath.replace(/\\/g, "/");
+
+  // Split into parts
+  const parts = normalized.split("/");
+  const baseParts = baseDir.replace(/\\/g, "/").split("/");
+
+  for (const part of parts) {
+    if (part === ".") {
+      // Current directory, do nothing
+    } else if (part === "..") {
+      // Go up one directory
+      baseParts.pop();
+    } else {
+      // Add the part
+      baseParts.push(part);
+    }
+  }
+
+  return baseParts.join("/");
 }

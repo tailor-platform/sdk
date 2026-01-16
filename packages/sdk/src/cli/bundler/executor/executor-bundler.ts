@@ -95,7 +95,6 @@ async function bundleSingleExecutor(
 ): Promise<void> {
   // Step 1: Create entry file that imports and extracts operation.body
   const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
-  // pathe already returns POSIX-style paths with forward slashes
   const absoluteSourcePath = path.resolve(executor.sourceFile);
 
   const entryContent = ml /* js */ `

@@ -86,7 +86,6 @@ async function bundleSingleResolver(
 ): Promise<void> {
   // Step 1: Create entry file that imports from the original source
   const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
-  // pathe already returns POSIX-style paths with forward slashes
   const absoluteSourcePath = path.resolve(resolver.sourceFile);
 
   const entryContent = ml /* js */ `
