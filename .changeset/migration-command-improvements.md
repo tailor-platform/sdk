@@ -2,20 +2,36 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add new migration management commands and features:
+Add TailorDB schema migration feature. Migrations allow you to safely evolve your database schema with type-safe data transformations.
 
-- Add `tailordb migration set` command to manually set migration checkpoint
-  - Useful for skipping failed migrations or resetting migration state
-  - Supports `--namespace`, `--yes`, `--workspace-id`, and `--profile` options
-  - Always shows warnings and requires confirmation before changing checkpoint
+**Key Features:**
 
-- Add `tailordb migration status` command to show migration status
-  - Displays current migration number and pending migrations
-  - Shows migration descriptions from diff.json when available
-  - Supports `--namespace` option to filter by specific namespace
+- **Local snapshot-based diff detection** - Detects field-level schema differences between current types and previous snapshots
+- **Type-safe migration scripts** - Generates TypeScript migration scripts with Kysely transaction types
+- **Transaction-wrapped execution** - All changes commit or rollback together for atomicity
+- **Automatic execution during apply** - Pending migrations run as part of `tailor-sdk apply`
+- **Migration checkpoint management** - Manually control which migrations have been applied
+- **Migration status tracking** - View current state and pending migrations
 
-- Add `--init` option to `migration generate` command
-  - Deletes existing migration directories and starts fresh
-  - Shows confirmation prompt with list of directories to be deleted
-  - Can be combined with `--yes` to skip confirmation
-  - Useful for completely resetting migration history
+**Commands:**
+
+- `tailordb migration generate` - Generate migration files from schema changes (supports `--name`, `--yes`, `--init`)
+- `tailordb migration set <number>` - Manually set migration checkpoint
+- `tailordb migration status` - Show migration status and pending migrations
+
+**Configuration:**
+
+Configure migrations in `tailor.config.ts`:
+
+```typescript
+db: {
+  tailordb: {
+    files: ["./tailordb/*.ts"],
+    migration: {
+      directory: "./migrations",
+      machineUser: "admin-machine-user", // optional
+      timeout: 600000, // optional
+    },
+  },
+}
+```
