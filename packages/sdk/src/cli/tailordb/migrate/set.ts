@@ -93,7 +93,7 @@ async function set(options: SetOptions): Promise<void> {
 
   // 7. Display warning and confirmation
   logger.newline();
-  logger.warn("⚠️  This operation will change the migration checkpoint.");
+  logger.warn("This operation will change the migration checkpoint.");
   logger.log(`Namespace: ${styles.bold(targetNamespace)}`);
   logger.log(`Current migration: ${styles.bold(formatMigrationNumber(currentMigration))}`);
   logger.log(`New migration: ${styles.bold(formatMigrationNumber(migrationNumber))}`);
