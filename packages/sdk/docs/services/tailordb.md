@@ -219,20 +219,12 @@ export const customer = db
     firstName: db.string(),
     lastName: db.string(),
     fullName: db.string(),
-    postalCode: db.string(),
-    address: db.string({ optional: true }),
-    city: db.string({ optional: true }),
-    fullAddress: db.string(),
     ...db.fields.timestamps(),
   })
   .hooks({
     fullName: {
       create: ({ data }) => `${data.firstName} ${data.lastName}`,
       update: ({ data }) => `${data.firstName} ${data.lastName}`,
-    },
-    fullAddress: {
-      create: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
-      update: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
     },
   });
 ```
