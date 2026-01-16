@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import { defineCommand } from "citty";
 import { defineApplication } from "@/cli/application";
 import {
@@ -19,8 +18,6 @@ import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { assertValidMigrationFiles } from "../tailordb/migrate/snapshot";
-import { getNamespacesWithMigrations, type PendingMigration } from "../tailordb/migrate/types";
 import { logger } from "../utils/logger";
 import { applyApplication, planApplication } from "./services/application";
 import { applyAuth, planAuth } from "./services/auth";
@@ -34,15 +31,9 @@ import {
 } from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
-import { detectPendingMigrations } from "./services/migration";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
-import {
-  applyTailorDB,
-  planTailorDB,
-  checkMigrationDiffs,
-  formatMigrationCheckResults,
-} from "./services/tailordb";
+import { applyTailorDB, planTailorDB, validateAndDetectMigrations } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
@@ -139,47 +130,16 @@ export async function apply(options?: ApplyOptions) {
     await tailordb.loadTypes();
   }
 
-  // Check migration diffs and detect pending migrations
+  // Validate migration files and detect pending migrations
   const noSchemaCheck = options?.noSchemaCheck ?? false;
-  const configDir = path.dirname(configPath);
-  const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
-  let pendingMigrations: PendingMigration[] = [];
-
-  if (namespacesWithMigrations.length > 0) {
-    // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
-    for (const { namespace, migrationsDir } of namespacesWithMigrations) {
-      assertValidMigrationFiles(migrationsDir, namespace);
-    }
-
-    // Check for schema diffs if not skipped
-    if (!noSchemaCheck) {
-      const migrationResults = await checkMigrationDiffs(
-        application.tailorDBServices,
-        namespacesWithMigrations,
-      );
-      const hasDiffs = migrationResults.some((r) => r.hasDiff);
-
-      if (hasDiffs) {
-        logger.error("Schema changes detected that are not in migration files:");
-        logger.log(formatMigrationCheckResults(migrationResults));
-        logger.newline();
-        logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
-        logger.info("Or use '--no-schema-check' to skip this check.");
-        throw new Error("Schema migration check failed");
-      }
-    }
-
-    // Detect pending migrations (migration scripts that haven't been executed yet)
-    pendingMigrations = await detectPendingMigrations(
-      client,
-      workspaceId,
-      namespacesWithMigrations,
-    );
-
-    if (pendingMigrations.length > 0) {
-      logger.info(`Found ${pendingMigrations.length} pending migration(s) to execute.`);
-    }
-  }
+  const pendingMigrations = await validateAndDetectMigrations(
+    client,
+    workspaceId,
+    application,
+    config,
+    configPath,
+    noSchemaCheck,
+  );
 
   for (const pipeline of application.resolverServices) {
     await pipeline.loadResolvers();

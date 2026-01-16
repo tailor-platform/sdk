@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -54,9 +55,12 @@ import {
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
+  assertValidMigrationFiles,
 } from "../../tailordb/migrate/snapshot";
+import { getNamespacesWithMigrations } from "../../tailordb/migrate/types";
+import { logger } from "../../utils/logger";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "./label";
-import { getMigrationMachineUser, executeMigrations } from "./migration";
+import { getMigrationMachineUser, executeMigrations, detectPendingMigrations } from "./migration";
 import { ChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -72,6 +76,67 @@ import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types"
 import type { Generator } from "@/parser/generator-config";
 import type { Executor } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+
+/**
+ * Validate migration files and detect pending migrations
+ * @param {OperatorClient} client - Operator client instance
+ * @param {string} workspaceId - Workspace ID
+ * @param {Readonly<Application>} application - Application instance
+ * @param {AppConfig} config - Application config
+ * @param {string} configPath - Path to config file
+ * @param {boolean} noSchemaCheck - Whether to skip schema diff check
+ * @returns {Promise<PendingMigration[]>} List of pending migrations
+ */
+export async function validateAndDetectMigrations(
+  client: OperatorClient,
+  workspaceId: string,
+  application: Readonly<Application>,
+  config: AppConfig,
+  configPath: string,
+  noSchemaCheck: boolean,
+): Promise<PendingMigration[]> {
+  const configDir = path.dirname(configPath);
+  const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
+  let pendingMigrations: PendingMigration[] = [];
+
+  if (namespacesWithMigrations.length > 0) {
+    // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
+    for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+      assertValidMigrationFiles(migrationsDir, namespace);
+    }
+
+    // Check for schema diffs if not skipped
+    if (!noSchemaCheck) {
+      const migrationResults = await checkMigrationDiffs(
+        application.tailorDBServices,
+        namespacesWithMigrations,
+      );
+      const hasDiffs = migrationResults.some((r) => r.hasDiff);
+
+      if (hasDiffs) {
+        logger.error("Schema changes detected that are not in migration files:");
+        logger.log(formatMigrationCheckResults(migrationResults));
+        logger.newline();
+        logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
+        logger.info("Or use '--no-schema-check' to skip this check.");
+        throw new Error("Schema migration check failed");
+      }
+    }
+
+    // Detect pending migrations (migration scripts that haven't been executed yet)
+    pendingMigrations = await detectPendingMigrations(
+      client,
+      workspaceId,
+      namespacesWithMigrations,
+    );
+
+    if (pendingMigrations.length > 0) {
+      logger.info(`Found ${pendingMigrations.length} pending migration(s) to execute.`);
+    }
+  }
+
+  return pendingMigrations;
+}
 
 /**
  * Apply TailorDB-related changes for the given phase.
@@ -1354,7 +1419,7 @@ function protoGqlOperand(
 // Migration Integration
 // ============================================================================
 
-export interface MigrationCheckResult {
+interface MigrationCheckResult {
   namespace: string;
   migrationsDir: string;
   hasDiff: boolean;
@@ -1367,7 +1432,7 @@ export interface MigrationCheckResult {
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
  * @returns {Promise<MigrationCheckResult[]>} Results for each namespace
  */
-export async function checkMigrationDiffs(
+async function checkMigrationDiffs(
   tailordbServices: readonly TailorDBService[],
   namespacesWithMigrations: NamespaceWithMigrations[],
 ): Promise<MigrationCheckResult[]> {
@@ -1424,7 +1489,7 @@ export async function checkMigrationDiffs(
  * @param {MigrationCheckResult[]} results - Migration check results
  * @returns {string} Formatted results string
  */
-export function formatMigrationCheckResults(results: MigrationCheckResult[]): string {
+function formatMigrationCheckResults(results: MigrationCheckResult[]): string {
   const lines: string[] = [];
 
   for (const result of results) {
