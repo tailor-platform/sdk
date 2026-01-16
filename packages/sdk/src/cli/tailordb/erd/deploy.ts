@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { logger } from "../../utils/logger";
 import { prepareErdBuilds } from "./liam";
@@ -13,6 +13,7 @@ export const erdDeployCommand = defineCommand({
   args: {
     ...commonArgs,
     ...deploymentArgs,
+    ...jsonArgs,
     namespace: {
       type: "string",
       description:
@@ -29,7 +30,7 @@ export const erdDeployCommand = defineCommand({
       namespace: args.namespace,
     });
 
-    await Promise.all(
+    const deployResults = await Promise.all(
       buildResults.map(async (result) => {
         if (!result.erdSite) {
           throw new Error(
@@ -38,21 +39,37 @@ export const erdDeployCommand = defineCommand({
           );
         }
 
-        logger.info(
-          `Deploying ERD for namespace "${result.namespace}" to site "${result.erdSite}"...`,
-        );
+        if (!args.json) {
+          logger.info(
+            `Deploying ERD for namespace "${result.namespace}" to site "${result.erdSite}"...`,
+          );
+        }
 
         const { url, skippedFiles } = await deployStaticWebsite(
           client,
           workspaceId,
           result.erdSite,
           result.distDir,
-          true,
+          !args.json,
         );
 
-        logger.success(`ERD site "${result.erdSite}" deployed successfully. URL: ${url}`);
-        logSkippedFiles(skippedFiles);
+        return {
+          namespace: result.namespace,
+          erdSite: result.erdSite,
+          url,
+          skippedFiles,
+        };
       }),
     );
+
+    if (args.json) {
+      logger.out(deployResults);
+    } else {
+      for (const result of deployResults) {
+        logger.success(`ERD site "${result.erdSite}" deployed successfully.`);
+        logger.info(`URL: ${result.url}`);
+        logSkippedFiles(result.skippedFiles);
+      }
+    }
   }),
 });

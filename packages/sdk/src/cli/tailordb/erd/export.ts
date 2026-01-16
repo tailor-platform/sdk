@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { defineCommand } from "citty";
-import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { DEFAULT_SCHEMA_OUTPUT } from "./constants";
 import { prepareErdBuilds } from "./liam";
@@ -14,6 +14,7 @@ export const erdExportCommand = defineCommand({
   args: {
     ...commonArgs,
     ...deploymentArgs,
+    ...jsonArgs,
     namespace: {
       type: "string",
       description: "TailorDB namespace name (optional if only one namespace is defined in config)",
@@ -38,10 +39,20 @@ export const erdExportCommand = defineCommand({
       outputDir,
     });
 
-    for (const result of results) {
-      logger.success(`Exported ERD for namespace "${result.namespace}"`);
-      logger.success(`  - Liam ERD dist: ${result.distDir}`);
-      logger.info(`  - tbls schema.json: ${result.schemaOutputPath}`);
+    if (args.json) {
+      logger.out(
+        results.map((result) => ({
+          namespace: result.namespace,
+          distDir: result.distDir,
+          schemaOutputPath: result.schemaOutputPath,
+        })),
+      );
+    } else {
+      for (const result of results) {
+        logger.success(`Exported ERD for namespace "${result.namespace}"`);
+        logger.info(`  - Liam ERD dist: ${result.distDir}`);
+        logger.info(`  - tbls schema.json: ${result.schemaOutputPath}`);
+      }
     }
   }),
 });
