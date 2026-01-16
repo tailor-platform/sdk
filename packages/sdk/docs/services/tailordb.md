@@ -190,24 +190,128 @@ type User {
 
 ### Hooks
 
-Add hooks to execute functions during data creation or update:
+Add hooks to execute functions during data creation or update. Hooks receive three arguments:
+
+- `value`: User input if provided, otherwise existing value on update or null on create
+- `data`: Entire record data (for accessing other field values)
+- `user`: User performing the operation
+
+#### Field-level Hooks
+
+Set hooks directly on individual fields:
 
 ```typescript
-db.datetime().hooks({
-  create: () => new Date(),
-  update: () => new Date(),
+db.string().hooks({
+  create: ({ user }) => user.id,
+  update: ({ value }) => value,
 });
 ```
 
-Function arguments include: `value` (field value), `data` (entire record value), `user` (user performing the operation).
+**Note:** When setting hooks at the field level, the `data` argument type is `unknown` since the field doesn't know about other fields in the type. Use type-level hooks if you need to access other fields with type safety.
+
+#### Type-level Hooks
+
+Set hooks for multiple fields at once using `db.type().hooks()`:
+
+```typescript
+export const customer = db
+  .type("Customer", {
+    firstName: db.string(),
+    lastName: db.string(),
+    fullName: db.string(),
+  })
+  .hooks({
+    fullName: {
+      create: ({ data }) => `${data.firstName} ${data.lastName}`,
+      update: ({ data }) => `${data.firstName} ${data.lastName}`,
+    },
+  });
+```
+
+**⚠️ Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
+
+```typescript
+// ❌ Compile error - cannot set hooks on the same field twice
+export const user = db
+  .type("User", {
+    name: db.string().hooks({ create: ({ data }) => data.firstName }), // Field-level
+  })
+  .hooks({
+    name: { create: ({ data }) => data.lastName }, // Type-level - ERROR
+  });
+
+// ✅ Correct - set hooks on different fields
+export const user = db
+  .type("User", {
+    firstName: db.string().hooks({ create: () => "John" }), // Field-level on firstName
+    lastName: db.string(),
+  })
+  .hooks({
+    lastName: { create: () => "Doe" }, // Type-level on lastName
+  });
+```
 
 ### Validation
 
+Add validation rules to fields. Validators receive three arguments (executed after hooks):
+
+- `value`: Field value after hook transformation
+- `data`: Entire record data after hook transformations (for accessing other field values)
+- `user`: User performing the operation
+
+Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
+
+#### Field-level Validation
+
+Set validators directly on individual fields:
+
 ```typescript
 db.string().validate(
-  ({ value }) => value.length > 5,
-  [({ value }) => value.length < 10, "Value must be shorter than 10 characters"],
+  ({ value }) => value.includes("@"),
+  [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
 );
+```
+
+#### Type-level Validation
+
+Set validators for multiple fields at once using `db.type().validate()`:
+
+```typescript
+export const user = db
+  .type("User", {
+    name: db.string(),
+    email: db.string(),
+  })
+  .validate({
+    name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
+    email: [
+      ({ value }) => value.includes("@"),
+      [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
+    ],
+  });
+```
+
+**⚠️ Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
+
+```typescript
+// ❌ Compile error - cannot set validation on the same field twice
+export const user = db
+  .type("User", {
+    name: db.string().validate(({ value }) => value.length > 0), // Field-level
+  })
+  .validate({
+    name: [({ value }) => value.length < 100, "Too long"], // Type-level - ERROR
+  });
+
+// ✅ Correct - set validation on different fields
+export const user = db
+  .type("User", {
+    name: db.string().validate(({ value }) => value.length > 0), // Field-level on name
+    email: db.string(),
+  })
+  .validate({
+    email: [({ value }) => value.includes("@"), "Invalid email"], // Type-level on email
+  });
 ```
 
 ### Vector Search
