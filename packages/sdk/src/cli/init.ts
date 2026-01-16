@@ -39,7 +39,7 @@ export const initCommand = defineCommand({
 
     let packageManager = detectPackageManager();
     if (!packageManager) {
-      logger.warn("⚠️ Could not detect package manager, defaulting to npm");
+      logger.warn("Could not detect package manager, defaulting to npm");
       packageManager = "npm";
     }
     const initArgs = [
