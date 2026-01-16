@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import ml from "multiline-ts";
+import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
@@ -95,7 +95,8 @@ async function bundleSingleExecutor(
 ): Promise<void> {
   // Step 1: Create entry file that imports and extracts operation.body
   const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
-  const absoluteSourcePath = path.resolve(executor.sourceFile).replace(/\\/g, "/");
+  // pathe already returns POSIX-style paths with forward slashes
+  const absoluteSourcePath = path.resolve(executor.sourceFile);
 
   const entryContent = ml /* js */ `
     import _internalExecutor from "${absoluteSourcePath}";

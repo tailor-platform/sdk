@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { parseSync } from "oxc-parser";
+import * as path from "pathe";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { logger } from "@/cli/utils/logger";
 import { findAllJobs, buildJobNameMap } from "./workflow/job-detector";

@@ -1,5 +1,5 @@
-import * as path from "node:path";
 import { loadEnvFile } from "node:process";
+import * as path from "pathe";
 import { z } from "zod";
 import { isCLIError } from "./utils/errors";
 import { logger } from "./utils/logger";

@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
+import * as path from "pathe";
 import { getDistDir } from "@/configure/config";
 import { type ApplyPhase } from "..";
 import { type OperatorClient, fetchAll } from "../../client";

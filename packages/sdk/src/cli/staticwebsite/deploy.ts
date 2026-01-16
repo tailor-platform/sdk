@@ -1,9 +1,9 @@
 import * as fs from "fs";
-import * as path from "path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
+import * as path from "pathe";
 import { withCommonArgs, commonArgs, jsonArgs, workspaceArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -136,7 +136,8 @@ async function uploadSingleFile(
 ): Promise<void> {
   const absPath = path.join(rootDir, relativePath);
 
-  const filePath = relativePath.split(path.sep).join("/");
+  // pathe already returns POSIX-style paths with forward slashes
+  const filePath = relativePath;
 
   const mime = mimeLookup(filePath);
 

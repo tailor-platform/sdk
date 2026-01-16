@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { defineCommand } from "citty";
+import * as path from "pathe";
 import { defineApplication, type Application } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
 import {
@@ -399,11 +399,11 @@ export class GenerationManager {
     await Promise.all(
       result.files.map(async (file) => {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
-        return new Promise<void>((resolve, reject) => {
+        return new Promise<void>((resolvePromise, reject) => {
           if (file.skipIfExists && fs.existsSync(file.path)) {
             const relativePath = path.relative(process.cwd(), file.path);
             logger.debug(`${gen.id} | skip existing: ${relativePath}`);
-            return resolve();
+            return resolvePromise();
           }
 
           fs.writeFile(file.path, file.content, (err) => {
@@ -426,11 +426,11 @@ export class GenerationManager {
                     logger.error(String(chmodErr));
                     reject(chmodErr);
                   } else {
-                    resolve();
+                    resolvePromise();
                   }
                 });
               } else {
-                resolve();
+                resolvePromise();
               }
             }
           });

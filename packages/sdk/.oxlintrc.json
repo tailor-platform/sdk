@@ -186,6 +186,18 @@
               {
                 "name": "consola",
                 "message": "Use logger from '@/cli/utils/logger' instead of consola for consistent logging."
+              },
+              {
+                "name": "table",
+                "message": "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/utils/format' instead of table for consistent table styling."
+              },
+              {
+                "name": "path",
+                "message": "Use 'pathe' instead of 'path' for consistent cross-platform path handling."
+              },
+              {
+                "name": "node:path",
+                "message": "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling."
               }
             ]
           }
@@ -193,7 +205,7 @@
       }
     },
     {
-      "files": ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts"],
+      "files": ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts", "src/cli/utils/format.ts"],
       "rules": {
         "no-restricted-imports": "off"
       }

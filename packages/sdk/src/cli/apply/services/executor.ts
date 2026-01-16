@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
@@ -15,6 +14,7 @@ import {
   type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import * as path from "pathe";
 import { getDistDir } from "@/configure/config";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
