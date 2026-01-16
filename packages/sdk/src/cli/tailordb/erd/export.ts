@@ -9,7 +9,7 @@ import { initErdContext } from "./utils";
 export const erdExportCommand = defineCommand({
   meta: {
     name: "export",
-    description: "Export applied TailorDB schema as tbls-compatible JSON for ERD tools (beta)",
+    description: "Export Liam ERD dist from applied TailorDB schema (beta)",
   },
   args: {
     ...commonArgs,
@@ -40,8 +40,8 @@ export const erdExportCommand = defineCommand({
 
     for (const result of results) {
       logger.success(`Exported ERD for namespace "${result.namespace}"`);
-      logger.success(`  - tbls schema: ${result.schemaOutputPath}`);
-      logger.success(`  - Liam ERD build: ${result.distDir}`);
+      logger.success(`  - Liam ERD dist: ${result.distDir}`);
+      logger.info(`  - tbls schema.json: ${result.schemaOutputPath}`);
     }
   }),
 });
