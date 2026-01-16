@@ -12,15 +12,32 @@ tailor-sdk <command> [options]
 
 The following options are available for most commands:
 
-| Option           | Short | Description                                         |
-| ---------------- | ----- | --------------------------------------------------- |
-| `--env-file`     | `-e`  | Specify a custom environment file path              |
-| `--verbose`      |       | Enable verbose logging (show stack traces on error) |
-| `--json`         | `-j`  | Output as JSON (where applicable)                   |
-| `--workspace-id` | `-w`  | Workspace ID (for deployment commands)              |
-| `--profile`      | `-p`  | Workspace profile                                   |
-| `--config`       | `-c`  | Path to SDK config file                             |
-| `--yes`          | `-y`  | Skip confirmation prompts                           |
+| Option                 | Short | Description                                         |
+| ---------------------- | ----- | --------------------------------------------------- |
+| `--env-file`           | `-e`  | Path to environment file (error if not found)       |
+| `--env-file-if-exists` |       | Path to environment file (ignored if not found)     |
+| `--verbose`            |       | Enable verbose logging (show stack traces on error) |
+| `--json`               | `-j`  | Output as JSON (where applicable)                   |
+| `--workspace-id`       | `-w`  | Workspace ID (for deployment commands)              |
+| `--profile`            | `-p`  | Workspace profile                                   |
+| `--config`             | `-c`  | Path to SDK config file                             |
+| `--yes`                | `-y`  | Skip confirmation prompts                           |
+
+### Environment File Loading
+
+Both `--env-file` and `--env-file-if-exists` can be specified multiple times and follow Node.js `--env-file` behavior:
+
+- Variables already set in the environment are **not** overwritten
+- Later files override earlier files
+- `--env-file` files are loaded first, then `--env-file-if-exists` files
+
+```bash
+# Load .env (required) and .env.local (optional, if exists)
+tailor-sdk apply --env-file .env --env-file-if-exists .env.local
+
+# Load multiple files
+tailor-sdk apply --env-file .env --env-file .env.production
+```
 
 ## Environment Variables
 
