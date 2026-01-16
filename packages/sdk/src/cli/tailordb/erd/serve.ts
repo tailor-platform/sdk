@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
+import { resolveCliBinPath } from "../../utils/resolve-cli-bin";
 import { prepareErdBuilds } from "./liam";
-import { resolveCliBinPath } from "./resolve-cli-bin";
 import { initErdContext } from "./utils";
 
 async function runServeDist(erdDir: string): Promise<void> {

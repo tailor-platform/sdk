@@ -1,4 +1,4 @@
-import { logger } from "../../utils/logger";
+import { logger } from "./logger";
 
 /**
  * Warn that the ERD CLI is a beta feature.

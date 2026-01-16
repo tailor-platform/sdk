@@ -1,7 +1,7 @@
 import { initOperatorClient } from "../../client";
 import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
-import { logErdBetaWarning } from "./beta";
+import { logErdBetaWarning } from "../../utils/beta";
 import type { OperatorClient } from "../../client";
 import type { AppConfig } from "@/configure/config";
 
