@@ -145,7 +145,7 @@ tailor-sdk tailordb erd <subcommand> [options]
 
 **Subcommands:**
 
-- `export` - Export applied TailorDB schema as tbls-compatible JSON
+- `export` - Export Liam ERD dist from applied TailorDB schema
 - `serve` - Generate and serve ERD locally (liam build + `serve dist`)
 - `deploy` - Deploy ERD static website for a TailorDB namespace
 
