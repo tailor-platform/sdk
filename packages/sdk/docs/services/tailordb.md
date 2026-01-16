@@ -201,18 +201,13 @@ Add hooks to execute functions during data creation or update. Hooks receive thr
 Set hooks directly on individual fields:
 
 ```typescript
-// Combine values from other fields
-db.string().hooks({
-  create: ({ data }) => `${data.firstName} ${data.lastName}`,
-  update: ({ value, data }) => value || `${data.firstName} ${data.lastName}`,
-});
-
-// Use user information
 db.string().hooks({
   create: ({ user }) => user.id,
-  update: ({ value }) => value, // Keep existing value on update
+  update: ({ value }) => value,
 });
 ```
+
+**Note:** When setting hooks at the field level, the `data` argument type is `unknown` since the field doesn't know about other fields in the type. Use type-level hooks if you need to access other fields with type safety.
 
 #### Type-level Hooks
 
@@ -280,19 +275,9 @@ Validators return `true` for success, `false` for failure. Use array form `[vali
 Set validators directly on individual fields:
 
 ```typescript
-// Single validation
-db.string().validate(({ value }) => value.includes("@"));
-
-// Multiple validations with custom error messages
 db.string().validate(
   ({ value }) => value.includes("@"),
   [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
-);
-
-// Use data and user arguments
-db.int().validate(
-  ({ value, data }) => value <= data.maxValue,
-  [({ user }) => user.role === "admin", "Only admins can set this value"],
 );
 ```
 
