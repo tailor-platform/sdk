@@ -52,12 +52,12 @@ tailor-sdk tailordb truncate User Post --yes
   - Specific types: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
 
-## tailordb migrate
+## tailordb migration
 
 Manage TailorDB schema migrations. Migrations allow you to safely evolve your database schema with data transformations.
 
 ```bash
-tailor-sdk tailordb migrate <subcommand> [options]
+tailor-sdk tailordb migration <subcommand> [options]
 ```
 
 ### Overview
@@ -71,12 +71,12 @@ The migration system detects field-level schema differences between your local t
 - **Automatic execution during apply** - pending migrations run as part of `tailor-sdk apply`
 - **TypeScript migration scripts** - type-safe data transformations using Kysely
 
-### tailordb migrate generate
+### tailordb migration generate
 
 Generate migration files by detecting schema differences between current local types and the previous migration snapshot.
 
 ```bash
-tailor-sdk tailordb migrate generate [options]
+tailor-sdk tailordb migration generate [options]
 ```
 
 **Options:**
@@ -86,18 +86,25 @@ tailor-sdk tailordb migrate generate [options]
 | `--config` | `-c`  | Path to the SDK config file (default: `tailor.config.ts`) |
 | `--name`   | `-n`  | Optional description for the migration                    |
 | `--yes`    | `-y`  | Skip confirmation prompts                                 |
+| `--init`   |       | Delete existing migrations and start fresh                |
 
 **Usage Examples:**
 
 ```bash
 # Generate migration for all schema changes
-tailor-sdk tailordb migrate generate
+tailor-sdk tailordb migration generate
 
 # Generate with a description
-tailor-sdk tailordb migrate generate --name "add email field to user"
+tailor-sdk tailordb migration generate --name "add email field to user"
 
 # Generate without confirmation prompts
-tailor-sdk tailordb migrate generate --yes
+tailor-sdk tailordb migration generate --yes
+
+# Delete existing migrations and start fresh (with confirmation)
+tailor-sdk tailordb migration generate --init
+
+# Delete existing migrations and start fresh (skip confirmation)
+tailor-sdk tailordb migration generate --init --yes
 ```
 
 **Generated Files:**
@@ -136,8 +143,92 @@ If the `EDITOR` environment variable is set, the generated script file will auto
 
 ```bash
 export EDITOR=vim
-tailor-sdk tailordb migrate generate
+tailor-sdk tailordb migration generate
 # → After generation, vim opens XXXX/migrate.ts
+```
+
+### tailordb migration set
+
+Manually set the migration checkpoint to a specific number. This is useful for skipping failed migrations or resetting migration state.
+
+```bash
+tailor-sdk tailordb migration set <number> [options]
+```
+
+**Arguments:**
+
+- `number` - Migration number to set (e.g., `0001` or `1`)
+
+**Options:**
+
+| Option           | Short | Description                                               |
+| ---------------- | ----- | --------------------------------------------------------- |
+| `--namespace`    | `-n`  | Target TailorDB namespace (required if multiple exist)    |
+| `--yes`          | `-y`  | Skip confirmation prompt                                  |
+| `--workspace-id` | `-w`  | ID of the workspace                                       |
+| `--profile`      | `-p`  | Workspace profile to use                                  |
+| `--config`       | `-c`  | Path to the SDK config file (default: `tailor.config.ts`) |
+
+**Usage Examples:**
+
+```bash
+# Set migration checkpoint to 0001 (with confirmation)
+tailor-sdk tailordb migration set 1
+
+# Set migration checkpoint without confirmation
+tailor-sdk tailordb migration set 1 --yes
+
+# Set for specific namespace
+tailor-sdk tailordb migration set 2 --namespace tailordb
+
+# Reset to initial state (all migrations become pending)
+tailor-sdk tailordb migration set 0 --yes
+```
+
+**Warning:**
+
+Setting the migration checkpoint changes which migrations will be executed on next apply:
+
+- **Forward** (e.g., 0001 → 0003): Skips migrations 0002 and 0003
+- **Backward** (e.g., 0003 → 0001): Migrations 0002 and 0003 become pending and will re-execute
+
+The command always displays a warning and requires confirmation unless `--yes` is specified.
+
+### tailordb migration status
+
+Show the current migration status for TailorDB namespaces, including applied and pending migrations.
+
+```bash
+tailor-sdk tailordb migration status [options]
+```
+
+**Options:**
+
+| Option           | Short | Description                                               |
+| ---------------- | ----- | --------------------------------------------------------- |
+| `--namespace`    | `-n`  | Show status for specific namespace only                   |
+| `--workspace-id` | `-w`  | ID of the workspace                                       |
+| `--profile`      | `-p`  | Workspace profile to use                                  |
+| `--config`       | `-c`  | Path to the SDK config file (default: `tailor.config.ts`) |
+
+**Usage Examples:**
+
+```bash
+# Show status for all namespaces
+tailor-sdk tailordb migration status
+
+# Show status for specific namespace
+tailor-sdk tailordb migration status --namespace tailordb
+```
+
+**Example Output:**
+
+```
+Namespace: tailordb
+  Current migration: 0001
+  Pending migrations:
+    - 0002: Add email field to user
+    - 0003: Remove deprecated status field
 ```
 
 ## Configuration
@@ -239,7 +330,7 @@ migrations/
 2. **Generate migration:**
 
    ```bash
-   tailor-sdk tailordb migrate generate
+   tailor-sdk tailordb migration generate
    # Output: Generated migration 0001
    #   Diff file: ./migrations/0001/diff.json
    #   Migration script: ./migrations/0001/migrate.ts

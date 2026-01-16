@@ -58,7 +58,7 @@ async function handleInitOption(
 
   // Show warning
   logger.newline();
-  logger.warn("⚠️  This will DELETE all existing migration files:");
+  logger.warn("This will DELETE all existing migration files:");
   for (const { namespace, migrationsDir } of existingDirs) {
     logger.log(`  - ${namespace}: ${migrationsDir}`);
   }
