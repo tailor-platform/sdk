@@ -29,7 +29,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * Apply executor-related changes for the given phase.
  * @param {OperatorClient} client - Operator client instance
  * @param {Awaited<ReturnType<typeof planExecutor>>} result - Planned executor changes
- * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase] - Apply phase (defaults to "create-update")
+ * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase] - Apply phase
  * @returns {Promise<void>} Promise that resolves when executors are applied
  */
 export async function applyExecutor(

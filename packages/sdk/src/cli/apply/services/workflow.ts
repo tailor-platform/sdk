@@ -14,7 +14,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * Apply workflow changes for the given phase.
  * @param {OperatorClient} client - Operator client instance
  * @param {Awaited<ReturnType<typeof planWorkflow>>} result - Planned workflow changes
- * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase="create-update"] - Apply phase
+ * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase] - Apply phase
  * @returns {Promise<void>} Promise that resolves when workflows are applied
  */
 export async function applyWorkflow(

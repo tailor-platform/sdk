@@ -16,7 +16,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * Apply static website changes for the given phase.
  * @param {OperatorClient} client - Operator client instance
  * @param {Awaited<ReturnType<typeof planStaticWebsite>>} result - Planned static website changes
- * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase="create-update"] - Apply phase
+ * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase] - Apply phase
  * @returns {Promise<void>} Promise that resolves when static websites are applied
  */
 export async function applyStaticWebsite(

@@ -19,7 +19,6 @@ import { generateUserTypes } from "@/cli/type-generator";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { KyselyGeneratorID } from "../generator/builtin/kysely-type";
 import { assertValidMigrationFiles } from "../tailordb/migrate/snapshot";
 import { getNamespacesWithMigrations, type PendingMigration } from "../tailordb/migrate/types";
 import { logger } from "../utils/logger";
@@ -35,11 +34,7 @@ import {
 } from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
-import {
-  detectPendingMigrations,
-  executeMigrations,
-  getMigrationMachineUser,
-} from "./services/migration";
+import { detectPendingMigrations } from "./services/migration";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
 import {
@@ -52,9 +47,6 @@ import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
-import type { AppConfig } from "@/configure/config";
-import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
-import type { Generator } from "@/parser/generator-config";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -292,44 +284,27 @@ export async function apply(options?: ApplyOptions) {
   // Phase 2: Create/Update services that Application depends on
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
-  if (pendingMigrations.length > 0) {
-    // 2-stage TailorDB update for migrations with breaking changes
-    // Phase 2a: Pre-migration - create/update types with breaking fields as optional
-    await applyTailorDB(client, tailorDB, "pre-migration", pendingMigrations);
-    await applyStaticWebsite(client, staticWebsite, "create-update");
-    await applyIdP(client, idp, "create-update");
-    await applyAuth(client, auth, "create-update");
-    await applyPipeline(client, pipeline, "create-update");
 
-    // Phase 2b: Execute pending migration scripts
-    // Only execute migrations that require migration scripts
-    const migrationsRequiringScripts = pendingMigrations.filter(
-      (m) => m.diff.requiresMigrationScript,
-    );
-    if (migrationsRequiringScripts.length > 0) {
-      await executePendingMigrations(
-        client,
-        workspaceId,
-        application,
-        config,
-        generators,
-        migrationsRequiringScripts,
-      );
-    }
+  // TailorDB: Automatically handles migration flow internally
+  await applyTailorDB(client, tailorDB, "create-update", pendingMigrations, {
+    workspaceId,
+    application,
+    config,
+    generators,
+  });
 
-    // Phase 2c: Post-migration - apply final types (required: true) and deletions
-    await applyTailorDB(client, tailorDB, "post-migration", pendingMigrations);
-  } else {
-    // Normal flow without migrations
-    await applyTailorDB(client, tailorDB, "create-update");
-    await applyStaticWebsite(client, staticWebsite, "create-update");
-    await applyIdP(client, idp, "create-update");
-    await applyAuth(client, auth, "create-update");
-    await applyPipeline(client, pipeline, "create-update");
+  // Other services: Apply after TailorDB migrations complete
+  await applyStaticWebsite(client, staticWebsite, "create-update");
+  await applyIdP(client, idp, "create-update");
+  await applyAuth(client, auth, "create-update");
+  await applyPipeline(client, pipeline, "create-update");
 
-    // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
-    // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
-    // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
+  // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
+  // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
+  // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
+  // NOTE: delete-resources is only needed when no migrations occurred
+  // (migrations already handle deletions in post-migration phase)
+  if (pendingMigrations.length === 0) {
     await applyTailorDB(client, tailorDB, "delete-resources");
   }
 
@@ -383,79 +358,6 @@ async function buildWorkflow(
 ): Promise<BundleWorkflowJobsResult> {
   // Use the workflow bundler with already collected jobs
   return bundleWorkflowJobs(collectedJobs, mainJobNames, env, triggerContext);
-}
-
-/**
- * Execute pending migration scripts
- * @param {OperatorClient} client - Operator client
- * @param {string} workspaceId - Workspace ID
- * @param {Readonly<Application>} application - Application instance
- * @param {AppConfig} config - Application config
- * @param {Generator[]} generators - Generators configuration
- * @param {PendingMigration[]} pendingMigrations - Pending migrations to execute
- * @returns {Promise<void>} Promise that resolves when migrations complete
- */
-async function executePendingMigrations(
-  client: OperatorClient,
-  workspaceId: string,
-  application: Readonly<Application>,
-  config: AppConfig,
-  generators: Generator[],
-  pendingMigrations: PendingMigration[],
-): Promise<void> {
-  // Get the auth namespace from the application
-  const authService = application.authService;
-  if (!authService) {
-    throw new Error("Auth configuration is required to execute migration scripts.");
-  }
-  const authNamespace = authService.config.name;
-
-  // Get machine users from auth config
-  const machineUsers = authService.config.machineUsers
-    ? Object.keys(authService.config.machineUsers)
-    : undefined;
-
-  // Find the first namespace with pending migrations to get config
-  const firstMigration = pendingMigrations[0];
-  const dbConfig = config.db?.[firstMigration.namespace] as TailorDBServiceConfig | undefined;
-  const migrationConfig = dbConfig?.migration;
-
-  // Get machine user for migration execution
-  const machineUserName = getMigrationMachineUser(migrationConfig, machineUsers);
-  if (!machineUserName) {
-    throw new Error(
-      "No machine user available for migration execution. " +
-        "Either configure 'migration.machineUser' in db config or define machine users in auth config.",
-    );
-  }
-
-  // Get generated TailorDB path from kysely generator
-  const kyselyGenerator = generators.find(
-    (g) => g.id === KyselyGeneratorID || (g as { id?: string }).id === KyselyGeneratorID,
-  );
-  if (!kyselyGenerator) {
-    throw new Error(
-      "Kysely generator (@tailor-platform/kysely-type) is required for migration execution. " +
-        "Add it to your generators configuration.",
-    );
-  }
-  const generatedTailorDBPath = (kyselyGenerator as { options?: { distPath?: string } }).options
-    ?.distPath;
-  if (!generatedTailorDBPath) {
-    throw new Error("Kysely generator distPath is not configured.");
-  }
-
-  // Execute migrations
-  await executeMigrations(
-    {
-      client,
-      workspaceId,
-      authNamespace,
-      machineUserName,
-      generatedTailorDBPath,
-    },
-    pendingMigrations,
-  );
 }
 
 export const applyCommand = defineCommand({
