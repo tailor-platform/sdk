@@ -2,16 +2,13 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
-import { loadConfig } from "@/cli/config-loader";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
-import { initOperatorClient } from "../../client";
-import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
-import { logErdBetaWarning } from "./beta";
 import { DEFAULT_DIST_DIR } from "./constants";
 import { resolveDbConfig } from "./db-config";
 import { prepareErdBuild } from "./prepare";
 import { resolveCliBinPath } from "./resolve-cli-bin";
+import { initErdContext } from "./utils";
 
 async function runServeDist(erdDir: string): Promise<void> {
   fs.mkdirSync(erdDir, { recursive: true });
@@ -75,21 +72,15 @@ export const erdServeCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    logErdBetaWarning();
-    const accessToken = await loadAccessToken({
-      useProfile: true,
+    const { client, workspaceId, config } = await initErdContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
+      config: args.config,
     });
     const outputPath = path.resolve(process.cwd(), String(args.output));
     const erdDir = path.dirname(path.resolve(process.cwd(), DEFAULT_DIST_DIR));
 
     // Resolve namespace once at command level
-    const { config } = await loadConfig(args.config);
     const { namespace } = resolveDbConfig(config, args.namespace);
 
     await prepareErdBuild({

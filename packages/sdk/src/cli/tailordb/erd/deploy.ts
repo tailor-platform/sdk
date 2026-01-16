@@ -1,16 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineCommand } from "citty";
-import { loadConfig } from "@/cli/config-loader";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
-import { initOperatorClient } from "../../client";
-import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { logger } from "../../utils/logger";
-import { logErdBetaWarning } from "./beta";
 import { DEFAULT_DIST_DIR, DEFAULT_ERD_BASE_DIR, DEFAULT_SCHEMA_OUTPUT } from "./constants";
 import { resolveAllErdSites, resolveDbConfig } from "./db-config";
 import { prepareErdBuild } from "./prepare";
+import { initErdContext } from "./utils";
 import type { OperatorClient } from "../../client";
 
 interface DeployTarget {
@@ -84,18 +81,11 @@ export const erdDeployCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    logErdBetaWarning();
-    const accessToken = await loadAccessToken({
-      useProfile: true,
+    const { client, workspaceId, config } = await initErdContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
+      config: args.config,
     });
-
-    const { config } = await loadConfig(args.config);
 
     let targets: DeployTarget[];
 

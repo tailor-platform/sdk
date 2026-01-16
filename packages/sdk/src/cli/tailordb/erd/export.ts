@@ -3,13 +3,19 @@ import * as path from "node:path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
-import { fetchAll, initOperatorClient } from "../../client";
-import { loadConfig } from "../../config-loader";
-import { loadAccessToken, loadWorkspaceId } from "../../context";
+import { fetchAll } from "../../client";
 import { logger } from "../../utils/logger";
-import { logErdBetaWarning } from "./beta";
 import { DEFAULT_SCHEMA_OUTPUT } from "./constants";
 import { resolveDbConfig } from "./db-config";
+import { initErdContext } from "./utils";
+import type {
+  TblsColumn,
+  TblsConstraint,
+  TblsEnum,
+  TblsRelation,
+  TblsSchema,
+  TblsTable,
+} from "./tbls-types";
 import type { OperatorClient } from "../../client";
 import type {
   TailorDBType as TailorDBProtoType,
@@ -20,57 +26,6 @@ export interface TailorDBSchemaOptions {
   workspaceId: string;
   namespace: string;
   client: OperatorClient;
-}
-
-interface TblsColumn {
-  name: string;
-  type: string;
-  nullable: boolean;
-  comment: string;
-}
-
-interface TblsTable {
-  name: string;
-  type: string;
-  comment: string;
-  columns: TblsColumn[];
-  indexes: unknown[];
-  constraints: TblsConstraint[];
-  triggers: unknown[];
-  def: string;
-  referenced_tables: string[];
-}
-
-interface TblsRelation {
-  table: string;
-  columns: string[];
-  parent_table: string;
-  parent_columns: string[];
-  cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more";
-  parent_cardinality: "zero_or_one" | "exactly_one" | "zero_or_more" | "one_or_more";
-  def: string;
-}
-
-interface TblsConstraint {
-  name: string;
-  type: "PRIMARY KEY" | "FOREIGN KEY" | string;
-  def: string;
-  table: string;
-  columns: string[];
-  referenced_table?: string;
-  referenced_columns?: string[];
-}
-
-interface TblsEnum {
-  name: string;
-  values: string[];
-}
-
-interface TblsSchema {
-  name: string;
-  tables: TblsTable[];
-  relations: TblsRelation[];
-  enums: TblsEnum[];
 }
 
 /**
@@ -295,20 +250,14 @@ export const erdExportCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    logErdBetaWarning();
-    const accessToken = await loadAccessToken({
-      useProfile: true,
+    const { client, workspaceId, config } = await initErdContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
+      config: args.config,
     });
     const outputPath = path.resolve(process.cwd(), String(args.output));
 
     // Resolve namespace once at command level
-    const { config } = await loadConfig(args.config);
     const { namespace } = resolveDbConfig(config, args.namespace);
 
     await writeTblsSchemaToFile({
