@@ -10,7 +10,7 @@ import type {
   TblsRelation,
   TblsSchema,
   TblsTable,
-} from "./tbls-types";
+} from "./types";
 import type { OperatorClient } from "../../client";
 import type {
   TailorDBType as TailorDBProtoType,
