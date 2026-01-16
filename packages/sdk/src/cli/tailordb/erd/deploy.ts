@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { logger } from "../../utils/logger";
-import { prepareErdBuilds } from "./liam";
+import { prepareErdBuilds } from "./export";
 import { initErdContext } from "./utils";
 
 export const erdDeployCommand = defineCommand({

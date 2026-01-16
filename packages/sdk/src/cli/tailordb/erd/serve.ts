@@ -4,7 +4,7 @@ import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { resolveCliBinPath } from "../../utils/resolve-cli-bin";
-import { prepareErdBuilds } from "./liam";
+import { prepareErdBuilds } from "./export";
 import { initErdContext } from "./utils";
 
 async function runServeDist(erdDir: string): Promise<void> {
