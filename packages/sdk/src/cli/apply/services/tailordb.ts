@@ -87,7 +87,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
  * @returns {Promise<PendingMigration[]>} List of pending migrations
  */
-export async function validateAndDetectMigrations(
+async function validateAndDetectMigrations(
   client: OperatorClient,
   workspaceId: string,
   application: Readonly<Application>,
@@ -143,29 +143,45 @@ export async function validateAndDetectMigrations(
  * @param {OperatorClient} client - Operator client instance
  * @param {Awaited<ReturnType<typeof planTailorDB>>} result - Planned TailorDB changes
  * @param {Exclude<ApplyPhase, "delete">} [phase] - Apply phase
- * @param {PendingMigration[]} [pendingMigrations] - Pending migrations for 2-stage updates
  * @param {object} [migrationContext] - Optional migration execution context
  * @param {string} migrationContext.workspaceId - Workspace ID
  * @param {Readonly<Application>} migrationContext.application - Application instance
  * @param {AppConfig} migrationContext.config - Application config
  * @param {Generator[]} migrationContext.generators - Generators configuration
+ * @param {string} migrationContext.configPath - Config file path
+ * @param {boolean} migrationContext.noSchemaCheck - Skip schema diff check
  * @returns {Promise<void>} Promise that resolves when TailorDB changes are applied
  */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
   phase: Exclude<ApplyPhase, "delete"> = "create-update",
-  pendingMigrations: PendingMigration[] = [],
   migrationContext?: {
     workspaceId: string;
     application: Readonly<Application>;
     config: AppConfig;
     generators: Generator[];
+    configPath: string;
+    noSchemaCheck: boolean;
   },
 ) {
   const { changeSet } = result;
 
   if (phase === "create-update") {
+    let pendingMigrations: PendingMigration[] = [];
+
+    // Validate and detect migrations if context is provided
+    if (migrationContext) {
+      pendingMigrations = await validateAndDetectMigrations(
+        client,
+        migrationContext.workspaceId,
+        migrationContext.application,
+        migrationContext.config,
+        migrationContext.configPath,
+        migrationContext.noSchemaCheck,
+      );
+    }
+
     if (pendingMigrations.length > 0 && migrationContext) {
       // Migration flow: Automatically handle 3-phase migration internally
       // Phase 1: Pre-migration - create/update types with breaking fields as optional
@@ -211,59 +227,18 @@ export async function applyTailorDB(
           client.updateTailorDBGQLPermission(update.request),
         ),
       ]);
+
+      // Delete resources (only when no migrations occurred)
+      // Migrations already handle deletions in post-migration phase
+      await Promise.all(
+        changeSet.gqlPermission.deletes.map((del) =>
+          client.deleteTailorDBGQLPermission(del.request),
+        ),
+      );
+      await Promise.all(
+        changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)),
+      );
     }
-  } else if (phase === "pre-migration") {
-    // Pre-migration phase: Create/update types with breaking fields as optional
-    // NO deletions in this phase
-
-    // Services - same as create-update
-    await Promise.all([
-      ...changeSet.service.creates.map(async (create) => {
-        await client.createTailorDBService(create.request);
-        await client.setMetadata(create.metaRequest);
-      }),
-      ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
-    ]);
-
-    // Build breaking changes map from pending migrations
-    const breakingChanges = buildBreakingChangesMap(pendingMigrations);
-
-    // Types - modify manifests to make breaking fields optional
-    await Promise.all([
-      ...changeSet.type.creates.map((create) => {
-        const modified = modifyManifestForPreMigration(create.request, breakingChanges);
-        return client.createTailorDBType(modified);
-      }),
-      ...changeSet.type.updates.map((update) => {
-        const modified = modifyManifestForPreMigration(update.request, breakingChanges);
-        return client.updateTailorDBType(modified);
-      }),
-    ]);
-
-    // GQLPermissions - same as create-update
-    await Promise.all([
-      ...changeSet.gqlPermission.creates.map((create) =>
-        client.createTailorDBGQLPermission(create.request),
-      ),
-      ...changeSet.gqlPermission.updates.map((update) =>
-        client.updateTailorDBGQLPermission(update.request),
-      ),
-    ]);
-  } else if (phase === "post-migration") {
-    // Post-migration phase: Apply full changes and deletions
-
-    // Types - apply final manifest (with required: true)
-    await Promise.all([
-      ...changeSet.type.updates.map((update) => client.updateTailorDBType(update.request)),
-    ]);
-
-    // GQLPermissions deletions
-    await Promise.all(
-      changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
-    );
-
-    // Type deletions
-    await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
   } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // GQLPermissions

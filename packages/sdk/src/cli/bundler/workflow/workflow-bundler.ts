@@ -34,7 +34,7 @@ export interface BundleWorkflowJobsResult {
  * Returns metadata about which jobs each workflow uses.
  * @param {JobInfo[]} allJobs - All available job infos
  * @param {string[]} mainJobNames - Names of main jobs
- * @param {Record<string, string | number | boolean>} [env={}] - Environment variables to inject
+ * @param {Record<string, string | number | boolean>} [env] - Environment variables to inject
  * @param {TriggerContext} [triggerContext] - Trigger context for transformations
  * @returns {Promise<BundleWorkflowJobsResult>} Workflow job bundling result
  */

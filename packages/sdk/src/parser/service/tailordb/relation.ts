@@ -70,7 +70,7 @@ export function validateRelationConfig(
  * Process raw relation config and compute derived metadata values.
  * @param {RawRelationConfig} rawRelation - Raw relation configuration
  * @param {RelationProcessingContext} context - Context information for the relation
- * @param {boolean} [isArrayField=false] - Whether the target field is an array field
+ * @param {boolean} [isArrayField] - Whether the target field is an array field
  * @returns {ProcessedRelationMetadata} Computed relation metadata to apply to field config
  */
 export function processRelationMetadata(

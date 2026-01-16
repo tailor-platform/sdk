@@ -33,7 +33,7 @@ import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
-import { applyTailorDB, planTailorDB, validateAndDetectMigrations } from "./services/tailordb";
+import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
@@ -58,13 +58,7 @@ export interface PlanContext {
   forRemoval: boolean;
 }
 
-export type ApplyPhase =
-  | "create-update"
-  | "pre-migration"
-  | "post-migration"
-  | "delete"
-  | "delete-resources"
-  | "delete-services";
+export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
 /**
  * Apply the configured application to the Tailor platform.
@@ -129,17 +123,6 @@ export async function apply(options?: ApplyOptions) {
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
   }
-
-  // Validate migration files and detect pending migrations
-  const noSchemaCheck = options?.noSchemaCheck ?? false;
-  const pendingMigrations = await validateAndDetectMigrations(
-    client,
-    workspaceId,
-    application,
-    config,
-    configPath,
-    noSchemaCheck,
-  );
 
   for (const pipeline of application.resolverServices) {
     await pipeline.loadResolvers();
@@ -245,12 +228,15 @@ export async function apply(options?: ApplyOptions) {
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
 
-  // TailorDB: Automatically handles migration flow internally
-  await applyTailorDB(client, tailorDB, "create-update", pendingMigrations, {
+  // TailorDB: Automatically validates migrations and handles migration flow internally
+  const noSchemaCheck = options?.noSchemaCheck ?? false;
+  await applyTailorDB(client, tailorDB, "create-update", {
     workspaceId,
     application,
     config,
     generators,
+    configPath,
+    noSchemaCheck,
   });
 
   // Other services: Apply after TailorDB migrations complete
@@ -262,13 +248,7 @@ export async function apply(options?: ApplyOptions) {
   // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
   // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
   // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
-  // NOTE: delete-resources is only needed when no migrations occurred
-  // (migrations already handle deletions in post-migration phase)
-  if (pendingMigrations.length === 0) {
-    await applyTailorDB(client, tailorDB, "delete-resources");
-  }
-
-  // Delete resources for other subgraph services
+  // NOTE: TailorDB resource deletions are handled internally by applyTailorDB
   await applyPipeline(client, pipeline, "delete-resources");
   await applyAuth(client, auth, "delete-resources");
   await applyIdP(client, idp, "delete-resources");
