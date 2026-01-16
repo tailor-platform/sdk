@@ -67,7 +67,7 @@ export const erdDeployCommand = defineCommand({
     } else {
       for (const result of deployResults) {
         logger.success(`ERD site "${result.erdSite}" deployed successfully.`);
-        logger.info(`URL: ${result.url}`);
+        logger.out(result.url);
         logSkippedFiles(result.skippedFiles);
       }
     }
