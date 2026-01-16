@@ -192,8 +192,8 @@ type User {
 
 Add hooks to execute functions during data creation or update. Hooks receive three arguments:
 
-- `value`: Current field value (`null` during `create`, existing value during `update`)
-- `data`: Entire record data (readonly, access other field values)
+- `value`: User input if provided, otherwise existing value on update or null on create
+- `data`: Entire record data (for accessing other field values)
 - `user`: User performing the operation
 
 #### Field-level Hooks
@@ -253,11 +253,11 @@ export const user = db
 
 ### Validation
 
-Add validation rules to fields. Validators receive three arguments:
+Add validation rules to fields. Validators receive three arguments (executed after hooks):
 
-- `value`: Field value to validate
-- `data`: Entire record data (useful for cross-field validation)
-- `user`: User performing the operation (useful for permission checks)
+- `value`: Field value after hook transformation
+- `data`: Entire record data after hook transformations (for accessing other field values)
+- `user`: User performing the operation
 
 Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
 
