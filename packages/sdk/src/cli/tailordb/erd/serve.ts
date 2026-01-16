@@ -1,12 +1,9 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
-import { DEFAULT_ERD_BASE_DIR } from "./constants";
-import { resolveDbConfig } from "./db-config";
-import { prepareErdBuild } from "./liam";
+import { prepareErdBuilds } from "./liam";
 import { resolveCliBinPath } from "./resolve-cli-bin";
 import { initErdContext } from "./utils";
 
@@ -67,18 +64,14 @@ export const erdServeCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
-    const { namespace } = resolveDbConfig(config, args.namespace);
-    const erdDir = path.resolve(process.cwd(), DEFAULT_ERD_BASE_DIR, namespace);
-    const schemaOutputPath = path.join(erdDir, "schema.json");
 
-    await prepareErdBuild({
+    const [result] = await prepareErdBuilds({
       client,
       workspaceId,
-      namespace,
-      outputPath: schemaOutputPath,
-      erdDir,
+      config,
+      namespace: args.namespace,
     });
 
-    await runServeDist(erdDir);
+    await runServeDist(result.erdDir);
   }),
 });

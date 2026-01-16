@@ -65,7 +65,7 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
  * Export TailorDB schema and build ERD artifacts via liam.
  * @param {TailorDBSchemaOptions & { outputPath: string; erdDir: string }} options - Build options.
  */
-export async function prepareErdBuild(
+async function prepareErdBuild(
   options: TailorDBSchemaOptions & { outputPath: string; erdDir: string },
 ): Promise<void> {
   await writeTblsSchemaToFile(options);
