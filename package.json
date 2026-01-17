@@ -12,7 +12,7 @@
     "check": "TAILOR_PLATFORM_SDK_TYPE_PATH=./user-defined.d.ts turbo run check",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
-    "knip:sdk": "knip --workspace packages/sdk",
+    "knip": "turbo run knip",
     "typecheck:go": "TAILOR_PLATFORM_SDK_TYPE_PATH=./user-defined.d.ts turbo run typecheck:go",
     "format": "turbo run format",
     "format:root": "oxfmt --write .",

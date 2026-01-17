@@ -14,7 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm exec turbo run dev` - Start development server
 - `pnpm exec turbo run build` - Build all packages
 - `pnpm exec turbo run test` - Run all tests using Turbo
-- `pnpm exec turbo run check` - Run format, lint:fix, and typecheck in sequence
+- `pnpm exec turbo run check` - Run format, lint:fix, typecheck, and knip in sequence
+- `pnpm exec turbo run knip` - Check for unused dependencies, exports, and files
 - `pnpm exec turbo run lint` - Run ESLint
 - `pnpm exec turbo run lint:fix` - Run ESLint with auto-fix
 - `pnpm exec turbo run format` - Format code with Oxfmt
