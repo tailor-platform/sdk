@@ -18,6 +18,12 @@ For the official Tailor Platform documentation, see [Executor Guide](https://doc
 
 Define executors in files matching glob patterns specified in `tailor.config.ts`.
 
+**Definition Rules:**
+
+- **One executor per file**: Each file must contain exactly one executor definition
+- **Export method**: Must use `export default`
+- **Uniqueness**: Executor names must be unique globally across your entire application
+
 ```typescript
 import { createExecutor, recordCreatedTrigger, t } from "@tailor-platform/sdk";
 import { user } from "../tailordb/user";
