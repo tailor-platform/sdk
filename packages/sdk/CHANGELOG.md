@@ -1,5 +1,62 @@
 # @tailor-platform/sdk
 
+## 1.3.0
+
+### Minor Changes
+
+- [#422](https://github.com/tailor-platform/sdk/pull/422) [`a079415`](https://github.com/tailor-platform/sdk/commit/a079415b50c882312b8a09917d7bd7c521393e2f) Thanks [@remiposo](https://github.com/remiposo)! - Add `--env-file-if-exists` option for optional environment file loading
+
+  Added a new CLI option `--env-file-if-exists` that loads environment files only if they exist, without throwing an error when the file is missing. This is useful for loading optional local configuration files like `.env.local`.
+
+  Environment file loading now follows Node.js `--env-file` behavior:
+
+  - Variables already set in the environment are not overwritten
+  - Later files override earlier files when multiple are specified
+
+### Patch Changes
+
+- [#427](https://github.com/tailor-platform/sdk/pull/427) [`6ac8385`](https://github.com/tailor-platform/sdk/commit/6ac83855489055ffa01697b9b3781faa29720545) Thanks [@remiposo](https://github.com/remiposo)! - Use pathe for cross-platform path handling
+
+  Replaced `node:path` with `pathe` across CLI modules to ensure consistent path separator handling on all operating systems. This eliminates the need for manual path separator normalization (e.g., `.replace(/\\/g, "/")`) and improves reliability on Windows.
+
+- [#435](https://github.com/tailor-platform/sdk/pull/435) [`79181a1`](https://github.com/tailor-platform/sdk/commit/79181a1e4f5d383e51bf451f97297225889df871) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix workflow job test implementations to match descriptions
+
+  Updated two test cases in workflow job type tests to properly validate optional field handling:
+
+  - "allows multiple optional fields in input": now actually tests multiple optional fields in input parameters
+  - "allows nested objects with optional fields": now tests nested optional field structures in input parameters
+
+  This ensures test descriptions accurately reflect what is being tested.
+
+- [#440](https://github.com/tailor-platform/sdk/pull/440) [`66b44da`](https://github.com/tailor-platform/sdk/commit/66b44dadf6667eccac324e843c264a9b4d902d3c) Thanks [@riku99](https://github.com/riku99)! - Update CLAUDE.md for oxlint migration
+
+- [#421](https://github.com/tailor-platform/sdk/pull/421) [`b3853e0`](https://github.com/tailor-platform/sdk/commit/b3853e024172c1c184501092627afd4e9ad45931) Thanks [@toiroakr](https://github.com/toiroakr)! - docs: improve TailorDB hooks and validation documentation
+
+  - Add practical examples using function arguments (value, data, user)
+  - Split hooks and validation sections into field-level and type-level subsections
+  - Clarify that field-level hooks have `data` as `unknown` type
+  - Add warnings that field-level and type-level configurations cannot coexist on the same field
+
+- [#417](https://github.com/tailor-platform/sdk/pull/417) [`c644157`](https://github.com/tailor-platform/sdk/commit/c6441573f235640eb8336f64d03f132984f51292) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/setup-node action to v6.2.0
+
+- [#418](https://github.com/tailor-platform/sdk/pull/418) [`0292001`](https://github.com/tailor-platform/sdk/commit/0292001dff866bda80e1d2fe868ce2d9dc33e239) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260112.1
+
+- [#424](https://github.com/tailor-platform/sdk/pull/424) [`7577497`](https://github.com/tailor-platform/sdk/commit/7577497c1f74e5fdb4db2177f7689958ef4318fb) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency lefthook to v2.0.14
+
+- [#428](https://github.com/tailor-platform/sdk/pull/428) [`d4a7f9b`](https://github.com/tailor-platform/sdk/commit/d4a7f9bac1b3dc63af6a089c3ea911bd68765db5) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.455.0
+
+- [#437](https://github.com/tailor-platform/sdk/pull/437) [`908ecae`](https://github.com/tailor-platform/sdk/commit/908ecaef4a4df2e1c373f22773aee95fe19de584) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.56.4
+
+- [#438](https://github.com/tailor-platform/sdk/pull/438) [`bfe4872`](https://github.com/tailor-platform/sdk/commit/bfe4872211d5ac7f3ceb610d5ca53160add3d918) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint-tsgolint to v0.11.1
+
+- [#439](https://github.com/tailor-platform/sdk/pull/439) [`81b086f`](https://github.com/tailor-platform/sdk/commit/81b086fd827fcae7e54e8a53d24d64be62c553a6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-beta.60
+
+- [#443](https://github.com/tailor-platform/sdk/pull/443) [`21ab273`](https://github.com/tailor-platform/sdk/commit/21ab273abf99e436daccd0355439870663f3fee1) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.458.0
+
+- [#444](https://github.com/tailor-platform/sdk/pull/444) [`85f0b8a`](https://github.com/tailor-platform/sdk/commit/85f0b8a49fdd6e20c36395b85d97c2f8ede3a400) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v5.81.0
+
+- [#404](https://github.com/tailor-platform/sdk/pull/404) [`0c48431`](https://github.com/tailor-platform/sdk/commit/0c4843100dbd49a5ef3e84e03dc09a890b8c0405) Thanks [@riku99](https://github.com/riku99)! - Enable deploying and viewing TailorDB ERD static sites via the CLI
+
 ## 1.2.6
 
 ### Patch Changes
