@@ -170,7 +170,7 @@ tailor-sdk tailordb erd export [options]
 **Options:**
 
 - `-n, --namespace` - TailorDB namespace name (optional - exports all namespaces with erdSite if omitted)
-- `-o, --output` - Output file path for tbls-compatible ERD JSON (default: `.tailor-sdk/erd/schema.json`)
+- `-o, --output` - Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) (default: `.tailor-sdk/erd`)
 - `-j, --json` - Output as JSON
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
@@ -186,8 +186,8 @@ tailor-sdk tailordb erd export
 # Export ERD for a specific namespace
 tailor-sdk tailordb erd export --namespace myNamespace
 
-# Export ERD with custom output path
-tailor-sdk tailordb erd export --output ./my-erd/schema.json
+# Export ERD with custom output directory
+tailor-sdk tailordb erd export --output ./my-erd
 
 # Export ERD with JSON output
 tailor-sdk tailordb erd export --json

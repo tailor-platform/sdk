@@ -12,7 +12,6 @@ import type { OperatorClient } from "../../client";
 import type { AppConfig } from "@/configure/config";
 
 const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
-const DEFAULT_SCHEMA_OUTPUT = `${DEFAULT_ERD_BASE_DIR}/schema.json`;
 
 /**
  * Resolve TailorDB config and namespace.
@@ -214,14 +213,15 @@ export const erdExportCommand = defineCommand({
     },
     output: {
       type: "string",
-      description: "Output file path for tbls-compatible ERD JSON",
+      description:
+        "Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json)",
       alias: "o",
-      default: DEFAULT_SCHEMA_OUTPUT,
+      default: DEFAULT_ERD_BASE_DIR,
     },
   },
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
-    const outputDir = path.dirname(path.resolve(process.cwd(), String(args.output)));
+    const outputDir = path.resolve(process.cwd(), String(args.output));
 
     const results = await prepareErdBuilds({
       client,
