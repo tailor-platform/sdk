@@ -42,6 +42,6 @@ pre-commit:
       glob: "*.{ts,js}"
       run: pnpm exec turbo run typecheck:go --filter=@tailor-platform/sdk --filter=example
 
-    5-knip-sdk:
+    5-knip:
       glob: "*.{ts,js}"
-      run: pnpm knip:sdk
+      run: pnpm run knip

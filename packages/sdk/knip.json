@@ -5,12 +5,14 @@
     "type": true
   },
   "tags": ["-lintignore"],
-  "ignore": ["packages/sdk/scripts/perf/**"],
+  "ignore": ["scripts/perf/**"],
   "ignoreDependencies": [
     "cross-env",
     "oxlint",
     "oxlint-tsgolint",
     "@typescript/native-preview",
-    "tsx"
-  ]
+    "tsx",
+    "eslint-plugin-import"
+  ],
+  "ignoreBinaries": ["vitest", "tsdown", "cross-env", "oxlint", "eslint", "tsc", "tsgo", "knip"]
 }

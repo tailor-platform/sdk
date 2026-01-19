@@ -30,8 +30,11 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck:go"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip"],
       "cache": false
+    },
+    "knip": {
+      "cache": true
     },
     "lint": {
       "dependsOn": ["^build"],

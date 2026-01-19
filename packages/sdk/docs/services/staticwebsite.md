@@ -16,6 +16,12 @@ For the official Tailor Platform documentation, see [Static Website Guide](https
 
 Configure static website hosting using `defineStaticWebSite()`:
 
+**Definition Rules:**
+
+- **Multiple websites allowed**: You can define multiple static websites in your config file
+- **Configuration location**: Define in `tailor.config.ts` and add to the `staticWebsites` array
+- **Uniqueness**: Website names must be unique across all static websites
+
 ```typescript
 import { defineStaticWebSite, defineConfig } from "@tailor-platform/sdk";
 
@@ -23,8 +29,13 @@ const website = defineStaticWebSite("my-website", {
   description: "My Static Website",
 });
 
+// You can define multiple static websites
+const adminWebsite = defineStaticWebSite("admin-website", {
+  description: "Admin Dashboard",
+});
+
 export default defineConfig({
-  staticWebsites: [website],
+  staticWebsites: [website, adminWebsite], // Add all websites to the array
 });
 ```
 

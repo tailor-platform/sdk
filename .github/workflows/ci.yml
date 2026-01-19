@@ -52,4 +52,4 @@ jobs:
         run: pnpm typecheck
 
       - name: Check unused code (knip)
-        run: pnpm knip:sdk
+        run: pnpm run knip

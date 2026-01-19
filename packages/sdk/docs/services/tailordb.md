@@ -18,15 +18,30 @@ For the official Tailor Platform documentation, see [TailorDB Guide](https://doc
 
 Define TailorDB Types in files matching glob patterns specified in `tailor.config.ts`.
 
+**Definition Rules:**
+
+- **Multiple types per file**: You can define multiple TailorDB types in a single file
+- **Export method**: Use named exports (`export const`)
+- **Export both value and type**: Always export both the runtime value and TypeScript type
+- **Uniqueness**: Type names must be unique across all TailorDB files
+
 ```typescript
 import { db } from "@tailor-platform/sdk";
 
+// Export both value and type
 export const user = db.type("User", {
   name: db.string(),
   email: db.string().unique(),
   age: db.int(),
   ...db.fields.timestamps(),
 });
+export type user = typeof user;
+
+// You can define multiple types in the same file
+export const role = db.type("Role", {
+  name: db.string().unique(),
+});
+export type role = typeof role;
 ```
 
 Specify plural form by passing an array as first argument:
