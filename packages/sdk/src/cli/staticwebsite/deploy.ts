@@ -1,9 +1,9 @@
 import * as fs from "fs";
-import * as path from "path";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand } from "citty";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
+import * as path from "pathe";
 import { withCommonArgs, commonArgs, jsonArgs, workspaceArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -146,12 +146,10 @@ async function uploadSingleFile(
   workspaceId: string,
   deploymentId: string,
   rootDir: string,
-  relativePath: string,
+  filePath: string,
   skippedFiles: string[],
 ): Promise<void> {
-  const absPath = path.join(rootDir, relativePath);
-
-  const filePath = relativePath.split(path.sep).join("/");
+  const absPath = path.join(rootDir, filePath);
 
   const mime = mimeLookup(filePath);
 

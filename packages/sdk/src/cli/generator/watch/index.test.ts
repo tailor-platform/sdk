@@ -1,7 +1,7 @@
 /* eslint-disable import/order */
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
-import * as path from "node:path";
+import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const madgeMock = vi.hoisted(() =>

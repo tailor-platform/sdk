@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { Code, ConnectError } from "@connectrpc/connect";
+import * as path from "pathe";
 import { fetchAll } from "../../client";
 import { logger } from "../../utils/logger";
 import type {

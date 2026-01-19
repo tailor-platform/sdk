@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import * as path from "node:path";
 import { parseYAML, stringifyYAML, parseTOML } from "confbox";
 import { findUpSync } from "find-up-simple";
 import ml from "multiline-ts";
+import * as path from "pathe";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { initOAuth2Client } from "./client";

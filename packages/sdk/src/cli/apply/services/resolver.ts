@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
@@ -18,6 +17,7 @@ import {
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
+import * as path from "pathe";
 import { type ResolverService } from "@/cli/application/resolver/service";
 import { logger } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
-import * as path from "node:path";
 import { findUpSync } from "find-up-simple";
+import * as path from "pathe";
 
 interface CliPackageJson {
   bin?: Record<string, string>;

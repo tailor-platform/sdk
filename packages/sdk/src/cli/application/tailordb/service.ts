@@ -1,5 +1,5 @@
-import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";

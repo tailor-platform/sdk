@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import ml from "multiline-ts";
 import { parseSync } from "oxc-parser";
+import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
@@ -233,7 +233,7 @@ async function bundleSingleJob(
 ): Promise<void> {
   // Step 1: Create entry file that imports job by named export
   const entryPath = path.join(outputDir, `${job.name}.entry.js`);
-  const absoluteSourcePath = path.resolve(job.sourceFile).replace(/\\/g, "/");
+  const absoluteSourcePath = path.resolve(job.sourceFile);
 
   const entryContent = ml /* js */ `
     import { ${job.exportName} } from "${absoluteSourcePath}";

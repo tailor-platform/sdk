@@ -1,7 +1,7 @@
 import { glob } from "node:fs/promises";
-import * as path from "node:path";
 import chokidar from "chokidar";
 import * as madgeModule from "madge";
+import * as path from "pathe";
 import { logger, styles } from "@/cli/utils/logger";
 import type { MadgeLoader } from "./types";
 

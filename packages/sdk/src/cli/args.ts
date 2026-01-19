@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { parseEnv } from "node:util";
+import * as path from "pathe";
 import { z } from "zod";
 import { isCLIError } from "./utils/errors";
 import { logger } from "./utils/logger";
