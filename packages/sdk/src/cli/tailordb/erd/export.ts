@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { defineCommand } from "citty";
+import * as path from "pathe";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { resolveCliBinPath } from "../../utils/resolve-cli-bin";
