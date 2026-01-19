@@ -78,7 +78,11 @@ export type Hooks<
       : K]?: Hook<TData, output<F[K]>>;
 }>;
 
-export type TailorDBServiceConfig = { files: string[]; ignores?: string[] };
+export type TailorDBServiceConfig = {
+  files: string[];
+  ignores?: string[];
+  erdSite?: string;
+};
 
 export type TailorDBExternalConfig = { external: true };
 

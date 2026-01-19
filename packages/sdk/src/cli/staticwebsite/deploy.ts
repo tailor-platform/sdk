@@ -19,12 +19,21 @@ function shouldIgnoreFile(filePath: string) {
   return IGNORED_FILES.has(fileName);
 }
 
-type DeployResult = {
+export type DeployResult = {
   url: string;
   skippedFiles: string[];
 };
 
-async function deployStaticWebsite(
+/**
+ * Deploy a static website by creating a deployment, uploading files, and publishing it.
+ * @param {OperatorClient} client - Operator client instance
+ * @param {string} workspaceId - Workspace ID
+ * @param {string} name - Static website name
+ * @param {string} distDir - Directory containing static site files
+ * @param {boolean} [showProgress=true] - Whether to show upload progress
+ * @returns {Promise<DeployResult>} Deployment result with URL and skipped files
+ */
+export async function deployStaticWebsite(
   client: OperatorClient,
   workspaceId: string,
   name: string,
@@ -105,6 +114,12 @@ async function uploadDirectory(
   return skippedFiles;
 }
 
+/**
+ * Recursively collect all deployable files under the given directory.
+ * @param {string} rootDir - Root directory to scan
+ * @param {string} [currentDir=""] - Current relative directory (for recursion)
+ * @returns {Promise<string[]>} List of file paths relative to rootDir
+ */
 async function collectFiles(rootDir: string, currentDir = ""): Promise<string[]> {
   const dirPath = path.join(rootDir, currentDir);
 
@@ -194,7 +209,12 @@ async function uploadSingleFile(
   );
 }
 
-function logSkippedFiles(skippedFiles: string[]) {
+/**
+ * Log skipped files after a deployment, including reasons for skipping.
+ * @param {string[]} skippedFiles - List of skipped file descriptions
+ * @returns {void}
+ */
+export function logSkippedFiles(skippedFiles: string[]) {
   if (skippedFiles.length === 0) {
     return;
   }

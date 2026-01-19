@@ -111,6 +111,9 @@ const allowedLicenses = new Set([
   "CC0-1.0",
   "Unlicense",
   "0BSD",
+  // Permissive licenses not in Google licenseclassifier but widely accepted
+  "BlueOak-1.0.0", // https://blueoakcouncil.org/license/1.0.0 - very permissive, similar to MIT
+  "WTFPL", // Do What The F*** You Want To Public License - essentially public domain
   // Unknown (allowed for now, but should be investigated)
   "Unknown",
 ]);

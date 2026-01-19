@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { erdCommand } from "./erd";
 import { truncateCommand } from "./truncate";
 
 export const tailordbCommand = defineCommand({
@@ -7,6 +8,7 @@ export const tailordbCommand = defineCommand({
     description: "Manage TailorDB tables and data",
   },
   subCommands: {
+    erd: erdCommand,
     truncate: truncateCommand,
   },
 });

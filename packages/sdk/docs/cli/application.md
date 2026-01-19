@@ -134,3 +134,132 @@ tailor-sdk tailordb truncate User Post --yes
   - `--namespace`: requires typing `truncate <namespace-name>`
   - Specific types: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
+
+### tailordb erd (beta)
+
+Generate ERD artifacts for TailorDB namespaces using [Liam ERD](https://liambx.com/erd).
+
+```bash
+tailor-sdk tailordb erd <subcommand> [options]
+```
+
+**Notes:**
+
+- This command is a beta feature and may introduce breaking changes in future releases
+- `@liam-hq/cli` is required for `export`, `serve`, and `deploy`
+- `serve` is required only for `tailordb erd serve`
+
+Install dependencies:
+
+```bash
+npm i -D @liam-hq/cli serve
+# OR
+yarn add -D @liam-hq/cli serve
+# OR
+pnpm add -D @liam-hq/cli serve
+```
+
+#### tailordb erd export
+
+Export Liam ERD dist from applied TailorDB schema.
+
+```bash
+tailor-sdk tailordb erd export [options]
+```
+
+**Options:**
+
+- `-n, --namespace` - TailorDB namespace name (optional - exports all namespaces with erdSite if omitted)
+- `-o, --output` - Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) (default: `.tailor-sdk/erd`)
+- `-j, --json` - Output as JSON
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-e, --env-file` - Path to the environment file
+
+**Usage Examples:**
+
+```bash
+# Export ERD for all namespaces with erdSite configured
+tailor-sdk tailordb erd export
+
+# Export ERD for a specific namespace
+tailor-sdk tailordb erd export --namespace myNamespace
+
+# Export ERD with custom output directory
+tailor-sdk tailordb erd export --output ./my-erd
+
+# Export ERD with JSON output
+tailor-sdk tailordb erd export --json
+```
+
+#### tailordb erd serve
+
+Generate and serve ERD locally (liam build + `serve dist`).
+
+```bash
+tailor-sdk tailordb erd serve [options]
+```
+
+**Options:**
+
+- `-n, --namespace` - TailorDB namespace name (uses first namespace with erdSite if not specified)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-e, --env-file` - Path to the environment file
+
+**Usage Examples:**
+
+```bash
+# Serve ERD for the first namespace with erdSite configured
+tailor-sdk tailordb erd serve
+
+# Serve ERD for a specific namespace
+tailor-sdk tailordb erd serve --namespace myNamespace
+```
+
+#### tailordb erd deploy
+
+Deploy ERD static website for TailorDB namespace(s).
+
+```bash
+tailor-sdk tailordb erd deploy [options]
+```
+
+**Options:**
+
+- `-n, --namespace` - TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)
+- `-j, --json` - Output as JSON
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-e, --env-file` - Path to the environment file
+
+**Usage Examples:**
+
+```bash
+# Deploy ERD for all namespaces with erdSite configured
+tailor-sdk tailordb erd deploy
+
+# Deploy ERD for a specific namespace
+tailor-sdk tailordb erd deploy --namespace myNamespace
+
+# Deploy ERD with JSON output
+tailor-sdk tailordb erd deploy --json
+```
+
+**Notes:**
+
+- Requires `erdSite` to be configured in `tailor.config.ts` for each namespace you want to deploy
+- Example config:
+  ```typescript
+  export default defineConfig({
+    db: {
+      myNamespace: {
+        // ... table definitions
+        erdSite: "my-erd-site-name",
+      },
+    },
+  });
+  ```
