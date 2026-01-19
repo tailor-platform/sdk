@@ -16,6 +16,12 @@ For the official Tailor Platform documentation, see [Identity Provider Setup](ht
 
 Configure the Built-in IdP using `defineIdp()`:
 
+**Definition Rules:**
+
+- **Multiple IdPs allowed**: You can define multiple IdP instances in your config file
+- **Configuration location**: Define in `tailor.config.ts` and add to the `idp` array
+- **Uniqueness**: IdP names must be unique across all IdP instances
+
 ```typescript
 import { defineIdp, defineConfig } from "@tailor-platform/sdk";
 
@@ -24,8 +30,14 @@ const idp = defineIdp("my-idp", {
   clients: ["my-client"],
 });
 
+// You can define multiple IdPs
+const anotherIdp = defineIdp("another-idp", {
+  authorization: "loggedIn",
+  clients: ["another-client"],
+});
+
 export default defineConfig({
-  idp: [idp],
+  idp: [idp, anotherIdp], // Add all IdPs to the array
 });
 ```
 

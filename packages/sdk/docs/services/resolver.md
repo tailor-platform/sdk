@@ -74,6 +74,12 @@ createResolver({
 
 Define resolvers in files matching glob patterns specified in `tailor.config.ts`.
 
+**Definition Rules:**
+
+- **One resolver per file**: Each file must contain exactly one resolver definition
+- **Export method**: Must use `export default`
+- **Uniqueness**: Resolver names must be unique per namespace
+
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
 

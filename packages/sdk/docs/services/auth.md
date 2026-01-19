@@ -17,6 +17,11 @@ For the official Tailor Platform documentation, see [Auth Guide](https://docs.ta
 
 Configure Auth service using `defineAuth()`:
 
+**Definition Rules:**
+
+- **One auth per application**: Each application can have exactly one Auth service
+- **Configuration location**: Define in `tailor.config.ts` using `defineAuth()` and reference directly in the config's `auth` field
+
 ```typescript
 import { defineAuth } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";

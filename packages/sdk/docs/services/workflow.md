@@ -18,6 +18,14 @@ For the official Tailor Platform documentation, see [Workflow Guide](https://doc
 
 All workflow components must follow these rules:
 
+**Definition Rules:**
+
+- **One workflow + multiple jobs per file**: Each file can define multiple jobs (named exports) and one workflow (default export)
+- **Workflow export method**: Must use `export default`
+- **Job export method**: Must use named exports (`export const`)
+- **Job name uniqueness**: Job names must be unique across the entire project (not just within one file)
+- **mainJob required**: Every workflow must specify a `mainJob`
+
 | Rule                                           | Description                                                                                              |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `createWorkflow` result must be default export | Workflow files must export the workflow as default                                                       |
