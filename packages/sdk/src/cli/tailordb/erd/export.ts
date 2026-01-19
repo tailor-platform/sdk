@@ -5,12 +5,14 @@ import { defineCommand } from "citty";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { resolveCliBinPath } from "../../utils/resolve-cli-bin";
-import { DEFAULT_ERD_BASE_DIR, DEFAULT_SCHEMA_OUTPUT } from "./constants";
 import { writeTblsSchemaToFile } from "./schema";
 import { initErdContext } from "./utils";
 import type { TailorDBSchemaOptions } from "./schema";
 import type { OperatorClient } from "../../client";
 import type { AppConfig } from "@/configure/config";
+
+const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
+const DEFAULT_SCHEMA_OUTPUT = `${DEFAULT_ERD_BASE_DIR}/schema.json`;
 
 /**
  * Resolve TailorDB config and namespace.
