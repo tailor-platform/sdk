@@ -64,8 +64,29 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
 }
 
 /**
+ * Helper type to check if all property types are valid.
+ * Uses -? to remove optional modifiers so all properties are treated uniformly.
+ */
+type AllPropertiesValid<T> = {
+  [K in keyof T]-?: IsValidInput<T[K]> extends true ? true : false;
+}[keyof T] extends true
+  ? true
+  : false;
+
+/**
  * Check if a type contains any non-JSON-compatible values.
  * Returns `true` if the type is valid for input, `false` otherwise.
+ *
+ * Accepts:
+ * - JSON primitives (string, number, boolean, null)
+ * - undefined
+ * - Optional primitives (e.g., string | undefined)
+ * - Arrays of valid types
+ * - Objects with valid field types
+ *
+ * Rejects:
+ * - Objects with toJSON methods (like Date)
+ * - Other non-JSON-serializable types
  */
 type IsValidInput<T> = T extends undefined
   ? true
@@ -76,14 +97,30 @@ type IsValidInput<T> = T extends undefined
       : T extends object
         ? T extends { toJSON: () => unknown }
           ? false
-          : { [K in keyof T]: IsValidInput<T[K]> }[keyof T] extends true
-            ? true
-            : false
+          : AllPropertiesValid<T>
         : false;
+
+/**
+ * Helper type to check if all property types are valid for output.
+ * Uses -? to remove optional modifiers so all properties are treated uniformly.
+ */
+type AllPropertiesValidOutput<T> = {
+  [K in keyof T]-?: IsValidOutput<T[K]> extends true ? true : false;
+}[keyof T] extends true
+  ? true
+  : false;
 
 /**
  * Check if a type is valid for output.
  * Returns `true` if the type is valid, `false` otherwise.
+ *
+ * Accepts:
+ * - JSON primitives (string, number, boolean, null)
+ * - undefined and void
+ * - Optional primitives (e.g., string | undefined)
+ * - Jsonifiable types (Date, objects with toJSON)
+ * - Arrays of valid types
+ * - Objects with valid field types
  */
 type IsValidOutput<T> = T extends undefined | void
   ? true
@@ -92,9 +129,7 @@ type IsValidOutput<T> = T extends undefined | void
     : T extends readonly (infer U)[]
       ? IsValidOutput<U>
       : T extends object
-        ? { [K in keyof T]: IsValidOutput<T[K]> }[keyof T] extends true
-          ? true
-          : false
+        ? AllPropertiesValidOutput<T>
         : false;
 
 /**

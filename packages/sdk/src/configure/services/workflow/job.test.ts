@@ -273,4 +273,70 @@ describe("WorkflowJob type constraints", () => {
       }>();
     });
   });
+
+  describe("input with optional fields", () => {
+    it("allows optional string field in input", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (input: { prompt: string; system?: string }) => ({
+          result: input.system ?? "default",
+        }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("allows multiple optional fields in input", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (input: { required: string; optional1?: string; optional2?: number }) => ({
+          result: input.required,
+          hasOptional: input.optional1 !== undefined,
+        }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("allows explicit union with undefined", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (input: { value: string | undefined }) => ({
+          result: input.value ?? "none",
+        }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("allows nested objects with optional fields", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (input: { data: { required: string; metadata?: { tag?: string } } }) => ({
+          result: input.data.required,
+          hasMetadata: input.data.metadata !== undefined,
+        }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("allows arrays with optional element types", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (input: { items: (string | undefined)[] }) => ({
+          count: input.items.length,
+        }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+  });
+
+  describe("output with optional fields", () => {
+    it("allows optional fields in output", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (): { value: string; metadata?: string } => {
+          return Math.random() > 0.5 ? { value: "test", metadata: "info" } : { value: "test" };
+        },
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+  });
 });
