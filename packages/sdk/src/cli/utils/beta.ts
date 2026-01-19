@@ -7,4 +7,5 @@ export function logErdBetaWarning(): void {
   logger.warn(
     "The ERD command is a beta feature and may introduce breaking changes in future releases.",
   );
+  logger.newline();
 }
