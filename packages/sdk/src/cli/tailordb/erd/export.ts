@@ -239,9 +239,9 @@ export const erdExportCommand = defineCommand({
       );
     } else {
       for (const result of results) {
-        logger.success(`Exported ERD for namespace "${result.namespace}"`);
-        logger.info(`  - Liam ERD dist: ${result.distDir}`);
-        logger.info(`  - tbls schema.json: ${result.schemaOutputPath}`);
+        logger.out(`Exported ERD for namespace "${result.namespace}"`);
+        logger.out(`  - Liam ERD dist: ${result.distDir}`);
+        logger.out(`  - tbls schema.json: ${result.schemaOutputPath}`);
       }
     }
   }),
