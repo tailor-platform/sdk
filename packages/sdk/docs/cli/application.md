@@ -146,15 +146,18 @@ tailor-sdk tailordb erd <subcommand> [options]
 **Notes:**
 
 - This command is a beta feature and may introduce breaking changes in future releases
-- Requires `@liam-hq/cli` and `serve` to be installed in your project:
+- `@liam-hq/cli` is required for `export`, `serve`, and `deploy`
+- `serve` is required only for `tailordb erd serve`
 
-  ```bash
-  npm i -D @liam-hq/cli serve
-  # OR
-  yarn add -D @liam-hq/cli serve
-  # OR
-  pnpm add -D @liam-hq/cli serve
-  ```
+Install dependencies:
+
+```bash
+npm i -D @liam-hq/cli serve
+# OR
+yarn add -D @liam-hq/cli serve
+# OR
+pnpm add -D @liam-hq/cli serve
+```
 
 #### tailordb erd export
 
