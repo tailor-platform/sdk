@@ -146,8 +146,8 @@ tailor-sdk tailordb erd <subcommand> [options]
 **Notes:**
 
 - This command is a beta feature and may introduce breaking changes in future releases
-- Requires `@liam-hq/cli` to be installed in your project
-- The `serve` subcommand additionally requires `serve`
+- Requires `@liam-hq/cli` to be installed in your project (`npm i -D @liam-hq/cli`)
+- The `serve` subcommand additionally requires `serve` (`npm i -D serve`)
 
 #### tailordb erd export
 
@@ -159,8 +159,8 @@ tailor-sdk tailordb erd export [options]
 
 **Options:**
 
-- `-n, --namespace` - TailorDB namespace name (optional if only one namespace is defined in config)
-- `-o, --output` - Output file path for tbls-compatible ERD JSON (default: `.erd/schema.json`)
+- `-n, --namespace` - TailorDB namespace name (optional - exports all namespaces with erdSite if omitted)
+- `-o, --output` - Output file path for tbls-compatible ERD JSON (default: `.tailor-sdk/erd/schema.json`)
 - `-j, --json` - Output as JSON
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
@@ -170,7 +170,7 @@ tailor-sdk tailordb erd export [options]
 **Usage Examples:**
 
 ```bash
-# Export ERD for the default namespace
+# Export ERD for all namespaces with erdSite configured
 tailor-sdk tailordb erd export
 
 # Export ERD for a specific namespace
@@ -193,7 +193,7 @@ tailor-sdk tailordb erd serve [options]
 
 **Options:**
 
-- `-n, --namespace` - TailorDB namespace name (uses first namespace in config if not specified)
+- `-n, --namespace` - TailorDB namespace name (uses first namespace with erdSite if not specified)
 - `-w, --workspace-id` - ID of the workspace
 - `-p, --profile` - Workspace profile to use
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
@@ -202,7 +202,7 @@ tailor-sdk tailordb erd serve [options]
 **Usage Examples:**
 
 ```bash
-# Serve ERD for the default namespace
+# Serve ERD for the first namespace with erdSite configured
 tailor-sdk tailordb erd serve
 
 # Serve ERD for a specific namespace
