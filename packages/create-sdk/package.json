@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
-    "@types/node": "24.10.7",
+    "@types/node": "24.10.9",
     "eslint": "9.39.2",
     "eslint-plugin-oxlint": "1.38.0",
     "oxlint": "1.38.0",
