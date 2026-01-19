@@ -96,7 +96,7 @@
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.10.7",
-    "@typescript/native-preview": "7.0.0-dev.20260112.1",
+    "@typescript/native-preview": "7.0.0-dev.20260116.1",
     "@vitest/coverage-v8": "4.0.17",
     "cross-env": "10.1.0",
     "eslint": "9.39.2",
