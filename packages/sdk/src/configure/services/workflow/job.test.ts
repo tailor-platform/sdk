@@ -288,7 +288,10 @@ describe("WorkflowJob type constraints", () => {
     it("allows multiple optional fields in input", () => {
       const job = createWorkflowJob({
         name: "test",
-        body: () => ({ result: "ok" }),
+        body: (input: { required: string; optional1?: string; optional2?: number }) => ({
+          result: input.required,
+          hasOptional: input.optional1 !== undefined,
+        }),
       });
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
@@ -306,8 +309,9 @@ describe("WorkflowJob type constraints", () => {
     it("allows nested objects with optional fields", () => {
       const job = createWorkflowJob({
         name: "test",
-        body: () => ({
-          result: true,
+        body: (input: { data: { required: string; metadata?: { tag?: string } } }) => ({
+          result: input.data.required,
+          hasMetadata: input.data.metadata !== undefined,
         }),
       });
       expectTypeOf(job.name).toEqualTypeOf<"test">();
