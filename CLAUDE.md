@@ -597,7 +597,7 @@ This pattern aligns with the module architecture principle that configure module
 - Test files: `**/__tests__/**/*.ts` or `**/?(*.)+(spec|test).ts`
 - Example tests are in `example/tests/` and `example/e2e/`
 
-## Agent Notes
+## Oxlint Manual Tweaks (SDK)
 
 - Oxlint configs for `packages/sdk` are regenerated from ESLint via `npx oxlint/migrate`.
   When you regenerate `packages/sdk/.oxlintrc.json`, re-apply the manual tweaks
@@ -611,8 +611,6 @@ Background (why this exists):
 - The generated config does not fully match the original ESLint behavior.
 - We apply manual tweaks after regeneration to preserve the intended linting behavior.
 - Use the checklist below whenever `npx @oxlint/migrate` overwrites the config.
-
-### Oxlint Manual Tweaks (SDK)
 
 Expected manual changes to re-apply:
 
