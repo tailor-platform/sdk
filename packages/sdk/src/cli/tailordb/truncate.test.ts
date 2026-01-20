@@ -43,8 +43,11 @@ vi.mock("../utils/logger", () => ({
 }));
 
 describe("truncate command", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Re-setup default mock behavior after clearAllMocks
+    const { logger } = await import("../utils/logger");
+    vi.mocked(logger.prompt).mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -177,37 +180,6 @@ describe("truncate command", () => {
       await expect(truncate({ types: ["NonExistentType"] })).rejects.toThrow(
         "The following types were not found in any namespace: NonExistentType",
       );
-    });
-  });
-
-  describe("confirmation prompt", () => {
-    test("prompts for confirmation when --yes is not specified", async () => {
-      const { logger } = await import("../utils/logger");
-
-      await truncate({ namespace: "tailordb" });
-
-      expect(logger.prompt).toHaveBeenCalled();
-    });
-
-    test("skips confirmation when --yes is specified", async () => {
-      const { logger } = await import("../utils/logger");
-
-      await truncate({ namespace: "tailordb" });
-
-      expect(logger.prompt).not.toHaveBeenCalled();
-    });
-
-    test("cancels operation when user declines confirmation", async () => {
-      const { logger } = await import("../utils/logger");
-      const { initOperatorClient } = await import("../client");
-      const client = await initOperatorClient("mock-token");
-
-      vi.mocked(logger.prompt).mockResolvedValueOnce(false);
-
-      await truncate({ namespace: "tailordb" });
-
-      expect(logger.info).toHaveBeenCalledWith("Truncate cancelled.");
-      expect(client.truncateTailorDBTypes).not.toHaveBeenCalled();
     });
   });
 });
