@@ -26,6 +26,13 @@ export declare type CreateAuthServiceRequest = Message<"tailor.v1.CreateAuthServ
    * @generated from field: string namespace_name = 2;
    */
   namespaceName: string;
+
+  /**
+   * Enable publishing session lifecycle events (issued, revoked, refreshed).
+   *
+   * @generated from field: bool publish_session_events = 3;
+   */
+  publishSessionEvents: boolean;
 };
 
 /**
@@ -49,6 +56,50 @@ export declare type CreateAuthServiceResponse = Message<"tailor.v1.CreateAuthSer
  * Use `create(CreateAuthServiceResponseSchema)` to create a new message.
  */
 export declare const CreateAuthServiceResponseSchema: GenMessage<CreateAuthServiceResponse>;
+
+/**
+ * @generated from message tailor.v1.UpdateAuthServiceRequest
+ */
+export declare type UpdateAuthServiceRequest = Message<"tailor.v1.UpdateAuthServiceRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * Enable publishing session lifecycle events (issued, revoked, refreshed).
+   *
+   * @generated from field: bool publish_session_events = 3;
+   */
+  publishSessionEvents: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateAuthServiceRequest.
+ * Use `create(UpdateAuthServiceRequestSchema)` to create a new message.
+ */
+export declare const UpdateAuthServiceRequestSchema: GenMessage<UpdateAuthServiceRequest>;
+
+/**
+ * @generated from message tailor.v1.UpdateAuthServiceResponse
+ */
+export declare type UpdateAuthServiceResponse = Message<"tailor.v1.UpdateAuthServiceResponse"> & {
+  /**
+   * @generated from field: tailor.v1.AuthService auth_service = 1;
+   */
+  authService?: AuthService;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateAuthServiceResponse.
+ * Use `create(UpdateAuthServiceResponseSchema)` to create a new message.
+ */
+export declare const UpdateAuthServiceResponseSchema: GenMessage<UpdateAuthServiceResponse>;
 
 /**
  * @generated from message tailor.v1.DeleteAuthServiceRequest

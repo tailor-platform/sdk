@@ -194,5 +194,6 @@ export const AuthConfigSchema = z
     idProvider: IdProviderSchema.optional(),
     scim: SCIMSchema.optional(),
     tenantProvider: TenantProviderSchema.optional(),
+    publishSessionEvents: z.boolean().optional(),
   })
   .brand("AuthConfig");

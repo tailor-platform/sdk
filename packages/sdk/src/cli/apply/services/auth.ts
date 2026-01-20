@@ -52,6 +52,7 @@ import type {
   UpdateAuthOAuth2ClientRequestSchema,
   UpdateAuthSCIMConfigRequestSchema,
   UpdateAuthSCIMResourceRequestSchema,
+  UpdateAuthServiceRequestSchema,
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
 } from "@tailor-proto/tailor/v1/auth_pb";
@@ -87,7 +88,10 @@ export async function applyAuth(
         await client.createAuthService(create.request);
         await client.setMetadata(create.metaRequest);
       }),
-      ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
+      ...changeSet.service.updates.map(async (update) => {
+        await client.updateAuthService(update.request);
+        await client.setMetadata(update.metaRequest);
+      }),
     ]);
 
     // IdPConfigs
@@ -300,6 +304,7 @@ type CreateService = {
 
 type UpdateService = {
   name: string;
+  request: MessageInitShape<typeof UpdateAuthServiceRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
@@ -375,6 +380,11 @@ async function planServices(
 
       changeSet.updates.push({
         name: config.name,
+        request: {
+          workspaceId,
+          namespaceName: config.name,
+          publishSessionEvents: config.publishSessionEvents,
+        },
         metaRequest,
       });
       delete existingServices[config.name];
@@ -384,6 +394,7 @@ async function planServices(
         request: {
           workspaceId,
           namespaceName: config.name,
+          publishSessionEvents: config.publishSessionEvents,
         },
         metaRequest,
       });

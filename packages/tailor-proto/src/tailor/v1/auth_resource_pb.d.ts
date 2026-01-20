@@ -21,6 +21,14 @@ export declare type AuthService = Message<"tailor.v1.AuthService"> & {
    * @generated from field: tailor.v1.Namespace namespace = 1;
    */
   namespace?: Namespace;
+
+  /**
+   * Enable publishing session lifecycle events (issued, revoked, refreshed).
+   * When enabled, events are published to the dataplane event topic.
+   *
+   * @generated from field: bool publish_session_events = 2;
+   */
+  publishSessionEvents: boolean;
 };
 
 /**
