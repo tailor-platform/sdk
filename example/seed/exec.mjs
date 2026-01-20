@@ -1,9 +1,7 @@
 import { GQLIngest } from "@jackchuka/gql-ingest";
 import { join } from "node:path";
-import { readFileSync } from "node:fs";
 import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
-import { parse } from "yaml";
 import { show, getMachineUserToken, truncate } from "@tailor-platform/sdk/cli";
 
 // Parse command-line arguments
@@ -62,11 +60,41 @@ const configPath = join(configDir, "../tailor.config.ts");
 
 console.log(styleText("cyan", "Starting seed data generation..."));
 
-// Load config.yaml to get entity-namespace mapping
-const configYamlPath = join(configDir, "config.yaml");
-const configYaml = parse(readFileSync(configYamlPath, "utf-8"));
-const entityNamespaces = configYaml.entityNamespaces || {};
-const entityDependencies = configYaml.entityDependencies || {};
+// Entity configuration
+const namespaceEntities = {
+  tailordb: [
+    "Customer",
+    "Invoice",
+    "NestedProfile",
+    "PurchaseOrder",
+    "SalesOrder",
+    "SalesOrderCreated",
+    "Selfie",
+    "Supplier",
+    "User",
+    "UserLog",
+    "UserSetting",
+  ],
+  analyticsdb: [
+    "Event",
+  ]
+};
+
+const entityDependencies = {
+  "Customer": [],
+  "Invoice": ["SalesOrder"],
+  "NestedProfile": [],
+  "PurchaseOrder": ["Supplier"],
+  "SalesOrder": ["Customer"],
+  "SalesOrderCreated": [],
+  "Selfie": [],
+  "Supplier": [],
+  "User": [],
+  "UserLog": ["User"],
+  "UserSetting": ["User"],
+  "Event": [],
+  "_User": ["User"]
+};
 
 // Determine which entities to process
 let entitiesToProcess = null;
@@ -91,13 +119,11 @@ if (skipIdp && hasNamespace) {
 // Filter by namespace (automatically excludes _User as it has no namespace)
 if (hasNamespace) {
   const namespace = values.namespace;
-  entitiesToProcess = Object.keys(entityNamespaces).filter(
-    (entity) => entityNamespaces[entity] === namespace
-  );
+  entitiesToProcess = namespaceEntities[namespace];
 
-  if (entitiesToProcess.length === 0) {
+  if (!entitiesToProcess || entitiesToProcess.length === 0) {
     console.error(styleText("red", `Error: No entities found in namespace "${namespace}"`));
-    console.error(styleText("yellow", `Available namespaces: ${[...new Set(Object.values(entityNamespaces))].join(", ")}`));
+    console.error(styleText("yellow", `Available namespaces: ${Object.keys(namespaceEntities).join(", ")}`));
     process.exit(1);
   }
 

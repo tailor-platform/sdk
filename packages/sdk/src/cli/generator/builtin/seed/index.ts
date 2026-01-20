@@ -17,16 +17,43 @@ export const SeedGeneratorID = "@tailor-platform/seed";
  * Generates the exec.mjs script content (Node.js executable) using gql-ingest Programmatic API
  * @param {string} machineUserName - Machine user name for token retrieval
  * @param {string} relativeConfigPath - Config path relative to exec script
+ * @param {Record<string, { namespace?: string; dependencies: string[] }>} entityDependencies - Entity dependencies mapping
  * @returns {string} exec.mjs file contents
  */
-function generateExecScript(machineUserName: string, relativeConfigPath: string): string {
+function generateExecScript(
+  machineUserName: string,
+  relativeConfigPath: string,
+  entityDependencies: Record<string, { namespace?: string; dependencies: string[] }>,
+): string {
+  // Generate namespaceEntities and entityDependenciesObject
+  const namespaceMap = new Map<string, string[]>();
+  for (const [type, meta] of Object.entries(entityDependencies)) {
+    if (meta.namespace) {
+      if (!namespaceMap.has(meta.namespace)) {
+        namespaceMap.set(meta.namespace, []);
+      }
+      namespaceMap.get(meta.namespace)!.push(type);
+    }
+  }
+
+  const namespaceEntitiesEntries = Array.from(namespaceMap.entries())
+    .map(([namespace, entities]) => {
+      const entitiesFormatted = entities.map((e) => `        "${e}",`).join("\n");
+      return `      ${namespace}: [\n${entitiesFormatted}\n      ]`;
+    })
+    .join(",\n");
+
+  const entityDependenciesEntries = Object.entries(entityDependencies)
+    .map(
+      ([type, meta]) => `      "${type}": [${meta.dependencies.map((d) => `"${d}"`).join(", ")}]`,
+    )
+    .join(",\n");
+
   return ml /* js */ `
     import { GQLIngest } from "@jackchuka/gql-ingest";
     import { join } from "node:path";
-    import { readFileSync } from "node:fs";
     import { parseArgs, styleText } from "node:util";
     import { createInterface } from "node:readline";
-    import { parse } from "yaml";
     import { show, getMachineUserToken, truncate } from "@tailor-platform/sdk/cli";
 
     // Parse command-line arguments
@@ -85,11 +112,14 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
 
     console.log(styleText("cyan", "Starting seed data generation..."));
 
-    // Load config.yaml to get entity-namespace mapping
-    const configYamlPath = join(configDir, "config.yaml");
-    const configYaml = parse(readFileSync(configYamlPath, "utf-8"));
-    const entityNamespaces = configYaml.entityNamespaces || {};
-    const entityDependencies = configYaml.entityDependencies || {};
+    // Entity configuration
+    const namespaceEntities = {
+${namespaceEntitiesEntries}
+    };
+
+    const entityDependencies = {
+${entityDependenciesEntries}
+    };
 
     // Determine which entities to process
     let entitiesToProcess = null;
@@ -114,13 +144,11 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
     // Filter by namespace (automatically excludes _User as it has no namespace)
     if (hasNamespace) {
       const namespace = values.namespace;
-      entitiesToProcess = Object.keys(entityNamespaces).filter(
-        (entity) => entityNamespaces[entity] === namespace
-      );
+      entitiesToProcess = namespaceEntities[namespace];
 
-      if (entitiesToProcess.length === 0) {
+      if (!entitiesToProcess || entitiesToProcess.length === 0) {
         console.error(styleText("red", \`Error: No entities found in namespace "\${namespace}"\`));
-        console.error(styleText("yellow", \`Available namespaces: \${[...new Set(Object.values(entityNamespaces))].join(", ")}\`));
+        console.error(styleText("yellow", \`Available namespaces: \${Object.keys(namespaceEntities).join(", ")}\`));
         process.exit(1);
       }
 
@@ -392,29 +420,14 @@ export function createSeedGenerator(options: {
         }
       }
 
-      // Generate config.yaml for each output directory
+      // Generate exec.mjs for each output directory
       for (const [outputDir, dependencies] of Object.entries(entityDependencies)) {
-        files.push({
-          path: path.join(outputDir, "config.yaml"),
-          content: /* yaml */ `entityDependencies:
-  ${Object.entries(dependencies)
-    .map(([type, meta]) => `${type}: [${meta.dependencies.join(", ")}]`)
-    .join("\n  ")}
-
-entityNamespaces:
-  ${Object.entries(dependencies)
-    .filter(([_, meta]) => meta.namespace)
-    .map(([type, meta]) => `${type}: ${meta.namespace}`)
-    .join("\n  ")}
-`,
-        });
-
         // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
           const relativeConfigPath = path.relative(outputDir, configPath);
           files.push({
             path: path.join(outputDir, "exec.mjs"),
-            content: generateExecScript(options.machineUserName, relativeConfigPath),
+            content: generateExecScript(options.machineUserName, relativeConfigPath, dependencies),
           });
         }
       }
