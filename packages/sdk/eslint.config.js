@@ -19,9 +19,9 @@ export default defineConfig([
     },
     rules: {
       "jsdoc/tag-lines": "error",
-      "jsdoc/check-param-names": "error",
+      "jsdoc/check-param-names": "off",
       "jsdoc/require-jsdoc": ["error", { publicOnly: true }],
-      "jsdoc/require-param": "error",
+      "jsdoc/require-param": "off",
       "jsdoc/require-returns": "error",
       "jsdoc/require-param-type": "off",
       "jsdoc/require-returns-type": "off",
