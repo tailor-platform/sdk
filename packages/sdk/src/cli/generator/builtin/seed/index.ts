@@ -24,15 +24,18 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
     import { GQLIngest } from "@jackchuka/gql-ingest";
     import { join } from "node:path";
     import { readFileSync } from "node:fs";
-    import { parseArgs } from "node:util";
+    import { parseArgs, styleText } from "node:util";
+    import { createInterface } from "node:readline";
     import { parse } from "yaml";
-    import { show, getMachineUserToken } from "@tailor-platform/sdk/cli";
+    import { show, getMachineUserToken, truncate } from "@tailor-platform/sdk/cli";
 
     // Parse command-line arguments
     const { values, positionals } = parseArgs({
       options: {
         namespace: { type: "string", short: "n" },
         "skip-idp": { type: "boolean", default: false },
+        truncate: { type: "boolean", default: false },
+        yes: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
       },
       allowPositionals: true,
@@ -45,21 +48,42 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
     Options:
       -n, --namespace <ns> Process all types in specified namespace (excludes _User)
       --skip-idp           Skip IdP user (_User) entity
+      --truncate           Truncate tables before seeding
+      --yes                Skip confirmation prompts (for truncate)
       -h, --help           Show help
 
     Examples:
-      node exec.mjs                       # Process all types (default)
-      node exec.mjs --namespace tailordb  # Process tailordb namespace only (no _User)
-      node exec.mjs User Order            # Process specific types only
-      node exec.mjs --skip-idp            # Process all except _User
+      node exec.mjs                                     # Process all types (default)
+      node exec.mjs --namespace <namespace>             # Process tailordb namespace only (no _User)
+      node exec.mjs User Order                          # Process specific types only
+      node exec.mjs --skip-idp                          # Process all except _User
+      node exec.mjs --truncate                          # Truncate all tables, then seed all
+      node exec.mjs --truncate --yes                    # Truncate all tables without confirmation, then seed all
+      node exec.mjs --truncate --namespace <namespace>  # Truncate tailordb, then seed tailordb
+      node exec.mjs --truncate User Order               # Truncate User and Order, then seed them
       \`);
       process.exit(0);
     }
 
+    // Helper function to prompt for y/n confirmation
+    const promptConfirmation = (question) => {
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      return new Promise((resolve) => {
+        rl.question(styleText("yellow", question), (answer) => {
+          rl.close();
+          resolve(answer.toLowerCase().trim());
+        });
+      });
+    };
+
     const configDir = import.meta.dirname;
     const configPath = join(configDir, "${relativeConfigPath}");
 
-    console.log("Starting seed data generation...");
+    console.log(styleText("cyan", "Starting seed data generation..."));
 
     // Load config.yaml to get entity-namespace mapping
     const configYamlPath = join(configDir, "config.yaml");
@@ -77,13 +101,13 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
     // Validate mutually exclusive options
     const optionCount = [hasNamespace, hasTypes].filter(Boolean).length;
     if (optionCount > 1) {
-      console.error("Error: Options --namespace and type names are mutually exclusive.");
+      console.error(styleText("red", "Error: Options --namespace and type names are mutually exclusive."));
       process.exit(1);
     }
 
     // --skip-idp and --namespace are redundant (namespace already excludes _User)
     if (skipIdp && hasNamespace) {
-      console.error("Error: --skip-idp is redundant with --namespace (namespace filtering already excludes _User).");
+      console.error(styleText("red", "Error: --skip-idp is redundant with --namespace (namespace filtering already excludes _User)."));
       process.exit(1);
     }
 
@@ -95,14 +119,13 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
       );
 
       if (entitiesToProcess.length === 0) {
-        console.error(\`Error: No entities found in namespace "\${namespace}"\`);
-        console.error(\`Available namespaces: \${[...new Set(Object.values(entityNamespaces))].join(", ")}\`);
+        console.error(styleText("red", \`Error: No entities found in namespace "\${namespace}"\`));
+        console.error(styleText("yellow", \`Available namespaces: \${[...new Set(Object.values(entityNamespaces))].join(", ")}\`));
         process.exit(1);
       }
 
-      console.log(\`Filtering by namespace: \${namespace}\`);
-      console.log(\`Entities: \${entitiesToProcess.join(", ")}\`);
-      console.log(\`Note: _User (IdP user) is automatically excluded when filtering by namespace\`);
+      console.log(styleText("cyan", \`Filtering by namespace: \${namespace}\`));
+      console.log(styleText("dim", \`Entities: \${entitiesToProcess.join(", ")}\`));
     }
 
     // Filter by specific types
@@ -119,12 +142,12 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
       });
 
       if (notFoundTypes.length > 0) {
-        console.error(\`Error: The following types were not found: \${notFoundTypes.join(", ")}\`);
-        console.error(\`Available types: \${Object.keys(entityDependencies).join(", ")}\`);
+        console.error(styleText("red", \`Error: The following types were not found: \${notFoundTypes.join(", ")}\`));
+        console.error(styleText("yellow", \`Available types: \${Object.keys(entityDependencies).join(", ")}\`));
         process.exit(1);
       }
 
-      console.log(\`Filtering by types: \${entitiesToProcess.join(", ")}\`);
+      console.log(styleText("cyan", \`Filtering by types: \${entitiesToProcess.join(", ")}\`));
     }
 
     // Apply --skip-idp filter
@@ -136,7 +159,49 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
         // Get all entities except _User
         entitiesToProcess = Object.keys(entityDependencies).filter((entity) => entity !== "_User");
       }
-      console.log(\`Skipping IdP user (_User)\`);
+      console.log(styleText("dim", \`Skipping IdP user (_User)\`));
+    }
+
+    // Truncate tables if requested
+    // Note: --skip-idp only affects seeding, not truncation
+    if (values.truncate) {
+      // Prompt user for confirmation
+      const answer = values.yes ? "y" : await promptConfirmation("Are you sure you want to truncate? (y/n): ");
+      if (answer !== "y") {
+        console.log(styleText("yellow", "Truncate cancelled."));
+        process.exit(0);
+      }
+
+      console.log(styleText("cyan", "\\nTruncating tables..."));
+
+      try {
+        if (hasNamespace) {
+          // Truncate specific namespace
+          await truncate({
+            configPath,
+            namespace: values.namespace,
+            yes: true,
+          });
+        } else if (hasTypes) {
+          // Truncate specific types
+          await truncate({
+            configPath,
+            types: entitiesToProcess || positionals,
+            yes: true,
+          });
+        } else {
+          // Truncate all (--skip-idp does not affect truncation)
+          await truncate({
+            configPath,
+            all: true,
+            yes: true,
+          });
+        }
+        console.log(styleText("green", "Truncate completed.\\n"));
+      } catch (error) {
+        console.error(styleText("red", \`Truncate failed: \${error.message}\`));
+        process.exit(1);
+      }
     }
 
     // Get application info and endpoint
@@ -156,20 +221,20 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
 
     // Progress monitoring event handlers
     client.on("started", (payload) => {
-      console.log(\`Processing \${payload.totalEntities} entities...\`);
+      console.log(styleText("cyan", \`Processing \${payload.totalEntities} entities...\`));
     });
 
     client.on("entityStart", (payload) => {
-      console.log(\`  Processing \${payload.entityName}...\`);
+      console.log(styleText("dim", \`  Processing \${payload.entityName}...\`));
     });
 
     client.on("entityComplete", (payload) => {
       const { entityName, successCount } = payload;
-      console.log(\`  ✓ \${entityName}: \${successCount} rows processed\`);
+      console.log(styleText("green", \`  ✓ \${entityName}: \${successCount} rows processed\`));
     });
 
     client.on("rowFailure", (payload) => {
-      console.error(\`  ✗ Row \${payload.rowIndex} in \${payload.entityName} failed: \${payload.error.message}\`);
+      console.error(styleText("red", \`  ✗ Row \${payload.rowIndex} in \${payload.entityName} failed: \${payload.error.message}\`));
     });
 
     // Run ingestion
@@ -182,15 +247,15 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
       }
 
       if (result.success) {
-        console.log("\\n✓ Seed data generation completed successfully");
+        console.log(styleText("green", "\\n✓ Seed data generation completed successfully"));
         console.log(client.getMetricsSummary());
       } else {
-        console.error("\\n✗ Seed data generation failed");
+        console.error(styleText("red", "\\n✗ Seed data generation failed"));
         console.error(client.getMetricsSummary());
         process.exit(1);
       }
     } catch (error) {
-      console.error("\\n✗ Seed data generation failed with error:", error.message);
+      console.error(styleText("red", \`\\n✗ Seed data generation failed with error: \${error.message}\`));
       process.exit(1);
     }
     `;

@@ -76,3 +76,4 @@ export type {
 } from "./workflow/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
+export { truncate, type TruncateOptions } from "./tailordb/truncate";
