@@ -14,14 +14,24 @@ import type { SeedTypeMetadata } from "./types";
 export const SeedGeneratorID = "@tailor-platform/seed";
 
 /**
- * Generates the exec.mjs script content (Node.js executable)
+ * Converts a path to POSIX format (forward slashes).
+ * This ensures consistent import paths across platforms.
+ * @param {string} p - Path to convert
+ * @returns {string} POSIX-style path
+ */
+function toPosixPath(p: string): string {
+  return p.split(path.sep).join(path.posix.sep);
+}
+
+/**
+ * Generates the exec.mjs script content (Node.js executable) using gql-ingest Programmatic API
  * @param {string} machineUserName - Machine user name for token retrieval
  * @param {string} relativeConfigPath - Config path relative to exec script
  * @returns {string} exec.mjs file contents
  */
 function generateExecScript(machineUserName: string, relativeConfigPath: string): string {
   return ml /* js */ `
-    import { execSync } from "node:child_process";
+    import { GQLIngest } from "@jackchuka/gql-ingest";
     import { join } from "node:path";
     import { show, getMachineUserToken } from "@tailor-platform/sdk/cli";
 
@@ -30,26 +40,55 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
 
     console.log("Starting seed data generation...");
 
+    // Get application info and endpoint
     const appInfo = await show({ configPath });
     const endpoint = \`\${appInfo.url}/query\`;
 
+    // Get machine user token
     const tokenInfo = await getMachineUserToken({ name: "${machineUserName}", configPath });
-    const headers = JSON.stringify({ Authorization: \`Bearer \${tokenInfo.accessToken}\` });
 
-    const headersArg = process.platform === "win32"
-      ? \`"\${headers.replace(/"/g, '\\\\"')}"\`
-      : \`'\${headers}'\`;
+    // Initialize GQLIngest client
+    const client = new GQLIngest({
+      endpoint,
+      headers: {
+        Authorization: \`Bearer \${tokenInfo.accessToken}\`,
+      },
+    });
 
-    const cmd = \`npx gql-ingest -c "\${configDir}" -e "\${endpoint}" --headers \${headersArg}\`;
-    console.log("Running:", cmd);
+    // Progress monitoring event handlers
+    client.on("started", (payload) => {
+      console.log(\`Processing \${payload.totalEntities} entities...\`);
+    });
 
+    client.on("entityStart", (payload) => {
+      console.log(\`  Processing \${payload.entityName}...\`);
+    });
+
+    client.on("entityComplete", (payload) => {
+      const { entityName, successCount } = payload;
+      console.log(\`  ✓ \${entityName}: \${successCount} rows processed\`);
+    });
+
+    client.on("rowFailure", (payload) => {
+      console.error(\`  ✗ Row \${payload.rowIndex} in \${payload.entityName} failed: \${payload.error.message}\`);
+    });
+
+    // Run ingestion
     try {
-      execSync(cmd, { stdio: "inherit" });
-    } catch (error) {
-      console.error("Seed failed with exit code:", error.status);
-      process.exit(error.status ?? 1);
-    }
+      const result = await client.ingest(configDir);
 
+      if (result.success) {
+        console.log("\\n✓ Seed data generation completed successfully");
+        console.log(client.getMetricsSummary());
+      } else {
+        console.error("\\n✗ Seed data generation failed");
+        console.error(client.getMetricsSummary());
+        process.exit(1);
+      }
+    } catch (error) {
+      console.error("\\n✗ Seed data generation failed with error:", error.message);
+      process.exit(1);
+    }
     `;
 }
 
