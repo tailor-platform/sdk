@@ -14,16 +14,6 @@ import type { SeedTypeMetadata } from "./types";
 export const SeedGeneratorID = "@tailor-platform/seed";
 
 /**
- * Converts a path to POSIX format (forward slashes).
- * This ensures consistent import paths across platforms.
- * @param {string} p - Path to convert
- * @returns {string} POSIX-style path
- */
-function toPosixPath(p: string): string {
-  return p.split(path.sep).join(path.posix.sep);
-}
-
-/**
  * Generates the exec.mjs script content (Node.js executable) using gql-ingest Programmatic API
  * @param {string} machineUserName - Machine user name for token retrieval
  * @param {string} relativeConfigPath - Config path relative to exec script
@@ -33,12 +23,121 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
   return ml /* js */ `
     import { GQLIngest } from "@jackchuka/gql-ingest";
     import { join } from "node:path";
+    import { readFileSync } from "node:fs";
+    import { parseArgs } from "node:util";
+    import { parse } from "yaml";
     import { show, getMachineUserToken } from "@tailor-platform/sdk/cli";
+
+    // Parse command-line arguments
+    const { values, positionals } = parseArgs({
+      options: {
+        namespace: { type: "string", short: "n" },
+        "skip-idp": { type: "boolean", default: false },
+        help: { type: "boolean", short: "h", default: false },
+      },
+      allowPositionals: true,
+    });
+
+    if (values.help) {
+      console.log(\`
+    Usage: node exec.mjs [options] [types...]
+
+    Options:
+      -n, --namespace <ns> Process all types in specified namespace (excludes _User)
+      --skip-idp           Skip IdP user (_User) entity
+      -h, --help           Show help
+
+    Examples:
+      node exec.mjs                       # Process all types (default)
+      node exec.mjs --namespace tailordb  # Process tailordb namespace only (no _User)
+      node exec.mjs User Order            # Process specific types only
+      node exec.mjs --skip-idp            # Process all except _User
+      \`);
+      process.exit(0);
+    }
 
     const configDir = import.meta.dirname;
     const configPath = join(configDir, "${relativeConfigPath}");
 
     console.log("Starting seed data generation...");
+
+    // Load config.yaml to get entity-namespace mapping
+    const configYamlPath = join(configDir, "config.yaml");
+    const configYaml = parse(readFileSync(configYamlPath, "utf-8"));
+    const entityNamespaces = configYaml.entityNamespaces || {};
+    const entityDependencies = configYaml.entityDependencies || {};
+
+    // Determine which entities to process
+    let entitiesToProcess = null;
+
+    const hasNamespace = !!values.namespace;
+    const hasTypes = positionals.length > 0;
+    const skipIdp = values["skip-idp"];
+
+    // Validate mutually exclusive options
+    const optionCount = [hasNamespace, hasTypes].filter(Boolean).length;
+    if (optionCount > 1) {
+      console.error("Error: Options --namespace and type names are mutually exclusive.");
+      process.exit(1);
+    }
+
+    // --skip-idp and --namespace are redundant (namespace already excludes _User)
+    if (skipIdp && hasNamespace) {
+      console.error("Error: --skip-idp is redundant with --namespace (namespace filtering already excludes _User).");
+      process.exit(1);
+    }
+
+    // Filter by namespace (automatically excludes _User as it has no namespace)
+    if (hasNamespace) {
+      const namespace = values.namespace;
+      entitiesToProcess = Object.keys(entityNamespaces).filter(
+        (entity) => entityNamespaces[entity] === namespace
+      );
+
+      if (entitiesToProcess.length === 0) {
+        console.error(\`Error: No entities found in namespace "\${namespace}"\`);
+        console.error(\`Available namespaces: \${[...new Set(Object.values(entityNamespaces))].join(", ")}\`);
+        process.exit(1);
+      }
+
+      console.log(\`Filtering by namespace: \${namespace}\`);
+      console.log(\`Entities: \${entitiesToProcess.join(", ")}\`);
+      console.log(\`Note: _User (IdP user) is automatically excluded when filtering by namespace\`);
+    }
+
+    // Filter by specific types
+    if (hasTypes) {
+      const requestedTypes = positionals;
+      const notFoundTypes = [];
+
+      entitiesToProcess = requestedTypes.filter((type) => {
+        if (!(type in entityDependencies)) {
+          notFoundTypes.push(type);
+          return false;
+        }
+        return true;
+      });
+
+      if (notFoundTypes.length > 0) {
+        console.error(\`Error: The following types were not found: \${notFoundTypes.join(", ")}\`);
+        console.error(\`Available types: \${Object.keys(entityDependencies).join(", ")}\`);
+        process.exit(1);
+      }
+
+      console.log(\`Filtering by types: \${entitiesToProcess.join(", ")}\`);
+    }
+
+    // Apply --skip-idp filter
+    if (skipIdp) {
+      if (entitiesToProcess) {
+        // Filter out _User from already filtered list
+        entitiesToProcess = entitiesToProcess.filter((entity) => entity !== "_User");
+      } else {
+        // Get all entities except _User
+        entitiesToProcess = Object.keys(entityDependencies).filter((entity) => entity !== "_User");
+      }
+      console.log(\`Skipping IdP user (_User)\`);
+    }
 
     // Get application info and endpoint
     const appInfo = await show({ configPath });
@@ -75,7 +174,12 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
 
     // Run ingestion
     try {
-      const result = await client.ingest(configDir);
+      let result;
+      if (entitiesToProcess && entitiesToProcess.length > 0) {
+        result = await client.ingestEntities(configDir, entitiesToProcess);
+      } else {
+        result = await client.ingest(configDir);
+      }
 
       if (result.success) {
         console.log("\\n✓ Seed data generation completed successfully");
@@ -109,8 +213,8 @@ export function createSeedGenerator(options: {
     description: "Generates seed data files (GraphQL Ingest + lines-db schema)",
     dependencies: ["tailordb"] as const,
 
-    processType: ({ type, source }) => {
-      const gqlIngest = processGqlIngest(type);
+    processType: ({ type, source, namespace }) => {
+      const gqlIngest = processGqlIngest(type, namespace);
       const linesDb = processLinesDb(type, source);
       return { gqlIngest, linesDb };
     },
@@ -123,7 +227,7 @@ export function createSeedGenerator(options: {
     }: AggregateArgs<TailorDBInput<Record<string, SeedTypeMetadata>>>) => {
       const entityDependencies: Record<
         /* outputDir */ string,
-        Record</* type */ string, /* dependencies */ string[]>
+        Record</* type */ string, { namespace?: string; dependencies: string[] }>
       > = {};
 
       const files: GeneratorResult["files"] = [];
@@ -139,7 +243,10 @@ export function createSeedGenerator(options: {
         for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
           const { gqlIngest, linesDb } = metadata;
 
-          entityDependencies[outputBaseDir][gqlIngest.name] = gqlIngest.dependencies;
+          entityDependencies[outputBaseDir][gqlIngest.name] = {
+            namespace: gqlIngest.namespace,
+            dependencies: gqlIngest.dependencies,
+          };
 
           // Generate GraphQL Ingest files
           files.push(
@@ -185,8 +292,10 @@ export function createSeedGenerator(options: {
             entityDependencies[outputBaseDir] = {};
           }
 
-          // Add _User to entityDependencies
-          entityDependencies[outputBaseDir][idpUser.name] = idpUser.dependencies;
+          // Add _User to entityDependencies (without namespace as IdP user doesn't have one)
+          entityDependencies[outputBaseDir][idpUser.name] = {
+            dependencies: idpUser.dependencies,
+          };
 
           // Generate GraphQL mutation file
           files.push({
@@ -224,7 +333,13 @@ export function createSeedGenerator(options: {
           path: path.join(outputDir, "config.yaml"),
           content: /* yaml */ `entityDependencies:
   ${Object.entries(dependencies)
-    .map(([type, deps]) => `${type}: [${deps.join(", ")}]`)
+    .map(([type, meta]) => `${type}: [${meta.dependencies.join(", ")}]`)
+    .join("\n  ")}
+
+entityNamespaces:
+  ${Object.entries(dependencies)
+    .filter(([_, meta]) => meta.namespace)
+    .map(([type, meta]) => `${type}: ${meta.namespace}`)
     .join("\n  ")}
 `,
         });
