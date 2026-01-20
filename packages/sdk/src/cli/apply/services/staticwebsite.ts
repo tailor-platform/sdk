@@ -14,10 +14,10 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 /**
  * Apply static website changes for the given phase.
- * @param {OperatorClient} client - Operator client instance
- * @param {Awaited<ReturnType<typeof planStaticWebsite>>} result - Planned static website changes
- * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase="create-update"] - Apply phase
- * @returns {Promise<void>} Promise that resolves when static websites are applied
+ * @param client - Operator client instance
+ * @param result - Planned static website changes
+ * @param [phase="create-update"] - Apply phase
+ * @returns Promise that resolves when static websites are applied
  */
 export async function applyStaticWebsite(
   client: OperatorClient,
@@ -67,8 +67,12 @@ function trn(workspaceId: string, name: string) {
 
 /**
  * Plan static website changes based on current and desired state.
- * @param {PlanContext} context - Planning context
- * @returns {Promise<unknown>} Planned changes
+ * @param context - Planning context
+ * @param context.client
+ * @param context.workspaceId
+ * @param context.application
+ * @param context.forRemoval
+ * @returns Planned changes
  */
 export async function planStaticWebsite({
   client,

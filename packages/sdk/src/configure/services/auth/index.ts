@@ -49,9 +49,9 @@ export type AuthInvoker<M extends string> = Omit<ParserAuthInvoker, "machineUser
  * @template AttributeList
  * @template MachineUserNames
  * @template M
- * @param {Name} name - Auth service name
- * @param {AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames>} config - Auth service configuration
- * @returns {AuthDefinitionBrand & AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames> & { name: string; invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M> }} Defined auth service
+ * @param name - Auth service name
+ * @param config - Auth service configuration
+ * @returns Defined auth service
  */
 export function defineAuth<
   const Name extends string,

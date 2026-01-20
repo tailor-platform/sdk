@@ -30,8 +30,8 @@ function secretInfo(secret: SecretManagerSecret): SecretInfo {
 
 /**
  * List secrets in a Secret Manager vault.
- * @param {SecretListOptions} options - Secret listing options
- * @returns {Promise<SecretInfo[]>} List of secrets
+ * @param options - Secret listing options
+ * @returns List of secrets
  */
 async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   const accessToken = await loadAccessToken({

@@ -21,7 +21,7 @@ const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/
 
 /**
  * Initialize an OAuth2 client for Tailor Platform.
- * @returns {OAuth2Client} Configured OAuth2 client
+ * @returns Configured OAuth2 client
  */
 export function initOAuth2Client() {
   return new OAuth2Client({
@@ -35,8 +35,8 @@ export type OperatorClient = Client<typeof OperatorService>;
 
 /**
  * Initialize an Operator client with the given access token.
- * @param {string} accessToken - Access token for authentication
- * @returns {Promise<OperatorClient>} Configured Operator client
+ * @param accessToken - Access token for authentication
+ * @returns Configured Operator client
  */
 export async function initOperatorClient(accessToken: string) {
   const transport = createConnectTransport({
@@ -54,7 +54,7 @@ export async function initOperatorClient(accessToken: string) {
 
 /**
  * Create an interceptor that sets a User-Agent header.
- * @returns {Promise<Interceptor>} User-Agent interceptor
+ * @returns User-Agent interceptor
  */
 async function userAgentInterceptor(): Promise<Interceptor> {
   const ua = await userAgent();
@@ -66,7 +66,7 @@ async function userAgentInterceptor(): Promise<Interceptor> {
 
 /**
  * Build the User-Agent string for CLI requests.
- * @returns {Promise<string>} User-Agent header value
+ * @returns User-Agent header value
  */
 export async function userAgent() {
   const packageJson = await readPackageJson();
@@ -75,8 +75,8 @@ export async function userAgent() {
 
 /**
  * Create an interceptor that sets the Authorization bearer token.
- * @param {string} accessToken - Access token to use
- * @returns {Promise<Interceptor>} Bearer token interceptor
+ * @param accessToken - Access token to use
+ * @returns Bearer token interceptor
  */
 async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor> {
   return (next) => async (req) => {
@@ -87,7 +87,7 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
 
 /**
  * Create an interceptor that retries idempotent requests with backoff.
- * @returns {Interceptor} Retry interceptor
+ * @returns Retry interceptor
  */
 function retryInterceptor(): Interceptor {
   return (next) => async (req) => {
@@ -117,8 +117,8 @@ function retryInterceptor(): Interceptor {
 
 /**
  * Wait for an exponential backoff delay with jitter.
- * @param {number} attempt - Current retry attempt number (1-based)
- * @returns {Promise<void>} Promise that resolves after the delay
+ * @param attempt - Current retry attempt number (1-based)
+ * @returns Promise that resolves after the delay
  */
 function waitRetryBackoff(attempt: number) {
   const base = 50 * 2 ** (attempt - 1);
@@ -129,9 +129,9 @@ function waitRetryBackoff(attempt: number) {
 
 /**
  * Determine whether the given error is retriable for the method idempotency.
- * @param {unknown} error - Error thrown by the request
- * @param {MethodOptions_IdempotencyLevel} idempotency - Method idempotency level
- * @returns {boolean} True if the error should be retried
+ * @param error - Error thrown by the request
+ * @param idempotency - Method idempotency level
+ * @returns True if the error should be retried
  */
 function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel) {
   if (!(error instanceof ConnectError)) {
@@ -153,7 +153,7 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
 
 /**
  * Create an interceptor that enhances error messages from the Operator API.
- * @returns {Interceptor} Error handling interceptor
+ * @returns Error handling interceptor
  */
 function errorHandlingInterceptor(): Interceptor {
   return (next) => async (req) => {
@@ -179,8 +179,8 @@ function errorHandlingInterceptor(): Interceptor {
 
 /**
  * @internal
- * @param {string} methodName - RPC method name (e.g., "CreateWorkspace")
- * @returns {{ operation: string; resourceType: string }} Parsed operation and resource type
+ * @param methodName - RPC method name (e.g., "CreateWorkspace")
+ * @returns Parsed operation and resource type
  */
 export function parseMethodName(methodName: string): {
   operation: string;
@@ -197,8 +197,8 @@ export function parseMethodName(methodName: string): {
 
 /**
  * @internal
- * @param {unknown} message - Request message to format
- * @returns {string} Pretty-printed JSON or error placeholder
+ * @param message - Request message to format
+ * @returns Pretty-printed JSON or error placeholder
  */
 export function formatRequestParams(message: unknown): string {
   try {
@@ -214,8 +214,8 @@ export function formatRequestParams(message: unknown): string {
 /**
  * Fetch all paginated resources by repeatedly calling the given function.
  * @template T
- * @param {(pageToken: string) => Promise<[T[], string]>} fn - Page fetcher returning items and next page token
- * @returns {Promise<T[]>} All fetched items
+ * @param fn - Page fetcher returning items and next page token
+ * @returns All fetched items
  */
 export async function fetchAll<T>(fn: (pageToken: string) => Promise<[T[], string]>) {
   const items: T[] = [];
@@ -232,8 +232,8 @@ export async function fetchAll<T>(fn: (pageToken: string) => Promise<[T[], strin
 
 /**
  * Fetch user info from the Tailor Platform userinfo endpoint.
- * @param {string} accessToken - Access token for the current user
- * @returns {Promise<{ email: string }>} Parsed user info
+ * @param accessToken - Access token for the current user
+ * @returns Parsed user info
  */
 export async function fetchUserInfo(accessToken: string) {
   const userInfoUrl = new URL("/auth/platform/userinfo", platformBaseUrl).href;
@@ -257,11 +257,11 @@ export async function fetchUserInfo(accessToken: string) {
 // Converting "name:url" patterns to actual Static Website URLs
 /**
  * Resolve "name:url" patterns to actual Static Website URLs.
- * @param {OperatorClient} client - Operator client instance
- * @param {string} workspaceId - Workspace ID
- * @param {string[] | undefined} urls - URLs or name:url patterns
- * @param {string} context - Logging context (e.g., "CORS", "OAuth2 redirect URIs")
- * @returns {Promise<string[]>} Resolved URLs
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param urls - URLs or name:url patterns
+ * @param context - Logging context (e.g., "CORS", "OAuth2 redirect URIs")
+ * @returns Resolved URLs
  */
 export async function resolveStaticWebsiteUrls(
   client: OperatorClient,
@@ -312,10 +312,10 @@ export async function resolveStaticWebsiteUrls(
 
 /**
  * Fetch an OAuth2 access token for a machine user.
- * @param {string} url - OAuth2 server base URL
- * @param {string} clientId - Client ID for the machine user
- * @param {string} clientSecret - Client secret for the machine user
- * @returns {Promise<string>} Access token
+ * @param url - OAuth2 server base URL
+ * @param clientId - Client ID for the machine user
+ * @param clientSecret - Client secret for the machine user
+ * @returns Access token
  */
 export async function fetchMachineUserToken(url: string, clientId: string, clientSecret: string) {
   const tokenEndpoint = new URL("/oauth2/token", url).href;

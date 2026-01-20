@@ -15,10 +15,10 @@ export interface GetWorkflowOptions {
 
 /**
  * Resolve a workflow definition by name.
- * @param {Awaited<ReturnType<typeof initOperatorClient>>} client - Operator client
- * @param {string} workspaceId - Workspace ID
- * @param {string} name - Workflow name
- * @returns {Promise<unknown>} Resolved workflow
+ * @param client - Operator client
+ * @param workspaceId - Workspace ID
+ * @param name - Workflow name
+ * @returns Resolved workflow
  */
 export async function resolveWorkflow(
   client: Awaited<ReturnType<typeof initOperatorClient>>,
@@ -37,8 +37,8 @@ export async function resolveWorkflow(
 
 /**
  * Get a workflow by name and return CLI-friendly info.
- * @param {GetWorkflowOptions} options - Workflow lookup options
- * @returns {Promise<WorkflowInfo>} Workflow information
+ * @param options - Workflow lookup options
+ * @returns Workflow information
  */
 export async function getWorkflow(options: GetWorkflowOptions): Promise<WorkflowInfo> {
   const accessToken = await loadAccessToken({

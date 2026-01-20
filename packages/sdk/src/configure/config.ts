@@ -41,8 +41,8 @@ export const getDistDir = (): string => {
 /**
  * Define a Tailor SDK application configuration with shallow exactness.
  * @template Config
- * @param {Config} config - Application configuration
- * @returns {Config} The same configuration object
+ * @param config - Application configuration
+ * @returns The same configuration object
  */
 export function defineConfig<
   const Config extends AppConfig &
@@ -54,8 +54,8 @@ export function defineConfig<
 
 /**
  * Define generators to be used with the Tailor SDK.
- * @param {...GeneratorConfig} configs - Generator configurations
- * @returns {GeneratorConfig[]} Generator configurations as given
+ * @param configs - Generator configurations
+ * @returns Generator configurations as given
  */
 export function defineGenerators(...configs: GeneratorConfig[]) {
   return configs;

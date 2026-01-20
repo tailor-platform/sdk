@@ -440,8 +440,10 @@ export interface ScheduleArgs {
 /**
  * Create a schedule-based trigger using a CRON expression and optional timezone.
  * @template T
- * @param {{ cron: T; timezone?: Timezone }} options - Schedule options
- * @returns {ScheduleTrigger<ScheduleArgs>} Schedule trigger
+ * @param options - Schedule options
+ * @param options.cron
+ * @param options.timezone
+ * @returns Schedule trigger
  */
 export function scheduleTrigger<T extends string>({
   cron,

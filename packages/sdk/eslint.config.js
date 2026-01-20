@@ -18,8 +18,8 @@ export default defineConfig([
       reportUnusedDisableDirectives: "off",
     },
     rules: {
-      "jsdoc/require-param-type": "error",
-      "jsdoc/require-returns-type": "error",
+      "jsdoc/require-param-type": "off",
+      "jsdoc/require-returns-type": "off",
       "jsdoc/tag-lines": "error",
       "jsdoc/check-param-names": "error",
       "jsdoc/require-jsdoc": ["error", { publicOnly: true }],
@@ -183,15 +183,6 @@ export default defineConfig([
               name: "table",
               message:
                 "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/utils/format' instead of table for consistent table styling.",
-            },
-            {
-              name: "path",
-              message: "Use 'pathe' instead of 'path' for consistent cross-platform path handling.",
-            },
-            {
-              name: "node:path",
-              message:
-                "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling.",
             },
           ],
         },

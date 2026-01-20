@@ -23,10 +23,10 @@ function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 
 /**
  * Generate the contents of the user-defined type definition file.
- * @param {AttributeMapConfig | undefined} attributeMap - Attribute map configuration
- * @param {AttributeListConfig | undefined} attributeList - Attribute list configuration
- * @param {Record<string, string | number | boolean>} [env] - Environment configuration
- * @returns {string} Generated type definition source
+ * @param attributeMap - Attribute map configuration
+ * @param attributeList - Attribute list configuration
+ * @param [env] - Environment configuration
+ * @returns Generated type definition source
  */
 export function generateTypeDefinition(
   attributeMap: AttributeMapConfig | undefined,
@@ -166,8 +166,8 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 
 /**
  * Resolve the output path for the generated type definition file.
- * @param {string} configPath - Path to Tailor config file
- * @returns {string} Absolute path to the type definition file
+ * @param configPath - Path to Tailor config file
+ * @returns Absolute path to the type definition file
  */
 function resolveTypeDefinitionPath(configPath: string): string {
   // Check for environment variable override
@@ -195,9 +195,9 @@ function resolveTypeDefinitionPath(configPath: string): string {
 
 /**
  * Generate user type definitions from the app config and write them to disk.
- * @param {AppConfig} config - Application config
- * @param {string} configPath - Path to Tailor config file
- * @returns {Promise<void>} Promise that resolves when types are generated
+ * @param config - Application config
+ * @param configPath - Path to Tailor config file
+ * @returns Promise that resolves when types are generated
  */
 export async function generateUserTypes(config: AppConfig, configPath: string): Promise<void> {
   try {

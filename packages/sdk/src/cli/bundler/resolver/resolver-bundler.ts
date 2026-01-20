@@ -22,10 +22,10 @@ interface ResolverInfo {
  * 1. Uses a transform plugin to add validation wrapper during bundling
  * 2. Creates entry file
  * 3. Bundles in a single step with tree-shaking
- * @param {string} namespace - Resolver namespace name
- * @param {FileLoadConfig} config - Resolver file loading configuration
- * @param {TriggerContext} [triggerContext] - Trigger context for workflow/job transformations
- * @returns {Promise<void>} Promise that resolves when bundling completes
+ * @param namespace - Resolver namespace name
+ * @param config - Resolver file loading configuration
+ * @param [triggerContext] - Trigger context for workflow/job transformations
+ * @returns Promise that resolves when bundling completes
  */
 export async function bundleResolvers(
   namespace: string,

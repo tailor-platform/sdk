@@ -22,8 +22,8 @@ export interface WorkflowLoadResult {
 /**
  * Load workflow files and collect all jobs in a single pass.
  * Dependencies are detected at bundle time via AST analysis.
- * @param {WorkflowServiceConfig} config - Workflow service configuration
- * @returns {Promise<WorkflowLoadResult>} Loaded workflows and collected jobs
+ * @param config - Workflow service configuration
+ * @returns Loaded workflows and collected jobs
  */
 export async function loadAndCollectJobs(
   config: WorkflowServiceConfig,
@@ -86,7 +86,7 @@ export async function loadAndCollectJobs(
 
 /**
  * Print workflow loading logs.
- * @param {WorkflowLoadResult} result - Workflow load result to print
+ * @param result - Workflow load result to print
  */
 export function printLoadedWorkflows(result: WorkflowLoadResult): void {
   if (result.fileCount === 0) {
@@ -106,8 +106,8 @@ export function printLoadedWorkflows(result: WorkflowLoadResult): void {
 
 /**
  * Load a single file and extract jobs and workflow
- * @param {string} filePath - Path to the workflow file
- * @returns {Promise<{ jobs: Array<{ name: string; exportName: string; sourceFile: string }>; workflow: Workflow | null }>} Extracted jobs and workflow
+ * @param filePath - Path to the workflow file
+ * @returns Extracted jobs and workflow
  */
 async function loadFileContent(filePath: string): Promise<{
   jobs: Array<{ name: string; exportName: string; sourceFile: string }>;
@@ -159,8 +159,8 @@ async function loadFileContent(filePath: string): Promise<{
 
 /**
  * Check if a value is a WorkflowJob by looking for the brand symbol
- * @param {unknown} value - Value to check
- * @returns {boolean} True if the value is a branded WorkflowJob
+ * @param value - Value to check
+ * @returns True if the value is a branded WorkflowJob
  */
 function isWorkflowJob(value: unknown): boolean {
   return (

@@ -91,8 +91,8 @@ async function getTypeNamespace(
 
 /**
  * Truncate TailorDB data based on the given options.
- * @param {TruncateOptions} [options] - Truncate options (all, namespace, or types)
- * @returns {Promise<void>} Promise that resolves when truncation completes
+ * @param [options] - Truncate options (all, namespace, or types)
+ * @returns Promise that resolves when truncation completes
  */
 export async function truncate(options?: TruncateOptions): Promise<void> {
   // Load and validate options

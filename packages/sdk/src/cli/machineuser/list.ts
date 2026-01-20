@@ -23,8 +23,8 @@ export interface MachineUserInfo {
 
 /**
  * Map a MachineUser protobuf message to CLI-friendly info.
- * @param {MachineUser} user - Machine user resource
- * @returns {MachineUserInfo} Flattened machine user info
+ * @param user - Machine user resource
+ * @returns Flattened machine user info
  */
 function machineUserInfo(user: MachineUser): MachineUserInfo {
   return {
@@ -38,8 +38,8 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
 
 /**
  * List machine users for the current application.
- * @param {ListMachineUsersOptions} [options] - Machine user listing options
- * @returns {Promise<MachineUserInfo[]>} List of machine users
+ * @param [options] - Machine user listing options
+ * @returns List of machine users
  */
 export async function listMachineUsers(
   options?: ListMachineUsersOptions,

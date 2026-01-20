@@ -5,11 +5,11 @@ import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /**
  * Processes TailorDB types to generate lines-db metadata
- * @param {ParsedTailorDBType} type - Parsed TailorDB type
- * @param {{ filePath: string; exportName: string }} source - Source file info
- * @param {string} source.filePath - Source file path
- * @param {string} source.exportName - Source export name
- * @returns {LinesDbMetadata} Generated lines-db metadata
+ * @param type - Parsed TailorDB type
+ * @param source - Source file info
+ * @param source.filePath - Source file path
+ * @param source.exportName - Source export name
+ * @returns Generated lines-db metadata
  */
 export function processLinesDb(
   type: ParsedTailorDBType,
@@ -79,9 +79,9 @@ export function processLinesDb(
 
 /**
  * Generates the schema file content for lines-db
- * @param {LinesDbMetadata} metadata - lines-db metadata
- * @param {string} importPath - Import path for the TailorDB type
- * @returns {string} Schema file contents
+ * @param metadata - lines-db metadata
+ * @param importPath - Import path for the TailorDB type
+ * @returns Schema file contents
  */
 export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath: string): string {
   const { exportName, optionalFields, omitFields, foreignKeys, indexes } = metadata;

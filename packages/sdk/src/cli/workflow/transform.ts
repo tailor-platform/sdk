@@ -45,8 +45,8 @@ export interface WorkflowExecutionInfo {
 
 /**
  * Convert a workflow execution status enum to a string.
- * @param {WorkflowExecution_Status} status - Workflow execution status
- * @returns {string} String representation of the status
+ * @param status - Workflow execution status
+ * @returns String representation of the status
  */
 function workflowExecutionStatusToString(status: WorkflowExecution_Status): string {
   switch (status) {
@@ -67,8 +67,8 @@ function workflowExecutionStatusToString(status: WorkflowExecution_Status): stri
 
 /**
  * Convert a workflow job execution status enum to a string.
- * @param {WorkflowJobExecution_Status} status - Workflow job execution status
- * @returns {string} String representation of the status
+ * @param status - Workflow job execution status
+ * @returns String representation of the status
  */
 function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status): string {
   switch (status) {
@@ -87,8 +87,8 @@ function workflowJobExecutionStatusToString(status: WorkflowJobExecution_Status)
 
 /**
  * Convert a Workflow proto to CLI-friendly list info.
- * @param {Workflow} workflow - Workflow resource
- * @returns {WorkflowListInfo} Flattened workflow list info
+ * @param workflow - Workflow resource
+ * @returns Flattened workflow list info
  */
 export function toWorkflowListInfo(workflow: Workflow): WorkflowListInfo {
   return {
@@ -101,8 +101,8 @@ export function toWorkflowListInfo(workflow: Workflow): WorkflowListInfo {
 
 /**
  * Convert a Workflow proto to detailed workflow info for CLI output.
- * @param {Workflow} workflow - Workflow resource
- * @returns {WorkflowInfo} Detailed workflow info
+ * @param workflow - Workflow resource
+ * @returns Detailed workflow info
  */
 export function toWorkflowInfo(workflow: Workflow): WorkflowInfo {
   const jobFunctions: Record<string, string> = {};
@@ -122,8 +122,8 @@ export function toWorkflowInfo(workflow: Workflow): WorkflowInfo {
 
 /**
  * Convert a WorkflowJobExecution proto to CLI-friendly job execution info.
- * @param {WorkflowJobExecution} jobExecution - Workflow job execution resource
- * @returns {WorkflowJobExecutionInfo} Flattened job execution info
+ * @param jobExecution - Workflow job execution resource
+ * @returns Flattened job execution info
  */
 export function toWorkflowJobExecutionInfo(
   jobExecution: WorkflowJobExecution,
@@ -142,8 +142,8 @@ export function toWorkflowJobExecutionInfo(
 
 /**
  * Convert a WorkflowExecution proto to CLI-friendly execution info.
- * @param {WorkflowExecution} execution - Workflow execution resource
- * @returns {WorkflowExecutionInfo} Flattened execution info
+ * @param execution - Workflow execution resource
+ * @returns Flattened execution info
  */
 export function toWorkflowExecutionInfo(execution: WorkflowExecution): WorkflowExecutionInfo {
   return {

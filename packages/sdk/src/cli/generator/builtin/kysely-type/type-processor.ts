@@ -8,8 +8,8 @@ import type { OperatorFieldConfig, ParsedTailorDBType } from "@/parser/service/t
 export class TypeProcessor {
   /**
    * Convert a ParsedTailorDBType into KyselyTypeMetadata.
-   * @param {ParsedTailorDBType} type - Parsed TailorDB type
-   * @returns {Promise<KyselyTypeMetadata>} Generated Kysely type metadata
+   * @param type - Parsed TailorDB type
+   * @returns Generated Kysely type metadata
    */
   static async processType(type: ParsedTailorDBType): Promise<KyselyTypeMetadata> {
     const result = this.generateTableInterface(type);
@@ -23,8 +23,8 @@ export class TypeProcessor {
 
   /**
    * Generate the table interface.
-   * @param {ParsedTailorDBType} type - Parsed TailorDB type
-   * @returns {{ typeDef: string; usedUtilityTypes: { Timestamp: boolean; Serial: boolean } }} Table interface code and used utility types
+   * @param type - Parsed TailorDB type
+   * @returns Table interface code and used utility types
    */
   private static generateTableInterface(type: ParsedTailorDBType): {
     typeDef: string;
@@ -61,8 +61,8 @@ export class TypeProcessor {
 
   /**
    * Generate the complete field type including array and null modifiers.
-   * @param {OperatorFieldConfig} fieldConfig - Parsed field configuration
-   * @returns {{ type: string; usedUtilityTypes: { Timestamp: boolean; Serial: boolean } }} Field type and used utility types
+   * @param fieldConfig - Parsed field configuration
+   * @returns Field type and used utility types
    */
   private static generateFieldType(fieldConfig: OperatorFieldConfig): {
     type: string;
@@ -97,8 +97,8 @@ export class TypeProcessor {
 
   /**
    * Get the base Kysely type for a field (without array/null modifiers).
-   * @param {OperatorFieldConfig} fieldConfig - Parsed field configuration
-   * @returns {{ type: string; usedUtilityTypes: { Timestamp: boolean; Serial: boolean } }} Base field type and used utility types
+   * @param fieldConfig - Parsed field configuration
+   * @returns Base field type and used utility types
    */
   private static getBaseType(fieldConfig: OperatorFieldConfig): {
     type: string;
@@ -143,8 +143,8 @@ export class TypeProcessor {
 
   /**
    * Get the enum type definition.
-   * @param {OperatorFieldConfig} fieldConfig - Parsed field configuration
-   * @returns {string} Enum type definition
+   * @param fieldConfig - Parsed field configuration
+   * @returns Enum type definition
    */
   private static getEnumType(fieldConfig: OperatorFieldConfig): string {
     const allowedValues = fieldConfig.allowedValues;
@@ -162,8 +162,8 @@ export class TypeProcessor {
 
   /**
    * Get the nested object type definition.
-   * @param {OperatorFieldConfig} fieldConfig - Parsed field configuration
-   * @returns {{ type: string; usedUtilityTypes: { Timestamp: boolean; Serial: boolean } }} Nested object type and used utility types
+   * @param fieldConfig - Parsed field configuration
+   * @returns Nested object type and used utility types
    */
   private static getNestedType(fieldConfig: OperatorFieldConfig): {
     type: string;
@@ -198,8 +198,8 @@ export class TypeProcessor {
 
   /**
    * Generate unified types file from multiple namespaces.
-   * @param {KyselyNamespaceMetadata[]} namespaceData - Namespace metadata
-   * @returns {string} Generated types file contents
+   * @param namespaceData - Namespace metadata
+   * @returns Generated types file contents
    */
   static generateUnifiedTypes(namespaceData: KyselyNamespaceMetadata[]): string {
     if (namespaceData.length === 0) {

@@ -17,10 +17,10 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 /**
  * Apply application changes for the given phase.
- * @param {OperatorClient} client - Operator client instance
- * @param {ReturnType<typeof planApplication>} changeSet - Planned application changes
- * @param {"create-update" | "delete"} [phase="create-update"] - Apply phase
- * @returns {Promise<void>} Promise that resolves when applications are applied
+ * @param client - Operator client instance
+ * @param changeSet - Planned application changes
+ * @param [phase="create-update"] - Apply phase
+ * @returns Promise that resolves when applications are applied
  */
 export async function applyApplication(
   client: OperatorClient,
@@ -85,8 +85,12 @@ function trn(workspaceId: string, name: string) {
 
 /**
  * Plan application changes based on current and desired state.
- * @param {PlanContext} context - Planning context
- * @returns {Promise<ChangeSet<CreateApplication, UpdateApplication, DeleteApplication>>} Planned changes
+ * @param context - Planning context
+ * @param context.client
+ * @param context.workspaceId
+ * @param context.application
+ * @param context.forRemoval
+ * @returns Planned changes
  */
 export async function planApplication({
   client,

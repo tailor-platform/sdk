@@ -54,10 +54,10 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 /**
  * Apply TailorDB-related changes for the given phase.
- * @param {OperatorClient} client - Operator client instance
- * @param {Awaited<ReturnType<typeof planTailorDB>>} result - Planned TailorDB changes
- * @param {Exclude<ApplyPhase, "delete">} [phase] - Apply phase (defaults to "create-update")
- * @returns {Promise<void>} Promise that resolves when TailorDB changes are applied
+ * @param client - Operator client instance
+ * @param result - Planned TailorDB changes
+ * @param [phase] - Apply phase (defaults to "create-update")
+ * @returns Promise that resolves when TailorDB changes are applied
  */
 export async function applyTailorDB(
   client: OperatorClient,
@@ -109,8 +109,12 @@ export async function applyTailorDB(
 
 /**
  * Plan TailorDB-related changes based on current and desired state.
- * @param {PlanContext} context - Planning context
- * @returns {Promise<unknown>} Planned changes
+ * @param context - Planning context
+ * @param context.client
+ * @param context.workspaceId
+ * @param context.application
+ * @param context.forRemoval
+ * @returns Planned changes
  */
 export async function planTailorDB({ client, workspaceId, application, forRemoval }: PlanContext) {
   const tailordbs: TailorDBService[] = [];

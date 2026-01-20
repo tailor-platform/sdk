@@ -48,10 +48,10 @@ const SCALAR_TYPE_MAP = {
 
 /**
  * Apply resolver pipeline changes for the given phase.
- * @param {OperatorClient} client - Operator client instance
- * @param {Awaited<ReturnType<typeof planPipeline>>} result - Planned pipeline changes
- * @param {Exclude<ApplyPhase, "delete">} [phase="create-update"] - Apply phase
- * @returns {Promise<void>} Promise that resolves when pipeline changes are applied
+ * @param client - Operator client instance
+ * @param result - Planned pipeline changes
+ * @param [phase="create-update"] - Apply phase
+ * @returns Promise that resolves when pipeline changes are applied
  */
 export async function applyPipeline(
   client: OperatorClient,
@@ -93,8 +93,12 @@ export async function applyPipeline(
 
 /**
  * Plan resolver pipeline changes based on current and desired state.
- * @param {PlanContext} context - Planning context
- * @returns {Promise<unknown>} Planned changes
+ * @param context - Planning context
+ * @param context.client
+ * @param context.workspaceId
+ * @param context.application
+ * @param context.forRemoval
+ * @returns Planned changes
  */
 export async function planPipeline({ client, workspaceId, application, forRemoval }: PlanContext) {
   const pipelines: Readonly<ResolverService>[] = [];

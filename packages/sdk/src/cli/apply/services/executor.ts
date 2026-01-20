@@ -27,10 +27,10 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 /**
  * Apply executor-related changes for the given phase.
- * @param {OperatorClient} client - Operator client instance
- * @param {Awaited<ReturnType<typeof planExecutor>>} result - Planned executor changes
- * @param {Extract<ApplyPhase, "create-update" | "delete">} [phase] - Apply phase (defaults to "create-update")
- * @returns {Promise<void>} Promise that resolves when executors are applied
+ * @param client - Operator client instance
+ * @param result - Planned executor changes
+ * @param [phase] - Apply phase (defaults to "create-update")
+ * @returns Promise that resolves when executors are applied
  */
 export async function applyExecutor(
   client: OperatorClient,
@@ -80,8 +80,12 @@ function trn(workspaceId: string, name: string) {
 
 /**
  * Plan executor-related changes based on current and desired state.
- * @param {PlanContext} context - Planning context
- * @returns {Promise<ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>>} Planned changes
+ * @param context - Planning context
+ * @param context.client
+ * @param context.workspaceId
+ * @param context.application
+ * @param context.forRemoval
+ * @returns Planned changes
  */
 export async function planExecutor({ client, workspaceId, application, forRemoval }: PlanContext) {
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> = new ChangeSet(
@@ -180,8 +184,8 @@ export async function planExecutor({ client, workspaceId, application, forRemova
 /**
  * Build args expression for resolverExecuted trigger.
  * Transforms server's succeeded/failed fields to success/result/error fields.
- * @param {string} [additionalFields] - Additional fields to include in the args expression
- * @returns {string} JavaScript expression for resolverExecuted trigger args
+ * @param [additionalFields] - Additional fields to include in the args expression
+ * @returns JavaScript expression for resolverExecuted trigger args
  */
 function buildResolverExecutedArgsExpr(additionalFields?: string): string {
   const baseFields = `...args, appNamespace: args.namespaceName, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error`;

@@ -13,11 +13,11 @@ export interface ErdCommandContext {
 
 /**
  * Initialize shared ERD command context.
- * @param {{ profile?: string; workspaceId?: string; config?: string }} args - CLI arguments.
- * @param {string | undefined} args.profile - Workspace profile.
- * @param {string | undefined} args.workspaceId - Workspace ID override.
- * @param {string | undefined} args.config - Config path override.
- * @returns {Promise<ErdCommandContext>} Initialized context.
+ * @param args - CLI arguments.
+ * @param args.profile - Workspace profile.
+ * @param args.workspaceId - Workspace ID override.
+ * @param args.config - Config path override.
+ * @returns Initialized context.
  */
 export async function initErdContext(args: {
   profile?: string;

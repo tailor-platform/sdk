@@ -18,9 +18,9 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 /**
  * Build the vault name for an IdP client.
- * @param {string} namespaceName - IdP namespace name
- * @param {string} clientName - IdP client name
- * @returns {string} Vault name
+ * @param namespaceName - IdP namespace name
+ * @param clientName - IdP client name
+ * @returns Vault name
  */
 export function idpClientVaultName(namespaceName: string, clientName: string) {
   return `idp-${namespaceName}-${clientName}`;
@@ -28,9 +28,9 @@ export function idpClientVaultName(namespaceName: string, clientName: string) {
 
 /**
  * Build the secret name for an IdP client.
- * @param {string} namespaceName - IdP namespace name
- * @param {string} clientName - IdP client name
- * @returns {string} Secret name
+ * @param namespaceName - IdP namespace name
+ * @param clientName - IdP client name
+ * @returns Secret name
  */
 export function idpClientSecretName(namespaceName: string, clientName: string) {
   return `client-secret-${namespaceName}-${clientName}`;
@@ -38,10 +38,10 @@ export function idpClientSecretName(namespaceName: string, clientName: string) {
 
 /**
  * Apply IdP-related changes for the given phase.
- * @param {OperatorClient} client - Operator client instance
- * @param {Awaited<ReturnType<typeof planIdP>>} result - Planned IdP changes
- * @param {Exclude<ApplyPhase, "delete">} [phase="create-update"] - Apply phase
- * @returns {Promise<void>} Promise that resolves when IdP changes are applied
+ * @param client - Operator client instance
+ * @param result - Planned IdP changes
+ * @param [phase="create-update"] - Apply phase
+ * @returns Promise that resolves when IdP changes are applied
  */
 export async function applyIdP(
   client: OperatorClient,
@@ -137,8 +137,12 @@ export async function applyIdP(
 
 /**
  * Plan IdP-related changes based on current and desired state.
- * @param {PlanContext} context - Planning context
- * @returns {Promise<unknown>} Planned changes and metadata
+ * @param context - Planning context
+ * @param context.client
+ * @param context.workspaceId
+ * @param context.application
+ * @param context.forRemoval
+ * @returns Planned changes and metadata
  */
 export async function planIdP({ client, workspaceId, application, forRemoval }: PlanContext) {
   const idps = forRemoval ? [] : application.idpServices;

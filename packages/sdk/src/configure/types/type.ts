@@ -112,11 +112,11 @@ export class TailorField<
   /**
    * Parse and validate a value against this field's validation rules
    * Returns StandardSchema Result type with success or failure
-   * @param {{ value: unknown; data: unknown; user: TailorUser }} args - Value, context data, and user
-   * @param {unknown} args.value - Value to validate
-   * @param {unknown} args.data - Context data
-   * @param {TailorUser} args.user - Tailor user information
-   * @returns {StandardSchemaV1.Result<Output>} Validation result
+   * @param args - Value, context data, and user
+   * @param args.value - Value to validate
+   * @param args.data - Context data
+   * @param args.user - Tailor user information
+   * @returns Validation result
    */
   parse(args: {
     value: unknown;
@@ -135,12 +135,12 @@ export class TailorField<
    * Validate a single value (not an array element)
    * Used internally for array element validation
    * @private
-   * @param {{ value: TailorToTs[T]; data: unknown; user: TailorUser; pathArray: string[] }} args - Validation arguments
-   * @param {TailorToTs[T]} args.value - Value to validate
-   * @param {unknown} args.data - Context data
-   * @param {TailorUser} args.user - Tailor user information
-   * @param {string[]} args.pathArray - Field path array for nested validation
-   * @returns {StandardSchemaV1.Issue[]} Validation issues
+   * @param args - Validation arguments
+   * @param args.value - Value to validate
+   * @param args.data - Context data
+   * @param args.user - Tailor user information
+   * @param args.pathArray - Field path array for nested validation
+   * @returns Validation issues
    */
   private _validateValue(args: {
     value: TailorToTs[T];
@@ -286,12 +286,12 @@ export class TailorField<
   /**
    * Internal parse method that tracks field path for nested validation
    * @private
-   * @param {{ value: unknown; data: unknown; user: TailorUser; pathArray: string[] }} args - Parse arguments
-   * @param {unknown} args.value - Value to parse
-   * @param {unknown} args.data - Context data
-   * @param {TailorUser} args.user - Tailor user information
-   * @param {string[]} args.pathArray - Field path array for nested validation
-   * @returns {StandardSchemaV1.Result<Output>} Validation result
+   * @param args - Parse arguments
+   * @param args.value - Value to parse
+   * @param args.data - Context data
+   * @param args.user - Tailor user information
+   * @param args.pathArray - Field path array for nested validation
+   * @returns Validation result
    */
   private _parseInternal(args: {
     // Runtime input is unknown/untyped; we validate and narrow it inside the parser.

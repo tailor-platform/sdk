@@ -34,8 +34,8 @@ const durationSchema = z
 
 /**
  * Parse a duration string (e.g., "3s", "500ms", "1m") to milliseconds
- * @param {string} duration - Duration string with unit suffix (ms, s, m)
- * @returns {number} Duration in milliseconds
+ * @param duration - Duration string with unit suffix (ms, s, m)
+ * @returns Duration in milliseconds
  */
 export function parseDuration(duration: string): number {
   return durationSchema.parse(duration);
@@ -54,8 +54,8 @@ type EnvFileArg = string | string[] | undefined;
  * Follows Node.js --env-file behavior:
  * - Variables already set in the environment are NOT overwritten
  * - Variables from later files override those from earlier files
- * @param {EnvFileArg} envFiles - Required env file path(s) that must exist
- * @param {EnvFileArg} envFilesIfExists - Optional env file path(s) that are loaded if they exist
+ * @param envFiles - Required env file path(s) that must exist
+ * @param envFilesIfExists - Optional env file path(s) that are loaded if they exist
  */
 export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg): void {
   // Snapshot of originally set environment variables (before loading any files)
@@ -174,8 +174,8 @@ export const jsonArgs = {
  * - Error handling with formatted output
  * - Exit code management
  * @template T
- * @param {(args: T) => Promise<void>} handler - Command handler function
- * @returns {(ctx: { args: T }) => Promise<void>} Wrapped handler
+ * @param handler - Command handler function
+ * @returns Wrapped handler
  */
 export const withCommonArgs =
   <T extends ParsedArgs<typeof commonArgs>>(handler: (args: T) => Promise<void>) =>
