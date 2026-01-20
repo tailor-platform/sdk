@@ -54,7 +54,7 @@
     "no-unexpected-multiline": "error",
     "no-unsafe-finally": "error",
     "no-unsafe-negation": "error",
-    "no-unsafe-optional-chaining": "off",
+    "no-unsafe-optional-chaining": "error",
     "no-unused-labels": "error",
     "no-unused-private-class-members": "error",
     "no-unused-vars": "error",
@@ -65,15 +65,7 @@
     "require-yield": "error",
     "use-isnan": "error",
     "valid-typeof": "error",
-    "@typescript-eslint/ban-ts-comment": [
-      "error",
-      {
-        "ts-ignore": "allow-with-description",
-        "ts-expect-error": "allow-with-description",
-        "ts-nocheck": "ban",
-        "ts-check": "ban"
-      }
-    ],
+    "@typescript-eslint/ban-ts-comment": "error",
     "no-array-constructor": "error",
     "@typescript-eslint/no-duplicate-enum-values": "error",
     "@typescript-eslint/no-empty-object-type": "error",
@@ -103,6 +95,7 @@
     "jsdoc/empty-tags": "warn",
     "jsdoc/implements-on-classes": "warn",
     "jsdoc/no-defaults": "warn",
+    "jsdoc/require-param": "error",
     "jsdoc/require-param-description": "warn",
     "jsdoc/require-param-name": "warn",
     "jsdoc/require-param-type": "error",
@@ -149,7 +142,12 @@
           }
         ],
         "@typescript-eslint/no-explicit-any": "warn",
-        "import/no-cycle": "error",
+        "import/no-cycle": [
+          "error",
+          {
+            "maxDepth": null
+          }
+        ],
         "no-unused-vars": [
           "error",
           {
@@ -160,9 +158,70 @@
       }
     },
     {
+      "files": ["src/configure/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Configure module should not import from cli module."
+              },
+              {
+                "group": ["**/parser/**", "@/parser/**"],
+                "message": "Configure module should not import from parser module."
+              },
+              {
+                "group": ["**/parser/**/types", "@/parser/**/types"],
+                "allowTypeImports": true,
+                "message": "Configure module should not import from parser module."
+              },
+              {
+                "group": ["zod"],
+                "allowTypeImports": true,
+                "message": "Configure module can import only types from zod module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/parser/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Parser module should not import from cli module."
+              },
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Parser module should not import from configure module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/parser/**/types.ts"],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**"],
+                "allowTypeImports": true,
+                "message": "types.ts can import only types."
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -200,12 +259,6 @@
             ]
           }
         ]
-      }
-    },
-    {
-      "files": ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts", "src/cli/utils/format.ts"],
-      "rules": {
-        "no-restricted-imports": "off"
       }
     },
     {
