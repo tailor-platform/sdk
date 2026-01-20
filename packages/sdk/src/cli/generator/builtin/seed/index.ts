@@ -208,21 +208,18 @@ ${entityDependenciesEntries}
           await truncate({
             configPath,
             namespace: values.namespace,
-            yes: true,
           });
         } else if (hasTypes) {
           // Truncate specific types
           await truncate({
             configPath,
             types: entitiesToProcess || positionals,
-            yes: true,
           });
         } else {
           // Truncate all (--skip-idp does not affect truncation)
           await truncate({
             configPath,
             all: true,
-            yes: true,
           });
         }
         console.log(styleText("green", "Truncate completed.\\n"));
@@ -286,6 +283,7 @@ ${entityDependenciesEntries}
       console.error(styleText("red", \`\\n✗ Seed data generation failed with error: \${error.message}\`));
       process.exit(1);
     }
+
     `;
 }
 
