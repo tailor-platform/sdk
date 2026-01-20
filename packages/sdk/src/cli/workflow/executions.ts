@@ -306,7 +306,6 @@ async function waitWithSpinner(
 /**
  * Print a workflow execution and its logs in a human-readable format.
  * @param execution - Workflow execution detail info
- * @returns
  */
 export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
   // Print execution summary

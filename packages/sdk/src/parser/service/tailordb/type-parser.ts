@@ -134,7 +134,6 @@ function parseTailorDBType(
  * @param types - Parsed types
  * @param namespace - TailorDB namespace name
  * @param [typeSourceInfo] - Optional type source information
- * @returns
  */
 function buildBackwardRelationships(
   types: Record<string, ParsedTailorDBType>,
@@ -255,7 +254,6 @@ function buildBackwardRelationships(
  * @param types - Parsed types
  * @param namespace - TailorDB namespace name
  * @param [typeSourceInfo] - Optional type source information
- * @returns
  */
 function validatePluralFormUniqueness(
   types: Record<string, ParsedTailorDBType>,

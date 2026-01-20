@@ -50,7 +50,6 @@ function getScopeStringsFromWriteFlag(write: boolean): string[] {
  * @param token - Token value
  * @param write - Whether the token has write scope
  * @param action - Action performed
- * @returns
  */
 export function printCreatedToken(
   name: string,

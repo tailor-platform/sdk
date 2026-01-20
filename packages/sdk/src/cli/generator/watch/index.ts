@@ -499,7 +499,6 @@ class DependencyWatcher {
   /**
    * Set the error handling callback.
    * @param callback - Error callback
-   * @returns
    */
   onError(callback: ErrorCallback): void {
     this.errorCallback = callback;
@@ -714,7 +713,6 @@ class DependencyWatcher {
 
   /**
    * Register signal handlers.
-   * @returns
    */
   private setupSignalHandlers(): void {
     if (this.signalHandlersRegistered) return;
@@ -737,7 +735,6 @@ class DependencyWatcher {
 
   /**
    * Remove signal handlers.
-   * @returns
    */
   private removeSignalHandlers(): void {
     if (!this.signalHandlersRegistered) return;

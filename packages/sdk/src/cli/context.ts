@@ -63,7 +63,6 @@ export function readPlatformConfig(): PfConfig {
 /**
  * Write Tailor Platform CLI configuration to disk.
  * @param config - Platform configuration to write
- * @returns
  */
 export function writePlatformConfig(config: PfConfig) {
   const configPath = platformConfigPath();

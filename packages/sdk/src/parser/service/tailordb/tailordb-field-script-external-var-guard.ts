@@ -42,7 +42,6 @@ const eslintConfig: Linter.Config = {
  * Ensure that a TailorDB script expression does not reference external variables.
  * @param expr - JavaScript expression to validate
  * @param ctx - Script context (type, field, kind)
- * @returns
  */
 function ensureNoExternalVariablesInScript(expr: string, ctx: ScriptContext): void {
   if (!expr.trim()) return;
@@ -84,7 +83,6 @@ type TailorDBFieldConfig = ParsedField["config"];
  * @param typeName - TailorDB type name
  * @param fieldName - Field name
  * @param fieldConfig - Parsed field configuration
- * @returns
  */
 export function ensureNoExternalVariablesInFieldScripts(
   typeName: string,
