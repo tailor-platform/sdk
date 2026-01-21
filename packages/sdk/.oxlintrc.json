@@ -99,7 +99,12 @@
     "import/no-duplicates": "warn",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
-    "jsdoc/check-tag-names": "warn",
+    "jsdoc/check-tag-names": [
+      "warn",
+      {
+        "definedTags": ["tailor-platform/sdk"]
+      }
+    ],
     "jsdoc/empty-tags": "warn",
     "jsdoc/implements-on-classes": "warn",
     "jsdoc/no-defaults": "warn",

@@ -29,7 +29,7 @@ export interface TriggerCall {
 }
 
 /**
- * Find all workflow jobs by detecting createWorkflowJob calls from \@tailor-platform/sdk
+ * Find all workflow jobs by detecting createWorkflowJob calls from @tailor-platform/sdk
  * @param program - Parsed TypeScript program
  * @param _sourceText - Source code text (currently unused)
  * @returns Detected job locations

@@ -15,7 +15,7 @@ export interface WorkflowLocation {
 }
 
 /**
- * Find all workflows by detecting createWorkflow calls from \@tailor-platform/sdk
+ * Find all workflows by detecting createWorkflow calls from @tailor-platform/sdk
  * @param program - Parsed TypeScript program
  * @param _sourceText - Source code text (currently unused)
  * @returns Detected workflows
