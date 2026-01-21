@@ -1,16 +1,17 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { sdkNameLabelKey } from "./label";
-import { applyTailorDB, planTailorDB } from "./tailordb";
-import type { PlanContext } from "../index";
+import { sdkNameLabelKey } from "../label";
+import { applyTailorDB, planTailorDB } from ".";
+import type { PlanContext } from "../../index";
 import type { Application } from "@/cli/application";
 import type { ExecutorService } from "@/cli/application/executor/service";
 import type { TailorDBService } from "@/cli/application/tailordb/service";
 import type { OperatorClient } from "@/cli/client";
+import type { LoadedConfig } from "@/cli/config-loader";
 
 // Mock label.ts
-vi.mock("./label", async (importOriginal) => {
+vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./label");
+  const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
     buildMetaRequest: vi.fn().mockResolvedValue({
@@ -24,9 +25,9 @@ vi.mock("./label", async (importOriginal) => {
 });
 
 // Mock createChangeSet to suppress output in tests
-vi.mock("./index", async (importOriginal) => {
+vi.mock("../index", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./index");
+  const original = (await importOriginal()) as typeof import("../index");
   return {
     ...original,
     createChangeSet: (title: string) => ({
@@ -35,6 +36,9 @@ vi.mock("./index", async (importOriginal) => {
     }),
   };
 });
+
+// Mock config values for tests
+const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 describe("planTailorDB (service level)", () => {
   const workspaceId = "test-workspace";
@@ -118,6 +122,7 @@ describe("planTailorDB (service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planTailorDB(ctx);
@@ -147,6 +152,7 @@ describe("planTailorDB (service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planTailorDB(ctx);
@@ -173,6 +179,7 @@ describe("planTailorDB (service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planTailorDB(ctx);
@@ -198,6 +205,7 @@ describe("planTailorDB (service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planTailorDB(ctx);
@@ -215,6 +223,7 @@ describe("planTailorDB (service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planTailorDB(ctx);
@@ -237,6 +246,7 @@ describe("planTailorDB (service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planTailorDB(ctx);
@@ -266,6 +276,13 @@ describe("applyTailorDB phase separation", () => {
 
   // Helper to create a mock plan result with deletes
   function createMockPlanResult() {
+    // Create mock TailorDB service for context
+    const mockTailorDBService = {
+      namespace: "test-tailordb",
+      loadTypes: vi.fn().mockResolvedValue({}),
+      getTypes: vi.fn().mockReturnValue({}),
+    } as unknown as TailorDBService;
+
     return {
       changeSet: {
         service: {
@@ -322,6 +339,15 @@ describe("applyTailorDB phase separation", () => {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
+      context: {
+        workspaceId: "test-workspace",
+        application: {
+          name: "test-app",
+          tailorDBServices: [mockTailorDBService],
+        } as unknown as Application,
+        config: mockConfig,
+        noSchemaCheck: true, // Skip migration checks in unit tests
+      },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
 
@@ -329,19 +355,8 @@ describe("applyTailorDB phase separation", () => {
     vi.clearAllMocks();
   });
 
-  test("delete-resources phase deletes gqlPermissions and types, but NOT services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
-
-    await applyTailorDB(client, planResult, "delete-resources");
-
-    // GQLPermissions should be deleted
-    expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(1);
-    // Types should be deleted
-    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
-    // Services should NOT be deleted
-    expect(client.deleteTailorDBService).not.toHaveBeenCalled();
-  });
+  // NOTE: delete-resources phase was removed as TailorDB handles deletions
+  // internally within create-update phase (for migration flow support)
 
   test("delete-services phase deletes ONLY services", async () => {
     const client = createMockClientWithSpies();
@@ -357,15 +372,16 @@ describe("applyTailorDB phase separation", () => {
     expect(client.deleteTailorDBService).toHaveBeenCalledTimes(1);
   });
 
-  test("create-update phase does not delete anything", async () => {
+  test("create-update phase deletes GQLPermissions and Types but not Services", async () => {
     const client = createMockClientWithSpies();
     const planResult = createMockPlanResult();
 
     await applyTailorDB(client, planResult, "create-update");
 
-    // No deletes should happen in create-update phase
-    expect(client.deleteTailorDBGQLPermission).not.toHaveBeenCalled();
-    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    // GQLPermissions and Types should be deleted in create-update phase (when no migrations)
+    expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(1);
+    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
+    // Services should NOT be deleted in create-update phase
     expect(client.deleteTailorDBService).not.toHaveBeenCalled();
   });
 });
