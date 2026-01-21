@@ -100,7 +100,7 @@
     "@vitest/coverage-v8": "4.0.17",
     "cross-env": "10.1.0",
     "eslint": "9.39.2",
-    "eslint-plugin-jsdoc": "62.0.0",
+    "eslint-plugin-jsdoc": "62.1.0",
     "eslint-plugin-oxlint": "1.39.0",
     "globals": "17.0.0",
     "oxlint": "1.39.0",
