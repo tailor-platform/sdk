@@ -68,10 +68,6 @@ function trn(workspaceId: string, name: string) {
 /**
  * Plan static website changes based on current and desired state.
  * @param context - Planning context
- * @param context.client
- * @param context.workspaceId
- * @param context.application
- * @param context.forRemoval
  * @returns Planned changes
  */
 export async function planStaticWebsite({

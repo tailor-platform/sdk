@@ -257,7 +257,6 @@ export type FullCodeGenerator<
  * Type guard to check if a generator has a specific dependency.
  * @template D
  * @param generator - Code generator instance
- * @param generator.dependencies - Generator dependencies
  * @param dependency - Dependency kind to check
  * @returns True if the generator has the dependency
  */

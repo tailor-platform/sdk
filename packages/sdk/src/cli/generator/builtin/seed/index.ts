@@ -57,8 +57,6 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
  * Factory function to create a Seed generator.
  * Combines GraphQL Ingest and lines-db schema generation.
  * @param options - Seed generator options
- * @param options.distPath - Output directory for generated files
- * @param [options.machineUserName] - Machine user name for seeding
  * @returns Seed generator
  */
 export function createSeedGenerator(options: {

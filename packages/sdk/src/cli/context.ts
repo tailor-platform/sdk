@@ -151,8 +151,6 @@ function validateUUID(value: string, source: string): string {
  * Load workspace ID from command options, environment variables, or platform config.
  * Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
  * @param [opts] - Workspace and profile options
- * @param [opts.workspaceId] - Workspace ID
- * @param [opts.profile] - Workspace profile name
  * @returns Resolved workspace ID
  */
 export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string }): string {
@@ -191,8 +189,6 @@ export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string 
  * Load access token from command options, environment variables, or platform config.
  * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
  * @param [opts] - Profile options
- * @param [opts.useProfile] - Whether to use profile resolution
- * @param [opts.profile] - Profile name
  * @returns Resolved access token
  */
 export async function loadAccessToken(opts?: { useProfile?: boolean; profile?: string }) {

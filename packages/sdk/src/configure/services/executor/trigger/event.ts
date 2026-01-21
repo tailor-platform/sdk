@@ -53,8 +53,6 @@ export type RecordTrigger<Args> = ParserRecordTrigger & {
  * Create a trigger that fires when a TailorDB record is created.
  * @template T
  * @param options - Trigger options
- * @param options.type
- * @param options.condition
  * @returns Record created trigger
  */
 export function recordCreatedTrigger<T extends TailorDBType>({
@@ -76,8 +74,6 @@ export function recordCreatedTrigger<T extends TailorDBType>({
  * Create a trigger that fires when a TailorDB record is updated.
  * @template T
  * @param options - Trigger options
- * @param options.type
- * @param options.condition
  * @returns Record updated trigger
  */
 export function recordUpdatedTrigger<T extends TailorDBType>({
@@ -99,8 +95,6 @@ export function recordUpdatedTrigger<T extends TailorDBType>({
  * Create a trigger that fires when a TailorDB record is deleted.
  * @template T
  * @param options - Trigger options
- * @param options.type
- * @param options.condition
  * @returns Record deleted trigger
  */
 export function recordDeletedTrigger<T extends TailorDBType>({
@@ -126,8 +120,6 @@ export type ResolverExecutedTrigger<Args> = ParserResolverExecutedTrigger & {
  * Create a trigger that fires when a resolver is executed.
  * @template R
  * @param options - Trigger options
- * @param options.resolver
- * @param options.condition
  * @returns Resolver executed trigger
  */
 export function resolverExecutedTrigger<R extends ResolverConfig>({

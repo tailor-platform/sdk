@@ -14,9 +14,6 @@ export interface ErdCommandContext {
 /**
  * Initialize shared ERD command context.
  * @param args - CLI arguments.
- * @param args.profile - Workspace profile.
- * @param args.workspaceId - Workspace ID override.
- * @param args.config - Config path override.
  * @returns Initialized context.
  */
 export async function initErdContext(args: {

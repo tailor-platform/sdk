@@ -131,11 +131,6 @@ export interface ErdBuildResult {
 /**
  * Prepare ERD builds for one or more namespaces.
  * @param options - Build options.
- * @param options.client - Operator client.
- * @param options.workspaceId - Workspace ID.
- * @param options.config - Loaded Tailor config.
- * @param options.namespace - Namespace override.
- * @param options.outputDir - Output directory override.
  * @returns Build results by namespace.
  */
 export async function prepareErdBuilds(options: {

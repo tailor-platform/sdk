@@ -17,10 +17,6 @@ type ResolveCliBinOptions = {
 /**
  * Resolve a CLI binary path from the caller's project dependencies.
  * @param options - Resolution options for locating the CLI binary.
- * @param options.cwd
- * @param options.packageName
- * @param options.binName
- * @param options.installHint
  * @returns Absolute path to the CLI binary entry.
  */
 export function resolveCliBinPath({

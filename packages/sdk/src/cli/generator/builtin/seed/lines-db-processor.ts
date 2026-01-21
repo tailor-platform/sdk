@@ -7,8 +7,6 @@ import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
  * Processes TailorDB types to generate lines-db metadata
  * @param type - Parsed TailorDB type
  * @param source - Source file info
- * @param source.filePath - Source file path
- * @param source.exportName - Source export name
  * @returns Generated lines-db metadata
  */
 export function processLinesDb(

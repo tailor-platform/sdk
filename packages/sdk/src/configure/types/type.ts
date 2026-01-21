@@ -113,9 +113,6 @@ export class TailorField<
    * Parse and validate a value against this field's validation rules
    * Returns StandardSchema Result type with success or failure
    * @param args - Value, context data, and user
-   * @param args.value - Value to validate
-   * @param args.data - Context data
-   * @param args.user - Tailor user information
    * @returns Validation result
    */
   parse(args: {
@@ -136,10 +133,6 @@ export class TailorField<
    * Used internally for array element validation
    * @private
    * @param args - Validation arguments
-   * @param args.value - Value to validate
-   * @param args.data - Context data
-   * @param args.user - Tailor user information
-   * @param args.pathArray - Field path array for nested validation
    * @returns Validation issues
    */
   private _validateValue(args: {
@@ -287,10 +280,6 @@ export class TailorField<
    * Internal parse method that tracks field path for nested validation
    * @private
    * @param args - Parse arguments
-   * @param args.value - Value to parse
-   * @param args.data - Context data
-   * @param args.user - Tailor user information
-   * @param args.pathArray - Field path array for nested validation
    * @returns Validation result
    */
   private _parseInternal(args: {

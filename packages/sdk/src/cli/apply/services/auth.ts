@@ -224,10 +224,6 @@ export async function applyAuth(
 /**
  * Plan auth-related changes based on current and desired state.
  * @param context - Planning context
- * @param context.client
- * @param context.workspaceId
- * @param context.application
- * @param context.forRemoval
  * @returns Planned auth changes and metadata
  */
 export async function planAuth({ client, workspaceId, application, forRemoval }: PlanContext) {

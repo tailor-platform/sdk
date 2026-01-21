@@ -22,8 +22,6 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
  * Create a workflow definition that can be triggered via the Tailor SDK.
  * @template Job
  * @param config - Workflow configuration
- * @param config.name - Workflow name
- * @param config.mainJob - Main job definition
  * @returns Defined workflow
  */
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(config: {
