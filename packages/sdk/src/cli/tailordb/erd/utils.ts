@@ -11,11 +11,11 @@ export interface ErdCommandContext {
   config: AppConfig;
 }
 
-interface ErdCommandOptions {
+type ErdCommandOptions = {
   profile?: string;
   workspaceId?: string;
   config?: string;
-}
+};
 
 /**
  * Initialize shared ERD command context.

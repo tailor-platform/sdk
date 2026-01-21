@@ -12,10 +12,10 @@ export interface StaticWebsiteInfo {
   allowedIpAddresses: string[];
 }
 
-interface StaticWebsiteListOptions {
+type StaticWebsiteListOptions = {
   workspaceId?: string;
   profile?: string;
-}
+};
 
 /**
  * List static websites in the workspace.

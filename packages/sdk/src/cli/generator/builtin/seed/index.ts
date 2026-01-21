@@ -13,10 +13,10 @@ import type { SeedTypeMetadata } from "./types";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
-interface SeedGeneratorOptions {
+type SeedGeneratorOptions = {
   distPath: string;
   machineUserName?: string;
-}
+};
 
 /**
  * Generates the exec.mjs script content (Node.js executable) using gql-ingest Programmatic API

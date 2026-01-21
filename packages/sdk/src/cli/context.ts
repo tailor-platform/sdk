@@ -31,14 +31,14 @@ const pfConfigSchema = z.object({
 });
 
 type PfConfig = z.output<typeof pfConfigSchema>;
-interface LoadWorkspaceIdOptions {
+type LoadWorkspaceIdOptions = {
   workspaceId?: string;
   profile?: string;
-}
-interface LoadAccessTokenOptions {
+};
+type LoadAccessTokenOptions = {
   useProfile?: boolean;
   profile?: string;
-}
+};
 
 function platformConfigPath() {
   if (!xdgConfig) {

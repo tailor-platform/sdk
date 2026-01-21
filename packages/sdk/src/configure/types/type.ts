@@ -25,27 +25,27 @@ const regex = {
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyField = TailorField<any>;
 
-interface FieldParseArgs {
+type FieldParseArgs = {
   value: unknown;
   data: unknown;
   user: TailorUser;
-}
+};
 
-interface FieldValidateValueArgs<T extends TailorFieldType> {
+type FieldValidateValueArgs<T extends TailorFieldType> = {
   value: TailorToTs[T];
   data: unknown;
   user: TailorUser;
   pathArray: string[];
-}
+};
 
-interface FieldParseInternalArgs {
+type FieldParseInternalArgs = {
   // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
   // oxlint-disable-next-line no-explicit-any
   value: any;
   data: unknown;
   user: TailorUser;
   pathArray: string[];
-}
+};
 
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,

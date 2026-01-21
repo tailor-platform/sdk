@@ -108,18 +108,18 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
   });
 }
 
-interface ErdBuildOptions extends TailorDBSchemaOptions {
+type ErdBuildOptions = TailorDBSchemaOptions & {
   outputPath: string;
   erdDir: string;
-}
+};
 
-interface ErdBuildsOptions {
+type ErdBuildsOptions = {
   client: OperatorClient;
   workspaceId: string;
   config: AppConfig;
   namespace?: string;
   outputDir?: string;
-}
+};
 
 /**
  * Export TailorDB schema and build ERD artifacts via liam.

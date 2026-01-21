@@ -3,10 +3,10 @@ import type { LinesDbMetadata } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
-interface LinesDbSource {
+type LinesDbSource = {
   filePath: string;
   exportName: string;
-}
+};
 
 /**
  * Processes TailorDB types to generate lines-db metadata

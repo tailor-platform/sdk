@@ -184,6 +184,15 @@ export default defineConfig([
               message:
                 "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/utils/format' instead of table for consistent table styling.",
             },
+            {
+              name: "path",
+              message: "Use 'pathe' instead of 'path' for consistent cross-platform path handling.",
+            },
+            {
+              name: "node:path",
+              message:
+                "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling.",
+            },
           ],
         },
       ],
