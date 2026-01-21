@@ -3,9 +3,9 @@ import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Processes TailorDB types to generate GraphQL Ingest metadata
- * @param {ParsedTailorDBType} type - Parsed TailorDB type
- * @param {string} namespace - Namespace of the type
- * @returns {GqlIngestMetadata} Generated GraphQL Ingest metadata
+ * @param type - Parsed TailorDB type
+ * @param  namespace - Namespace of the type
+ * @returns Generated GraphQL Ingest metadata
  */
 export function processGqlIngest(type: ParsedTailorDBType, namespace: string): GqlIngestMetadata {
   // Extract dependencies from relations

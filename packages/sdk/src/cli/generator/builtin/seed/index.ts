@@ -20,10 +20,10 @@ interface SeedGeneratorOptions {
 
 /**
  * Generates the exec.mjs script content (Node.js executable) using gql-ingest Programmatic API
- * @param {string} machineUserName - Machine user name for token retrieval
- * @param {string} relativeConfigPath - Config path relative to exec script
- * @param {Record<string, { namespace?: string; dependencies: string[] }>} entityDependencies - Entity dependencies mapping
- * @returns {string} exec.mjs file contents
+ * @param machineUserName - Machine user name for token retrieval
+ * @param relativeConfigPath - Config path relative to exec script
+ * @param entityDependencies - Entity dependencies mapping
+ * @returns exec.mjs file contents
  */
 function generateExecScript(
   machineUserName: string,
