@@ -31,6 +31,14 @@ const pfConfigSchema = z.object({
 });
 
 type PfConfig = z.output<typeof pfConfigSchema>;
+interface LoadWorkspaceIdOptions {
+  workspaceId?: string;
+  profile?: string;
+}
+interface LoadAccessTokenOptions {
+  useProfile?: boolean;
+  profile?: string;
+}
 
 function platformConfigPath() {
   if (!xdgConfig) {
@@ -153,7 +161,7 @@ function validateUUID(value: string, source: string): string {
  * @param [opts] - Workspace and profile options
  * @returns Resolved workspace ID
  */
-export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string }): string {
+export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
   // opts/workspaceId
   if (opts?.workspaceId) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
@@ -191,7 +199,7 @@ export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string 
  * @param [opts] - Profile options
  * @returns Resolved access token
  */
-export async function loadAccessToken(opts?: { useProfile?: boolean; profile?: string }) {
+export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
   if (process.env.TAILOR_PLATFORM_TOKEN) {
     return process.env.TAILOR_PLATFORM_TOKEN;

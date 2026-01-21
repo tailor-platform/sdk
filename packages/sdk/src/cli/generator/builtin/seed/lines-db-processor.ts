@@ -3,16 +3,18 @@ import type { LinesDbMetadata } from "./types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
+interface LinesDbSource {
+  filePath: string;
+  exportName: string;
+}
+
 /**
  * Processes TailorDB types to generate lines-db metadata
  * @param type - Parsed TailorDB type
  * @param source - Source file info
  * @returns Generated lines-db metadata
  */
-export function processLinesDb(
-  type: ParsedTailorDBType,
-  source: { filePath: string; exportName: string },
-): LinesDbMetadata {
+export function processLinesDb(type: ParsedTailorDBType, source: LinesDbSource): LinesDbMetadata {
   if (!source.filePath || !source.exportName) {
     throw new Error(`Missing source info for type ${type.name}`);
   }

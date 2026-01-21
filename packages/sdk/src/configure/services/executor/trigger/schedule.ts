@@ -437,19 +437,21 @@ export interface ScheduleArgs {
   env: TailorEnv;
 }
 
+interface ScheduleTriggerOptions<T extends string> {
+  cron: StandardCRON<T> extends never ? never : T;
+  timezone?: Timezone;
+}
+
 /**
  * Create a schedule-based trigger using a CRON expression and optional timezone.
  * @template T
  * @param options - Schedule options
  * @returns Schedule trigger
  */
-export function scheduleTrigger<T extends string>({
-  cron,
-  timezone,
-}: {
-  cron: StandardCRON<T> extends never ? never : T;
-  timezone?: Timezone;
-}): ScheduleTrigger<ScheduleArgs> {
+export function scheduleTrigger<T extends string>(
+  options: ScheduleTriggerOptions<T>,
+): ScheduleTrigger<ScheduleArgs> {
+  const { cron, timezone } = options;
   return {
     kind: "schedule",
     cron,

@@ -18,16 +18,20 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   ) => Promise<string>;
 }
 
+interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
+  name: string;
+  mainJob: Job;
+}
+
 /**
  * Create a workflow definition that can be triggered via the Tailor SDK.
  * @template Job
  * @param config - Workflow configuration
  * @returns Defined workflow
  */
-export function createWorkflow<Job extends WorkflowJob<any, any, any>>(config: {
-  name: string;
-  mainJob: Job;
-}): Workflow<Job> {
+export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
+  config: WorkflowDefinition<Job>,
+): Workflow<Job> {
   return {
     ...config,
     trigger: async (args, options) => {

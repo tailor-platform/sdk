@@ -11,16 +11,18 @@ export interface ErdCommandContext {
   config: AppConfig;
 }
 
+interface ErdCommandOptions {
+  profile?: string;
+  workspaceId?: string;
+  config?: string;
+}
+
 /**
  * Initialize shared ERD command context.
  * @param args - CLI arguments.
  * @returns Initialized context.
  */
-export async function initErdContext(args: {
-  profile?: string;
-  workspaceId?: string;
-  config?: string;
-}): Promise<ErdCommandContext> {
+export async function initErdContext(args: ErdCommandOptions): Promise<ErdCommandContext> {
   logErdBetaWarning();
   const accessToken = await loadAccessToken({
     useProfile: true,

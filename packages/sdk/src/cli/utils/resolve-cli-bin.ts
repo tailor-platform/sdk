@@ -19,12 +19,8 @@ type ResolveCliBinOptions = {
  * @param options - Resolution options for locating the CLI binary.
  * @returns Absolute path to the CLI binary entry.
  */
-export function resolveCliBinPath({
-  cwd,
-  packageName,
-  binName,
-  installHint,
-}: ResolveCliBinOptions): string {
+export function resolveCliBinPath(options: ResolveCliBinOptions): string {
+  const { cwd, packageName, binName, installHint } = options;
   const projectPackageJsonPath = findUpSync("package.json", { cwd });
   if (!projectPackageJsonPath) {
     throw new Error(`Failed to locate package.json from ${cwd}.`);

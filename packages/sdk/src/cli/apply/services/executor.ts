@@ -83,7 +83,8 @@ function trn(workspaceId: string, name: string) {
  * @param context - Planning context
  * @returns Planned changes
  */
-export async function planExecutor({ client, workspaceId, application, forRemoval }: PlanContext) {
+export async function planExecutor(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> = new ChangeSet(
     "Executors",
   );

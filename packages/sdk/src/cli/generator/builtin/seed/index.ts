@@ -13,6 +13,11 @@ import type { SeedTypeMetadata } from "./types";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
+interface SeedGeneratorOptions {
+  distPath: string;
+  machineUserName?: string;
+}
+
 /**
  * Generates the exec.mjs script content (Node.js executable)
  * @param machineUserName - Machine user name for token retrieval
@@ -59,10 +64,9 @@ function generateExecScript(machineUserName: string, relativeConfigPath: string)
  * @param options - Seed generator options
  * @returns Seed generator
  */
-export function createSeedGenerator(options: {
-  distPath: string;
-  machineUserName?: string;
-}): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
+export function createSeedGenerator(
+  options: SeedGeneratorOptions,
+): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
   return {
     id: SeedGeneratorID,
     description: "Generates seed data files (GraphQL Ingest + lines-db schema)",

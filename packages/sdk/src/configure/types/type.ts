@@ -25,6 +25,28 @@ const regex = {
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyField = TailorField<any>;
 
+interface FieldParseArgs {
+  value: unknown;
+  data: unknown;
+  user: TailorUser;
+}
+
+interface FieldValidateValueArgs<T extends TailorFieldType> {
+  value: TailorToTs[T];
+  data: unknown;
+  user: TailorUser;
+  pathArray: string[];
+}
+
+interface FieldParseInternalArgs {
+  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
+  // oxlint-disable-next-line no-explicit-any
+  value: any;
+  data: unknown;
+  user: TailorUser;
+  pathArray: string[];
+}
+
 export class TailorField<
   const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   // Generic default output type (kept loose on purpose for library ergonomics).
@@ -115,11 +137,7 @@ export class TailorField<
    * @param args - Value, context data, and user
    * @returns Validation result
    */
-  parse(args: {
-    value: unknown;
-    data: unknown;
-    user: TailorUser;
-  }): StandardSchemaV1.Result<Output> {
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output> {
     return this._parseInternal({
       value: args.value,
       data: args.data,
@@ -135,12 +153,7 @@ export class TailorField<
    * @param args - Validation arguments
    * @returns Validation issues
    */
-  private _validateValue(args: {
-    value: TailorToTs[T];
-    data: unknown;
-    user: TailorUser;
-    pathArray: string[];
-  }): StandardSchemaV1.Issue[] {
+  private _validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
@@ -282,14 +295,7 @@ export class TailorField<
    * @param args - Parse arguments
    * @returns Validation result
    */
-  private _parseInternal(args: {
-    // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
-    // oxlint-disable-next-line no-explicit-any
-    value: any;
-    data: unknown;
-    user: TailorUser;
-    pathArray: string[];
-  }): StandardSchemaV1.Result<Output> {
+  private _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output> {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 

@@ -108,13 +108,24 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
   });
 }
 
+interface ErdBuildOptions extends TailorDBSchemaOptions {
+  outputPath: string;
+  erdDir: string;
+}
+
+interface ErdBuildsOptions {
+  client: OperatorClient;
+  workspaceId: string;
+  config: AppConfig;
+  namespace?: string;
+  outputDir?: string;
+}
+
 /**
  * Export TailorDB schema and build ERD artifacts via liam.
  * @param options - Build options.
  */
-async function prepareErdBuild(
-  options: TailorDBSchemaOptions & { outputPath: string; erdDir: string },
-): Promise<void> {
+async function prepareErdBuild(options: ErdBuildOptions): Promise<void> {
   await writeTblsSchemaToFile(options);
 
   await runLiamBuild(options.outputPath, options.erdDir);
@@ -133,13 +144,7 @@ export interface ErdBuildResult {
  * @param options - Build options.
  * @returns Build results by namespace.
  */
-export async function prepareErdBuilds(options: {
-  client: OperatorClient;
-  workspaceId: string;
-  config: AppConfig;
-  namespace?: string;
-  outputDir?: string;
-}): Promise<ErdBuildResult[]> {
+export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBuildResult[]> {
   const { client, workspaceId, config } = options;
   const baseDir = options.outputDir ?? path.resolve(process.cwd(), DEFAULT_ERD_BASE_DIR);
   let targets: ErdBuildResult[];

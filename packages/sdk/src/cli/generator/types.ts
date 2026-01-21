@@ -253,6 +253,10 @@ export type FullCodeGenerator<
 // Runtime utility
 // ========================================
 
+interface DependencyCarrier {
+  dependencies: readonly DependencyKind[];
+}
+
 /**
  * Type guard to check if a generator has a specific dependency.
  * @template D
@@ -261,7 +265,7 @@ export type FullCodeGenerator<
  * @returns True if the generator has the dependency
  */
 export function hasDependency<D extends DependencyKind>(
-  generator: { dependencies: readonly DependencyKind[] },
+  generator: DependencyCarrier,
   dependency: D,
 ): boolean {
   return generator.dependencies.includes(dependency);

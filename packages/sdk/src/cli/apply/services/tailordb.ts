@@ -112,7 +112,8 @@ export async function applyTailorDB(
  * @param context - Planning context
  * @returns Planned changes
  */
-export async function planTailorDB({ client, workspaceId, application, forRemoval }: PlanContext) {
+export async function planTailorDB(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const tailordbs: TailorDBService[] = [];
   if (!forRemoval) {
     for (const tailordb of application.tailorDBServices) {

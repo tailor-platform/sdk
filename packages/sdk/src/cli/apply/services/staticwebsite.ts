@@ -70,12 +70,8 @@ function trn(workspaceId: string, name: string) {
  * @param context - Planning context
  * @returns Planned changes
  */
-export async function planStaticWebsite({
-  client,
-  workspaceId,
-  application,
-  forRemoval,
-}: PlanContext) {
+export async function planStaticWebsite(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const changeSet: ChangeSet<CreateStaticWebsite, UpdateStaticWebsite, DeleteStaticWebsite> =
     new ChangeSet("StaticWebsites");
   const conflicts: OwnerConflict[] = [];

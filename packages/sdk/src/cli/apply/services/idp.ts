@@ -140,7 +140,8 @@ export async function applyIdP(
  * @param context - Planning context
  * @returns Planned changes and metadata
  */
-export async function planIdP({ client, workspaceId, application, forRemoval }: PlanContext) {
+export async function planIdP(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const {
     changeSet: serviceChangeSet,

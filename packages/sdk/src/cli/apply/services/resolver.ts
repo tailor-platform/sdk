@@ -96,7 +96,8 @@ export async function applyPipeline(
  * @param context - Planning context
  * @returns Planned changes
  */
-export async function planPipeline({ client, workspaceId, application, forRemoval }: PlanContext) {
+export async function planPipeline(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const pipelines: Readonly<ResolverService>[] = [];
   if (!forRemoval) {
     for (const pipeline of application.resolverServices) {

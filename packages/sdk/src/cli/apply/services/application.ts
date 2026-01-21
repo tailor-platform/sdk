@@ -88,12 +88,8 @@ function trn(workspaceId: string, name: string) {
  * @param context - Planning context
  * @returns Planned changes
  */
-export async function planApplication({
-  client,
-  workspaceId,
-  application,
-  forRemoval,
-}: PlanContext) {
+export async function planApplication(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const changeSet: ChangeSet<CreateApplication, UpdateApplication, DeleteApplication> =
     new ChangeSet("Applications");
 

@@ -226,7 +226,8 @@ export async function applyAuth(
  * @param context - Planning context
  * @returns Planned auth changes and metadata
  */
-export async function planAuth({ client, workspaceId, application, forRemoval }: PlanContext) {
+export async function planAuth(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const auths: Readonly<AuthService>[] = [];
   if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();

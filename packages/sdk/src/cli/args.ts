@@ -168,6 +168,10 @@ export const jsonArgs = {
   },
 } as const;
 
+type WithCommonArgsContext<T> = {
+  args: T;
+};
+
 /**
  * Wrapper for command handlers that provides:
  * - Environment file loading
@@ -179,7 +183,8 @@ export const jsonArgs = {
  */
 export const withCommonArgs =
   <T extends ParsedArgs<typeof commonArgs>>(handler: (args: T) => Promise<void>) =>
-  async ({ args }: { args: T }) => {
+  async (context: WithCommonArgsContext<T>) => {
+    const { args } = context;
     try {
       // Set JSON mode if --json flag is provided
       if ("json" in args && typeof args.json === "boolean") {
