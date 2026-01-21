@@ -79,22 +79,7 @@ const namespaceEntities = {
     "Event",
   ]
 };
-
-const entityDependencies = {
-  "Customer": [],
-  "Invoice": ["SalesOrder"],
-  "NestedProfile": [],
-  "PurchaseOrder": ["Supplier"],
-  "SalesOrder": ["Customer"],
-  "SalesOrderCreated": [],
-  "Selfie": [],
-  "Supplier": [],
-  "User": [],
-  "UserLog": ["User"],
-  "UserSetting": ["User"],
-  "Event": [],
-  "_User": ["User"]
-};
+const entities = Object.values(namespaceEntities).flat();
 
 // Determine which entities to process
 let entitiesToProcess = null;
@@ -112,8 +97,7 @@ if (optionCount > 1) {
 
 // --skip-idp and --namespace are redundant (namespace already excludes _User)
 if (skipIdp && hasNamespace) {
-  console.error(styleText("red", "Error: --skip-idp is redundant with --namespace (namespace filtering already excludes _User)."));
-  process.exit(1);
+  console.warn(styleText("yellow", "Warning: --skip-idp is redundant with --namespace (namespace filtering already excludes _User)."));
 }
 
 // Filter by namespace (automatically excludes _User as it has no namespace)
@@ -137,7 +121,7 @@ if (hasTypes) {
   const notFoundTypes = [];
 
   entitiesToProcess = requestedTypes.filter((type) => {
-    if (!(type in entityDependencies)) {
+    if (!entities.includes(type)) {
       notFoundTypes.push(type);
       return false;
     }
@@ -146,7 +130,7 @@ if (hasTypes) {
 
   if (notFoundTypes.length > 0) {
     console.error(styleText("red", `Error: The following types were not found: ${notFoundTypes.join(", ")}`));
-    console.error(styleText("yellow", `Available types: ${Object.keys(entityDependencies).join(", ")}`));
+    console.error(styleText("yellow", `Available types: ${entities.join(", ")}`));
     process.exit(1);
   }
 
@@ -160,7 +144,7 @@ if (skipIdp) {
     entitiesToProcess = entitiesToProcess.filter((entity) => entity !== "_User");
   } else {
     // Get all entities except _User
-    entitiesToProcess = Object.keys(entityDependencies).filter((entity) => entity !== "_User");
+    entitiesToProcess = entities.filter((entity) => entity !== "_User");
   }
   console.log(styleText("dim", `Skipping IdP user (_User)`));
 }
@@ -188,7 +172,7 @@ if (values.truncate) {
       // Truncate specific types
       await truncate({
         configPath,
-        types: entitiesToProcess || positionals,
+        types: entitiesToProcess,
       });
     } else {
       // Truncate all (--skip-idp does not affect truncation)

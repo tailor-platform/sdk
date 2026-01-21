@@ -43,12 +43,6 @@ function generateExecScript(
     })
     .join(",\n");
 
-  const entityDependenciesEntries = Object.entries(entityDependencies)
-    .map(
-      ([type, meta]) => `      "${type}": [${meta.dependencies.map((d) => `"${d}"`).join(", ")}]`,
-    )
-    .join(",\n");
-
   return ml /* js */ `
     import { GQLIngest } from "@jackchuka/gql-ingest";
     import { join } from "node:path";
@@ -116,10 +110,7 @@ function generateExecScript(
     const namespaceEntities = {
 ${namespaceEntitiesEntries}
     };
-
-    const entityDependencies = {
-${entityDependenciesEntries}
-    };
+    const entities = Object.values(namespaceEntities).flat();
 
     // Determine which entities to process
     let entitiesToProcess = null;
@@ -137,8 +128,7 @@ ${entityDependenciesEntries}
 
     // --skip-idp and --namespace are redundant (namespace already excludes _User)
     if (skipIdp && hasNamespace) {
-      console.error(styleText("red", "Error: --skip-idp is redundant with --namespace (namespace filtering already excludes _User)."));
-      process.exit(1);
+      console.warn(styleText("yellow", "Warning: --skip-idp is redundant with --namespace (namespace filtering already excludes _User)."));
     }
 
     // Filter by namespace (automatically excludes _User as it has no namespace)
@@ -162,7 +152,7 @@ ${entityDependenciesEntries}
       const notFoundTypes = [];
 
       entitiesToProcess = requestedTypes.filter((type) => {
-        if (!(type in entityDependencies)) {
+        if (!entities.includes(type)) {
           notFoundTypes.push(type);
           return false;
         }
@@ -171,7 +161,7 @@ ${entityDependenciesEntries}
 
       if (notFoundTypes.length > 0) {
         console.error(styleText("red", \`Error: The following types were not found: \${notFoundTypes.join(", ")}\`));
-        console.error(styleText("yellow", \`Available types: \${Object.keys(entityDependencies).join(", ")}\`));
+        console.error(styleText("yellow", \`Available types: \${entities.join(", ")}\`));
         process.exit(1);
       }
 
@@ -185,7 +175,7 @@ ${entityDependenciesEntries}
         entitiesToProcess = entitiesToProcess.filter((entity) => entity !== "_User");
       } else {
         // Get all entities except _User
-        entitiesToProcess = Object.keys(entityDependencies).filter((entity) => entity !== "_User");
+        entitiesToProcess = entities.filter((entity) => entity !== "_User");
       }
       console.log(styleText("dim", \`Skipping IdP user (_User)\`));
     }
@@ -213,7 +203,7 @@ ${entityDependenciesEntries}
           // Truncate specific types
           await truncate({
             configPath,
-            types: entitiesToProcess || positionals,
+            types: entitiesToProcess,
           });
         } else {
           // Truncate all (--skip-idp does not affect truncation)
@@ -418,9 +408,15 @@ export function createSeedGenerator(options: {
         }
       }
 
-      // Generate exec.mjs for each output directory
       for (const [outputDir, dependencies] of Object.entries(entityDependencies)) {
-        // Generate exec.mjs if machineUserName is provided
+        files.push({
+          path: path.join(outputDir, "config.yaml"),
+          content: /* yaml */ `entityDependencies:
+  ${Object.entries(dependencies)
+    .map(([type, deps]) => `${type}: [${deps.dependencies.join(", ")}]`)
+    .join("\n  ")}
+`,
+        }); // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
           const relativeConfigPath = path.relative(outputDir, configPath);
           files.push({
