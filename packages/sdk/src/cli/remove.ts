@@ -98,8 +98,8 @@ async function execRemove(
 
 /**
  * Remove all resources managed by the current application.
- * @param {RemoveOptions} [options] - Remove options
- * @returns {Promise<void>} Promise that resolves when removal completes
+ * @param options - Remove options
+ * @returns Promise that resolves when removal completes
  */
 export async function remove(options?: RemoveOptions): Promise<void> {
   const { client, workspaceId, application } = await loadOptions(options);

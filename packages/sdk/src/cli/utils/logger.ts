@@ -252,10 +252,10 @@ export const logger = {
   /**
    * Prompt the user for input unless running in CI.
    * @template T
-   * @param {string} message - Prompt message
-   * @param {T} [options] - Prompt options
+   * @param message - Prompt message
+   * @param options - Prompt options
    * @throws {CIPromptError} When called in a CI environment
-   * @returns {unknown} Prompt result
+   * @returns Prompt result
    */
   prompt<T extends PromptOptions>(
     message: string,

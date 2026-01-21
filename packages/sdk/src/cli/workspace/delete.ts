@@ -29,8 +29,8 @@ async function loadOptions(options: DeleteWorkspaceOptions) {
 
 /**
  * Delete a workspace by ID.
- * @param {DeleteWorkspaceOptions} options - Workspace deletion options
- * @returns {Promise<void>} Promise that resolves when deletion completes
+ * @param options - Workspace deletion options
+ * @returns Promise that resolves when deletion completes
  */
 export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<void> {
   // Load and validate options

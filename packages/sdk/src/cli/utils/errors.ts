@@ -32,8 +32,8 @@ type CLIErrorInternal = Error & {
 
 /**
  * Format CLI error for output
- * @param {CLIError} error - CLIError instance to format
- * @returns {string} Formatted error message
+ * @param error - CLIError instance to format
+ * @returns Formatted error message
  */
 function formatError(error: CLIError): string {
   const parts: string[] = [
@@ -59,8 +59,8 @@ function formatError(error: CLIError): string {
 
 /**
  * Create a CLI error with formatted output
- * @param {CLIErrorOptions} options - Options to construct a CLIError
- * @returns {CLIError} Constructed CLIError instance
+ * @param options - Options to construct a CLIError
+ * @returns Constructed CLIError instance
  */
 function createCLIError(options: CLIErrorOptions): CLIError {
   const error = new Error(options.message) as CLIErrorInternal;
@@ -75,8 +75,8 @@ function createCLIError(options: CLIErrorOptions): CLIError {
 
 /**
  * Type guard to check if an error is a CLIError
- * @param {unknown} error - Error to check
- * @returns {error is CLIError} True if the error is a CLIError
+ * @param error - Error to check
+ * @returns True if the error is a CLIError
  */
 export function isCLIError(error: unknown): error is CLIError {
   return error instanceof Error && error.name === "CLIError";

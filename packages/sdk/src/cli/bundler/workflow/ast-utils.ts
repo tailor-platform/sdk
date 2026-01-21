@@ -27,8 +27,8 @@ export interface FoundProperty {
 
 /**
  * Check if a module source is from the Tailor SDK package (including subpaths)
- * @param {string} source - Module source string
- * @returns {boolean} True if the source is from the Tailor SDK package
+ * @param source - Module source string
+ * @returns True if the source is from the Tailor SDK package
  */
 export function isTailorSdkSource(source: string): boolean {
   return /^@tailor-platform\/sdk(\/|$)/.test(source);
@@ -36,8 +36,8 @@ export function isTailorSdkSource(source: string): boolean {
 
 /**
  * Get the source string from a dynamic import or require call
- * @param {Expression | null | undefined} node - AST node to inspect
- * @returns {string | null} Resolved import/require source string or null
+ * @param node - AST node to inspect
+ * @returns Resolved import/require source string or null
  */
 export function getImportSource(node: Expression | null | undefined): string | null {
   if (!node) return null;
@@ -70,8 +70,8 @@ export function getImportSource(node: Expression | null | undefined): string | n
 
 /**
  * Unwrap AwaitExpression to get the inner expression
- * @param {Expression | null | undefined} node - AST expression node
- * @returns {Expression | null | undefined} Inner expression if node is an AwaitExpression
+ * @param node - AST expression node
+ * @returns Inner expression if node is an AwaitExpression
  */
 export function unwrapAwait(node: Expression | null | undefined): Expression | null | undefined {
   if (node?.type === "AwaitExpression") {
@@ -82,8 +82,8 @@ export function unwrapAwait(node: Expression | null | undefined): Expression | n
 
 /**
  * Check if a node is a string literal
- * @param {Expression | null | undefined} node - AST expression node
- * @returns {node is Expression & { type: "Literal"; value: string }} True if node is a string literal
+ * @param node - AST expression node
+ * @returns True if node is a string literal
  */
 export function isStringLiteral(
   node: Expression | null | undefined,
@@ -94,8 +94,8 @@ export function isStringLiteral(
 
 /**
  * Check if a node is a function expression (arrow or regular)
- * @param {Expression | null | undefined} node - AST expression node
- * @returns {node is ArrowFunctionExpression | FunctionExpression} True if node is a function expression
+ * @param node - AST expression node
+ * @returns True if node is a function expression
  */
 export function isFunctionExpression(
   node: Expression | null | undefined,
@@ -105,9 +105,9 @@ export function isFunctionExpression(
 
 /**
  * Find a property in an object expression
- * @param {ObjectPropertyKind[]} properties - Object properties to search
- * @param {string} name - Property name to find
- * @returns {FoundProperty | null} Found property info or null
+ * @param properties - Object properties to search
+ * @param name - Property name to find
+ * @returns Found property info or null
  */
 export function findProperty(properties: ObjectPropertyKind[], name: string): FoundProperty | null {
   for (const prop of properties) {
@@ -136,9 +136,9 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
 /**
  * Apply string replacements to source code
  * Replacements are applied from end to start to maintain positions
- * @param {string} source - Original source code
- * @param {Replacement[]} replacements - Replacements to apply
- * @returns {string} Transformed source code
+ * @param source - Original source code
+ * @param replacements - Replacements to apply
+ * @returns Transformed source code
  */
 export function applyReplacements(source: string, replacements: Replacement[]): string {
   const sorted = [...replacements].sort((a, b) => b.start - a.start);
@@ -151,9 +151,9 @@ export function applyReplacements(source: string, replacements: Replacement[]): 
 
 /**
  * Find the end of a statement including any trailing newline
- * @param {string} source - Source code
- * @param {number} position - Start position of the statement
- * @returns {number} Index of the end of the statement including trailing newline
+ * @param source - Source code
+ * @param position - Start position of the statement
+ * @returns Index of the end of the statement including trailing newline
  */
 export function findStatementEnd(source: string, position: number): number {
   let i = position;
@@ -171,9 +171,9 @@ export function findStatementEnd(source: string, position: number): number {
 /**
  * Resolve a relative path from a base directory
  * Simple implementation that handles ./ and ../ prefixes
- * @param {string} baseDir - Base directory
- * @param {string} relativePath - Relative path to resolve
- * @returns {string} Resolved absolute path
+ * @param baseDir - Base directory
+ * @param relativePath - Relative path to resolve
+ * @returns Resolved absolute path
  */
 export function resolvePath(baseDir: string, relativePath: string): string {
   // Normalize separators to forward slash

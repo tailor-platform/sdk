@@ -25,9 +25,9 @@ export interface TailorDBSchemaOptions {
 
 /**
  * Convert TailorDB field config to tbls column definition.
- * @param {string} fieldName - Field name
- * @param {TailorDBType_FieldConfig} fieldConfig - TailorDB field configuration
- * @returns {TblsColumn} tbls column definition
+ * @param fieldName - Field name
+ * @param fieldConfig - TailorDB field configuration
+ * @returns tbls column definition
  */
 function toTblsColumn(fieldName: string, fieldConfig: TailorDBType_FieldConfig): TblsColumn {
   const baseType = fieldConfig.type || "string";
@@ -43,9 +43,9 @@ function toTblsColumn(fieldName: string, fieldConfig: TailorDBType_FieldConfig):
 
 /**
  * Build tbls schema JSON from TailorDB types.
- * @param {TailorDBProtoType[]} types - TailorDB types fetched from platform
- * @param {string} namespace - TailorDB namespace
- * @returns {TblsSchema} tbls-compatible schema representation
+ * @param types - TailorDB types fetched from platform
+ * @param namespace - TailorDB namespace
+ * @returns tbls-compatible schema representation
  */
 function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSchema {
   const tables: TblsTable[] = [];
@@ -176,8 +176,8 @@ function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSch
 
 /**
  * Export apply-applied TailorDB schema for a namespace as tbls-compatible JSON.
- * @param {TailorDBSchemaOptions} options - Export options
- * @returns {Promise<TblsSchema>} tbls schema representation
+ * @param options - Export options
+ * @returns tbls schema representation
  */
 async function exportTailorDBSchema(options: TailorDBSchemaOptions): Promise<TblsSchema> {
   const { client, workspaceId, namespace } = options;
@@ -211,7 +211,7 @@ export interface WriteSchemaOptions extends TailorDBSchemaOptions {
 
 /**
  * Writes the TailorDB schema to a file in tbls-compatible JSON format.
- * @param {WriteSchemaOptions} options - The options for writing the schema file.
+ * @param options - The options for writing the schema file.
  */
 export async function writeTblsSchemaToFile(options: WriteSchemaOptions): Promise<void> {
   const schema = await exportTailorDBSchema(options);

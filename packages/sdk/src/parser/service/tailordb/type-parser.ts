@@ -21,10 +21,10 @@ export type TypeSourceInfo = Record<string, { filePath: string; exportName: stri
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.
  * This is the main entry point for parsing TailorDB types.
- * @param {Record<string, TailorDBType>} rawTypes - Raw TailorDB types keyed by name
- * @param {string} namespace - TailorDB namespace name
- * @param {TypeSourceInfo} [typeSourceInfo] - Optional type source information
- * @returns {Record<string, ParsedTailorDBType>} Parsed types
+ * @param rawTypes - Raw TailorDB types keyed by name
+ * @param namespace - TailorDB namespace name
+ * @param typeSourceInfo - Optional type source information
+ * @returns Parsed types
  */
 export function parseTypes(
   rawTypes: Record<string, TailorDBType>,
@@ -46,10 +46,10 @@ export function parseTypes(
 
 /**
  * Parse a TailorDBType into a ParsedTailorDBType.
- * @param {TailorDBType} type - TailorDB type to parse
- * @param {Set<string>} allTypeNames - Set of all TailorDB type names
- * @param {Record<string, TailorDBType>} rawTypes - All raw TailorDB types keyed by name
- * @returns {ParsedTailorDBType} Parsed TailorDB type
+ * @param type - TailorDB type to parse
+ * @param allTypeNames - Set of all TailorDB type names
+ * @param rawTypes - All raw TailorDB types keyed by name
+ * @returns Parsed TailorDB type
  */
 function parseTailorDBType(
   type: TailorDBType,
@@ -131,10 +131,9 @@ function parseTailorDBType(
 /**
  * Build backward relationships between parsed types.
  * Also validates that backward relation names are unique within each type.
- * @param {Record<string, ParsedTailorDBType>} types - Parsed types
- * @param {string} namespace - TailorDB namespace name
- * @param {TypeSourceInfo} [typeSourceInfo] - Optional type source information
- * @returns {void}
+ * @param types - Parsed types
+ * @param namespace - TailorDB namespace name
+ * @param typeSourceInfo - Optional type source information
  */
 function buildBackwardRelationships(
   types: Record<string, ParsedTailorDBType>,
@@ -252,10 +251,9 @@ function buildBackwardRelationships(
  * Checks for:
  * 1. Each type's singular query name != plural query name
  * 2. No duplicate query names across all types
- * @param {Record<string, ParsedTailorDBType>} types - Parsed types
- * @param {string} namespace - TailorDB namespace name
- * @param {TypeSourceInfo} [typeSourceInfo] - Optional type source information
- * @returns {void}
+ * @param types - Parsed types
+ * @param namespace - TailorDB namespace name
+ * @param typeSourceInfo - Optional type source information
  */
 function validatePluralFormUniqueness(
   types: Record<string, ParsedTailorDBType>,

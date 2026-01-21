@@ -114,6 +114,7 @@
     "jsdoc/require-property-description": "warn",
     "jsdoc/require-property-name": "warn",
     "jsdoc/require-property-type": "warn",
+    "jsdoc/require-returns": "error",
     "jsdoc/require-returns-description": "warn",
     "jsdoc/require-yields": "warn"
   },

@@ -11,19 +11,18 @@ export interface ErdCommandContext {
   config: AppConfig;
 }
 
-/**
- * Initialize shared ERD command context.
- * @param {{ profile?: string; workspaceId?: string; config?: string }} args - CLI arguments.
- * @param {string | undefined} args.profile - Workspace profile.
- * @param {string | undefined} args.workspaceId - Workspace ID override.
- * @param {string | undefined} args.config - Config path override.
- * @returns {Promise<ErdCommandContext>} Initialized context.
- */
-export async function initErdContext(args: {
+type ErdCommandOptions = {
   profile?: string;
   workspaceId?: string;
   config?: string;
-}): Promise<ErdCommandContext> {
+};
+
+/**
+ * Initialize shared ERD command context.
+ * @param args - CLI arguments.
+ * @returns Initialized context.
+ */
+export async function initErdContext(args: ErdCommandOptions): Promise<ErdCommandContext> {
   logErdBetaWarning();
   const accessToken = await loadAccessToken({
     useProfile: true,

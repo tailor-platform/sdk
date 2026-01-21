@@ -14,8 +14,8 @@ export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspace
  * Convert a function to a string representation.
  * Handles method shorthand syntax (e.g., `create() { ... }`) by converting it to
  * a function expression (e.g., `function create() { ... }`).
- * @param {(...args: unknown[]) => unknown} fn - Function to stringify
- * @returns {string} Stringified function source
+ * @param fn - Function to stringify
+ * @returns Stringified function source
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export const stringifyFunction = (fn: Function): string => {
@@ -35,8 +35,8 @@ export const stringifyFunction = (fn: Function): string => {
 
 /**
  * Convert a hook function to a script expression.
- * @param {NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>} fn - Hook function
- * @returns {string} JavaScript expression calling the hook
+ * @param fn - Hook function
+ * @returns JavaScript expression calling the hook
  */
 const convertHookToExpr = (
   fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,
@@ -48,8 +48,8 @@ const convertHookToExpr = (
 /**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
- * @param {TailorAnyDBField} field - TailorDB field definition
- * @returns {OperatorFieldConfig} Parsed operator field configuration
+ * @param field - TailorDB field definition
+ * @returns Parsed operator field configuration
  */
 export function parseFieldConfig(field: TailorAnyDBField): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;

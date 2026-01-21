@@ -13,12 +13,17 @@ import type { SeedTypeMetadata } from "./types";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
+type SeedGeneratorOptions = {
+  distPath: string;
+  machineUserName?: string;
+};
+
 /**
  * Generates the exec.mjs script content (Node.js executable) using gql-ingest Programmatic API
- * @param {string} machineUserName - Machine user name for token retrieval
- * @param {string} relativeConfigPath - Config path relative to exec script
- * @param {Record<string, { namespace?: string; dependencies: string[] }>} entityDependencies - Entity dependencies mapping
- * @returns {string} exec.mjs file contents
+ * @param machineUserName - Machine user name for token retrieval
+ * @param relativeConfigPath - Config path relative to exec script
+ * @param entityDependencies - Entity dependencies mapping
+ * @returns exec.mjs file contents
  */
 function generateExecScript(
   machineUserName: string,
@@ -280,15 +285,12 @@ ${namespaceEntitiesEntries}
 /**
  * Factory function to create a Seed generator.
  * Combines GraphQL Ingest and lines-db schema generation.
- * @param {{ distPath: string; machineUserName?: string }} options - Seed generator options
- * @param {string} options.distPath - Output directory for generated files
- * @param {string} [options.machineUserName] - Machine user name for seeding
- * @returns {TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>>} Seed generator
+ * @param options - Seed generator options
+ * @returns Seed generator
  */
-export function createSeedGenerator(options: {
-  distPath: string;
-  machineUserName?: string;
-}): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
+export function createSeedGenerator(
+  options: SeedGeneratorOptions,
+): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
   return {
     id: SeedGeneratorID,
     description: "Generates seed data files (GraphQL Ingest + lines-db schema)",

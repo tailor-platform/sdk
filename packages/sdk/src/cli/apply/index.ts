@@ -61,8 +61,8 @@ export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "dele
 
 /**
  * Apply the configured application to the Tailor platform.
- * @param {ApplyOptions} [options] - Options for apply execution
- * @returns {Promise<void>} Promise that resolves when apply completes
+ * @param options - Options for apply execution
+ * @returns Promise that resolves when apply completes
  */
 export async function apply(options?: ApplyOptions) {
   // Load and validate options

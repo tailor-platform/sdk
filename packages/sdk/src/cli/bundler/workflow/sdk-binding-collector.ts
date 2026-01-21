@@ -16,9 +16,9 @@ import type {
 /**
  * Collect all import bindings for a specific function from the Tailor SDK package
  * Returns a Set of local names that refer to the function
- * @param {Program} program - Parsed TypeScript program
- * @param {string} functionName - Function name to collect bindings for
- * @returns {Set<string>} Set of local names bound to the SDK function
+ * @param program - Parsed TypeScript program
+ * @param functionName - Function name to collect bindings for
+ * @returns Set of local names bound to the SDK function
  */
 export function collectSdkBindings(program: Program, functionName: string): Set<string> {
   const bindings = new Set<string>();
@@ -117,10 +117,10 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
 
 /**
  * Check if a CallExpression is a call to a specific SDK function
- * @param {ASTNode} node - AST node to inspect
- * @param {Set<string>} bindings - Collected SDK bindings
- * @param {string} functionName - SDK function name
- * @returns {node is ASTNode & { type: "CallExpression" }} True if node is a call to the SDK function
+ * @param node - AST node to inspect
+ * @param bindings - Collected SDK bindings
+ * @param functionName - SDK function name
+ * @returns True if node is a call to the SDK function
  */
 export function isSdkFunctionCall(
   node: ASTNode,

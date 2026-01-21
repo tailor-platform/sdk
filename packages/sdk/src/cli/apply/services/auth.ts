@@ -70,10 +70,10 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
 
 /**
  * Apply auth-related changes for the given phase.
- * @param {OperatorClient} client - Operator client instance
- * @param {Awaited<ReturnType<typeof planAuth>>} result - Planned auth changes
- * @param {Exclude<ApplyPhase, "delete">} [phase] - Apply phase (defaults to "create-update")
- * @returns {Promise<void>} Promise that resolves when auth changes are applied
+ * @param client - Operator client instance
+ * @param result - Planned auth changes
+ * @param phase - Apply phase (defaults to "create-update")
+ * @returns Promise that resolves when auth changes are applied
  */
 export async function applyAuth(
   client: OperatorClient,
@@ -227,10 +227,11 @@ export async function applyAuth(
 
 /**
  * Plan auth-related changes based on current and desired state.
- * @param {PlanContext} context - Planning context
- * @returns {Promise<unknown>} Planned auth changes and metadata
+ * @param context - Planning context
+ * @returns Planned auth changes and metadata
  */
-export async function planAuth({ client, workspaceId, application, forRemoval }: PlanContext) {
+export async function planAuth(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
   const auths: Readonly<AuthService>[] = [];
   if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();

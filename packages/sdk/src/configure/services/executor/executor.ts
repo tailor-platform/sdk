@@ -38,8 +38,8 @@ type Executor<Args, O> = O extends {
  * Create an executor configuration for the Tailor SDK.
  * @template Args
  * @template O
- * @param {Executor<Args, O>} config - Executor configuration
- * @returns {Executor<Args, O>} The same executor configuration
+ * @param config - Executor configuration
+ * @returns The same executor configuration
  */
 export function createExecutor<
   Args,

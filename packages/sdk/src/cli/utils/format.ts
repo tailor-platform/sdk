@@ -6,9 +6,9 @@ import type { TableUserConfig } from "table";
 /**
  * Formats a table with consistent single-line border style.
  * Use this instead of importing `table` directly.
- * @param {unknown[][]} data - Table data
- * @param {TableUserConfig} [config] - Table configuration
- * @returns {string} Formatted table string
+ * @param data - Table data
+ * @param config - Table configuration
+ * @returns Formatted table string
  */
 export function formatTable(data: unknown[][], config?: TableUserConfig): string {
   return table(data, {
@@ -19,8 +19,8 @@ export function formatTable(data: unknown[][], config?: TableUserConfig): string
 
 /**
  * Formats a key-value table with single-line border style.
- * @param {[string, string][]} data - Key-value pairs
- * @returns {string} Formatted key-value table string
+ * @param data - Key-value pairs
+ * @returns Formatted key-value table string
  */
 export function formatKeyValueTable(data: [string, string][]): string {
   return formatTable(data, { singleLine: true });
@@ -29,9 +29,9 @@ export function formatKeyValueTable(data: [string, string][]): string {
 /**
  * Formats a table with headers, using single-line border style.
  * Draws horizontal lines only at top, after header, and bottom.
- * @param {string[]} headers - Table header labels
- * @param {string[][]} rows - Table rows
- * @returns {string} Formatted table string with headers
+ * @param headers - Table header labels
+ * @param rows - Table rows
+ * @returns Formatted table string with headers
  */
 export function formatTableWithHeaders(headers: string[], rows: string[][]): string {
   return formatTable([headers, ...rows], {
@@ -43,8 +43,8 @@ export function formatTableWithHeaders(headers: string[], rows: string[][]): str
 
 /**
  * Format a 2D array of values into a table string.
- * @param {unknown} value - Value to format
- * @returns {string} Human-readable string representation
+ * @param value - Value to format
+ * @returns Human-readable string representation
  */
 export function formatValue(value: unknown): string {
   if (value === null || value === undefined) {
@@ -61,8 +61,8 @@ export function formatValue(value: unknown): string {
 
 /**
  * Format an ISO timestamp string as a human-readable relative time.
- * @param {string} isoString - ISO date string
- * @returns {string} Relative time (e.g., "5 minutes ago")
+ * @param isoString - ISO date string
+ * @returns Relative time (e.g., "5 minutes ago")
  */
 export function humanizeRelativeTime(isoString: string): string {
   const date = new Date(isoString);

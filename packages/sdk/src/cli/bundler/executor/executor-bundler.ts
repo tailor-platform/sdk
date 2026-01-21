@@ -21,9 +21,9 @@ interface ExecutorInfo {
  * This function:
  * 1. Creates entry file that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
- * @param {FileLoadConfig} config - Executor file loading configuration
- * @param {TriggerContext} [triggerContext] - Trigger context for workflow/job transformations
- * @returns {Promise<void>} Promise that resolves when bundling completes
+ * @param config - Executor file loading configuration
+ * @param triggerContext - Trigger context for workflow/job transformations
+ * @returns Promise that resolves when bundling completes
  */
 export async function bundleExecutors(
   config: FileLoadConfig,

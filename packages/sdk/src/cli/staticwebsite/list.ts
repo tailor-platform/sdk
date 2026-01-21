@@ -12,17 +12,19 @@ export interface StaticWebsiteInfo {
   allowedIpAddresses: string[];
 }
 
-/**
- * List static websites in the workspace.
- * @param {{ workspaceId?: string; profile?: string }} [options] - Static website listing options
- * @param {string} [options.workspaceId] - Workspace ID
- * @param {string} [options.profile] - Workspace profile
- * @returns {Promise<StaticWebsiteInfo[]>} List of static websites
- */
-async function listStaticWebsites(options?: {
+type StaticWebsiteListOptions = {
   workspaceId?: string;
   profile?: string;
-}): Promise<StaticWebsiteInfo[]> {
+};
+
+/**
+ * List static websites in the workspace.
+ * @param options - Static website listing options
+ * @returns List of static websites
+ */
+async function listStaticWebsites(
+  options?: StaticWebsiteListOptions,
+): Promise<StaticWebsiteInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options?.profile,

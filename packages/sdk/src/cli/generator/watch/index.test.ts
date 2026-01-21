@@ -30,7 +30,7 @@ beforeEach(() => {
 
 /**
  * Create temporary directory for testing
- * @returns {Promise<string>} Path to the created temporary directory
+ * @returns Path to the created temporary directory
  */
 async function createTempDir(): Promise<string> {
   return await fs.mkdtemp(path.join(os.tmpdir(), "dependency-watcher-test-"));
@@ -38,9 +38,9 @@ async function createTempDir(): Promise<string> {
 
 /**
  * Create files for testing
- * @param {string} filePath - Path of the file to create
- * @param {string} content - File contents
- * @returns {Promise<void>} Promise that resolves when the file is created
+ * @param filePath - Path of the file to create
+ * @param content - File contents
+ * @returns Promise that resolves when the file is created
  */
 async function createTestFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });

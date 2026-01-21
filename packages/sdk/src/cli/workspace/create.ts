@@ -38,8 +38,8 @@ const validateRegion = async (region: string, client: OperatorClient) => {
 
 /**
  * Create a new workspace with the given options.
- * @param {CreateWorkspaceOptions} options - Workspace creation options
- * @returns {Promise<WorkspaceInfo>} Created workspace info
+ * @param options - Workspace creation options
+ * @returns Created workspace info
  */
 export async function createWorkspace(options: CreateWorkspaceOptions): Promise<WorkspaceInfo> {
   // Validate options with zod schema

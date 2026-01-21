@@ -21,8 +21,8 @@ export interface TriggerContext {
 
 /**
  * Normalize a file path by removing extension and resolving to absolute path
- * @param {string} filePath - File path to normalize
- * @returns {string} Normalized absolute path without extension
+ * @param filePath - File path to normalize
+ * @returns Normalized absolute path without extension
  */
 function normalizeFilePath(filePath: string): string {
   const absolutePath = path.resolve(filePath);
@@ -33,8 +33,8 @@ function normalizeFilePath(filePath: string): string {
 /**
  * Build trigger context from workflow configuration
  * Scans workflow files to collect workflow and job mappings
- * @param {FileLoadConfig | undefined} workflowConfig - Workflow file loading configuration
- * @returns {Promise<TriggerContext>} Trigger context built from workflow sources
+ * @param workflowConfig - Workflow file loading configuration
+ * @returns Trigger context built from workflow sources
  */
 export async function buildTriggerContext(
   workflowConfig: FileLoadConfig | undefined,
@@ -90,8 +90,8 @@ export async function buildTriggerContext(
 /**
  * Create a rolldown plugin for transforming trigger calls
  * Returns undefined if no trigger context is provided
- * @param {TriggerContext | undefined} triggerContext - Trigger context to use for transformations
- * @returns {Plugin | undefined} Rolldown plugin or undefined when no context
+ * @param triggerContext - Trigger context to use for transformations
+ * @returns Rolldown plugin or undefined when no context
  */
 export function createTriggerTransformPlugin(
   triggerContext: TriggerContext | undefined,

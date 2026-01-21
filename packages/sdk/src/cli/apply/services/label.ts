@@ -14,8 +14,8 @@ export type WithLabel<T> = Partial<
 
 /**
  * Build TRN prefix for a workspace.
- * @param {string} workspaceId - Workspace ID
- * @returns {string} TRN prefix string
+ * @param workspaceId - Workspace ID
+ * @returns TRN prefix string
  */
 export function trnPrefix(workspaceId: string): string {
   return `trn:v1:workspace:${workspaceId}`;
@@ -25,9 +25,9 @@ export const sdkNameLabelKey = "sdk-name";
 
 /**
  * Build metadata request with SDK labels.
- * @param {string} trn - Target TRN
- * @param {string} appName - Application name label
- * @returns {Promise<MessageInitShape<typeof SetMetadataRequestSchema>>} Metadata request
+ * @param trn - Target TRN
+ * @param appName - Application name label
+ * @returns Metadata request
  */
 export async function buildMetaRequest(
   trn: string,

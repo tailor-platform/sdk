@@ -31,6 +31,14 @@ const pfConfigSchema = z.object({
 });
 
 type PfConfig = z.output<typeof pfConfigSchema>;
+type LoadWorkspaceIdOptions = {
+  workspaceId?: string;
+  profile?: string;
+};
+type LoadAccessTokenOptions = {
+  useProfile?: boolean;
+  profile?: string;
+};
 
 function platformConfigPath() {
   if (!xdgConfig) {
@@ -41,7 +49,7 @@ function platformConfigPath() {
 
 /**
  * Read Tailor Platform CLI configuration, migrating from tailorctl if necessary.
- * @returns {PfConfig} Parsed platform configuration
+ * @returns Parsed platform configuration
  */
 export function readPlatformConfig(): PfConfig {
   const configPath = platformConfigPath();
@@ -62,8 +70,7 @@ export function readPlatformConfig(): PfConfig {
 
 /**
  * Write Tailor Platform CLI configuration to disk.
- * @param {PfConfig} config - Platform configuration to write
- * @returns {void}
+ * @param config - Platform configuration to write
  */
 export function writePlatformConfig(config: PfConfig) {
   const configPath = platformConfigPath();
@@ -151,12 +158,10 @@ function validateUUID(value: string, source: string): string {
 /**
  * Load workspace ID from command options, environment variables, or platform config.
  * Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
- * @param {{ workspaceId?: string; profile?: string }} [opts] - Workspace and profile options
- * @param {string} [opts.workspaceId] - Workspace ID
- * @param {string} [opts.profile] - Workspace profile name
- * @returns {string} Resolved workspace ID
+ * @param opts - Workspace and profile options
+ * @returns Resolved workspace ID
  */
-export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string }): string {
+export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
   // opts/workspaceId
   if (opts?.workspaceId) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
@@ -191,12 +196,10 @@ export function loadWorkspaceId(opts?: { workspaceId?: string; profile?: string 
 /**
  * Load access token from command options, environment variables, or platform config.
  * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
- * @param {{ useProfile?: boolean; profile?: string }} [opts] - Profile options
- * @param {boolean} [opts.useProfile] - Whether to use profile resolution
- * @param {string} [opts.profile] - Profile name
- * @returns {Promise<string>} Resolved access token
+ * @param opts - Profile options
+ * @returns Resolved access token
  */
-export async function loadAccessToken(opts?: { useProfile?: boolean; profile?: string }) {
+export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   // env/pat - TAILOR_PLATFORM_TOKEN takes precedence
   if (process.env.TAILOR_PLATFORM_TOKEN) {
     return process.env.TAILOR_PLATFORM_TOKEN;
@@ -237,9 +240,9 @@ export async function loadAccessToken(opts?: { useProfile?: boolean; profile?: s
 
 /**
  * Fetch the latest access token, refreshing if necessary.
- * @param {PfConfig} config - Platform config
- * @param {string} user - User name
- * @returns {Promise<string>} Latest access token
+ * @param config - Platform config
+ * @param user - User name
+ * @returns Latest access token
  */
 export async function fetchLatestToken(config: PfConfig, user: string): Promise<string> {
   const tokens = config.users[user];
@@ -281,8 +284,8 @@ const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
 /**
  * Load config path from command options or environment variables.
  * Priority: opts/config > env/config > search parent directories
- * @param {string} [configPath] - Optional explicit config path
- * @returns {string | undefined} Resolved config path or undefined
+ * @param configPath - Optional explicit config path
+ * @returns Resolved config path or undefined
  */
 export function loadConfigPath(configPath?: string): string | undefined {
   if (configPath) {
@@ -299,8 +302,8 @@ export function loadConfigPath(configPath?: string): string | undefined {
 /**
  * Load organization ID from command options or environment variables.
  * Priority: opts/organizationId > env/organizationId > undefined (optional)
- * @param {string} [organizationId] - Organization ID override
- * @returns {string | undefined} Resolved organization ID or undefined
+ * @param organizationId - Organization ID override
+ * @returns Resolved organization ID or undefined
  */
 export function loadOrganizationId(organizationId?: string): string | undefined {
   if (organizationId) {
@@ -318,8 +321,8 @@ export function loadOrganizationId(organizationId?: string): string | undefined 
 /**
  * Load folder ID from command options or environment variables.
  * Priority: opts/folderId > env/folderId > undefined (optional)
- * @param {string} [folderId] - Folder ID override
- * @returns {string | undefined} Resolved folder ID or undefined
+ * @param folderId - Folder ID override
+ * @returns Resolved folder ID or undefined
  */
 export function loadFolderId(folderId?: string): string | undefined {
   if (folderId) {

@@ -97,8 +97,8 @@ function parseStatus(status: string): WorkflowExecution_Status {
 
 /**
  * List workflow executions with optional filters.
- * @param {ListWorkflowExecutionsOptions} [options] - Workflow execution listing options
- * @returns {Promise<WorkflowExecutionInfo[]>} List of workflow executions
+ * @param options - Workflow execution listing options
+ * @returns List of workflow executions
  */
 export async function listWorkflowExecutions(
   options?: ListWorkflowExecutionsOptions,
@@ -162,8 +162,8 @@ export async function listWorkflowExecutions(
 
 /**
  * Get a single workflow execution with optional logs.
- * @param {GetWorkflowExecutionOptions} options - Workflow execution lookup options
- * @returns {Promise<GetWorkflowExecutionResult>} Workflow execution with optional logs
+ * @param options - Workflow execution lookup options
+ * @returns Workflow execution with optional logs
  */
 export async function getWorkflowExecution(
   options: GetWorkflowExecutionOptions,
@@ -305,8 +305,7 @@ async function waitWithSpinner(
 
 /**
  * Print a workflow execution and its logs in a human-readable format.
- * @param {WorkflowExecutionDetailInfo} execution - Workflow execution detail info
- * @returns {void}
+ * @param execution - Workflow execution detail info
  */
 export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
   // Print execution summary

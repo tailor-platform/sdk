@@ -15,9 +15,9 @@ const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
 
 /**
  * Resolve TailorDB config and namespace.
- * @param {AppConfig} config - Loaded Tailor SDK config.
- * @param {string | undefined} explicitNamespace - Namespace override.
- * @returns {{ namespace: string; erdSite: string | undefined }} Resolved namespace and erdSite.
+ * @param config - Loaded Tailor SDK config.
+ * @param explicitNamespace - Namespace override.
+ * @returns Resolved namespace and erdSite.
  */
 function resolveDbConfig(
   config: AppConfig,
@@ -42,8 +42,8 @@ function resolveDbConfig(
 
 /**
  * Get all namespaces with erdSite configured.
- * @param {AppConfig} config - Loaded Tailor SDK config.
- * @returns {Array<{ namespace: string; erdSite: string }>} Namespaces with erdSite.
+ * @param config - Loaded Tailor SDK config.
+ * @returns Namespaces with erdSite.
  */
 function resolveAllErdSites(config: AppConfig): Array<{ namespace: string; erdSite: string }> {
   const results: Array<{ namespace: string; erdSite: string }> = [];
@@ -59,9 +59,9 @@ function resolveAllErdSites(config: AppConfig): Array<{ namespace: string; erdSi
 
 /**
  * Run the liam CLI to build an ERD static site from a schema file.
- * @param {string} schemaPath - Path to the ERD schema JSON file
- * @param {string} cwd - Working directory where liam will run (dist is created here)
- * @returns {Promise<void>} Resolves when the build completes successfully
+ * @param schemaPath - Path to the ERD schema JSON file
+ * @param cwd - Working directory where liam will run (dist is created here)
+ * @returns Resolves when the build completes successfully
  */
 async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
   fs.mkdirSync(cwd, { recursive: true });
@@ -108,13 +108,24 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
   });
 }
 
+type ErdBuildOptions = TailorDBSchemaOptions & {
+  outputPath: string;
+  erdDir: string;
+};
+
+type ErdBuildsOptions = {
+  client: OperatorClient;
+  workspaceId: string;
+  config: AppConfig;
+  namespace?: string;
+  outputDir?: string;
+};
+
 /**
  * Export TailorDB schema and build ERD artifacts via liam.
- * @param {TailorDBSchemaOptions & { outputPath: string; erdDir: string }} options - Build options.
+ * @param options - Build options.
  */
-async function prepareErdBuild(
-  options: TailorDBSchemaOptions & { outputPath: string; erdDir: string },
-): Promise<void> {
+async function prepareErdBuild(options: ErdBuildOptions): Promise<void> {
   await writeTblsSchemaToFile(options);
 
   await runLiamBuild(options.outputPath, options.erdDir);
@@ -130,21 +141,10 @@ export interface ErdBuildResult {
 
 /**
  * Prepare ERD builds for one or more namespaces.
- * @param {{ client: OperatorClient; workspaceId: string; config: AppConfig; namespace?: string; outputDir?: string }} options - Build options.
- * @param {OperatorClient} options.client - Operator client.
- * @param {string} options.workspaceId - Workspace ID.
- * @param {AppConfig} options.config - Loaded Tailor config.
- * @param {string | undefined} options.namespace - Namespace override.
- * @param {string | undefined} options.outputDir - Output directory override.
- * @returns {Promise<ErdBuildResult[]>} Build results by namespace.
+ * @param options - Build options.
+ * @returns Build results by namespace.
  */
-export async function prepareErdBuilds(options: {
-  client: OperatorClient;
-  workspaceId: string;
-  config: AppConfig;
-  namespace?: string;
-  outputDir?: string;
-}): Promise<ErdBuildResult[]> {
+export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBuildResult[]> {
   const { client, workspaceId, config } = options;
   const baseDir = options.outputDir ?? path.resolve(process.cwd(), DEFAULT_ERD_BASE_DIR);
   let targets: ErdBuildResult[];

@@ -76,8 +76,8 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
  * Normalize record-level permissions into a standard structure.
  * @template User
  * @template Type
- * @param {TailorTypePermission<User, Type>} permission - Tailor type permission
- * @returns {StandardTailorTypePermission} Normalized record permissions
+ * @param permission - Tailor type permission
+ * @returns Normalized record permissions
  */
 function normalizePermission<User extends object = object, Type extends object = object>(
   permission: TailorTypePermission<User, Type>,
@@ -92,8 +92,8 @@ function normalizePermission<User extends object = object, Type extends object =
 
 /**
  * Normalize GraphQL permissions into a standard structure.
- * @param {TailorTypeGqlPermission<unknown, unknown>} permission - Tailor GQL permission
- * @returns {StandardTailorTypeGqlPermission} Normalized GQL permissions
+ * @param permission - Tailor GQL permission
+ * @returns Normalized GQL permissions
  */
 export function normalizeGqlPermission(
   // Raw GQL permissions are not strongly typed at parse time
@@ -117,8 +117,8 @@ function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionP
 /**
  * Parse raw permissions into normalized permissions.
  * This is the main entry point for permission parsing in the parser layer.
- * @param {RawPermissions} rawPermissions - Raw permissions definition
- * @returns {Permissions} Normalized permissions
+ * @param rawPermissions - Raw permissions definition
+ * @returns Normalized permissions
  */
 export function parsePermissions(rawPermissions: RawPermissions): Permissions {
   return {
@@ -133,8 +133,8 @@ export function parsePermissions(rawPermissions: RawPermissions): Permissions {
 
 /**
  * Normalize a single action permission into the standard format.
- * @param {unknown} permission - Raw permission definition
- * @returns {StandardActionPermission} Normalized action permission
+ * @param permission - Raw permission definition
+ * @returns Normalized action permission
  */
 export function normalizeActionPermission(permission: unknown): StandardActionPermission {
   // object format

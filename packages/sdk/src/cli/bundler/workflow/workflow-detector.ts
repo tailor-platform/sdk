@@ -15,10 +15,10 @@ export interface WorkflowLocation {
 }
 
 /**
- * Find all workflows by detecting createWorkflow calls from \@tailor-platform/sdk
- * @param {Program} program - Parsed TypeScript program
- * @param {string} _sourceText - Source code text (currently unused)
- * @returns {WorkflowLocation[]} Detected workflows
+ * Find all workflows by detecting createWorkflow calls from @tailor-platform/sdk
+ * @param program - Parsed TypeScript program
+ * @param _sourceText - Source code text (currently unused)
+ * @returns Detected workflows
  */
 export function findAllWorkflows(program: Program, _sourceText: string): WorkflowLocation[] {
   const workflows: WorkflowLocation[] = [];
@@ -82,8 +82,8 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
 
 /**
  * Build a map from export name to workflow name from detected workflows
- * @param {WorkflowLocation[]} workflows - Detected workflows
- * @returns {Map<string, string>} Map from export name to workflow name
+ * @param workflows - Detected workflows
+ * @returns Map from export name to workflow name
  */
 export function buildWorkflowNameMap(workflows: WorkflowLocation[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -97,8 +97,8 @@ export function buildWorkflowNameMap(workflows: WorkflowLocation[]): Map<string,
 
 /**
  * Detect default imports in a source file and return a map from local name to import source
- * @param {Program} program - Parsed TypeScript program
- * @returns {Map<string, string>} Map from local name to import source
+ * @param program - Parsed TypeScript program
+ * @returns Map from local name to import source
  */
 export function detectDefaultImports(program: Program): Map<string, string> {
   const imports = new Map<string, string>();

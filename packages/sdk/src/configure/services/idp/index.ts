@@ -7,9 +7,9 @@ type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };
 /**
  * Define an IdP service configuration for the Tailor SDK.
  * @template TClients
- * @param {string} name - IdP service name
- * @param {Omit<IdPInput, "name" | "clients"> & { clients: TClients }} config - IdP configuration
- * @returns {IdpDefinitionBrand & IdPInput} Defined IdP service
+ * @param name - IdP service name
+ * @param config - IdP configuration
+ * @returns Defined IdP service
  */
 export function defineIdp<const TClients extends string[]>(
   name: string,

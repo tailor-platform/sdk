@@ -98,8 +98,8 @@ describe("E2E: Service deletion order", () => {
 
   /**
    * Helper to create a test config file with unique name to avoid Node.js module caching
-   * @param {string} config - Config file contents
-   * @returns {string} Path to the created config file
+   * @param config - Config file contents
+   * @returns Path to the created config file
    */
   function createTestConfig(config: string): string {
     configCounter++;

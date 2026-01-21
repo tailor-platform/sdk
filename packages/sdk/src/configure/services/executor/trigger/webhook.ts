@@ -21,7 +21,7 @@ export type IncomingWebhookTrigger<Args> = ParserIncomingWebhookTrigger & {
 /**
  * Create a trigger for incoming webhook requests.
  * @template T
- * @returns {IncomingWebhookTrigger<IncomingWebhookArgs<T>>} Incoming webhook trigger
+ * @returns Incoming webhook trigger
  */
 export function incomingWebhookTrigger<T extends IncomingWebhookRequest>(): IncomingWebhookTrigger<
   IncomingWebhookArgs<T>
