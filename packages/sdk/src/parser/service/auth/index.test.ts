@@ -1,7 +1,6 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
-import { OAuth2ClientSchema } from "./schema";
-import type { AuthConfigSchema } from "./schema";
+import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "./types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
@@ -264,5 +263,36 @@ describe("OAuth2ClientSchema validation", () => {
 
     const result = OAuth2ClientSchema.parse(clientWithoutDpop);
     expect(result.requireDpop).toBeUndefined();
+  });
+});
+
+describe("AuthConfigSchema publishSessionEvents validation", () => {
+  it("accepts publishSessionEvents set to true", () => {
+    const config = {
+      name: "my-auth",
+      publishSessionEvents: true,
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.publishSessionEvents).toBe(true);
+  });
+
+  it("accepts publishSessionEvents set to false", () => {
+    const config = {
+      name: "my-auth",
+      publishSessionEvents: false,
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.publishSessionEvents).toBe(false);
+  });
+
+  it("accepts config without publishSessionEvents field", () => {
+    const config = {
+      name: "my-auth",
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.publishSessionEvents).toBeUndefined();
   });
 });

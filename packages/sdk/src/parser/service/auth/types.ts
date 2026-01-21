@@ -202,4 +202,5 @@ export type AuthServiceInput<
   idProvider?: IdProviderConfig;
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
+  publishSessionEvents?: boolean;
 };
