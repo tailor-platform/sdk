@@ -32,7 +32,7 @@ export const openCommand = defineCommand({
       : `/workspaces/${workspaceId}/applications`;
     const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
 
-    logger.info(`Opening Tailor Platform Console:\n${consoleUrl}\n`);
+    logger.info("Opening Tailor Platform Console...");
 
     try {
       await open(consoleUrl);
@@ -42,7 +42,9 @@ export const openCommand = defineCommand({
         logger.out(`Application Name: ${applicationName}`);
       }
     } catch {
-      logger.warn("Failed to open browser automatically. Please open the URL above manually.");
+      logger.warn(
+        `Failed to open browser automatically. Please open this URL manually:\n${consoleUrl}`,
+      );
     }
   }),
 });
