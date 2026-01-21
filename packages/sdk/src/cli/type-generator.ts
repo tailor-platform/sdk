@@ -25,7 +25,7 @@ function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
  * Generate the contents of the user-defined type definition file.
  * @param attributeMap - Attribute map configuration
  * @param attributeList - Attribute list configuration
- * @param [env] - Environment configuration
+ * @param env - Environment configuration
  * @returns Generated type definition source
  */
 export function generateTypeDefinition(

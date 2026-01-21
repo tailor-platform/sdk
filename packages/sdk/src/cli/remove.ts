@@ -98,7 +98,7 @@ async function execRemove(
 
 /**
  * Remove all resources managed by the current application.
- * @param [options] - Remove options
+ * @param options - Remove options
  * @returns Promise that resolves when removal completes
  */
 export async function remove(options?: RemoveOptions): Promise<void> {

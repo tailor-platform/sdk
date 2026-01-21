@@ -72,7 +72,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * Apply auth-related changes for the given phase.
  * @param client - Operator client instance
  * @param result - Planned auth changes
- * @param [phase] - Apply phase (defaults to "create-update")
+ * @param phase - Apply phase (defaults to "create-update")
  * @returns Promise that resolves when auth changes are applied
  */
 export async function applyAuth(

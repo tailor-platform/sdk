@@ -13,7 +13,7 @@ export interface ListWorkflowsOptions {
 
 /**
  * List workflows in the workspace and return CLI-friendly info.
- * @param [options] - Workflow listing options
+ * @param options - Workflow listing options
  * @returns List of workflows
  */
 export async function listWorkflows(options?: ListWorkflowsOptions): Promise<WorkflowListInfo[]> {

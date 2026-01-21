@@ -97,7 +97,7 @@ function parseStatus(status: string): WorkflowExecution_Status {
 
 /**
  * List workflow executions with optional filters.
- * @param [options] - Workflow execution listing options
+ * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
 export async function listWorkflowExecutions(

@@ -33,7 +33,7 @@ export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerato
 
 /**
  * Load Tailor configuration file and associated generators.
- * @param [configPath] - Optional explicit config path
+ * @param configPath - Optional explicit config path
  * @returns Loaded config and generators
  */
 export async function loadConfig(

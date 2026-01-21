@@ -158,7 +158,7 @@ function validateUUID(value: string, source: string): string {
 /**
  * Load workspace ID from command options, environment variables, or platform config.
  * Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
- * @param [opts] - Workspace and profile options
+ * @param opts - Workspace and profile options
  * @returns Resolved workspace ID
  */
 export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
@@ -196,7 +196,7 @@ export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
 /**
  * Load access token from command options, environment variables, or platform config.
  * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
- * @param [opts] - Profile options
+ * @param opts - Profile options
  * @returns Resolved access token
  */
 export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
@@ -284,7 +284,7 @@ const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
 /**
  * Load config path from command options or environment variables.
  * Priority: opts/config > env/config > search parent directories
- * @param [configPath] - Optional explicit config path
+ * @param configPath - Optional explicit config path
  * @returns Resolved config path or undefined
  */
 export function loadConfigPath(configPath?: string): string | undefined {
@@ -302,7 +302,7 @@ export function loadConfigPath(configPath?: string): string | undefined {
 /**
  * Load organization ID from command options or environment variables.
  * Priority: opts/organizationId > env/organizationId > undefined (optional)
- * @param [organizationId] - Organization ID override
+ * @param organizationId - Organization ID override
  * @returns Resolved organization ID or undefined
  */
 export function loadOrganizationId(organizationId?: string): string | undefined {
@@ -321,7 +321,7 @@ export function loadOrganizationId(organizationId?: string): string | undefined 
 /**
  * Load folder ID from command options or environment variables.
  * Priority: opts/folderId > env/folderId > undefined (optional)
- * @param [folderId] - Folder ID override
+ * @param folderId - Folder ID override
  * @returns Resolved folder ID or undefined
  */
 export function loadFolderId(folderId?: string): string | undefined {

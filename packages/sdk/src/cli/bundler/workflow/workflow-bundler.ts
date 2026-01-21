@@ -34,8 +34,8 @@ export interface BundleWorkflowJobsResult {
  * Returns metadata about which jobs each workflow uses.
  * @param allJobs - All available job infos
  * @param mainJobNames - Names of main jobs
- * @param [env={}] - Environment variables to inject
- * @param [triggerContext] - Trigger context for transformations
+ * @param env - Environment variables to inject
+ * @param triggerContext - Trigger context for transformations
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(

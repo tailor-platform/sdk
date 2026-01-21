@@ -40,7 +40,7 @@ export function idpClientSecretName(namespaceName: string, clientName: string) {
  * Apply IdP-related changes for the given phase.
  * @param client - Operator client instance
  * @param result - Planned IdP changes
- * @param [phase="create-update"] - Apply phase
+ * @param phase - Apply phase
  * @returns Promise that resolves when IdP changes are applied
  */
 export async function applyIdP(

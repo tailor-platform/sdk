@@ -521,7 +521,7 @@ export class GenerationManager {
 
 /**
  * Run code generation using the Tailor configuration and generators.
- * @param [options] - Generation options
+ * @param options - Generation options
  * @returns Promise that resolves when generation (and watch, if enabled) completes
  */
 export async function generate(options?: GenerateOptions) {

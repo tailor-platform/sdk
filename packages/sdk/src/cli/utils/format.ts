@@ -7,7 +7,7 @@ import type { TableUserConfig } from "table";
  * Formats a table with consistent single-line border style.
  * Use this instead of importing `table` directly.
  * @param data - Table data
- * @param [config] - Table configuration
+ * @param config - Table configuration
  * @returns Formatted table string
  */
 export function formatTable(data: unknown[][], config?: TableUserConfig): string {

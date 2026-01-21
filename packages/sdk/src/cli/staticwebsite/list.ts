@@ -19,7 +19,7 @@ interface StaticWebsiteListOptions {
 
 /**
  * List static websites in the workspace.
- * @param [options] - Static website listing options
+ * @param options - Static website listing options
  * @returns List of static websites
  */
 async function listStaticWebsites(

@@ -15,7 +15,7 @@ const limitSchema = z.coerce.number().int().positive().optional();
 
 /**
  * List workspaces with an optional limit.
- * @param [options] - Workspace listing options
+ * @param options - Workspace listing options
  * @returns List of workspaces
  */
 export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<WorkspaceInfo[]> {

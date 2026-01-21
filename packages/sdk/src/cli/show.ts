@@ -41,7 +41,7 @@ function applicationInfo(app: Application): ApplicationInfo {
 
 /**
  * Show applied application information for the current workspace.
- * @param [options] - Show options
+ * @param options - Show options
  * @returns Application information
  */
 export async function show(options?: ShowOptions): Promise<ApplicationInfo> {

@@ -24,7 +24,7 @@ interface ResolverInfo {
  * 3. Bundles in a single step with tree-shaking
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
- * @param [triggerContext] - Trigger context for workflow/job transformations
+ * @param triggerContext - Trigger context for workflow/job transformations
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleResolvers(

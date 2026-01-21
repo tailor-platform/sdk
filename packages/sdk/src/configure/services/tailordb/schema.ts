@@ -247,7 +247,7 @@ export class TailorDBField<
 
   /**
    * Clone the field with optional overrides for field options
-   * @param [options] - Optional field options to override
+   * @param options - Optional field options to override
    * @returns A new TailorDBField instance with the same configuration
    */
   clone<const NewOpt extends FieldOptions>(

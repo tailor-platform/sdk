@@ -27,7 +27,7 @@ function vaultInfo(vault: SecretManagerVault): VaultInfo {
 
 /**
  * List Secret Manager vaults in the workspace.
- * @param [options] - Vault listing options
+ * @param options - Vault listing options
  * @returns List of vaults
  */
 async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {

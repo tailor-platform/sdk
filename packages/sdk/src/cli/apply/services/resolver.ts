@@ -50,7 +50,7 @@ const SCALAR_TYPE_MAP = {
  * Apply resolver pipeline changes for the given phase.
  * @param client - Operator client instance
  * @param result - Planned pipeline changes
- * @param [phase="create-update"] - Apply phase
+ * @param phase - Apply phase
  * @returns Promise that resolves when pipeline changes are applied
  */
 export async function applyPipeline(

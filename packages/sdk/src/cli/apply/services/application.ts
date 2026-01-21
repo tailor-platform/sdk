@@ -19,7 +19,7 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * Apply application changes for the given phase.
  * @param client - Operator client instance
  * @param changeSet - Planned application changes
- * @param [phase="create-update"] - Apply phase
+ * @param phase - Apply phase
  * @returns Promise that resolves when applications are applied
  */
 export async function applyApplication(

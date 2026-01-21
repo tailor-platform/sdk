@@ -38,7 +38,7 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
 
 /**
  * List machine users for the current application.
- * @param [options] - Machine user listing options
+ * @param options - Machine user listing options
  * @returns List of machine users
  */
 export async function listMachineUsers(

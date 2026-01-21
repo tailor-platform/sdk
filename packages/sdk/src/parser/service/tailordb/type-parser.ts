@@ -23,7 +23,7 @@ export type TypeSourceInfo = Record<string, { filePath: string; exportName: stri
  * This is the main entry point for parsing TailorDB types.
  * @param rawTypes - Raw TailorDB types keyed by name
  * @param namespace - TailorDB namespace name
- * @param [typeSourceInfo] - Optional type source information
+ * @param typeSourceInfo - Optional type source information
  * @returns Parsed types
  */
 export function parseTypes(
@@ -133,7 +133,7 @@ function parseTailorDBType(
  * Also validates that backward relation names are unique within each type.
  * @param types - Parsed types
  * @param namespace - TailorDB namespace name
- * @param [typeSourceInfo] - Optional type source information
+ * @param typeSourceInfo - Optional type source information
  */
 function buildBackwardRelationships(
   types: Record<string, ParsedTailorDBType>,
@@ -253,7 +253,7 @@ function buildBackwardRelationships(
  * 2. No duplicate query names across all types
  * @param types - Parsed types
  * @param namespace - TailorDB namespace name
- * @param [typeSourceInfo] - Optional type source information
+ * @param typeSourceInfo - Optional type source information
  */
 function validatePluralFormUniqueness(
   types: Record<string, ParsedTailorDBType>,

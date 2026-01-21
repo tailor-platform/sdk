@@ -183,8 +183,8 @@ function detectExtendedTriggerCalls(
  * @param source - The source code to transform
  * @param workflowNameMap - Map from variable name to workflow name
  * @param jobNameMap - Map from variable name to job name
- * @param [workflowFileMap] - Map from file path (without extension) to workflow name for default exports
- * @param [currentFilePath] - Path of the current file being transformed (for resolving relative imports)
+ * @param workflowFileMap - Map from file path (without extension) to workflow name for default exports
+ * @param currentFilePath - Path of the current file being transformed (for resolving relative imports)
  * @returns Transformed source code with trigger calls rewritten
  */
 export function transformFunctionTriggers(

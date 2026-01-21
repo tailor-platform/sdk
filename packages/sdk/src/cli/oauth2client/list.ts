@@ -14,7 +14,7 @@ export interface ListOAuth2ClientsOptions {
 
 /**
  * List OAuth2 clients for the current application.
- * @param [options] - OAuth2 client listing options
+ * @param options - OAuth2 client listing options
  * @returns List of OAuth2 clients
  */
 export async function listOAuth2Clients(

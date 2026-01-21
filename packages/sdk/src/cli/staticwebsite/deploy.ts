@@ -30,7 +30,7 @@ export type DeployResult = {
  * @param workspaceId - Workspace ID
  * @param name - Static website name
  * @param distDir - Directory containing static site files
- * @param [showProgress=true] - Whether to show upload progress
+ * @param showProgress - Whether to show upload progress
  * @returns Deployment result with URL and skipped files
  */
 export async function deployStaticWebsite(
@@ -117,7 +117,7 @@ async function uploadDirectory(
 /**
  * Recursively collect all deployable files under the given directory.
  * @param rootDir - Root directory to scan
- * @param [currentDir=""] - Current relative directory (for recursion)
+ * @param currentDir - Current relative directory (for recursion)
  * @returns List of file paths relative to rootDir
  */
 async function collectFiles(rootDir: string, currentDir = ""): Promise<string[]> {
