@@ -5,6 +5,7 @@ import type { PlanContext } from "../index";
 import type { Application } from "@/cli/application";
 import type { ExecutorService } from "@/cli/application/executor/service";
 import type { OperatorClient } from "@/cli/client";
+import type { LoadedConfig } from "@/cli/config-loader";
 import type { Executor } from "@/parser/service/executor";
 
 // Mock node:fs to avoid file system access
@@ -17,6 +18,9 @@ vi.mock("node:fs", () => ({
 vi.mock("@/cli/utils/dist-dir", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
+
+// Mock config values for tests
+const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
@@ -144,6 +148,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -178,6 +183,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -212,6 +218,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -244,6 +251,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -277,6 +285,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -297,6 +306,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -323,6 +333,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -349,6 +360,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -376,6 +388,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -404,6 +417,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -424,6 +438,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -454,6 +469,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: true,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -478,6 +494,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);
@@ -508,6 +525,7 @@ describe("planExecutor", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planExecutor(ctx);

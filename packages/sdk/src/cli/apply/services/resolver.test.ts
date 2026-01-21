@@ -6,6 +6,7 @@ import type { Application } from "@/cli/application";
 import type { ExecutorService } from "@/cli/application/executor/service";
 import type { ResolverService } from "@/cli/application/resolver/service";
 import type { OperatorClient } from "@/cli/client";
+import type { LoadedConfig } from "@/cli/config-loader";
 
 // Mock node:fs
 vi.mock("node:fs", () => ({
@@ -17,6 +18,9 @@ vi.mock("node:fs", () => ({
 vi.mock("@/cli/utils/dist-dir", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
+
+// Mock config values for tests
+const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
@@ -127,6 +131,7 @@ describe("planPipeline (resolver service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planPipeline(ctx);
@@ -156,6 +161,7 @@ describe("planPipeline (resolver service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planPipeline(ctx);
@@ -182,6 +188,7 @@ describe("planPipeline (resolver service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planPipeline(ctx);
@@ -207,6 +214,7 @@ describe("planPipeline (resolver service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planPipeline(ctx);
@@ -224,6 +232,7 @@ describe("planPipeline (resolver service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planPipeline(ctx);
@@ -246,6 +255,7 @@ describe("planPipeline (resolver service level)", () => {
         workspaceId,
         application,
         forRemoval: false,
+        config: mockConfig,
       };
 
       const result = await planPipeline(ctx);
