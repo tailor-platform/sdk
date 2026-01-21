@@ -416,7 +416,9 @@ export function createSeedGenerator(options: {
     .map(([type, deps]) => `${type}: [${deps.dependencies.join(", ")}]`)
     .join("\n  ")}
 `,
-        }); // Generate exec.mjs if machineUserName is provided
+        });
+
+        // Generate exec.mjs if machineUserName is provided
         if (options.machineUserName) {
           const relativeConfigPath = path.relative(outputDir, configPath);
           files.push({
