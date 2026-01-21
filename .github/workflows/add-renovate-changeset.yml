@@ -2,7 +2,7 @@ name: Add changeset for Renovate PR
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
 
 permissions:
   contents: read
@@ -23,7 +23,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check if changeset exists
+        id: check
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          FILENAME=".changeset/renovate-${PR_NUMBER}.md"
+          if [ -f "$FILENAME" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create changeset file
+        if: steps.check.outputs.exists == 'false'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -39,6 +52,7 @@ jobs:
           EOF
 
       - name: Commit changeset
+        if: steps.check.outputs.exists == 'false'
         uses: suzuki-shunsuke/commit-action@f28421acc277a6d6a9c1f94ea449076ad77dba67 # v0.1.0
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
