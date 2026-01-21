@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-01-20T07:02:28.600Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "User",
+      "fieldName": "name",
+      "before": {
+        "type": "string",
+        "required": true,
+        "index": true,
+        "unique": true
+      },
+      "after": {
+        "type": "string",
+        "required": true
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "User",
+      "reason": "Index \"idx_name_department\" added",
+      "before": {},
+      "after": {
+        "indexes": {
+          "idx_name_department": {
+            "fields": ["name", "department"],
+            "unique": false
+          },
+          "user_status_created_idx": {
+            "fields": ["status", "createdAt"],
+            "unique": false
+          }
+        }
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "User",
+      "reason": "Index \"user_status_created_idx\" added",
+      "before": {},
+      "after": {
+        "indexes": {
+          "idx_name_department": {
+            "fields": ["name", "department"],
+            "unique": false
+          },
+          "user_status_created_idx": {
+            "fields": ["status", "createdAt"],
+            "unique": false
+          }
+        }
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "User",
+      "reason": "File field \"avatar\" added",
+      "before": {},
+      "after": {
+        "files": {
+          "avatar": "profile image"
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}

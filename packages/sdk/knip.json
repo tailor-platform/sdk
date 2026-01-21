@@ -5,7 +5,7 @@
     "type": true
   },
   "tags": ["-lintignore"],
-  "ignore": ["scripts/perf/**"],
+  "ignore": ["scripts/**", "e2e/fixtures/**"],
   "ignoreDependencies": [
     "cross-env",
     "oxlint",

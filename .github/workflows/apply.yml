@@ -90,9 +90,43 @@ jobs:
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
+      - name: Apply initial migration (0000)
+        working-directory: example
+        shell: bash
+        run: pnpm run apply
+        env:
+          TAILOR_APPLY_MIGRATION_VERSION: "0000"
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Verify initial schema applied
+        working-directory: example
+        shell: bash
+        run: |
+          echo "Checking migration status..."
+          pnpm --silent tailor-sdk tailordb migration status --namespace tailordb
+        env:
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
       - name: Apply workspace
         working-directory: example
         run: pnpm run apply
+        env:
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
+      - name: Verify all migrations applied
+        working-directory: example
+        shell: bash
+        run: |
+          STATUS=$(pnpm --silent tailor-sdk tailordb migration status --namespace tailordb)
+          echo "$STATUS"
+
+          # Check for pending migrations
+          if echo "$STATUS" | grep -q "Pending migrations:"; then
+            echo "❌ ERROR: Pending migrations found after apply"
+            exit 1
+          fi
+
+          echo "✅ All migrations applied successfully"
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 

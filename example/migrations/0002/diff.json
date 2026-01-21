@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-01-20T03:12:24.116Z",
+  "changes": [
+    {
+      "kind": "field_added",
+      "typeName": "User",
+      "fieldName": "department",
+      "after": {
+        "type": "string",
+        "required": false
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
