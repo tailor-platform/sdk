@@ -2,7 +2,9 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add TailorDB schema migration feature. Migrations allow you to safely evolve your database schema with type-safe data transformations.
+Add TailorDB schema migration feature (beta). Migrations allow you to safely evolve your database schema with type-safe data transformations.
+
+> **Note:** This feature is currently in beta. The API and behavior may change in future releases.
 
 **Key Features:**
 
