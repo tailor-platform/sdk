@@ -213,8 +213,8 @@ client.on("entityStart", (payload) => {
 });
 
 client.on("entityComplete", (payload) => {
-  const { entityName, successCount } = payload;
-  console.log(styleText("green", `  ✓ ${entityName}: ${successCount} rows processed`));
+  const { entityName, metrics: { rowsProcessed } } = payload;
+  console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));
 });
 
 client.on("rowFailure", (payload) => {
