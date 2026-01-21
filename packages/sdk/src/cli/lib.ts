@@ -8,7 +8,7 @@ export { apply } from "./apply/index";
 export type { ApplyOptions } from "./apply/index";
 export { generate } from "./generator/index";
 export type { GenerateOptions } from "./generator/options";
-export { loadConfig } from "./config-loader";
+export { loadConfig, type LoadedConfig } from "./config-loader";
 export { generateUserTypes } from "./type-generator";
 export type {
   CodeGenerator,
@@ -77,3 +77,41 @@ export type {
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
 export { truncate, type TruncateOptions } from "./tailordb/truncate";
+
+// Migration exports
+export {
+  generate as migrateGenerate,
+  type GenerateOptions as MigrateGenerateOptions,
+} from "./tailordb/migrate/generate";
+export {
+  createSnapshotFromLocalTypes,
+  reconstructSnapshotFromMigrations,
+  compareSnapshots,
+  getNextMigrationNumber,
+  getLatestMigrationNumber,
+  getMigrationFiles,
+  compareLocalTypesWithSnapshot,
+} from "./tailordb/migrate/snapshot";
+export {
+  hasChanges,
+  formatMigrationDiff,
+  formatDiffSummary,
+} from "./tailordb/migrate/diff-calculator";
+export {
+  MIGRATION_LABEL_KEY,
+  SCHEMA_FILE_NAME,
+  DIFF_FILE_NAME,
+  MIGRATE_FILE_NAME,
+  DB_TYPES_FILE_NAME,
+  INITIAL_SCHEMA_NUMBER,
+  getMigrationDirPath,
+  getMigrationFilePath,
+  getNamespacesWithMigrations,
+  type SchemaSnapshot,
+  type MigrationDiff,
+  type SnapshotType,
+  type SnapshotFieldConfig,
+  type BreakingChangeInfo,
+  type NamespaceWithMigrations,
+  type MigrationInfo,
+} from "./tailordb/migrate/types";

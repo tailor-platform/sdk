@@ -17,6 +17,11 @@ import { createSeedGenerator, SeedGeneratorID } from "./generator/builtin/seed";
 import type { AppConfig } from "@/parser/app-config";
 import "./mock";
 
+/**
+ * Loaded configuration with resolved path
+ */
+export type LoadedConfig = AppConfig & { path: string };
+
 // Register built-in generators with their constructor functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
@@ -38,7 +43,7 @@ export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerato
  */
 export async function loadConfig(
   configPath?: string,
-): Promise<{ config: AppConfig; generators: Generator[]; configPath: string }> {
+): Promise<{ config: LoadedConfig; generators: Generator[] }> {
   const foundPath = loadConfigPath(configPath);
   if (!foundPath) {
     throw new Error(
@@ -79,8 +84,7 @@ export async function loadConfig(
   }
 
   return {
-    config: configModule.default as AppConfig,
+    config: { ...configModule.default, path: resolvedPath } as LoadedConfig,
     generators: allGenerators,
-    configPath: resolvedPath,
   };
 }
