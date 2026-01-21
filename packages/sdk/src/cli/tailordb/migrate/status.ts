@@ -8,13 +8,14 @@ import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logBetaWarning } from "../../utils/beta";
 import { logger, styles } from "../../utils/logger";
-import { getMigrationFiles, loadDiff } from "./snapshot";
+import { getNamespacesWithMigrations } from "./config";
 import {
-  getNamespacesWithMigrations,
+  getMigrationFiles,
+  loadDiff,
   getMigrationFilePath,
   formatMigrationNumber,
-  parseMigrationLabelNumber,
-} from "./types";
+} from "./snapshot";
+import { parseMigrationLabelNumber } from "./types";
 
 export interface StatusOptions {
   configPath?: string;

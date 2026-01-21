@@ -49,19 +49,22 @@ import {
 import { createChangeSet } from "..";
 import { fetchAll, type OperatorClient } from "../../../client";
 import {
+  getNamespacesWithMigrations,
+  type NamespaceWithMigrations,
+} from "../../../tailordb/migrate/config";
+import {
   hasChanges,
   formatMigrationDiff,
   formatDiffSummary,
+  type MigrationDiff,
+  type DiffChange,
 } from "../../../tailordb/migrate/diff-calculator";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
   assertValidMigrationFiles,
-} from "../../../tailordb/migrate/snapshot";
-import {
-  getNamespacesWithMigrations,
   formatMigrationNumber,
-} from "../../../tailordb/migrate/types";
+} from "../../../tailordb/migrate/snapshot";
 import { logger, styles } from "../../../utils/logger";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
 import {
@@ -72,12 +75,7 @@ import {
   buildFilteredTypesForVersion,
 } from "./migration";
 import type { ApplyPhase, PlanContext } from "../..";
-import type {
-  NamespaceWithMigrations,
-  MigrationDiff,
-  PendingMigration,
-  DiffChange,
-} from "../../../tailordb/migrate/types";
+import type { PendingMigration } from "../../../tailordb/migrate/types";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";

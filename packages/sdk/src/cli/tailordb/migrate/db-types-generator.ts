@@ -6,8 +6,13 @@
  */
 
 import * as fs from "node:fs/promises";
-import { getMigrationFilePath } from "./types";
-import type { SchemaSnapshot, SnapshotFieldConfig, SnapshotType, MigrationDiff } from "./types";
+import {
+  getMigrationFilePath,
+  type SchemaSnapshot,
+  type SnapshotFieldConfig,
+  type SnapshotType,
+} from "./snapshot";
+import type { MigrationDiff } from "./diff-calculator";
 
 /**
  * Information about enum value changes

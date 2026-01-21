@@ -4,9 +4,10 @@ import {
   formatMigrationDiff,
   formatBreakingChanges,
   formatDiffSummary,
+  SCHEMA_SNAPSHOT_VERSION,
+  type MigrationDiff,
+  type BreakingChangeInfo,
 } from "./diff-calculator";
-import { SCHEMA_SNAPSHOT_VERSION } from "./types";
-import type { MigrationDiff, BreakingChangeInfo } from "./types";
 
 // Helper to create a MigrationDiff
 function createDiff(

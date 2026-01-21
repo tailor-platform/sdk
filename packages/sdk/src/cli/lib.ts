@@ -93,12 +93,17 @@ export {
   compareLocalTypesWithSnapshot,
 } from "./tailordb/migrate/snapshot";
 export {
+  getNamespacesWithMigrations,
+  type NamespaceWithMigrations,
+} from "./tailordb/migrate/config";
+export {
   hasChanges,
   formatMigrationDiff,
   formatDiffSummary,
+  type MigrationDiff,
+  type BreakingChangeInfo,
 } from "./tailordb/migrate/diff-calculator";
 export {
-  MIGRATION_LABEL_KEY,
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
@@ -106,12 +111,9 @@ export {
   INITIAL_SCHEMA_NUMBER,
   getMigrationDirPath,
   getMigrationFilePath,
-  getNamespacesWithMigrations,
   type SchemaSnapshot,
-  type MigrationDiff,
   type SnapshotType,
   type SnapshotFieldConfig,
-  type BreakingChangeInfo,
-  type NamespaceWithMigrations,
   type MigrationInfo,
-} from "./tailordb/migrate/types";
+} from "./tailordb/migrate/snapshot";
+export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";

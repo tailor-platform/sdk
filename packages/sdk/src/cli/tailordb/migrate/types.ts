@@ -1,12 +1,12 @@
 /**
- * Types for TailorDB migration functionality
+ * Types for TailorDB migration execution
  */
 
-import * as path from "pathe";
-import type { AppConfig } from "@/configure/config";
+import { formatMigrationNumber } from "./snapshot";
+import type { MigrationDiff } from "./diff-calculator";
 
 // ============================================================================
-// Constants
+// Label Constants
 // ============================================================================
 
 /**
@@ -21,28 +21,13 @@ export const MAX_LABEL_LENGTH = 63;
 export const MIGRATION_LABEL_PREFIX = "m";
 
 /**
- * Pattern for validating migration number format (4-digit sequential number)
- * Examples: 0001, 0002, 0003, ...
+ * Label key for storing migration state in TailorDB Service metadata
  */
-export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
+export const MIGRATION_LABEL_KEY = "sdk-migration";
 
-/**
- * Migration file names (used within migration directories)
- */
-export const SCHEMA_FILE_NAME = "schema.json";
-export const DIFF_FILE_NAME = "diff.json";
-export const MIGRATE_FILE_NAME = "migrate.ts";
-export const DB_TYPES_FILE_NAME = "db.ts";
-
-/**
- * Initial schema migration number (0000)
- */
-export const INITIAL_SCHEMA_NUMBER = 0;
-
-/**
- * Current schema snapshot format version
- */
-export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
+// ============================================================================
+// Error Constants
+// ============================================================================
 
 /**
  * Error patterns that indicate schema corruption
@@ -57,188 +42,6 @@ export const SCHEMA_ERROR_PATTERNS = [
 // ============================================================================
 // Types
 // ============================================================================
-
-/**
- * Namespace with migrations configuration
- */
-export interface NamespaceWithMigrations {
-  namespace: string;
-  migrationsDir: string;
-}
-
-function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { directory: string } } {
-  if (typeof dbConfig !== "object" || dbConfig === null) return false;
-  if (!("migration" in dbConfig)) return false;
-
-  const migration = (dbConfig as { migration: unknown }).migration;
-  if (typeof migration !== "object" || migration === null) return false;
-  if (!("directory" in migration)) return false;
-
-  return typeof (migration as { directory: unknown }).directory === "string";
-}
-
-/**
- * Get namespaces that have migrations configured
- * @param {AppConfig} config - Application configuration
- * @param {string} configDir - Configuration directory path
- * @returns {NamespaceWithMigrations[]} Array of namespaces with migrations configured
- */
-export function getNamespacesWithMigrations(
-  config: AppConfig,
-  configDir: string,
-): NamespaceWithMigrations[] {
-  const result: NamespaceWithMigrations[] = [];
-
-  for (const namespace of Object.keys(config.db ?? {})) {
-    const dbConfig = config.db?.[namespace];
-    if (!hasMigrationConfig(dbConfig)) continue;
-
-    const migrationsDir = path.resolve(configDir, dbConfig.migration.directory);
-    result.push({ namespace, migrationsDir });
-  }
-
-  return result;
-}
-
-// ============================================================================
-// Schema Snapshot Types
-// ============================================================================
-
-/**
- * Field configuration in schema snapshot
- */
-export interface SnapshotFieldConfig {
-  type: string;
-  required: boolean;
-  array?: boolean;
-  index?: boolean;
-  unique?: boolean;
-  allowedValues?: string[];
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-}
-
-/**
- * Index configuration in schema snapshot
- */
-export interface SnapshotIndexConfig {
-  fields: string[];
-  unique?: boolean;
-}
-
-/**
- * Type definition in schema snapshot
- */
-export interface SnapshotType {
-  name: string;
-  pluralForm?: string;
-  description?: string;
-  fields: Record<string, SnapshotFieldConfig>;
-  settings?: {
-    aggregation?: boolean;
-    bulkUpsert?: boolean;
-  };
-  indexes?: Record<string, SnapshotIndexConfig>;
-  files?: Record<string, string>;
-}
-
-/**
- * Schema snapshot - full schema state at a point in time
- * Stored as XXXX/schema.json (e.g., 0000/schema.json for initial snapshot)
- */
-export interface SchemaSnapshot {
-  /** Format version for future compatibility */
-  version: typeof SCHEMA_SNAPSHOT_VERSION;
-  namespace: string;
-  createdAt: string;
-  types: Record<string, SnapshotType>;
-}
-
-// ============================================================================
-// Migration Diff Types
-// ============================================================================
-
-/**
- * Change kind in migration diff
- */
-export type DiffChangeKind =
-  | "type_added"
-  | "type_removed"
-  | "type_modified"
-  | "field_added"
-  | "field_removed"
-  | "field_modified";
-
-/**
- * Single change in migration diff
- */
-export interface DiffChange {
-  kind: DiffChangeKind;
-  typeName: string;
-  fieldName?: string;
-  before?: unknown;
-  after?: unknown;
-  reason?: string;
-}
-
-/**
- * Migration diff - changes between two schema versions
- * Stored as XXXX/diff.json (e.g., 0001/diff.json)
- */
-export interface MigrationDiff {
-  /** Format version for future compatibility */
-  version: typeof SCHEMA_SNAPSHOT_VERSION;
-  namespace: string;
-  createdAt: string;
-  description?: string;
-  changes: DiffChange[];
-  /** Whether there are breaking changes (data loss or constraint violations possible) */
-  hasBreakingChanges: boolean;
-  /** List of breaking changes */
-  breakingChanges: BreakingChangeInfo[];
-  /** Whether a migration script is required to handle data migration */
-  requiresMigrationScript: boolean;
-}
-
-/**
- * Breaking change information in migration diff
- */
-export interface BreakingChangeInfo {
-  typeName: string;
-  fieldName?: string;
-  reason: string;
-}
-
-// ============================================================================
-// Migration State Types
-// ============================================================================
-
-/**
- * Label key for storing migration state in TailorDB Service metadata
- */
-export const MIGRATION_LABEL_KEY = "sdk-migration";
-
-/**
- * Migration file type
- */
-export type MigrationFileType = "schema" | "diff" | "migrate" | "db";
-
-/**
- * Information about a migration
- */
-export interface MigrationInfo {
-  /** Migration number (e.g., 1, 2, 3) */
-  number: number;
-  /** Migration number as 4-digit string (e.g., "0001", "0002") */
-  numberStr: string;
-  /** Migration file type */
-  type: MigrationFileType;
-  /** Path to migration file */
-  path: string;
-  /** Parsed content (schema snapshot or diff) */
-  content: SchemaSnapshot | MigrationDiff;
-}
 
 /**
  * Pending migration to be executed
@@ -259,38 +62,8 @@ export interface PendingMigration {
 }
 
 // ============================================================================
-// Helper Functions
+// Label Helper Functions
 // ============================================================================
-
-/**
- * Validate that a migration number follows the expected format (4-digit number)
- * @param {string} numberStr - Migration number string to validate
- * @returns {boolean} True if number matches expected format
- */
-export function isValidMigrationNumber(numberStr: string): boolean {
-  return MIGRATION_NUMBER_PATTERN.test(numberStr);
-}
-
-/**
- * Format migration number as 4-digit string
- * @param {number} num - Migration number
- * @returns {string} 4-digit padded string (e.g., "0001")
- */
-export function formatMigrationNumber(num: number): string {
-  return num.toString().padStart(4, "0");
-}
-
-/**
- * Parse migration number from file name
- * @param {string} fileName - File name (e.g., "0001_schema.json")
- * @returns {number | null} Parsed number or null if invalid
- */
-export function parseMigrationNumber(fileName: string): number | null {
-  const match = fileName.match(/^(\d{4})_/);
-  if (!match) return null;
-  const num = parseInt(match[1], 10);
-  return isNaN(num) ? null : num;
-}
 
 /**
  * Sanitize migration number for use as label value
@@ -317,6 +90,10 @@ export function parseMigrationLabelNumber(label: string): number | null {
   return isNaN(num) ? null : num;
 }
 
+// ============================================================================
+// Error Helper Functions
+// ============================================================================
+
 /**
  * Check if an error message indicates schema corruption
  * @param {string} errorMessage - Error message to check
@@ -325,41 +102,4 @@ export function parseMigrationLabelNumber(label: string): number | null {
 export function isSchemaError(errorMessage: string): boolean {
   const lowerMessage = errorMessage.toLowerCase();
   return SCHEMA_ERROR_PATTERNS.some((pattern) => lowerMessage.includes(pattern));
-}
-
-/**
- * Get migration directory path for a given number
- * @param {string} migrationsDir - Base migrations directory path
- * @param {number} num - Migration number
- * @returns {string} Full directory path for the migration
- */
-export function getMigrationDirPath(migrationsDir: string, num: number): string {
-  const numStr = formatMigrationNumber(num);
-  return path.join(migrationsDir, numStr);
-}
-
-/**
- * Map of migration file types to their file names
- */
-const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
-  schema: SCHEMA_FILE_NAME,
-  diff: DIFF_FILE_NAME,
-  migrate: MIGRATE_FILE_NAME,
-  db: DB_TYPES_FILE_NAME,
-};
-
-/**
- * Get migration file path for a given number and type
- * @param {string} migrationsDir - Migrations directory path
- * @param {number} num - Migration number
- * @param {MigrationFileType} type - File type
- * @returns {string} Full file path
- */
-export function getMigrationFilePath(
-  migrationsDir: string,
-  num: number,
-  type: MigrationFileType,
-): string {
-  const migrationDir = getMigrationDirPath(migrationsDir, num);
-  return path.join(migrationDir, MIGRATION_FILE_NAMES[type]);
 }

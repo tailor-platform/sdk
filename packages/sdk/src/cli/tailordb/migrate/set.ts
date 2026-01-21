@@ -7,12 +7,9 @@ import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logBetaWarning } from "../../utils/beta";
 import { logger, styles } from "../../utils/logger";
-import {
-  getNamespacesWithMigrations,
-  formatMigrationNumber,
-  isValidMigrationNumber,
-  parseMigrationLabelNumber,
-} from "./types";
+import { getNamespacesWithMigrations } from "./config";
+import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
+import { parseMigrationLabelNumber } from "./types";
 
 export interface SetOptions {
   configPath?: string;

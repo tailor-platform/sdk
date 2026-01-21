@@ -5,7 +5,67 @@
  * The actual diff calculation is performed by snapshot.ts.
  */
 
-import type { MigrationDiff, DiffChange, BreakingChangeInfo, SnapshotFieldConfig } from "./types";
+import type { SnapshotFieldConfig } from "./snapshot";
+
+// ============================================================================
+// Diff Types
+// ============================================================================
+
+/**
+ * Current schema snapshot format version
+ */
+export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
+
+/**
+ * Change kind in migration diff
+ */
+export type DiffChangeKind =
+  | "type_added"
+  | "type_removed"
+  | "type_modified"
+  | "field_added"
+  | "field_removed"
+  | "field_modified";
+
+/**
+ * Single change in migration diff
+ */
+export interface DiffChange {
+  kind: DiffChangeKind;
+  typeName: string;
+  fieldName?: string;
+  before?: unknown;
+  after?: unknown;
+  reason?: string;
+}
+
+/**
+ * Migration diff - changes between two schema versions
+ * Stored as XXXX/diff.json (e.g., 0001/diff.json)
+ */
+export interface MigrationDiff {
+  /** Format version for future compatibility */
+  version: typeof SCHEMA_SNAPSHOT_VERSION;
+  namespace: string;
+  createdAt: string;
+  description?: string;
+  changes: DiffChange[];
+  /** Whether there are breaking changes (data loss or constraint violations possible) */
+  hasBreakingChanges: boolean;
+  /** List of breaking changes */
+  breakingChanges: BreakingChangeInfo[];
+  /** Whether a migration script is required to handle data migration */
+  requiresMigrationScript: boolean;
+}
+
+/**
+ * Breaking change information in migration diff
+ */
+export interface BreakingChangeInfo {
+  typeName: string;
+  fieldName?: string;
+  reason: string;
+}
 
 /**
  * Check if a migration diff has any changes

@@ -5,23 +5,189 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import {
-  type SchemaSnapshot,
-  type SnapshotType,
-  type SnapshotFieldConfig,
-  type SnapshotIndexConfig,
   type MigrationDiff,
   type DiffChange,
   type BreakingChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
-  SCHEMA_FILE_NAME,
-  DIFF_FILE_NAME,
-  INITIAL_SCHEMA_NUMBER,
-  formatMigrationNumber,
-  isValidMigrationNumber,
-  getMigrationDirPath,
-  getMigrationFilePath,
-} from "./types";
+} from "./diff-calculator";
 import type { ParsedTailorDBType, ParsedField } from "@/parser/service/tailordb/types";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/**
+ * Initial schema migration number (0000)
+ */
+export const INITIAL_SCHEMA_NUMBER = 0;
+
+/**
+ * Migration file names (used within migration directories)
+ */
+export const SCHEMA_FILE_NAME = "schema.json";
+export const DIFF_FILE_NAME = "diff.json";
+export const MIGRATE_FILE_NAME = "migrate.ts";
+export const DB_TYPES_FILE_NAME = "db.ts";
+
+/**
+ * Pattern for validating migration number format (4-digit sequential number)
+ * Examples: 0001, 0002, 0003, ...
+ */
+export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
+
+// Re-export SCHEMA_SNAPSHOT_VERSION for convenience
+export { SCHEMA_SNAPSHOT_VERSION };
+
+// ============================================================================
+// Snapshot Types
+// ============================================================================
+
+/**
+ * Field configuration in schema snapshot
+ */
+export interface SnapshotFieldConfig {
+  type: string;
+  required: boolean;
+  array?: boolean;
+  index?: boolean;
+  unique?: boolean;
+  allowedValues?: string[];
+  foreignKey?: boolean;
+  foreignKeyType?: string;
+  foreignKeyField?: string;
+}
+
+/**
+ * Index configuration in schema snapshot
+ */
+export interface SnapshotIndexConfig {
+  fields: string[];
+  unique?: boolean;
+}
+
+/**
+ * Type definition in schema snapshot
+ */
+export interface SnapshotType {
+  name: string;
+  pluralForm?: string;
+  description?: string;
+  fields: Record<string, SnapshotFieldConfig>;
+  settings?: {
+    aggregation?: boolean;
+    bulkUpsert?: boolean;
+  };
+  indexes?: Record<string, SnapshotIndexConfig>;
+  files?: Record<string, string>;
+}
+
+/**
+ * Schema snapshot - full schema state at a point in time
+ * Stored as XXXX/schema.json (e.g., 0000/schema.json for initial snapshot)
+ */
+export interface SchemaSnapshot {
+  /** Format version for future compatibility */
+  version: typeof SCHEMA_SNAPSHOT_VERSION;
+  namespace: string;
+  createdAt: string;
+  types: Record<string, SnapshotType>;
+}
+
+/**
+ * Migration file type
+ */
+export type MigrationFileType = "schema" | "diff" | "migrate" | "db";
+
+/**
+ * Information about a migration
+ */
+export interface MigrationInfo {
+  /** Migration number (e.g., 1, 2, 3) */
+  number: number;
+  /** Migration number as 4-digit string (e.g., "0001", "0002") */
+  numberStr: string;
+  /** Migration file type */
+  type: MigrationFileType;
+  /** Path to migration file */
+  path: string;
+  /** Parsed content (schema snapshot or diff) */
+  content: SchemaSnapshot | MigrationDiff;
+}
+
+// ============================================================================
+// Migration Number Helpers
+// ============================================================================
+
+/**
+ * Validate that a migration number follows the expected format (4-digit number)
+ * @param {string} numberStr - Migration number string to validate
+ * @returns {boolean} True if number matches expected format
+ */
+export function isValidMigrationNumber(numberStr: string): boolean {
+  return MIGRATION_NUMBER_PATTERN.test(numberStr);
+}
+
+/**
+ * Format migration number as 4-digit string
+ * @param {number} num - Migration number
+ * @returns {string} 4-digit padded string (e.g., "0001")
+ */
+export function formatMigrationNumber(num: number): string {
+  return num.toString().padStart(4, "0");
+}
+
+/**
+ * Parse migration number from file name
+ * @param {string} fileName - File name (e.g., "0001_schema.json")
+ * @returns {number | null} Parsed number or null if invalid
+ */
+export function parseMigrationNumber(fileName: string): number | null {
+  const match = fileName.match(/^(\d{4})_/);
+  if (!match) return null;
+  const num = parseInt(match[1], 10);
+  return isNaN(num) ? null : num;
+}
+
+// ============================================================================
+// Path Helpers
+// ============================================================================
+
+/**
+ * Map of migration file types to their file names
+ */
+const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
+  schema: SCHEMA_FILE_NAME,
+  diff: DIFF_FILE_NAME,
+  migrate: MIGRATE_FILE_NAME,
+  db: DB_TYPES_FILE_NAME,
+};
+
+/**
+ * Get migration directory path for a given number
+ * @param {string} migrationsDir - Base migrations directory path
+ * @param {number} num - Migration number
+ * @returns {string} Full directory path for the migration
+ */
+export function getMigrationDirPath(migrationsDir: string, num: number): string {
+  const numStr = formatMigrationNumber(num);
+  return path.join(migrationsDir, numStr);
+}
+
+/**
+ * Get migration file path for a given number and type
+ * @param {string} migrationsDir - Migrations directory path
+ * @param {number} num - Migration number
+ * @param {MigrationFileType} type - File type
+ * @returns {string} Full file path
+ */
+export function getMigrationFilePath(
+  migrationsDir: string,
+  num: number,
+  type: MigrationFileType,
+): string {
+  const migrationDir = getMigrationDirPath(migrationsDir, num);
+  return path.join(migrationDir, MIGRATION_FILE_NAMES[type]);
+}
 
 // ============================================================================
 // Snapshot Creation

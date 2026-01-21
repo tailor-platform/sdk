@@ -10,19 +10,21 @@ import * as path from "pathe";
 import { bundleMigrationScript } from "../../../bundler/migration/migration-bundler";
 import { type OperatorClient } from "../../../client";
 import {
+  getNamespacesWithMigrations,
+  type NamespaceWithMigrations,
+} from "../../../tailordb/migrate/config";
+import {
   loadDiff,
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
   filterTypeToSnapshot,
+  getMigrationFilePath,
+  formatMigrationNumber,
 } from "../../../tailordb/migrate/snapshot";
 import {
   type PendingMigration,
-  type NamespaceWithMigrations,
   MIGRATION_LABEL_KEY,
-  formatMigrationNumber,
   parseMigrationLabelNumber,
-  getMigrationFilePath,
-  getNamespacesWithMigrations,
 } from "../../../tailordb/migrate/types";
 import { logger, styles } from "../../../utils/logger";
 import { executeScript } from "../../../utils/script-executor";

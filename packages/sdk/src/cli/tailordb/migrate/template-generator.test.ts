@@ -2,21 +2,21 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
+import {
+  SCHEMA_FILE_NAME,
+  DIFF_FILE_NAME,
+  MIGRATE_FILE_NAME,
+  DB_TYPES_FILE_NAME,
+  getMigrationDirPath,
+  type SchemaSnapshot,
+} from "./snapshot";
 import {
   generateSchemaFile,
   generateDiffFiles,
   migrationScriptExists,
   getMigrationScriptPath,
 } from "./template-generator";
-import {
-  SCHEMA_SNAPSHOT_VERSION,
-  SCHEMA_FILE_NAME,
-  DIFF_FILE_NAME,
-  MIGRATE_FILE_NAME,
-  DB_TYPES_FILE_NAME,
-  getMigrationDirPath,
-} from "./types";
-import type { SchemaSnapshot, MigrationDiff } from "./types";
 
 describe("template-generator", () => {
   let tempDir: string;

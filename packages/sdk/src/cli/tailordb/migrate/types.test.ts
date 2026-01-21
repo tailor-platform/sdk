@@ -1,22 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   isValidMigrationNumber,
-  isSchemaError,
   formatMigrationNumber,
   parseMigrationNumber,
-  sanitizeMigrationLabel,
-  parseMigrationLabelNumber,
   getMigrationFilePath,
   getMigrationDirPath,
-  MAX_LABEL_LENGTH,
-  MIGRATION_LABEL_PREFIX,
   MIGRATION_NUMBER_PATTERN,
-  SCHEMA_ERROR_PATTERNS,
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
   DB_TYPES_FILE_NAME,
   INITIAL_SCHEMA_NUMBER,
+} from "./snapshot";
+import {
+  isSchemaError,
+  sanitizeMigrationLabel,
+  parseMigrationLabelNumber,
+  MAX_LABEL_LENGTH,
+  MIGRATION_LABEL_PREFIX,
+  SCHEMA_ERROR_PATTERNS,
 } from "./types";
 
 describe("migration constants", () => {

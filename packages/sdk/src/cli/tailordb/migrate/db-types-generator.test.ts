@@ -2,8 +2,13 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, it, beforeEach, afterAll } from "vitest";
 import { writeDbTypesFile } from "./db-types-generator";
-import { SCHEMA_SNAPSHOT_VERSION, formatMigrationNumber, getMigrationDirPath } from "./types";
-import type { SchemaSnapshot, MigrationDiff, SnapshotFieldConfig } from "./types";
+import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
+import {
+  formatMigrationNumber,
+  getMigrationDirPath,
+  type SchemaSnapshot,
+  type SnapshotFieldConfig,
+} from "./snapshot";
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_db_types__");
 

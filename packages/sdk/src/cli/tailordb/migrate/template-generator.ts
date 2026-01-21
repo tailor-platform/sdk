@@ -10,8 +10,13 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
-import { getMigrationDirPath, getMigrationFilePath } from "./types";
-import type { SchemaSnapshot, MigrationDiff, DiffChange, SnapshotFieldConfig } from "./types";
+import {
+  getMigrationDirPath,
+  getMigrationFilePath,
+  type SchemaSnapshot,
+  type SnapshotFieldConfig,
+} from "./snapshot";
+import type { MigrationDiff, DiffChange } from "./diff-calculator";
 
 /**
  * Check if a file exists

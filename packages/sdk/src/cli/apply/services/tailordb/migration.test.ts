@@ -3,18 +3,21 @@ import * as path from "pathe";
 import { describe, expect, it, vi, beforeEach, afterAll, afterEach } from "vitest";
 import {
   SCHEMA_SNAPSHOT_VERSION,
-  MIGRATION_LABEL_KEY,
+  type MigrationDiff,
+} from "../../../tailordb/migrate/diff-calculator";
+import {
   formatMigrationNumber,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
-} from "../../../tailordb/migrate/types";
+} from "../../../tailordb/migrate/snapshot";
+import { MIGRATION_LABEL_KEY } from "../../../tailordb/migrate/types";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
   getMigrationMachineUser,
 } from "./migration";
 import type { OperatorClient } from "../../../client";
-import type { MigrationDiff, NamespaceWithMigrations } from "../../../tailordb/migrate/types";
+import type { NamespaceWithMigrations } from "../../../tailordb/migrate/config";
 
 // Mock label.ts for trnPrefix
 vi.mock("../label", () => ({

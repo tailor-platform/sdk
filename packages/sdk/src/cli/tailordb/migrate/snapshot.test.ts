@@ -15,15 +15,14 @@ import {
   writeDiff,
   validateMigrationFiles,
   assertValidMigrationFiles,
-} from "./snapshot";
-import {
   SCHEMA_SNAPSHOT_VERSION,
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   INITIAL_SCHEMA_NUMBER,
   formatMigrationNumber,
-} from "./types";
-import type { SchemaSnapshot, MigrationDiff } from "./types";
+  type SchemaSnapshot,
+} from "./snapshot";
+import type { MigrationDiff } from "./diff-calculator";
 import type { ParsedTailorDBType, ParsedField } from "@/parser/service/tailordb/types";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {

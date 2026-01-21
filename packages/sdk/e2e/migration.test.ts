@@ -41,8 +41,9 @@ import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
   loadDiff,
+  INITIAL_SCHEMA_NUMBER,
+  getMigrationFilePath,
 } from "../src/cli/tailordb/migrate/snapshot";
-import { INITIAL_SCHEMA_NUMBER, getMigrationFilePath } from "../src/cli/tailordb/migrate/types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

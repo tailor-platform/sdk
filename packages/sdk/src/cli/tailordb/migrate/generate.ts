@@ -15,6 +15,7 @@ import { commonArgs, withCommonArgs } from "../../args";
 import { loadConfig } from "../../config-loader";
 import { logBetaWarning } from "../../utils/beta";
 import { logger, styles } from "../../utils/logger";
+import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
   formatMigrationDiff,
   formatBreakingChanges,
@@ -27,10 +28,10 @@ import {
   compareSnapshots,
   getNextMigrationNumber,
   assertValidMigrationFiles,
+  INITIAL_SCHEMA_NUMBER,
+  type SchemaSnapshot,
 } from "./snapshot";
 import { generateSchemaFile, generateDiffFiles } from "./template-generator";
-import { getNamespacesWithMigrations, INITIAL_SCHEMA_NUMBER } from "./types";
-import type { NamespaceWithMigrations, SchemaSnapshot } from "./types";
 
 export interface GenerateOptions {
   configPath?: string;
