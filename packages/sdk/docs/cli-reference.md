@@ -43,13 +43,14 @@ tailor-sdk apply --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                          | Description                                         |
-| --------------------------------- | --------------------------------------------------- |
-| `TAILOR_PLATFORM_WORKSPACE_ID`    | Workspace ID for deployment commands                |
-| `TAILOR_PLATFORM_TOKEN`           | Authentication token (alternative to `login`)       |
-| `TAILOR_TOKEN`                    | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead |
-| `TAILOR_PLATFORM_PROFILE`         | Workspace profile name                              |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH` | Path to SDK config file                             |
+| Variable                          | Description                                                  |
+| --------------------------------- | ------------------------------------------------------------ |
+| `TAILOR_PLATFORM_WORKSPACE_ID`    | Workspace ID for deployment commands                         |
+| `TAILOR_PLATFORM_TOKEN`           | Authentication token (alternative to `login`)                |
+| `TAILOR_TOKEN`                    | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead          |
+| `TAILOR_PLATFORM_PROFILE`         | Workspace profile name                                       |
+| `TAILOR_PLATFORM_SDK_CONFIG_PATH` | Path to SDK config file                                      |
+| `EDITOR`                          | Editor to open generated files (e.g., `vim`, `code`, `nano`) |
 
 ### Authentication Token Priority
 
@@ -74,14 +75,26 @@ Workspace ID resolution follows this priority order:
 
 Commands for managing Tailor Platform applications (work with `tailor.config.ts`).
 
-| Command                                                     | Description                       |
-| ----------------------------------------------------------- | --------------------------------- |
-| [init](./cli/application.md#init)                           | Initialize a new project          |
-| [generate](./cli/application.md#generate)                   | Generate files from configuration |
-| [apply](./cli/application.md#apply)                         | Deploy application to workspace   |
-| [remove](./cli/application.md#remove)                       | Remove application from workspace |
-| [show](./cli/application.md#show)                           | Show deployed application info    |
-| [tailordb truncate](./cli/application.md#tailordb-truncate) | Truncate TailorDB tables          |
+| Command                                   | Description                       |
+| ----------------------------------------- | --------------------------------- |
+| [init](./cli/application.md#init)         | Initialize a new project          |
+| [generate](./cli/application.md#generate) | Generate files from configuration |
+| [apply](./cli/application.md#apply)       | Deploy application to workspace   |
+| [remove](./cli/application.md#remove)     | Remove application from workspace |
+| [show](./cli/application.md#show)         | Show deployed application info    |
+
+### [TailorDB Commands](./cli/tailordb.md)
+
+Commands for managing TailorDB tables, data, and schema migrations.
+
+| Command                                                                      | Description                                   |
+| ---------------------------------------------------------------------------- | --------------------------------------------- |
+| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate TailorDB tables                      |
+| [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files from schema snapshot |
+| [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint manually             |
+| [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show migration status                         |
+
+Note: Migration scripts are automatically executed during `tailor-sdk apply`. See [Automatic Migration Execution](./cli/tailordb.md#automatic-migration-execution) for details.
 
 ### [User & Auth Commands](./cli/user.md)
 

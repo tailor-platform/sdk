@@ -46,6 +46,22 @@ tailor-sdk apply [options]
 - `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 - `-d, --dry-run` - Run the command without making any changes
 - `-y, --yes` - Skip confirmation prompt
+- `--no-schema-check` - Skip schema diff check against migration snapshots
+
+**Migration Handling:**
+
+When migrations are configured (`db.tailordb.migration` in config), the `apply` command automatically:
+
+1. Detects pending migration scripts that haven't been executed
+2. Applies schema changes in a safe order (pre-migration → script execution → post-migration)
+3. Executes migration scripts via TestExecScript API
+4. Updates migration state labels in TailorDB metadata
+
+See [TailorDB Commands](./tailordb.md#automatic-migration-execution) for details on automatic migration execution.
+
+**Schema Check:**
+
+By default, `apply` verifies that local schema changes match the migration files. This ensures migrations are properly generated before deployment. Use `--no-schema-check` to skip this verification (not recommended for production).
 
 ## remove
 
