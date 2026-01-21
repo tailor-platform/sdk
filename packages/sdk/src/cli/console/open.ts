@@ -4,7 +4,7 @@ import { commonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
 
-const consoleBaseUrl = process.env.TAILOR_CONSOLE_URL ?? "https://console.tailor.tech";
+const consoleBaseUrl = "https://console.tailor.tech";
 
 export const openCommand = defineCommand({
   meta: {
@@ -14,6 +14,11 @@ export const openCommand = defineCommand({
   args: {
     ...commonArgs,
     ...workspaceArgs,
+    "application-name": {
+      type: "string",
+      description: "Application name",
+      alias: "a",
+    },
   },
   run: withCommonArgs(async (args) => {
     const workspaceId = loadWorkspaceId({
@@ -21,10 +26,11 @@ export const openCommand = defineCommand({
       profile: args.profile,
     });
 
-    const consoleUrl = new URL(
-      `/workspaces/${workspaceId}/applications`,
-      consoleBaseUrl,
-    ).toString();
+    const applicationName = args["application-name"];
+    const consolePath = applicationName
+      ? `/workspaces/${workspaceId}/applications/${encodeURIComponent(applicationName)}/overview`
+      : `/workspaces/${workspaceId}/applications`;
+    const consoleUrl = new URL(consolePath, consoleBaseUrl).toString();
 
     logger.info(`Opening Tailor Platform Console:\n${consoleUrl}\n`);
 
@@ -32,6 +38,9 @@ export const openCommand = defineCommand({
       await open(consoleUrl);
       logger.out(`Console URL: ${consoleUrl}`);
       logger.out(`Workspace ID: ${workspaceId}`);
+      if (applicationName) {
+        logger.out(`Application Name: ${applicationName}`);
+      }
     } catch {
       logger.warn("Failed to open browser automatically. Please open the URL above manually.");
     }
