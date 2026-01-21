@@ -126,10 +126,7 @@ import type { Transaction } from "./db";
 export async function main(trx: Transaction): Promise<void> {
   // Your data migration logic here
   // All operations use the transaction object (trx)
-  await trx
-    .updateTable("User")
-    .set({ newField: "default value" })
-    .execute();
+  await trx.updateTable("User").set({ newField: "default value" }).execute();
 }
 ```
 
@@ -348,7 +345,7 @@ Changing a field from array to single value is not directly supported. Use this 
    // tailordb/user.ts
    export const user = db.type("User", {
      name: db.string(),
-     email: db.string(),  // ← New required field
+     email: db.string(), // ← New required field
      ...db.fields.timestamps(),
    });
    ```
