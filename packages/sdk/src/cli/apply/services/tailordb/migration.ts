@@ -5,7 +5,6 @@
  */
 
 import * as fs from "node:fs";
-import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
 import ora from "ora";
 import * as path from "pathe";
 import { bundleMigrationScript } from "../../../bundler/migration/migration-bundler";
@@ -20,13 +19,13 @@ import {
   type PendingMigration,
   type NamespaceWithMigrations,
   MIGRATION_LABEL_KEY,
-  MIGRATION_POLL_INTERVAL,
   formatMigrationNumber,
   parseMigrationLabelNumber,
   getMigrationFilePath,
   getNamespacesWithMigrations,
 } from "../../../tailordb/migrate/types";
 import { logger, styles } from "../../../utils/logger";
+import { executeScript } from "../../../utils/script-executor";
 import { trnPrefix } from "../label";
 import type { Application } from "@/cli/application";
 import type { LoadedConfig } from "@/cli/config-loader";
@@ -178,45 +177,6 @@ export async function detectPendingMigrations(
 // ============================================================================
 
 /**
- * Wait for a function execution to complete
- * @param {OperatorClient} client - Operator client instance
- * @param {string} workspaceId - Workspace ID
- * @param {string} executionId - Execution ID to wait for
- * @returns {Promise<{ status: FunctionExecution_Status; logs: string; result: string }>} Execution result
- */
-async function waitForExecution(
-  client: OperatorClient,
-  workspaceId: string,
-  executionId: string,
-): Promise<{ status: FunctionExecution_Status; logs: string; result: string }> {
-  while (true) {
-    const { execution } = await client.getFunctionExecution({
-      workspaceId,
-      executionId,
-    });
-
-    if (!execution) {
-      throw new Error(`Execution '${executionId}' not found.`);
-    }
-
-    // Check for terminal states
-    if (
-      execution.status === FunctionExecution_Status.SUCCESS ||
-      execution.status === FunctionExecution_Status.FAILED
-    ) {
-      return {
-        status: execution.status,
-        logs: execution.logs,
-        result: execution.result,
-      };
-    }
-
-    // Wait before polling again
-    await new Promise((resolve) => setTimeout(resolve, MIGRATION_POLL_INTERVAL));
-  }
-}
-
-/**
  * Execute a single migration script
  * @param {MigrationExecutionOptions} options - Execution options
  * @param {PendingMigration} migration - Migration to execute
@@ -237,36 +197,22 @@ async function executeSingleMigration(
     migration.number,
   );
 
-  // Execute the script
-  const response = await client.testExecScript({
+  // Execute the script using the shared script executor
+  const result = await executeScript({
+    client,
     workspaceId,
     name: migrationName,
     code: bundleResult.bundledCode,
-    arg: JSON.stringify({}),
     invoker: authInvoker,
   });
-  const executionId = response.executionId;
 
-  // Wait for completion
-  const result = await waitForExecution(client, workspaceId, executionId);
-
-  if (result.status === FunctionExecution_Status.SUCCESS) {
-    return {
-      namespace: migration.namespace,
-      migrationNumber: migration.number,
-      success: true,
-      logs: result.logs,
-    };
-  } else {
-    const errorDetails = [result.logs, result.result].filter(Boolean).join("\n");
-    return {
-      namespace: migration.namespace,
-      migrationNumber: migration.number,
-      success: false,
-      logs: result.logs,
-      error: errorDetails || "Migration failed with unknown error",
-    };
-  }
+  return {
+    namespace: migration.namespace,
+    migrationNumber: migration.number,
+    success: result.success,
+    logs: result.logs,
+    error: result.error,
+  };
 }
 
 /**
@@ -344,7 +290,7 @@ export async function executeMigrations(
 
       // Show logs if any
       if (result.logs && result.logs.trim()) {
-        logger.debug(`Logs:\n${result.logs}`);
+        logger.log(`Logs:\n${result.logs}`);
       }
     } else {
       spinner.fail(`Migration ${migrationLabel} failed`);

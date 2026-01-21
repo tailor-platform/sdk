@@ -16,11 +16,6 @@ import type { AppConfig } from "@/configure/config";
 export const MAX_LABEL_LENGTH = 63;
 
 /**
- * Default polling interval for migration execution status in milliseconds (1 second)
- */
-export const MIGRATION_POLL_INTERVAL = 1000;
-
-/**
  * Prefix added to migration numbers in labels (required because migration names start with numbers)
  */
 export const MIGRATION_LABEL_PREFIX = "m";
