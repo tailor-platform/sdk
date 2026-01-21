@@ -9,6 +9,7 @@ import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
  */
 export interface GqlIngestMetadata {
   name: string;
+  namespace: string;
   dependencies: string[];
   mapping: {
     dataFile: string;
