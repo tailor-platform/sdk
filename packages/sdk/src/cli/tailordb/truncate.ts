@@ -12,6 +12,9 @@ export interface TruncateOptions {
   all?: boolean;
   namespace?: string;
   types?: string[];
+}
+
+interface InternalTruncateOptions extends TruncateOptions {
   yes?: boolean;
 }
 
@@ -95,6 +98,10 @@ async function getTypeNamespace(
  * @returns Promise that resolves when truncation completes
  */
 export async function truncate(options?: TruncateOptions): Promise<void> {
+  return await $truncate({ ...options, yes: true });
+}
+
+async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   // Load and validate options
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -274,7 +281,7 @@ export const truncateCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     // Get type names from rest arguments (_)
     const types = args._.length > 0 ? args._.map((arg) => String(arg)).filter(Boolean) : undefined;
-    await truncate({
+    await $truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,

@@ -3,10 +3,11 @@ import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Processes TailorDB types to generate GraphQL Ingest metadata
- * @param type - Parsed TailorDB type
- * @returns Generated GraphQL Ingest metadata
+ * @param {ParsedTailorDBType} type - Parsed TailorDB type
+ * @param {string} namespace - Namespace of the type
+ * @returns {GqlIngestMetadata} Generated GraphQL Ingest metadata
  */
-export function processGqlIngest(type: ParsedTailorDBType): GqlIngestMetadata {
+export function processGqlIngest(type: ParsedTailorDBType, namespace: string): GqlIngestMetadata {
   // Extract dependencies from relations
   const dependencies = Array.from(
     Object.values(type.fields).reduce<Set<string>>((set, field) => {
@@ -27,6 +28,7 @@ export function processGqlIngest(type: ParsedTailorDBType): GqlIngestMetadata {
 
   return {
     name: type.name,
+    namespace,
     dependencies,
     mapping: {
       dataFile: `data/${type.name}.jsonl`,
