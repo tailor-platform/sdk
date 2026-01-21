@@ -1,5 +1,38 @@
 # @tailor-platform/sdk
 
+## 1.4.0
+
+### Minor Changes
+
+- [#452](https://github.com/tailor-platform/sdk/pull/452) [`2428441`](https://github.com/tailor-platform/sdk/commit/2428441fd9df34428520adc578c6016f448f776c) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(seed): improve exec script with colors and embedded config
+
+  - Remove yaml package dependency by embedding entity config in exec.mjs
+  - Replace entityNamespaces with namespaceEntities (Map<namespace, entities[]>)
+  - Add --yes flag to skip confirmation prompts
+  - Use node:util styleText for colored output (cyan, green, red, yellow, dim)
+  - Remove config.yaml generation (no longer needed)
+  - Improve array formatting in namespaceEntities (one element per line)
+
+### Patch Changes
+
+- [#453](https://github.com/tailor-platform/sdk/pull/453) [`9589142`](https://github.com/tailor-platform/sdk/commit/95891421eb3bcd645d6a15dbad2935fee9cd7a90) Thanks [@riku99](https://github.com/riku99)! - Updated jsdoc rules and jsdoc comments
+
+- [#451](https://github.com/tailor-platform/sdk/pull/451) [`46b42c4`](https://github.com/tailor-platform/sdk/commit/46b42c4e157026b891490e9ebc080dc8bbf05513) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `publishSessionEvents` option to auth configuration
+
+- [#446](https://github.com/tailor-platform/sdk/pull/446) [`d57daaa`](https://github.com/tailor-platform/sdk/commit/d57daaaefa48744a0918a409f726564867759955) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency bufbuild/buf to v1.64.0
+
+- [#447](https://github.com/tailor-platform/sdk/pull/447) [`58dc5e1`](https://github.com/tailor-platform/sdk/commit/58dc5e1ffefd3c483c4dcd244a45742c01c52918) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @jackchuka/gql-ingest to v3
+
+- [#448](https://github.com/tailor-platform/sdk/pull/448) [`3e27e60`](https://github.com/tailor-platform/sdk/commit/3e27e60a639291b6efe0ceef9ff6321f01ada338) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.7.5
+
+- [#450](https://github.com/tailor-platform/sdk/pull/450) [`89e315c`](https://github.com/tailor-platform/sdk/commit/89e315c49c659790dc9448a90dcd89788ad7134e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260117.1
+
+- [#454](https://github.com/tailor-platform/sdk/pull/454) [`e6bfac2`](https://github.com/tailor-platform/sdk/commit/e6bfac254900e301def16b8b7f9dbacea70e8fbf) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.56.5
+
+- [#455](https://github.com/tailor-platform/sdk/pull/455) [`386c5bf`](https://github.com/tailor-platform/sdk/commit/386c5bf728a1e9a95febb52468af6921718b22fe) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.459.0
+
+- [#456](https://github.com/tailor-platform/sdk/pull/456) [`77ee396`](https://github.com/tailor-platform/sdk/commit/77ee396d645248dad1f201f7d219b036e66a6f93) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint-plugin-jsdoc to v62.1.0
+
 ## 1.3.0
 
 ### Minor Changes
