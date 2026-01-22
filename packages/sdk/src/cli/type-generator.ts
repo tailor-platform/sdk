@@ -237,92 +237,120 @@ export async function generateUserTypes(config: AppConfig, configPath: string): 
   }
 }
 
+import type { TailorAnyField } from "@/configure/types";
+
 /**
  * Plugin info for type generation
  */
 export interface PluginInfo {
   id: string;
-  configSchema?: import("zod").ZodType;
+  configSchema?: Record<string, TailorAnyField>;
 }
 
 /**
- * Convert a Zod schema to a TypeScript type string.
- * Handles common Zod types used in plugin configurations.
- * @param schema - Zod schema to convert
- * @param indent - Indentation level for nested objects
+ * Field metadata structure from TailorField
+ */
+interface FieldMetadata {
+  required?: boolean;
+  array?: boolean;
+  allowedValues?: Array<{ value: string }>;
+}
+
+/**
+ * Convert a TailorField type to its TypeScript type string.
+ * @param fieldType - The field type (string, number, etc.)
+ * @param metadata - Field metadata
+ * @param nestedFields - Nested fields for object types
+ * @param indent - Indentation level
  * @returns TypeScript type string
  */
-function zodToTypeString(schema: import("zod").ZodType, indent = 0): string {
-  const padding = "  ".repeat(indent);
+function fieldTypeToString(
+  fieldType: string,
+  metadata: FieldMetadata,
+  nestedFields?: Record<string, TailorAnyField>,
+  indent = 0,
+): string {
   const innerPadding = "  ".repeat(indent + 1);
+  const padding = "  ".repeat(indent);
 
-  // Get the schema's type name using Zod's internal structure
-  const def = (schema as { _def?: { typeName?: string } })._def;
-  const typeName = def?.typeName;
+  let baseType: string;
 
-  switch (typeName) {
-    case "ZodString":
-      return "string";
-    case "ZodNumber":
-      return "number";
-    case "ZodBoolean":
-      return "boolean";
-    case "ZodArray": {
-      const arrayDef = def as { type?: import("zod").ZodType };
-      const elementType = arrayDef.type ? zodToTypeString(arrayDef.type, indent) : "unknown";
-      return `${elementType}[]`;
-    }
-    case "ZodObject": {
-      const objectDef = def as { shape?: () => Record<string, import("zod").ZodType> };
-      const shape = objectDef.shape?.() ?? {};
-      const entries = Object.entries(shape);
-      if (entries.length === 0) {
-        return "{}";
+  switch (fieldType) {
+    case "string":
+    case "uuid":
+    case "date":
+    case "datetime":
+    case "time":
+      baseType = "string";
+      break;
+    case "integer":
+    case "float":
+    case "number":
+      baseType = "number";
+      break;
+    case "boolean":
+      baseType = "boolean";
+      break;
+    case "enum":
+      if (metadata.allowedValues && metadata.allowedValues.length > 0) {
+        baseType = metadata.allowedValues.map((v) => `"${v.value}"`).join(" | ");
+      } else {
+        baseType = "string";
       }
-      const fields = entries
-        .map(([key, value]) => {
-          const isOptional =
-            (value as { _def?: { typeName?: string } })._def?.typeName === "ZodOptional";
-          const innerSchema = isOptional
-            ? ((value as { _def?: { innerType?: import("zod").ZodType } })._def?.innerType ?? value)
-            : value;
-          const typeStr = zodToTypeString(innerSchema, indent + 1);
-          return `${innerPadding}${key}${isOptional ? "?" : ""}: ${typeStr};`;
-        })
-        .join("\n");
-      return `{\n${fields}\n${padding}}`;
-    }
-    case "ZodOptional": {
-      const optionalDef = def as { innerType?: import("zod").ZodType };
-      return optionalDef.innerType ? zodToTypeString(optionalDef.innerType, indent) : "unknown";
-    }
-    case "ZodEnum": {
-      const enumDef = def as { values?: string[] };
-      const values = enumDef.values ?? [];
-      return values.map((v) => `"${v}"`).join(" | ") || "string";
-    }
-    case "ZodLiteral": {
-      const literalDef = def as { value?: unknown };
-      const value = literalDef.value;
-      if (typeof value === "string") return `"${value}"`;
-      if (typeof value === "number" || typeof value === "boolean") return String(value);
-      return "unknown";
-    }
-    case "ZodUnion": {
-      const unionDef = def as { options?: import("zod").ZodType[] };
-      const options = unionDef.options ?? [];
-      return options.map((opt) => zodToTypeString(opt, indent)).join(" | ") || "unknown";
-    }
-    case "ZodRecord": {
-      const recordDef = def as { valueType?: import("zod").ZodType };
-      const valueType = recordDef.valueType
-        ? zodToTypeString(recordDef.valueType, indent)
-        : "unknown";
-      return `Record<string, ${valueType}>`;
-    }
+      break;
+    case "nested":
+    case "object":
+      if (nestedFields && Object.keys(nestedFields).length > 0) {
+        const fields = Object.entries(nestedFields)
+          .map(([key, field]) => {
+            const fm = field.metadata as FieldMetadata;
+            const isOptional = fm.required === false;
+            const typeStr = fieldTypeToString(field.type, fm, field.fields, indent + 1);
+            return `${innerPadding}${key}${isOptional ? "?" : ""}: ${typeStr};`;
+          })
+          .join("\n");
+        baseType = `{\n${fields}\n${padding}}`;
+      } else {
+        baseType = "Record<string, unknown>";
+      }
+      break;
     default:
-      return "unknown";
+      baseType = "unknown";
   }
+
+  // Handle array types
+  if (metadata.array) {
+    return `${baseType}[]`;
+  }
+
+  return baseType;
+}
+
+/**
+ * Convert a plugin config schema to a TypeScript type string.
+ * @param schema - Record of TailorField definitions
+ * @param indent - Base indentation level
+ * @returns TypeScript type string
+ */
+function configSchemaToTypeString(schema: Record<string, TailorAnyField>, indent = 2): string {
+  const innerPadding = "  ".repeat(indent + 1);
+  const padding = "  ".repeat(indent);
+
+  const entries = Object.entries(schema);
+  if (entries.length === 0) {
+    return "{}";
+  }
+
+  const fields = entries
+    .map(([key, field]) => {
+      const metadata = field.metadata as FieldMetadata;
+      const isOptional = metadata.required === false;
+      const typeStr = fieldTypeToString(field.type, metadata, field.fields, indent + 1);
+      return `${innerPadding}${key}${isOptional ? "?" : ""}: ${typeStr};`;
+    })
+    .join("\n");
+
+  return `{\n${fields}\n${padding}}`;
 }
 
 /**
@@ -354,7 +382,7 @@ export {};
   const pluginEntries = plugins
     .map((plugin) => {
       const typeStr = plugin.configSchema
-        ? zodToTypeString(plugin.configSchema, 2)
+        ? configSchemaToTypeString(plugin.configSchema, 2)
         : "Record<string, unknown>";
       return `    "${plugin.id}": ${typeStr};`;
     })
