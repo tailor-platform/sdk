@@ -100,12 +100,12 @@ export async function detectPendingMigrations(
   const pendingMigrations: PendingMigration[] = [];
 
   // Check for max version from environment variable
-  const maxVersionEnv = process.env.TAILOR_APPLY_MIGRATION_VERSION;
+  const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
   const maxVersion = maxVersionEnv ? parseInt(maxVersionEnv, 10) : undefined;
 
   if (maxVersion !== undefined && !Number.isInteger(maxVersion)) {
     throw new Error(
-      `Invalid TAILOR_APPLY_MIGRATION_VERSION: "${maxVersionEnv}". Must be a valid integer.`,
+      `Invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "${maxVersionEnv}". Must be a valid integer.`,
     );
   }
 

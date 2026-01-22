@@ -1074,7 +1074,7 @@ export function assertValidMigrationFiles(migrationsDir: string, namespace: stri
 
 /**
  * Filter a ParsedTailorDBType to match the schema state in a snapshot
- * This is used when TAILOR_APPLY_MIGRATION_VERSION is specified to ensure
+ * This is used when TAILOR_INTERNAL_APPLY_MIGRATION_VERSION is specified to ensure
  * the deployed schema matches the specified migration version
  * @param {ParsedTailorDBType} type - Local parsed type (latest state)
  * @param {SnapshotType} snapshotType - Target snapshot state

@@ -303,19 +303,19 @@ describe("migration", () => {
       expect(result[3].number).toBe(2);
     });
 
-    describe("TAILOR_APPLY_MIGRATION_VERSION environment variable", () => {
-      const originalEnv = process.env.TAILOR_APPLY_MIGRATION_VERSION;
+    describe("TAILOR_INTERNAL_APPLY_MIGRATION_VERSION environment variable", () => {
+      const originalEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
 
       afterEach(() => {
         if (originalEnv === undefined) {
-          delete process.env.TAILOR_APPLY_MIGRATION_VERSION;
+          delete process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
         } else {
-          process.env.TAILOR_APPLY_MIGRATION_VERSION = originalEnv;
+          process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION = originalEnv;
         }
       });
 
-      it("respects TAILOR_APPLY_MIGRATION_VERSION environment variable", async () => {
-        process.env.TAILOR_APPLY_MIGRATION_VERSION = "2";
+      it("respects TAILOR_INTERNAL_APPLY_MIGRATION_VERSION environment variable", async () => {
+        process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION = "2";
         const client = createMockClient({ tailordb: 0 });
 
         // Create migrations 0001, 0002, 0003
@@ -335,8 +335,8 @@ describe("migration", () => {
         expect(result[1].number).toBe(2);
       });
 
-      it("throws error for invalid TAILOR_APPLY_MIGRATION_VERSION", async () => {
-        process.env.TAILOR_APPLY_MIGRATION_VERSION = "invalid";
+      it("throws error for invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION", async () => {
+        process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION = "invalid";
         const client = createMockClient({ tailordb: 0 });
 
         const namespacesWithMigrations: NamespaceWithMigrations[] = [
@@ -345,7 +345,7 @@ describe("migration", () => {
 
         await expect(
           detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
-        ).rejects.toThrow("Invalid TAILOR_APPLY_MIGRATION_VERSION");
+        ).rejects.toThrow("Invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION");
       });
     });
   });

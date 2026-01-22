@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: pnpm run apply
         env:
-          TAILOR_APPLY_MIGRATION_VERSION: "0000"
+          TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
       - name: Verify initial schema applied

@@ -625,16 +625,16 @@ export async function planTailorDB(context: PlanContext) {
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
 
-  // Check for TAILOR_APPLY_MIGRATION_VERSION and build filtered types if set (only for non-removal)
+  // Check for TAILOR_INTERNAL_APPLY_MIGRATION_VERSION and build filtered types if set (only for non-removal)
   let filteredTypesByNamespace: Map<string, Record<string, ParsedTailorDBType>> | undefined;
   let skipSchemaCheck = false;
   if (!forRemoval) {
-    const maxVersionEnv = process.env.TAILOR_APPLY_MIGRATION_VERSION;
+    const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
     if (maxVersionEnv) {
       const maxVersion = parseInt(maxVersionEnv, 10);
       if (!Number.isInteger(maxVersion)) {
         throw new Error(
-          `Invalid TAILOR_APPLY_MIGRATION_VERSION: "${maxVersionEnv}". Must be a valid integer.`,
+          `Invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "${maxVersionEnv}". Must be a valid integer.`,
         );
       }
 
