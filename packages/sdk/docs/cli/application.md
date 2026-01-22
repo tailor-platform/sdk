@@ -276,4 +276,3 @@ tailor-sdk console open [options]
 
 - `-w, --workspace-id` - ID of the workspace to open in Console
 - `-p, --profile` - Workspace profile to use
-- `-a, --application-name` - Application name to open (optional)
