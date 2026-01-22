@@ -5,6 +5,8 @@
  */
 
 import * as fs from "node:fs";
+import { create } from "@bufbuild/protobuf";
+import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import ora from "ora";
 import * as path from "pathe";
 import { bundleMigrationScript } from "../../../bundler/migration/migration-bundler";
@@ -31,8 +33,8 @@ import { executeScript } from "../../../utils/script-executor";
 import { trnPrefix } from "../label";
 import type { Application } from "@/cli/application";
 import type { LoadedConfig } from "@/cli/config-loader";
+import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
-import type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 // ============================================================================
 // Types
@@ -42,6 +44,17 @@ export interface MigrationExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
   authInvoker: AuthInvoker;
+}
+
+/**
+ * Context for migration execution with per-namespace configuration
+ */
+export interface MigrationContext {
+  client: OperatorClient;
+  workspaceId: string;
+  authNamespace: string;
+  machineUsers: string[] | undefined;
+  dbConfig: Record<string, TailorDBServiceConfig | undefined>;
 }
 
 interface ExecutionResult {
@@ -250,13 +263,13 @@ export async function updateMigrationLabel(
 }
 
 /**
- * Execute all pending migrations
- * @param {MigrationExecutionOptions} options - Execution options
+ * Execute all pending migrations, grouping by namespace and using appropriate machine user
+ * @param {MigrationContext} context - Migration context with per-namespace configuration
  * @param {PendingMigration[]} migrations - Migrations to execute
  * @returns {Promise<void>}
  */
 export async function executeMigrations(
-  options: MigrationExecutionOptions,
+  context: MigrationContext,
   migrations: PendingMigration[],
 ): Promise<void> {
   // Filter migrations that require script execution
@@ -267,39 +280,70 @@ export async function executeMigrations(
   }
 
   logger.info(`Executing ${migrationsWithScripts.length} data migration(s)...`);
-  logger.info(`Using machine user: ${styles.bold(options.authInvoker.machineUserName)}`);
   logger.newline();
 
-  for (const migration of migrationsWithScripts) {
-    const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
-    const spinner = ora({
-      text: `Executing migration ${migrationLabel}...`,
-      prefixText: "",
-    }).start();
+  // Group migrations by namespace
+  const migrationsByNamespace = groupMigrationsByNamespace(migrationsWithScripts);
 
-    const result = await executeSingleMigration(options, migration);
+  // Execute migrations for each namespace with appropriate machine user
+  for (const [namespace, namespaceMigrations] of migrationsByNamespace) {
+    const dbConfig = context.dbConfig[namespace];
+    const migrationConfig = dbConfig?.migration;
 
-    if (result.success) {
-      // Update the migration label
-      await updateMigrationLabel(
-        options.client,
-        options.workspaceId,
-        migration.namespace,
-        migration.number,
+    // Get machine user name for this namespace
+    const machineUserName = getMigrationMachineUser(migrationConfig, context.machineUsers);
+    if (!machineUserName) {
+      throw new Error(
+        `No machine user available for migration execution in namespace '${namespace}'. ` +
+          "Either configure 'migration.machineUser' in db config or define machine users in auth config.",
       );
+    }
 
-      spinner.succeed(`Migration ${migrationLabel} completed successfully`);
+    // Create authInvoker for this namespace
+    const authInvoker = create(AuthInvokerSchema, {
+      namespace: context.authNamespace,
+      machineUserName,
+    });
 
-      // Show logs if any
-      if (result.logs && result.logs.trim()) {
-        logger.log(`Logs:\n${result.logs}`);
+    const options: MigrationExecutionOptions = {
+      client: context.client,
+      workspaceId: context.workspaceId,
+      authInvoker,
+    };
+
+    logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);
+
+    for (const migration of namespaceMigrations) {
+      const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
+      const spinner = ora({
+        text: `Executing migration ${migrationLabel}...`,
+        prefixText: "",
+      }).start();
+
+      const result = await executeSingleMigration(options, migration);
+
+      if (result.success) {
+        // Update the migration label
+        await updateMigrationLabel(
+          options.client,
+          options.workspaceId,
+          migration.namespace,
+          migration.number,
+        );
+
+        spinner.succeed(`Migration ${migrationLabel} completed successfully`);
+
+        // Show logs if any
+        if (result.logs && result.logs.trim()) {
+          logger.log(`Logs:\n${result.logs}`);
+        }
+      } else {
+        spinner.fail(`Migration ${migrationLabel} failed`);
+        if (result.logs) {
+          logger.error(`Logs:\n${result.logs}`);
+        }
+        throw new Error(result.error ?? "Migration failed");
       }
-    } else {
-      spinner.fail(`Migration ${migrationLabel} failed`);
-      if (result.logs) {
-        logger.error(`Logs:\n${result.logs}`);
-      }
-      throw new Error(result.error ?? "Migration failed");
     }
   }
 
@@ -332,6 +376,23 @@ export function getMigrationMachineUser(
   }
 
   return undefined;
+}
+
+/**
+ * Group migrations by namespace
+ * @param {PendingMigration[]} migrations - Migrations to group
+ * @returns {Map<string, PendingMigration[]>} Migrations grouped by namespace
+ */
+export function groupMigrationsByNamespace(
+  migrations: PendingMigration[],
+): Map<string, PendingMigration[]> {
+  const grouped = new Map<string, PendingMigration[]>();
+  for (const migration of migrations) {
+    const existing = grouped.get(migration.namespace) ?? [];
+    existing.push(migration);
+    grouped.set(migration.namespace, existing);
+  }
+  return grouped;
 }
 
 // ============================================================================

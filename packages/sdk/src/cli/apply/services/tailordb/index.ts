@@ -1,7 +1,6 @@
-import { create, fromJson, type MessageInitShape } from "@bufbuild/protobuf";
+import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
   type CreateTailorDBServiceRequestSchema,
@@ -68,11 +67,11 @@ import {
 import { logger, styles } from "../../../utils/logger";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
 import {
-  getMigrationMachineUser,
   executeMigrations,
   detectPendingMigrations,
   updateMigrationLabel,
   buildFilteredTypesForVersion,
+  type MigrationContext,
 } from "./migration";
 import type { ApplyPhase, PlanContext } from "../..";
 import type { PendingMigration } from "../../../tailordb/migrate/types";
@@ -210,42 +209,27 @@ export async function applyTailorDB(
           throw new Error("Auth configuration is required to execute migration scripts.");
         }
 
-        const authNamespace = authService.config.name;
-        const machineUsers = authService.config.machineUsers
-          ? Object.keys(authService.config.machineUsers)
-          : undefined;
-
-        // Get migration config for the first migration's namespace
-        const firstMigration = migrationsRequiringScripts[0];
-        const dbConfig = migrationContext.config.db?.[firstMigration.namespace] as
-          | TailorDBServiceConfig
-          | undefined;
-        const migrationConfig = dbConfig?.migration;
-
-        // Get machine user name
-        const machineUserName = getMigrationMachineUser(migrationConfig, machineUsers);
-        if (!machineUserName) {
-          throw new Error(
-            "No machine user available for migration execution. " +
-              "Either configure 'migration.machineUser' in db config or define machine users in auth config.",
-          );
+        // Build dbConfig map for all namespaces
+        const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
+        for (const migration of migrationsRequiringScripts) {
+          if (!(migration.namespace in dbConfigMap)) {
+            dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
+              | TailorDBServiceConfig
+              | undefined;
+          }
         }
 
-        // Create authInvoker
-        const authInvoker = create(AuthInvokerSchema, {
-          namespace: authNamespace,
-          machineUserName,
-        });
-
-        // Pass authInvoker instead of raw data
-        await executePendingMigrationsInternal(
+        const migrationCtx: MigrationContext = {
           client,
-          {
-            workspaceId: migrationContext.workspaceId,
-            authInvoker,
-          },
-          migrationsRequiringScripts,
-        );
+          workspaceId: migrationContext.workspaceId,
+          authNamespace: authService.config.name,
+          machineUsers: authService.config.machineUsers
+            ? Object.keys(authService.config.machineUsers)
+            : undefined,
+          dbConfig: dbConfigMap,
+        };
+
+        await executeMigrations(migrationCtx, migrationsRequiringScripts);
       }
 
       // Phase 3: Post-migration - apply final types (required: true) and deletions
@@ -577,34 +561,6 @@ async function executePostMigrationPhase(
 
   // Type deletions
   await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
-}
-
-/**
- * Execute pending migration scripts
- * @param {OperatorClient} client - Operator client
- * @param {object} context - Migration context
- * @param {string} context.workspaceId - Workspace ID
- * @param {AuthInvoker} context.authInvoker - Auth invoker for migration execution
- * @param {PendingMigration[]} pendingMigrations - Pending migrations to execute
- * @returns {Promise<void>} Promise that resolves when migrations complete
- */
-async function executePendingMigrationsInternal(
-  client: OperatorClient,
-  context: {
-    workspaceId: string;
-    authInvoker: AuthInvoker;
-  },
-  pendingMigrations: PendingMigration[],
-): Promise<void> {
-  // Execute migrations
-  await executeMigrations(
-    {
-      client,
-      workspaceId: context.workspaceId,
-      authInvoker: context.authInvoker,
-    },
-    pendingMigrations,
-  );
 }
 
 /**

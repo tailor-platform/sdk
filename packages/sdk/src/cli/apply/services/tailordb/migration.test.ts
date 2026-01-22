@@ -15,6 +15,7 @@ import {
   detectPendingMigrations,
   updateMigrationLabel,
   getMigrationMachineUser,
+  groupMigrationsByNamespace,
 } from "./migration";
 import type { OperatorClient } from "../../../client";
 import type { NamespaceWithMigrations } from "../../../tailordb/migrate/config";
@@ -126,6 +127,79 @@ describe("migration", () => {
     it("returns undefined when machine users array is empty", () => {
       const result = getMigrationMachineUser(undefined, []);
       expect(result).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // groupMigrationsByNamespace
+  // ==========================================================================
+  describe("groupMigrationsByNamespace", () => {
+    it("groups migrations by namespace", () => {
+      const migrations = [
+        {
+          namespace: "namespace-a",
+          number: 1,
+          migrationsDir: "/path/a",
+          scriptPath: "/path/a/0001/migrate.ts",
+          diffPath: "/path/a/0001/diff.json",
+          diff: createMockDiff({ namespace: "namespace-a" }),
+        },
+        {
+          namespace: "namespace-b",
+          number: 1,
+          migrationsDir: "/path/b",
+          scriptPath: "/path/b/0001/migrate.ts",
+          diffPath: "/path/b/0001/diff.json",
+          diff: createMockDiff({ namespace: "namespace-b" }),
+        },
+        {
+          namespace: "namespace-a",
+          number: 2,
+          migrationsDir: "/path/a",
+          scriptPath: "/path/a/0002/migrate.ts",
+          diffPath: "/path/a/0002/diff.json",
+          diff: createMockDiff({ namespace: "namespace-a" }),
+        },
+      ];
+
+      const result = groupMigrationsByNamespace(migrations);
+
+      expect(result.size).toBe(2);
+      expect(result.get("namespace-a")).toHaveLength(2);
+      expect(result.get("namespace-b")).toHaveLength(1);
+      expect(result.get("namespace-a")?.[0].number).toBe(1);
+      expect(result.get("namespace-a")?.[1].number).toBe(2);
+    });
+
+    it("returns empty map for empty input", () => {
+      const result = groupMigrationsByNamespace([]);
+      expect(result.size).toBe(0);
+    });
+
+    it("handles single namespace", () => {
+      const migrations = [
+        {
+          namespace: "single",
+          number: 1,
+          migrationsDir: "/path",
+          scriptPath: "/path/0001/migrate.ts",
+          diffPath: "/path/0001/diff.json",
+          diff: createMockDiff({ namespace: "single" }),
+        },
+        {
+          namespace: "single",
+          number: 2,
+          migrationsDir: "/path",
+          scriptPath: "/path/0002/migrate.ts",
+          diffPath: "/path/0002/diff.json",
+          diff: createMockDiff({ namespace: "single" }),
+        },
+      ];
+
+      const result = groupMigrationsByNamespace(migrations);
+
+      expect(result.size).toBe(1);
+      expect(result.get("single")).toHaveLength(2);
     });
   });
 
