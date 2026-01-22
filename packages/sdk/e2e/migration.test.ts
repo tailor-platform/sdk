@@ -257,10 +257,24 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       JSON.stringify({ type: "module" }, null, 2),
     );
 
-    // Create symlink for @tailor-platform/sdk module resolution
-    const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
-    fs.mkdirSync(nodeModulesDir, { recursive: true });
-    fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
+    // Create symlinks for module resolution
+    const nodeModulesDir = path.join(tempDir, "node_modules");
+    const tailorPlatformDir = path.join(nodeModulesDir, "@tailor-platform");
+    fs.mkdirSync(tailorPlatformDir, { recursive: true });
+
+    // Symlink @tailor-platform/sdk
+    fs.symlinkSync(sdkRoot, path.join(tailorPlatformDir, "sdk"));
+
+    // Symlink kysely and @tailor-platform/function-kysely-tailordb
+    // These are required for migration script bundling
+    // In pnpm workspace, these are in the monorepo root node_modules
+    const monorepoRoot = path.resolve(sdkRoot, "../..");
+    const monorepoNodeModules = path.join(monorepoRoot, "node_modules");
+    fs.symlinkSync(path.join(monorepoNodeModules, "kysely"), path.join(nodeModulesDir, "kysely"));
+    fs.symlinkSync(
+      path.join(monorepoNodeModules, "@tailor-platform", "function-kysely-tailordb"),
+      path.join(tailorPlatformDir, "function-kysely-tailordb"),
+    );
   }, 120000);
 
   afterAll(async () => {

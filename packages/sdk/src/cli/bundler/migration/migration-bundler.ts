@@ -5,17 +5,49 @@
  */
 
 import * as fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { logger } from "@/cli/utils/logger";
 import { getDistDir } from "@/configure/config";
 
 export interface MigrationBundleResult {
   namespace: string;
   migrationNumber: number;
   bundledCode: string;
+}
+
+const REQUIRED_PACKAGES = ["kysely", "@tailor-platform/function-kysely-tailordb"] as const;
+
+let dependencyCheckDone = false;
+
+/**
+ * Check if required packages for migration bundling are installed.
+ * Logs a warning if any are missing.
+ */
+function checkMigrationDependencies(): void {
+  if (dependencyCheckDone) return;
+  dependencyCheckDone = true;
+
+  const require = createRequire(path.resolve(process.cwd(), "package.json"));
+  const missing: string[] = [];
+
+  for (const pkg of REQUIRED_PACKAGES) {
+    try {
+      require.resolve(pkg);
+    } catch {
+      missing.push(pkg);
+    }
+  }
+
+  if (missing.length > 0) {
+    logger.warn(
+      `Missing optional dependencies for migration bundling: ${missing.join(", ")}. ` +
+        `Install them in your project: pnpm add -D ${missing.join(" ")}`,
+    );
+  }
 }
 
 /**
@@ -36,23 +68,15 @@ export async function bundleMigrationScript(
   namespace: string,
   migrationNumber: number,
 ): Promise<MigrationBundleResult> {
-  // Find SDK root directory (where node_modules exists)
-  let sdkRoot = path.dirname(fileURLToPath(import.meta.url));
-  while (sdkRoot !== path.dirname(sdkRoot)) {
-    if (fs.existsSync(path.join(sdkRoot, "node_modules"))) {
-      break;
-    }
-    sdkRoot = path.dirname(sdkRoot);
-  }
+  // Check for required dependencies (only once per session)
+  checkMigrationDependencies();
 
-  // Create entry file in SDK root to ensure node_modules resolution
-  const tempEntryDir = path.join(sdkRoot, ".tmp-migrations");
-  fs.mkdirSync(tempEntryDir, { recursive: true });
-  const entryPath = path.join(tempEntryDir, `migration_${namespace}_${migrationNumber}.entry.js`);
-
-  // Output directory in .tailor-sdk
+  // Output directory in .tailor-sdk (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
   fs.mkdirSync(outputDir, { recursive: true });
+
+  // Entry file in output directory (consistent with resolver/executor bundlers)
+  const entryPath = path.join(outputDir, `migration_${namespace}_${migrationNumber}.entry.js`);
   const outputPath = path.join(outputDir, `migration_${namespace}_${migrationNumber}.js`);
 
   const absoluteSourcePath = path.resolve(sourceFile).replace(/\\/g, "/");
@@ -119,14 +143,7 @@ export async function bundleMigrationScript(
   // Read bundled output
   const bundledCode = fs.readFileSync(outputPath, "utf-8");
 
-  // Clean up entry file and temp directory
-  fs.unlinkSync(entryPath);
-  try {
-    // Remove temp directory if empty
-    fs.rmdirSync(tempEntryDir);
-  } catch {
-    // Directory not empty or other error, ignore
-  }
+  // Entry file remains in output directory (consistent with resolver/executor bundlers)
 
   return {
     namespace,
