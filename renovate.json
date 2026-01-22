@@ -6,6 +6,7 @@
     ":pinAllExceptPeerDependencies",
     ":disableDependencyDashboard"
   ],
+  "gitIgnoredAuthors": ["247949890+tailor-pr-trigger[bot]@users.noreply.github.com"],
   "dependencyDashboardApproval": false,
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
