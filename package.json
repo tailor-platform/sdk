@@ -31,7 +31,7 @@
     "eslint": "9.39.2",
     "eslint-plugin-import": "2.32.0",
     "globals": "17.0.0",
-    "knip": "5.81.0",
+    "knip": "5.82.0",
     "lefthook": "2.0.15",
     "oxfmt": "0.24.0",
     "pkg-pr-new": "0.0.62",
