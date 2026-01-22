@@ -13,9 +13,15 @@ import {
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
-import { generateUserTypes } from "@/cli/type-generator";
+import {
+  generateUserTypes,
+  generatePluginTypeFiles,
+  writePluginTypeFiles,
+  type PluginTypeGenerationInput,
+} from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
+import { PluginManager } from "@/plugin/manager";
 import { type AppConfig } from "@/parser/app-config";
 import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
@@ -23,13 +29,15 @@ import { type Resolver } from "@/parser/service/resolver";
 import { commonArgs, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { Plugin } from "@/parser/plugin-config";
+import type { PluginBase } from "@/parser/plugin-config/types";
+import type { TailorDBType, TypeSourceInfo } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 
 type TypeInfo = {
   types: Record<string, TailorDBType>;
-  sourceInfo: Record<string, { filePath: string; exportName: string }>;
+  sourceInfo: TypeSourceInfo;
 };
 
 /**
@@ -56,12 +64,14 @@ type GeneratorResults = Record<
  * Creates a generation manager.
  * @param config - Application configuration
  * @param generators - List of generators
+ * @param plugins - List of plugins
  * @param configPath - Path to the configuration file
  * @returns GenerationManager instance
  */
 export function createGenerationManager(
   config: AppConfig,
   generators: Generator[] = [],
+  plugins: Plugin[] = [],
   configPath?: string,
 ): GenerationManager {
   const application = defineApplication(config);
@@ -76,6 +86,12 @@ export function createGenerationManager(
 
   let watcher: DependencyWatcher | null = null;
   const generatorResults: GeneratorResults = {};
+
+  // Initialize plugin manager if plugins are provided
+  let pluginManager: PluginManager | undefined;
+  if (plugins.length > 0) {
+    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+  }
 
   // Helper functions for dependency checking
   function getDeps(gen: AnyCodeGenerator): Set<DependencyKind> {
@@ -435,9 +451,15 @@ export function createGenerationManager(
 
       const app = application;
 
-      // Phase 1: Load TailorDB
+      // Phase 1: Load TailorDB (inject PluginManager before loading)
       for (const db of app.tailorDBServices) {
         const namespace = db.namespace;
+
+        // Inject PluginManager before loading types so plugins can generate types
+        if (pluginManager) {
+          db.setPluginManager(pluginManager);
+        }
+
         try {
           await db.loadTypes();
           services.tailordb[namespace] = {
@@ -451,6 +473,20 @@ export function createGenerationManager(
             throw error;
           }
         }
+      }
+
+      // Phase 1.5: Generate plugin type files for plugin-generated types
+      // These files are needed by generators (e.g., seed generator) for imports
+      const pluginTypeInputs: PluginTypeGenerationInput[] = Object.entries(services.tailordb).map(
+        ([namespace, typeInfo]) => ({
+          namespace,
+          types: typeInfo.types,
+          sourceInfo: typeInfo.sourceInfo,
+        }),
+      );
+      const pluginTypeFiles = generatePluginTypeFiles(pluginTypeInputs);
+      if (pluginTypeFiles.length > 0) {
+        writePluginTypeFiles(pluginTypeFiles);
       }
 
       // Phase 2: Auth resolveNamespaces (depends on TailorDB)
@@ -555,12 +591,12 @@ export function createGenerationManager(
  */
 export async function generate(options?: GenerateOptions) {
   // Load and validate options
-  const { config, generators } = await loadConfig(options?.configPath);
+  const { config, generators, plugins } = await loadConfig(options?.configPath);
   const watch = options?.watch ?? false;
 
   // Generate user types from loaded config
   await generateUserTypes(config, config.path);
-  const manager = createGenerationManager(config, generators, config.path);
+  const manager = createGenerationManager(config, generators, plugins, config.path);
   await manager.generate(watch);
   if (watch) {
     await manager.watch();
