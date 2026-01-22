@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 /**
@@ -124,6 +125,13 @@ export interface PluginBase {
   readonly id: string;
   /** Human-readable description of the plugin */
   readonly description: string;
+  /**
+   * Zod schema defining the expected configuration for this plugin.
+   * This schema is used to:
+   * 1. Validate configuration at runtime
+   * 2. Generate TypeScript type definitions in plugin-defined.d.ts
+   */
+  readonly configSchema?: z.ZodType;
 
   /**
    * Process a single TailorDB type and generate outputs

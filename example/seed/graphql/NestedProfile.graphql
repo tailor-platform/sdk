@@ -1,5 +1,0 @@
-mutation CreateNestedProfile($input: NestedProfileCreateInput!) {
-  createNestedProfile(input: $input) {
-    id
-  }
-}

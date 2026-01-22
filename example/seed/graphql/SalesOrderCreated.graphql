@@ -1,5 +1,0 @@
-mutation CreateSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {
-  createSalesOrderCreated(input: $input) {
-    id
-  }
-}

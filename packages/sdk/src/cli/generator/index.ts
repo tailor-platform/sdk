@@ -577,8 +577,8 @@ export async function generate(options?: GenerateOptions) {
   await generateUserTypes(config, configPath);
 
   // Generate plugin types from loaded plugins
-  const pluginIds = plugins.map((p) => p.id);
-  await generatePluginTypes(pluginIds, configPath);
+  const pluginInfos = plugins.map((p) => ({ id: p.id, configSchema: p.configSchema }));
+  await generatePluginTypes(pluginInfos, configPath);
 
   const manager = new GenerationManager(config, generators, plugins, configPath);
   await manager.generate(watch);
