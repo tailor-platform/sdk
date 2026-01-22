@@ -4,6 +4,7 @@ import { register } from "node:module";
 import { defineCommand, runMain } from "citty";
 import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
+import { consoleCommand } from "./console";
 import { generateCommand } from "./generator";
 import { initCommand } from "./init";
 import { loginCommand } from "./login";
@@ -35,6 +36,7 @@ export const mainCommand = defineCommand({
   subCommands: {
     api: apiCommand,
     apply: applyCommand,
+    console: consoleCommand,
     generate: generateCommand,
     init: initCommand,
     login: loginCommand,
