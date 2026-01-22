@@ -292,6 +292,12 @@ export async function applyTailorDB(
         changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)),
       );
     }
+  } else if (phase === "delete-resources") {
+    // Delete GQL permissions first, then types
+    await Promise.all(
+      changeSet.gqlPermission.deletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
+    );
+    await Promise.all(changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)));
   } else if (phase === "delete-services") {
     // Services only
     await Promise.all(

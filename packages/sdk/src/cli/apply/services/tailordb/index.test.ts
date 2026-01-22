@@ -355,8 +355,19 @@ describe("applyTailorDB phase separation", () => {
     vi.clearAllMocks();
   });
 
-  // NOTE: delete-resources phase was removed as TailorDB handles deletions
-  // internally within create-update phase (for migration flow support)
+  test("delete-resources phase deletes GQLPermissions and Types but not Services", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyTailorDB(client, planResult, "delete-resources");
+
+    // GQLPermissions should be deleted
+    expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(1);
+    // Types should be deleted
+    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
+    // Services should NOT be deleted
+    expect(client.deleteTailorDBService).not.toHaveBeenCalled();
+  });
 
   test("delete-services phase deletes ONLY services", async () => {
     const client = createMockClientWithSpies();
