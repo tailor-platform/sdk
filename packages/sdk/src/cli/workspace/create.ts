@@ -116,6 +116,7 @@ export const createCommand = defineCommand({
     "profile-name": {
       type: "string",
       description: "Profile name to create",
+      alias: "p",
     },
     "profile-user": {
       type: "string",
