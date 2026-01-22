@@ -1,12 +1,13 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { changesetPlugin } from "@/cli/plugin/builtin";
 import {
   createGeneratorConfigSchema,
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
-import { createPluginConfigSchema, type PluginBase, type Plugin } from "@/parser/plugin-config";
+import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
 import { loadConfigPath } from "./context";
 import {
   EnumConstantsGenerator,
@@ -33,8 +34,7 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
 export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
 
 // Register built-in plugins with their constructor functions
-// Currently empty - will be populated as built-in plugins are added
-const builtinPlugins = new Map<string, (options: unknown) => PluginBase>();
+const builtinPlugins = new Map([[changesetPlugin.id, () => changesetPlugin]]);
 
 export const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
 
