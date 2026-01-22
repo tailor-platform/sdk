@@ -282,8 +282,12 @@ export async function planWorkflow(
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
     if (!usedJobNames) {
       throw new Error(
-        `No dependency info found for mainJob "${workflow.mainJob.name}". ` +
-          `Please run "generate" command before "apply".`,
+        `Job "${workflow.mainJob.name}" (mainJob of workflow "${workflow.name}") was not found.\n\n` +
+          `Possible causes:\n` +
+          `  - The job is not exported as a named export\n` +
+          `  - The file containing the job is not included in workflow.files glob pattern\n\n` +
+          `Solution:\n` +
+          `  export const ${workflow.mainJob.name} = createWorkflowJob({ name: "${workflow.mainJob.name}", ... })`,
       );
     }
 
