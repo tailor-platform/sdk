@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.4.1
+
+### Patch Changes
+
+- [#464](https://github.com/tailor-platform/sdk/pull/464) [`eecb5a4`](https://github.com/tailor-platform/sdk/commit/eecb5a476befde51fcc11d6e2d1edb4c48aa97f3) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): improve error message when workflow mainJob is not found
+
+- [#457](https://github.com/tailor-platform/sdk/pull/457) [`43c3ba5`](https://github.com/tailor-platform/sdk/commit/43c3ba545e43a4ccd8a8b6b01722066adfd3e73c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.460.1
+
+- [#459](https://github.com/tailor-platform/sdk/pull/459) [`3e596c5`](https://github.com/tailor-platform/sdk/commit/3e596c5e16896d998544efb2d6574750be61a1dc) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260118.1
+
+- [#460](https://github.com/tailor-platform/sdk/pull/460) [`6b71d69`](https://github.com/tailor-platform/sdk/commit/6b71d693dcffe64be56b94e045afcc9766baf591) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.28.10
+
+- [#465](https://github.com/tailor-platform/sdk/pull/465) [`fe91cfd`](https://github.com/tailor-platform/sdk/commit/fe91cfd63ed57901c0985a1cb58bcf610c12f22f) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update changesets/action action to v1.6.0
+
+- [#466](https://github.com/tailor-platform/sdk/pull/466) [`f13544e`](https://github.com/tailor-platform/sdk/commit/f13544eeb1d550421a951e82869aa589de1c849a) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v5.82.0
+
 ## 1.4.0
 
 ### Minor Changes
