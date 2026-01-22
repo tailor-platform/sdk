@@ -1,4 +1,6 @@
 import { logger, styles } from "@/cli/utils/logger";
+import { t, unauthenticatedTailorUser } from "@/configure/types";
+import type { TailorAnyField } from "@/configure/types";
 import type {
   PluginBase,
   PluginOutput,
@@ -26,6 +28,41 @@ export interface AggregatedPluginOutput {
   types: Map<string, PluginGeneratedType>;
   resolvers: Map<string, PluginGeneratedResolver>;
   executors: Map<string, PluginGeneratedExecutor>;
+}
+
+/**
+ * Validation error for plugin config
+ */
+interface ConfigValidationError {
+  field: string;
+  message: string;
+}
+
+/**
+ * Validate plugin config against its schema
+ * @param config - The config object to validate
+ * @param schema - The schema defining expected fields
+ * @returns Array of validation errors (empty if valid)
+ */
+function validatePluginConfig(
+  config: unknown,
+  schema: Record<string, TailorAnyField>,
+): ConfigValidationError[] {
+  const objectSchema = t.object(schema);
+  const result = objectSchema.parse({
+    value: config,
+    data: config,
+    user: unauthenticatedTailorUser,
+  });
+
+  if ("issues" in result && result.issues) {
+    return result.issues.map((issue) => ({
+      field: Array.isArray(issue.path) ? issue.path.join(".") : "",
+      message: issue.message,
+    }));
+  }
+
+  return [];
 }
 
 /**
@@ -104,6 +141,23 @@ export class PluginManager {
           `Plugin "${styles.warning(attachment.pluginId)}" not found for type "${styles.highlight(attachment.type.name)}"`,
         );
         continue;
+      }
+
+      // Validate config against schema if provided
+      if (plugin.configSchema) {
+        const validationErrors = validatePluginConfig(attachment.config, plugin.configSchema);
+        if (validationErrors.length > 0) {
+          logger.error(
+            `Invalid config for plugin ${styles.error(plugin.id)} on type "${styles.highlight(attachment.type.name)}":`,
+          );
+          for (const error of validationErrors) {
+            const fieldPrefix = error.field ? `${error.field}: ` : "";
+            logger.error(`  ${fieldPrefix}${error.message}`);
+          }
+          throw new Error(
+            `Plugin config validation failed for "${plugin.id}" on type "${attachment.type.name}"`,
+          );
+        }
       }
 
       try {
