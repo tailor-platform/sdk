@@ -26,6 +26,7 @@ import {
 import type { InferredAttributeMap } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -366,6 +367,7 @@ export class TailorDBType<
   private _indexes: IndexDef<this>[] = [];
   private _permissions: RawPermissions = {};
   private _files: Record<string, string> = {};
+  private _plugins: PluginAttachment[] = [];
 
   constructor(
     public readonly name: string,
@@ -522,6 +524,28 @@ export class TailorDBType<
       }
     }
     return result as Omit<Fields, K>;
+  }
+
+  /**
+   * Get all plugin attachments for this type
+   * @returns Array of plugin attachments
+   */
+  get plugins(): readonly PluginAttachment[] {
+    return this._plugins;
+  }
+
+  /**
+   * Attach a plugin to this type with optional configuration.
+   * The plugin will be processed during code generation to produce
+   * additional types, resolvers, or executors.
+   * @param pluginOrId - Plugin instance or plugin ID string
+   * @param config - Plugin-specific configuration
+   * @returns This type for method chaining
+   */
+  plugin<P extends { id: string } | string>(pluginOrId: P, config?: unknown): this {
+    const pluginId = typeof pluginOrId === "string" ? pluginOrId : pluginOrId.id;
+    this._plugins.push({ pluginId, config: config ?? {} });
+    return this;
   }
 }
 

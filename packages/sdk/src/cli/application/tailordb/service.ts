@@ -9,11 +9,13 @@ import {
   type TypeSourceInfo,
 } from "@/parser/service/tailordb";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 
 export class TailorDBService {
   private rawTypes: Record<string, Record<string, TailorDBType>> = {};
   private types: Record<string, ParsedTailorDBType> = {};
   private typeSourceInfo: TypeSourceInfo = {};
+  private pluginAttachments: Map<string, PluginAttachment[]> = new Map();
 
   constructor(
     public readonly namespace: string,
@@ -26,6 +28,14 @@ export class TailorDBService {
 
   getTypeSourceInfo() {
     return this.typeSourceInfo as Readonly<typeof this.typeSourceInfo>;
+  }
+
+  /**
+   * Get plugin attachments for all types in this service
+   * @returns Map of type name to plugin attachments
+   */
+  getPluginAttachments(): ReadonlyMap<string, readonly PluginAttachment[]> {
+    return this.pluginAttachments;
   }
 
   async loadTypes() {
@@ -85,6 +95,18 @@ export class TailorDBService {
             filePath: typeFile,
             exportName,
           };
+
+          // Store plugin attachments if any
+          if (
+            exportedValue.plugins &&
+            Array.isArray(exportedValue.plugins) &&
+            exportedValue.plugins.length > 0
+          ) {
+            this.pluginAttachments.set(exportedValue.name, [...exportedValue.plugins]);
+            logger.log(
+              `  Plugin attachments: ${styles.info(exportedValue.plugins.map((p: PluginAttachment) => p.pluginId).join(", "))}`,
+            );
+          }
         }
       }
     } catch (error) {

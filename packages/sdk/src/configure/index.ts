@@ -25,4 +25,17 @@ export {
 
 export * from "@/configure/services";
 
-export { defineConfig, defineGenerators } from "@/configure/config";
+export { defineConfig, defineGenerators, definePlugins } from "@/configure/config";
+
+// Plugin types for custom plugin development
+export type {
+  PluginBase,
+  PluginConfig,
+  PluginOutput,
+  PluginProcessContext,
+  PluginAttachment,
+  PluginGeneratedType,
+  PluginGeneratedResolver,
+  PluginGeneratedExecutor,
+  PluginFieldDefinition,
+} from "@/parser/plugin-config/types";

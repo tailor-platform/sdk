@@ -6,6 +6,7 @@ import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
 import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import type { WorkflowServiceInput } from "@/configure/services/workflow/types";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
+import type { PluginConfig } from "@/parser/plugin-config/types";
 
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
@@ -58,5 +59,16 @@ export function defineConfig<
  * @returns Generator configurations as given
  */
 export function defineGenerators(...configs: GeneratorConfig[]) {
+  return configs;
+}
+
+/**
+ * Define plugins to be used with the Tailor SDK.
+ * Plugins can generate additional types, resolvers, and executors
+ * based on existing TailorDB types.
+ * @param configs - Plugin configurations
+ * @returns Plugin configurations as given
+ */
+export function definePlugins(...configs: PluginConfig[]) {
   return configs;
 }

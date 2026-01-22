@@ -12,6 +12,7 @@ import {
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
+import { PluginManager, type AggregatedPluginOutput } from "@/cli/plugin/manager";
 import { generateUserTypes } from "@/cli/type-generator";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir, type AppConfig } from "@/configure/config";
@@ -21,6 +22,8 @@ import { type Resolver } from "@/parser/service/resolver";
 import { commonArgs, withCommonArgs } from "../args";
 import { DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
+import type { Plugin } from "@/parser/plugin-config";
+import type { PluginBase } from "@/parser/plugin-config/types";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
@@ -38,15 +41,24 @@ export class GenerationManager {
     executor: Record<string, Executor>;
   } = { tailordb: {}, resolver: {}, executor: {} };
   private readonly baseDir;
+  private pluginManager?: PluginManager;
+  private pluginOutput?: AggregatedPluginOutput;
 
   constructor(
     config: AppConfig,
     private generators: Generator[] = [],
+    private plugins: Plugin[] = [],
     private configPath?: string,
   ) {
     this.application = defineApplication(config);
     this.baseDir = path.join(getDistDir(), "generated");
     fs.mkdirSync(this.baseDir, { recursive: true });
+
+    // Initialize plugin manager if plugins are provided
+    if (plugins.length > 0) {
+      // Cast Plugin (branded type) to PluginBase for the manager
+      this.pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+    }
   }
 
   // Helper functions for dependency checking
@@ -65,6 +77,33 @@ export class GenerationManager {
 
   private hasNone(gen: AnyCodeGenerator, ...excluded: DependencyKind[]): boolean {
     return excluded.every((e) => !this.getDeps(gen).has(e));
+  }
+
+  /**
+   * Process all plugins and collect their outputs
+   */
+  private async processPlugins() {
+    if (!this.pluginManager) return;
+
+    const app = this.application;
+
+    // Register type attachments from all TailorDB services
+    for (const db of app.tailorDBServices) {
+      const namespace = db.namespace;
+      const types = db.getTypes();
+      const attachments = db.getPluginAttachments();
+
+      this.pluginManager.registerFromService(types, namespace, attachments);
+    }
+
+    // Process all registered attachments
+    if (this.pluginManager.hasAttachments()) {
+      this.pluginOutput = await this.pluginManager.processAll();
+
+      // Log summary of generated artifacts
+      // Note: In the PoC, we only log the output. Full integration (merging
+      // generated types/resolvers/executors back into services) is future work.
+    }
   }
 
   async generate(watch: boolean) {
@@ -89,6 +128,11 @@ export class GenerationManager {
           throw error;
         }
       }
+    }
+
+    // Phase 1.5: Process plugins (depends on TailorDB)
+    if (this.pluginManager) {
+      await this.processPlugins();
     }
 
     // Phase 2: Auth resolveNamespaces (depends on TailorDB)
@@ -526,12 +570,12 @@ export class GenerationManager {
  */
 export async function generate(options?: GenerateOptions) {
   // Load and validate options
-  const { config, generators, configPath } = await loadConfig(options?.configPath);
+  const { config, generators, plugins, configPath } = await loadConfig(options?.configPath);
   const watch = options?.watch ?? false;
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
-  const manager = new GenerationManager(config, generators, configPath);
+  const manager = new GenerationManager(config, generators, plugins, configPath);
   await manager.generate(watch);
   if (watch) {
     await manager.watch();

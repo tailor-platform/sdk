@@ -6,6 +6,7 @@ import {
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
+import { createPluginConfigSchema, type PluginBase, type Plugin } from "@/parser/plugin-config";
 import { loadConfigPath } from "./context";
 import {
   EnumConstantsGenerator,
@@ -31,14 +32,20 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
 
 export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
 
+// Register built-in plugins with their constructor functions
+// Currently empty - will be populated as built-in plugins are added
+const builtinPlugins = new Map<string, (options: unknown) => PluginBase>();
+
+export const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
+
 /**
- * Load Tailor configuration file and associated generators.
+ * Load Tailor configuration file and associated generators and plugins.
  * @param configPath - Optional explicit config path
- * @returns Loaded config and generators
+ * @returns Loaded config, generators, plugins, and config path
  */
 export async function loadConfig(
   configPath?: string,
-): Promise<{ config: AppConfig; generators: Generator[]; configPath: string }> {
+): Promise<{ config: AppConfig; generators: Generator[]; plugins: Plugin[]; configPath: string }> {
   const foundPath = loadConfigPath(configPath);
   if (!foundPath) {
     throw new Error(
@@ -58,9 +65,13 @@ export async function loadConfig(
 
   // Collect all generator exports (generators, generators2, etc.)
   const allGenerators: Generator[] = [];
+  // Collect all plugin exports (plugins, plugins2, etc.)
+  const allPlugins: Plugin[] = [];
+
   for (const value of Object.values(configModule)) {
     if (Array.isArray(value)) {
-      const parsed = value.reduce(
+      // Try to parse as generators
+      const generatorParsed = value.reduce(
         (acc, item) => {
           if (!acc.success) return acc;
 
@@ -74,13 +85,36 @@ export async function loadConfig(
         },
         { success: true, items: [] as Generator[] },
       );
-      allGenerators.push(...parsed.items);
+      if (generatorParsed.success && generatorParsed.items.length > 0) {
+        allGenerators.push(...generatorParsed.items);
+        continue;
+      }
+
+      // Try to parse as plugins
+      const pluginParsed = value.reduce(
+        (acc, item) => {
+          if (!acc.success) return acc;
+
+          const result = PluginConfigSchema.safeParse(item);
+          if (result.success) {
+            acc.items.push(result.data);
+          } else {
+            acc.success = false;
+          }
+          return acc;
+        },
+        { success: true, items: [] as Plugin[] },
+      );
+      if (pluginParsed.success && pluginParsed.items.length > 0) {
+        allPlugins.push(...pluginParsed.items);
+      }
     }
   }
 
   return {
     config: configModule.default as AppConfig,
     generators: allGenerators,
+    plugins: allPlugins,
     configPath: resolvedPath,
   };
 }
