@@ -1,5 +1,4 @@
 export {
-  PluginFieldDefinitionSchema,
   PluginGeneratedTypeSchema,
   PluginGeneratedResolverSchema,
   PluginGeneratedExecutorSchema,

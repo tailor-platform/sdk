@@ -26,7 +26,7 @@ import {
 import type { InferredAttributeMap } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
-import type { PluginAttachment } from "@/parser/plugin-config/types";
+import type { PluginAttachment, PluginConfigs } from "@/parser/plugin-config/types";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -535,16 +535,35 @@ export class TailorDBType<
   }
 
   /**
-   * Attach a plugin to this type with optional configuration.
-   * The plugin will be processed during code generation to produce
-   * additional types, resolvers, or executors.
-   * @param pluginOrId - Plugin instance or plugin ID string
-   * @param config - Plugin-specific configuration
+   * Attach plugins to this type with typed configurations.
+   * Multiple plugins can be specified in a single call.
+   * Extend PluginConfigs interface via declaration merging to add type-safe configs.
+   *
+   * @example
+   * ```typescript
+   * db.type("Order", { ... }).plugin({
+   *   "@my-company/audit-log": { trackedFields: ["status"] },
+   *   "@my-company/versioning": { maxVersions: 10 },
+   * });
+   * ```
+   *
+   * @param configs - Object mapping plugin IDs to their configurations
    * @returns This type for method chaining
    */
-  plugin<P extends { id: string } | string>(pluginOrId: P, config?: unknown): this {
-    const pluginId = typeof pluginOrId === "string" ? pluginOrId : pluginOrId.id;
-    this._plugins.push({ pluginId, config: config ?? {} });
+  plugin<K extends keyof PluginConfigs>(configs: { [P in K]: PluginConfigs[P] }): this;
+
+  /**
+   * Attach plugins to this type with configurations.
+   * @param configs - Object mapping plugin IDs to their configurations
+   * @returns This type for method chaining
+   */
+  plugin(configs: Record<string, unknown>): this;
+
+  // Implementation
+  plugin(configs: Record<string, unknown>): this {
+    for (const [pluginId, config] of Object.entries(configs)) {
+      this._plugins.push({ pluginId, config: config ?? {} } as PluginAttachment);
+    }
     return this;
   }
 }

@@ -1,90 +1,19 @@
 import { z } from "zod";
 import type { PluginBase } from "./types";
 
-// Field type enum for plugin-generated fields
-const PluginFieldTypeSchema = z.enum([
-  "uuid",
-  "string",
-  "boolean",
-  "integer",
-  "float",
-  "date",
-  "datetime",
-  "time",
-  "enum",
-  "nested",
-]);
-
-// Enum value schema
-const EnumValueSchema = z.object({
-  value: z.string(),
-  description: z.string().optional(),
-});
-
-// Relation schema for plugin-generated fields
-const PluginRelationSchema = z.object({
-  type: z.enum(["n-1", "1-1", "1-n"]),
-  targetType: z.string(),
-  targetField: z.string().optional(),
-});
-
-// Base field definition schema (without nested fields to avoid circular reference)
-const BasePluginFieldDefinitionSchema = z.object({
-  type: PluginFieldTypeSchema,
-  required: z.boolean().optional(),
-  description: z.string().optional(),
-  array: z.boolean().optional(),
-  index: z.boolean().optional(),
-  unique: z.boolean().optional(),
-  allowedValues: z.array(EnumValueSchema).optional(),
-  relation: PluginRelationSchema.optional(),
-});
-
-// Full field definition schema with nested fields support
-export const PluginFieldDefinitionSchema: z.ZodType<{
-  type:
-    | "uuid"
-    | "string"
-    | "boolean"
-    | "integer"
-    | "float"
-    | "date"
-    | "datetime"
-    | "time"
-    | "enum"
-    | "nested";
-  required?: boolean;
-  description?: string;
-  array?: boolean;
-  index?: boolean;
-  unique?: boolean;
-  allowedValues?: Array<{ value: string; description?: string }>;
-  relation?: { type: "n-1" | "1-1" | "1-n"; targetType: string; targetField?: string };
-  fields?: Record<string, unknown>;
-}> = BasePluginFieldDefinitionSchema.extend({
-  fields: z.lazy(() => z.record(z.string(), PluginFieldDefinitionSchema)).optional(),
-});
-
-// Plugin-generated type schema
+// Plugin-generated type schema - accepts TailorDBType instances (from db.type())
+// We only validate the minimal interface: name and fields properties
 export const PluginGeneratedTypeSchema = z.object({
   name: z.string(),
-  fields: z.record(z.string(), PluginFieldDefinitionSchema),
-  description: z.string().optional(),
-  settings: z
-    .object({
-      pluralForm: z.string().optional(),
-      aggregation: z.boolean().optional(),
-      bulkUpsert: z.boolean().optional(),
-    })
-    .optional(),
+  fields: z.record(z.string(), z.unknown()),
 });
 
 // Plugin-generated resolver schema
 export const PluginGeneratedResolverSchema = z.object({
   name: z.string(),
   operation: z.enum(["query", "mutation"]),
-  inputFields: z.record(z.string(), PluginFieldDefinitionSchema).optional(),
-  outputFields: z.record(z.string(), PluginFieldDefinitionSchema),
+  inputFields: z.record(z.string(), z.unknown()).optional(),
+  outputFields: z.record(z.string(), z.unknown()),
   body: z.string(),
 });
 

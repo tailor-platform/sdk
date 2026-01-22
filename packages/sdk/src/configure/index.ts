@@ -31,11 +31,12 @@ export { defineConfig, defineGenerators, definePlugins } from "@/configure/confi
 export type {
   PluginBase,
   PluginConfig,
+  PluginConfigs,
   PluginOutput,
   PluginProcessContext,
   PluginAttachment,
   PluginGeneratedType,
   PluginGeneratedResolver,
   PluginGeneratedExecutor,
-  PluginFieldDefinition,
+  TailorDBTypeForPlugin,
 } from "@/parser/plugin-config/types";
