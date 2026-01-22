@@ -517,11 +517,12 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   if (oldField.foreignKeyType !== newField.foreignKeyType) return true;
   if (oldField.foreignKeyField !== newField.foreignKeyField) return true;
 
-  // Compare allowedValues
+  // Compare allowedValues (set-based comparison - order doesn't matter)
   const oldAllowed = oldField.allowedValues ?? [];
   const newAllowed = newField.allowedValues ?? [];
   if (oldAllowed.length !== newAllowed.length) return true;
-  if (!oldAllowed.every((v, i) => v === newAllowed[i])) return true;
+  const newAllowedSet = new Set(newAllowed);
+  if (oldAllowed.some((v) => !newAllowedSet.has(v))) return true;
 
   return false;
 }

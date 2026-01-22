@@ -177,10 +177,13 @@ function formatFieldModification(before: SnapshotFieldConfig, after: SnapshotFie
     changes.push(`unique: ${before.unique ?? false} → ${after.unique ?? false}`);
   }
 
-  // Check allowedValues changes
+  // Check allowedValues changes (set-based comparison - order doesn't matter)
   const beforeAllowed = before.allowedValues ?? [];
   const afterAllowed = after.allowedValues ?? [];
-  if (JSON.stringify(beforeAllowed) !== JSON.stringify(afterAllowed)) {
+  const afterSet = new Set(afterAllowed);
+  const hasAllowedValuesChange =
+    beforeAllowed.length !== afterAllowed.length || beforeAllowed.some((v) => !afterSet.has(v));
+  if (hasAllowedValuesChange) {
     changes.push(`allowedValues: [${beforeAllowed.join(", ")}] → [${afterAllowed.join(", ")}]`);
   }
 

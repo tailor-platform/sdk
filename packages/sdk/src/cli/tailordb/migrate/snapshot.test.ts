@@ -508,6 +508,87 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("CANCELLED");
     });
 
+    it("does not detect change when enum values are reordered", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Task: {
+            name: "Task",
+            fields: {
+              id: { type: "uuid", required: true },
+              status: {
+                type: "enum",
+                required: true,
+                allowedValues: ["PENDING", "IN_PROGRESS", "DONE"],
+              },
+            },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Task: {
+            name: "Task",
+            fields: {
+              id: { type: "uuid", required: true },
+              status: {
+                type: "enum",
+                required: true,
+                allowedValues: ["DONE", "PENDING", "IN_PROGRESS"], // Same values, different order
+              },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes.length).toBe(0);
+      expect(diff.hasBreakingChanges).toBe(false);
+    });
+
+    it("detects change when enum values are added (regardless of order)", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Task: {
+            name: "Task",
+            fields: {
+              id: { type: "uuid", required: true },
+              status: {
+                type: "enum",
+                required: true,
+                allowedValues: ["PENDING", "DONE"],
+              },
+            },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Task: {
+            name: "Task",
+            fields: {
+              id: { type: "uuid", required: true },
+              status: {
+                type: "enum",
+                required: true,
+                allowedValues: ["DONE", "IN_PROGRESS", "PENDING"], // Added IN_PROGRESS, reordered
+              },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes.length).toBe(1);
+      expect(diff.changes[0].kind).toBe("field_modified");
+      expect(diff.hasBreakingChanges).toBe(false);
+    });
+
     it("returns empty diff when no changes", () => {
       const snapshot: SchemaSnapshot = {
         ...createEmptySnapshot(),
