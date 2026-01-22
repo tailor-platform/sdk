@@ -3,7 +3,6 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import {
-  fetchLatestToken,
   loadAccessToken,
   loadFolderId,
   loadOrganizationId,
@@ -12,6 +11,7 @@ import {
 } from "../context";
 import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
+import type { ProfileInfo } from "../profile";
 
 /**
  * Schema for workspace creation options
@@ -133,9 +133,10 @@ export const createCommand = defineCommand({
       folderId: args["folder-id"],
     });
 
-    if (args["profile-name"]) {
+    let profileInfo: ProfileInfo | undefined;
+    const profileName = args["profile-name"];
+    if (profileName) {
       const config = readPlatformConfig();
-      const profileName = args["profile-name"];
       if (config.profiles[profileName]) {
         throw new Error(`Profile "${profileName}" already exists.`);
       }
@@ -147,12 +148,21 @@ export const createCommand = defineCommand({
         );
       }
 
-      await fetchLatestToken(config, profileUser);
+      if (!config.users[profileUser]) {
+        throw new Error(
+          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
+        );
+      }
       config.profiles[profileName] = {
         user: profileUser,
         workspace_id: workspace.id,
       };
       writePlatformConfig(config);
+      profileInfo = {
+        name: profileName,
+        user: profileUser,
+        workspaceId: workspace.id,
+      };
 
       if (!args.json) {
         logger.success(`Profile "${profileName}" created successfully.`);
@@ -163,6 +173,15 @@ export const createCommand = defineCommand({
       logger.success(`Workspace "${args.name}" created successfully.`);
     }
 
+    if (args.json && profileInfo) {
+      logger.out({ workspace, profile: profileInfo });
+      return;
+    }
+
     logger.out(workspace);
+    if (profileInfo) {
+      logger.out("Profile:");
+      logger.out(profileInfo);
+    }
   }),
 });
