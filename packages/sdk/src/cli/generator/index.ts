@@ -13,7 +13,7 @@ import {
   hasDependency,
 } from "@/cli/generator/types";
 import { PluginManager, type AggregatedPluginOutput } from "@/cli/plugin/manager";
-import { generateUserTypes } from "@/cli/type-generator";
+import { generateUserTypes, generatePluginTypes } from "@/cli/type-generator";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir, type AppConfig } from "@/configure/config";
 import { type Generator } from "@/parser/generator-config";
@@ -575,6 +575,11 @@ export async function generate(options?: GenerateOptions) {
 
   // Generate user types from loaded config
   await generateUserTypes(config, configPath);
+
+  // Generate plugin types from loaded plugins
+  const pluginIds = plugins.map((p) => p.id);
+  await generatePluginTypes(pluginIds, configPath);
+
   const manager = new GenerationManager(config, generators, plugins, configPath);
   await manager.generate(watch);
   if (watch) {
