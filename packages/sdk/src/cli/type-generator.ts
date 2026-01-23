@@ -5,6 +5,12 @@ import * as path from "pathe";
 import { logger } from "@/cli/utils/logger";
 // eslint-disable-next-line import/order -- type imports are excluded from pathGroups, causing false positive
 import type { AppConfig } from "@/configure/config";
+import type { TailorAnyField } from "@/configure/types";
+import type {
+  ParsedTailorDBType,
+  TypeSourceInfo,
+  OperatorFieldConfig,
+} from "@/parser/service/tailordb";
 
 export interface AttributeMapConfig {
   [key: string]: string;
@@ -238,8 +244,6 @@ export async function generateUserTypes(config: AppConfig, configPath: string): 
   }
 }
 
-import type { TailorAnyField } from "@/configure/types";
-
 /**
  * Plugin info for type generation
  */
@@ -367,7 +371,7 @@ function configSchemaToTypeString(schema: TailorAnyField, indent = 2): string {
  * @param plugins - Array of plugin info objects
  * @returns Generated type definition source
  */
-export function generatePluginTypeDefinition(plugins: PluginInfo[]): string {
+function generatePluginTypeDefinition(plugins: PluginInfo[]): string {
   if (plugins.length === 0) {
     return ml /* ts */ `
 /* eslint-disable @typescript-eslint/no-empty-object-type */
@@ -495,5 +499,216 @@ function resolvePackageDirectory(startDir: string): string | null {
     return path.dirname(resolved);
   } catch {
     return null;
+  }
+}
+
+// --- Plugin-generated TailorDB type file generation ---
+
+/**
+ * Generated file information for plugin-generated types
+ */
+export interface GeneratedTypeFile {
+  /** Absolute file path */
+  path: string;
+  /** File content */
+  content: string;
+}
+
+/**
+ * Input data for plugin type file generation
+ */
+export interface PluginTypeGenerationInput {
+  /** Namespace name (e.g., "tailordb") */
+  namespace: string;
+  /** Parsed TailorDB types */
+  types: Record<string, ParsedTailorDBType>;
+  /** Type source information */
+  sourceInfo: TypeSourceInfo;
+}
+
+/**
+ * Convert a field type to its db.* method call string.
+ * @param fieldConfig - Field configuration
+ * @returns db.* method call string (e.g., "db.string()", "db.uuid({ optional: true })")
+ */
+function fieldConfigToDbCall(fieldConfig: OperatorFieldConfig): string {
+  // Determine if the field is optional (not required means optional)
+  const isOptional = !fieldConfig.required;
+  const isArray = fieldConfig.array;
+
+  // Build options object for the db.* method call
+  const buildOptions = (): string => {
+    const opts: string[] = [];
+    if (isOptional) opts.push("optional: true");
+    if (isArray) opts.push("array: true");
+    return opts.length > 0 ? `{ ${opts.join(", ")} }` : "";
+  };
+
+  let baseCall: string;
+  const options = buildOptions();
+
+  // Map field type to db method
+  switch (fieldConfig.type) {
+    case "string":
+      baseCall = options ? `db.string(${options})` : "db.string()";
+      break;
+    case "uuid":
+      baseCall = options ? `db.uuid(${options})` : "db.uuid()";
+      break;
+    case "integer":
+      baseCall = options ? `db.int(${options})` : "db.int()";
+      break;
+    case "float":
+      baseCall = options ? `db.float(${options})` : "db.float()";
+      break;
+    case "boolean":
+      baseCall = options ? `db.bool(${options})` : "db.bool()";
+      break;
+    case "date":
+      baseCall = options ? `db.date(${options})` : "db.date()";
+      break;
+    case "datetime":
+      baseCall = options ? `db.datetime(${options})` : "db.datetime()";
+      break;
+    case "time":
+      baseCall = options ? `db.time(${options})` : "db.time()";
+      break;
+    case "enum":
+      if (fieldConfig.allowedValues && fieldConfig.allowedValues.length > 0) {
+        const values = fieldConfig.allowedValues.map((v) => {
+          if (v.description) {
+            return `{ value: "${v.value}", description: "${v.description}" }`;
+          }
+          return `"${v.value}"`;
+        });
+        baseCall = `db.enum([${values.join(", ")}]${options ? `, ${options}` : ""})`;
+      } else {
+        baseCall = `db.enum([]${options ? `, ${options}` : ""})`;
+      }
+      break;
+    case "nested":
+      if (fieldConfig.fields && Object.keys(fieldConfig.fields).length > 0) {
+        const nestedFields = Object.entries(fieldConfig.fields)
+          .map(([name, config]) => `    ${name}: ${fieldConfigToDbCall(config)},`)
+          .join("\n");
+        baseCall = `db.nested({\n${nestedFields}\n  }${options ? `, ${options}` : ""})`;
+      } else {
+        baseCall = `db.nested({}${options ? `, ${options}` : ""})`;
+      }
+      break;
+    default:
+      // For unknown types, use string as fallback
+      baseCall = options ? `db.string(${options})` : "db.string()";
+  }
+
+  // Apply chain modifiers (index, unique, description, foreignKey)
+  const modifiers: string[] = [];
+
+  if (fieldConfig.description) {
+    modifiers.push(`.description("${fieldConfig.description.replace(/"/g, '\\"')}")`);
+  }
+
+  if (fieldConfig.index) {
+    modifiers.push(".index()");
+  }
+
+  if (fieldConfig.unique) {
+    modifiers.push(".unique()");
+  }
+
+  if (fieldConfig.foreignKey && fieldConfig.foreignKeyType) {
+    modifiers.push(`.foreignKey("${fieldConfig.foreignKeyType}")`);
+  }
+
+  return baseCall + modifiers.join("");
+}
+
+/**
+ * Generate TypeScript source content for a plugin-generated TailorDB type.
+ * @param type - Parsed TailorDB type
+ * @returns TypeScript source code
+ */
+function generatePluginTypeSource(type: ParsedTailorDBType): string {
+  // Generate field definitions, excluding 'id' since db.type() adds it automatically
+  const fieldEntries = Object.entries(type.fields)
+    .filter(([name]) => name !== "id")
+    .map(([name, field]) => `  ${name}: ${fieldConfigToDbCall(field.config)},`)
+    .join("\n");
+
+  // Check if we need to add timestamps
+  const hasCreatedAt = "createdAt" in type.fields;
+  const hasUpdatedAt = "updatedAt" in type.fields;
+  const hasTimestamps = hasCreatedAt && hasUpdatedAt;
+
+  // Filter out timestamp fields if they exist
+  const nonTimestampFields = Object.entries(type.fields)
+    .filter(([name]) => name !== "id" && name !== "createdAt" && name !== "updatedAt")
+    .map(([name, field]) => `  ${name}: ${fieldConfigToDbCall(field.config)},`)
+    .join("\n");
+
+  const fieldsContent = hasTimestamps
+    ? `${nonTimestampFields}\n  ...db.fields.timestamps(),`
+    : fieldEntries;
+
+  return ml /* ts */ `
+// This file is auto-generated by @tailor-platform/sdk
+// Do not edit this file manually
+// Generated for plugin-created type: ${type.name}
+
+import { db } from "@tailor-platform/sdk";
+
+export const ${type.name} = db.type("${type.name}", {
+${fieldsContent}
+});
+
+export type ${type.name} = typeof ${type.name};
+
+`;
+}
+
+/**
+ * Generate TypeScript files for plugin-generated TailorDB types.
+ * @param inputs - Array of namespace data with types and sourceInfo
+ * @returns Array of generated file information
+ */
+export function generatePluginTypeFiles(inputs: PluginTypeGenerationInput[]): GeneratedTypeFile[] {
+  const files: GeneratedTypeFile[] = [];
+
+  for (const { types, sourceInfo } of inputs) {
+    for (const [typeName, type] of Object.entries(types)) {
+      const info = sourceInfo[typeName];
+
+      // Only generate files for plugin-generated types
+      if (!info?.pluginId) {
+        continue;
+      }
+
+      const content = generatePluginTypeSource(type);
+      files.push({
+        path: info.filePath,
+        content,
+      });
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Write plugin-generated type files to disk.
+ * @param files - Array of generated file information
+ */
+export function writePluginTypeFiles(files: GeneratedTypeFile[]): void {
+  for (const file of files) {
+    fs.mkdirSync(path.dirname(file.path), { recursive: true });
+    fs.writeFileSync(file.path, file.content);
+    const relativePath = path.relative(process.cwd(), file.path);
+    logger.debug(`Generated plugin type file: ${relativePath}`);
+  }
+
+  if (files.length > 0) {
+    logger.success(`Generated ${files.length} plugin type file(s) in .tailor-sdk/types/`, {
+      mode: "plain",
+    });
   }
 }

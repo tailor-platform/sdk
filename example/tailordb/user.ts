@@ -23,4 +23,4 @@ export const user = db
   )
   .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission)
-  .plugin({ "@tailor-platform/changeset": { enable: true } });
+  .plugin({ "@tailor-platform/changeset": true });

@@ -12,7 +12,13 @@ import {
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
-import { generateUserTypes, generatePluginTypes } from "@/cli/type-generator";
+import {
+  generateUserTypes,
+  generatePluginTypes,
+  generatePluginTypeFiles,
+  writePluginTypeFiles,
+  type PluginTypeGenerationInput,
+} from "@/cli/type-generator";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir, type AppConfig } from "@/configure/config";
 import { type Generator } from "@/parser/generator-config";
@@ -24,13 +30,13 @@ import { DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { Plugin } from "@/parser/plugin-config";
 import type { PluginBase } from "@/parser/plugin-config/types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { ParsedTailorDBType, TypeSourceInfo } from "@/parser/service/tailordb";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 
 interface TypeInfo {
   types: Record<string, ParsedTailorDBType>;
-  sourceInfo: Record<string, { filePath: string; exportName: string }>;
+  sourceInfo: TypeSourceInfo;
 }
 
 export class GenerationManager {
@@ -109,6 +115,20 @@ export class GenerationManager {
     }
 
     // Note: Plugin processing for types is now done during loadTypes() in TailorDBService
+
+    // Phase 1.5: Generate plugin type files for plugin-generated types
+    // These files are needed by generators (e.g., seed generator) for imports
+    const pluginTypeInputs: PluginTypeGenerationInput[] = Object.entries(
+      this.services.tailordb,
+    ).map(([namespace, typeInfo]) => ({
+      namespace,
+      types: typeInfo.types,
+      sourceInfo: typeInfo.sourceInfo,
+    }));
+    const pluginTypeFiles = generatePluginTypeFiles(pluginTypeInputs);
+    if (pluginTypeFiles.length > 0) {
+      writePluginTypeFiles(pluginTypeFiles);
+    }
 
     // Phase 2: Auth resolveNamespaces (depends on TailorDB)
     if (app.authService) {

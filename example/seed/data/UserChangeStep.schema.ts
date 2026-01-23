@@ -1,7 +1,7 @@
 import { t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
-import { UserChangeStep } from "../../tailordb/user";
+import { UserChangeStep } from "../../.tailor-sdk/types/tailordb/UserChangeStep";
 
 const schemaType = t.object({
   ...UserChangeStep.pickFields(["id","createdAt"], { optional: true }),

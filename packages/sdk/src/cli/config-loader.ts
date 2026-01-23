@@ -36,7 +36,7 @@ export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerato
 // Register built-in plugins with their constructor functions
 const builtinPlugins = new Map([[changesetPlugin.id, () => changesetPlugin]]);
 
-export const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
+const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
 
 /**
  * Load Tailor configuration file and associated generators and plugins.

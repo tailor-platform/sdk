@@ -181,13 +181,23 @@ export class TailorDBService {
         );
       }
 
-      // Then add generated types to rawTypes (same file path, but with pluginId marker)
+      // Then add generated types to rawTypes
+      // Plugin-generated types are placed in .tailor-sdk/types/{namespace}/{TypeName}.ts
       for (const generatedType of output.types ?? []) {
         this.rawTypes[sourceFilePath][generatedType.name] = generatedType as TailorDBType;
+        const generatedFilePath = path.join(
+          process.cwd(),
+          ".tailor-sdk",
+          "types",
+          this.namespace,
+          `${generatedType.name}.ts`,
+        );
         this.typeSourceInfo[generatedType.name] = {
-          filePath: sourceFilePath,
+          filePath: generatedFilePath,
           exportName: generatedType.name,
           pluginId: attachment.pluginId,
+          originalFilePath: sourceFilePath,
+          originalExportName: rawType.name,
         };
 
         logger.log(
