@@ -252,51 +252,10 @@ describe("template-generator", () => {
       expect(result.dbTypesFilePath).toBeUndefined();
     });
 
-    it("should generate migration script for type change", async () => {
-      const snapshotWithStringPrice = createTestSnapshot({
-        Product: {
-          name: "Product",
-          fields: {
-            price: { type: "string", required: true },
-          },
-        },
-      });
+    // Note: Type change is rejected as unsupported in generate.ts before reaching generateDiffFiles
+    // No test needed here as the migration file will never be generated for this case
 
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
-        changes: [
-          {
-            kind: "field_modified",
-            typeName: "Product",
-            fieldName: "price",
-            before: { type: "string", required: true },
-            after: { type: "number", required: true },
-          },
-        ],
-        hasBreakingChanges: true,
-        breakingChanges: [
-          {
-            typeName: "Product",
-            fieldName: "price",
-            reason: "Type changed from string to number",
-          },
-        ],
-        requiresMigrationScript: true,
-      };
-
-      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithStringPrice);
-
-      expect(result.migrateFilePath).toBeDefined();
-
-      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-      expect(scriptContent).toContain("price");
-      expect(scriptContent).toContain("string");
-      expect(scriptContent).toContain("number");
-    });
-
-    // Note: Array to single value change is rejected in generate.ts before reaching generateDiffFiles
+    // Note: Array to single value change is rejected as unsupported in generate.ts before reaching generateDiffFiles
     // No test needed here as the migration file will never be generated for this case
 
     it("should generate migration script for unique constraint addition", async () => {

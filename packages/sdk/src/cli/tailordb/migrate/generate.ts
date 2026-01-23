@@ -220,40 +220,30 @@ async function generateDiffFromSnapshot(
   logger.newline();
   logger.info(`Summary: ${formatDiffSummary(diff)}`);
 
-  // Check for unsupported field structure changes (type change, array flag change)
-  for (const change of diff.breakingChanges) {
-    if (change.reason.startsWith("Field type changed")) {
+  // Check for unsupported changes
+  const unsupportedChanges = diff.breakingChanges.filter((change) => change.unsupported);
+  if (unsupportedChanges.length > 0) {
+    for (const change of unsupportedChanges) {
       logger.newline();
-      logger.error(
-        `Field type change is not supported yet: ${change.typeName}.${change.fieldName}`,
-      );
+      logger.error(`Unsupported change: ${change.typeName}.${change.fieldName}`);
       logger.error(`  ${change.reason}`);
-      logger.newline();
-      logger.info("To change a field type, you need 3 migrations:");
-      logger.info("  Migration 1: Add a new field with the desired type (e.g., fieldName_new)");
-      logger.info("               and migrate data from old field to new field");
-      logger.info("  Migration 2: Remove the old field");
-      logger.info("  Migration 3: Add the field with the original name and new type,");
-      logger.info("               migrate data from temporary field, then remove temporary field");
-      throw new Error("Field type change is not supported");
     }
 
-    if (change.reason.includes("array to single value")) {
+    // Show 3-step migration hint if any unsupported change requires it
+    if (unsupportedChanges.some((change) => change.showThreeStepHint)) {
       logger.newline();
-      logger.error(
-        `Array to single value change is not supported yet: ${change.typeName}.${change.fieldName}`,
-      );
-      logger.error(`  ${change.reason}`);
-      logger.newline();
-      logger.info("To change a field from array to single value, you need 3 migrations:");
-      logger.info(
-        "  Migration 1: Add a new field (single value) and migrate data from array field",
-      );
-      logger.info("  Migration 2: Remove the old array field");
-      logger.info("  Migration 3: Add the field with the original name as single value,");
+      logger.info("These changes require a manual 3-step migration process:");
+      logger.info("  Migration 1: Add a new field with the desired structure");
+      logger.info("               and migrate data from old field to new field");
+      logger.info("  Migration 2: Remove the old field");
+      logger.info("  Migration 3: Add the field with the original name and new structure,");
       logger.info("               migrate data from temporary field, then remove temporary field");
-      throw new Error("Array to single value change is not supported");
     }
+
+    const details = unsupportedChanges
+      .map((c) => `  - ${c.typeName}.${c.fieldName}: ${c.reason}`)
+      .join("\n");
+    throw new Error(`Unsupported schema changes detected:\n${details}`);
   }
 
   // Warn about breaking changes

@@ -65,6 +65,10 @@ export interface BreakingChangeInfo {
   typeName: string;
   fieldName?: string;
   reason: string;
+  /** If true, this change is not supported and migration generation will fail */
+  unsupported?: boolean;
+  /** If true, show 3-step migration instructions for this unsupported change */
+  showThreeStepHint?: boolean;
 }
 
 /**

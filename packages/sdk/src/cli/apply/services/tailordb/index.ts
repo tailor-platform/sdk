@@ -540,18 +540,72 @@ async function executePreMigrationPhase(
  * Execute post-migration phase: Apply final types (with required: true) and deletions
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
- * @param {PendingMigration[]} _pendingMigrations - Pending migrations (unused, for consistency)
+ * @param {PendingMigration[]} pendingMigrations - Pending migrations
  * @returns {Promise<void>} Promise that resolves when post-migration phase completes
  */
 async function executePostMigrationPhase(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
-  _pendingMigrations: PendingMigration[],
+  pendingMigrations: PendingMigration[],
 ): Promise<void> {
-  // Types - apply final manifest (with required: true)
+  // Rebuild breaking changes map to restore values modified in pre-migration phase
+  const breakingChanges = buildBreakingChangesMap(pendingMigrations);
+
+  // Types - restore final manifest values (undo pre-migration modifications)
+  // Since pre-migration modified the protobuf messages directly, we need to restore
+  // the original values from change.after before sending updates
   try {
     await Promise.all([
-      ...changeSet.type.updates.map((update) => client.updateTailorDBType(update.request)),
+      ...changeSet.type.updates.map((update) => {
+        const typeName = update.request.tailordbType?.name;
+        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+
+        // Restore values modified in pre-migration phase
+        if (typeChanges && typeChanges.size > 0 && update.request.tailordbType?.schema?.fields) {
+          const fields = update.request.tailordbType.schema.fields;
+
+          for (const [fieldName, change] of typeChanges) {
+            if (!isBreakingChange(change) || !fields[fieldName]) continue;
+
+            const before = change.before as FieldConfig | undefined;
+            const after = change.after as FieldConfig | undefined;
+
+            // Restore required field added: set to the intended required value
+            if (change.kind === "field_added" && after?.required) {
+              fields[fieldName].required = true;
+            }
+
+            // Restore optional to required change
+            if (change.kind === "field_modified" && !before?.required && after?.required) {
+              fields[fieldName].required = true;
+            }
+
+            // Restore unique constraint added
+            if (
+              change.kind === "field_modified" &&
+              !(before?.unique ?? false) &&
+              (after?.unique ?? false)
+            ) {
+              fields[fieldName].unique = true;
+            }
+
+            // Restore enum values (apply final allowedValues from after)
+            if (change.kind === "field_modified" && before?.allowedValues && after?.allowedValues) {
+              const removedValues = before.allowedValues.filter(
+                (v) => !after.allowedValues!.includes(v),
+              );
+              if (removedValues.length > 0) {
+                fields[fieldName].allowedValues = after.allowedValues.map((v) => ({
+                  value: v,
+                  description: "",
+                }));
+              }
+            }
+          }
+        }
+
+        return client.updateTailorDBType(update.request);
+      }),
     ]);
   } catch (error) {
     handleOptionalToRequiredError(error, [

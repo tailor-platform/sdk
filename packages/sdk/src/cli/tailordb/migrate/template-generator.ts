@@ -211,20 +211,8 @@ function generateChangeScript(change: DiffChange): string | null {
   const before = change.before as SnapshotFieldConfig;
   const after = change.after as SnapshotFieldConfig;
 
-  // Type change
-  if (before.type !== after.type) {
-    return `  // Migrate ${change.fieldName} from ${before.type} to ${after.type}
-  // TODO: Implement data conversion logic
-  // const records = await trx.selectFrom("${change.typeName}").selectAll().execute();
-  // for (const record of records) {
-  //   const convertedValue = /* convert record.${change.fieldName} */;
-  //   await trx
-  //     .updateTable("${change.typeName}")
-  //     .set({ ${change.fieldName}: convertedValue })
-  //     .where("id", "=", record.id)
-  //     .execute();
-  // }`;
-  }
+  // Note: Type change is rejected as unsupported in generate.ts
+  // No script generation needed here
 
   // Optional to required
   if (!before.required && after.required) {
@@ -243,7 +231,7 @@ function generateChangeScript(change: DiffChange): string | null {
 
   // Unique constraint added
   if (!(before.unique ?? false) && (after.unique ?? false)) {
-    return `  // TODO: Ensure ${change.fieldName} values are unique before adding constraint
+    return `  // Ensure ${change.fieldName} values are unique before adding constraint
   const duplicates = await trx
     .selectFrom("${change.typeName}")
     .select(["${change.fieldName}"])
@@ -251,19 +239,19 @@ function generateChangeScript(change: DiffChange): string | null {
     .having((eb) => eb.fn.count("id"), ">", 1)
     .execute();
   for (const dup of duplicates) {
-    // Example: Keep first record, add suffix to others
-    // const records = await trx
-    //   .selectFrom("${change.typeName}")
-    //   .select(["id", "${change.fieldName}"])
-    //   .where("${change.fieldName}", "=", dup.${change.fieldName})
-    //   .execute();
-    // for (let i = 1; i < records.length; i++) {
-    //   await trx
-    //     .updateTable("${change.typeName}")
-    //     .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` })
-    //     .where("id", "=", records[i].id)
-    //     .execute();
-    // }
+    // Keep first record, add suffix to others
+    const records = await trx
+      .selectFrom("${change.typeName}")
+      .select(["id", "${change.fieldName}"])
+      .where("${change.fieldName}", "=", dup.${change.fieldName})
+      .execute();
+    for (let i = 1; i < records.length; i++) {
+      await trx
+        .updateTable("${change.typeName}")
+        .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+        .where("id", "=", records[i].id)
+        .execute();
+    }
   }`;
   }
 
@@ -281,6 +269,30 @@ function generateChangeScript(change: DiffChange): string | null {
     .where("${change.fieldName}", "in", [${removedValues.map((v) => `"${v}"`).join(", ")}])
     .execute();`;
     }
+  }
+
+  // Foreign key relationship changed
+  if (
+    before.foreignKeyType &&
+    after.foreignKeyType &&
+    before.foreignKeyType !== after.foreignKeyType
+  ) {
+    return `  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
+  // Find records that don't have a valid reference in the new target table
+  const orphanedRecords = await trx
+    .selectFrom("${change.typeName}")
+    .leftJoin("${after.foreignKeyType}", "${change.typeName}.${change.fieldName}", "${after.foreignKeyType}.id")
+    .select(["${change.typeName}.id", "${change.typeName}.${change.fieldName}"])
+    .where("${after.foreignKeyType}.id", "is", null)
+    .where("${change.typeName}.${change.fieldName}", "is not", null)
+    .execute();
+  for (const record of orphanedRecords) {
+    await trx
+      .updateTable("${change.typeName}")
+      .set({ ${change.fieldName}: null }) // TODO: Set appropriate new reference
+      .where("id", "=", record.id)
+      .execute();
+  }`;
   }
 
   return null;

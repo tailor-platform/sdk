@@ -550,12 +550,14 @@ function isBreakingFieldChange(
     };
   }
 
-  // Field type changed - breaking
+  // Field type changed - unsupported (requires 3-step migration)
   if (oldField && newField && oldField.type !== newField.type) {
     return {
       typeName,
       fieldName,
       reason: `Field type changed from ${oldField.type} to ${newField.type}`,
+      unsupported: true,
+      showThreeStepHint: true,
     };
   }
 
@@ -568,13 +570,31 @@ function isBreakingFieldChange(
     };
   }
 
-  // Array to single value - breaking (existing array data would be lost)
-  if (oldField && newField && (oldField.array ?? false) && !(newField.array ?? false)) {
+  // Array property changed - unsupported (requires 3-step migration)
+  if (oldField && newField && (oldField.array ?? false) !== (newField.array ?? false)) {
+    const [fromType, toType] = oldField.array
+      ? ["array", "single value"]
+      : ["single value", "array"];
     return {
       typeName,
       fieldName,
-      reason: "Field changed from array to single value",
+      reason: `Field changed from ${fromType} to ${toType}`,
+      unsupported: true,
+      showThreeStepHint: true,
     };
+  }
+
+  // Foreign key relationship changed - breaking (existing references may become invalid)
+  if (oldField && newField) {
+    const oldForeignKeyType = oldField.foreignKeyType;
+    const newForeignKeyType = newField.foreignKeyType;
+    if (oldForeignKeyType && newForeignKeyType && oldForeignKeyType !== newForeignKeyType) {
+      return {
+        typeName,
+        fieldName,
+        reason: `Foreign key target type changed from ${oldForeignKeyType} to ${newForeignKeyType}`,
+      };
+    }
   }
 
   // Unique constraint added - breaking (existing duplicate values would violate constraint)

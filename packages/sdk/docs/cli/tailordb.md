@@ -81,12 +81,10 @@ tailor-sdk tailordb migration generate [options]
 
 **Options:**
 
-| Option     | Short | Description                                               |
-| ---------- | ----- | --------------------------------------------------------- |
-| `--config` | `-c`  | Path to the SDK config file (default: `tailor.config.ts`) |
-| `--name`   | `-n`  | Optional description for the migration                    |
-| `--yes`    | `-y`  | Skip confirmation prompts                                 |
-| `--init`   |       | Delete existing migrations and start fresh                |
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-n, --name` - Optional description for the migration
+- `-y, --yes` - Skip confirmation prompts
+- `--init` - Delete existing migrations and start fresh
 
 **Usage Examples:**
 
@@ -158,13 +156,11 @@ tailor-sdk tailordb migration set <number> [options]
 
 **Options:**
 
-| Option           | Short | Description                                               |
-| ---------------- | ----- | --------------------------------------------------------- |
-| `--namespace`    | `-n`  | Target TailorDB namespace (required if multiple exist)    |
-| `--yes`          | `-y`  | Skip confirmation prompt                                  |
-| `--workspace-id` | `-w`  | ID of the workspace                                       |
-| `--profile`      | `-p`  | Workspace profile to use                                  |
-| `--config`       | `-c`  | Path to the SDK config file (default: `tailor.config.ts`) |
+- `-n, --namespace` - Target TailorDB namespace (required if multiple exist)
+- `-y, --yes` - Skip confirmation prompt
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 
 **Usage Examples:**
 
@@ -201,12 +197,10 @@ tailor-sdk tailordb migration status [options]
 
 **Options:**
 
-| Option           | Short | Description                                               |
-| ---------------- | ----- | --------------------------------------------------------- |
-| `--namespace`    | `-n`  | Show status for specific namespace only                   |
-| `--workspace-id` | `-w`  | ID of the workspace                                       |
-| `--profile`      | `-p`  | Workspace profile to use                                  |
-| `--config`       | `-c`  | Path to the SDK config file (default: `tailor.config.ts`) |
+- `-n, --namespace` - Show status for specific namespace only
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 
 **Usage Examples:**
 
@@ -267,14 +261,6 @@ When executing migration scripts, the system selects a machine user in the follo
 
 The machine user being used is logged during migration execution.
 
-## Migration State
-
-Migration state is tracked using TailorDB service metadata labels (`sdk-migration`). The label value is formatted as `m0000`, `m0001`, `m0002`, etc. This allows the system to:
-
-- Determine which migrations have been applied
-- Prevent duplicate execution
-- Track migration progress
-
 ## Migration Directory Structure
 
 Migrations use a directory-based structure with 4-digit sequential numbering:
@@ -298,24 +284,25 @@ migrations/
 
 ## Supported Schema Changes
 
-| Change Type                  | Breaking? | Migration Script | Notes                                         |
-| ---------------------------- | --------- | ---------------- | --------------------------------------------- |
-| Add optional field           | No        | No               | Schema change only                            |
-| Add required field           | Yes       | Yes              | Script populates default values               |
-| Remove field                 | No        | No               | Schema change only - data is preserved        |
-| Change optional→required     | Yes       | Yes              | Script sets defaults for null values          |
-| Change required→optional     | No        | No               | Schema change only                            |
-| Add index                    | No        | No               | Schema change only                            |
-| Remove index                 | No        | No               | Schema change only                            |
-| Add unique constraint        | Yes       | Yes              | Script must resolve duplicate values          |
-| Remove unique constraint     | No        | No               | Schema change only                            |
-| Add enum value               | No        | No               | Schema change only                            |
-| Remove enum value            | Yes       | Yes              | Script migrates records with removed values   |
-| Add type                     | No        | No               | Schema change only                            |
-| Remove type                  | No        | No               | Schema change only - data is preserved        |
-| Change field type            | -         | -                | **Not supported** - requires 3-step migration |
-| Change array to single value | -         | -                | **Not supported** - requires 3-step migration |
-| Change single value to array | No        | No               | Schema change only                            |
+| Change Type                     | Breaking? | Migration Script | Notes                                         |
+| ------------------------------- | --------- | ---------------- | --------------------------------------------- |
+| Add optional field              | No        | No               | Schema change only                            |
+| Add required field              | Yes       | Yes              | Script populates default values               |
+| Remove field                    | No        | No               | Schema change only - data is preserved        |
+| Change optional→required        | Yes       | Yes              | Script sets defaults for null values          |
+| Change required→optional        | No        | No               | Schema change only                            |
+| Add index                       | No        | No               | Schema change only                            |
+| Remove index                    | No        | No               | Schema change only                            |
+| Add unique constraint           | Yes       | Yes              | Script must resolve duplicate values          |
+| Remove unique constraint        | No        | No               | Schema change only                            |
+| Add enum value                  | No        | No               | Schema change only                            |
+| Remove enum value               | Yes       | Yes              | Script migrates records with removed values   |
+| Add type                        | No        | No               | Schema change only                            |
+| Remove type                     | No        | No               | Schema change only - data is preserved        |
+| Change field type               | -         | -                | **Not supported** - requires 3-step migration |
+| Change array to single value    | -         | -                | **Not supported** - requires 3-step migration |
+| Change single value to array    | -         | -                | **Not supported** - requires 3-step migration |
+| Change foreign key relationship | Yes       | Yes              | Script updates existing references            |
 
 ### Unsupported Schema Changes
 
@@ -329,13 +316,9 @@ Field type changes (e.g., `string` → `integer`) are not directly supported. Us
 2. **Migration 2**: Remove the old field
 3. **Migration 3**: Add the field with the original name and new type, migrate data from temporary field, then remove temporary field
 
-#### Array to Single Value
+#### Array Property Change
 
-Changing a field from array to single value is not directly supported. Use this migration strategy:
-
-1. **Migration 1**: Add a new field (single value) and migrate data from array field
-2. **Migration 2**: Remove the old array field
-3. **Migration 3**: Add the field with the original name as single value, migrate data from temporary field, then remove temporary field
+Changing between single value and array (e.g., `array: false` → `array: true`) is not directly supported. Use the same 3-step migration strategy as field type changes.
 
 ## Example Workflow
 
@@ -465,3 +448,132 @@ tailor-sdk apply --no-schema-check
 2. Test your script logic locally if possible
 3. Fix the script
 4. Apply again: `tailor-sdk apply`
+
+## tailordb erd (beta)
+
+Generate ERD artifacts for TailorDB namespaces using [Liam ERD](https://liambx.com/erd).
+
+```bash
+tailor-sdk tailordb erd <subcommand> [options]
+```
+
+**Notes:**
+
+- This command is a beta feature and may introduce breaking changes in future releases
+- `@liam-hq/cli` is required for `export`, `serve`, and `deploy`
+- `serve` is required only for `tailordb erd serve`
+
+Install dependencies:
+
+```bash
+npm i -D @liam-hq/cli serve
+# OR
+yarn add -D @liam-hq/cli serve
+# OR
+pnpm add -D @liam-hq/cli serve
+```
+
+### tailordb erd export
+
+Export Liam ERD dist from applied TailorDB schema.
+
+```bash
+tailor-sdk tailordb erd export [options]
+```
+
+**Options:**
+
+- `-n, --namespace` - TailorDB namespace name (optional - exports all namespaces with erdSite if omitted)
+- `-o, --output` - Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) (default: `.tailor-sdk/erd`)
+- `-j, --json` - Output as JSON
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-e, --env-file` - Path to the environment file
+
+**Usage Examples:**
+
+```bash
+# Export ERD for all namespaces with erdSite configured
+tailor-sdk tailordb erd export
+
+# Export ERD for a specific namespace
+tailor-sdk tailordb erd export --namespace myNamespace
+
+# Export ERD with custom output directory
+tailor-sdk tailordb erd export --output ./my-erd
+
+# Export ERD with JSON output
+tailor-sdk tailordb erd export --json
+```
+
+### tailordb erd serve
+
+Generate and serve ERD locally (liam build + `serve dist`).
+
+```bash
+tailor-sdk tailordb erd serve [options]
+```
+
+**Options:**
+
+- `-n, --namespace` - TailorDB namespace name (uses first namespace with erdSite if not specified)
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-e, --env-file` - Path to the environment file
+
+**Usage Examples:**
+
+```bash
+# Serve ERD for the first namespace with erdSite configured
+tailor-sdk tailordb erd serve
+
+# Serve ERD for a specific namespace
+tailor-sdk tailordb erd serve --namespace myNamespace
+```
+
+### tailordb erd deploy
+
+Deploy ERD static website for TailorDB namespace(s).
+
+```bash
+tailor-sdk tailordb erd deploy [options]
+```
+
+**Options:**
+
+- `-n, --namespace` - TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)
+- `-j, --json` - Output as JSON
+- `-w, --workspace-id` - ID of the workspace
+- `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+- `-e, --env-file` - Path to the environment file
+
+**Usage Examples:**
+
+```bash
+# Deploy ERD for all namespaces with erdSite configured
+tailor-sdk tailordb erd deploy
+
+# Deploy ERD for a specific namespace
+tailor-sdk tailordb erd deploy --namespace myNamespace
+
+# Deploy ERD with JSON output
+tailor-sdk tailordb erd deploy --json
+```
+
+**Notes:**
+
+- Requires `erdSite` to be configured in `tailor.config.ts` for each namespace you want to deploy
+- Example config:
+  ```typescript
+  export default defineConfig({
+    db: {
+      myNamespace: {
+        // ... table definitions
+        erdSite: "my-erd-site-name",
+      },
+    },
+  });
+  ```
