@@ -264,15 +264,16 @@ tailor-sdk tailordb erd deploy --json
   });
   ```
 
-## console
+## open
 
 Open Tailor Platform Console.
 
 ```bash
-tailor-sdk console open [options]
+tailor-sdk open [options]
 ```
 
 **Options:**
 
 - `-w, --workspace-id` - ID of the workspace to open in Console
 - `-p, --profile` - Workspace profile to use
+- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)

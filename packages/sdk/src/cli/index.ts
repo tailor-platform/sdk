@@ -4,13 +4,13 @@ import { register } from "node:module";
 import { defineCommand, runMain } from "citty";
 import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
-import { consoleCommand } from "./console";
 import { generateCommand } from "./generator";
 import { initCommand } from "./init";
 import { loginCommand } from "./login";
 import { logoutCommand } from "./logout";
 import { machineuserCommand } from "./machineuser";
 import { oauth2clientCommand } from "./oauth2client";
+import { openCommand } from "./open";
 import { profileCommand } from "./profile";
 import { removeCommand } from "./remove";
 import { secretCommand } from "./secret";
@@ -36,7 +36,7 @@ export const mainCommand = defineCommand({
   subCommands: {
     api: apiCommand,
     apply: applyCommand,
-    console: consoleCommand,
+    open: openCommand,
     generate: generateCommand,
     init: initCommand,
     login: loginCommand,
