@@ -287,7 +287,7 @@ describe("KyselyGenerator integration tests", () => {
   });
 
   describe("error handling tests", () => {
-    it("handles errors appropriately with invalid type definitions", () => {
+    it("handles errors appropriately with invalid type definitions", async () => {
       const validType = parseTailorDBType(mockBasicType);
       const invalidType: ParsedTailorDBType = {
         ...validType,
@@ -296,12 +296,12 @@ describe("KyselyGenerator integration tests", () => {
         fields: null,
       };
 
-      expect(() =>
+      await expect(
         kyselyGenerator.processType({
           type: invalidType,
           namespace: "test-namespace",
         }),
-      ).toThrow();
+      ).rejects.toThrow();
     });
 
     it("processes unknown type definitions as string type", async () => {

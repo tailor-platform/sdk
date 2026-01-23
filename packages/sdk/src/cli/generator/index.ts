@@ -336,13 +336,14 @@ export class GenerationManager {
     if (!authService) return undefined;
 
     const config = authService.parsedConfig;
+    const userProfile = authService.userProfile;
     return {
       name: config.name,
-      userProfile: authService.userProfile
+      userProfile: userProfile
         ? {
-            typeName: authService.userProfile.type.name,
-            namespace: authService.userProfile.namespace,
-            usernameField: authService.userProfile.usernameField,
+            typeName: userProfile.type.name,
+            namespace: userProfile.namespace,
+            usernameField: userProfile.usernameField,
           }
         : undefined,
       machineUsers: config.machineUsers,

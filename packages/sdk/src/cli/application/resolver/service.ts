@@ -5,32 +5,26 @@ import { logger, styles } from "@/cli/utils/logger";
 import { type ResolverServiceConfig } from "@/configure/services/resolver/types";
 import { type Resolver, ResolverSchema } from "@/parser/service/resolver";
 
-export class ResolverService {
-  private resolvers: Record<string, Resolver> = {};
+export type ResolverService = {
+  readonly namespace: string;
+  readonly config: ResolverServiceConfig;
+  getResolvers(): Record<string, Resolver>;
+  loadResolvers(): Promise<void>;
+};
 
-  constructor(
-    public readonly namespace: string,
-    public readonly config: ResolverServiceConfig,
-  ) {}
+/**
+ * Creates a new ResolverService instance.
+ * @param namespace - The namespace for this resolver service
+ * @param config - The resolver service configuration
+ * @returns A new ResolverService instance
+ */
+export function createResolverService(
+  namespace: string,
+  config: ResolverServiceConfig,
+): ResolverService {
+  const resolvers: Record<string, Resolver> = {};
 
-  async loadResolvers(): Promise<void> {
-    if (Object.keys(this.resolvers).length > 0) {
-      return;
-    }
-    if (!this.config.files || this.config.files.length === 0) {
-      return;
-    }
-
-    const resolverFiles = loadFilesWithIgnores(this.config);
-
-    logger.log(
-      `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${this.namespace}"`)}`,
-    );
-
-    await Promise.all(resolverFiles.map((resolverFile) => this.loadResolverForFile(resolverFile)));
-  }
-
-  async loadResolverForFile(resolverFile: string) {
+  const loadResolverForFile = async (resolverFile: string): Promise<Resolver | undefined> => {
     try {
       const resolverModule = await import(pathToFileURL(resolverFile).href);
       const result = ResolverSchema.safeParse(resolverModule.default);
@@ -39,7 +33,7 @@ export class ResolverService {
         logger.log(
           `Resolver: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        this.resolvers[resolverFile] = result.data;
+        resolvers[resolverFile] = result.data;
         return result.data;
       }
     } catch (error) {
@@ -49,9 +43,27 @@ export class ResolverService {
       throw error;
     }
     return undefined;
-  }
+  };
 
-  getResolvers(): Record<string, Resolver> {
-    return this.resolvers;
-  }
+  return {
+    namespace,
+    config,
+    getResolvers: () => resolvers,
+    loadResolvers: async () => {
+      if (Object.keys(resolvers).length > 0) {
+        return;
+      }
+      if (!config.files || config.files.length === 0) {
+        return;
+      }
+
+      const resolverFiles = loadFilesWithIgnores(config);
+
+      logger.log(
+        `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${namespace}"`)}`,
+      );
+
+      await Promise.all(resolverFiles.map((resolverFile) => loadResolverForFile(resolverFile)));
+    },
+  };
 }
