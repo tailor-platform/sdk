@@ -1,5 +1,5 @@
 import { logger, styles } from "@/cli/utils/logger";
-import { t, unauthenticatedTailorUser } from "@/configure/types";
+import { unauthenticatedTailorUser } from "@/configure/types";
 import type { TailorAnyField } from "@/configure/types";
 import type { PluginBase, PluginOutput } from "@/parser/plugin-config/types";
 import type { TailorDBType } from "@/parser/service/tailordb/types";
@@ -28,12 +28,8 @@ interface ConfigValidationError {
  * @param schema - The schema defining expected fields
  * @returns Array of validation errors (empty if valid)
  */
-function validatePluginConfig(
-  config: unknown,
-  schema: Record<string, TailorAnyField>,
-): ConfigValidationError[] {
-  const objectSchema = t.object(schema);
-  const result = objectSchema.parse({
+function validatePluginConfig(config: unknown, schema: TailorAnyField): ConfigValidationError[] {
+  const result = schema.parse({
     value: config,
     data: config,
     user: unauthenticatedTailorUser,

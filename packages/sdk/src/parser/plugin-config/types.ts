@@ -32,11 +32,11 @@ export interface PluginAttachment {
 /**
  * Context passed to plugin's process method
  */
-export interface PluginProcessContext {
+export interface PluginProcessContext<Config = unknown> {
   /** The raw TailorDB type being processed */
   type: TailorDBType;
   /** Plugin-specific configuration passed via .plugin() method */
-  config: unknown;
+  config: Config;
   /** Namespace of the TailorDB type */
   namespace: string;
 }
@@ -152,7 +152,7 @@ export interface PluginBase {
    * }
    * ```
    */
-  readonly configSchema?: Record<string, TailorAnyField>;
+  readonly configSchema: TailorAnyField;
 
   /**
    * Process a single TailorDB type and generate outputs
