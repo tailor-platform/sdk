@@ -2,6 +2,9 @@ export interface TypeWithFiles {
   SalesOrder: {
     fields: "receipt" | "form";
   };
+  User: {
+    fields: "avatar";
+  };
   Event: {
     fields: "screenshot";
   };
@@ -9,6 +12,7 @@ export interface TypeWithFiles {
 
 const namespaces: Record<keyof TypeWithFiles, string> = {
   SalesOrder: "tailordb",
+  User: "tailordb",
   Event: "analyticsdb",
 };
 

@@ -114,15 +114,6 @@ export interface Namespace {
 
     User: {
       id: Generated<string>;
-      recordId: string;
-      recordState: "DRAFT" | "ACTIVE" | "ARCHIVED";
-      archivedSeq: number;
-      effectiveFrom: Timestamp;
-      effectiveTo: Timestamp | null;
-      requestedBy: string;
-      requestedAt: Timestamp;
-      currentApprover: string | null;
-      approvers: string[];
       name: string;
       email: string;
       status: string | null;

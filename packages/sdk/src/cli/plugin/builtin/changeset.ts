@@ -28,23 +28,9 @@ function processChangeset(context: PluginProcessContext): PluginOutput {
 
   const typeName = type.name;
 
-  // Generate the main entity with version control fields
-  const mainEntity = db.type(typeName, {
-    // Version control fields
-    recordId: db.uuid().index(),
-    recordState: db.enum(["DRAFT", "ACTIVE", "ARCHIVED"]).index(),
-    archivedSeq: db.int(),
-    effectiveFrom: db.datetime(),
-    effectiveTo: db.datetime({ optional: true }),
-    requestedBy: db.uuid().index(),
-    requestedAt: db.datetime(),
-    currentApprover: db.uuid({ optional: true }).index(),
-    approvers: db.uuid({ array: true }),
-    // Original fields from the source type are copied
-    ...type.fields,
-    // Timestamps
-    ...db.fields.timestamps(),
-  });
+  // Note: The original type is used as-is. Version control fields should be
+  // added to the original type definition by the user if needed.
+  // This plugin only generates auxiliary types for the approval workflow.
 
   // ChangeRequest - approval process
   const changeRequest = db.type(`${typeName}ChangeRequest`, {
@@ -104,15 +90,14 @@ function processChangeset(context: PluginProcessContext): PluginOutput {
   });
 
   return {
-    types: [mainEntity, changeRequest, changeStep, changeApproval, changeReworkEvent],
+    types: [changeRequest, changeStep, changeApproval, changeReworkEvent],
   };
 }
 
 /**
  * Changeset plugin for generating approval flow related types.
  *
- * When applied to a type, generates:
- * - Main entity with version control fields (recordId, recordState, etc.)
+ * When applied to a type, generates auxiliary types for approval workflow:
  * - ChangeRequest - the approval process
  * - ChangeStep - execution steps
  * - ChangeApproval - approval logs (audit)

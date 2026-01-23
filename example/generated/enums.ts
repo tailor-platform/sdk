@@ -26,13 +26,6 @@ export const SupplierState = {
 } as const;
 export type SupplierState = (typeof SupplierState)[keyof typeof SupplierState];
 
-export const UserRecordState = {
-  "DRAFT": "DRAFT",
-  "ACTIVE": "ACTIVE",
-  "ARCHIVED": "ARCHIVED"
-} as const;
-export type UserRecordState = (typeof UserRecordState)[keyof typeof UserRecordState];
-
 export const UserRole = {
   "MANAGER": "MANAGER",
   "STAFF": "STAFF"
