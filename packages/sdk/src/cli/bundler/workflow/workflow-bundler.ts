@@ -6,7 +6,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
-import { getDistDir } from "@/configure/config";
+import { getDistDir } from "@/parser/app-config";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";

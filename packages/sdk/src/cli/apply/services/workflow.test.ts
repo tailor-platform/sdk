@@ -21,7 +21,7 @@ vi.mock("node:path", async (importOriginal) => {
 });
 
 // Mock configure/config
-vi.mock("@/configure/config", () => ({
+vi.mock("@/parser/app-config", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
 

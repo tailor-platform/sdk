@@ -20,7 +20,7 @@ import * as inflection from "inflection";
 import * as path from "pathe";
 import { type ResolverService } from "@/cli/application/resolver/service";
 import { logger } from "@/cli/utils/logger";
-import { getDistDir } from "@/configure/config";
+import { getDistDir } from "@/parser/app-config";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { tailorUserMap } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";

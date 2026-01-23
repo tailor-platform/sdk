@@ -11,7 +11,7 @@ import { t } from "@/configure/types";
 import { type Resolver } from "@/parser/service/resolver";
 import { DependencyWatcher } from "./watch";
 import { GenerationManager } from "./index";
-import type { AppConfig } from "@/configure/config";
+import type { AppConfig } from "@/parser/app-config";
 
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {

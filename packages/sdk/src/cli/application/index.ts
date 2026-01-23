@@ -2,12 +2,12 @@ import { AuthService } from "@/cli/application/auth/service";
 import { ExecutorService } from "@/cli/application/executor/service";
 import { ResolverService } from "@/cli/application/resolver/service";
 import { TailorDBService } from "@/cli/application/tailordb/service";
-import { type AppConfig } from "@/configure/config";
 import { type AuthConfig } from "@/configure/services/auth";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type ResolverServiceInput } from "@/configure/services/resolver/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { type WorkflowServiceConfig } from "@/configure/services/workflow/types";
+import { type AppConfig } from "@/parser/app-config";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import {
   StaticWebsiteSchema,
