@@ -174,7 +174,7 @@ export const createCommand = defineCommand({
     }
 
     if (args.json && profileInfo) {
-      logger.out({ workspace, profile: profileInfo });
+      logger.out({ ...workspace, profile: profileInfo });
       return;
     }
 
