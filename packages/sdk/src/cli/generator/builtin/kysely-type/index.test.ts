@@ -1,15 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { TailorDBService } from "@/cli/application/tailordb/service";
 import { db } from "@/configure/services/tailordb/schema";
-import { KyselyGenerator } from "./index";
+import { parseTypes } from "@/parser/service/tailordb";
+import { createKyselyGenerator } from "./index";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
-  const service = new TailorDBService("test", { files: [] });
-  service["rawTypes"]["test.ts"] = { [type.name]: type };
-  service["parseTypes"]();
-  return service.getTypes()[type.name];
+  const types = parseTypes({ [type.name]: type }, "test", {});
+  return types[type.name];
 }
 
 const mockBasicType = db.type("User", {
@@ -45,11 +43,11 @@ const mockNestedType = db.type("ComplexUser", {
 });
 
 describe("KyselyGenerator integration tests", () => {
-  let kyselyGenerator: KyselyGenerator;
+  let kyselyGenerator: ReturnType<typeof createKyselyGenerator>;
   const testDistPath = "/test/dist/kysely-types.ts";
 
   beforeEach(() => {
-    kyselyGenerator = new KyselyGenerator({ distPath: testDistPath });
+    kyselyGenerator = createKyselyGenerator({ distPath: testDistPath });
   });
 
   describe("basic functionality tests", () => {
@@ -201,7 +199,7 @@ describe("KyselyGenerator integration tests", () => {
   });
 
   describe("aggregate function tests", () => {
-    it("integrates type definitions and returns file generation result", () => {
+    it("integrates type definitions and returns file generation result", async () => {
       // Metadata object from processTailorDBNamespace
       const processedTypes = {
         namespace: "test-namespace",
@@ -227,7 +225,7 @@ describe("KyselyGenerator integration tests", () => {
           },
         ],
       };
-      const result = kyselyGenerator.aggregate({
+      const result = await kyselyGenerator.aggregate({
         input: input,
         baseDir: "/test",
         configPath: "tailor.config.ts",
@@ -271,7 +269,7 @@ describe("KyselyGenerator integration tests", () => {
           },
         ],
       };
-      const result = kyselyGenerator.aggregate({
+      const result = await kyselyGenerator.aggregate({
         input: input,
         baseDir: "/test",
         configPath: "tailor.config.ts",
@@ -289,7 +287,7 @@ describe("KyselyGenerator integration tests", () => {
   });
 
   describe("error handling tests", () => {
-    it("handles errors appropriately with invalid type definitions", async () => {
+    it("handles errors appropriately with invalid type definitions", () => {
       const validType = parseTailorDBType(mockBasicType);
       const invalidType: ParsedTailorDBType = {
         ...validType,
@@ -298,12 +296,12 @@ describe("KyselyGenerator integration tests", () => {
         fields: null,
       };
 
-      await expect(
+      expect(() =>
         kyselyGenerator.processType({
           type: invalidType,
           namespace: "test-namespace",
         }),
-      ).rejects.toThrow();
+      ).toThrow();
     });
 
     it("processes unknown type definitions as string type", async () => {
@@ -321,7 +319,7 @@ describe("KyselyGenerator integration tests", () => {
   });
 
   describe("multiple namespace support", () => {
-    it("aggregates types from multiple namespaces", () => {
+    it("aggregates types from multiple namespaces", async () => {
       const tailordbTypes = {
         namespace: "tailordb",
         types: [
@@ -359,7 +357,7 @@ describe("KyselyGenerator integration tests", () => {
         ],
       };
 
-      const result = kyselyGenerator.aggregate({
+      const result = await kyselyGenerator.aggregate({
         input,
         baseDir: "/test",
         configPath: "tailor.config.ts",
@@ -379,7 +377,7 @@ describe("KyselyGenerator integration tests", () => {
       expect(content).toContain("interface Namespace {");
     });
 
-    it("includes only necessary utility types", () => {
+    it("includes only necessary utility types", async () => {
       const types = {
         namespace: "test",
         types: [
@@ -399,7 +397,7 @@ describe("KyselyGenerator integration tests", () => {
         tailordb: [{ namespace: "test", types }],
       };
 
-      const result = kyselyGenerator.aggregate({
+      const result = await kyselyGenerator.aggregate({
         input,
         baseDir: "/test",
         configPath: "tailor.config.ts",

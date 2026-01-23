@@ -1,24 +1,23 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { TailorDBService } from "@/cli/application/tailordb/service";
 import { db } from "@/configure/services/tailordb";
-import { FileProcessor } from "./file-processor";
-import { FileUtilsGenerator } from "./index";
+import { parseTypes } from "@/parser/service/tailordb";
+import { generateUnifiedFileUtils } from "./generate-file-utils";
+import { processFileType } from "./process-file-type";
+import { createFileUtilsGenerator } from "./index";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
-  const service = new TailorDBService("test", { files: [] });
-  service["rawTypes"]["test.ts"] = { [type.name]: type };
-  service["parseTypes"]();
-  return service.getTypes()[type.name];
+  const types = parseTypes({ [type.name]: type }, "test", {});
+  return types[type.name];
 }
 
 describe("FileUtilsGenerator", () => {
-  let generator: FileUtilsGenerator;
+  let generator: ReturnType<typeof createFileUtilsGenerator>;
   const testDistPath = "/test/dist/files.ts";
 
   beforeEach(() => {
-    generator = new FileUtilsGenerator({ distPath: testDistPath });
+    generator = createFileUtilsGenerator({ distPath: testDistPath });
   });
 
   describe("basic properties", () => {
@@ -44,7 +43,7 @@ describe("FileUtilsGenerator", () => {
           avatar: "profile image",
         });
 
-      const result = await FileProcessor.processType(parseTailorDBType(type));
+      const result = await processFileType(parseTailorDBType(type));
 
       expect(result.fileFields).toEqual(["avatar"]);
     });
@@ -59,7 +58,7 @@ describe("FileUtilsGenerator", () => {
           form: "order form",
         });
 
-      const result = await FileProcessor.processType(parseTailorDBType(type));
+      const result = await processFileType(parseTailorDBType(type));
 
       expect(result.fileFields).toEqual(["receipt", "form"]);
     });
@@ -69,7 +68,7 @@ describe("FileUtilsGenerator", () => {
         name: db.string(),
       });
 
-      const result = await FileProcessor.processType(parseTailorDBType(type));
+      const result = await processFileType(parseTailorDBType(type));
 
       expect(result.fileFields).toEqual([]);
     });
@@ -87,7 +86,7 @@ describe("FileUtilsGenerator", () => {
         },
       ];
 
-      const result = FileProcessor.generateUnifiedFileUtils(namespaceData);
+      const result = generateUnifiedFileUtils(namespaceData);
 
       expect(result).toContain("export interface TypeWithFiles");
       expect(result).toContain("User: {");
@@ -113,7 +112,7 @@ describe("FileUtilsGenerator", () => {
         },
       ];
 
-      const result = FileProcessor.generateUnifiedFileUtils(namespaceData);
+      const result = generateUnifiedFileUtils(namespaceData);
 
       expect(result).toContain("export interface TypeWithFiles");
       expect(result).toContain("User: {");
@@ -128,7 +127,7 @@ describe("FileUtilsGenerator", () => {
     });
 
     it("should return empty string when no namespace data", () => {
-      const result = FileProcessor.generateUnifiedFileUtils([]);
+      const result = generateUnifiedFileUtils([]);
 
       expect(result).toBe("");
     });
@@ -141,7 +140,7 @@ describe("FileUtilsGenerator", () => {
         },
       ];
 
-      const result = FileProcessor.generateUnifiedFileUtils(namespaceData);
+      const result = generateUnifiedFileUtils(namespaceData);
 
       expect(result).toBe("");
     });

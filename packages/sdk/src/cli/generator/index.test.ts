@@ -2,13 +2,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi, afterAll } from "vitest";
-import { TailorDBService } from "@/cli/application/tailordb/service";
 import { GeneratorConfigSchema } from "@/cli/config-loader";
-import { KyselyGenerator } from "@/cli/generator/builtin/kysely-type";
+import { KyselyGeneratorID } from "@/cli/generator/builtin/kysely-type";
 import { createResolver } from "@/configure/services/resolver/resolver";
 import { db, type TailorDBType } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types";
 import { type Resolver } from "@/parser/service/resolver";
+import { parseTypes } from "@/parser/service/tailordb";
 import { DependencyWatcher } from "./watch";
 import { GenerationManager } from "./index";
 import type { AppConfig } from "@/configure/config";
@@ -126,7 +126,7 @@ describe("GenerationManager", () => {
         // For test-only access to private members
         // oxlint-disable-next-line no-explicit-any
         (managerWithKysely as any).generators.some(
-          (gen: unknown) => gen instanceof KyselyGenerator,
+          (gen: { id: string }) => gen.id === KyselyGeneratorID,
         ),
       ).toBe(true);
     });
@@ -161,15 +161,13 @@ describe("GenerationManager", () => {
       const types = {
         testType: db.type("TestType", {}),
       };
-      const service = new TailorDBService("test-namespace", { files: [] });
-      service["rawTypes"]["test.ts"] = types;
-      service["parseTypes"]();
+      const parsedTypes = parseTypes({ TestType: types.testType }, "test-namespace", {});
 
       manager.services = {
         tailordb: {
           "test-namespace": {
-            types: service.getTypes(),
-            sourceInfo: service.getTypeSourceInfo(),
+            types: parsedTypes,
+            sourceInfo: {},
           },
         },
         resolver: {
@@ -236,15 +234,13 @@ describe("GenerationManager", () => {
       const types = {
         testType: db.type("TestType", {}),
       };
-      const service = new TailorDBService("test-namespace", { files: [] });
-      service["rawTypes"]["test.ts"] = types;
-      service["parseTypes"]();
+      const parsedTypes = parseTypes({ TestType: types.testType }, "test-namespace", {});
 
       manager.services = {
         tailordb: {
           "test-namespace": {
-            types: service.getTypes(),
-            sourceInfo: service.getTypeSourceInfo(),
+            types: parsedTypes,
+            sourceInfo: {},
           },
         },
         resolver: {
@@ -313,9 +309,11 @@ describe("GenerationManager", () => {
         type3: db.type("Type3", {}),
       };
 
-      const service = new TailorDBService("test-namespace", { files: [] });
-      service["rawTypes"]["test.ts"] = types;
-      service["parseTypes"]();
+      const parsedTypes = parseTypes(
+        { Type1: types.type1, Type2: types.type2, Type3: types.type3 },
+        "test-namespace",
+        {},
+      );
 
       // Initialize generatorResults
       manager.generatorResults[testGenerator.id] = {
@@ -327,8 +325,8 @@ describe("GenerationManager", () => {
       };
 
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
-        types: service.getTypes(),
-        sourceInfo: service.getTypeSourceInfo(),
+        types: parsedTypes,
+        sourceInfo: {},
       });
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
@@ -364,14 +362,13 @@ describe("GenerationManager", () => {
         TestType: db.type("TestType", {}),
       };
 
-      const service = new TailorDBService("test-namespace", { files: [] });
-      service["rawTypes"]["test.ts"] = types;
-      // Manually set typeSourceInfo since we're not using loadTypesForFile
-      service["typeSourceInfo"]["TestType"] = {
-        filePath: "test.ts",
-        exportName: "TestType",
+      const sourceInfo = {
+        TestType: {
+          filePath: "test.ts",
+          exportName: "TestType",
+        },
       };
-      service["parseTypes"]();
+      const parsedTypes = parseTypes({ TestType: types.TestType }, "test-namespace", sourceInfo);
 
       // Initialize generatorResults
       manager.generatorResults[testGenerator.id] = {
@@ -383,8 +380,8 @@ describe("GenerationManager", () => {
       };
 
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
-        types: service.getTypes(),
-        sourceInfo: service.getTypeSourceInfo(),
+        types: parsedTypes,
+        sourceInfo,
       });
 
       expect(processTypeSpy).toHaveBeenCalledWith(
@@ -722,7 +719,7 @@ describe("Integration Tests", () => {
 
     expect(manager.generators.length).toBe(2);
     expect(manager.generators.some((g: unknown) => g instanceof TestGenerator)).toBe(true);
-    expect(manager.generators.some((g: unknown) => g instanceof KyselyGenerator)).toBe(true);
+    expect(manager.generators.some((g: { id: string }) => g.id === KyselyGeneratorID)).toBe(true);
   });
 
   it("integration test for error recovery and performance", async () => {
@@ -770,13 +767,11 @@ describe("Integration Tests", () => {
               types[`Type${nsIdx}_${typeIdx}`] = db.type(`Type${nsIdx}_${typeIdx}`, {});
             });
 
-          const service = new TailorDBService(namespace, { files: [] });
-          service["rawTypes"]["test.ts"] = types;
-          service["parseTypes"]();
+          const parsedTypes = parseTypes(types, namespace, {});
 
           manager.services.tailordb[namespace] = {
-            types: service.getTypes(),
-            sourceInfo: service.getTypeSourceInfo(),
+            types: parsedTypes,
+            sourceInfo: {},
           };
 
           // Add resolvers to namespace
