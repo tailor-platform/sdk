@@ -10,7 +10,9 @@ import {
   type BreakingChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
+import type { SchemaDrift } from "./types";
 import type { ParsedTailorDBType, ParsedField } from "@/parser/service/tailordb/types";
+import type { TailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // ============================================================================
 // Constants
@@ -199,9 +201,11 @@ export function getMigrationFilePath(
  * @returns {SnapshotFieldConfig} Snapshot field configuration
  */
 function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
+  // Note: Use `!== false` to match generateTailorDBTypeManifest behavior
+  // where undefined defaults to true (required by default in SDK)
   const config: SnapshotFieldConfig = {
     type: field.config.type,
-    required: field.config.required ?? false,
+    required: field.config.required !== false,
   };
 
   if (field.config.array) config.array = true;
@@ -1164,4 +1168,276 @@ export function filterTypeToSnapshot(
     indexes: Object.keys(filteredIndexes).length > 0 ? filteredIndexes : undefined,
     files: Object.keys(filteredFiles).length > 0 ? filteredFiles : undefined,
   };
+}
+
+// ============================================================================
+// Remote Schema Verification
+// ============================================================================
+
+/**
+ * Convert remote TailorDBType to SnapshotFieldConfig for comparison
+ * @param {TailorDBType} remoteType - Remote TailorDB type from API
+ * @returns {Record<string, SnapshotFieldConfig>} Converted field configs
+ */
+function convertRemoteFieldsToSnapshot(
+  remoteType: TailorDBType,
+): Record<string, SnapshotFieldConfig> {
+  const fields: Record<string, SnapshotFieldConfig> = {};
+  const remoteFields = remoteType.schema?.fields ?? {};
+
+  for (const [fieldName, remoteField] of Object.entries(remoteFields)) {
+    const config: SnapshotFieldConfig = {
+      type: remoteField.type,
+      required: remoteField.required,
+    };
+
+    if (remoteField.array) config.array = true;
+    if (remoteField.index) config.index = true;
+    if (remoteField.unique) config.unique = true;
+    if (remoteField.foreignKey) {
+      config.foreignKey = true;
+      if (remoteField.foreignKeyType) config.foreignKeyType = remoteField.foreignKeyType;
+      if (remoteField.foreignKeyField) config.foreignKeyField = remoteField.foreignKeyField;
+    }
+    if (remoteField.allowedValues && remoteField.allowedValues.length > 0) {
+      config.allowedValues = remoteField.allowedValues.map((v) => v.value);
+    }
+
+    fields[fieldName] = config;
+  }
+
+  return fields;
+}
+
+/**
+ * Compare a single field between remote and snapshot
+ * @param {string} typeName - Name of the type
+ * @param {string} fieldName - Name of the field
+ * @param {SnapshotFieldConfig} remoteField - Remote field config
+ * @param {SnapshotFieldConfig} snapshotField - Snapshot field config
+ * @returns {SchemaDrift | null} Drift info or null if fields match
+ */
+function compareFields(
+  typeName: string,
+  fieldName: string,
+  remoteField: SnapshotFieldConfig,
+  snapshotField: SnapshotFieldConfig,
+): SchemaDrift | null {
+  const differences: string[] = [];
+
+  // Compare type
+  if (remoteField.type !== snapshotField.type) {
+    differences.push(`type: remote=${remoteField.type}, expected=${snapshotField.type}`);
+  }
+
+  // Compare required
+  if (remoteField.required !== snapshotField.required) {
+    differences.push(
+      `required: remote=${remoteField.required}, expected=${snapshotField.required}`,
+    );
+  }
+
+  // Compare array
+  const remoteArray = remoteField.array ?? false;
+  const snapshotArray = snapshotField.array ?? false;
+  if (remoteArray !== snapshotArray) {
+    differences.push(`array: remote=${remoteArray}, expected=${snapshotArray}`);
+  }
+
+  // Compare unique
+  const remoteUnique = remoteField.unique ?? false;
+  const snapshotUnique = snapshotField.unique ?? false;
+  if (remoteUnique !== snapshotUnique) {
+    differences.push(`unique: remote=${remoteUnique}, expected=${snapshotUnique}`);
+  }
+
+  // Compare foreignKey
+  const remoteFk = remoteField.foreignKey ?? false;
+  const snapshotFk = snapshotField.foreignKey ?? false;
+  if (remoteFk !== snapshotFk) {
+    differences.push(`foreignKey: remote=${remoteFk}, expected=${snapshotFk}`);
+  }
+
+  // Compare foreignKeyType
+  if (remoteField.foreignKeyType !== snapshotField.foreignKeyType) {
+    differences.push(
+      `foreignKeyType: remote=${remoteField.foreignKeyType ?? "none"}, expected=${snapshotField.foreignKeyType ?? "none"}`,
+    );
+  }
+
+  // Compare allowedValues (set-based)
+  const remoteAllowed = new Set(remoteField.allowedValues ?? []);
+  const snapshotAllowed = new Set(snapshotField.allowedValues ?? []);
+  if (remoteAllowed.size !== snapshotAllowed.size) {
+    differences.push(
+      `allowedValues count: remote=${remoteAllowed.size}, expected=${snapshotAllowed.size}`,
+    );
+  } else {
+    for (const v of remoteAllowed) {
+      if (!snapshotAllowed.has(v)) {
+        differences.push(`allowedValues: remote has '${v}' not in snapshot`);
+        break;
+      }
+    }
+    for (const v of snapshotAllowed) {
+      if (!remoteAllowed.has(v)) {
+        differences.push(`allowedValues: snapshot has '${v}' not in remote`);
+        break;
+      }
+    }
+  }
+
+  if (differences.length > 0) {
+    return {
+      typeName,
+      kind: "field_mismatch",
+      fieldName,
+      details: differences.join("; "),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * System fields that are auto-generated and should be excluded from comparison
+ */
+const SYSTEM_FIELDS = new Set(["id"]);
+
+/**
+ * Compare remote TailorDB types with a local snapshot
+ * @param {TailorDBType[]} remoteTypes - Remote types from listTailorDBTypes API
+ * @param {SchemaSnapshot} snapshot - Local schema snapshot
+ * @returns {SchemaDrift[]} List of drifts detected
+ */
+export function compareRemoteWithSnapshot(
+  remoteTypes: TailorDBType[],
+  snapshot: SchemaSnapshot,
+): SchemaDrift[] {
+  const drifts: SchemaDrift[] = [];
+
+  // Build maps for easy lookup
+  const remoteTypeMap = new Map<string, TailorDBType>();
+  for (const remoteType of remoteTypes) {
+    remoteTypeMap.set(remoteType.name, remoteType);
+  }
+
+  const snapshotTypeNames = new Set(Object.keys(snapshot.types));
+  const remoteTypeNames = new Set(remoteTypeMap.keys());
+
+  // Check for types missing in remote
+  for (const typeName of snapshotTypeNames) {
+    if (!remoteTypeNames.has(typeName)) {
+      drifts.push({
+        typeName,
+        kind: "type_missing_remote",
+        details: `Type '${typeName}' exists in snapshot but not in remote`,
+      });
+    }
+  }
+
+  // Check for types missing in snapshot (unexpected types in remote)
+  for (const typeName of remoteTypeNames) {
+    if (!snapshotTypeNames.has(typeName)) {
+      drifts.push({
+        typeName,
+        kind: "type_missing_local",
+        details: `Type '${typeName}' exists in remote but not in snapshot`,
+      });
+    }
+  }
+
+  // Compare fields for types that exist in both
+  for (const typeName of snapshotTypeNames) {
+    if (!remoteTypeNames.has(typeName)) continue;
+
+    const remoteType = remoteTypeMap.get(typeName)!;
+    const snapshotType = snapshot.types[typeName];
+
+    const remoteFields = convertRemoteFieldsToSnapshot(remoteType);
+    const snapshotFields = snapshotType.fields;
+
+    // Exclude system fields (like 'id') from comparison
+    const remoteFieldNames = new Set(
+      Object.keys(remoteFields).filter((f) => !SYSTEM_FIELDS.has(f)),
+    );
+    const snapshotFieldNames = new Set(
+      Object.keys(snapshotFields).filter((f) => !SYSTEM_FIELDS.has(f)),
+    );
+
+    // Check for fields missing in remote
+    for (const fieldName of snapshotFieldNames) {
+      if (!remoteFieldNames.has(fieldName)) {
+        drifts.push({
+          typeName,
+          kind: "field_missing_remote",
+          fieldName,
+          details: `Field '${fieldName}' exists in snapshot but not in remote`,
+        });
+      }
+    }
+
+    // Check for fields missing in snapshot
+    for (const fieldName of remoteFieldNames) {
+      if (!snapshotFieldNames.has(fieldName)) {
+        drifts.push({
+          typeName,
+          kind: "field_missing_local",
+          fieldName,
+          details: `Field '${fieldName}' exists in remote but not in snapshot`,
+        });
+      }
+    }
+
+    // Compare fields that exist in both
+    for (const fieldName of snapshotFieldNames) {
+      if (!remoteFieldNames.has(fieldName)) continue;
+
+      const drift = compareFields(
+        typeName,
+        fieldName,
+        remoteFields[fieldName],
+        snapshotFields[fieldName],
+      );
+      if (drift) {
+        drifts.push(drift);
+      }
+    }
+  }
+
+  return drifts;
+}
+
+/**
+ * Format schema drifts for display
+ * @param {SchemaDrift[]} drifts - List of drifts to format
+ * @returns {string} Formatted drift report
+ */
+export function formatSchemaDrifts(drifts: SchemaDrift[]): string {
+  if (drifts.length === 0) {
+    return "No schema drifts detected.";
+  }
+
+  const lines: string[] = [];
+
+  // Group drifts by type
+  const driftsByType = new Map<string, SchemaDrift[]>();
+  for (const drift of drifts) {
+    const existing = driftsByType.get(drift.typeName) ?? [];
+    existing.push(drift);
+    driftsByType.set(drift.typeName, existing);
+  }
+
+  for (const [typeName, typeDrifts] of driftsByType) {
+    lines.push(`  Type '${typeName}':`);
+    for (const drift of typeDrifts) {
+      if (drift.fieldName) {
+        lines.push(`    - Field '${drift.fieldName}': ${drift.details}`);
+      } else {
+        lines.push(`    - ${drift.details}`);
+      }
+    }
+  }
+
+  return lines.join("\n");
 }

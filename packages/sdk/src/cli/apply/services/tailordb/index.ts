@@ -19,6 +19,7 @@ import {
   TailorDBGQLPermission_Permit,
   type TailorDBGQLPermission_PolicySchema,
   type TailorDBGQLPermissionSchema,
+  type TailorDBType,
   type TailorDBType_FieldConfigSchema,
   type TailorDBType_FileConfigSchema,
   type TailorDBType_IndexSchema,
@@ -63,6 +64,8 @@ import {
   compareLocalTypesWithSnapshot,
   assertValidMigrationFiles,
   formatMigrationNumber,
+  compareRemoteWithSnapshot,
+  formatSchemaDrifts,
 } from "../../../tailordb/migrate/snapshot";
 import { logger, styles } from "../../../utils/logger";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
@@ -74,12 +77,160 @@ import {
   type MigrationContext,
 } from "./migration";
 import type { ApplyPhase, PlanContext } from "../..";
-import type { PendingMigration } from "../../../tailordb/migrate/types";
+import type {
+  PendingMigration,
+  RemoteSchemaVerificationResult,
+} from "../../../tailordb/migrate/types";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type { Executor } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+
+// ============================================================================
+// Remote Schema Verification
+// ============================================================================
+
+/**
+ * Fetch all TailorDB types from remote for a namespace
+ * @param {OperatorClient} client - Operator client instance
+ * @param {string} workspaceId - Workspace ID
+ * @param {string} namespace - TailorDB namespace
+ * @returns {Promise<TailorDBType[]>} Remote TailorDB types
+ */
+async function fetchRemoteTypes(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<TailorDBType[]> {
+  return fetchAll(async (pageToken) => {
+    try {
+      const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+      });
+      return [tailordbTypes, nextPageToken];
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        return [[], ""];
+      }
+      throw error;
+    }
+  });
+}
+
+/**
+ * Get the current migration number from remote metadata
+ * @param {OperatorClient} client - Operator client instance
+ * @param {string} workspaceId - Workspace ID
+ * @param {string} namespace - TailorDB namespace
+ * @returns {Promise<number | null>} Current migration number, or null if no migration label exists
+ */
+async function getRemoteMigrationNumber(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<number | null> {
+  try {
+    const trn = `${trnPrefix(workspaceId)}:tailordb:${namespace}`;
+    const { metadata } = await client.getMetadata({ trn });
+    const label = metadata?.labels?.["sdk-migration"];
+    if (!label) return null; // No migration label means first apply
+    const match = label.match(/^m(\d+)$/);
+    return match ? parseInt(match[1], 10) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify remote schema matches the expected snapshot state
+ * @param {OperatorClient} client - Operator client instance
+ * @param {string} workspaceId - Workspace ID
+ * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migration config
+ * @returns {Promise<RemoteSchemaVerificationResult[]>} Verification results per namespace
+ */
+async function verifyRemoteSchema(
+  client: OperatorClient,
+  workspaceId: string,
+  namespacesWithMigrations: NamespaceWithMigrations[],
+): Promise<RemoteSchemaVerificationResult[]> {
+  const results: RemoteSchemaVerificationResult[] = [];
+
+  for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+    // Get current remote migration number
+    const remoteMigrationNumber = await getRemoteMigrationNumber(client, workspaceId, namespace);
+
+    // If no migration label exists, this is likely a first apply - skip verification
+    // Remote verification only makes sense when there's an established migration history
+    if (remoteMigrationNumber === null) {
+      results.push({
+        namespace,
+        remoteMigrationNumber: 0,
+        drifts: [],
+        hasDrift: false,
+      });
+      continue;
+    }
+
+    // Reconstruct snapshot at the remote migration version
+    const expectedSnapshot = reconstructSnapshotFromMigrations(
+      migrationsDir,
+      remoteMigrationNumber,
+    );
+    if (!expectedSnapshot) {
+      // No snapshots exist - skip verification
+      results.push({
+        namespace,
+        remoteMigrationNumber,
+        drifts: [],
+        hasDrift: false,
+      });
+      continue;
+    }
+
+    // Fetch remote types
+    const remoteTypes = await fetchRemoteTypes(client, workspaceId, namespace);
+
+    // Compare remote with expected snapshot
+    const drifts = compareRemoteWithSnapshot(remoteTypes, expectedSnapshot);
+
+    results.push({
+      namespace,
+      remoteMigrationNumber,
+      drifts,
+      hasDrift: drifts.length > 0,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Format remote schema verification results for display
+ * @param {RemoteSchemaVerificationResult[]} results - Verification results
+ * @returns {string} Formatted results string
+ */
+function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult[]): string {
+  const lines: string[] = [];
+
+  for (const result of results) {
+    if (!result.hasDrift) continue;
+
+    lines.push(`Namespace: ${result.namespace}`);
+    lines.push(`  Remote migration: ${formatMigrationNumber(result.remoteMigrationNumber)}`);
+    lines.push(`  Differences:`);
+    lines.push(formatSchemaDrifts(result.drifts));
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+// ============================================================================
+// Migration Validation
+// ============================================================================
 
 /**
  * Validate migration files and detect pending migrations
@@ -109,6 +260,7 @@ async function validateAndDetectMigrations(
 
     // Check for schema diffs if not skipped
     if (!noSchemaCheck) {
+      // 1. Check local types vs local snapshot (existing check)
       const migrationResults = await checkMigrationDiffs(
         typesByNamespace,
         namespacesWithMigrations,
@@ -122,6 +274,27 @@ async function validateAndDetectMigrations(
         logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
         logger.info("Or use '--no-schema-check' to skip this check.");
         throw new Error("Schema migration check failed");
+      }
+
+      // 2. Check remote schema vs local snapshot (new check)
+      const remoteVerificationResults = await verifyRemoteSchema(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+      );
+      const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
+
+      if (hasRemoteDrift) {
+        logger.error("Remote schema drift detected:");
+        logger.log(formatRemoteVerificationResults(remoteVerificationResults));
+        logger.newline();
+        logger.info("This may indicate:");
+        logger.info("  - Another developer applied different migrations", { mode: "plain" });
+        logger.info("  - Manual schema changes were made directly", { mode: "plain" });
+        logger.info("  - Migration history is out of sync", { mode: "plain" });
+        logger.newline();
+        logger.info("Use '--no-schema-check' to skip this check (not recommended).");
+        throw new Error("Remote schema verification failed");
       }
     }
 
@@ -303,6 +476,25 @@ export async function applyTailorDB(
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
     );
+  }
+
+  // Update migration labels if TAILOR_INTERNAL_APPLY_MIGRATION_VERSION is set
+  // This ensures the migration label matches the applied schema version
+  if (phase === "create-update") {
+    const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
+    if (maxVersionEnv) {
+      const maxVersion = parseInt(maxVersionEnv, 10);
+      if (Number.isInteger(maxVersion)) {
+        const configDir = path.dirname(migrationContext.config.path);
+        const namespacesWithMigrations = getNamespacesWithMigrations(
+          migrationContext.config,
+          configDir,
+        );
+        for (const { namespace } of namespacesWithMigrations) {
+          await updateMigrationLabel(client, migrationContext.workspaceId, namespace, maxVersion);
+        }
+      }
+    }
   }
 }
 

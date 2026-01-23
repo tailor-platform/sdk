@@ -103,3 +103,37 @@ export function isSchemaError(errorMessage: string): boolean {
   const lowerMessage = errorMessage.toLowerCase();
   return SCHEMA_ERROR_PATTERNS.some((pattern) => lowerMessage.includes(pattern));
 }
+
+// ============================================================================
+// Remote Schema Verification Types
+// ============================================================================
+
+/**
+ * Type of schema drift detected between remote and local snapshot
+ */
+export type SchemaDriftKind =
+  | "type_missing_remote"
+  | "type_missing_local"
+  | "field_missing_remote"
+  | "field_missing_local"
+  | "field_mismatch";
+
+/**
+ * Single schema drift item
+ */
+export interface SchemaDrift {
+  typeName: string;
+  kind: SchemaDriftKind;
+  fieldName?: string;
+  details: string;
+}
+
+/**
+ * Result of remote schema verification for a single namespace
+ */
+export interface RemoteSchemaVerificationResult {
+  namespace: string;
+  remoteMigrationNumber: number;
+  drifts: SchemaDrift[];
+  hasDrift: boolean;
+}

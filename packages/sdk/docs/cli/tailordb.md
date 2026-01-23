@@ -396,13 +396,40 @@ tailor-sdk apply
 2. **Auth configured**: Auth service with machine users
 3. **Kysely generator**: `@tailor-platform/kysely-type` generator configured
 
+### Schema Verification
+
+By default, `tailor-sdk apply` performs two schema verifications:
+
+1. **Local schema check**: Ensures local type definitions match the migration snapshot
+2. **Remote schema check**: Ensures remote schema matches the expected state based on migration history
+
+If remote schema drift is detected, you'll see an error like:
+
+```
+✖ Remote schema drift detected:
+Namespace: tailordb
+  Remote migration: 0007
+  Differences:
+  Type 'User':
+    - Field 'email': required: remote=false, expected=true
+
+ℹ This may indicate:
+  - Another developer applied different migrations
+  - Manual schema changes were made directly
+  - Migration history is out of sync
+
+ℹ Use '--no-schema-check' to skip this check (not recommended).
+```
+
 ### Skipping Schema Check
 
-To skip the schema diff check (not recommended for production):
+To skip both local and remote schema verification (not recommended for production):
 
 ```bash
 tailor-sdk apply --no-schema-check
 ```
+
+**Warning:** Skipping schema checks may result in applying migrations to an inconsistent state.
 
 ### Example Output
 
@@ -419,6 +446,21 @@ tailor-sdk apply --no-schema-check
 ```
 
 ## Troubleshooting
+
+### Remote schema drift detected
+
+**Cause:** The remote schema doesn't match the expected state based on migration history. This can happen when:
+
+- Another developer applied different migrations
+- Schema was changed manually outside of migrations
+- Migration history is out of sync
+
+**Solution:**
+
+1. **Check migration status**: Run `tailor-sdk tailordb migration status` to see current state
+2. **Sync with team**: Ensure all team members have the same migration files
+3. **Reset if needed**: Use `tailor-sdk tailordb migration set <number>` to reset migration checkpoint
+4. **Force apply** (use with caution): Use `--no-schema-check` to skip verification
 
 ### "Machine user not found"
 

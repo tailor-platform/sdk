@@ -11,6 +11,8 @@ import {
   reconstructSnapshotFromMigrations,
   compareSnapshots,
   compareLocalTypesWithSnapshot,
+  compareRemoteWithSnapshot,
+  formatSchemaDrifts,
   writeSnapshot,
   writeDiff,
   validateMigrationFiles,
@@ -24,6 +26,7 @@ import {
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
 import type { ParsedTailorDBType, ParsedField } from "@/parser/service/tailordb/types";
+import type { TailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
   const migDir = path.join(baseDir, formatMigrationNumber(num));
@@ -1277,6 +1280,393 @@ describe("snapshot", () => {
         /Migration file validation failed for namespace "test"/,
       );
       expect(() => assertValidMigrationFiles(testDir, "test")).toThrow(/Initial schema snapshot/);
+    });
+  });
+
+  // ==========================================================================
+  // compareRemoteWithSnapshot
+  // ==========================================================================
+  describe("compareRemoteWithSnapshot", () => {
+    /**
+     * Create a mock TailorDBType for testing
+     * @param {string} name - Type name
+     * @param {Record<string, object>} fields - Field configurations
+     * @returns {TailorDBType} Mock TailorDBType
+     */
+    function createMockRemoteType(
+      name: string,
+      fields: Record<
+        string,
+        {
+          type: string;
+          required: boolean;
+          array?: boolean;
+          unique?: boolean;
+          foreignKey?: boolean;
+          foreignKeyType?: string;
+          allowedValues?: { value: string }[];
+        }
+      >,
+    ): TailorDBType {
+      const fieldConfigs: Record<string, unknown> = {};
+      for (const [fieldName, config] of Object.entries(fields)) {
+        fieldConfigs[fieldName] = {
+          type: config.type,
+          required: config.required,
+          array: config.array ?? false,
+          unique: config.unique ?? false,
+          foreignKey: config.foreignKey ?? false,
+          foreignKeyType: config.foreignKeyType,
+          allowedValues: config.allowedValues ?? [],
+        };
+      }
+
+      return {
+        name,
+        schema: {
+          fields: fieldConfigs,
+        },
+      } as unknown as TailorDBType;
+    }
+
+    it("returns empty array when remote and snapshot match exactly", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              id: { type: "uuid", required: true },
+              name: { type: "string", required: true },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          name: { type: "string", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts).toEqual([]);
+    });
+
+    it("detects type missing in remote", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: { id: { type: "uuid", required: true } },
+          },
+          Post: {
+            name: "Post",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("type_missing_remote");
+      expect(drifts[0].typeName).toBe("Post");
+    });
+
+    it("detects type missing in snapshot (unexpected type in remote)", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+        }),
+        createMockRemoteType("ExtraType", {
+          id: { type: "uuid", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("type_missing_local");
+      expect(drifts[0].typeName).toBe("ExtraType");
+    });
+
+    it("detects field missing in remote", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              id: { type: "uuid", required: true },
+              email: { type: "string", required: false },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("field_missing_remote");
+      expect(drifts[0].fieldName).toBe("email");
+    });
+
+    it("detects field missing in snapshot (unexpected field in remote)", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          extraField: { type: "string", required: false },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("field_missing_local");
+      expect(drifts[0].fieldName).toBe("extraField");
+    });
+
+    it("detects field type mismatch", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              id: { type: "uuid", required: true },
+              age: { type: "number", required: false },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          age: { type: "string", required: false },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("field_mismatch");
+      expect(drifts[0].fieldName).toBe("age");
+      expect(drifts[0].details).toContain("type");
+    });
+
+    it("detects required flag mismatch", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              id: { type: "uuid", required: true },
+              name: { type: "string", required: false },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          name: { type: "string", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("field_mismatch");
+      expect(drifts[0].details).toContain("required");
+    });
+
+    it("detects array flag mismatch", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              id: { type: "uuid", required: true },
+              tags: { type: "string", required: false, array: true },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          tags: { type: "string", required: false, array: false },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("field_mismatch");
+      expect(drifts[0].details).toContain("array");
+    });
+
+    it("detects enum allowedValues mismatch", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Task: {
+            name: "Task",
+            fields: {
+              id: { type: "uuid", required: true },
+              status: {
+                type: "enum",
+                required: true,
+                allowedValues: ["PENDING", "DONE"],
+              },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("Task", {
+          id: { type: "uuid", required: true },
+          status: {
+            type: "enum",
+            required: true,
+            allowedValues: [{ value: "PENDING" }, { value: "IN_PROGRESS" }],
+          },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("field_mismatch");
+      expect(drifts[0].details).toContain("allowedValues");
+    });
+
+    it("handles empty remote types list", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const drifts = compareRemoteWithSnapshot([], snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("type_missing_remote");
+    });
+
+    it("handles empty snapshot types", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {},
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("type_missing_local");
+    });
+  });
+
+  // ==========================================================================
+  // formatSchemaDrifts
+  // ==========================================================================
+  describe("formatSchemaDrifts", () => {
+    it("returns 'No schema drifts detected.' for empty array", () => {
+      const result = formatSchemaDrifts([]);
+      expect(result).toBe("No schema drifts detected.");
+    });
+
+    it("formats drifts grouped by type", () => {
+      const drifts = [
+        {
+          typeName: "User",
+          kind: "field_missing_remote" as const,
+          fieldName: "email",
+          details: "Field 'email' exists in snapshot but not in remote",
+        },
+        {
+          typeName: "User",
+          kind: "field_mismatch" as const,
+          fieldName: "name",
+          details: "type: remote=string, expected=text",
+        },
+        {
+          typeName: "Post",
+          kind: "type_missing_remote" as const,
+          details: "Type 'Post' exists in snapshot but not in remote",
+        },
+      ];
+
+      const result = formatSchemaDrifts(drifts);
+      expect(result).toContain("Type 'User':");
+      expect(result).toContain("Field 'email'");
+      expect(result).toContain("Field 'name'");
+      expect(result).toContain("Type 'Post':");
     });
   });
 });
