@@ -1,9 +1,9 @@
 import { defineCommand } from "citty";
 import open from "open";
-import { commonArgs, deploymentArgs, withCommonArgs } from "../args";
-import { loadConfig } from "../config-loader";
-import { loadWorkspaceId } from "../context";
-import { logger } from "../utils/logger";
+import { commonArgs, deploymentArgs, withCommonArgs } from "./args";
+import { loadConfig } from "./config-loader";
+import { loadWorkspaceId } from "./context";
+import { logger } from "./utils/logger";
 
 const consoleBaseUrl = "https://console.tailor.tech";
 
