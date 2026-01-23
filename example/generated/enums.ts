@@ -32,6 +32,16 @@ export const UserRole = {
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
+/**
+ * Current state of the record
+ */
+export const UserRecordState = {
+  "DRAFT": "DRAFT",
+  "ACTIVE": "ACTIVE",
+  "ARCHIVED": "ARCHIVED"
+} as const;
+export type UserRecordState = (typeof UserRecordState)[keyof typeof UserRecordState];
+
 export const UserChangeRequestStatus = {
   "RUNNING": "RUNNING",
   "REWORK": "REWORK",

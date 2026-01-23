@@ -114,6 +114,12 @@ export interface PluginOutput {
   resolvers?: PluginGeneratedResolver[];
   /** Additional executors to generate */
   executors?: PluginGeneratedExecutor[];
+  /**
+   * Fields to add to the source type.
+   * These fields will be merged into the original type's fields.
+   * Existing fields (from original definition or earlier plugins) take precedence.
+   */
+  extendFields?: Record<string, unknown>;
 }
 
 /**

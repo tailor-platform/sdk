@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
+import { db, type TailorDBType } from "@/configure/services/tailordb/schema";
 import {
   parseTypes,
   type ParsedTailorDBType,
@@ -148,15 +148,32 @@ export class TailorDBService {
   ): Promise<void> {
     if (!this.pluginManager) return;
 
+    // Keep track of the current type state for extension across multiple plugins
+    let currentType = rawType;
+
     for (const attachment of attachments) {
       const output = await this.pluginManager.processAttachment({
-        type: rawType,
+        type: currentType,
         config: attachment.config,
         namespace: this.namespace,
         pluginId: attachment.pluginId,
       });
 
-      // Add generated types to rawTypes (same file path, but with pluginId marker)
+      // First, extend the original type with new fields (if any)
+      // This must be done before adding generated types, as they may reference extended fields
+      if (output.extendFields && Object.keys(output.extendFields).length > 0) {
+        currentType = this.extendTypeFields(
+          currentType,
+          output.extendFields,
+          sourceFilePath,
+          attachment.pluginId,
+        );
+        logger.log(
+          `  Extended: ${styles.success(currentType.name)} with ${styles.highlight(Object.keys(output.extendFields).length.toString())} fields by plugin ${styles.info(attachment.pluginId)}`,
+        );
+      }
+
+      // Then add generated types to rawTypes (same file path, but with pluginId marker)
       for (const generatedType of output.types ?? []) {
         this.rawTypes[sourceFilePath][generatedType.name] = generatedType as TailorDBType;
         this.typeSourceInfo[generatedType.name] = {
@@ -170,6 +187,114 @@ export class TailorDBService {
         );
       }
     }
+  }
+
+  /**
+   * Extend the fields of a TailorDBType.
+   * Creates a new type with merged fields while preserving original metadata.
+   * @param rawType - The original TailorDB type to extend
+   * @param extendFields - New fields to add to the type
+   * @param sourceFilePath - The file path where the type was loaded from
+   * @param pluginId - The ID of the plugin extending the type (for error messages)
+   * @returns The extended TailorDBType for use in subsequent processing
+   * @throws {Error} If extendFields contains fields that already exist in the type
+   */
+  private extendTypeFields(
+    rawType: TailorDBType,
+    extendFields: Record<string, unknown>,
+    sourceFilePath: string,
+    pluginId: string,
+  ): TailorDBType {
+    // Check for duplicate fields
+    const existingFieldNames = Object.keys(rawType.fields);
+    const newFieldNames = Object.keys(extendFields);
+    const duplicateFields = newFieldNames.filter((name) => existingFieldNames.includes(name));
+
+    if (duplicateFields.length > 0) {
+      throw new Error(
+        `Plugin "${pluginId}" attempted to add fields that already exist in type "${rawType.name}": ${duplicateFields.join(", ")}. ` +
+          `extendFields cannot overwrite existing fields.`,
+      );
+    }
+
+    // Create new field object with merged fields
+    const mergedFields = {
+      ...rawType.fields,
+      ...extendFields,
+    };
+
+    // Create new TailorDBType with merged fields
+    // Note: We need to exclude 'id' since db.type() adds it automatically
+    const { id: _id, ...fieldsWithoutId } = mergedFields;
+    const extendedType = db.type(rawType.name, fieldsWithoutId);
+
+    // Copy metadata from original to extended type
+    const result = this.copyMetadataToExtendedType(rawType, extendedType);
+    this.rawTypes[sourceFilePath][rawType.name] = result;
+
+    return result;
+  }
+
+  /**
+   * Copy metadata from original type to extended type.
+   * Preserves files, settings, permissions, indexes, and plugins.
+   * @param original - The original TailorDB type
+   * @param extended - The newly created extended type
+   * @returns The extended type with copied metadata
+   */
+  private copyMetadataToExtendedType(original: TailorDBType, extended: TailorDBType): TailorDBType {
+    let result = extended;
+
+    // Copy description
+    if (original._description) {
+      result = result.description(original._description);
+    }
+
+    // Copy files metadata
+    const metadata = original.metadata;
+    if (metadata.files && Object.keys(metadata.files).length > 0) {
+      result = result.files(metadata.files);
+    }
+
+    // Copy settings/features (excluding pluralForm which is set during construction)
+    if (metadata.settings) {
+      const { pluralForm: _pluralForm, ...features } = metadata.settings;
+      if (Object.keys(features).length > 0) {
+        // TypeFeatures uses literal type `true` for boolean flags,
+        // but metadata getter returns inferred `boolean | undefined`.
+        // Cast is safe since we're copying the same values.
+        result = result.features(
+          features as typeof features & { aggregation?: true; bulkUpsert?: true },
+        );
+      }
+    }
+
+    // Access private fields for permissions and indexes
+    // TypeScript private fields are accessible at runtime
+    // oxlint-disable-next-line no-explicit-any
+    const originalAny = original as any;
+
+    // Copy permissions
+    if (originalAny._permissions?.record) {
+      result = result.permission(originalAny._permissions.record);
+    }
+    if (originalAny._permissions?.gql) {
+      result = result.gqlPermission(originalAny._permissions.gql);
+    }
+
+    // Copy indexes (using the internal array format, not the metadata format)
+    if (originalAny._indexes && originalAny._indexes.length > 0) {
+      result = result.indexes(...originalAny._indexes);
+    }
+
+    // Copy plugins (but don't re-process them)
+    if (originalAny._plugins && originalAny._plugins.length > 0) {
+      for (const plugin of originalAny._plugins) {
+        result = result.plugin({ [plugin.pluginId]: plugin.config });
+      }
+    }
+
+    return result;
   }
 
   private parseTypes() {

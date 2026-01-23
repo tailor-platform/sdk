@@ -15,7 +15,7 @@ const configSchema = {
 /**
  * Process a type and generate changeset-related types
  * @param context - Plugin processing context containing the type to process
- * @returns Plugin output with generated changeset types
+ * @returns Plugin output with generated changeset types and extended fields
  */
 function processChangeset(context: PluginProcessContext): PluginOutput {
   const { type, config } = context;
@@ -28,9 +28,24 @@ function processChangeset(context: PluginProcessContext): PluginOutput {
 
   const typeName = type.name;
 
-  // Note: The original type is used as-is. Version control fields should be
-  // added to the original type definition by the user if needed.
-  // This plugin only generates auxiliary types for the approval workflow.
+  // Fields to add to the original type for version control
+  const extendFields = {
+    recordId: db.uuid().index().description("Unique identifier for the record across versions"),
+    recordState: db
+      .enum(["DRAFT", "ACTIVE", "ARCHIVED"])
+      .index()
+      .description("Current state of the record"),
+    archivedSeq: db.int().description("Sequence number for archived versions"),
+    effectiveFrom: db.datetime().description("When this version becomes effective"),
+    effectiveTo: db.datetime({ optional: true }).description("When this version expires"),
+    requestedBy: db.uuid().index().description("User who requested the change"),
+    requestedAt: db.datetime().description("When the change was requested"),
+    currentApprover: db
+      .uuid({ optional: true })
+      .index()
+      .description("Current approver in the workflow"),
+    approvers: db.uuid({ array: true }).description("List of approvers for this change"),
+  };
 
   // ChangeRequest - approval process
   const changeRequest = db.type(`${typeName}ChangeRequest`, {
@@ -91,17 +106,20 @@ function processChangeset(context: PluginProcessContext): PluginOutput {
 
   return {
     types: [changeRequest, changeStep, changeApproval, changeReworkEvent],
+    extendFields,
   };
 }
 
 /**
  * Changeset plugin for generating approval flow related types.
  *
- * When applied to a type, generates auxiliary types for approval workflow:
- * - ChangeRequest - the approval process
- * - ChangeStep - execution steps
- * - ChangeApproval - approval logs (audit)
- * - ChangeReworkEvent - rework logs
+ * When applied to a type:
+ * 1. Extends the original type with version control fields (recordId, recordState, etc.)
+ * 2. Generates auxiliary types for approval workflow:
+ *    - ChangeRequest - the approval process
+ *    - ChangeStep - execution steps
+ *    - ChangeApproval - approval logs (audit)
+ *    - ChangeReworkEvent - rework logs
  */
 export const changesetPlugin: PluginBase = {
   id: "@tailor-platform/changeset",
