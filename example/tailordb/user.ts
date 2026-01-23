@@ -16,4 +16,5 @@ export const user = db
     { fields: ["status", "createdAt"], unique: false, name: "user_status_created_idx" },
   )
   .permission(defaultPermission)
-  .gqlPermission(defaultGqlPermission);
+  .gqlPermission(defaultGqlPermission)
+  .plugin({ "@tailor-platform/changeset": true });

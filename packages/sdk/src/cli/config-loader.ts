@@ -43,7 +43,7 @@ const builtinPlugins = new Map<string, (options: unknown) => PluginBase>([
   [changesetPlugin.id, () => changesetPlugin],
 ]);
 
-export const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
+const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
 
 /**
  * Load Tailor configuration file and associated generators and plugins.

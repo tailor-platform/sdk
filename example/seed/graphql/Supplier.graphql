@@ -1,0 +1,5 @@
+mutation CreateSupplier($input: SupplierCreateInput!) {
+  createSupplier(input: $input) {
+    id
+  }
+}

@@ -21,11 +21,11 @@ import {
 } from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
-import { PluginManager } from "@/plugin/manager";
 import { type AppConfig } from "@/parser/app-config";
 import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
+import { PluginManager } from "@/plugin/manager";
 import { commonArgs, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
@@ -45,6 +45,27 @@ type TypeInfo = {
  */
 export type GenerationManager = {
   readonly application: Application;
+  readonly baseDir: string;
+  readonly generators: Generator[];
+  readonly services: {
+    tailordb: Record<string, TypeInfo>;
+    resolver: Record<string, Record<string, Resolver>>;
+    executor: Record<string, Executor>;
+  };
+  readonly generatorResults: GeneratorResults;
+  processGenerator: (gen: AnyCodeGenerator) => Promise<void>;
+  processTailorDBNamespace: (
+    gen: AnyCodeGenerator,
+    namespace: string,
+    typeInfo: TypeInfo,
+  ) => Promise<void>;
+  processResolverNamespace: (
+    gen: AnyCodeGenerator,
+    namespace: string,
+    resolvers: Record<string, Resolver>,
+  ) => Promise<void>;
+  processExecutors: (gen: AnyCodeGenerator) => Promise<void>;
+  aggregate: (gen: AnyCodeGenerator) => Promise<void>;
   generate: (watch: boolean) => Promise<void>;
   watch: () => Promise<void>;
 };
@@ -581,7 +602,7 @@ export function createGenerationManager(
       // Keep the process running
       await new Promise(() => {});
     },
-  } as GenerationManager;
+  };
 }
 
 /**

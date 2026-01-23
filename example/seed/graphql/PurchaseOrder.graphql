@@ -1,0 +1,5 @@
+mutation CreatePurchaseOrder($input: PurchaseOrderCreateInput!) {
+  createPurchaseOrder(input: $input) {
+    id
+  }
+}

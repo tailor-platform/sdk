@@ -54,6 +54,9 @@ export function createTailorDBService(
   /**
    * Copy metadata from original type to extended type.
    * Preserves files, settings, permissions, indexes, and plugins.
+   * @param original - The original TailorDB type with metadata
+   * @param extended - The newly created extended type
+   * @returns The extended type with copied metadata
    */
   const copyMetadataToExtendedType = (
     original: TailorDBType,
@@ -111,6 +114,11 @@ export function createTailorDBService(
 
   /**
    * Extend the fields of a TailorDBType.
+   * @param rawType - The original TailorDB type to extend
+   * @param extendFields - New fields to add to the type
+   * @param sourceFilePath - The file path where the type was loaded from
+   * @param pluginId - The ID of the plugin extending the type
+   * @returns The extended TailorDBType
    */
   const extendTypeFields = (
     rawType: TailorDBType,
@@ -144,6 +152,9 @@ export function createTailorDBService(
 
   /**
    * Process plugins for a type and add generated types to rawTypes
+   * @param rawType - The raw TailorDB type being processed
+   * @param attachments - Plugin attachments for this type
+   * @param sourceFilePath - The file path where the type was loaded from
    */
   const processPluginsForType = async (
     rawType: TailorDBType,

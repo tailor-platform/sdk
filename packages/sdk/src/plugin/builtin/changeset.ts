@@ -1,23 +1,26 @@
 import { db } from "@/configure/services/tailordb";
+import { t } from "@/configure/types";
+import type { output } from "@/configure/types/helpers";
 import type { PluginBase, PluginProcessContext, PluginOutput } from "@/parser/plugin-config/types";
 
 /**
  * Changeset plugin configuration schema
  */
-const configSchema = {
-  /**
-   * User type for tracking requestedBy, approver references
-   */
-  // userType: t.string().optional(),
-};
+const configSchema = t.bool().validate(({ value }) => value === true);
 
 /**
  * Process a type and generate changeset-related types
  * @param context - Plugin processing context containing the type to process
  * @returns Plugin output with generated changeset types and extended fields
  */
-function processChangeset(context: PluginProcessContext): PluginOutput {
-  const { type } = context;
+function processChangeset(
+  context: PluginProcessContext<output<typeof configSchema>>,
+): PluginOutput {
+  const { type, config } = context;
+  if (!config) {
+    return { types: [] };
+  }
+
   const typeName = type.name;
 
   // Fields to add to the original type for version control

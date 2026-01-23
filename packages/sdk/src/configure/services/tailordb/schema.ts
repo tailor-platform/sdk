@@ -30,8 +30,8 @@ import {
 import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
-import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { PluginAttachment, PluginConfigs } from "@/parser/plugin-config/types";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;

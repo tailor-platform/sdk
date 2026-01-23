@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/UserChangeApproval.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/UserChangeApproval.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}
