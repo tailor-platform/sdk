@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger } from "@/cli/utils/logger";
+// eslint-disable-next-line import/order -- type imports are excluded from pathGroups, causing false positive
 import type { AppConfig } from "@/configure/config";
 
 export interface AttributeMapConfig {
