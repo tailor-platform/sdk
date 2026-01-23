@@ -2,21 +2,6 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "@/cli/client";
 
-// Mock ChangeSet print method
-vi.mock("./index", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("./index");
-  return {
-    ...original,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ChangeSet: class extends original.ChangeSet<any, any, any> {
-      print() {
-        // Do nothing in tests
-      }
-    },
-  };
-});
-
 describe("applyIdP phase separation", () => {
   // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {

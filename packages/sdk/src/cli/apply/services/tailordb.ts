@@ -46,7 +46,7 @@ import {
 } from "@/parser/service/tailordb/types";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "./label";
-import { ChangeSet } from ".";
+import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor } from "@/parser/service/executor";
@@ -182,7 +182,7 @@ async function planServices(
   appName: string,
   tailordbs: ReadonlyArray<TailorDBService>,
 ) {
-  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> = new ChangeSet(
+  const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "TailorDB services",
   );
   const conflicts: OwnerConflict[] = [];
@@ -296,7 +296,7 @@ async function planTypes(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateType, UpdateType, DeleteType> = new ChangeSet("TailorDB types");
+  const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
 
   const fetchTypes = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -721,8 +721,9 @@ async function planGqlPermissions(
   tailordbs: ReadonlyArray<TailorDBService>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateGqlPermission, UpdateGqlPermission, DeleteGqlPermission> =
-    new ChangeSet("TailorDB gqlPermissions");
+  const changeSet = createChangeSet<CreateGqlPermission, UpdateGqlPermission, DeleteGqlPermission>(
+    "TailorDB gqlPermissions",
+  );
 
   const fetchGqlPermissions = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {

@@ -19,7 +19,7 @@ import { getDistDir } from "@/configure/config";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
-import { ChangeSet } from ".";
+import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Executor, Trigger } from "@/parser/service/executor";
@@ -85,9 +85,7 @@ function trn(workspaceId: string, name: string) {
  */
 export async function planExecutor(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
-  const changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor> = new ChangeSet(
-    "Executors",
-  );
+  const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();

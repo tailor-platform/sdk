@@ -4,31 +4,44 @@ export interface HasName {
   name: string;
 }
 
-export class ChangeSet<C extends HasName, U extends HasName, D extends HasName> {
-  creates: C[] = [];
-  updates: U[] = [];
-  deletes: D[] = [];
+export type ChangeSet<C extends HasName, U extends HasName, D extends HasName> = {
+  readonly title: string;
+  readonly creates: C[];
+  readonly updates: U[];
+  readonly deletes: D[];
+  isEmpty(): boolean;
+  print(): void;
+};
 
-  constructor(private title: string) {}
+/**
+ * Create a new ChangeSet for tracking resource changes.
+ * @param title - Title for the change set
+ * @returns Empty ChangeSet instance with isEmpty() and print() methods
+ */
+export function createChangeSet<C extends HasName, U extends HasName, D extends HasName>(
+  title: string,
+): ChangeSet<C, U, D> {
+  const creates: C[] = [];
+  const updates: U[] = [];
+  const deletes: D[] = [];
 
-  isEmpty(): boolean {
-    return this.creates.length === 0 && this.updates.length === 0 && this.deletes.length === 0;
-  }
+  const isEmpty = (): boolean =>
+    creates.length === 0 && updates.length === 0 && deletes.length === 0;
 
-  print() {
-    if (this.isEmpty()) {
-      return;
-    }
-
-    logger.log(styles.bold(`${this.title}:`));
-    this.creates.forEach((item) => {
-      logger.log(`  ${symbols.create} ${item.name}`);
-    });
-    this.deletes.forEach((item) => {
-      logger.log(`  ${symbols.delete} ${item.name}`);
-    });
-    this.updates.forEach((item) => {
-      logger.log(`  ${symbols.update} ${item.name}`);
-    });
-  }
+  return {
+    title,
+    creates,
+    updates,
+    deletes,
+    isEmpty,
+    print: () => {
+      if (isEmpty()) {
+        return;
+      }
+      logger.log(styles.bold(`${title}:`));
+      creates.forEach((item) => logger.log(`  ${symbols.create} ${item.name}`));
+      deletes.forEach((item) => logger.log(`  ${symbols.delete} ${item.name}`));
+      updates.forEach((item) => logger.log(`  ${symbols.update} ${item.name}`));
+    },
+  };
 }

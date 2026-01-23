@@ -41,18 +41,16 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-// Mock ChangeSet print method
+// Mock createChangeSet to suppress output in tests
 vi.mock("./index", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("./index");
   return {
     ...original,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ChangeSet: class extends original.ChangeSet<any, any, any> {
-      print() {
-        // Do nothing in tests
-      }
-    },
+    createChangeSet: (title: string) => ({
+      ...original.createChangeSet(title),
+      print: () => {},
+    }),
   };
 });
 

@@ -7,7 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
-import { ChangeSet } from ".";
+import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -72,8 +72,9 @@ function trn(workspaceId: string, name: string) {
  */
 export async function planStaticWebsite(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
-  const changeSet: ChangeSet<CreateStaticWebsite, UpdateStaticWebsite, DeleteStaticWebsite> =
-    new ChangeSet("StaticWebsites");
+  const changeSet = createChangeSet<CreateStaticWebsite, UpdateStaticWebsite, DeleteStaticWebsite>(
+    "StaticWebsites",
+  );
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
