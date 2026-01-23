@@ -8,6 +8,7 @@ export type WithLabel<T> = Partial<
     {
       resource: T;
       label: string | undefined;
+      allLabels?: Record<string, string>;
     }
   >
 >;
@@ -27,11 +28,13 @@ export const sdkNameLabelKey = "sdk-name";
  * Build metadata request with SDK labels.
  * @param trn - Target TRN
  * @param appName - Application name label
+ * @param existingLabels - Existing labels to preserve (optional)
  * @returns Metadata request
  */
 export async function buildMetaRequest(
   trn: string,
   appName: string,
+  existingLabels?: Record<string, string>,
 ): Promise<MessageInitShape<typeof SetMetadataRequestSchema>> {
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
@@ -42,6 +45,7 @@ export async function buildMetaRequest(
   return {
     trn,
     labels: {
+      ...(existingLabels ?? {}),
       [sdkNameLabelKey]: appName,
       "sdk-version": sdkVersion,
     },

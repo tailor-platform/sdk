@@ -774,13 +774,18 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
 
   for (const tailordb of tailordbs) {
     const existing = existingServices[tailordb.namespace];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, tailordb.namespace), appName);
+    const metaRequest = await buildMetaRequest(
+      trn(workspaceId, tailordb.namespace),
+      appName,
+      existing?.allLabels,
+    );
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
