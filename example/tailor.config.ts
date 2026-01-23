@@ -3,6 +3,7 @@ import {
   defineConfig,
   defineGenerators,
   defineIdp,
+  definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
@@ -87,3 +88,5 @@ export const generators = defineGenerators(
   ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
 );
+
+export const plugins = definePlugins(["@tailor-platform/changeset", {}]);

@@ -1,14 +1,14 @@
 import { t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
-import { event } from "../../analyticsdb/event";
+import { UserChangeApproval } from "../../tailordb/user";
 
 const schemaType = t.object({
-  ...event.pickFields(["id","createdAt"], { optional: true }),
-  ...event.omitFields(["id","createdAt"]),
+  ...UserChangeApproval.pickFields(["id","createdAt"], { optional: true }),
+  ...UserChangeApproval.omitFields(["id","createdAt"]),
 });
 
-const hook = createTailorDBHook(event);
+const hook = createTailorDBHook(UserChangeApproval);
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),

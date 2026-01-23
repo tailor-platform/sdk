@@ -1,4 +1,5 @@
 import { db } from "@/configure/services/tailordb";
+import { t } from "@/configure/types";
 import type { PluginBase, PluginProcessContext, PluginOutput } from "@/parser/plugin-config/types";
 
 /**
@@ -6,9 +7,9 @@ import type { PluginBase, PluginProcessContext, PluginOutput } from "@/parser/pl
  */
 const configSchema = {
   /**
-   * User type for tracking requestedBy, approver references
+   * Enable changeset generation for this type
    */
-  // userType: t.string().optional(),
+  enable: t.bool(),
 };
 
 /**
@@ -17,7 +18,14 @@ const configSchema = {
  * @returns Plugin output with generated changeset types
  */
 function processChangeset(context: PluginProcessContext): PluginOutput {
-  const { type } = context;
+  const { type, config } = context;
+  const typedConfig = config as { enable?: boolean };
+
+  // Skip if not enabled
+  if (!typedConfig.enable) {
+    return { types: [] };
+  }
+
   const typeName = type.name;
 
   // Generate the main entity with version control fields

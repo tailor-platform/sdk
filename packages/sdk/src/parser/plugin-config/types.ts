@@ -1,10 +1,9 @@
 import type { TailorAnyField } from "@/configure/types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Interface for plugin configuration mapping.
  * Extend this interface via declaration merging to add typed plugin configs.
- *
  * @example
  * ```typescript
  * // In your plugin package or types file:
@@ -34,8 +33,8 @@ export interface PluginAttachment {
  * Context passed to plugin's process method
  */
 export interface PluginProcessContext {
-  /** The parsed TailorDB type being processed */
-  type: ParsedTailorDBType;
+  /** The raw TailorDB type being processed */
+  type: TailorDBType;
   /** Plugin-specific configuration passed via .plugin() method */
   config: unknown;
   /** Namespace of the TailorDB type */
@@ -131,7 +130,6 @@ export interface PluginBase {
    * This schema is used to:
    * 1. Validate configuration at runtime
    * 2. Generate TypeScript type definitions in plugin-defined.d.ts
-   *
    * @example
    * ```typescript
    * configSchema: {

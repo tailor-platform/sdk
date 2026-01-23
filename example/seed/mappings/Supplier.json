@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/Supplier.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/Supplier.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

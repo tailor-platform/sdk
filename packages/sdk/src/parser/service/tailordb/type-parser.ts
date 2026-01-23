@@ -16,7 +16,10 @@ import type {
   ParsedRelationship,
 } from "./types";
 
-export type TypeSourceInfo = Record<string, { filePath: string; exportName: string }>;
+export type TypeSourceInfo = Record<
+  string,
+  { filePath: string; exportName: string; pluginId?: string }
+>;
 
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.

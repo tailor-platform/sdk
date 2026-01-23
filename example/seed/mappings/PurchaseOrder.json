@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/PurchaseOrder.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/PurchaseOrder.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

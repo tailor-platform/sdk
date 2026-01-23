@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/NestedProfile.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/NestedProfile.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

@@ -1,0 +1,5 @@
+mutation CreateUserChangeReworkEvent($input: UserChangeReworkEventCreateInput!) {
+  createUserChangeReworkEvent(input: $input) {
+    id
+  }
+}

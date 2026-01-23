@@ -12,7 +12,7 @@ import {
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
-import { PluginManager, type AggregatedPluginOutput } from "@/cli/plugin/manager";
+import { PluginManager } from "@/cli/plugin/manager";
 import { generateUserTypes, generatePluginTypes } from "@/cli/type-generator";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir, type AppConfig } from "@/configure/config";
@@ -42,7 +42,6 @@ export class GenerationManager {
   } = { tailordb: {}, resolver: {}, executor: {} };
   private readonly baseDir;
   private pluginManager?: PluginManager;
-  private pluginOutput?: AggregatedPluginOutput;
 
   constructor(
     config: AppConfig,
@@ -79,42 +78,21 @@ export class GenerationManager {
     return excluded.every((e) => !this.getDeps(gen).has(e));
   }
 
-  /**
-   * Process all plugins and collect their outputs
-   */
-  private async processPlugins() {
-    if (!this.pluginManager) return;
-
-    const app = this.application;
-
-    // Register type attachments from all TailorDB services
-    for (const db of app.tailorDBServices) {
-      const namespace = db.namespace;
-      const types = db.getTypes();
-      const attachments = db.getPluginAttachments();
-
-      this.pluginManager.registerFromService(types, namespace, attachments);
-    }
-
-    // Process all registered attachments
-    if (this.pluginManager.hasAttachments()) {
-      this.pluginOutput = await this.pluginManager.processAll();
-
-      // Log summary of generated artifacts
-      // Note: In the PoC, we only log the output. Full integration (merging
-      // generated types/resolvers/executors back into services) is future work.
-    }
-  }
-
   async generate(watch: boolean) {
     logger.newline();
     logger.log(`Generation for application: ${styles.highlight(this.application.config.name)}`);
 
     const app = this.application;
 
-    // Phase 1: Load TailorDB
+    // Phase 1: Load TailorDB (inject PluginManager before loading)
     for (const db of app.tailorDBServices) {
       const namespace = db.namespace;
+
+      // Inject PluginManager before loading types so plugins can generate types
+      if (this.pluginManager) {
+        db.setPluginManager(this.pluginManager);
+      }
+
       try {
         await db.loadTypes();
         this.services.tailordb[namespace] = {
@@ -130,10 +108,7 @@ export class GenerationManager {
       }
     }
 
-    // Phase 1.5: Process plugins (depends on TailorDB)
-    if (this.pluginManager) {
-      await this.processPlugins();
-    }
+    // Note: Plugin processing for types is now done during loadTypes() in TailorDBService
 
     // Phase 2: Auth resolveNamespaces (depends on TailorDB)
     if (app.authService) {

@@ -538,7 +538,6 @@ export class TailorDBType<
    * Attach plugins to this type with typed configurations.
    * Multiple plugins can be specified in a single call.
    * Extend PluginConfigs interface via declaration merging to add type-safe configs.
-   *
    * @example
    * ```typescript
    * db.type("Order", { ... }).plugin({
@@ -546,7 +545,6 @@ export class TailorDBType<
    *   "@my-company/versioning": { maxVersions: 10 },
    * });
    * ```
-   *
    * @param configs - Object mapping plugin IDs to their configurations
    * @returns This type for method chaining
    */

@@ -8,6 +8,7 @@ import {
   type ParsedTailorDBType,
   type TypeSourceInfo,
 } from "@/parser/service/tailordb";
+import type { PluginManager } from "@/cli/plugin/manager";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 
@@ -16,11 +17,15 @@ export class TailorDBService {
   private types: Record<string, ParsedTailorDBType> = {};
   private typeSourceInfo: TypeSourceInfo = {};
   private pluginAttachments: Map<string, PluginAttachment[]> = new Map();
+  private pluginManager?: PluginManager;
 
   constructor(
     public readonly namespace: string,
     public readonly config: TailorDBServiceConfig,
-  ) {}
+    pluginManager?: PluginManager,
+  ) {
+    this.pluginManager = pluginManager;
+  }
 
   getTypes() {
     return this.types as Readonly<typeof this.types>;
@@ -28,6 +33,15 @@ export class TailorDBService {
 
   getTypeSourceInfo() {
     return this.typeSourceInfo as Readonly<typeof this.typeSourceInfo>;
+  }
+
+  /**
+   * Set the plugin manager for processing plugin attachments.
+   * This should be called before loadTypes() if plugins are enabled.
+   * @param manager - The PluginManager instance
+   */
+  setPluginManager(manager: PluginManager): void {
+    this.pluginManager = manager;
   }
 
   /**
@@ -96,7 +110,7 @@ export class TailorDBService {
             exportName,
           };
 
-          // Store plugin attachments if any
+          // Process plugins if any and pluginManager is available
           if (
             exportedValue.plugins &&
             Array.isArray(exportedValue.plugins) &&
@@ -106,6 +120,9 @@ export class TailorDBService {
             logger.log(
               `  Plugin attachments: ${styles.info(exportedValue.plugins.map((p: PluginAttachment) => p.pluginId).join(", "))}`,
             );
+
+            // Process plugins and generate types
+            await this.processPluginsForType(exportedValue, exportedValue.plugins, typeFile);
           }
         }
       }
@@ -116,6 +133,43 @@ export class TailorDBService {
       throw error;
     }
     return loadedTypes;
+  }
+
+  /**
+   * Process plugins for a type and add generated types to rawTypes
+   * @param rawType - The raw TailorDB type being processed
+   * @param attachments - Plugin attachments for this type
+   * @param sourceFilePath - The file path where the type was loaded from
+   */
+  private async processPluginsForType(
+    rawType: TailorDBType,
+    attachments: PluginAttachment[],
+    sourceFilePath: string,
+  ): Promise<void> {
+    if (!this.pluginManager) return;
+
+    for (const attachment of attachments) {
+      const output = await this.pluginManager.processAttachment({
+        type: rawType,
+        config: attachment.config,
+        namespace: this.namespace,
+        pluginId: attachment.pluginId,
+      });
+
+      // Add generated types to rawTypes (same file path, but with pluginId marker)
+      for (const generatedType of output.types ?? []) {
+        this.rawTypes[sourceFilePath][generatedType.name] = generatedType as TailorDBType;
+        this.typeSourceInfo[generatedType.name] = {
+          filePath: sourceFilePath,
+          exportName: generatedType.name,
+          pluginId: attachment.pluginId,
+        };
+
+        logger.log(
+          `  Generated: ${styles.success(generatedType.name)} by plugin ${styles.info(attachment.pluginId)}`,
+        );
+      }
+    }
   }
 
   private parseTypes() {
