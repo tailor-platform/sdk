@@ -12,13 +12,13 @@ import {
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
-import { PluginManager } from "@/cli/plugin/manager";
 import { generateUserTypes, generatePluginTypes } from "@/cli/type-generator";
 import { logger, styles } from "@/cli/utils/logger";
 import { getDistDir, type AppConfig } from "@/configure/config";
 import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
+import { PluginManager } from "@/plugin/manager";
 import { commonArgs, withCommonArgs } from "../args";
 import { DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";

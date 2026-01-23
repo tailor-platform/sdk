@@ -123,6 +123,23 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/plugin/**/*.ts"],
+    ignores: ["src/plugin/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Plugin module should not import from cli module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["src/parser/**/types.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": [

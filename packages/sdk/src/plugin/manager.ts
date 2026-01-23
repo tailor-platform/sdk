@@ -1,4 +1,3 @@
-import { logger, styles } from "@/cli/utils/logger";
 import { unauthenticatedTailorUser } from "@/configure/types";
 import type { TailorAnyField } from "@/configure/types";
 import type { PluginBase, PluginOutput } from "@/parser/plugin-config/types";
@@ -13,6 +12,13 @@ export interface ProcessAttachmentContext {
   namespace: string;
   pluginId: string;
 }
+
+/**
+ * Result of processing a plugin attachment
+ */
+export type ProcessAttachmentResult =
+  | { success: true; output: PluginOutput }
+  | { success: false; error: string };
 
 /**
  * Validation error for plugin config
@@ -61,38 +67,39 @@ export class PluginManager {
    * Process a single plugin attachment on a raw TailorDBType.
    * This method is called during type loading before parsing.
    * @param context - Context containing the raw type, config, namespace, and plugin ID
-   * @returns Plugin output with generated types, resolvers, and executors
+   * @returns Result with plugin output on success, or error message on failure
    */
-  async processAttachment(context: ProcessAttachmentContext): Promise<PluginOutput> {
+  async processAttachment(context: ProcessAttachmentContext): Promise<ProcessAttachmentResult> {
     const plugin = this.plugins.get(context.pluginId);
     if (!plugin) {
-      logger.warn(`Plugin "${styles.warning(context.pluginId)}" not found`);
-      return { types: [] };
+      return {
+        success: false,
+        error: `Plugin "${context.pluginId}" not found`,
+      };
     }
 
     // Validate config against schema if provided
     if (plugin.configSchema) {
       const validationErrors = validatePluginConfig(context.config, plugin.configSchema);
       if (validationErrors.length > 0) {
-        logger.error(
-          `Invalid config for plugin ${styles.error(plugin.id)} on type "${styles.highlight(context.type.name)}":`,
-        );
-        for (const error of validationErrors) {
-          const fieldPrefix = error.field ? `${error.field}: ` : "";
-          logger.error(`  ${fieldPrefix}${error.message}`);
-        }
-        throw new Error(
-          `Plugin config validation failed for "${plugin.id}" on type "${context.type.name}"`,
-        );
+        const errorDetails = validationErrors
+          .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
+          .join("; ");
+        return {
+          success: false,
+          error: `Invalid config for plugin "${plugin.id}" on type "${context.type.name}": ${errorDetails}`,
+        };
       }
     }
 
     // Execute plugin process with raw TailorDBType
-    return await plugin.process({
+    const output = await plugin.process({
       type: context.type,
       config: context.config,
       namespace: context.namespace,
     });
+
+    return { success: true, output };
   }
 
   /**

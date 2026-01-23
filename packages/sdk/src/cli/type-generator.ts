@@ -245,7 +245,7 @@ import type { TailorAnyField } from "@/configure/types";
  */
 export interface PluginInfo {
   id: string;
-  configSchema?: Record<string, TailorAnyField>;
+  configSchema: TailorAnyField;
 }
 
 /**
@@ -329,29 +329,37 @@ function fieldTypeToString(
 
 /**
  * Convert a plugin config schema to a TypeScript type string.
- * @param schema - Record of TailorField definitions
+ * @param schema - TailorField definition for the config
  * @param indent - Base indentation level
  * @returns TypeScript type string
  */
-function configSchemaToTypeString(schema: Record<string, TailorAnyField>, indent = 2): string {
-  const innerPadding = "  ".repeat(indent + 1);
-  const padding = "  ".repeat(indent);
+function configSchemaToTypeString(schema: TailorAnyField, indent = 2): string {
+  const metadata = schema.metadata as FieldMetadata;
 
-  const entries = Object.entries(schema);
-  if (entries.length === 0) {
-    return "{}";
+  // For nested (object) types, generate object type
+  if (schema.type === "nested" && schema.fields) {
+    const innerPadding = "  ".repeat(indent + 1);
+    const padding = "  ".repeat(indent);
+
+    const entries = Object.entries(schema.fields);
+    if (entries.length === 0) {
+      return "{}";
+    }
+
+    const fields = entries
+      .map(([key, field]) => {
+        const fieldMetadata = field.metadata as FieldMetadata;
+        const isOptional = fieldMetadata.required === false;
+        const typeStr = fieldTypeToString(field.type, fieldMetadata, field.fields, indent + 1);
+        return `${innerPadding}${key}${isOptional ? "?" : ""}: ${typeStr};`;
+      })
+      .join("\n");
+
+    return `{\n${fields}\n${padding}}`;
   }
 
-  const fields = entries
-    .map(([key, field]) => {
-      const metadata = field.metadata as FieldMetadata;
-      const isOptional = metadata.required === false;
-      const typeStr = fieldTypeToString(field.type, metadata, field.fields, indent + 1);
-      return `${innerPadding}${key}${isOptional ? "?" : ""}: ${typeStr};`;
-    })
-    .join("\n");
-
-  return `{\n${fields}\n${padding}}`;
+  // For non-nested types, generate the type directly
+  return fieldTypeToString(schema.type, metadata, schema.fields, indent);
 }
 
 /**

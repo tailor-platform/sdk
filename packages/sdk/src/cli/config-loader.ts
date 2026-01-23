@@ -1,13 +1,13 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { changesetPlugin } from "@/cli/plugin/builtin";
 import {
   createGeneratorConfigSchema,
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
 import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
+import { changesetPlugin } from "@/plugin/builtin";
 import { loadConfigPath } from "./context";
 import {
   EnumConstantsGenerator,

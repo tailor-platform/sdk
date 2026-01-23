@@ -8,9 +8,9 @@ import {
   type ParsedTailorDBType,
   type TypeSourceInfo,
 } from "@/parser/service/tailordb";
-import type { PluginManager } from "@/cli/plugin/manager";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
+import type { PluginManager } from "@/plugin/manager";
 
 export class TailorDBService {
   private rawTypes: Record<string, Record<string, TailorDBType>> = {};
@@ -152,12 +152,19 @@ export class TailorDBService {
     let currentType = rawType;
 
     for (const attachment of attachments) {
-      const output = await this.pluginManager.processAttachment({
+      const result = await this.pluginManager.processAttachment({
         type: currentType,
         config: attachment.config,
         namespace: this.namespace,
         pluginId: attachment.pluginId,
       });
+
+      if (!result.success) {
+        logger.error(result.error);
+        throw new Error(result.error);
+      }
+
+      const output = result.output;
 
       // First, extend the original type with new fields (if any)
       // This must be done before adding generated types, as they may reference extended fields
