@@ -106,7 +106,7 @@ function processChangeset(context: PluginProcessContext): PluginOutput {
 
   return {
     types: [changeRequest, changeStep, changeApproval, changeReworkEvent],
-    extendFields,
+    extends: { fields: extendFields },
   };
 }
 

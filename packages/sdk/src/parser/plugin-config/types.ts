@@ -105,6 +105,18 @@ export interface PluginGeneratedExecutor {
 }
 
 /**
+ * Extension options for modifying the source type
+ */
+export interface PluginExtends {
+  /**
+   * Fields to add to the source type.
+   * These fields will be merged into the original type's fields.
+   * Existing fields (from original definition or earlier plugins) take precedence.
+   */
+  fields?: Record<string, unknown>;
+}
+
+/**
  * Output returned by a plugin's process method
  */
 export interface PluginOutput {
@@ -114,12 +126,8 @@ export interface PluginOutput {
   resolvers?: PluginGeneratedResolver[];
   /** Additional executors to generate */
   executors?: PluginGeneratedExecutor[];
-  /**
-   * Fields to add to the source type.
-   * These fields will be merged into the original type's fields.
-   * Existing fields (from original definition or earlier plugins) take precedence.
-   */
-  extendFields?: Record<string, unknown>;
+  /** Extensions to apply to the source type */
+  extends?: PluginExtends;
 }
 
 /**

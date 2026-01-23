@@ -161,15 +161,16 @@ export class TailorDBService {
 
       // First, extend the original type with new fields (if any)
       // This must be done before adding generated types, as they may reference extended fields
-      if (output.extendFields && Object.keys(output.extendFields).length > 0) {
+      const extendFields = output.extends?.fields;
+      if (extendFields && Object.keys(extendFields).length > 0) {
         currentType = this.extendTypeFields(
           currentType,
-          output.extendFields,
+          extendFields,
           sourceFilePath,
           attachment.pluginId,
         );
         logger.log(
-          `  Extended: ${styles.success(currentType.name)} with ${styles.highlight(Object.keys(output.extendFields).length.toString())} fields by plugin ${styles.info(attachment.pluginId)}`,
+          `  Extended: ${styles.success(currentType.name)} with ${styles.highlight(Object.keys(extendFields).length.toString())} fields by plugin ${styles.info(attachment.pluginId)}`,
         );
       }
 
