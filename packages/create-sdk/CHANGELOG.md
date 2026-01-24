@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 1.4.2
+
+### Patch Changes
+
+- [#475](https://github.com/tailor-platform/sdk/pull/475) [`d8b0ab0`](https://github.com/tailor-platform/sdk/commit/d8b0ab07c417eb932f58a58e2a5cb59e6cee2fa0) Thanks [@haru0017](https://github.com/haru0017)! - Remove unused @tailor-platform/function-types from hello-world and multi-application template
+
 ## 1.4.1
 
 ## 1.4.0

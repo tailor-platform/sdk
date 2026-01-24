@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/create-sdk",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
   "repository": {
