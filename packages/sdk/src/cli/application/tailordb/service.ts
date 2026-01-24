@@ -13,9 +13,9 @@ import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types"
 export type TailorDBService = {
   readonly namespace: string;
   readonly config: TailorDBServiceConfig;
-  getTypes(): Readonly<Record<string, ParsedTailorDBType>>;
-  getTypeSourceInfo(): Readonly<TypeSourceInfo>;
-  loadTypes(): Promise<Record<string, ParsedTailorDBType> | undefined>;
+  getTypes: () => Readonly<Record<string, ParsedTailorDBType>>;
+  getTypeSourceInfo: () => Readonly<TypeSourceInfo>;
+  loadTypes: () => Promise<Record<string, ParsedTailorDBType> | undefined>;
 };
 
 /**

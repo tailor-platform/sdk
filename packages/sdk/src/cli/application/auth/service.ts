@@ -13,7 +13,7 @@ export type AuthService = {
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
   readonly parsedConfig: AuthOwnConfig & { idProvider?: IdProviderConfig };
   readonly userProfile: UserProfile | undefined;
-  resolveNamespaces(): Promise<void>;
+  resolveNamespaces: () => Promise<void>;
 };
 
 /**

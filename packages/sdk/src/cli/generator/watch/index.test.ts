@@ -15,7 +15,14 @@ vi.mock("madge", () => ({
   default: madgeMock,
 }));
 
-import { DependencyGraphManager, DependencyWatcher, WatcherError, WatcherErrorCode } from "./index";
+import {
+  createDependencyGraphManager,
+  createDependencyWatcher,
+  type DependencyGraphManager,
+  type DependencyWatcher,
+  WatcherError,
+  WatcherErrorCode,
+} from "./index";
 
 let manager: DependencyGraphManager;
 
@@ -25,7 +32,7 @@ beforeEach(() => {
     obj: () => ({}),
     circular: () => [],
   }));
-  manager = new DependencyGraphManager();
+  manager = createDependencyGraphManager();
 });
 
 /**
@@ -53,7 +60,7 @@ describe("DependencyWatcher", () => {
 
   beforeEach(async () => {
     tempDir = await createTempDir();
-    watcher = new DependencyWatcher({
+    watcher = createDependencyWatcher({
       debounceTime: 10,
       detectCircularDependencies: true,
     });
@@ -228,7 +235,7 @@ describe("DependencyGraphManager", () => {
     const originalDefault = (mockedMadge as { default?: unknown }).default;
     (mockedMadge as { default?: unknown }).default = undefined;
 
-    const localManager = new DependencyGraphManager();
+    const localManager = createDependencyGraphManager();
 
     try {
       await expect(

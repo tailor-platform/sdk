@@ -7,8 +7,8 @@ import { type Executor, ExecutorSchema } from "@/parser/service/executor";
 
 export type ExecutorService = {
   readonly config: ExecutorServiceConfig;
-  getExecutors(): Record<string, Executor>;
-  loadExecutors(): Promise<Record<string, Executor> | undefined>;
+  getExecutors: () => Record<string, Executor>;
+  loadExecutors: () => Promise<Record<string, Executor> | undefined>;
 };
 
 /**

@@ -8,8 +8,8 @@ import { type Resolver, ResolverSchema } from "@/parser/service/resolver";
 export type ResolverService = {
   readonly namespace: string;
   readonly config: ResolverServiceConfig;
-  getResolvers(): Record<string, Resolver>;
-  loadResolvers(): Promise<void>;
+  getResolvers: () => Record<string, Resolver>;
+  loadResolvers: () => Promise<void>;
 };
 
 /**

@@ -9,8 +9,8 @@ export type ChangeSet<C extends HasName, U extends HasName, D extends HasName> =
   readonly creates: C[];
   readonly updates: U[];
   readonly deletes: D[];
-  isEmpty(): boolean;
-  print(): void;
+  isEmpty: () => boolean;
+  print: () => void;
 };
 
 /**
