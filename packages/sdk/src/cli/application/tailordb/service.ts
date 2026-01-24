@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
+import { TAILOR_DB_TYPE_BRAND } from "@/configure/types/brand";
 import {
   parseTypes,
   type ParsedTailorDBType,
@@ -52,16 +53,11 @@ export function createTailorDBService(
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
 
-        // Shape-based check for TailorDBType (factory function pattern)
+        // Symbol-based check for TailorDBType using brand
         const isDBTypeLike =
           exportedValue &&
           typeof exportedValue === "object" &&
-          typeof exportedValue.name === "string" &&
-          typeof exportedValue.fields === "object" &&
-          exportedValue.fields !== null &&
-          typeof exportedValue.metadata === "object" &&
-          exportedValue.metadata !== null &&
-          "_output" in exportedValue;
+          TAILOR_DB_TYPE_BRAND in exportedValue;
 
         if (isDBTypeLike) {
           const relativePath = path.relative(process.cwd(), typeFile);

@@ -1,4 +1,9 @@
 import {
+  TAILOR_DB_FIELD_BRAND,
+  TAILOR_DB_TYPE_BRAND,
+  TAILOR_FIELD_BRAND,
+} from "@/configure/types/brand";
+import {
   type AllowedValues,
   type AllowedValuesOutput,
   mapAllowedValues,
@@ -101,6 +106,8 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>,
   "description" | "validate"
 > {
+  /** Brand symbol for type identification */
+  readonly [TAILOR_DB_FIELD_BRAND]: true;
   /** Returns a shallow copy of the raw relation config if set */
   readonly rawRelation: Readonly<RawRelationConfig> | undefined;
 
@@ -505,6 +512,8 @@ function createTailorDBField<
   }
 
   const field: FieldType = {
+    [TAILOR_FIELD_BRAND]: true,
+    [TAILOR_DB_FIELD_BRAND]: true,
     type,
     fields: (fields ?? {}) as Record<string, TailorAnyField>,
     _defined: undefined as unknown as {
@@ -709,6 +718,8 @@ export interface TailorDBType<
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
 > {
+  /** Brand symbol for type identification */
+  readonly [TAILOR_DB_TYPE_BRAND]: true;
   readonly name: string;
   readonly fields: Fields;
   readonly _output: InferFieldsOutput<Fields>;
@@ -827,6 +838,7 @@ function createTailorDBType<
   }
 
   const dbType: TailorDBType<Fields, User> = {
+    [TAILOR_DB_TYPE_BRAND]: true,
     name,
     fields,
     _output: null as unknown as InferFieldsOutput<Fields>,

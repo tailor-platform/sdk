@@ -1,3 +1,4 @@
+import { TAILOR_FIELD_BRAND } from "@/configure/types/brand";
 import { t } from "@/configure/types/type";
 import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
@@ -58,13 +59,9 @@ export function createResolver<
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     }>,
 ): ResolverReturn<Input, Output> {
-  // Check if output is already a TailorField (shape-based check)
+  // Check if output is already a TailorField using Symbol brand
   const isTailorField = (obj: unknown): obj is TailorAnyField =>
-    typeof obj === "object" &&
-    obj !== null &&
-    "type" in obj &&
-    "fields" in obj &&
-    "_metadata" in obj;
+    typeof obj === "object" && obj !== null && TAILOR_FIELD_BRAND in obj;
 
   const normalizedOutput = isTailorField(config.output) ? config.output : t.object(config.output);
 
