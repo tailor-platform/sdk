@@ -52,14 +52,16 @@ export function createTailorDBService(
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
 
+        // Shape-based check for TailorDBType (factory function pattern)
         const isDBTypeLike =
           exportedValue &&
           typeof exportedValue === "object" &&
-          exportedValue.constructor?.name === "TailorDBType" &&
           typeof exportedValue.name === "string" &&
           typeof exportedValue.fields === "object" &&
-          exportedValue.metadata &&
-          typeof exportedValue.metadata === "object";
+          exportedValue.fields !== null &&
+          typeof exportedValue.metadata === "object" &&
+          exportedValue.metadata !== null &&
+          "_output" in exportedValue;
 
         if (isDBTypeLike) {
           const relativePath = path.relative(process.cwd(), typeFile);
