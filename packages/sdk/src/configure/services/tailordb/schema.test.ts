@@ -1308,6 +1308,46 @@ describe("TailorDBType/TailorDBField description support", () => {
   });
 });
 
+describe("TailorDBField fluent API type preservation", () => {
+  it("description() preserves _output type", () => {
+    const field = db.string().description("A name field");
+    expectTypeOf<output<typeof field>>().toEqualTypeOf<string>();
+  });
+
+  it("description() on optional field preserves nullable type", () => {
+    const field = db.string({ optional: true }).description("Optional field");
+    expectTypeOf<output<typeof field>>().toEqualTypeOf<string | null>();
+  });
+
+  it("description() on array field preserves array type", () => {
+    const field = db.string({ array: true }).description("Array field");
+    expectTypeOf<output<typeof field>>().toEqualTypeOf<string[]>();
+  });
+
+  it("multiple method chain preserves type", () => {
+    const field = db
+      .string()
+      .description("Email address")
+      .index()
+      .validate(({ value }) => value.includes("@"));
+    expectTypeOf<output<typeof field>>().toEqualTypeOf<string>();
+  });
+
+  it("chained methods on optional field preserve nullable type", () => {
+    const field = db.int({ optional: true }).description("Optional count").index();
+    expectTypeOf<output<typeof field>>().toEqualTypeOf<number | null>();
+  });
+
+  it("relation() preserves uuid type", () => {
+    const User = db.type("User", { name: db.string() });
+    const field = db
+      .uuid()
+      .description("User reference")
+      .relation({ type: "n-1", toward: { type: User } });
+    expectTypeOf<output<typeof field>>().toEqualTypeOf<string>();
+  });
+});
+
 describe("TailorDBType files method tests", () => {
   it("files method adds file fields to metadata", () => {
     const userType = db
