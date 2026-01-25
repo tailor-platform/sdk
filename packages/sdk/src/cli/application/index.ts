@@ -32,14 +32,19 @@ export type Application = {
   readonly applications: ReadonlyArray<Application>;
 };
 
-function defineTailorDB(
-  config: TailorDBServiceInput | undefined,
-  tailorDBServices: TailorDBService[],
-  externalTailorDBNamespaces: string[],
-  subgraphs: Array<{ Type: string; Name: string }>,
-): void {
+type DefineTailorDBResult = {
+  tailorDBServices: TailorDBService[];
+  externalTailorDBNamespaces: string[];
+  subgraphs: Array<{ Type: string; Name: string }>;
+};
+
+function defineTailorDB(config: TailorDBServiceInput | undefined): DefineTailorDBResult {
+  const tailorDBServices: TailorDBService[] = [];
+  const externalTailorDBNamespaces: string[] = [];
+  const subgraphs: Array<{ Type: string; Name: string }> = [];
+
   if (!config) {
-    return;
+    return { tailorDBServices, externalTailorDBNamespaces, subgraphs };
   }
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
@@ -51,15 +56,21 @@ function defineTailorDB(
     }
     subgraphs.push({ Type: "tailordb", Name: namespace });
   }
+
+  return { tailorDBServices, externalTailorDBNamespaces, subgraphs };
 }
 
-function defineResolver(
-  config: ResolverServiceInput | undefined,
-  resolverServices: ResolverService[],
-  subgraphs: Array<{ Type: string; Name: string }>,
-): void {
+type DefineResolverResult = {
+  resolverServices: ResolverService[];
+  subgraphs: Array<{ Type: string; Name: string }>;
+};
+
+function defineResolver(config: ResolverServiceInput | undefined): DefineResolverResult {
+  const resolverServices: ResolverService[] = [];
+  const subgraphs: Array<{ Type: string; Name: string }> = [];
+
   if (!config) {
-    return;
+    return { resolverServices, subgraphs };
   }
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
@@ -69,15 +80,21 @@ function defineResolver(
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
   }
+
+  return { resolverServices, subgraphs };
 }
 
-function defineIdp(
-  config: readonly IdPConfig[] | undefined,
-  idpServices: IdP[],
-  subgraphs: Array<{ Type: string; Name: string }>,
-): void {
+type DefineIdpResult = {
+  idpServices: IdP[];
+  subgraphs: Array<{ Type: string; Name: string }>;
+};
+
+function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
+  const idpServices: IdP[] = [];
+  const subgraphs: Array<{ Type: string; Name: string }> = [];
+
   if (!config) {
-    return;
+    return { idpServices, subgraphs };
   }
 
   const idpNames = new Set<string>();
@@ -93,16 +110,24 @@ function defineIdp(
     }
     subgraphs.push({ Type: "idp", Name: name });
   });
+
+  return { idpServices, subgraphs };
 }
+
+type DefineAuthResult = {
+  authService: AuthService | undefined;
+  subgraphs: Array<{ Type: string; Name: string }>;
+};
 
 function defineAuth(
   config: AuthConfig | undefined,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
-  subgraphs: Array<{ Type: string; Name: string }>,
-): AuthService | undefined {
+): DefineAuthResult {
+  const subgraphs: Array<{ Type: string; Name: string }> = [];
+
   if (!config) {
-    return undefined;
+    return { authService: undefined, subgraphs };
   }
 
   let authService: AuthService | undefined;
@@ -110,27 +135,39 @@ function defineAuth(
     authService = createAuthService(config, tailorDBServices, externalTailorDBNamespaces);
   }
   subgraphs.push({ Type: "auth", Name: config.name });
-  return authService;
+
+  return { authService, subgraphs };
 }
 
-function defineExecutor(config: ExecutorServiceInput | undefined): ExecutorService | undefined {
+type DefineExecutorResult = {
+  executorService: ExecutorService | undefined;
+};
+
+function defineExecutor(config: ExecutorServiceInput | undefined): DefineExecutorResult {
   if (!config) {
-    return undefined;
+    return { executorService: undefined };
   }
-  return createExecutorService(config);
+  return { executorService: createExecutorService(config) };
 }
 
-function defineWorkflow(
-  config: WorkflowServiceConfig | undefined,
-): WorkflowServiceConfig | undefined {
-  return config;
+type DefineWorkflowResult = {
+  workflowConfig: WorkflowServiceConfig | undefined;
+};
+
+function defineWorkflow(config: WorkflowServiceConfig | undefined): DefineWorkflowResult {
+  return { workflowConfig: config };
 }
+
+type DefineStaticWebsitesResult = {
+  staticWebsiteServices: StaticWebsite[];
+};
 
 function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
-  staticWebsiteServices: StaticWebsite[],
-): void {
+): DefineStaticWebsitesResult {
+  const staticWebsiteServices: StaticWebsite[] = [];
   const websiteNames = new Set<string>();
+
   (websites ?? []).forEach((config) => {
     const website = StaticWebsiteSchema.parse(config);
     if (websiteNames.has(website.name)) {
@@ -139,6 +176,8 @@ function defineStaticWebsites(
     websiteNames.add(website.name);
     staticWebsiteServices.push(website);
   });
+
+  return { staticWebsiteServices };
 }
 
 /**
@@ -147,38 +186,37 @@ function defineStaticWebsites(
  * @returns Configured application instance
  */
 export function defineApplication(config: AppConfig): Application {
-  const tailorDBServices: TailorDBService[] = [];
-  const externalTailorDBNamespaces: string[] = [];
-  const resolverServices: ResolverService[] = [];
-  const idpServices: IdP[] = [];
-  const subgraphs: Array<{ Type: string; Name: string }> = [];
-  const staticWebsiteServices: StaticWebsite[] = [];
-
-  defineTailorDB(config.db, tailorDBServices, externalTailorDBNamespaces, subgraphs);
-  defineResolver(config.resolver, resolverServices, subgraphs);
-  defineIdp(config.idp, idpServices, subgraphs);
-  const authService = defineAuth(
+  const tailordbResult = defineTailorDB(config.db);
+  const resolverResult = defineResolver(config.resolver);
+  const idpResult = defineIdp(config.idp);
+  const authResult = defineAuth(
     config.auth,
-    tailorDBServices,
-    externalTailorDBNamespaces,
-    subgraphs,
+    tailordbResult.tailorDBServices,
+    tailordbResult.externalTailorDBNamespaces,
   );
-  const executorService = defineExecutor(config.executor);
-  const workflowConfig = defineWorkflow(config.workflow);
-  defineStaticWebsites(config.staticWebsites, staticWebsiteServices);
+  const executorResult = defineExecutor(config.executor);
+  const workflowResult = defineWorkflow(config.workflow);
+  const staticWebsiteResult = defineStaticWebsites(config.staticWebsites);
+
+  const subgraphs = [
+    ...tailordbResult.subgraphs,
+    ...resolverResult.subgraphs,
+    ...idpResult.subgraphs,
+    ...authResult.subgraphs,
+  ];
 
   const application: Application = {
     name: config.name,
     config,
     subgraphs,
-    tailorDBServices,
-    externalTailorDBNamespaces,
-    resolverServices,
-    idpServices,
-    authService,
-    executorService,
-    workflowConfig,
-    staticWebsiteServices,
+    tailorDBServices: tailordbResult.tailorDBServices,
+    externalTailorDBNamespaces: tailordbResult.externalTailorDBNamespaces,
+    resolverServices: resolverResult.resolverServices,
+    idpServices: idpResult.idpServices,
+    authService: authResult.authService,
+    executorService: executorResult.executorService,
+    workflowConfig: workflowResult.workflowConfig,
+    staticWebsiteServices: staticWebsiteResult.staticWebsiteServices,
     env: config.env ?? {},
     get applications() {
       return [application];
