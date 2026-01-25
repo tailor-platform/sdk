@@ -22,4 +22,5 @@ export const user = db
     },
   )
   .permission(defaultPermission)
-  .gqlPermission(defaultGqlPermission);
+  .gqlPermission(defaultGqlPermission)
+  .plugin({ "@tailor-platform/changeset": true });

@@ -26,6 +26,7 @@ import {
 import type { InferredAttributeMap } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import type { PluginAttachment, PluginConfigs } from "@/parser/plugin-config/types";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -366,6 +367,7 @@ export class TailorDBType<
   private _indexes: IndexDef<this>[] = [];
   private _permissions: RawPermissions = {};
   private _files: Record<string, string> = {};
+  private _plugins: PluginAttachment[] = [];
 
   constructor(
     public readonly name: string,
@@ -522,6 +524,45 @@ export class TailorDBType<
       }
     }
     return result as Omit<Fields, K>;
+  }
+
+  /**
+   * Get all plugin attachments for this type
+   * @returns Array of plugin attachments
+   */
+  get plugins(): readonly PluginAttachment[] {
+    return this._plugins;
+  }
+
+  /**
+   * Attach plugins to this type with typed configurations.
+   * Multiple plugins can be specified in a single call.
+   * Extend PluginConfigs interface via declaration merging to add type-safe configs.
+   * @example
+   * ```typescript
+   * db.type("Order", { ... }).plugin({
+   *   "@my-company/audit-log": { trackedFields: ["status"] },
+   *   "@my-company/versioning": { maxVersions: 10 },
+   * });
+   * ```
+   * @param configs - Object mapping plugin IDs to their configurations
+   * @returns This type for method chaining
+   */
+  plugin<K extends keyof PluginConfigs>(configs: { [P in K]: PluginConfigs[P] }): this;
+
+  /**
+   * Attach plugins to this type with configurations.
+   * @param configs - Object mapping plugin IDs to their configurations
+   * @returns This type for method chaining
+   */
+  plugin(configs: Record<string, unknown>): this;
+
+  // Implementation
+  plugin(configs: Record<string, unknown>): this {
+    for (const [pluginId, config] of Object.entries(configs)) {
+      this._plugins.push({ pluginId, config: config ?? {} } as PluginAttachment);
+    }
+    return this;
   }
 }
 

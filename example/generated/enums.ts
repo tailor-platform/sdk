@@ -32,6 +32,62 @@ export const UserRole = {
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
+/**
+ * Current state of the record
+ */
+export const UserRecordState = {
+  "DRAFT": "DRAFT",
+  "ACTIVE": "ACTIVE",
+  "ARCHIVED": "ARCHIVED"
+} as const;
+export type UserRecordState = (typeof UserRecordState)[keyof typeof UserRecordState];
+
+export const UserChangeRequestStatus = {
+  "RUNNING": "RUNNING",
+  "REWORK": "REWORK",
+  "APPROVED": "APPROVED",
+  "REJECTED": "REJECTED",
+  "CANCELED": "CANCELED"
+} as const;
+export type UserChangeRequestStatus = (typeof UserChangeRequestStatus)[keyof typeof UserChangeRequestStatus];
+
+export const UserChangeRequestActivationStatus = {
+  "PENDING": "PENDING",
+  "ACTIVATED": "ACTIVATED"
+} as const;
+export type UserChangeRequestActivationStatus = (typeof UserChangeRequestActivationStatus)[keyof typeof UserChangeRequestActivationStatus];
+
+export const UserChangeStepQuorumType = {
+  "ALL": "ALL",
+  "ANY": "ANY"
+} as const;
+export type UserChangeStepQuorumType = (typeof UserChangeStepQuorumType)[keyof typeof UserChangeStepQuorumType];
+
+export const UserChangeStepStatus = {
+  "PENDING": "PENDING",
+  "APPROVED": "APPROVED",
+  "REWORK": "REWORK",
+  "REJECTED": "REJECTED",
+  "SKIPPED": "SKIPPED"
+} as const;
+export type UserChangeStepStatus = (typeof UserChangeStepStatus)[keyof typeof UserChangeStepStatus];
+
+export const UserChangeApprovalDecision = {
+  "PENDING": "PENDING",
+  "APPROVED": "APPROVED",
+  "REWORK": "REWORK",
+  "REJECTED": "REJECTED"
+} as const;
+export type UserChangeApprovalDecision = (typeof UserChangeApprovalDecision)[keyof typeof UserChangeApprovalDecision];
+
+export const UserChangeApprovalResolvedByRuleType = {
+  "USER": "USER",
+  "GROUP": "GROUP",
+  "ROLE": "ROLE",
+  "ORG_MANAGER": "ORG_MANAGER"
+} as const;
+export type UserChangeApprovalResolvedByRuleType = (typeof UserChangeApprovalResolvedByRuleType)[keyof typeof UserChangeApprovalResolvedByRuleType];
+
 export const UserSettingLanguage = {
   "jp": "jp",
   "en": "en"

@@ -1,0 +1,5 @@
+mutation CreateUserChangeRequest($input: UserChangeRequestCreateInput!) {
+  createUserChangeRequest(input: $input) {
+    id
+  }
+}

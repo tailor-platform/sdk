@@ -1,0 +1,5 @@
+mutation CreateUserChangeStep($input: UserChangeStepCreateInput!) {
+  createUserChangeStep(input: $input) {
+    id
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/UserChangeStep.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/UserChangeStep.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

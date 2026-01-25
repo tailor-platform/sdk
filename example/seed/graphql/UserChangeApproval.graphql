@@ -1,0 +1,5 @@
+mutation CreateUserChangeApproval($input: UserChangeApprovalCreateInput!) {
+  createUserChangeApproval(input: $input) {
+    id
+  }
+}
