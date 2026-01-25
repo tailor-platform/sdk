@@ -1,4 +1,3 @@
-import { TAILOR_FIELD_BRAND } from "./brand";
 import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
 import {
   type TailorFieldType,
@@ -13,6 +12,13 @@ import type { FieldValidateInput } from "./validation";
 import type { TailorUser } from "@/configure/types";
 import type { TailorFieldInput } from "@/parser/service/resolver/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+
+/**
+ * Symbol used to brand TailorField objects.
+ * This enables reliable runtime detection of TailorField instances regardless of
+ * how they were imported or assigned (variable reassignment, destructuring, etc.)
+ */
+export const TAILOR_FIELD_BRAND = Symbol.for("tailor:field");
 
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,

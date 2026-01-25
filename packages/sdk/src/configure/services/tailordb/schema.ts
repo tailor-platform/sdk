@@ -1,14 +1,9 @@
 import {
-  TAILOR_DB_FIELD_BRAND,
-  TAILOR_DB_TYPE_BRAND,
-  TAILOR_FIELD_BRAND,
-} from "@/configure/types/brand";
-import {
   type AllowedValues,
   type AllowedValuesOutput,
   mapAllowedValues,
 } from "@/configure/types/field";
-import { type TailorField, type TailorAnyField } from "@/configure/types/type";
+import { type TailorField, type TailorAnyField, TAILOR_FIELD_BRAND } from "@/configure/types/type";
 import {
   type FieldOptions,
   type FieldOutput,
@@ -36,6 +31,20 @@ import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+
+/**
+ * Symbol used to brand TailorDBField objects.
+ * This enables reliable runtime detection of TailorDBField instances regardless of
+ * how they were imported or assigned (variable reassignment, destructuring, etc.)
+ */
+const TAILOR_DB_FIELD_BRAND = Symbol.for("tailor:tailordb-field");
+
+/**
+ * Symbol used to brand TailorDBType objects created by db.type().
+ * This enables reliable runtime detection of TailorDBType instances regardless of
+ * how they were imported or assigned (variable reassignment, destructuring, etc.)
+ */
+export const TAILOR_DB_TYPE_BRAND = Symbol.for("tailor:tailordb-type");
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
