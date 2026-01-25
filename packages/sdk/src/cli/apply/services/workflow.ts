@@ -4,7 +4,7 @@ import { getDistDir } from "@/configure/config";
 import { type ApplyPhase } from "..";
 import { type OperatorClient, fetchAll } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
-import { ChangeSet } from ".";
+import { createChangeSet, type ChangeSet } from ".";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Workflow } from "@/parser/service/workflow";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -244,9 +244,7 @@ export async function planWorkflow(
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
 ) {
-  const changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow> = new ChangeSet(
-    "Workflows",
-  );
+  const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
