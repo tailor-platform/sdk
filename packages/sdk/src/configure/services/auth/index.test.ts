@@ -153,8 +153,9 @@ describe("defineAuth", () => {
   });
 
   it("rejects configs that include both userProfile and machineUserAttributes", () => {
+    // @ts-ignore - @see https://github.com/microsoft/TypeScript/issues/63051
     defineAuth("exclusive-attributes", {
-      // @ts-expect-error - userProfile and machineUserAttributes are mutually exclusive; provide exactly one.
+      // @ts-ignore - userProfile and machineUserAttributes are mutually exclusive; provide exactly one.
       userProfile: {
         type: db.type("User", {
           email: db.string().unique(),
