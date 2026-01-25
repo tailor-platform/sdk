@@ -325,9 +325,9 @@ function createTailorField<
       return { issues };
     }
 
-    // If optional and null/undefined, skip further validation
+    // If optional and null/undefined, skip further validation and normalize to null
     if (!field._metadata.required && isNullOrUndefined) {
-      return { value };
+      return { value: value ?? null };
     }
 
     // 2. Check array type
