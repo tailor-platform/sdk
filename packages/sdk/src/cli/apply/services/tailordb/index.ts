@@ -640,7 +640,7 @@ async function executePreMigrationPhase(
   // Build breaking changes map from pending migrations
   const breakingChanges = buildBreakingChangesMap(pendingMigrations);
 
-  // Types - modify protobuf messages directly (they are mutable)
+  // Types - clone requests before modifying to preserve original changeSet for post-migration
   await Promise.all([
     ...changeSet.type.creates.map((create) => {
       const typeName = create.request.tailordbType?.name;
@@ -650,9 +650,10 @@ async function executePreMigrationPhase(
         return client.createTailorDBType(create.request);
       }
 
-      // Protobuf messages are mutable - modify directly
-      if (create.request.tailordbType?.schema?.fields) {
-        const fields = create.request.tailordbType.schema.fields;
+      // Clone request to avoid modifying the original changeSet
+      const clonedRequest = structuredClone(create.request);
+      if (clonedRequest.tailordbType?.schema?.fields) {
+        const fields = clonedRequest.tailordbType.schema.fields;
         for (const [fieldName, change] of typeChanges) {
           if (!isBreakingChange(change) || !fields[fieldName]) continue;
 
@@ -663,7 +664,7 @@ async function executePreMigrationPhase(
         }
       }
 
-      return client.createTailorDBType(create.request);
+      return client.createTailorDBType(clonedRequest);
     }),
     ...changeSet.type.updates.map((update) => {
       const typeName = update.request.tailordbType?.name;
@@ -673,9 +674,10 @@ async function executePreMigrationPhase(
         return client.updateTailorDBType(update.request);
       }
 
-      // Protobuf messages are mutable - modify directly
-      if (update.request.tailordbType?.schema?.fields) {
-        const fields = update.request.tailordbType.schema.fields;
+      // Clone request to avoid modifying the original changeSet
+      const clonedRequest = structuredClone(update.request);
+      if (clonedRequest.tailordbType?.schema?.fields) {
+        const fields = clonedRequest.tailordbType.schema.fields;
 
         for (const [fieldName, change] of typeChanges) {
           if (!isBreakingChange(change) || !fields[fieldName]) continue;
@@ -713,7 +715,7 @@ async function executePreMigrationPhase(
         }
       }
 
-      return client.updateTailorDBType(update.request);
+      return client.updateTailorDBType(clonedRequest);
     }),
   ]);
 
@@ -740,64 +742,33 @@ async function executePostMigrationPhase(
   changeSet: TailorDBChangeSet,
   pendingMigrations: PendingMigration[],
 ): Promise<void> {
-  // Rebuild breaking changes map to restore values modified in pre-migration phase
+  // Build breaking changes map to identify types that need post-migration updates
   const breakingChanges = buildBreakingChangesMap(pendingMigrations);
 
-  // Types - restore final manifest values (undo pre-migration modifications)
-  // Since pre-migration modified the protobuf messages directly, we need to restore
-  // the original values from change.after before sending updates
+  // Types - apply final schema values using original (unmodified) changeSet
+  // Pre-migration used cloned requests, so the original changeSet still has correct values
   try {
     await Promise.all([
-      ...changeSet.type.updates.map((update) => {
-        const typeName = update.request.tailordbType?.name;
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
-
-        // Restore values modified in pre-migration phase
-        if (typeChanges && typeChanges.size > 0 && update.request.tailordbType?.schema?.fields) {
-          const fields = update.request.tailordbType.schema.fields;
-
-          for (const [fieldName, change] of typeChanges) {
-            if (!isBreakingChange(change) || !fields[fieldName]) continue;
-
-            const before = change.before as FieldConfig | undefined;
-            const after = change.after as FieldConfig | undefined;
-
-            // Restore required field added: set to the intended required value
-            if (change.kind === "field_added" && after?.required) {
-              fields[fieldName].required = true;
-            }
-
-            // Restore optional to required change
-            if (change.kind === "field_modified" && !before?.required && after?.required) {
-              fields[fieldName].required = true;
-            }
-
-            // Restore unique constraint added
-            if (
-              change.kind === "field_modified" &&
-              !(before?.unique ?? false) &&
-              (after?.unique ?? false)
-            ) {
-              fields[fieldName].unique = true;
-            }
-
-            // Restore enum values (apply final allowedValues from after)
-            if (change.kind === "field_modified" && before?.allowedValues && after?.allowedValues) {
-              const removedValues = before.allowedValues.filter(
-                (v) => !after.allowedValues!.includes(v),
-              );
-              if (removedValues.length > 0) {
-                fields[fieldName].allowedValues = after.allowedValues.map((v) => ({
-                  value: v,
-                  description: "",
-                }));
-              }
-            }
-          }
-        }
-
-        return client.updateTailorDBType(update.request);
-      }),
+      // For newly created types that had breaking changes, send update with final values
+      ...changeSet.type.creates
+        .filter((create) => {
+          const typeName = create.request.tailordbType?.name;
+          return typeName && breakingChanges.has(typeName);
+        })
+        .map((create) =>
+          client.updateTailorDBType({
+            workspaceId: create.request.workspaceId,
+            namespaceName: create.request.namespaceName,
+            tailordbType: create.request.tailordbType,
+          }),
+        ),
+      // For updated types, send update with final values (original changeSet is unmodified)
+      ...changeSet.type.updates
+        .filter((update) => {
+          const typeName = update.request.tailordbType?.name;
+          return typeName && breakingChanges.has(typeName);
+        })
+        .map((update) => client.updateTailorDBType(update.request)),
     ]);
   } catch (error) {
     handleOptionalToRequiredError(error, [
