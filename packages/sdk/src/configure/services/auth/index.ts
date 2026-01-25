@@ -20,9 +20,24 @@ type PlaceholderUser = TailorDBInstance<Record<string, never>, Record<string, ne
 type PlaceholderAttributeMap = UserAttributeMap<PlaceholderUser>;
 type PlaceholderAttributeList = UserAttributeListKey<PlaceholderUser>[];
 
+type UserProfileAuthInput<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+  AttributeList extends UserAttributeListKey<User>[],
+  MachineUserNames extends string,
+> = Omit<
+  AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames, undefined>,
+  "userProfile" | "machineUserAttributes"
+> & {
+  userProfile: NonNullable<
+    AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames, undefined>["userProfile"]
+  >;
+  machineUserAttributes?: never;
+};
+
 type MachineUserOnlyAuthInput<
   MachineUserNames extends string,
-  MachineUserAttributes extends MachineUserAttributeFields | undefined = undefined,
+  MachineUserAttributes extends MachineUserAttributeFields,
 > = Omit<
   AuthServiceInput<
     PlaceholderUser,
@@ -31,9 +46,10 @@ type MachineUserOnlyAuthInput<
     MachineUserNames,
     MachineUserAttributes
   >,
-  "userProfile"
+  "userProfile" | "machineUserAttributes"
 > & {
   userProfile?: never;
+  machineUserAttributes: MachineUserAttributes;
 };
 
 type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
@@ -90,25 +106,18 @@ export function defineAuth<
   const User extends TailorDBInstance,
   const AttributeMap extends UserAttributeMap<User>,
   const AttributeList extends UserAttributeListKey<User>[],
-  const MachineUserAttributes extends MachineUserAttributeFields | undefined,
   const MachineUserNames extends string,
 >(
   name: Name,
-  config: AuthServiceInput<
-    User,
-    AttributeMap,
-    AttributeList,
-    MachineUserNames,
-    MachineUserAttributes
-  >,
+  config: UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames>,
 ): DefinedAuth<
   Name,
-  AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames, MachineUserAttributes>,
+  UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames>,
   MachineUserNames
 >;
 export function defineAuth<
   const Name extends string,
-  const MachineUserAttributes extends MachineUserAttributeFields | undefined,
+  const MachineUserAttributes extends MachineUserAttributeFields,
   const MachineUserNames extends string,
 >(
   name: Name,
@@ -123,12 +132,12 @@ export function defineAuth<
   const User extends TailorDBInstance,
   const AttributeMap extends UserAttributeMap<User>,
   const AttributeList extends UserAttributeListKey<User>[],
-  const MachineUserAttributes extends MachineUserAttributeFields | undefined,
+  const MachineUserAttributes extends MachineUserAttributeFields,
   const MachineUserNames extends string,
 >(
   name: Name,
   config:
-    | AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames, MachineUserAttributes>
+    | UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames>
     | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes>,
 ) {
   const result = {
@@ -138,7 +147,7 @@ export function defineAuth<
       return { namespace: name, machineUserName: machineUser } as const;
     },
   } as const satisfies (
-    | AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames, MachineUserAttributes>
+    | UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames>
     | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes>
   ) & {
     name: string;
