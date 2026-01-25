@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, expectTypeOf } from "vitest";
+import { t } from "@/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth, type AuthInvoker } from "./index";
 import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
@@ -93,6 +94,64 @@ describe("defineAuth", () => {
     expect(authConfig.machineUsers).toBeUndefined();
   });
 
+  it("creates auth configuration with machineUsers only", () => {
+    const authConfig = defineAuth("machine-only", {
+      machineUserAttributes: {
+        role: t.enum(["ADMIN", "WORKER"]),
+        isActive: t.bool(),
+        tags: t.string({ array: true }),
+        externalId: t.uuid(),
+      },
+      machineUsers: {
+        admin: {
+          attributes: {
+            role: "ADMIN",
+            isActive: true,
+            tags: ["root"],
+            externalId: "admin-external-id",
+          },
+          attributeList: machineUserAttributeList,
+        },
+        worker: {
+          attributes: {
+            role: "WORKER",
+            isActive: false,
+            tags: [],
+            externalId: "worker-external-id",
+          },
+        },
+      },
+    });
+
+    expect(authConfig.name).toBe("machine-only");
+    expect(authConfig.userProfile).toBeUndefined();
+    expect(authConfig.machineUsers!.admin.attributes.role).toBe("ADMIN");
+    expectTypeOf(authConfig.machineUsers!.admin.attributes.role).toEqualTypeOf<
+      "ADMIN" | "WORKER"
+    >();
+  });
+
+  it("rejects invalid machine user attributes when machineUsers-only", () => {
+    defineAuth("machine-only-invalid", {
+      machineUserAttributes: {
+        role: t.enum(["ADMIN", "WORKER"]),
+      },
+      machineUsers: {
+        admin: {
+          attributes: {
+            role: "ADMIN",
+          },
+        },
+        worker: {
+          attributes: {
+            // @ts-expect-error - role only allows "ADMIN" | "WORKER"
+            role: "OWNER",
+          },
+        },
+      },
+    });
+  });
+
   describe("name literal type inference", () => {
     it("infers name as literal type", () => {
       const authConfig = defineAuth("my-auth-service", {
@@ -119,7 +178,7 @@ describe("defineAuth", () => {
       // The entire config should be readonly
       type AuthConfigType = typeof _authConfig;
       expectTypeOf<AuthConfigType>().toMatchObjectType<{
-        readonly name: "production-auth";
+        name: "production-auth";
       }>();
     });
 

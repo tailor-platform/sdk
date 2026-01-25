@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TailorFieldSchema } from "@/parser/service/resolver/schema";
 import type { ValueOperand } from "./types";
 
 export const AuthInvokerSchema = z.object({
@@ -189,6 +190,7 @@ export const AuthConfigSchema = z
   .object({
     name: z.string(),
     userProfile: UserProfileSchema.optional(),
+    machineUserAttributes: z.record(z.string(), TailorFieldSchema).optional(),
     machineUsers: z.record(z.string(), MachineUserSchema).optional(),
     oauth2Clients: z.record(z.string(), OAuth2ClientSchema).optional(),
     idProvider: IdProviderSchema.optional(),
