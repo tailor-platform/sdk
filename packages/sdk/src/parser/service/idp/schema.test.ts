@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { IdPUserAuthPolicySchema } from "./schema";
+import { IdPUserAuthPolicySchema, IdPSchema } from "./schema";
 
 describe("IdPUserAuthPolicySchema validation", () => {
   it("accepts valid password policy configuration", () => {
@@ -117,5 +117,42 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.passwordMinLength).toBe(8);
     expect(result.passwordRequireLowercase).toBeUndefined();
     expect(result.passwordMaxLength).toBeUndefined();
+  });
+});
+
+describe("IdPSchema validation", () => {
+  it("accepts publishUserEvents as true", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      publishUserEvents: true,
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.publishUserEvents).toBe(true);
+  });
+
+  it("accepts publishUserEvents as false", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      publishUserEvents: false,
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.publishUserEvents).toBe(false);
+  });
+
+  it("accepts missing publishUserEvents", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.publishUserEvents).toBeUndefined();
   });
 });
