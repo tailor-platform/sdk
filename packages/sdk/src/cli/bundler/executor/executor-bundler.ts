@@ -6,7 +6,7 @@ import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
-import { getDistDir } from "@/parser/app-config";
+import { getDistDir } from "@/configure/config";
 import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
 import { loadExecutor } from "./loader";
 

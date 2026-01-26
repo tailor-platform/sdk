@@ -13,7 +13,7 @@ vi.mock("node:fs", () => ({
 }));
 
 // Mock configure/config to avoid getDistDir issues
-vi.mock("@/parser/app-config", () => ({
+vi.mock("@/configure/config", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
 

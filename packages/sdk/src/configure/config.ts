@@ -1,6 +1,17 @@
 import type { AppConfig } from "@/parser/app-config/types";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
 
+let distPath: string | null = null;
+export const getDistDir = (): string => {
+  const configured = process.env.TAILOR_SDK_OUTPUT_DIR;
+  if (configured && configured !== distPath) {
+    distPath = configured;
+  } else if (distPath === null) {
+    distPath = configured || ".tailor-sdk";
+  }
+  return distPath;
+};
+
 /**
  * Define a Tailor SDK application configuration with shallow exactness.
  * @template Config
