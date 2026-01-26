@@ -38,7 +38,8 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
     // For local execution, directly call mainJob.trigger()
     // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
     trigger: async (args) => {
-      return await config.mainJob.trigger(...([args] as unknown as []));
+      await config.mainJob.trigger(...([args] as unknown as []));
+      return "00000000-0000-0000-0000-000000000000";
     },
   };
 }
