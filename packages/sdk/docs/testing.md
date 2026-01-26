@@ -220,7 +220,7 @@ describe("workflow with dependencies", () => {
 
 ### Integration Tests with `.trigger()`
 
-Test the full workflow execution using `workflow.trigger()` or `job.trigger()`:
+Test the full workflow execution using `workflow.mainJob.trigger()`:
 
 ```typescript
 import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
@@ -232,12 +232,12 @@ describe("workflow integration", () => {
     vi.unstubAllEnvs();
   });
 
-  test("workflow.trigger() executes all jobs", async () => {
+  test("workflow.mainJob.trigger() executes all jobs", async () => {
     // Set environment variables for the workflow
     vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ NODE_ENV: "test" }));
 
     // No mocking - all jobs execute their actual body functions
-    const result = await workflow.trigger({ a: 3, b: 4 });
+    const result = await workflow.mainJob.trigger({ a: 3, b: 4 });
 
     expect(result).toBe(21); // (3 + 4) * 3 = 21
   });
@@ -249,7 +249,7 @@ describe("workflow integration", () => {
 - Use `.body()` for unit testing individual job logic
 - Use `vi.spyOn(job, "trigger").mockResolvedValue(...)` to mock dependent jobs when they don't need `env`
 - If dependent jobs require `env`, use `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` and call `.trigger()` instead of mocking
-- `workflow.trigger()` calls `mainJob.trigger()` which executes all jobs in the chain
+- Use `workflow.mainJob.trigger()` to execute the full workflow chain and get the result
 - **Best for:** Testing workflow orchestration and job dependencies
 
 ## End-to-End (E2E) Tests

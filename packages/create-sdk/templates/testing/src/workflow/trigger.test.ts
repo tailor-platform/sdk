@@ -58,7 +58,7 @@ describe("workflow trigger tests", () => {
       vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ NODE_ENV: "test" }));
 
       // No mocking - all jobs execute their actual body functions
-      const result = await workflow.trigger({ a: 3, b: 4 });
+      const result = await workflow.mainJob.trigger({ a: 3, b: 4 });
 
       // (3 + 4) * 3 = 21
       expect(result).toBe(21);
