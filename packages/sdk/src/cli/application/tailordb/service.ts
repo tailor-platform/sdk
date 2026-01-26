@@ -1,15 +1,15 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { TAILOR_DB_TYPE_BRAND } from "@/cli/utils/brand";
 import { logger, styles } from "@/cli/utils/logger";
-import { TAILOR_DB_TYPE_BRAND } from "@/configure/types/brand";
 import {
   parseTypes,
   type ParsedTailorDBType,
   type TypeSourceInfo,
   type TailorDBType,
+  type TailorDBServiceConfig,
 } from "@/parser/service/tailordb";
-import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 
 export type TailorDBService = {
   readonly namespace: string;
