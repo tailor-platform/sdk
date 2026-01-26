@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type TailorDBType, TAILOR_DB_TYPE_BRAND } from "@/configure/services/tailordb/schema";
+import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import {
   parseTypes,
   TailorDBTypeSchema,
@@ -10,15 +10,6 @@ import {
   type TypeSourceInfo,
 } from "@/parser/service/tailordb";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
-
-/**
- * Check if a value is a TailorDBType by looking for the brand symbol
- * @param value - Value to check
- * @returns True if the value is a branded TailorDBType
- */
-function isTailorDBType(value: unknown): boolean {
-  return value != null && typeof value === "object" && TAILOR_DB_TYPE_BRAND in value;
-}
 
 export type TailorDBService = {
   readonly namespace: string;
@@ -61,11 +52,6 @@ export function createTailorDBService(
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
-
-        // Symbol-based check for TailorDBType using brand
-        if (!isTailorDBType(exportedValue)) {
-          continue;
-        }
 
         const result = TailorDBTypeSchema.safeParse(exportedValue);
         if (!result.success) {

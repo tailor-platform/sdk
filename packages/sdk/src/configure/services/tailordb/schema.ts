@@ -3,7 +3,7 @@ import {
   type AllowedValuesOutput,
   mapAllowedValues,
 } from "@/configure/types/field";
-import { type TailorField, type TailorAnyField, TAILOR_FIELD_BRAND } from "@/configure/types/type";
+import { type TailorField, type TailorAnyField } from "@/configure/types/type";
 import {
   type FieldOptions,
   type FieldOutput,
@@ -31,20 +31,6 @@ import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-
-/**
- * Symbol used to brand TailorDBField objects.
- * This enables reliable runtime detection of TailorDBField instances regardless of
- * how they were imported or assigned (variable reassignment, destructuring, etc.)
- */
-const TAILOR_DB_FIELD_BRAND = Symbol.for("tailor:tailordb-field");
-
-/**
- * Symbol used to brand TailorDBType objects created by db.type().
- * This enables reliable runtime detection of TailorDBType instances regardless of
- * how they were imported or assigned (variable reassignment, destructuring, etc.)
- */
-export const TAILOR_DB_TYPE_BRAND = Symbol.for("tailor:tailordb-type");
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -115,8 +101,6 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>,
   "description" | "validate"
 > {
-  /** Brand symbol for type identification */
-  readonly [TAILOR_DB_FIELD_BRAND]: true;
   /** Returns a shallow copy of the raw relation config if set */
   readonly rawRelation: Readonly<RawRelationConfig> | undefined;
 
@@ -521,8 +505,6 @@ function createTailorDBField<
   }
 
   const field: FieldType = {
-    [TAILOR_FIELD_BRAND]: true,
-    [TAILOR_DB_FIELD_BRAND]: true,
     type,
     fields: (fields ?? {}) as Record<string, TailorAnyField>,
     _defined: undefined as unknown as {
@@ -727,8 +709,6 @@ export interface TailorDBType<
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
 > {
-  /** Brand symbol for type identification */
-  readonly [TAILOR_DB_TYPE_BRAND]: true;
   readonly name: string;
   readonly fields: Fields;
   readonly _output: InferFieldsOutput<Fields>;
@@ -847,7 +827,6 @@ function createTailorDBType<
   }
 
   const dbType: TailorDBType<Fields, User> = {
-    [TAILOR_DB_TYPE_BRAND]: true,
     name,
     fields,
     _output: null as unknown as InferFieldsOutput<Fields>,
