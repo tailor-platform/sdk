@@ -7,4 +7,4 @@ export {
   type TailorTypeGqlPermission,
   type PermissionCondition,
 } from "./permission";
-export type { DBFieldMetadata, Hook } from "./types";
+export type { DBFieldMetadata, Hook, TailorDBExternalConfig, TailorDBServiceConfig } from "./types";

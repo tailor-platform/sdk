@@ -11,8 +11,8 @@ export type {
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
+  TailorDBServiceConfig,
 } from "@/configure/services/tailordb";
-export type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 
 export interface Script {
   expr: string;
