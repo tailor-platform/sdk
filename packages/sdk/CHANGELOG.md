@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.4.2
+
+### Patch Changes
+
+- [#470](https://github.com/tailor-platform/sdk/pull/470) [`2e56c13`](https://github.com/tailor-platform/sdk/commit/2e56c13377d713463a993bf8e1999b942ad9236c) Thanks [@riku99](https://github.com/riku99)! - Create profile when create workspace
+
+- [#461](https://github.com/tailor-platform/sdk/pull/461) [`1843602`](https://github.com/tailor-platform/sdk/commit/184360246de148baab96c8984da4f8b281ff4821) Thanks [@riku99](https://github.com/riku99)! - Add CLI command to open tailor platform console via `pnpm tailor-sdk open`
+
 ## 1.4.1
 
 ### Patch Changes

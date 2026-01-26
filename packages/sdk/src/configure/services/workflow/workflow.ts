@@ -25,6 +25,7 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 
 /**
  * Create a workflow definition that can be triggered via the Tailor SDK.
+ * In production, bundler transforms .trigger() calls to tailor.workflow.triggerWorkflow().
  * @template Job
  * @param config - Workflow configuration
  * @returns Defined workflow
@@ -34,12 +35,11 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
 ): Workflow<Job> {
   return {
     ...config,
-    trigger: async (args, options) => {
-      return tailor.workflow.triggerWorkflow(
-        config.name,
-        args,
-        options ? { authInvoker: options.authInvoker } : undefined,
-      );
+    // For local execution, directly call mainJob.trigger()
+    // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
+    trigger: async (args) => {
+      await config.mainJob.trigger(...([args] as unknown as []));
+      return "00000000-0000-0000-0000-000000000000";
     },
   };
 }

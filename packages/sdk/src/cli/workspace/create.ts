@@ -2,9 +2,16 @@ import { defineCommand } from "citty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
-import { loadAccessToken, loadFolderId, loadOrganizationId } from "../context";
+import {
+  loadAccessToken,
+  loadFolderId,
+  loadOrganizationId,
+  readPlatformConfig,
+  writePlatformConfig,
+} from "../context";
 import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
+import type { ProfileInfo } from "../profile";
 
 /**
  * Schema for workspace creation options
@@ -106,6 +113,15 @@ export const createCommand = defineCommand({
       description: "Folder ID to workspace associate with",
       alias: "f",
     },
+    "profile-name": {
+      type: "string",
+      description: "Profile name to create",
+      alias: "p",
+    },
+    "profile-user": {
+      type: "string",
+      description: "User email for the profile (defaults to current user)",
+    },
   },
   run: withCommonArgs(async (args) => {
     // Execute workspace create logic
@@ -117,10 +133,55 @@ export const createCommand = defineCommand({
       folderId: args["folder-id"],
     });
 
+    let profileInfo: ProfileInfo | undefined;
+    const profileName = args["profile-name"];
+    if (profileName) {
+      const config = readPlatformConfig();
+      if (config.profiles[profileName]) {
+        throw new Error(`Profile "${profileName}" already exists.`);
+      }
+
+      const profileUser = args["profile-user"] || config.current_user;
+      if (!profileUser) {
+        throw new Error(
+          "Current user not found. Please login or specify --profile-user to create a profile.",
+        );
+      }
+
+      if (!config.users[profileUser]) {
+        throw new Error(
+          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
+        );
+      }
+      config.profiles[profileName] = {
+        user: profileUser,
+        workspace_id: workspace.id,
+      };
+      writePlatformConfig(config);
+      profileInfo = {
+        name: profileName,
+        user: profileUser,
+        workspaceId: workspace.id,
+      };
+
+      if (!args.json) {
+        logger.success(`Profile "${profileName}" created successfully.`);
+      }
+    }
+
     if (!args.json) {
       logger.success(`Workspace "${args.name}" created successfully.`);
     }
 
+    if (args.json && profileInfo) {
+      logger.out({ ...workspace, profile: profileInfo });
+      return;
+    }
+
     logger.out(workspace);
+    if (profileInfo) {
+      logger.out("Profile:");
+      logger.out(profileInfo);
+    }
   }),
 });

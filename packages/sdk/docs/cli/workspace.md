@@ -25,6 +25,8 @@ tailor-sdk workspace create [options]
 - `-d, --delete-protection` - Enable delete protection for the workspace
 - `-o, --organization-id` - Organization ID to associate the workspace with
 - `-f, --folder-id` - Folder ID to associate the workspace with
+- `-p, --profile-name` - Profile name to create (optional)
+- `--profile-user` - User email for the profile (defaults to current user)
 - `-j, --json` - Output as JSON
 
 ### workspace list

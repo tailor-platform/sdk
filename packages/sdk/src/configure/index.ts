@@ -15,7 +15,7 @@ export namespace t {
 }
 
 export {
-  TailorField,
+  type TailorField,
   type TailorUser,
   unauthenticatedTailorUser,
   type AttributeMap,

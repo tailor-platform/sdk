@@ -1,25 +1,24 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { TailorDBService } from "@/cli/application/tailordb/service";
 import { db } from "@/configure/services/tailordb";
-import { EnumProcessor } from "./enum-processor";
-import { EnumConstantsGenerator } from "./index";
+import { parseTypes } from "@/parser/service/tailordb";
+import { generateUnifiedEnumConstants } from "./generate-enum-constants";
+import { processEnumType } from "./process-enum-type";
+import { createEnumConstantsGenerator } from "./index";
 import type { EnumDefinition } from "./types";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
-  const service = new TailorDBService("test", { files: [] });
-  service["rawTypes"]["test.ts"] = { [type.name]: type };
-  service["parseTypes"]();
-  return service.getTypes()[type.name];
+  const types = parseTypes({ [type.name]: type }, "test", {});
+  return types[type.name];
 }
 
 describe("EnumConstantsGenerator", () => {
-  let generator: EnumConstantsGenerator;
+  let generator: ReturnType<typeof createEnumConstantsGenerator>;
   const testDistPath = "/test/dist/enums.ts";
 
   beforeEach(() => {
-    generator = new EnumConstantsGenerator({ distPath: testDistPath });
+    generator = createEnumConstantsGenerator({ distPath: testDistPath });
   });
 
   describe("basic properties", () => {
@@ -40,7 +39,7 @@ describe("EnumConstantsGenerator", () => {
         status: db.enum(["ACTIVE", "INACTIVE"], { optional: true }),
       });
 
-      const result = await EnumProcessor.processType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(type));
 
       expect(result.enums).toHaveLength(2);
       expect(result.enums[0].name).toBe("UserRole");
@@ -67,7 +66,7 @@ describe("EnumConstantsGenerator", () => {
         ),
       });
 
-      const result = await EnumProcessor.processType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(type));
 
       expect(result.enums).toHaveLength(1);
       expect(result.enums[0].name).toBe("PurchaseOrderAttachedFilesType");
@@ -83,7 +82,7 @@ describe("EnumConstantsGenerator", () => {
         age: db.int(),
       });
 
-      const result = await EnumProcessor.processType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(type));
 
       expect(result.enums).toEqual([]);
     });
@@ -97,7 +96,7 @@ describe("EnumConstantsGenerator", () => {
         ]),
       });
 
-      const result = await EnumProcessor.processType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(type));
 
       expect(result.enums).toHaveLength(1);
       expect(result.enums[0].name).toBe("InvoiceStatus");
@@ -118,7 +117,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("export const UserRole = {");
       expect(result).toContain('  "admin": "admin"');
@@ -135,7 +134,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain('  "draft": "draft"');
       expect(result).toContain('  "sent": "sent"');
@@ -150,7 +149,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain('  "in_progress": "in-progress"');
       expect(result).toContain('  "ready_to_ship": "ready to ship"');
@@ -160,7 +159,7 @@ describe("EnumConstantsGenerator", () => {
     it("should return empty string when no enums are present", () => {
       const allEnums: EnumDefinition[] = [];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toBe("");
     });
@@ -177,7 +176,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("export const UserRole = {");
       expect(result).toContain("export const InvoiceStatus = {");
@@ -195,7 +194,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * @property draft - Draft invoice");
@@ -213,7 +212,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).not.toContain("/**");
       expect(result).not.toContain("@property");
@@ -232,7 +231,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * @property draft - Draft invoice");
@@ -255,7 +254,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * Invoice status");
@@ -275,7 +274,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       expect(result).toContain("/**");
       expect(result).toContain(" * User role");
@@ -295,7 +294,7 @@ describe("EnumConstantsGenerator", () => {
         },
       ];
 
-      const result = EnumProcessor.generateUnifiedEnumConstants(allEnums);
+      const result = generateUnifiedEnumConstants(allEnums);
 
       // Should only contain one UserRole definition (the last one wins)
       const matches = result.match(/export const UserRole = {/g);

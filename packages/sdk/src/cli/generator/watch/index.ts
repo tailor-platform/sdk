@@ -121,82 +121,44 @@ export class WatcherError extends Error {
 }
 
 /**
- * Class dedicated to managing the dependency graph.
+ * Dependency graph manager type.
  */
-export class DependencyGraphManager {
-  private graph: Map<string, DependencyNode> = new Map();
-  private madgeInstance: Awaited<ReturnType<MadgeLoader>> | null = null;
-  private madgeLoader: MadgeLoader | null = null;
+export type DependencyGraphManager = {
+  buildGraph: (filePaths: string[]) => Promise<void>;
+  getDependents: (filePath: string) => string[];
+  getDependencies: (filePath: string) => string[];
+  findCircularDependencies: () => string[][];
+  addNode: (filePath: string) => void;
+  removeNode: (filePath: string) => void;
+  getGraphStats: () => GraphStats;
+};
 
-  constructor(private readonly options: Parameters<MadgeLoader>[1] = {}) {}
+/**
+ * Creates a dependency graph manager.
+ * @param options - Options for madge
+ * @returns DependencyGraphManager instance
+ */
+export function createDependencyGraphManager(
+  options: Parameters<MadgeLoader>[1] = {},
+): DependencyGraphManager {
+  const graph: Map<string, DependencyNode> = new Map();
+  let madgeInstance: Awaited<ReturnType<MadgeLoader>> | null = null;
+  let madgeLoader: MadgeLoader | null = null;
 
-  /**
-   * Build the dependency graph from the given files.
-   * @param filePaths - File paths to analyze
-   * @returns Promise that resolves when the graph is built
-   */
-  async buildGraph(filePaths: string[]): Promise<void> {
-    try {
-      if (filePaths.length === 0) return;
-
-      const madge = this.getMadgeLoader();
-
-      this.madgeInstance = await madge(filePaths, {
-        fileExtensions: ["ts", "js"],
-        excludeRegExp: [/node_modules/],
-        baseDir: ".",
-        ...this.options,
-      });
-
-      const dependencyObj = this.madgeInstance.obj() as Record<string, string[]>;
-      this.graph.clear();
-
-      for (const filePath of filePaths) {
-        this.addNode(filePath);
-      }
-
-      for (const [filePath, dependencies] of Object.entries(dependencyObj)) {
-        const absoluteFilePath = path.resolve(".", filePath);
-        const node = this.graph.get(absoluteFilePath);
-        if (!node) continue;
-
-        for (const dep of dependencies) {
-          const absoluteDepPath = path.resolve(".", dep);
-          node.dependencies.add(absoluteDepPath);
-
-          const depNode = this.graph.get(absoluteDepPath);
-          if (depNode) {
-            depNode.dependents.add(absoluteFilePath);
-          }
-        }
-      }
-    } catch (error) {
-      if (error instanceof WatcherError) {
-        throw error;
-      }
-      throw new WatcherError(
-        `Failed to build dependency graph: ${error instanceof Error ? error.message : String(error)}`,
-        WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED,
-        undefined,
-        error instanceof Error ? error : undefined,
-      );
-    }
-  }
-
-  private getMadgeLoader(): MadgeLoader {
-    if (this.madgeLoader) {
-      return this.madgeLoader;
+  function getMadgeLoader(): MadgeLoader {
+    if (madgeLoader) {
+      return madgeLoader;
     }
 
     const defaultExport = (madgeModule as { default?: unknown }).default;
     if (typeof defaultExport === "function") {
-      this.madgeLoader = defaultExport as MadgeLoader;
-      return this.madgeLoader;
+      madgeLoader = defaultExport as MadgeLoader;
+      return madgeLoader;
     }
 
     if (typeof (madgeModule as unknown) === "function") {
-      this.madgeLoader = madgeModule as unknown as MadgeLoader;
-      return this.madgeLoader;
+      madgeLoader = madgeModule as unknown as MadgeLoader;
+      return madgeLoader;
     }
 
     throw new WatcherError(
@@ -205,48 +167,42 @@ export class DependencyGraphManager {
     );
   }
 
-  /**
-   * Get every file that depends on the specified file (all levels).
-   * @param filePath - File path to inspect
-   * @returns List of dependent files
-   */
-  getDependents(filePath: string): string[] {
-    const visited = new Set<string>();
-    return this.traverseDependents(path.resolve(filePath), visited);
-  }
+  function traverseDependents(filePath: string, visited: Set<string>): string[] {
+    if (visited.has(filePath)) return [];
+    visited.add(filePath);
 
-  /**
-   * Get every file the specified file depends on (all levels).
-   * @param filePath - File path to inspect
-   * @returns List of dependency files
-   */
-  getDependencies(filePath: string): string[] {
-    const visited = new Set<string>();
-    return this.traverseDependencies(path.resolve(filePath), visited);
-  }
+    const node = graph.get(filePath);
+    if (!node) return [];
 
-  /**
-   * Detect circular dependencies.
-   * @returns List of circular dependency cycles
-   */
-  findCircularDependencies(): string[][] {
-    if (!this.madgeInstance) return [];
-    try {
-      return this.madgeInstance.circular();
-    } catch (error) {
-      logger.warn(`Failed to detect circular dependencies: ${String(error)}`);
-      return [];
+    const result: string[] = [];
+    for (const dependent of node.dependents) {
+      result.push(dependent);
+      result.push(...traverseDependents(dependent, visited));
     }
+
+    return result;
   }
 
-  /**
-   * Add a node to the graph.
-   * @param filePath - File path to add as a node
-   */
-  addNode(filePath: string): void {
+  function traverseDependencies(filePath: string, visited: Set<string>): string[] {
+    if (visited.has(filePath)) return [];
+    visited.add(filePath);
+
+    const node = graph.get(filePath);
+    if (!node) return [];
+
+    const result: string[] = [];
+    for (const dependency of node.dependencies) {
+      result.push(dependency);
+      result.push(...traverseDependencies(dependency, visited));
+    }
+
+    return result;
+  }
+
+  function addNode(filePath: string): void {
     const absolutePath = path.resolve(filePath);
-    if (!this.graph.has(absolutePath)) {
-      this.graph.set(absolutePath, {
+    if (!graph.has(absolutePath)) {
+      graph.set(absolutePath, {
         filePath: absolutePath,
         dependencies: new Set(),
         dependents: new Set(),
@@ -254,421 +210,151 @@ export class DependencyGraphManager {
     }
   }
 
-  /**
-   * Remove a node from the graph.
-   * @param filePath - File path to remove from the graph
-   */
-  removeNode(filePath: string): void {
+  function removeNode(filePath: string): void {
     const absolutePath = path.resolve(filePath);
-    const node = this.graph.get(absolutePath);
+    const node = graph.get(absolutePath);
     if (!node) return;
 
     for (const dep of node.dependencies) {
-      const depNode = this.graph.get(dep);
+      const depNode = graph.get(dep);
       if (depNode) {
         depNode.dependents.delete(absolutePath);
       }
     }
 
     for (const dependent of node.dependents) {
-      const dependentNode = this.graph.get(dependent);
+      const dependentNode = graph.get(dependent);
       if (dependentNode) {
         dependentNode.dependencies.delete(absolutePath);
       }
     }
 
-    this.graph.delete(absolutePath);
+    graph.delete(absolutePath);
   }
 
-  /**
-   * Get graph statistics.
-   * @returns Current dependency graph statistics
-   */
-  getGraphStats(): GraphStats {
-    let edgeCount = 0;
-    for (const node of this.graph.values()) {
-      edgeCount += node.dependencies.size;
+  function findCircularDependencies(): string[][] {
+    if (!madgeInstance) return [];
+    try {
+      return madgeInstance.circular();
+    } catch (error) {
+      logger.warn(`Failed to detect circular dependencies: ${String(error)}`);
+      return [];
     }
-
-    return {
-      nodeCount: this.graph.size,
-      edgeCount,
-      circularDependencyCount: this.findCircularDependencies().length,
-    };
   }
 
-  private traverseDependents(filePath: string, visited: Set<string>): string[] {
-    if (visited.has(filePath)) return [];
-    visited.add(filePath);
+  return {
+    async buildGraph(filePaths: string[]): Promise<void> {
+      try {
+        if (filePaths.length === 0) return;
 
-    const node = this.graph.get(filePath);
-    if (!node) return [];
+        const madge = getMadgeLoader();
 
-    const result: string[] = [];
-    for (const dependent of node.dependents) {
-      result.push(dependent);
-      result.push(...this.traverseDependents(dependent, visited));
-    }
+        madgeInstance = await madge(filePaths, {
+          fileExtensions: ["ts", "js"],
+          excludeRegExp: [/node_modules/],
+          baseDir: ".",
+          ...options,
+        });
 
-    return result;
-  }
+        const dependencyObj = madgeInstance.obj() as Record<string, string[]>;
+        graph.clear();
 
-  private traverseDependencies(filePath: string, visited: Set<string>): string[] {
-    if (visited.has(filePath)) return [];
-    visited.add(filePath);
+        for (const filePath of filePaths) {
+          addNode(filePath);
+        }
 
-    const node = this.graph.get(filePath);
-    if (!node) return [];
+        for (const [filePath, dependencies] of Object.entries(dependencyObj)) {
+          const absoluteFilePath = path.resolve(".", filePath);
+          const node = graph.get(absoluteFilePath);
+          if (!node) continue;
 
-    const result: string[] = [];
-    for (const dependency of node.dependencies) {
-      result.push(dependency);
-      result.push(...this.traverseDependencies(dependency, visited));
-    }
+          for (const dep of dependencies) {
+            const absoluteDepPath = path.resolve(".", dep);
+            node.dependencies.add(absoluteDepPath);
 
-    return result;
-  }
+            const depNode = graph.get(absoluteDepPath);
+            if (depNode) {
+              depNode.dependents.add(absoluteFilePath);
+            }
+          }
+        }
+      } catch (error) {
+        if (error instanceof WatcherError) {
+          throw error;
+        }
+        throw new WatcherError(
+          `Failed to build dependency graph: ${error instanceof Error ? error.message : String(error)}`,
+          WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED,
+          undefined,
+          error instanceof Error ? error : undefined,
+        );
+      }
+    },
+
+    getDependents(filePath: string): string[] {
+      const visited = new Set<string>();
+      return traverseDependents(path.resolve(filePath), visited);
+    },
+
+    getDependencies(filePath: string): string[] {
+      const visited = new Set<string>();
+      return traverseDependencies(path.resolve(filePath), visited);
+    },
+
+    findCircularDependencies,
+    addNode,
+    removeNode,
+
+    getGraphStats(): GraphStats {
+      let edgeCount = 0;
+      for (const node of graph.values()) {
+        edgeCount += node.dependencies.size;
+      }
+
+      return {
+        nodeCount: graph.size,
+        edgeCount,
+        circularDependencyCount: findCircularDependencies().length,
+      };
+    },
+  };
 }
 
 /**
- * Dependency watching system backed by chokidar and madge.
+ * Dependency watcher type.
  */
-class DependencyWatcher {
-  private chokidarWatcher: ReturnType<typeof chokidar.watch> | null = null;
-  private watchGroups: Map<string, WatchGroup> = new Map();
-  private dependencyGraphManager: DependencyGraphManager;
-  private errorCallback: ErrorCallback | null = null;
-  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
-  private isInitialized = false;
-  private dependencyCache: Map<string, string[]> = new Map();
-  private readonly maxCacheSize = 1000;
-  private signalHandlersRegistered = false;
+export type DependencyWatcher = {
+  initialize: () => Promise<void>;
+  addWatchGroup: (groupId: string, patterns: string[]) => Promise<void>;
+  removeWatchGroup: (groupId: string) => Promise<void>;
+  start: () => Promise<void>;
+  stop: () => Promise<void>;
+  onError: (callback: ErrorCallback) => void;
+  updateDependencyGraph: () => Promise<void>;
+  calculateImpact: (filePath: string) => ImpactAnalysisResult;
+  detectCircularDependencies: () => string[][];
+  getWatchStatus: () => WatchStatus;
+  setRestartCallback: (callback: () => void) => void;
+};
 
-  constructor(private readonly options: WatcherOptions = {}) {
-    this.dependencyGraphManager = new DependencyGraphManager(options.madgeOptions);
-  }
+/**
+ * Creates a dependency watcher.
+ * @param options - Watcher options
+ * @returns DependencyWatcher instance
+ */
+export function createDependencyWatcher(options: WatcherOptions = {}): DependencyWatcher {
+  let chokidarWatcher: ReturnType<typeof chokidar.watch> | null = null;
+  const watchGroups: Map<string, WatchGroup> = new Map();
+  const dependencyGraphManager = createDependencyGraphManager(options.madgeOptions);
+  let errorCallback: ErrorCallback | null = null;
+  const debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  let isInitialized = false;
+  const dependencyCache: Map<string, string[]> = new Map();
+  const maxCacheSize = 1000;
+  let signalHandlersRegistered = false;
+  let restartCallback: (() => void) | null = null;
 
-  /**
-   * Initialize the watcher system.
-   */
-  async initialize(): Promise<void> {
-    if (this.isInitialized) return;
-
-    try {
-      this.chokidarWatcher = chokidar.watch([], {
-        ignored: /node_modules/,
-        persistent: true,
-        ignoreInitial: true,
-        usePolling: false,
-        awaitWriteFinish: {
-          stabilityThreshold: 100,
-          pollInterval: 100,
-        },
-        ...this.options.chokidarOptions,
-      });
-
-      this.chokidarWatcher.on("add", (filePath: string) => {
-        logger.debug(`File added: ${filePath}`);
-        this.debounceFileChange("add", filePath);
-      });
-
-      this.chokidarWatcher.on("change", (filePath: string) => {
-        logger.debug(`File changed: ${filePath}`);
-        this.debounceFileChange("change", filePath);
-      });
-
-      this.chokidarWatcher.on("unlink", (filePath: string) => {
-        logger.debug(`File removed: ${filePath}`);
-        this.debounceFileChange("unlink", filePath);
-      });
-
-      this.chokidarWatcher.on("error", (error: unknown) => {
-        logger.error(`Watcher error: ${error instanceof Error ? error.message : String(error)}`, {
-          mode: "stream",
-        });
-        this.handleError(
-          new WatcherError(
-            `File watcher error: ${error instanceof Error ? error.message : String(error)}`,
-            WatcherErrorCode.FILE_WATCH_FAILED,
-            undefined,
-            error instanceof Error ? error : undefined,
-          ),
-        );
-      });
-
-      this.setupSignalHandlers();
-      this.isInitialized = true;
-    } catch (error) {
-      throw new WatcherError(
-        `Failed to initialize watcher: ${error instanceof Error ? error.message : String(error)}`,
-        WatcherErrorCode.FILE_WATCH_FAILED,
-        undefined,
-        error instanceof Error ? error : undefined,
-      );
-    }
-  }
-
-  /**
-   * Add a watch group.
-   * @param groupId - Group identifier
-   * @param patterns - Glob patterns to watch
-   * @returns Promise that resolves when the group is added
-   */
-  async addWatchGroup(groupId: string, patterns: string[]): Promise<void> {
-    this.validateWatchGroup(groupId, patterns);
-
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
-
-    const files = new Set<string>();
-    for (const pattern of patterns) {
-      logger.log(
-        `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), pattern)}`,
-      );
-      for await (const file of glob(pattern)) {
-        files.add(path.resolve(file));
-      }
-    }
-
-    const watchGroup: WatchGroup = {
-      id: groupId,
-      patterns,
-      files,
-    };
-
-    this.watchGroups.set(groupId, watchGroup);
-
-    if (this.chokidarWatcher) {
-      const filePaths = Array.from(files);
-      this.chokidarWatcher.add(filePaths);
-    }
-
-    await this.updateDependencyGraph();
-  }
-
-  /**
-   * Remove a watch group.
-   * @param groupId - Group identifier
-   * @returns Promise that resolves when the group is removed
-   */
-  async removeWatchGroup(groupId: string): Promise<void> {
-    const watchGroup = this.watchGroups.get(groupId);
-    if (!watchGroup) return;
-
-    if (this.chokidarWatcher) {
-      this.chokidarWatcher.unwatch(watchGroup.patterns);
-    }
-
-    for (const filePath of watchGroup.files) {
-      this.dependencyGraphManager.removeNode(filePath);
-    }
-
-    this.watchGroups.delete(groupId);
-    this.dependencyCache.clear();
-  }
-
-  /**
-   * Start watching.
-   */
-  async start(): Promise<void> {
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
-    await this.updateDependencyGraph();
-  }
-
-  /**
-   * Stop watching.
-   */
-  async stop(): Promise<void> {
-    if (this.chokidarWatcher) {
-      await this.chokidarWatcher.close();
-      this.chokidarWatcher = null;
-    }
-
-    for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.debounceTimers.clear();
-
-    this.removeSignalHandlers();
-    this.isInitialized = false;
-  }
-
-  /**
-   * Set the error handling callback.
-   * @param callback - Error callback
-   */
-  onError(callback: ErrorCallback): void {
-    this.errorCallback = callback;
-  }
-
-  /**
-   * Manually refresh the dependency graph.
-   */
-  async updateDependencyGraph(): Promise<void> {
-    const allFiles: string[] = [];
-    for (const group of this.watchGroups.values()) {
-      allFiles.push(...Array.from(group.files));
-    }
-
-    await this.dependencyGraphManager.buildGraph(allFiles);
-    this.dependencyCache.clear();
-
-    if (this.options.detectCircularDependencies) {
-      const circularDeps = this.dependencyGraphManager.findCircularDependencies();
-      if (circularDeps.length > 0) {
-        logger.warn(`Circular dependencies detected: ${JSON.stringify(circularDeps)}`);
-      }
-    }
-  }
-
-  /**
-   * Compute the impact scope of a specific file.
-   * @param filePath - File path to analyze
-   * @returns Impact analysis result for the file
-   */
-  calculateImpact(filePath: string): ImpactAnalysisResult {
-    const cacheKey = `impact:${filePath}`;
-    let affectedFiles = this.dependencyCache.get(cacheKey);
-
-    if (!affectedFiles) {
-      affectedFiles = this.findAffectedFiles(filePath);
-      this.setCacheValue(cacheKey, affectedFiles);
-    }
-
-    // Include the changed file itself in the affected files
-    const allAffectedFiles = [filePath, ...affectedFiles];
-    const affectedGroups = this.findAffectedGroups(allAffectedFiles);
-
-    return {
-      changedFile: filePath,
-      affectedFiles: allAffectedFiles,
-      affectedGroups,
-    };
-  }
-
-  /**
-   * Detect circular dependencies.
-   * @returns List of circular dependency cycles
-   */
-  detectCircularDependencies(): string[][] {
-    return this.dependencyGraphManager.findCircularDependencies();
-  }
-
-  /**
-   * Retrieve the current watcher status.
-   * @returns Snapshot of the current watcher status
-   */
-  getWatchStatus(): WatchStatus {
-    let fileCount = 0;
-    for (const group of this.watchGroups.values()) {
-      fileCount += group.files.size;
-    }
-
-    const stats = this.dependencyGraphManager.getGraphStats();
-
-    return {
-      isWatching: this.isInitialized && this.chokidarWatcher !== null,
-      groupCount: this.watchGroups.size,
-      fileCount,
-      dependencyNodeCount: stats.nodeCount,
-    };
-  }
-
-  private debounceFileChange(event: FileChangeEvent, filePath: string): void {
-    const key = `${event}:${filePath}`;
-
-    if (this.debounceTimers.has(key)) {
-      clearTimeout(this.debounceTimers.get(key));
-    }
-
-    const timer = setTimeout(() => {
-      this.handleFileChange(event, filePath);
-      this.debounceTimers.delete(key);
-    }, this.options.debounceTime || 100);
-
-    this.debounceTimers.set(key, timer);
-  }
-
-  private restartCallback: (() => void) | null = null;
-
-  /**
-   * Set the restart callback to be called when a file change is detected.
-   * @param callback - Restart callback
-   */
-  setRestartCallback(callback: () => void): void {
-    this.restartCallback = callback;
-  }
-
-  private async handleFileChange(event: FileChangeEvent, filePath: string): Promise<void> {
-    try {
-      const absolutePath = path.resolve(filePath);
-
-      if (event === "unlink") {
-        this.dependencyGraphManager.removeNode(absolutePath);
-      } else {
-        this.dependencyGraphManager.addNode(absolutePath);
-        if (event === "change") {
-          await this.updateDependencyGraph();
-        }
-      }
-
-      this.dependencyCache.clear();
-
-      const impactResult = this.calculateImpact(absolutePath);
-
-      // If any groups are affected, trigger restart instead of calling callbacks
-      if (impactResult.affectedGroups.length > 0) {
-        logger.info("File change detected, restarting watch process...", {
-          mode: "stream",
-        });
-        logger.info(`Changed file: ${absolutePath}`, { mode: "stream" });
-        logger.info(`Affected groups: ${impactResult.affectedGroups.join(", ")}`, {
-          mode: "stream",
-        });
-
-        if (this.restartCallback) {
-          this.restartCallback();
-        }
-      } else {
-        logger.debug(`No affected groups found for file: ${absolutePath}`);
-      }
-    } catch (error) {
-      this.handleError(
-        new WatcherError(
-          `Failed to handle file change: ${error instanceof Error ? error.message : String(error)}`,
-          WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED,
-          filePath,
-          error instanceof Error ? error : undefined,
-        ),
-      );
-    }
-  }
-
-  private findAffectedFiles(changedFile: string): string[] {
-    return this.dependencyGraphManager.getDependents(changedFile);
-  }
-
-  private findAffectedGroups(affectedFiles: string[]): string[] {
-    logger.debug(`Finding affected groups for files: ${affectedFiles.join(", ")}`);
-    const affectedGroups = new Set<string>();
-
-    for (const [groupId, group] of this.watchGroups) {
-      for (const affectedFile of affectedFiles) {
-        if (group.files.has(affectedFile)) {
-          logger.debug(`Group ${groupId} is affected by file: ${affectedFile}`);
-          affectedGroups.add(groupId);
-          break;
-        }
-      }
-    }
-
-    return Array.from(affectedGroups);
-  }
-
-  private validateWatchGroup(groupId: string, patterns: string[]): void {
+  function validateWatchGroup(groupId: string, patterns: string[]): void {
     if (!groupId || typeof groupId !== "string") {
       throw new WatcherError(
         "Group ID must be a non-empty string",
@@ -683,7 +369,7 @@ class DependencyWatcher {
       );
     }
 
-    if (this.watchGroups.has(groupId)) {
+    if (watchGroups.has(groupId)) {
       throw new WatcherError(
         `Watch group with ID '${groupId}' already exists`,
         WatcherErrorCode.INVALID_WATCH_GROUP,
@@ -691,35 +377,165 @@ class DependencyWatcher {
     }
   }
 
-  private handleError(error: WatcherError): void {
+  function handleError(error: WatcherError): void {
     logger.error(
       `[DependencyWatcher] ${error.message} (code: ${error.code}, filePath: ${error.filePath})`,
     );
 
-    if (this.errorCallback) {
-      this.errorCallback(error);
+    if (errorCallback) {
+      errorCallback(error);
     }
   }
 
-  private setCacheValue(key: string, value: string[]): void {
-    if (this.dependencyCache.size >= this.maxCacheSize) {
-      const firstKey = this.dependencyCache.keys().next().value;
+  function setCacheValue(key: string, value: string[]): void {
+    if (dependencyCache.size >= maxCacheSize) {
+      const firstKey = dependencyCache.keys().next().value;
       if (firstKey) {
-        this.dependencyCache.delete(firstKey);
+        dependencyCache.delete(firstKey);
       }
     }
-    this.dependencyCache.set(key, value);
+    dependencyCache.set(key, value);
   }
 
-  /**
-   * Register signal handlers.
-   */
-  private setupSignalHandlers(): void {
-    if (this.signalHandlersRegistered) return;
+  function findAffectedFiles(changedFile: string): string[] {
+    return dependencyGraphManager.getDependents(changedFile);
+  }
+
+  function findAffectedGroups(affectedFiles: string[]): string[] {
+    logger.debug(`Finding affected groups for files: ${affectedFiles.join(", ")}`);
+    const affectedGroupsSet = new Set<string>();
+
+    for (const [groupId, group] of watchGroups) {
+      for (const affectedFile of affectedFiles) {
+        if (group.files.has(affectedFile)) {
+          logger.debug(`Group ${groupId} is affected by file: ${affectedFile}`);
+          affectedGroupsSet.add(groupId);
+          break;
+        }
+      }
+    }
+
+    return Array.from(affectedGroupsSet);
+  }
+
+  function calculateImpact(filePath: string): ImpactAnalysisResult {
+    const cacheKey = `impact:${filePath}`;
+    let affectedFiles = dependencyCache.get(cacheKey);
+
+    if (!affectedFiles) {
+      affectedFiles = findAffectedFiles(filePath);
+      setCacheValue(cacheKey, affectedFiles);
+    }
+
+    // Include the changed file itself in the affected files
+    const allAffectedFiles = [filePath, ...affectedFiles];
+    const affectedGroups = findAffectedGroups(allAffectedFiles);
+
+    return {
+      changedFile: filePath,
+      affectedFiles: allAffectedFiles,
+      affectedGroups,
+    };
+  }
+
+  async function updateDependencyGraph(): Promise<void> {
+    const allFiles: string[] = [];
+    for (const group of watchGroups.values()) {
+      allFiles.push(...Array.from(group.files));
+    }
+
+    await dependencyGraphManager.buildGraph(allFiles);
+    dependencyCache.clear();
+
+    if (options.detectCircularDependencies) {
+      const circularDeps = dependencyGraphManager.findCircularDependencies();
+      if (circularDeps.length > 0) {
+        logger.warn(`Circular dependencies detected: ${JSON.stringify(circularDeps)}`);
+      }
+    }
+  }
+
+  async function handleFileChange(event: FileChangeEvent, filePath: string): Promise<void> {
+    try {
+      const absolutePath = path.resolve(filePath);
+
+      if (event === "unlink") {
+        dependencyGraphManager.removeNode(absolutePath);
+      } else {
+        dependencyGraphManager.addNode(absolutePath);
+        if (event === "change") {
+          await updateDependencyGraph();
+        }
+      }
+
+      dependencyCache.clear();
+
+      const impactResult = calculateImpact(absolutePath);
+
+      // If any groups are affected, trigger restart instead of calling callbacks
+      if (impactResult.affectedGroups.length > 0) {
+        logger.info("File change detected, restarting watch process...", {
+          mode: "stream",
+        });
+        logger.info(`Changed file: ${absolutePath}`, { mode: "stream" });
+        logger.info(`Affected groups: ${impactResult.affectedGroups.join(", ")}`, {
+          mode: "stream",
+        });
+
+        if (restartCallback) {
+          restartCallback();
+        }
+      } else {
+        logger.debug(`No affected groups found for file: ${absolutePath}`);
+      }
+    } catch (error) {
+      handleError(
+        new WatcherError(
+          `Failed to handle file change: ${error instanceof Error ? error.message : String(error)}`,
+          WatcherErrorCode.DEPENDENCY_ANALYSIS_FAILED,
+          filePath,
+          error instanceof Error ? error : undefined,
+        ),
+      );
+    }
+  }
+
+  function debounceFileChange(event: FileChangeEvent, filePath: string): void {
+    const key = `${event}:${filePath}`;
+
+    if (debounceTimers.has(key)) {
+      clearTimeout(debounceTimers.get(key));
+    }
+
+    const timer = setTimeout(() => {
+      handleFileChange(event, filePath);
+      debounceTimers.delete(key);
+    }, options.debounceTime || 100);
+
+    debounceTimers.set(key, timer);
+  }
+
+  async function stop(): Promise<void> {
+    if (chokidarWatcher) {
+      await chokidarWatcher.close();
+      chokidarWatcher = null;
+    }
+
+    for (const timer of debounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    debounceTimers.clear();
+
+    removeSignalHandlers();
+    isInitialized = false;
+  }
+
+  function setupSignalHandlers(): void {
+    if (signalHandlersRegistered) return;
 
     const handleSignal = async () => {
       try {
-        await this.stop();
+        await stop();
         logger.info("Watcher stopped successfully");
         process.exit(0);
       } catch (error) {
@@ -730,19 +546,166 @@ class DependencyWatcher {
 
     process.on("SIGINT", () => handleSignal());
     process.on("SIGTERM", () => handleSignal());
-    this.signalHandlersRegistered = true;
+    signalHandlersRegistered = true;
   }
 
-  /**
-   * Remove signal handlers.
-   */
-  private removeSignalHandlers(): void {
-    if (!this.signalHandlersRegistered) return;
+  function removeSignalHandlers(): void {
+    if (!signalHandlersRegistered) return;
 
     process.removeAllListeners("SIGINT");
     process.removeAllListeners("SIGTERM");
-    this.signalHandlersRegistered = false;
+    signalHandlersRegistered = false;
   }
+
+  async function initialize(): Promise<void> {
+    if (isInitialized) return;
+
+    try {
+      chokidarWatcher = chokidar.watch([], {
+        ignored: /node_modules/,
+        persistent: true,
+        ignoreInitial: true,
+        usePolling: false,
+        awaitWriteFinish: {
+          stabilityThreshold: 100,
+          pollInterval: 100,
+        },
+        ...options.chokidarOptions,
+      });
+
+      chokidarWatcher.on("add", (filePath: string) => {
+        logger.debug(`File added: ${filePath}`);
+        debounceFileChange("add", filePath);
+      });
+
+      chokidarWatcher.on("change", (filePath: string) => {
+        logger.debug(`File changed: ${filePath}`);
+        debounceFileChange("change", filePath);
+      });
+
+      chokidarWatcher.on("unlink", (filePath: string) => {
+        logger.debug(`File removed: ${filePath}`);
+        debounceFileChange("unlink", filePath);
+      });
+
+      chokidarWatcher.on("error", (error: unknown) => {
+        logger.error(`Watcher error: ${error instanceof Error ? error.message : String(error)}`, {
+          mode: "stream",
+        });
+        handleError(
+          new WatcherError(
+            `File watcher error: ${error instanceof Error ? error.message : String(error)}`,
+            WatcherErrorCode.FILE_WATCH_FAILED,
+            undefined,
+            error instanceof Error ? error : undefined,
+          ),
+        );
+      });
+
+      setupSignalHandlers();
+      isInitialized = true;
+    } catch (error) {
+      throw new WatcherError(
+        `Failed to initialize watcher: ${error instanceof Error ? error.message : String(error)}`,
+        WatcherErrorCode.FILE_WATCH_FAILED,
+        undefined,
+        error instanceof Error ? error : undefined,
+      );
+    }
+  }
+
+  return {
+    initialize,
+
+    async addWatchGroup(groupId: string, patterns: string[]): Promise<void> {
+      validateWatchGroup(groupId, patterns);
+
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      const files = new Set<string>();
+      for (const pattern of patterns) {
+        logger.log(
+          `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), pattern)}`,
+        );
+        for await (const file of glob(pattern)) {
+          files.add(path.resolve(file));
+        }
+      }
+
+      const watchGroup: WatchGroup = {
+        id: groupId,
+        patterns,
+        files,
+      };
+
+      watchGroups.set(groupId, watchGroup);
+
+      if (chokidarWatcher) {
+        const filePaths = Array.from(files);
+        chokidarWatcher.add(filePaths);
+      }
+
+      await updateDependencyGraph();
+    },
+
+    async removeWatchGroup(groupId: string): Promise<void> {
+      const watchGroup = watchGroups.get(groupId);
+      if (!watchGroup) return;
+
+      if (chokidarWatcher) {
+        chokidarWatcher.unwatch(watchGroup.patterns);
+      }
+
+      for (const filePath of watchGroup.files) {
+        dependencyGraphManager.removeNode(filePath);
+      }
+
+      watchGroups.delete(groupId);
+      dependencyCache.clear();
+    },
+
+    async start(): Promise<void> {
+      if (!isInitialized) {
+        await initialize();
+      }
+      await updateDependencyGraph();
+    },
+
+    stop,
+
+    onError(callback: ErrorCallback): void {
+      errorCallback = callback;
+    },
+
+    updateDependencyGraph,
+    calculateImpact,
+
+    detectCircularDependencies(): string[][] {
+      return dependencyGraphManager.findCircularDependencies();
+    },
+
+    getWatchStatus(): WatchStatus {
+      let fileCount = 0;
+      for (const group of watchGroups.values()) {
+        fileCount += group.files.size;
+      }
+
+      const stats = dependencyGraphManager.getGraphStats();
+
+      return {
+        isWatching: isInitialized && chokidarWatcher !== null,
+        groupCount: watchGroups.size,
+        fileCount,
+        dependencyNodeCount: stats.nodeCount,
+      };
+    },
+
+    setRestartCallback(callback: () => void): void {
+      restartCallback = callback;
+    },
+  };
 }
 
-export { DependencyWatcher, WatcherErrorCode };
+export { WatcherErrorCode };

@@ -1,7 +1,9 @@
-import { t, TailorField } from "@/configure/types/type";
+import { TAILOR_FIELD_BRAND } from "@/configure/types/brand";
+import { t } from "@/configure/types/type";
 import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
+import type { TailorField } from "@/configure/types/type";
 import type { ResolverInput } from "@/parser/service/resolver/types";
 
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
@@ -57,8 +59,11 @@ export function createResolver<
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     }>,
 ): ResolverReturn<Input, Output> {
-  const normalizedOutput =
-    config.output instanceof TailorField ? config.output : t.object(config.output);
+  // Check if output is already a TailorField using Symbol brand
+  const isTailorField = (obj: unknown): obj is TailorAnyField =>
+    typeof obj === "object" && obj !== null && TAILOR_FIELD_BRAND in obj;
+
+  const normalizedOutput = isTailorField(config.output) ? config.output : t.object(config.output);
 
   return {
     ...config,

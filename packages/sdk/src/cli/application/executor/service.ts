@@ -5,29 +5,21 @@ import { logger, styles } from "@/cli/utils/logger";
 import { type ExecutorServiceConfig } from "@/configure/services/executor/types";
 import { type Executor, ExecutorSchema } from "@/parser/service/executor";
 
-export class ExecutorService {
-  private executors: Record<string, Executor> = {};
+export type ExecutorService = {
+  readonly config: ExecutorServiceConfig;
+  getExecutors: () => Record<string, Executor>;
+  loadExecutors: () => Promise<Record<string, Executor> | undefined>;
+};
 
-  constructor(public readonly config: ExecutorServiceConfig) {}
+/**
+ * Creates a new ExecutorService instance.
+ * @param config - The executor service configuration
+ * @returns A new ExecutorService instance
+ */
+export function createExecutorService(config: ExecutorServiceConfig): ExecutorService {
+  const executors: Record<string, Executor> = {};
 
-  async loadExecutors() {
-    if (Object.keys(this.executors).length > 0) {
-      return this.executors;
-    }
-    if (!this.config.files || this.config.files.length === 0) {
-      return;
-    }
-
-    const executorFiles = loadFilesWithIgnores(this.config);
-
-    logger.newline();
-    logger.log(`Found ${styles.highlight(executorFiles.length.toString())} executor files`);
-
-    await Promise.all(executorFiles.map((executorFile) => this.loadExecutorForFile(executorFile)));
-    return this.executors;
-  }
-
-  async loadExecutorForFile(executorFile: string) {
+  const loadExecutorForFile = async (executorFile: string): Promise<Executor | undefined> => {
     try {
       const executorModule = await import(pathToFileURL(executorFile).href);
       const result = ExecutorSchema.safeParse(executorModule.default);
@@ -36,7 +28,7 @@ export class ExecutorService {
         logger.log(
           `Executor: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        this.executors[executorFile] = result.data;
+        executors[executorFile] = result.data;
         return result.data;
       }
     } catch (error) {
@@ -46,9 +38,26 @@ export class ExecutorService {
       throw error;
     }
     return undefined;
-  }
+  };
 
-  getExecutors() {
-    return this.executors;
-  }
+  return {
+    config,
+    getExecutors: () => executors,
+    loadExecutors: async () => {
+      if (Object.keys(executors).length > 0) {
+        return executors;
+      }
+      if (!config.files || config.files.length === 0) {
+        return;
+      }
+
+      const executorFiles = loadFilesWithIgnores(config);
+
+      logger.newline();
+      logger.log(`Found ${styles.highlight(executorFiles.length.toString())} executor files`);
+
+      await Promise.all(executorFiles.map((executorFile) => loadExecutorForFile(executorFile)));
+      return executors;
+    },
+  };
 }
