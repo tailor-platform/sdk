@@ -3,9 +3,9 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import { type TailorDBType } from "@/configure/services/tailordb/schema";
-import { TAILOR_DB_TYPE_BRAND } from "@/configure/types/brand";
 import {
   parseTypes,
+  TailorDBTypeSchema,
   type ParsedTailorDBType,
   type TypeSourceInfo,
 } from "@/parser/service/tailordb";
@@ -53,25 +53,22 @@ export function createTailorDBService(
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
 
-        // Symbol-based check for TailorDBType using brand
-        const isDBTypeLike =
-          exportedValue &&
-          typeof exportedValue === "object" &&
-          TAILOR_DB_TYPE_BRAND in exportedValue;
-
-        if (isDBTypeLike) {
-          const relativePath = path.relative(process.cwd(), typeFile);
-          logger.log(
-            `Type: ${styles.successBright(`"${exportName}"`)} loaded from ${styles.path(relativePath)}`,
-          );
-          rawTypes[typeFile][exportedValue.name] = exportedValue;
-          loadedTypes[exportedValue.name] = exportedValue;
-          // Store source info mapping
-          typeSourceInfo[exportedValue.name] = {
-            filePath: typeFile,
-            exportName,
-          };
+        const result = TailorDBTypeSchema.safeParse(exportedValue);
+        if (!result.success) {
+          continue;
         }
+
+        const relativePath = path.relative(process.cwd(), typeFile);
+        logger.log(
+          `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
+        );
+        rawTypes[typeFile][result.data.name] = exportedValue;
+        loadedTypes[result.data.name] = exportedValue;
+        // Store source info mapping
+        typeSourceInfo[result.data.name] = {
+          filePath: typeFile,
+          exportName,
+        };
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);

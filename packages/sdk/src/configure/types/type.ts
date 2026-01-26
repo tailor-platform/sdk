@@ -1,4 +1,3 @@
-import { TAILOR_FIELD_BRAND } from "./brand";
 import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
 import {
   type TailorFieldType,
@@ -61,8 +60,6 @@ export interface TailorField<
   M extends FieldMetadata = FieldMetadata,
   T extends TailorFieldType = TailorFieldType,
 > extends TailorFieldInput {
-  /** Brand symbol for type identification */
-  readonly [TAILOR_FIELD_BRAND]: true;
   readonly type: T;
   readonly fields: Record<string, TailorAnyField>;
   readonly _defined: Defined;
@@ -378,7 +375,6 @@ function createTailorField<
     { type: T; array: TOptions extends { array: true } ? true : false },
     FieldOutput<OutputBase, TOptions>
   > = {
-    [TAILOR_FIELD_BRAND]: true,
     type,
     fields: fields ?? {},
     _defined: undefined as unknown as {
