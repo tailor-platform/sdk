@@ -15,7 +15,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import * as path from "pathe";
-import { getDistDir } from "@/configure/config";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";

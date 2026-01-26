@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { getDistDir } from "@/configure/config";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { type ApplyPhase } from "..";
 import { type OperatorClient, fetchAll } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";

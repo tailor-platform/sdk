@@ -41,6 +41,14 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
    * @generated from field: tailor.v1.IdPLang lang = 5;
    */
   lang: IdPLang;
+
+  /**
+   * publish_user_events indicates whether user lifecycle events (created, updated, deleted) are enabled.
+   * When enabled, events are published to the dataplane event topic.
+   *
+   * @generated from field: bool publish_user_events = 6;
+   */
+  publishUserEvents: boolean;
 };
 
 /**

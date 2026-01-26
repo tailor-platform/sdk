@@ -13,8 +13,9 @@ import {
   hasDependency,
 } from "@/cli/generator/types";
 import { generateUserTypes } from "@/cli/type-generator";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
-import { getDistDir, type AppConfig } from "@/configure/config";
+import { type AppConfig } from "@/parser/app-config";
 import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";

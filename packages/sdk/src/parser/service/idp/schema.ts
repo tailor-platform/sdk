@@ -49,5 +49,6 @@ export const IdPSchema = z
     userAuthPolicy: IdPUserAuthPolicySchema.transform((input) =>
       IdPUserAuthPolicySchema.parse(input ?? {}),
     ).optional(),
+    publishUserEvents: z.boolean().optional(),
   })
   .brand("IdPConfig");

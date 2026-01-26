@@ -269,6 +269,7 @@ async function planServices(
           authorization,
           lang,
           userAuthPolicy,
+          publishUserEvents: idp.publishUserEvents,
         },
         metaRequest,
       });
@@ -282,6 +283,7 @@ async function planServices(
           authorization,
           lang,
           userAuthPolicy,
+          publishUserEvents: idp.publishUserEvents,
         },
         metaRequest,
       });

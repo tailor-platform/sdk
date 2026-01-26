@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { generateTypeDefinition } from "./type-generator";
+import { defineAuth } from "@/configure/services/auth";
+import { t } from "@/configure/types/type";
+import { extractAttributesFromConfig, generateTypeDefinition } from "./type-generator";
 import type { AttributeListConfig, AttributeMapConfig } from "./type-generator";
 
 describe("generateTypeDefinition", () => {
@@ -73,5 +75,36 @@ describe("generateTypeDefinition", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
     expect(result).toContain("interface Env {}");
+  });
+});
+
+describe("extractAttributesFromConfig + generateTypeDefinition", () => {
+  it("renders machineUserAttributes into AttributeMap", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {
+          role: t.enum(["ADMIN", "WORKER"]),
+          isActive: t.bool(),
+          tags: t.string({ array: true }),
+        },
+        machineUsers: {
+          admin: {
+            attributes: {
+              role: "ADMIN",
+              isActive: true,
+              tags: ["root"],
+            },
+          },
+        },
+      }),
+    };
+
+    const { attributeMap } = extractAttributesFromConfig(config);
+    const content = generateTypeDefinition(attributeMap, undefined);
+
+    expect(content).toContain('role: "ADMIN" | "WORKER";');
+    expect(content).toContain("isActive: boolean;");
+    expect(content).toContain("tags: string[];");
   });
 });

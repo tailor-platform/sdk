@@ -20,8 +20,8 @@ vi.mock("node:path", async (importOriginal) => {
   };
 });
 
-// Mock configure/config
-vi.mock("@/configure/config", () => ({
+// Mock dist-dir
+vi.mock("@/cli/utils/dist-dir", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
 
