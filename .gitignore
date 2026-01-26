@@ -40,6 +40,7 @@ user-defined.d.ts
 
 # AI
 .agent/
-.claude/
+.claude/*
 !.claude/rules
+!.claude/rules/**
 CLAUDE.local.md
