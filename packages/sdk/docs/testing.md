@@ -171,6 +171,87 @@ describe("decrementUserAge resolver", () => {
 - Mock high-level operations instead of low-level SQL queries
 - **Best for:** Complex business logic with multiple database operations
 
+## Workflow Tests
+
+Test workflows locally without deploying to Tailor Platform.
+
+### Job Unit Tests
+
+Test individual job logic by calling `.body()` directly:
+
+```typescript
+import workflow, { addNumbers, calculate } from "./workflows/calculation";
+
+describe("workflow jobs", () => {
+  test("addNumbers.body() adds two numbers", () => {
+    const result = addNumbers.body({ a: 2, b: 3 }, { env: {} });
+    expect(result).toBe(5);
+  });
+});
+```
+
+### Mocking Dependent Jobs
+
+For jobs that trigger other jobs, mock the dependencies using `vi.spyOn()`:
+
+```typescript
+import { afterEach, vi } from "vitest";
+import workflow, { addNumbers, calculate, multiplyNumbers } from "./workflows/calculation";
+
+describe("workflow with dependencies", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("calculate.body() with mocked dependent jobs", async () => {
+    // Mock the trigger methods for dependent jobs
+    vi.spyOn(addNumbers, "trigger").mockResolvedValue(5);
+    vi.spyOn(multiplyNumbers, "trigger").mockResolvedValue(10);
+
+    const result = await calculate.body({ a: 2, b: 3 }, { env: {} });
+
+    expect(addNumbers.trigger).toHaveBeenCalledWith({ a: 2, b: 3 });
+    expect(result).toBe(10);
+  });
+});
+```
+
+**Note:** To execute dependent jobs without mocking, and they require `env`, use `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` and call `.trigger()` directly as shown in the integration test section below.
+
+### Integration Tests with `.trigger()`
+
+Test the full workflow execution using `workflow.trigger()` or `job.trigger()`:
+
+```typescript
+import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
+import { afterEach, vi } from "vitest";
+import workflow from "./workflows/calculation";
+
+describe("workflow integration", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("workflow.trigger() executes all jobs", async () => {
+    // Set environment variables for the workflow
+    vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ NODE_ENV: "test" }));
+
+    // No mocking - all jobs execute their actual body functions
+    const result = await workflow.trigger({ a: 3, b: 4 });
+
+    expect(result).toBe(21); // (3 + 4) * 3 = 21
+  });
+});
+```
+
+**Key points:**
+
+- Use `.body()` for unit testing individual job logic
+- Use `vi.spyOn(job, "trigger").mockResolvedValue(...)` to mock dependent jobs when they don't need `env`
+- If dependent jobs require `env`, use `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` and call `.trigger()` instead of mocking
+- `workflow.trigger()` calls `mainJob.trigger()` which executes all jobs in the chain
+- **Best for:** Testing workflow orchestration and job dependencies
+
 ## End-to-End (E2E) Tests
 
 E2E tests verify your application works correctly when deployed to Tailor Platform. They test the full stack including GraphQL API, database operations, and authentication.
