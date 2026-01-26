@@ -1,5 +1,16 @@
 # @tailor-platform/create-sdk
 
+## 1.5.0
+
+### Minor Changes
+
+- [#478](https://github.com/tailor-platform/sdk/pull/478) [`dce0040`](https://github.com/tailor-platform/sdk/commit/dce0040f0477c2603b604ab3aac17383ec03f3e7) Thanks [@toiroakr](https://github.com/toiroakr)! - Add local testing support for workflows
+
+  - `createWorkflowJob`: `.trigger()` now executes body directly for local testing
+  - `createWorkflow`: `.trigger()` now calls `mainJob.trigger()` for local testing
+  - Export `WORKFLOW_TEST_ENV_KEY` from `@tailor-platform/sdk/test` for env configuration
+  - Add workflow trigger test examples to testing template
+
 ## 1.4.2
 
 ### Patch Changes
