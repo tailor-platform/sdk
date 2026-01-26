@@ -13,13 +13,6 @@ import type { TailorUser } from "@/configure/types";
 import type { TailorFieldInput } from "@/parser/service/resolver/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
-/**
- * Symbol used to brand TailorField objects.
- * This enables reliable runtime detection of TailorField instances regardless of
- * how they were imported or assigned (variable reassignment, destructuring, etc.)
- */
-export const TAILOR_FIELD_BRAND = Symbol.for("tailor:field");
-
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
@@ -67,8 +60,6 @@ export interface TailorField<
   M extends FieldMetadata = FieldMetadata,
   T extends TailorFieldType = TailorFieldType,
 > extends TailorFieldInput {
-  /** Brand symbol for type identification */
-  readonly [TAILOR_FIELD_BRAND]: true;
   readonly type: T;
   readonly fields: Record<string, TailorAnyField>;
   readonly _defined: Defined;
@@ -384,7 +375,6 @@ function createTailorField<
     { type: T; array: TOptions extends { array: true } ? true : false },
     FieldOutput<OutputBase, TOptions>
   > = {
-    [TAILOR_FIELD_BRAND]: true,
     type,
     fields: fields ?? {},
     _defined: undefined as unknown as {
