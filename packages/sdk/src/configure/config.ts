@@ -1,7 +1,5 @@
-import { type AppConfig } from "@/shared/app-config";
+import type { AppConfig } from "@/parser/app-config/types";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
-
-export type { AppConfig };
 
 /**
  * Define a Tailor SDK application configuration with shallow exactness.
