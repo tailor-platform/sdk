@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger } from "@/cli/utils/logger";
-import type { AppConfig } from "@/configure/config";
+import type { AppConfig } from "@/parser/app-config";
 
 export interface AttributeMapConfig {
   [key: string]: string;

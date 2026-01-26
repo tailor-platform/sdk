@@ -3,7 +3,7 @@ import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logErdBetaWarning } from "../../utils/beta";
 import type { OperatorClient } from "../../client";
-import type { AppConfig } from "@/configure/config";
+import type { AppConfig } from "@/parser/app-config";
 
 export interface ErdCommandContext {
   client: OperatorClient;
