@@ -45,34 +45,30 @@ const DBFieldMetadataSchema = z.object({
 });
 
 const TailorDBFieldSchema: z.ZodType<unknown> = z.lazy(() =>
-  z
-    .object({
-      type: TailorFieldTypeSchema,
-      fields: z.record(z.string(), TailorDBFieldSchema).optional(),
-      _metadata: DBFieldMetadataSchema,
-    })
-    .passthrough(),
+  z.object({
+    type: TailorFieldTypeSchema,
+    fields: z.record(z.string(), TailorDBFieldSchema).optional(),
+    _metadata: DBFieldMetadataSchema,
+  }),
 );
 
-export const TailorDBTypeSchema = z
-  .object({
+export const TailorDBTypeSchema = z.object({
+  name: z.string(),
+  fields: z.record(z.string(), TailorDBFieldSchema),
+  metadata: z.object({
     name: z.string(),
-    fields: z.record(z.string(), TailorDBFieldSchema),
-    metadata: z.object({
-      name: z.string(),
-      description: z.string().optional(),
-      settings: z.object({}).passthrough().optional(),
-      permissions: z.object({}).passthrough(),
-      files: z.record(z.string(), z.string()),
-      indexes: z
-        .record(
-          z.string(),
-          z.object({
-            fields: z.array(z.string()),
-            unique: z.boolean().optional(),
-          }),
-        )
-        .optional(),
-    }),
-  })
-  .passthrough();
+    description: z.string().optional(),
+    settings: z.unknown().optional(),
+    permissions: z.unknown(),
+    files: z.record(z.string(), z.string()),
+    indexes: z
+      .record(
+        z.string(),
+        z.object({
+          fields: z.array(z.string()),
+          unique: z.boolean().optional(),
+        }),
+      )
+      .optional(),
+  }),
+});
