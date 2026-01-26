@@ -2062,6 +2062,48 @@ export declare type GetControlplaneMachineUserResponse = Message<"tailor.v1.GetC
 export declare const GetControlplaneMachineUserResponseSchema: GenMessage<GetControlplaneMachineUserResponse>;
 
 /**
+ * @generated from message tailor.v1.GetControlplaneMachineUserByNameRequest
+ */
+export declare type GetControlplaneMachineUserByNameRequest = Message<"tailor.v1.GetControlplaneMachineUserByNameRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetControlplaneMachineUserByNameRequest.
+ * Use `create(GetControlplaneMachineUserByNameRequestSchema)` to create a new message.
+ */
+export declare const GetControlplaneMachineUserByNameRequestSchema: GenMessage<GetControlplaneMachineUserByNameRequest>;
+
+/**
+ * @generated from message tailor.v1.GetControlplaneMachineUserByNameResponse
+ */
+export declare type GetControlplaneMachineUserByNameResponse = Message<"tailor.v1.GetControlplaneMachineUserByNameResponse"> & {
+  /**
+   * @generated from field: tailor.v1.ControlplaneMachineUser machine_user = 1;
+   */
+  machineUser?: ControlplaneMachineUser;
+};
+
+/**
+ * Describes the message tailor.v1.GetControlplaneMachineUserByNameResponse.
+ * Use `create(GetControlplaneMachineUserByNameResponseSchema)` to create a new message.
+ */
+export declare const GetControlplaneMachineUserByNameResponseSchema: GenMessage<GetControlplaneMachineUserByNameResponse>;
+
+/**
  * @generated from message tailor.v1.ListControlplaneMachineUsersRequest
  */
 export declare type ListControlplaneMachineUsersRequest = Message<"tailor.v1.ListControlplaneMachineUsersRequest"> & {

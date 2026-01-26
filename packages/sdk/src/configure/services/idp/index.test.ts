@@ -167,4 +167,26 @@ describe("defineIdp", () => {
     // Note: These tests verify the schema validation works,
     // but defineIdp itself doesn't validate - validation happens in parser layer
   });
+
+  it("should preserve publishUserEvents config", () => {
+    const idpWithPublishUserEvents = defineIdp("idp-with-publish-user-events", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      publishUserEvents: true,
+    });
+    expect(idpWithPublishUserEvents.publishUserEvents).toBe(true);
+
+    const idpWithPublishUserEventsFalse = defineIdp("idp-with-publish-user-events-false", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      publishUserEvents: false,
+    });
+    expect(idpWithPublishUserEventsFalse.publishUserEvents).toBe(false);
+
+    const idpNoPublishUserEvents = defineIdp("idp-no-publish-user-events", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoPublishUserEvents.publishUserEvents).toBeUndefined();
+  });
 });

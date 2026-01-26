@@ -99,6 +99,14 @@ export declare type CreateIdPServiceRequest = Message<"tailor.v1.CreateIdPServic
    * @generated from field: tailor.v1.IdPLang lang = 5;
    */
   lang: IdPLang;
+
+  /**
+   * publish_user_events enables publishing user lifecycle events (created, updated, deleted).
+   * When enabled, events are published to the dataplane event topic.
+   *
+   * @generated from field: bool publish_user_events = 6;
+   */
+  publishUserEvents: boolean;
 };
 
 /**
@@ -153,6 +161,14 @@ export declare type UpdateIdPServiceRequest = Message<"tailor.v1.UpdateIdPServic
    * @generated from field: tailor.v1.IdPLang lang = 5;
    */
   lang: IdPLang;
+
+  /**
+   * publish_user_events enables publishing user lifecycle events (created, updated, deleted).
+   * When enabled, events are published to the dataplane event topic.
+   *
+   * @generated from field: bool publish_user_events = 6;
+   */
+  publishUserEvents: boolean;
 };
 
 /**
