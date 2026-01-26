@@ -2,12 +2,12 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import { TAILOR_DB_TYPE_BRAND } from "@/configure/types/brand";
 import {
   parseTypes,
   type ParsedTailorDBType,
   type TypeSourceInfo,
+  type TailorDBType,
 } from "@/parser/service/tailordb";
 import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 
