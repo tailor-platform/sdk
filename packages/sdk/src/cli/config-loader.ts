@@ -14,7 +14,7 @@ import {
 import { createFileUtilsGenerator, FileUtilsGeneratorID } from "./generator/builtin/file-utils";
 import { createKyselyGenerator, KyselyGeneratorID } from "./generator/builtin/kysely-type";
 import { createSeedGenerator, SeedGeneratorID } from "./generator/builtin/seed";
-import type { AppConfig } from "@/configure/config";
+import type { AppConfig } from "@/parser/app-config";
 import "./mock";
 
 // Register built-in generators with their constructor functions

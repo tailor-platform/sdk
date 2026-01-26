@@ -1,11 +1,16 @@
-import { defineAuth, defineConfig, defineGenerators } from "@tailor-platform/sdk";
+import { defineAuth, defineConfig, defineGenerators, t } from "@tailor-platform/sdk";
 
 export default defineConfig({
   name: "testing",
   auth: defineAuth("main-auth", {
+    machineUserAttributes: {
+      role: t.string(),
+    },
     machineUsers: {
       admin: {
-        attributes: {},
+        attributes: {
+          role: "admin",
+        },
       },
     },
   }),

@@ -32,6 +32,10 @@ const auth = defineAuth("my-auth", {
     usernameField: "email",
     attributes: { role: true },
   },
+  // Optional when you don't define userProfile:
+  // machineUserAttributes: {
+  //   role: t.string(),
+  // },
   machineUsers: {
     "admin-machine-user": {
       attributes: { role: "ADMIN" },
@@ -84,6 +88,36 @@ export const user = db.type("User", {
 
 **attributes**: Specifies which fields from the TailorDB type are used as user attributes. Set to `true` to enable a field. Enabled attributes must be assigned values in all machine user definitions.
 
+## Machine User Attributes (without userProfile)
+
+When you want to use machine users without defining a `userProfile`, define `machineUserAttributes` instead. These attributes are used for:
+
+- type-safe `machineUsers[*].attributes`
+- `context.user.attributes` typing (via `user-defined.d.ts`)
+
+```typescript
+import { defineAuth, t } from "@tailor-platform/sdk";
+
+export const auth = defineAuth("my-auth", {
+  machineUserAttributes: {
+    role: t.string(),
+    isActive: t.bool(),
+    tags: t.string({ array: true }),
+  },
+  machineUsers: {
+    "admin-machine-user": {
+      attributes: { role: "ADMIN", isActive: true, tags: ["root"] },
+    },
+  },
+});
+```
+
+To update types in `user-defined.d.ts`, run:
+
+```bash
+tailor-sdk generate
+```
+
 ## Machine Users
 
 Service accounts for automated access without user interaction:
@@ -99,7 +133,7 @@ machineUsers: {
 },
 ```
 
-**attributes**: Values for attributes enabled in `userProfile.attributes`. All fields marked as `true` in `userProfile.attributes` must be set here. These values are accessible via `user.attributes`:
+**attributes**: Values for attributes enabled in `userProfile.attributes` (or all fields defined in `machineUserAttributes` when `userProfile` is omitted). All enabled fields must be set here. These values are accessible via `user.attributes`:
 
 ```typescript
 // In a resolver
