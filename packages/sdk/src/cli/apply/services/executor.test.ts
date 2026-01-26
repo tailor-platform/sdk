@@ -13,8 +13,8 @@ vi.mock("node:fs", () => ({
   existsSync: vi.fn().mockReturnValue(true),
 }));
 
-// Mock configure/config to avoid getDistDir issues
-vi.mock("@/configure/config", () => ({
+// Mock dist-dir to avoid getDistDir issues
+vi.mock("@/cli/utils/dist-dir", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
 

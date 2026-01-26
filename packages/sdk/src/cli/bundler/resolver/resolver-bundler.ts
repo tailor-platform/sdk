@@ -5,8 +5,8 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
-import { getDistDir } from "@/configure/config";
 import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
 import { loadResolver } from "./loader";
 

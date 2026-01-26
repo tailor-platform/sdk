@@ -19,8 +19,8 @@ import {
 import * as inflection from "inflection";
 import * as path from "pathe";
 import { type ResolverService } from "@/cli/application/resolver/service";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger } from "@/cli/utils/logger";
-import { getDistDir } from "@/configure/config";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { tailorUserMap } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
