@@ -148,8 +148,7 @@ export default defineConfig([
   //         patterns: [
   //           {
   //             group: ["**/configure/**", "@/configure/**"],
-  //             message:
-  //               "Cli module should not import from configure module. Please use parser module as an intermediary.",
+  //             message: "Cli module should not import from configure module. Please use parser module as an intermediary.",
   //           },
   //         ],
   //       },
