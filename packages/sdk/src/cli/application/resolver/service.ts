@@ -2,8 +2,8 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type ResolverServiceConfig } from "@/configure/services/resolver/types";
 import { type Resolver, ResolverSchema } from "@/parser/service/resolver";
+import { type ResolverServiceConfig } from "@/parser/service/resolver/types";
 
 export type ResolverService = {
   readonly namespace: string;
