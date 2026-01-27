@@ -3,13 +3,6 @@ import type { JsonCompatible } from "@/configure/types/helpers";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
 
 /**
- * Symbol used to brand WorkflowJob objects created by createWorkflowJob.
- * This enables reliable runtime detection of workflow jobs regardless of
- * how they were imported or assigned (variable reassignment, destructuring, etc.)
- */
-export const WORKFLOW_JOB_BRAND = Symbol.for("tailor:workflow-job");
-
-/**
  * Context object passed as the second argument to workflow job body functions.
  */
 export type WorkflowJobContext = {
@@ -47,7 +40,6 @@ export type WorkflowJobInput = undefined | JsonCompatible<unknown>;
  * - Trigger returns Jsonify<Output> (Date becomes string after JSON.stringify)
  */
 export interface WorkflowJob<Name extends string = string, Input = undefined, Output = undefined> {
-  readonly [WORKFLOW_JOB_BRAND]?: true;
   name: Name;
   /**
    * Trigger this job with the given input.
@@ -143,18 +135,25 @@ type WorkflowJobBody<I, O> =
       : never
     : never;
 
+/**
+ * Environment variable key for workflow testing.
+ * Contains JSON-serialized TailorEnv object.
+ */
+export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
+
 export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(config: {
   readonly name: Name;
   readonly body: WorkflowJobBody<I, O>;
 }): WorkflowJob<Name, I, Awaited<O>> => {
   return {
-    [WORKFLOW_JOB_BRAND]: true,
     name: config.name,
     // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
     // This converts Date objects to strings, matching actual runtime behavior.
+    // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
     trigger: async (args?: unknown) => {
-      const ret = await tailor.workflow.triggerJobFunction(config.name, args);
-      return ret ? JSON.parse(JSON.stringify(ret)) : ret;
+      const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
+      const result = await config.body(args as I, { env });
+      return result ? JSON.parse(JSON.stringify(result)) : result;
     },
     body: config.body,
   } as WorkflowJob<Name, I, Awaited<O>>;

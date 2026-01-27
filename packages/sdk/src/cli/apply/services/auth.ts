@@ -12,6 +12,7 @@ import {
   TenantProviderConfig_TenantProviderType,
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { type AuthService } from "@/cli/application/auth/service";
 import {
   OAuth2ClientSchema,
   type BuiltinIdP,
@@ -26,10 +27,9 @@ import {
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "../../client";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
-import { ChangeSet } from ".";
+import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { AuthService } from "@/cli/application/auth/service";
 import type {
   CreateAuthIDPConfigRequestSchema,
   CreateAuthMachineUserRequestSchema,
@@ -324,9 +324,7 @@ async function planServices(
   appName: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
-  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> = new ChangeSet(
-    "Auth services",
-  );
+  const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("Auth services");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -444,7 +442,7 @@ async function planIdPConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateIdPConfig, UpdateIdPConfig, DeleteIdPConfig> = new ChangeSet(
+  const changeSet = createChangeSet<CreateIdPConfig, UpdateIdPConfig, DeleteIdPConfig>(
     "Auth idpConfigs",
   );
 
@@ -655,11 +653,11 @@ async function planUserProfileConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<
+  const changeSet = createChangeSet<
     CreateUserProfileConfig,
     UpdateUserProfileConfig,
     DeleteUserProfileConfig
-  > = new ChangeSet("Auth userProfileConfigs");
+  >("Auth userProfileConfigs");
 
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
@@ -671,13 +669,14 @@ async function planUserProfileConfigs(
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (auth.userProfile) {
+        const userProfileForCreate = auth.userProfile;
+        if (userProfileForCreate) {
           changeSet.creates.push({
             name,
             request: {
               workspaceId,
               namespaceName: config.name,
-              userProfileProviderConfig: protoUserProfileConfig(auth.userProfile),
+              userProfileProviderConfig: protoUserProfileConfig(userProfileForCreate),
             },
           });
         }
@@ -685,13 +684,14 @@ async function planUserProfileConfigs(
       }
       throw error;
     }
-    if (auth.userProfile) {
+    const userProfileForUpdate = auth.userProfile;
+    if (userProfileForUpdate) {
       changeSet.updates.push({
         name,
         request: {
           workspaceId,
           namespaceName: config.name,
-          userProfileProviderConfig: protoUserProfileConfig(auth.userProfile),
+          userProfileProviderConfig: protoUserProfileConfig(userProfileForUpdate),
         },
       });
     } else {
@@ -776,8 +776,9 @@ async function planTenantConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateTenantConfig, UpdateTenantConfig, DeleteTenantConfig> =
-    new ChangeSet("Auth tenantConfigs");
+  const changeSet = createChangeSet<CreateTenantConfig, UpdateTenantConfig, DeleteTenantConfig>(
+    "Auth tenantConfigs",
+  );
 
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
@@ -885,8 +886,9 @@ async function planMachineUsers(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateMachineUser, UpdateMachineUser, DeleteMachineUser> =
-    new ChangeSet("Auth machineUsers");
+  const changeSet = createChangeSet<CreateMachineUser, UpdateMachineUser, DeleteMachineUser>(
+    "Auth machineUsers",
+  );
 
   const fetchMachineUsers = (authNamespace: string) => {
     return fetchAll(async (pageToken) => {
@@ -1006,8 +1008,9 @@ async function planOAuth2Clients(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateOAuth2Clients, UpdateOAuth2Client, DeleteOAuth2Client> =
-    new ChangeSet("Auth oauth2Clients");
+  const changeSet = createChangeSet<CreateOAuth2Clients, UpdateOAuth2Client, DeleteOAuth2Client>(
+    "Auth oauth2Clients",
+  );
 
   const fetchOAuth2Clients = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -1143,7 +1146,7 @@ async function planSCIMConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateSCIMConfig, UpdateSCIMConfig, DeleteSCIMConfig> = new ChangeSet(
+  const changeSet = createChangeSet<CreateSCIMConfig, UpdateSCIMConfig, DeleteSCIMConfig>(
     "Auth scimConfigs",
   );
 
@@ -1263,8 +1266,9 @@ async function planSCIMResources(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet: ChangeSet<CreateSCIMResource, UpdateSCIMResource, DeleteSCIMResource> =
-    new ChangeSet("Auth scimResources");
+  const changeSet = createChangeSet<CreateSCIMResource, UpdateSCIMResource, DeleteSCIMResource>(
+    "Auth scimResources",
+  );
 
   const fetchSCIMResources = async (namespaceName: string) => {
     try {

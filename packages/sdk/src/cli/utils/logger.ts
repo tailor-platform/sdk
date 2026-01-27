@@ -110,48 +110,51 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
 };
 
 /**
- * Reporter that handles all log output modes.
+ * Creates a reporter that handles all log output modes.
  *
  * Supports three modes controlled via logObj.tag:
  * - "default": Colored icons and messages, no timestamp, dynamic line wrapping
  * - "stream": Colored icons with timestamps, for streaming/polling operations
  * - "plain": Colored messages only, no icons, no timestamp
+ * @returns A ConsolaReporter instance
  */
-class Reporter implements ConsolaReporter {
-  log(logObj: LogObject, ctx: { options: ConsolaOptions }) {
-    const mode = (logObj.tag as string) || "default";
-    const stdout = ctx.options.stdout || process.stdout;
-    const stderr = ctx.options.stderr || process.stderr;
-    const formatOptions = ctx.options.formatOptions;
-    const inspectOpts: InspectOptions = {
-      breakLength: stdout.columns || 80,
-      compact: formatOptions.compact,
-    };
-    const message = formatWithOptions(inspectOpts, ...logObj.args);
+function createReporter(): ConsolaReporter {
+  return {
+    log(logObj: LogObject, ctx: { options: ConsolaOptions }) {
+      const mode = logObj.tag || "default";
+      const stdout = ctx.options.stdout || process.stdout;
+      const stderr = ctx.options.stderr || process.stderr;
+      const formatOptions = ctx.options.formatOptions;
+      const inspectOpts: InspectOptions = {
+        breakLength: stdout.columns || 80,
+        compact: formatOptions.compact,
+      };
+      const message = formatWithOptions(inspectOpts, ...logObj.args);
 
-    // Apply color based on log type
-    const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
+      // Apply color based on log type
+      const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
 
-    // Plain mode: color only, no icon, no timestamp
-    if (mode === "plain") {
-      stderr.write(`${colorFn(message)}\n`);
-      return;
-    }
+      // Plain mode: color only, no icon, no timestamp
+      if (mode === "plain") {
+        stderr.write(`${colorFn(message)}\n`);
+        return;
+      }
 
-    // Default/Stream mode: with icon and color
-    const icon = TYPE_ICONS[logObj.type] || "";
-    const prefix = icon ? `${icon} ` : "";
-    const coloredOutput = colorFn(`${prefix}${message}`);
+      // Default/Stream mode: with icon and color
+      const icon = TYPE_ICONS[logObj.type] || "";
+      const prefix = icon ? `${icon} ` : "";
+      const coloredOutput = colorFn(`${prefix}${message}`);
 
-    // Add timestamp for stream mode
-    const timestamp =
-      mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
-    stderr.write(`${timestamp}${coloredOutput}\n`);
-  }
+      // Add timestamp for stream mode
+      const timestamp =
+        mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
+      stderr.write(`${timestamp}${coloredOutput}\n`);
+    },
+  };
 }
 
 const consola = createConsola({
-  reporters: [new Reporter()],
+  reporters: [createReporter()],
   formatOptions: { date: true },
 });
 

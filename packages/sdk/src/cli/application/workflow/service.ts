@@ -2,7 +2,6 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { WORKFLOW_JOB_BRAND } from "@/configure/services/workflow/job";
 import { type Workflow, WorkflowJobSchema, WorkflowSchema } from "@/parser/service/workflow";
 import type { WorkflowServiceConfig } from "@/configure/services/workflow/types";
 
@@ -133,16 +132,13 @@ async function loadFileContent(filePath: string): Promise<{
         continue;
       }
 
-      // Check if it's a workflow job using Symbol brand
-      if (isWorkflowJob(exportValue)) {
-        const jobResult = WorkflowJobSchema.safeParse(exportValue);
-        if (jobResult.success) {
-          jobs.push({
-            name: jobResult.data.name,
-            exportName,
-            sourceFile: filePath,
-          });
-        }
+      const jobResult = WorkflowJobSchema.safeParse(exportValue);
+      if (jobResult.success) {
+        jobs.push({
+          name: jobResult.data.name,
+          exportName,
+          sourceFile: filePath,
+        });
       }
     }
   } catch (error) {
@@ -155,18 +151,4 @@ async function loadFileContent(filePath: string): Promise<{
   }
 
   return { jobs, workflow };
-}
-
-/**
- * Check if a value is a WorkflowJob by looking for the brand symbol
- * @param value - Value to check
- * @returns True if the value is a branded WorkflowJob
- */
-function isWorkflowJob(value: unknown): boolean {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    WORKFLOW_JOB_BRAND in value &&
-    (value as Record<symbol, unknown>)[WORKFLOW_JOB_BRAND] === true
-  );
 }

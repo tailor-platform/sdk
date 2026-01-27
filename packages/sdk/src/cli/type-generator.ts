@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger } from "@/cli/utils/logger";
-import type { AppConfig } from "@/configure/config";
+import type { AppConfig } from "@/parser/app-config";
 
 export interface AttributeMapConfig {
   [key: string]: string;
@@ -17,7 +17,21 @@ interface ExtractedAttributes {
   env?: Record<string, string | number | boolean>;
 }
 
-function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
+type AttributeFieldLike = {
+  type?: string;
+  metadata?: {
+    array?: boolean;
+    allowedValues?: Array<{ value: string }>;
+  };
+};
+
+/**
+ * Extract attribute definitions from the app config for user-defined typing.
+ * @param config - Application config to inspect
+ * @returns Extracted attribute map/list and env values
+ * @internal
+ */
+export function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   return collectAttributesFromConfig(config);
 }
 
@@ -98,22 +112,39 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     return {};
   }
 
+  const inferAttributeType = (field?: AttributeFieldLike): string => {
+    const type = field?.type;
+    const metadata = field?.metadata;
+
+    // Default to string if no metadata
+    if (!metadata) {
+      return "string";
+    }
+
+    let typeStr = "string";
+
+    if (type === "boolean") {
+      typeStr = "boolean";
+    } else if (type === "enum" && metadata.allowedValues) {
+      // Generate union type from enum values
+      typeStr = metadata.allowedValues.map((v) => `"${v.value}"`).join(" | ");
+    }
+
+    // Add array suffix if needed
+    if (metadata.array) {
+      typeStr += "[]";
+    }
+
+    return typeStr;
+  };
+
   // Check if auth has userProfile with attributes/attributeList
   if ("userProfile" in auth) {
     const userProfile = (
       auth as {
         userProfile?: {
           type?: {
-            fields?: Record<
-              string,
-              {
-                type: string;
-                metadata?: {
-                  array?: boolean;
-                  allowedValues?: Array<{ value: string }>;
-                };
-              }
-            >;
+            fields?: Record<string, AttributeFieldLike>;
           };
           attributes?: Record<string, true>;
           attributeList?: AttributeListConfig;
@@ -128,29 +159,7 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     // Convert attributes to AttributeMapConfig by inferring types from field metadata
     const attributeMap: AttributeMapConfig | undefined = attributes
       ? Object.keys(attributes).reduce((acc, key) => {
-          const { type, metadata } = fields?.[key] ?? {};
-
-          // Default to string if no metadata
-          if (!metadata) {
-            acc[key] = "string";
-            return acc;
-          }
-
-          let typeStr = "string";
-
-          if (type === "boolean") {
-            typeStr = "boolean";
-          } else if (type === "enum" && metadata.allowedValues) {
-            // Generate union type from enum values
-            typeStr = metadata.allowedValues.map((v) => `"${v.value}"`).join(" | ");
-          }
-
-          // Add array suffix if needed
-          if (metadata.array) {
-            typeStr += "[]";
-          }
-
-          acc[key] = typeStr;
+          acc[key] = inferAttributeType(fields?.[key]);
           return acc;
         }, {} as AttributeMapConfig)
       : undefined;
@@ -158,6 +167,27 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     return {
       attributeMap,
       attributeList,
+    };
+  }
+
+  if ("machineUserAttributes" in auth) {
+    const machineUserAttributes = (
+      auth as {
+        machineUserAttributes?: Record<string, AttributeFieldLike>;
+      }
+    ).machineUserAttributes;
+
+    if (!machineUserAttributes) {
+      return {};
+    }
+
+    const attributeMap = Object.entries(machineUserAttributes).reduce((acc, [key, field]) => {
+      acc[key] = inferAttributeType(field);
+      return acc;
+    }, {} as AttributeMapConfig);
+
+    return {
+      attributeMap,
     };
   }
 

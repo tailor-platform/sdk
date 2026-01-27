@@ -11,7 +11,7 @@ import { IdPLang } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { type IdP, type IdPLang as IdPLangInput } from "@/parser/service/idp";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
-import { ChangeSet } from ".";
+import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -192,9 +192,7 @@ async function planServices(
   appName: string,
   idps: ReadonlyArray<IdP>,
 ) {
-  const changeSet: ChangeSet<CreateService, UpdateService, DeleteService> = new ChangeSet(
-    "IdP services",
-  );
+  const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -271,6 +269,7 @@ async function planServices(
           authorization,
           lang,
           userAuthPolicy,
+          publishUserEvents: idp.publishUserEvents,
         },
         metaRequest,
       });
@@ -284,6 +283,7 @@ async function planServices(
           authorization,
           lang,
           userAuthPolicy,
+          publishUserEvents: idp.publishUserEvents,
         },
         metaRequest,
       });
@@ -332,9 +332,7 @@ async function planClients(
   idps: ReadonlyArray<IdP>,
   deletedServices: string[],
 ) {
-  const changeSet: ChangeSet<CreateClient, UpdateClient, DeleteClient> = new ChangeSet(
-    "IdP clients",
-  );
+  const changeSet = createChangeSet<CreateClient, UpdateClient, DeleteClient>("IdP clients");
 
   const fetchClients = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {

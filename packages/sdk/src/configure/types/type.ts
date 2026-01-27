@@ -47,68 +47,45 @@ type FieldParseInternalArgs = {
   pathArray: string[];
 };
 
-export class TailorField<
-  const Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
+/**
+ * TailorField interface representing a field with metadata, type information, and optional nested fields.
+ * This is the base field type used by both resolver types and TailorDB types.
+ * Using interface to allow self-referencing in the fields property.
+ */
+export interface TailorField<
+  Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
   // Generic default output type (kept loose on purpose for library ergonomics).
   // oxlint-disable-next-line no-explicit-any
-  const Output = any,
+  Output = any,
   M extends FieldMetadata = FieldMetadata,
   T extends TailorFieldType = TailorFieldType,
-> implements TailorFieldInput {
-  protected _metadata: M;
-  public readonly _defined: Defined = undefined as unknown as Defined;
-  public readonly _output = undefined as Output;
+> extends TailorFieldInput {
+  readonly type: T;
+  readonly fields: Record<string, TailorAnyField>;
+  readonly _defined: Defined;
+  readonly _output: Output;
+  _metadata: M;
 
-  get metadata() {
-    return { ...this._metadata };
-  }
+  /** Returns a shallow copy of the metadata */
+  readonly metadata: M;
 
-  protected constructor(
-    public readonly type: T,
-    options?: FieldOptions,
-    public readonly fields: Record<string, TailorAnyField> = {},
-    values?: AllowedValues,
-  ) {
-    this._metadata = { required: true } as M;
-    if (options) {
-      if (options.optional === true) {
-        this._metadata.required = false;
-      }
-      if (options.array === true) {
-        this._metadata.array = true;
-      }
-    }
-    if (values) {
-      this._metadata.allowedValues = mapAllowedValues(values);
-    }
-  }
-
-  static create<
-    const TType extends TailorFieldType,
-    const TOptions extends FieldOptions,
-    const OutputBase = TailorToTs[TType],
-  >(
-    type: TType,
-    options?: TOptions,
-    fields?: Record<string, TailorAnyField>,
-    values?: AllowedValues,
-  ) {
-    return new TailorField<
-      { type: TType; array: TOptions extends { array: true } ? true : false },
-      FieldOutput<OutputBase, TOptions>
-    >(type, options, fields, values);
-  }
-
+  /**
+   * Set a description for the field
+   * @param description - The description text
+   * @returns The field with updated metadata
+   */
   description<CurrentDefined extends Defined>(
     this: CurrentDefined extends { description: unknown }
       ? never
       : TailorField<CurrentDefined, Output>,
     description: string,
-  ) {
-    this._metadata.description = description;
-    return this as TailorField<Prettify<CurrentDefined & { description: true }>, Output>;
-  }
+  ): TailorField<Prettify<CurrentDefined & { description: true }>, Output>;
 
+  /**
+   * Set a custom type name for enum or nested types
+   * @param typeName - The custom type name
+   * @returns The field with updated metadata
+   */
   typeName<CurrentDefined extends Defined>(
     this: CurrentDefined extends { typeName: unknown }
       ? never
@@ -116,20 +93,19 @@ export class TailorField<
         ? TailorField<CurrentDefined, Output>
         : never,
     typeName: string,
-  ) {
-    this._metadata.typeName = typeName;
-    return this as TailorField<Prettify<CurrentDefined & { typeName: true }>, Output>;
-  }
+  ): TailorField<Prettify<CurrentDefined & { typeName: true }>, Output>;
 
+  /**
+   * Add validation functions to the field
+   * @param validate - One or more validation functions
+   * @returns The field with updated metadata
+   */
   validate<CurrentDefined extends Defined>(
     this: CurrentDefined extends { validate: unknown }
       ? never
       : TailorField<CurrentDefined, Output>,
     ...validate: FieldValidateInput<Output>[]
-  ) {
-    this._metadata.validate = validate;
-    return this as TailorField<Prettify<CurrentDefined & { validate: true }>, Output>;
-  }
+  ): TailorField<Prettify<CurrentDefined & { validate: true }>, Output>;
 
   /**
    * Parse and validate a value against this field's validation rules
@@ -137,28 +113,64 @@ export class TailorField<
    * @param args - Value, context data, and user
    * @returns Validation result
    */
-  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output> {
-    return this._parseInternal({
-      value: args.value,
-      data: args.data,
-      user: args.user,
-      pathArray: [],
-    });
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
+
+  /**
+   * Internal parse method that tracks field path for nested validation
+   * @private
+   * @param args - Parse arguments
+   * @returns Validation result
+   */
+  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
+}
+
+/**
+ * Creates a new TailorField instance.
+ * @param type - Field type
+ * @param options - Field options
+ * @param fields - Nested fields for object-like types
+ * @param values - Allowed values for enum-like fields
+ * @returns A new TailorField
+ */
+function createTailorField<
+  const T extends TailorFieldType,
+  const TOptions extends FieldOptions,
+  const OutputBase = TailorToTs[T],
+>(
+  type: T,
+  options?: TOptions,
+  fields?: Record<string, TailorAnyField>,
+  values?: AllowedValues,
+): TailorField<
+  { type: T; array: TOptions extends { array: true } ? true : false },
+  FieldOutput<OutputBase, TOptions>
+> {
+  const _metadata: FieldMetadata = { required: true };
+
+  if (options) {
+    if (options.optional === true) {
+      _metadata.required = false;
+    }
+    if (options.array === true) {
+      _metadata.array = true;
+    }
+  }
+  if (values) {
+    _metadata.allowedValues = mapAllowedValues(values);
   }
 
   /**
    * Validate a single value (not an array element)
    * Used internally for array element validation
-   * @private
-   * @param args - Validation arguments
-   * @returns Validation issues
+   * @param args - Value, context data, and user
+   * @returns Array of validation issues
    */
-  private _validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
+  function validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
     // Type-specific validation
-    switch (this.type) {
+    switch (type) {
       case "string":
         if (typeof value !== "string") {
           issues.push({
@@ -228,8 +240,8 @@ export class TailorField<
         }
         break;
       case "enum":
-        if (this.metadata.allowedValues) {
-          const allowedValues = this.metadata.allowedValues.map((v) => v.value);
+        if (field._metadata.allowedValues) {
+          const allowedValues = field._metadata.allowedValues.map((v) => v.value);
           if (typeof value !== "string" || !allowedValues.includes(value)) {
             issues.push({
               message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
@@ -251,10 +263,10 @@ export class TailorField<
             message: `Expected an object: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
           });
-        } else if (this.fields && Object.keys(this.fields).length > 0) {
-          for (const [fieldName, field] of Object.entries(this.fields)) {
+        } else if (field.fields && Object.keys(field.fields).length > 0) {
+          for (const [fieldName, nestedField] of Object.entries(field.fields)) {
             const fieldValue = value?.[fieldName];
-            const result = field._parseInternal({
+            const result = nestedField._parseInternal({
               value: fieldValue,
               data,
               user,
@@ -269,7 +281,7 @@ export class TailorField<
     }
 
     // Custom validation functions
-    const validateFns = this.metadata.validate;
+    const validateFns = field._metadata.validate;
     if (validateFns && validateFns.length > 0) {
       for (const validateInput of validateFns) {
         const { fn, message } =
@@ -291,17 +303,18 @@ export class TailorField<
 
   /**
    * Internal parse method that tracks field path for nested validation
-   * @private
    * @param args - Parse arguments
-   * @returns Validation result
+   * @returns Parse result with value or issues
    */
-  private _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output> {
+  function parseInternal(
+    args: FieldParseInternalArgs,
+  ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
     const { value, data, user, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
     // 1. Check required/optional
     const isNullOrUndefined = value === null || value === undefined;
-    if (this.metadata.required && isNullOrUndefined) {
+    if (field._metadata.required && isNullOrUndefined) {
       issues.push({
         message: "Required field is missing",
         path: pathArray.length > 0 ? pathArray : undefined,
@@ -309,13 +322,13 @@ export class TailorField<
       return { issues };
     }
 
-    // If optional and null/undefined, skip further validation
-    if (!this.metadata.required && isNullOrUndefined) {
-      return { value };
+    // If optional and null/undefined, skip further validation and normalize to null
+    if (!field._metadata.required && isNullOrUndefined) {
+      return { value: value ?? null };
     }
 
     // 2. Check array type
-    if (this.metadata.array) {
+    if (field._metadata.array) {
       if (!Array.isArray(value)) {
         issues.push({
           message: "Expected an array",
@@ -330,7 +343,7 @@ export class TailorField<
         const elementPath = pathArray.concat(`[${i}]`);
 
         // Validate element with same type but without array flag
-        const elementIssues = this._validateValue({
+        const elementIssues = validateValue({
           value: elementValue,
           data,
           user,
@@ -344,11 +357,11 @@ export class TailorField<
       if (issues.length > 0) {
         return { issues };
       }
-      return { value: value as Output };
+      return { value: value as FieldOutput<OutputBase, TOptions> };
     }
 
     // 3. Type-specific validation and custom validation
-    const valueIssues = this._validateValue({ value, data, user, pathArray });
+    const valueIssues = validateValue({ value, data, user, pathArray });
     issues.push(...valueIssues);
 
     if (issues.length > 0) {
@@ -357,39 +370,90 @@ export class TailorField<
 
     return { value };
   }
+
+  const field: TailorField<
+    { type: T; array: TOptions extends { array: true } ? true : false },
+    FieldOutput<OutputBase, TOptions>
+  > = {
+    type,
+    fields: fields ?? {},
+    _defined: undefined as unknown as {
+      type: T;
+      array: TOptions extends { array: true } ? true : false;
+    },
+    _output: undefined as FieldOutput<OutputBase, TOptions>,
+    _metadata,
+
+    get metadata() {
+      return { ...this._metadata };
+    },
+
+    description(description: string) {
+      this._metadata.description = description;
+      // Fluent API returns this with updated type
+      // oxlint-disable-next-line no-explicit-any
+      return this as any;
+    },
+
+    typeName(typeName: string) {
+      this._metadata.typeName = typeName;
+      // Fluent API returns this with updated type
+      // oxlint-disable-next-line no-explicit-any
+      return this as any;
+    },
+
+    validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
+      this._metadata.validate = validateInputs;
+      // Fluent API returns this with updated type
+      // oxlint-disable-next-line no-explicit-any
+      return this as any;
+    },
+
+    parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
+      return parseInternal({
+        value: args.value,
+        data: args.data,
+        user: args.user,
+        pathArray: [],
+      });
+    },
+
+    _parseInternal: parseInternal,
+  };
+
+  return field;
 }
 
-const createField = TailorField.create;
 function uuid<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("uuid", options);
+  return createTailorField("uuid", options);
 }
 
 function string<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("string", options);
+  return createTailorField("string", options);
 }
 
 function bool<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("boolean", options);
+  return createTailorField("boolean", options);
 }
 
 function int<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("integer", options);
+  return createTailorField("integer", options);
 }
 
 function float<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("float", options);
+  return createTailorField("float", options);
 }
 
 function date<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("date", options);
+  return createTailorField("date", options);
 }
 
 function datetime<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("datetime", options);
+  return createTailorField("datetime", options);
 }
 
 function time<const Opt extends FieldOptions>(options?: Opt) {
-  return createField("time", options);
+  return createTailorField("time", options);
 }
 
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
@@ -399,14 +463,14 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   { type: "enum"; array: Opt extends { array: true } ? true : false },
   FieldOutput<AllowedValuesOutput<V>, Opt>
 > {
-  return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
+  return createTailorField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
 function object<const F extends Record<string, TailorAnyField>, const Opt extends FieldOptions>(
   fields: F,
   options?: Opt,
 ) {
-  const objectField = createField("nested", options, fields) as TailorField<
+  const objectField = createTailorField("nested", options, fields) as TailorField<
     { type: "nested"; array: Opt extends { array: true } ? true : false },
     FieldOutput<InferFieldsOutput<F>, Opt>
   >;

@@ -3,6 +3,7 @@ import { sdkNameLabelKey } from "./label";
 import { applyTailorDB, planTailorDB } from "./tailordb";
 import type { PlanContext } from "../index";
 import type { Application } from "@/cli/application";
+import type { ExecutorService } from "@/cli/application/executor/service";
 import type { TailorDBService } from "@/cli/application/tailordb/service";
 import type { OperatorClient } from "@/cli/client";
 
@@ -22,18 +23,16 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-// Mock ChangeSet print method
+// Mock createChangeSet to suppress output in tests
 vi.mock("./index", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("./index");
   return {
     ...original,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ChangeSet: class extends original.ChangeSet<any, any, any> {
-      print() {
-        // Do nothing in tests
-      }
-    },
+    createChangeSet: (title: string) => ({
+      ...original.createChangeSet(title),
+      print: () => {},
+    }),
   };
 });
 
@@ -45,9 +44,20 @@ describe("planTailorDB (service level)", () => {
   function createMockTailorDBService(namespace: string): TailorDBService {
     return {
       namespace,
-      loadTypes: vi.fn().mockResolvedValue({}),
+      config: {},
       getTypes: vi.fn().mockReturnValue({}),
+      getTypeSourceInfo: vi.fn().mockReturnValue({}),
+      loadTypes: vi.fn().mockResolvedValue({}),
     } as unknown as TailorDBService;
+  }
+
+  // Helper to create mock executor service
+  function createMockExecutorService(): ExecutorService {
+    return {
+      config: {},
+      getExecutors: vi.fn().mockReturnValue({}),
+      loadExecutors: vi.fn().mockResolvedValue({}),
+    } as unknown as ExecutorService;
   }
 
   // Helper to create mock client
@@ -87,9 +97,7 @@ describe("planTailorDB (service level)", () => {
       name: appName,
       env: {},
       tailorDBServices,
-      executorService: {
-        loadExecutors: vi.fn().mockResolvedValue({}),
-      },
+      executorService: createMockExecutorService(),
     } as unknown as Application;
   }
 

@@ -3,6 +3,7 @@ import { sdkNameLabelKey } from "./label";
 import { applyPipeline, planPipeline } from "./resolver";
 import type { PlanContext } from "../index";
 import type { Application } from "@/cli/application";
+import type { ExecutorService } from "@/cli/application/executor/service";
 import type { ResolverService } from "@/cli/application/resolver/service";
 import type { OperatorClient } from "@/cli/client";
 
@@ -12,8 +13,8 @@ vi.mock("node:fs", () => ({
   existsSync: vi.fn().mockReturnValue(true),
 }));
 
-// Mock configure/config
-vi.mock("@/configure/config", () => ({
+// Mock dist-dir
+vi.mock("@/cli/utils/dist-dir", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
 
@@ -33,18 +34,16 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-// Mock ChangeSet print method
+// Mock createChangeSet to suppress output in tests
 vi.mock("./index", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("./index");
   return {
     ...original,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ChangeSet: class extends original.ChangeSet<any, any, any> {
-      print() {
-        // Do nothing in tests
-      }
-    },
+    createChangeSet: (title: string) => ({
+      ...original.createChangeSet(title),
+      print: () => {},
+    }),
   };
 });
 
@@ -56,9 +55,19 @@ describe("planPipeline (resolver service level)", () => {
   function createMockResolverService(namespace: string): ResolverService {
     return {
       namespace,
-      loadResolvers: vi.fn().mockResolvedValue({}),
+      config: {},
       getResolvers: vi.fn().mockReturnValue({}),
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
     } as unknown as ResolverService;
+  }
+
+  // Helper to create mock executor service
+  function createMockExecutorService(): ExecutorService {
+    return {
+      config: {},
+      getExecutors: vi.fn().mockReturnValue({}),
+      loadExecutors: vi.fn().mockResolvedValue({}),
+    } as unknown as ExecutorService;
   }
 
   // Helper to create mock client
@@ -97,9 +106,7 @@ describe("planPipeline (resolver service level)", () => {
       name: appName,
       env: {},
       resolverServices,
-      executorService: {
-        loadExecutors: vi.fn().mockResolvedValue({}),
-      },
+      executorService: createMockExecutorService(),
     } as unknown as Application;
   }
 

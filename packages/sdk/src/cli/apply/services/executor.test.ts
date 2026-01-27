@@ -3,6 +3,7 @@ import { planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { PlanContext } from "../index";
 import type { Application } from "@/cli/application";
+import type { ExecutorService } from "@/cli/application/executor/service";
 import type { OperatorClient } from "@/cli/client";
 import type { Executor } from "@/parser/service/executor";
 
@@ -12,8 +13,8 @@ vi.mock("node:fs", () => ({
   existsSync: vi.fn().mockReturnValue(true),
 }));
 
-// Mock configure/config to avoid getDistDir issues
-vi.mock("@/configure/config", () => ({
+// Mock dist-dir to avoid getDistDir issues
+vi.mock("@/cli/utils/dist-dir", () => ({
   getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
 }));
 
@@ -33,18 +34,16 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-// Mock ChangeSet print method
+// Mock createChangeSet to suppress output in tests
 vi.mock("./index", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("./index");
   return {
     ...original,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ChangeSet: class extends original.ChangeSet<any, any, any> {
-      print() {
-        // Do nothing in tests
-      }
-    },
+    createChangeSet: (title: string) => ({
+      ...original.createChangeSet(title),
+      print: () => {},
+    }),
   };
 });
 
@@ -109,16 +108,22 @@ describe("planExecutor", () => {
     } as unknown as OperatorClient;
   }
 
+  // Helper to create mock executor service
+  function createMockExecutorService(executors: Executor[]): ExecutorService {
+    const executorMap = Object.fromEntries(executors.map((e) => [e.name, e]));
+    return {
+      config: {},
+      getExecutors: vi.fn().mockReturnValue(executorMap),
+      loadExecutors: vi.fn().mockResolvedValue(executorMap),
+    } as unknown as ExecutorService;
+  }
+
   // Helper to create mock application
   function createMockApplication(executors: Executor[]): Application {
     return {
       name: appName,
       env: {},
-      executorService: {
-        loadExecutors: vi
-          .fn()
-          .mockResolvedValue(Object.fromEntries(executors.map((e) => [e.name, e]))),
-      },
+      executorService: createMockExecutorService(executors),
     } as unknown as Application;
   }
 

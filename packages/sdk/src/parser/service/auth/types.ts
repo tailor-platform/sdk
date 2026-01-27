@@ -17,6 +17,8 @@ import type {
 } from "./schema";
 import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
 import type { output } from "@/configure/types/helpers";
+import type { TailorField } from "@/configure/types/type";
+import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
 import type { IsAny } from "type-fest";
 import type { z } from "zod";
 
@@ -161,33 +163,82 @@ type UserProfile<
   attributeList?: AttributeList;
 };
 
+type MachineUserAttributeFields = Record<
+  string,
+  TailorField<DefinedFieldMetadata, unknown, FieldMetadata, TailorFieldType>
+>;
+
+type TailorFieldOutputValue<Field> =
+  Field extends TailorField<DefinedFieldMetadata, infer Output, FieldMetadata, TailorFieldType>
+    ? Output
+    : never;
+
+type MachineUserAttributeValues<Fields extends MachineUserAttributeFields> = {
+  [K in keyof Fields]: TailorFieldOutputValue<Fields[K]> extends ValueOperand | null | undefined
+    ? TailorFieldOutputValue<Fields[K]>
+    : never;
+};
+
+type MachineUserFromAttributes<Fields extends MachineUserAttributeFields> =
+  (keyof Fields extends never
+    ? { attributes?: never }
+    : { attributes: DisallowExtraKeys<MachineUserAttributeValues<Fields>, keyof Fields> }) & {
+    attributeList?: string[];
+  };
+
 type MachineUser<
   User extends TailorDBInstance,
   AttributeMap extends UserAttributeMap<User> = UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[] = [],
+  MachineUserAttributes extends MachineUserAttributeFields | undefined = undefined,
 > =
-  IsAny<User> extends true
-    ? {
-        attributes: Record<string, AuthAttributeValue>;
-        attributeList?: string[];
-      }
-    : (AttributeMapSelectedKeys<User, AttributeMap> extends never
-        ? { attributes?: never }
-        : {
-            attributes: {
-              [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
-                ? output<User>[K]
-                : never;
-            } & {
-              [K in Exclude<
-                keyof output<User>,
-                AttributeMapSelectedKeys<User, AttributeMap>
-              >]?: never;
-            };
-          }) &
-        ([] extends AttributeList
-          ? { attributeList?: never }
-          : { attributeList: AttributeListToTuple<User, AttributeList> });
+  IsAny<MachineUserAttributes> extends true
+    ? IsAny<User> extends true
+      ? {
+          attributes: Record<string, AuthAttributeValue>;
+          attributeList?: string[];
+        }
+      : (AttributeMapSelectedKeys<User, AttributeMap> extends never
+          ? { attributes?: never }
+          : {
+              attributes: {
+                [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
+                  ? output<User>[K]
+                  : never;
+              } & {
+                [K in Exclude<
+                  keyof output<User>,
+                  AttributeMapSelectedKeys<User, AttributeMap>
+                >]?: never;
+              };
+            }) &
+          ([] extends AttributeList
+            ? { attributeList?: never }
+            : { attributeList: AttributeListToTuple<User, AttributeList> })
+    : [MachineUserAttributes] extends [MachineUserAttributeFields]
+      ? MachineUserFromAttributes<MachineUserAttributes>
+      : IsAny<User> extends true
+        ? {
+            attributes: Record<string, AuthAttributeValue>;
+            attributeList?: string[];
+          }
+        : (AttributeMapSelectedKeys<User, AttributeMap> extends never
+            ? { attributes?: never }
+            : {
+                attributes: {
+                  [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
+                    ? output<User>[K]
+                    : never;
+                } & {
+                  [K in Exclude<
+                    keyof output<User>,
+                    AttributeMapSelectedKeys<User, AttributeMap>
+                  >]?: never;
+                };
+              }) &
+            ([] extends AttributeList
+              ? { attributeList?: never }
+              : { attributeList: AttributeListToTuple<User, AttributeList> });
 
 // Input type (before parsing) - used by configure layer
 export type AuthServiceInput<
@@ -195,9 +246,16 @@ export type AuthServiceInput<
   AttributeMap extends UserAttributeMap<User>,
   AttributeList extends UserAttributeListKey<User>[],
   MachineUserNames extends string,
+  MachineUserAttributes extends MachineUserAttributeFields | undefined =
+    | MachineUserAttributeFields
+    | undefined,
 > = {
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
-  machineUsers?: Record<MachineUserNames, MachineUser<User, AttributeMap, AttributeList>>;
+  machineUserAttributes?: MachineUserAttributes;
+  machineUsers?: Record<
+    MachineUserNames,
+    MachineUser<User, AttributeMap, AttributeList, MachineUserAttributes>
+  >;
   oauth2Clients?: Record<string, OAuth2ClientInput>;
   idProvider?: IdProviderConfig;
   scim?: SCIMConfig;

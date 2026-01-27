@@ -6,7 +6,7 @@ import {
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "../../client";
 import { buildMetaRequest } from "./label";
-import { ChangeSet } from ".";
+import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type {
   DeleteApplicationRequestSchema,
@@ -90,8 +90,9 @@ function trn(workspaceId: string, name: string) {
  */
 export async function planApplication(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
-  const changeSet: ChangeSet<CreateApplication, UpdateApplication, DeleteApplication> =
-    new ChangeSet("Applications");
+  const changeSet = createChangeSet<CreateApplication, UpdateApplication, DeleteApplication>(
+    "Applications",
+  );
 
   const existingApplications = await fetchAll(async (pageToken) => {
     try {
