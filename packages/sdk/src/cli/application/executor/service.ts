@@ -2,8 +2,8 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type ExecutorServiceConfig } from "@/configure/services/executor/types";
 import { type Executor, ExecutorSchema } from "@/parser/service/executor";
+import { type ExecutorServiceConfig } from "@/parser/service/executor/types";
 
 export type ExecutorService = {
   readonly config: ExecutorServiceConfig;
