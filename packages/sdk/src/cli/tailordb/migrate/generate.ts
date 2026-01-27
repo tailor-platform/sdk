@@ -119,7 +119,9 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
   if (namespacesWithMigrations.length === 0) {
     logger.warn("No TailorDB namespaces with migrations config found.");
-    logger.info('Add "migrations" field to your db config to enable migrations.');
+    logger.info(
+      'Add "migration: { directory: \\"./migrations\\" }" to your db config to enable migrations.',
+    );
     return;
   }
 

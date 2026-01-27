@@ -767,8 +767,8 @@ function compareIndexes(
       const oldIndex = oldIndexes![indexName];
       const newIndex = newIndexes![indexName];
 
-      const oldFieldsStr = JSON.stringify(oldIndex.fields.sort());
-      const newFieldsStr = JSON.stringify(newIndex.fields.sort());
+      const oldFieldsStr = JSON.stringify(oldIndex.fields.toSorted());
+      const newFieldsStr = JSON.stringify(newIndex.fields.toSorted());
 
       if (oldFieldsStr !== newFieldsStr || oldIndex.unique !== newIndex.unique) {
         ctx.changes.push({

@@ -409,6 +409,11 @@ export async function applyTailorDB(
       }
 
       // Step 3: Execute each migration sequentially: pre -> script -> post
+      if (migrationsRequiringScripts.length > 0) {
+        logger.info(`Executing ${migrationsRequiringScripts.length} data migration(s)...`);
+        logger.newline();
+      }
+
       for (const migration of pendingMigrations) {
         // Pre-migration phase: Create/update types with breaking fields as optional
         await executeSingleMigrationPrePhase(client, changeSet, migration);
@@ -428,6 +433,11 @@ export async function applyTailorDB(
 
         // Post-migration phase: Apply final types (required: true) and deletions
         await executeSingleMigrationPostPhase(client, changeSet, migration);
+      }
+
+      if (migrationsRequiringScripts.length > 0) {
+        logger.newline();
+        logger.success(`All data migrations completed successfully.`);
       }
 
       // Step 4: Delete remaining GQL permissions that weren't deleted with their types

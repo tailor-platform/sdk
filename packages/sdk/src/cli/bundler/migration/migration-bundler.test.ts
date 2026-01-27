@@ -14,9 +14,13 @@ describe("migration-bundler", () => {
       `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
+    // Set TAILOR_SDK_OUTPUT_DIR to testDir so bundled output goes into test directory
+    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
   });
 
   afterAll(() => {
+    // Clean up environment variable
+    delete process.env.TAILOR_SDK_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });
     } catch {

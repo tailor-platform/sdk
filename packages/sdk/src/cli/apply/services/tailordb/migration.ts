@@ -279,9 +279,6 @@ export async function executeMigrations(
     return;
   }
 
-  logger.info(`Executing ${migrationsWithScripts.length} data migration(s)...`);
-  logger.newline();
-
   // Group migrations by namespace
   const migrationsByNamespace = groupMigrationsByNamespace(migrationsWithScripts);
 
@@ -346,9 +343,6 @@ export async function executeMigrations(
       }
     }
   }
-
-  logger.newline();
-  logger.success(`All data migrations completed successfully.`);
 }
 
 /**

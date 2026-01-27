@@ -10,8 +10,8 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger } from "@/cli/utils/logger";
-import { getDistDir } from "@/configure/config";
 
 export interface MigrationBundleResult {
   namespace: string;
