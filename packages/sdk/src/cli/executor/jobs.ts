@@ -14,11 +14,10 @@ import {
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { defineCommand } from "citty";
 import ora from "ora";
-import { table } from "table";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
+import { formatKeyValueTable } from "../utils/format";
 import { logger, styles } from "../utils/logger";
 import { getWorkflowExecution } from "../workflow/executions";
 import {
@@ -60,10 +59,17 @@ export interface WatchExecutorJobOptions {
   workspaceId?: string;
   profile?: string;
   interval?: number;
+  logs?: boolean;
 }
 
 export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
   attempts?: ExecutorJobAttemptInfo[];
+}
+
+export interface WorkflowJobLog {
+  jobName: string;
+  logs?: string;
+  result?: string;
 }
 
 export interface WatchExecutorJobResult {
@@ -71,8 +77,10 @@ export interface WatchExecutorJobResult {
   targetType: string;
   workflowExecutionId?: string;
   workflowStatus?: string;
+  workflowJobLogs?: WorkflowJobLog[];
   functionExecutionId?: string;
   functionStatus?: string;
+  functionLogs?: string;
 }
 
 function formatTime(date: Date): string {
@@ -276,7 +284,22 @@ export async function watchExecutorJob(
               workspaceId: options.workspaceId,
               profile: options.profile,
               interval,
+              logs: options.logs,
             });
+
+            // Helper to extract workflow job logs
+            const extractWorkflowJobLogs = (
+              exec: typeof execution,
+            ): WorkflowJobLog[] | undefined => {
+              if (!options.logs || !exec.jobDetails) return undefined;
+              return exec.jobDetails
+                .filter((job) => job.logs || job.result)
+                .map((job) => ({
+                  jobName: job.stackedJobName || job.id,
+                  logs: job.logs,
+                  result: job.result,
+                }));
+            };
 
             // Check if already completed
             if (execution.status === "SUCCESS" || execution.status === "FAILED") {
@@ -292,6 +315,7 @@ export async function watchExecutorJob(
                 targetType: targetTypeStr,
                 workflowExecutionId: operationReference,
                 workflowStatus: execution.status,
+                workflowJobLogs: extractWorkflowJobLogs(execution),
               };
             }
 
@@ -316,6 +340,7 @@ export async function watchExecutorJob(
                 targetType: targetTypeStr,
                 workflowExecutionId: operationReference,
                 workflowStatus: finalExecution.status,
+                workflowJobLogs: extractWorkflowJobLogs(finalExecution),
               };
             } finally {
               clearInterval(updateInterval);
@@ -362,6 +387,7 @@ export async function watchExecutorJob(
                     targetType: targetTypeStr,
                     functionExecutionId: operationReference,
                     functionStatus: statusStr,
+                    functionLogs: options.logs ? execution.logs || undefined : undefined,
                   };
                 }
 
@@ -402,7 +428,7 @@ function printJobWithAttempts(job: ExecutorJobDetailInfo): void {
     ["createdAt", job.createdAt],
     ["updatedAt", job.updatedAt],
   ];
-  process.stdout.write(table(summaryData, { singleLine: true }));
+  logger.log(formatKeyValueTable(summaryData));
 
   // Print attempts
   if (job.attempts && job.attempts.length > 0) {
@@ -453,21 +479,29 @@ export const jobsCommand = defineCommand({
       description: "Show job attempts (only with job ID)",
       default: false,
     },
-    watch: {
+    wait: {
       type: "boolean",
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
       default: false,
+      alias: "W",
     },
     interval: {
       type: "string",
-      description: "Polling interval (e.g., '3s', '500ms', '1m')",
+      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
       default: "3s",
+      alias: "i",
+    },
+    logs: {
+      type: "boolean",
+      description: "Display function execution logs after completion (requires --wait)",
+      default: false,
+      alias: "l",
     },
   },
   run: withCommonArgs(async (args) => {
     if (args.jobId) {
-      if (args.watch) {
+      if (args.wait) {
         const interval = parseDuration(args.interval as string);
         const result = await watchExecutorJob({
           executorName: args.executorName as string,
@@ -475,6 +509,7 @@ export const jobsCommand = defineCommand({
           workspaceId: args["workspace-id"],
           profile: args.profile,
           interval,
+          logs: args.logs,
         });
 
         // Print result
@@ -487,6 +522,19 @@ export const jobsCommand = defineCommand({
             if (result.workflowStatus) {
               logger.log(`  Status: ${result.workflowStatus}`);
             }
+            if (result.workflowJobLogs && result.workflowJobLogs.length > 0) {
+              for (const jobLog of result.workflowJobLogs) {
+                logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
+                if (jobLog.logs) {
+                  logger.log(styles.dim("  Logs:"));
+                  logger.log(jobLog.logs);
+                }
+                if (jobLog.result) {
+                  logger.log(styles.dim("  Result:"));
+                  logger.log(jobLog.result);
+                }
+              }
+            }
           }
           if (result.functionExecutionId) {
             logger.log(styles.bold("\nFunction Execution:"));
@@ -494,9 +542,13 @@ export const jobsCommand = defineCommand({
             if (result.functionStatus) {
               logger.log(`  Status: ${result.functionStatus}`);
             }
+            if (result.functionLogs) {
+              logger.log(styles.bold("\nLogs:"));
+              logger.log(result.functionLogs);
+            }
           }
         } else {
-          printData(result, args.json);
+          logger.out(result);
         }
         return;
       }
@@ -511,11 +563,11 @@ export const jobsCommand = defineCommand({
       if (args.attempts && !args.json) {
         printJobWithAttempts(job);
       } else {
-        printData(job, args.json);
+        logger.out(job);
       }
     } else {
-      if (args.watch) {
-        logger.warn("--watch flag is ignored in list mode. Specify a job ID to watch.");
+      if (args.wait) {
+        logger.warn("--wait flag is ignored in list mode. Specify a job ID to wait.");
       }
       const jobs = await listExecutorJobs({
         executorName: args.executorName as string,
@@ -523,7 +575,7 @@ export const jobsCommand = defineCommand({
         workspaceId: args["workspace-id"],
         profile: args.profile,
       });
-      printData(jobs, args.json);
+      logger.out(jobs);
     }
   }),
 });

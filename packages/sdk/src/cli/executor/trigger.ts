@@ -3,7 +3,6 @@ import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { printData } from "../utils/format";
 import { logger, styles } from "../utils/logger";
 import { watchExecutorJob } from "./jobs";
 import type { JsonObject } from "@bufbuild/protobuf";
@@ -39,10 +38,7 @@ export async function triggerExecutor(
       payload: options.payload,
     });
 
-    // jobId is available from PR #9939
-    const jobId = (response as { jobId?: string }).jobId;
-
-    return { jobId };
+    return { jobId: response.jobId };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       throw new Error(`Executor '${options.executorName}' not found.`);
@@ -73,16 +69,24 @@ export const triggerCommand = defineCommand({
       description: "Payload data (JSON string)",
       alias: "d",
     },
-    watch: {
+    wait: {
       type: "boolean",
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
       default: false,
+      alias: "W",
     },
     interval: {
       type: "string",
-      description: "Polling interval for --watch (e.g., '3s', '500ms', '1m')",
+      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
       default: "3s",
+      alias: "i",
+    },
+    logs: {
+      type: "boolean",
+      description: "Display function execution logs after completion (requires --wait)",
+      default: false,
+      alias: "l",
     },
   },
   run: withCommonArgs(async (args) => {
@@ -106,7 +110,7 @@ export const triggerCommand = defineCommand({
 
     if (!result.jobId) {
       logger.success(`Executor '${args.executorName}' triggered successfully.`);
-      if (args.watch) {
+      if (args.wait) {
         logger.warn("Cannot watch: job ID not available. The API may need to be updated.");
       }
       return;
@@ -116,7 +120,7 @@ export const triggerCommand = defineCommand({
       `Executor '${args.executorName}' triggered successfully. Job ID: ${result.jobId}`,
     );
 
-    if (args.watch) {
+    if (args.wait) {
       const interval = parseDuration(args.interval as string);
       const watchResult = await watchExecutorJob({
         executorName: args.executorName,
@@ -124,6 +128,7 @@ export const triggerCommand = defineCommand({
         workspaceId: args["workspace-id"],
         profile: args.profile,
         interval,
+        logs: args.logs,
       });
 
       // Print result
@@ -137,6 +142,19 @@ export const triggerCommand = defineCommand({
           if (watchResult.workflowStatus) {
             logger.log(`  Status: ${watchResult.workflowStatus}`);
           }
+          if (watchResult.workflowJobLogs && watchResult.workflowJobLogs.length > 0) {
+            for (const jobLog of watchResult.workflowJobLogs) {
+              logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
+              if (jobLog.logs) {
+                logger.log(styles.dim("  Logs:"));
+                logger.log(jobLog.logs);
+              }
+              if (jobLog.result) {
+                logger.log(styles.dim("  Result:"));
+                logger.log(jobLog.result);
+              }
+            }
+          }
         }
         if (watchResult.functionExecutionId) {
           logger.log(styles.bold("\nFunction Execution:"));
@@ -144,9 +162,13 @@ export const triggerCommand = defineCommand({
           if (watchResult.functionStatus) {
             logger.log(`  Status: ${watchResult.functionStatus}`);
           }
+          if (watchResult.functionLogs) {
+            logger.log(styles.bold("\nLogs:"));
+            logger.log(watchResult.functionLogs);
+          }
         }
       } else {
-        printData(watchResult, args.json);
+        logger.out(watchResult);
       }
     }
   }),
