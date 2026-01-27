@@ -87,6 +87,11 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString("en-US", { hour12: false });
 }
 
+/**
+ * List executor jobs for a given executor.
+ * @param options - Options for listing executor jobs
+ * @returns List of executor job information
+ */
 export async function listExecutorJobs(
   options: ListExecutorJobsOptions,
 ): Promise<ExecutorJobListInfo[]> {
@@ -138,6 +143,11 @@ export async function listExecutorJobs(
   }
 }
 
+/**
+ * Get details of a specific executor job.
+ * @param options - Options for getting executor job details
+ * @returns Executor job detail information
+ */
 export async function getExecutorJob(
   options: GetExecutorJobOptions,
 ): Promise<ExecutorJobDetailInfo> {
@@ -190,6 +200,11 @@ export async function getExecutorJob(
   }
 }
 
+/**
+ * Watch an executor job until completion, including downstream executions.
+ * @param options - Options for watching executor job
+ * @returns Result including job details and downstream execution info
+ */
 export async function watchExecutorJob(
   options: WatchExecutorJobOptions,
 ): Promise<WatchExecutorJobResult> {

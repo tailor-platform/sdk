@@ -9,6 +9,11 @@ import { styles } from "../utils/logger";
 // Executor Job Status
 // ============================================================================
 
+/**
+ * Colorize executor job status for display.
+ * @param status - Executor job status string
+ * @returns Colorized status string
+ */
 export function colorizeExecutorJobStatus(status: string): string {
   switch (status) {
     case "PENDING":
@@ -26,6 +31,11 @@ export function colorizeExecutorJobStatus(status: string): string {
   }
 }
 
+/**
+ * Check if executor job status is terminal.
+ * @param status - Executor job status enum
+ * @returns True if status is terminal
+ */
 export function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean {
   return (
     status === ExecutorJobStatus.SUCCESS ||
@@ -34,6 +44,11 @@ export function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean 
   );
 }
 
+/**
+ * Parse executor job status string to enum.
+ * @param status - Status string to parse
+ * @returns Parsed ExecutorJobStatus enum value
+ */
 export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
   const upperStatus = status.toUpperCase();
   switch (upperStatus) {
@@ -58,6 +73,11 @@ export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
 // Function Execution Status
 // ============================================================================
 
+/**
+ * Colorize function execution status for display.
+ * @param status - Function execution status string
+ * @returns Colorized status string
+ */
 export function colorizeFunctionExecutionStatus(status: string): string {
   switch (status) {
     case "RUNNING":
@@ -71,10 +91,20 @@ export function colorizeFunctionExecutionStatus(status: string): string {
   }
 }
 
+/**
+ * Check if function execution status is terminal.
+ * @param status - Function execution status enum
+ * @returns True if status is terminal
+ */
 export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Status): boolean {
   return status === FunctionExecution_Status.SUCCESS || status === FunctionExecution_Status.FAILED;
 }
 
+/**
+ * Convert function execution status enum to string.
+ * @param status - Function execution status enum
+ * @returns Status string
+ */
 export function functionExecutionStatusToString(status: FunctionExecution_Status): string {
   switch (status) {
     case FunctionExecution_Status.RUNNING:
@@ -92,6 +122,11 @@ export function functionExecutionStatusToString(status: FunctionExecution_Status
 // Executor Target Type
 // ============================================================================
 
+/**
+ * Convert executor target type enum to string.
+ * @param targetType - Executor target type enum
+ * @returns Target type string
+ */
 export function executorTargetTypeToString(targetType: ExecutorTargetType): string {
   switch (targetType) {
     case ExecutorTargetType.WEBHOOK:
