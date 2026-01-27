@@ -20,7 +20,6 @@ export type {
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
-  TailorDBServiceInput,
 } from "@/configure/services/tailordb";
 
 export type TailorDBServiceConfig = {
