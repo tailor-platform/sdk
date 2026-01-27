@@ -193,6 +193,15 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
+   * Helper to get the absolute path pattern for tailordb files
+   * This is needed because file patterns are resolved from process.cwd(), not config file location
+   * @returns Absolute path pattern for tailordb files
+   */
+  function getTailordbFilesPattern(): string {
+    return path.join(tempDir, "tailordb", "*.ts").replace(/\\/g, "/");
+  }
+
+  /**
    * Helper to create TailorDB type file
    */
   function createTailorDBTypeFile(): void {
@@ -227,7 +236,7 @@ import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -264,8 +273,8 @@ import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
-    "${additionalTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+    "${additionalTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -295,7 +304,7 @@ import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -333,7 +342,7 @@ const idp = defineIdp("${idpName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
   idp: [idp],
 });
@@ -357,7 +366,7 @@ import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -408,7 +417,7 @@ const auth = defineAuth("${authName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
   idp: [idp],
   auth,
@@ -440,7 +449,7 @@ const idp = defineIdp("${idpName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
   idp: [idp],
 });
@@ -522,7 +531,7 @@ export default defineConfig({
   name: "${testAppName}",
   db: {
     "${sharedTailordbName}": {
-      files: ["./tailordb/*.ts"],
+      files: ["${getTailordbFilesPattern()}"],
       migration: {
         directory: "${migrationsDir.replace(/\\/g, "\\\\")}",
       },
@@ -580,7 +589,7 @@ import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
