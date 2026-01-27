@@ -1,18 +1,127 @@
 import type { RelationType } from "./relation";
-import type { TailorTypePermission, TailorTypeGqlPermission } from "@/configure/services/tailordb";
+import type {
+  TailorAnyDBField,
+  TailorDBField,
+  TailorTypeGqlPermission,
+  TailorTypePermission,
+} from "@/configure/services/tailordb";
+import type { Hooks, IndexDef, TypeFeatures } from "@/configure/services/tailordb/types";
+import type { InferredAttributeMap } from "@/configure/types";
+import type { InferFieldsOutput, output } from "@/configure/types/helpers";
+import type { FieldOptions, FieldOutput, TailorToTs } from "@/configure/types/types";
+import type { Validators } from "@/configure/types/validation";
 import type { ValueOperand } from "@/parser/service/auth/types";
 
 export type { RelationType } from "./relation";
 export type {
   TailorAnyDBField,
   TailorDBField,
-  TailorDBType,
   DBFieldMetadata,
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
   TailorDBServiceConfig,
+  TailorDBServiceInput,
 } from "@/configure/services/tailordb";
+
+// Helper alias
+// oxlint-disable-next-line no-explicit-any
+export type TailorAnyDBType = TailorDBType<any, any>;
+
+/**
+ * TailorDBType interface representing a database type definition with fields, permissions, and settings.
+ */
+export interface TailorDBType<
+  // Default kept loose to avoid forcing callers to supply generics.
+  // oxlint-disable-next-line no-explicit-any
+  Fields extends Record<string, TailorAnyDBField> = any,
+  User extends object = InferredAttributeMap,
+> {
+  readonly name: string;
+  readonly fields: Fields;
+  readonly _output: InferFieldsOutput<Fields>;
+  _description?: string;
+
+  /** Returns metadata for the type */
+  readonly metadata: TailorDBTypeMetadata;
+
+  /**
+   * Add hooks for fields
+   */
+  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
+
+  /**
+   * Add validators for fields
+   */
+  validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
+
+  /**
+   * Configure type features
+   */
+  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
+
+  /**
+   * Define composite indexes
+   */
+  indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
+
+  /**
+   * Define file fields
+   */
+  files<const F extends string>(
+    files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
+  ): TailorDBType<Fields, User>;
+
+  /**
+   * Set record-level permissions
+   */
+  permission<
+    U extends object = User,
+    P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
+      U,
+      output<TailorDBType<Fields, User>>
+    >,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U>;
+
+  /**
+   * Set GraphQL-level permissions
+   */
+  gqlPermission<
+    U extends object = User,
+    P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U>;
+
+  /**
+   * Set type description
+   */
+  description(description: string): TailorDBType<Fields, User>;
+
+  /**
+   * Pick specific fields from the type
+   */
+  pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
+    keys: K[],
+    options: Opt,
+  ): {
+    [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
+      ? TailorDBField<
+          Omit<D, "array"> & {
+            array: Opt extends { array: true } ? true : D["array"];
+          },
+          FieldOutput<TailorToTs[D["type"]], Opt>
+        >
+      : never;
+  };
+
+  /**
+   * Omit specific fields from the type
+   */
+  omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
+}
 
 export interface Script {
   expr: string;

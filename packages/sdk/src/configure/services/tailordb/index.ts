@@ -1,4 +1,5 @@
-export { db, type TailorDBType, type TailorDBField, type TailorAnyDBField } from "./schema";
+export { db, type TailorDBField, type TailorAnyDBField } from "./schema";
+export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { TailorDBInstance } from "./schema";
 export {
   unsafeAllowAllTypePermission,
@@ -7,4 +8,10 @@ export {
   type TailorTypeGqlPermission,
   type PermissionCondition,
 } from "./permission";
-export type { DBFieldMetadata, Hook, TailorDBServiceConfig } from "./types";
+export type {
+  DBFieldMetadata,
+  Hook,
+  TailorDBExternalConfig,
+  TailorDBServiceConfig,
+  TailorDBServiceInput,
+} from "./types";
