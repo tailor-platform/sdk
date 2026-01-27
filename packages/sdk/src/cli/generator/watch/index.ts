@@ -1,5 +1,5 @@
 import { glob } from "node:fs/promises";
-import { watch } from "chokidar";
+import chokidar from "chokidar";
 import * as madgeModule from "madge";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/utils/logger";
@@ -56,7 +56,7 @@ type ErrorCallback = (error: WatcherError) => void;
  */
 interface WatcherOptions {
   /** Options for chokidar. */
-  chokidarOptions?: Parameters<typeof watch>[1];
+  chokidarOptions?: Parameters<typeof chokidar.watch>[1];
   /** Options for madge. */
   madgeOptions?: Parameters<MadgeLoader>[1];
   /** Update interval for the dependency graph (milliseconds). */
@@ -334,7 +334,7 @@ export class DependencyGraphManager {
  * Dependency watching system backed by chokidar and madge.
  */
 class DependencyWatcher {
-  private chokidarWatcher: ReturnType<typeof watch> | null = null;
+  private chokidarWatcher: ReturnType<typeof chokidar.watch> | null = null;
   private watchGroups: Map<string, WatchGroup> = new Map();
   private dependencyGraphManager: DependencyGraphManager;
   private errorCallback: ErrorCallback | null = null;
@@ -355,7 +355,7 @@ class DependencyWatcher {
     if (this.isInitialized) return;
 
     try {
-      this.chokidarWatcher = watch([], {
+      this.chokidarWatcher = chokidar.watch([], {
         ignored: /node_modules/,
         persistent: true,
         ignoreInitial: true,
