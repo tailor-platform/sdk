@@ -132,12 +132,14 @@ export async function planTailorDB(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
+  const createdServices = new Set(serviceChangeSet.creates.map((create) => create.name));
   const typeChangeSet = await planTypes(client, workspaceId, tailordbs, executors, deletedServices);
   const gqlPermissionChangeSet = await planGqlPermissions(
     client,
     workspaceId,
     tailordbs,
     deletedServices,
+    createdServices,
   );
 
   serviceChangeSet.print();
@@ -720,6 +722,7 @@ async function planGqlPermissions(
   workspaceId: string,
   tailordbs: ReadonlyArray<TailorDBService>,
   deletedServices: ReadonlyArray<string>,
+  createdServices: ReadonlySet<string>,
 ) {
   const changeSet = createChangeSet<CreateGqlPermission, UpdateGqlPermission, DeleteGqlPermission>(
     "TailorDB gqlPermissions",
@@ -744,7 +747,10 @@ async function planGqlPermissions(
   };
 
   for (const tailordb of tailordbs) {
-    const existingGqlPermissions = await fetchGqlPermissions(tailordb.namespace);
+    // Skip fetching for newly created services as they don't have any gqlPermissions yet
+    const existingGqlPermissions = createdServices.has(tailordb.namespace)
+      ? []
+      : await fetchGqlPermissions(tailordb.namespace);
     const existingNameSet = new Set<string>();
     existingGqlPermissions.forEach((gqlPermission) => {
       existingNameSet.add(gqlPermission.typeName);
