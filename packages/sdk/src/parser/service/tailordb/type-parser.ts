@@ -80,7 +80,8 @@ function parseTailorDBType(
     }
 
     // Validate that index/unique are not set on array fields
-    if (fieldConfig.array && fieldConfig.index) {
+    // Exception: foreignKey fields require index=true for federation, even on arrays
+    if (fieldConfig.array && fieldConfig.index && !fieldConfig.foreignKey) {
       throw new Error(
         `Field "${fieldName}" on type "${type.name}": index cannot be set on array fields`,
       );

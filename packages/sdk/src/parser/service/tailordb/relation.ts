@@ -85,8 +85,9 @@ export function processRelationMetadata(
   const targetTypeName =
     rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
 
-  // Index and unique are not supported on array fields
-  const shouldSetIndex = !isArrayField;
+  // Foreign key fields always require index: true for federation
+  // Unique is not supported on array fields (logical constraint)
+  const shouldSetIndex = true;
   const shouldSetUnique = !isArrayField && isUnique;
 
   return {

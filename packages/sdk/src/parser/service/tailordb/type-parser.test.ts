@@ -4,7 +4,7 @@ import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
   describe("array field validation", () => {
-    it("should throw error when index is set on array field", () => {
+    it("should throw error when index is set on non-relation array field", () => {
       // Bypass type check by directly setting metadata
       const field = db.string({ array: true });
       (field as unknown as { _metadata: { index: boolean } })._metadata.index = true;
@@ -16,6 +16,28 @@ describe("parseTypes", () => {
       expect(() => parseTypes({ Test: testType }, "test-namespace")).toThrow(
         'Field "tags" on type "Test": index cannot be set on array fields',
       );
+    });
+
+    it("should allow index on array fields with relations (foreignKey requirement)", () => {
+      const contract = db.type("Contract", {
+        name: db.string(),
+      });
+
+      const order = db.type("Order", {
+        contractIDs: db.uuid({ array: true }).relation({
+          type: "1-1",
+          toward: { type: contract, as: "contracts" },
+        }),
+      });
+
+      const result = parseTypes({ Contract: contract, Order: order }, "test-namespace");
+
+      // Foreign key fields require index=true for federation, even on arrays
+      expect(result.Order.fields.contractIDs.config.index).toBe(true);
+      expect(result.Order.fields.contractIDs.config.foreignKey).toBe(true);
+      expect(result.Order.fields.contractIDs.config.array).toBe(true);
+      // unique should not be set on array fields, even for 1-1 relations
+      expect(result.Order.fields.contractIDs.config.unique).toBe(false);
     });
 
     it("should throw error when unique is set on array field", () => {
