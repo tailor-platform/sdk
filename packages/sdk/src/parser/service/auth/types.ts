@@ -116,6 +116,8 @@ export type UserAttributeMap<User extends TailorDBInstance> = {
   [K in UserAttributeKey<User>]?: true;
 };
 
+export type { AuthConfig, AuthOwnConfig } from "@/configure/services/auth";
+
 // Helper types for AuthServiceInput
 type DisallowExtraKeys<T, Allowed extends PropertyKey> = T & {
   [K in Exclude<keyof T, Allowed>]: never;

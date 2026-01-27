@@ -2,14 +2,13 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import {
   parseTypes,
   TailorDBTypeSchema,
   type ParsedTailorDBType,
   type TypeSourceInfo,
 } from "@/parser/service/tailordb";
-import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
+import type { TailorDBServiceConfig, TailorDBType } from "@/parser/service/tailordb/types";
 
 export type TailorDBService = {
   readonly namespace: string;
