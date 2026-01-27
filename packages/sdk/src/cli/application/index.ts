@@ -6,7 +6,6 @@ import { type AuthConfig } from "@/configure/services/auth";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type ResolverServiceInput } from "@/configure/services/resolver/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import { type WorkflowServiceConfig } from "@/configure/services/workflow/types";
 import { type AppConfig } from "@/parser/app-config";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import {
@@ -14,6 +13,7 @@ import {
   type StaticWebsite,
   type StaticWebsiteInput,
 } from "@/parser/service/staticwebsite";
+import { type WorkflowServiceConfig } from "@/parser/service/workflow";
 import type { IdPConfig } from "@/configure/services/idp";
 
 export type Application = {
