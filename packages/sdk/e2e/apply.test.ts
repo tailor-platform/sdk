@@ -112,6 +112,87 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
+   * Helper to list all TailorDB service namespaces in the workspace
+   * @returns List of TailorDB service namespace names
+   */
+  async function listTailorDBServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBServices({ workspaceId, pageToken });
+      for (const svc of resp.tailordbServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to list all TailorDB type names in a namespace
+   * @param namespace - TailorDB namespace name
+   * @returns List of type names in the namespace
+   */
+  async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
+    const types: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+      });
+      for (const t of resp.tailordbTypes) {
+        if (t.name) {
+          types.push(t.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return types;
+  }
+
+  /**
+   * Helper to list all IdP service names in the workspace
+   * @returns List of IdP service namespace names
+   */
+  async function listIdPServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listIdPServices({ workspaceId, pageToken });
+      for (const svc of resp.idpServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to list all Auth service names in the workspace
+   * @returns List of Auth service namespace names
+   */
+  async function listAuthServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listAuthServices({ workspaceId, pageToken });
+      for (const svc of resp.authServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
    * Helper to create TailorDB type file
    */
   function createTailorDBTypeFile(): void {
@@ -157,6 +238,14 @@ export default defineConfig({
       configPath,
       yes: true,
     });
+
+    // Verify: TailorDB service should exist
+    const services = await listTailorDBServiceNames();
+    expect(services).toContain(sharedTailordbName);
+
+    // Verify: User type should exist in the namespace
+    const types = await listTailorDBTypeNames(sharedTailordbName);
+    expect(types).toContain("User");
   }, 120000);
 
   /**
@@ -188,6 +277,17 @@ export default defineConfig({
       yes: true,
     });
 
+    // Verify: Both TailorDB services should exist
+    const servicesAfterAdd = await listTailorDBServiceNames();
+    expect(servicesAfterAdd).toContain(sharedTailordbName);
+    expect(servicesAfterAdd).toContain(additionalTailordbName);
+
+    // Verify: User type should exist in both namespaces
+    const typesInShared = await listTailorDBTypeNames(sharedTailordbName);
+    expect(typesInShared).toContain("User");
+    const typesInAdditional = await listTailorDBTypeNames(additionalTailordbName);
+    expect(typesInAdditional).toContain("User");
+
     // Step 2: Remove the additional TailorDB (keep shared one)
     const configWithoutExtra = `
 import { defineConfig } from "@tailor-platform/sdk";
@@ -203,13 +303,16 @@ export default defineConfig({
     const configPath2 = createTestConfig(configWithoutExtra);
 
     // Step 3: Apply - this should delete the extra TailorDB without error
-    await expect(
-      apply({
-        workspaceId,
-        configPath: configPath2,
-        yes: true,
-      }),
-    ).resolves.not.toThrow();
+    await apply({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: Additional TailorDB service should be deleted
+    const servicesAfterDelete = await listTailorDBServiceNames();
+    expect(servicesAfterDelete).toContain(sharedTailordbName);
+    expect(servicesAfterDelete).not.toContain(additionalTailordbName);
   }, 120000);
 
   /**
@@ -243,6 +346,10 @@ export default defineConfig({
       yes: true,
     });
 
+    // Verify: IdP service should exist
+    const idpServicesAfterAdd = await listIdPServiceNames();
+    expect(idpServicesAfterAdd).toContain(idpName);
+
     // Step 2: Remove IdP from config (keep TailorDB)
     const configWithoutIdP = `
 import { defineConfig } from "@tailor-platform/sdk";
@@ -260,13 +367,15 @@ export default defineConfig({
     // Step 3: Apply - this should delete IdP without error
     // Before the fix, this would fail with:
     // "Failed to delete IdPService: idp xxx is used by gateway(s)"
-    await expect(
-      apply({
-        workspaceId,
-        configPath: configPath2,
-        yes: true,
-      }),
-    ).resolves.not.toThrow();
+    await apply({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: IdP service should be deleted
+    const idpServicesAfterDelete = await listIdPServiceNames();
+    expect(idpServicesAfterDelete).not.toContain(idpName);
   }, 120000);
 
   /**
@@ -313,6 +422,12 @@ export default defineConfig({
       yes: true,
     });
 
+    // Verify: Auth and IdP services should exist
+    const authServicesAfterAdd = await listAuthServiceNames();
+    expect(authServicesAfterAdd).toContain(authName);
+    const idpServicesAfterAdd = await listIdPServiceNames();
+    expect(idpServicesAfterAdd).toContain(idpName);
+
     // Step 2: Remove Auth from config (keep TailorDB and IdP)
     const configWithoutAuth = `
 import { defineConfig, defineIdp } from "@tailor-platform/sdk";
@@ -336,13 +451,17 @@ export default defineConfig({
     // Step 3: Apply - this should delete Auth without error
     // Before the fix, this would fail with:
     // "Failed to delete AuthService: auth xxx is used by gateway(s)"
-    await expect(
-      apply({
-        workspaceId,
-        configPath: configPath2,
-        yes: true,
-      }),
-    ).resolves.not.toThrow();
+    await apply({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: Auth service should be deleted, IdP should remain
+    const authServicesAfterDelete = await listAuthServiceNames();
+    expect(authServicesAfterDelete).not.toContain(authName);
+    const idpServicesAfterDelete = await listIdPServiceNames();
+    expect(idpServicesAfterDelete).toContain(idpName);
   }, 120000);
 
   /**
