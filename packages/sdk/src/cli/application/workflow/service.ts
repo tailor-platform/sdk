@@ -2,8 +2,12 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type Workflow, WorkflowJobSchema, WorkflowSchema } from "@/parser/service/workflow";
-import type { WorkflowServiceConfig } from "@/configure/services/workflow/types";
+import {
+  type Workflow,
+  type WorkflowServiceConfig,
+  WorkflowJobSchema,
+  WorkflowSchema,
+} from "@/parser/service/workflow";
 
 export interface CollectedJob {
   name: string;
