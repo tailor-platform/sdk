@@ -28,6 +28,11 @@ export interface ExecutorJobAttemptInfo {
   operationReference: string;
 }
 
+/**
+ * Convert executor job status enum to string.
+ * @param status - Executor job status enum
+ * @returns Status string
+ */
 export function executorJobStatusToString(status: ExecutorJobStatus): string {
   switch (status) {
     case ExecutorJobStatus.PENDING:
@@ -45,6 +50,11 @@ export function executorJobStatusToString(status: ExecutorJobStatus): string {
   }
 }
 
+/**
+ * Transform ExecutorJob to ExecutorJobListInfo for list display.
+ * @param job - Executor job from proto
+ * @returns Executor job list info
+ */
 export function toExecutorJobListInfo(job: ExecutorJob): ExecutorJobListInfo {
   return {
     id: job.id,
@@ -54,6 +64,11 @@ export function toExecutorJobListInfo(job: ExecutorJob): ExecutorJobListInfo {
   };
 }
 
+/**
+ * Transform ExecutorJob to ExecutorJobInfo for detail display.
+ * @param job - Executor job from proto
+ * @returns Executor job info
+ */
 export function toExecutorJobInfo(job: ExecutorJob): ExecutorJobInfo {
   return {
     id: job.id,
@@ -65,6 +80,11 @@ export function toExecutorJobInfo(job: ExecutorJob): ExecutorJobInfo {
   };
 }
 
+/**
+ * Transform ExecutorJobAttempt to ExecutorJobAttemptInfo for display.
+ * @param attempt - Executor job attempt from proto
+ * @returns Executor job attempt info
+ */
 export function toExecutorJobAttemptInfo(attempt: ExecutorJobAttempt): ExecutorJobAttemptInfo {
   return {
     id: attempt.id,

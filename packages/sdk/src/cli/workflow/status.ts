@@ -1,6 +1,11 @@
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import { styles } from "../utils/logger";
 
+/**
+ * Colorize workflow execution status for display.
+ * @param status - Workflow execution status enum
+ * @returns Colorized status string
+ */
 export function colorizeWorkflowExecutionStatus(status: WorkflowExecution_Status): string {
   const statusText = WorkflowExecution_Status[status];
   switch (status) {
@@ -19,6 +24,11 @@ export function colorizeWorkflowExecutionStatus(status: WorkflowExecution_Status
   }
 }
 
+/**
+ * Check if workflow execution status is terminal.
+ * @param status - Workflow execution status enum
+ * @returns True if status is terminal
+ */
 export function isWorkflowExecutionTerminalStatus(status: WorkflowExecution_Status): boolean {
   return (
     status === WorkflowExecution_Status.SUCCESS ||
@@ -27,6 +37,11 @@ export function isWorkflowExecutionTerminalStatus(status: WorkflowExecution_Stat
   );
 }
 
+/**
+ * Parse workflow execution status string to enum.
+ * @param status - Status string to parse
+ * @returns Parsed WorkflowExecution_Status enum value
+ */
 export function parseWorkflowExecutionStatus(status: string): WorkflowExecution_Status {
   const upperStatus = status.toUpperCase();
   switch (upperStatus) {

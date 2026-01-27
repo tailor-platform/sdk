@@ -18,6 +18,11 @@ export interface TriggerExecutorResult {
   jobId?: string;
 }
 
+/**
+ * Trigger an executor and return the job ID.
+ * @param options - Options for triggering executor
+ * @returns Result containing the job ID if available
+ */
 export async function triggerExecutor(
   options: TriggerExecutorOptions,
 ): Promise<TriggerExecutorResult> {
