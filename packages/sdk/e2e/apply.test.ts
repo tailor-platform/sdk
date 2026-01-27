@@ -142,12 +142,11 @@ export type user = typeof user;
 
     const baseConfig = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
   },
 });
 `;
@@ -172,13 +171,12 @@ export default defineConfig({
     // Step 1: Add an additional TailorDB service
     const configWithExtra = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
-    "${additionalTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
+    "${additionalTailordbName}": { files: ["./tailordb/*.ts"] },
   },
 });
 `;
@@ -193,12 +191,11 @@ export default defineConfig({
     // Step 2: Remove the additional TailorDB (keep shared one)
     const configWithoutExtra = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
   },
 });
 `;
@@ -224,7 +221,6 @@ export default defineConfig({
     // Step 1: Add IdP service to the application
     const configWithIdP = `
 import { defineConfig, defineIdp } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 const idp = defineIdp("${idpName}", {
   authorization: "loggedIn",
@@ -234,7 +230,7 @@ const idp = defineIdp("${idpName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
   },
   idp: [idp],
 });
@@ -250,12 +246,11 @@ export default defineConfig({
     // Step 2: Remove IdP from config (keep TailorDB)
     const configWithoutIdP = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
   },
 });
 `;
@@ -291,7 +286,6 @@ export default defineConfig({
     // Step 1: Add Auth service (without userProfile to avoid SDL composition issues)
     const configWithAuth = `
 import { defineConfig, defineAuth, defineIdp } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 const idp = defineIdp("${idpName}", {
   authorization: "loggedIn",
@@ -305,7 +299,7 @@ const auth = defineAuth("${authName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
   },
   idp: [idp],
   auth,
@@ -322,7 +316,6 @@ export default defineConfig({
     // Step 2: Remove Auth from config (keep TailorDB and IdP)
     const configWithoutAuth = `
 import { defineConfig, defineIdp } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 const idp = defineIdp("${idpName}", {
   authorization: "loggedIn",
@@ -332,7 +325,7 @@ const idp = defineIdp("${idpName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
   },
   idp: [idp],
 });
@@ -405,13 +398,12 @@ export type user = typeof user;
 
     const configWithMigrations = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
     "${sharedTailordbName}": {
-      types: [user],
+      files: ["./tailordb/*.ts"],
       migration: {
         directory: "${migrationsDir.replace(/\\/g, "\\\\")}",
       },
@@ -465,12 +457,11 @@ export type user = typeof user;
   test("cleanup: remove remaining services", async () => {
     const cleanupConfig = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["./tailordb/*.ts"] },
   },
 });
 `;

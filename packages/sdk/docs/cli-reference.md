@@ -87,12 +87,15 @@ Commands for managing Tailor Platform applications (work with `tailor.config.ts`
 
 Commands for managing TailorDB tables, data, and schema migrations.
 
-| Command                                                                      | Description                                   |
-| ---------------------------------------------------------------------------- | --------------------------------------------- |
-| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate TailorDB tables                      |
-| [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files from schema snapshot |
-| [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint manually             |
-| [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show migration status                         |
+| Command                                                                      | Description                                      |
+| ---------------------------------------------------------------------------- | ------------------------------------------------ |
+| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate TailorDB tables                         |
+| [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files from schema snapshot    |
+| [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint manually                |
+| [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show migration status                            |
+| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export ERD artifacts from TailorDB schema (beta) |
+| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Serve ERD locally (beta)                         |
+| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website (beta)                 |
 
 Note: Migration scripts are automatically executed during `tailor-sdk apply`. See [Automatic Migration Execution](./cli/tailordb.md#automatic-migration-execution) for details.
 
