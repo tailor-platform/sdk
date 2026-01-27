@@ -3,13 +3,6 @@ import type { JsonCompatible } from "@/configure/types/helpers";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
 
 /**
- * Symbol used to brand WorkflowJob objects created by createWorkflowJob.
- * This enables reliable runtime detection of workflow jobs regardless of
- * how they were imported or assigned (variable reassignment, destructuring, etc.)
- */
-export const WORKFLOW_JOB_BRAND = Symbol.for("tailor:workflow-job");
-
-/**
  * Context object passed as the second argument to workflow job body functions.
  */
 export type WorkflowJobContext = {
@@ -47,7 +40,6 @@ export type WorkflowJobInput = undefined | JsonCompatible<unknown>;
  * - Trigger returns Jsonify<Output> (Date becomes string after JSON.stringify)
  */
 export interface WorkflowJob<Name extends string = string, Input = undefined, Output = undefined> {
-  readonly [WORKFLOW_JOB_BRAND]?: true;
   name: Name;
   /**
    * Trigger this job with the given input.
@@ -154,7 +146,6 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
   readonly body: WorkflowJobBody<I, O>;
 }): WorkflowJob<Name, I, Awaited<O>> => {
   return {
-    [WORKFLOW_JOB_BRAND]: true,
     name: config.name,
     // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
     // This converts Date objects to strings, matching actual runtime behavior.

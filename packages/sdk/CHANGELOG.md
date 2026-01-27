@@ -1,5 +1,39 @@
 # @tailor-platform/sdk
 
+## 1.5.0
+
+### Minor Changes
+
+- [#479](https://github.com/tailor-platform/sdk/pull/479) [`bb984f5`](https://github.com/tailor-platform/sdk/commit/bb984f59421999709be389febc23bbadfc5d91e5) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Support machine users without userProfile via new machineUserAttributes field
+
+  Adds machineUserAttributes configuration option for defining type-safe machine-user-only authentication without requiring a userProfile.
+
+- [#478](https://github.com/tailor-platform/sdk/pull/478) [`dce0040`](https://github.com/tailor-platform/sdk/commit/dce0040f0477c2603b604ab3aac17383ec03f3e7) Thanks [@toiroakr](https://github.com/toiroakr)! - Add local testing support for workflows
+
+  - `createWorkflowJob`: `.trigger()` now executes body directly for local testing
+  - `createWorkflow`: `.trigger()` now calls `mainJob.trigger()` for local testing
+  - Export `WORKFLOW_TEST_ENV_KEY` from `@tailor-platform/sdk/test` for env configuration
+  - Add workflow trigger test examples to testing template
+
+### Patch Changes
+
+- [#474](https://github.com/tailor-platform/sdk/pull/474) [`a41a320`](https://github.com/tailor-platform/sdk/commit/a41a3205d093a5ae6e864d96687fe87f1af81bf4) Thanks [@riku99](https://github.com/riku99)! - Moved AppConfig into packages/sdk/src/parser/\*\* and imports in cli'
+
+- [#482](https://github.com/tailor-platform/sdk/pull/482) [`43afdae`](https://github.com/tailor-platform/sdk/commit/43afdaeccd6a68500721cfe17e27149fe6a44c43) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `publishUserEvents` option for IdP configuration
+
+  When enabled, user lifecycle events (created, updated, deleted) are published to the dataplane event topic.
+
+- [#471](https://github.com/tailor-platform/sdk/pull/471) [`e2c5e83`](https://github.com/tailor-platform/sdk/commit/e2c5e83b85fb835652e06d78290a41a9fc06fb3e) Thanks [@dqn](https://github.com/dqn)! - Refactor class-based implementations to factory functions
+
+  - Convert service classes (AuthService, ExecutorService, ResolverService, TailorDBService) to factory functions
+  - Convert Application class to factory function
+  - Convert generator classes to factory functions
+  - Convert TailorField, TailorDBField, TailorDBType classes to interfaces with factory functions
+  - Introduce Symbol branding for reliable type identification
+  - Normalize undefined to null for optional fields
+
+- [#483](https://github.com/tailor-platform/sdk/pull/483) [`fe8d1c5`](https://github.com/tailor-platform/sdk/commit/fe8d1c5a940855be935bac4d02115317ce0edf88) Thanks [@riku99](https://github.com/riku99)! - Moved getDistDir to cli utils and updated imports
+
 ## 1.4.2
 
 ### Patch Changes
