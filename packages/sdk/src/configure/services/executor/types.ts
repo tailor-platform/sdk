@@ -1,2 +1,1 @@
-export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
-export type ExecutorServiceInput = ExecutorServiceConfig;
+export type { ExecutorServiceConfig, ExecutorServiceInput } from "@/parser/service/executor/types";

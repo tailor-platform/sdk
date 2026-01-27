@@ -25,3 +25,6 @@ export type WorkflowOperation = z.infer<typeof WorkflowOperationSchema>;
 
 export type Executor = z.infer<typeof ExecutorSchema>;
 export type ExecutorInput = z.input<typeof ExecutorSchema>;
+
+export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
+export type ExecutorServiceInput = ExecutorServiceConfig;

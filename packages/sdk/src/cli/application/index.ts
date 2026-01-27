@@ -3,11 +3,11 @@ import { createExecutorService, type ExecutorService } from "@/cli/application/e
 import { createResolverService, type ResolverService } from "@/cli/application/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
 import { type AuthConfig } from "@/configure/services/auth";
-import { type ExecutorServiceInput } from "@/configure/services/executor/types";
 import { type ResolverServiceInput } from "@/configure/services/resolver/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { type WorkflowServiceConfig } from "@/configure/services/workflow/types";
 import { type AppConfig } from "@/parser/app-config";
+import { type ExecutorServiceInput } from "@/parser/service/executor";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import {
   StaticWebsiteSchema,
