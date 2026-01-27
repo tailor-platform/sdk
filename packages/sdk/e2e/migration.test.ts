@@ -298,6 +298,64 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     }
   }, 120000);
 
+  /**
+   * Helper to list all TailorDB service namespaces in the workspace
+   * @returns List of TailorDB service namespace names
+   */
+  async function listTailorDBServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBServices({ workspaceId, pageToken });
+      for (const svc of resp.tailordbServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to list all TailorDB type names in a namespace
+   * @param namespace - TailorDB namespace name
+   * @returns List of type names in the namespace
+   */
+  async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
+    const types: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+      });
+      for (const t of resp.tailordbTypes) {
+        if (t.name) {
+          types.push(t.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return types;
+  }
+
+  /**
+   * Helper to get field names for a TailorDB type
+   * @param namespace - TailorDB namespace name
+   * @param typeName - Type name
+   * @returns List of field names
+   */
+  async function getTailorDBTypeFields(namespace: string, typeName: string): Promise<string[]> {
+    const resp = await client.getTailorDBType({
+      workspaceId,
+      namespaceName: namespace,
+      tailordbTypeName: typeName,
+    });
+    return Object.keys(resp.tailordbType?.schema?.fields ?? {});
+  }
+
   describe("Initial Setup", () => {
     /**
      * Scenario 1: Initial migration generation
@@ -332,6 +390,18 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       const configPath = createConfig();
 
       runApplyCli(configPath, workspaceId, tempDir);
+
+      // Verify: TailorDB service should exist
+      const services = await listTailorDBServiceNames();
+      expect(services).toContain(tailordbName);
+
+      // Verify: User type should exist with expected fields
+      const types = await listTailorDBTypeNames(tailordbName);
+      expect(types).toContain("User");
+
+      const fields = await getTailorDBTypeFields(tailordbName, "User");
+      expect(fields).toContain("name");
+      expect(fields).toContain("email");
     }, 120000);
   });
 
@@ -380,6 +450,10 @@ export type user = typeof user;
       const configPath = createConfig();
 
       runApplyCli(configPath, workspaceId, tempDir);
+
+      // Verify: phone field should be added to User type
+      const fields = await getTailorDBTypeFields(tailordbName, "User");
+      expect(fields).toContain("phone");
     }, 120000);
   });
 
@@ -440,6 +514,10 @@ export type user = typeof user;
       const configPath = createConfig();
 
       runApplyCli(configPath, workspaceId, tempDir);
+
+      // Verify: requiredField should be added to User type
+      const fields = await getTailorDBTypeFields(tailordbName, "User");
+      expect(fields).toContain("requiredField");
     }, 120000);
   });
 
@@ -500,6 +578,10 @@ export type user = typeof user;
       const configPath = createConfig();
 
       runApplyCli(configPath, workspaceId, tempDir);
+
+      // Verify: Post type should be added
+      const types = await listTailorDBTypeNames(tailordbName);
+      expect(types).toContain("Post");
     }, 120000);
   });
 
@@ -550,6 +632,10 @@ export type user = typeof user;
       const configPath = createConfig();
 
       runApplyCli(configPath, workspaceId, tempDir);
+
+      // Verify: requiredField should be removed from User type
+      const fields = await getTailorDBTypeFields(tailordbName, "User");
+      expect(fields).not.toContain("requiredField");
     }, 120000);
   });
 });
