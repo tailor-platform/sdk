@@ -1,7 +1,25 @@
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { formatDistanceToNowStrict } from "date-fns";
 // eslint-disable-next-line no-restricted-imports
 import { getBorderCharacters, table } from "table";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import type { TableUserConfig } from "table";
+
+/**
+ * Format a protobuf Timestamp to ISO string.
+ * @param timestamp - Protobuf timestamp
+ * @returns ISO date string or "N/A" if invalid
+ */
+export function formatTimestamp(timestamp: Timestamp | undefined): string {
+  if (!timestamp) {
+    return "N/A";
+  }
+  const date = timestampDate(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "N/A";
+  }
+  return date.toISOString();
+}
 
 /**
  * Formats a table with consistent single-line border style.
