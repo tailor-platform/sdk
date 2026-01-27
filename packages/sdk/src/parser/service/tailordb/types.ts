@@ -20,9 +20,14 @@ export type {
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
-  TailorDBServiceConfig,
   TailorDBServiceInput,
 } from "@/configure/services/tailordb";
+
+export type TailorDBServiceConfig = {
+  files: string[];
+  ignores?: string[];
+  erdSite?: string;
+};
 
 // Helper alias
 // oxlint-disable-next-line no-explicit-any
