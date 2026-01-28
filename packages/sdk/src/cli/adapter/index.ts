@@ -18,5 +18,11 @@ export type {
   CLIAdapter,
 } from "./types";
 
+// Export both adapters for testing and migration purposes
+export { cittyAdapter } from "./citty";
+export { polittyAdapter } from "./politty";
+
 // Export the current adapter implementation
-export { cittyAdapter as adapter } from "./citty";
+// During migration, switch between citty and politty here:
+// export { cittyAdapter as adapter } from "./citty";
+export { polittyAdapter as adapter } from "./politty";

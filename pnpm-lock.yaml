@@ -396,6 +396,9 @@ importers:
       pkg-types:
         specifier: 2.3.0
         version: 2.3.0
+      politty:
+        specifier: ^0.1.1
+        version: 0.1.1(zod@4.3.5)
       rolldown:
         specifier: 1.0.0-beta.60
         version: 1.0.0-beta.60
@@ -4278,6 +4281,12 @@ packages:
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
+
+  politty@0.1.1:
+    resolution: {integrity: sha512-Ej1vgQlnusLZ7TlCAizXfanH4djMPygaFbXoHuGZxJWqiw+SUMeLYxAvtN/Luvai50IB6kQUwIURj+wMyQyuDg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^4.2.1
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -8913,6 +8922,10 @@ snapshots:
       pathe: 2.0.3
 
   pluralize@8.0.0: {}
+
+  politty@0.1.1(zod@4.3.5):
+    dependencies:
+      zod: 4.3.5
 
   possible-typed-array-names@1.1.0: {}
 
