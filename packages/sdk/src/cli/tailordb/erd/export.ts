@@ -45,11 +45,32 @@ function resolveDbConfig(
  * @param config - Loaded Tailor SDK config.
  * @returns Namespaces with erdSite.
  */
-function resolveAllErdSites(config: AppConfig): Array<{ namespace: string; erdSite: string }> {
+export function resolveAllErdSites(
+  config: AppConfig,
+): Array<{ namespace: string; erdSite: string }> {
   const results: Array<{ namespace: string; erdSite: string }> = [];
 
   for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
     if (dbConfig && typeof dbConfig === "object" && !("external" in dbConfig) && dbConfig.erdSite) {
+      results.push({ namespace, erdSite: dbConfig.erdSite });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Get all namespaces (regardless of erdSite configuration).
+ * @param config - Loaded Tailor SDK config.
+ * @returns All namespaces with optional erdSite.
+ */
+function resolveAllNamespaces(
+  config: AppConfig,
+): Array<{ namespace: string; erdSite: string | undefined }> {
+  const results: Array<{ namespace: string; erdSite: string | undefined }> = [];
+
+  for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
+    if (dbConfig && typeof dbConfig === "object" && !("external" in dbConfig)) {
       results.push({ namespace, erdSite: dbConfig.erdSite });
     }
   }
@@ -85,10 +106,15 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
       process.execPath,
       [liamBinPath, "erd", "build", "--format", "tbls", "--input", schemaPath],
       {
-        stdio: "inherit",
+        stdio: "pipe",
         cwd,
       },
     );
+
+    let stderrOutput = "";
+    child.stderr?.on("data", (data: Buffer) => {
+      stderrOutput += data.toString();
+    });
 
     child.on("error", (error) => {
       logger.error("Failed to run `@liam-hq/cli`. Ensure it is installed in your project.");
@@ -99,6 +125,9 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
       if (code === 0) {
         resolve();
       } else {
+        if (stderrOutput) {
+          logger.error(stderrOutput);
+        }
         logger.error(
           "liam CLI exited with a non-zero code. Ensure `@liam-hq/cli erd build --format tbls --input schema.json` works in your project.",
         );
@@ -119,6 +148,7 @@ type ErdBuildsOptions = {
   config: AppConfig;
   namespace?: string;
   outputDir?: string;
+  requireErdSite?: boolean;
 };
 
 /**
@@ -162,15 +192,21 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
       },
     ];
   } else {
-    const erdSites = resolveAllErdSites(config);
-    if (erdSites.length === 0) {
+    const namespaces = options.requireErdSite
+      ? resolveAllErdSites(config)
+      : resolveAllNamespaces(config);
+    if (namespaces.length === 0) {
       throw new Error(
-        "No namespaces with erdSite configured found. " +
-          'Add erdSite: "<static-website-name>" to db.<namespace> in tailor.config.ts.',
+        options.requireErdSite
+          ? "No namespaces with erdSite configured found. " +
+              'Add erdSite: "<static-website-name>" to db.<namespace> in tailor.config.ts.'
+          : "No TailorDB namespaces found in config. Please define db services in tailor.config.ts.",
       );
     }
-    logger.info(`Found ${erdSites.length} namespace(s) with erdSite configured.`);
-    targets = erdSites.map(({ namespace, erdSite }) => {
+    logger.info(
+      `Found ${namespaces.length} namespace(s)${options.requireErdSite ? " with erdSite configured" : ""}.`,
+    );
+    targets = namespaces.map(({ namespace, erdSite }) => {
       const erdDir = path.join(baseDir, namespace);
       return {
         namespace,
