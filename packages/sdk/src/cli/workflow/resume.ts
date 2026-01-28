@@ -77,7 +77,10 @@ export const resumeCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    executionId: arg(z.string(), { positional: true, description: "Failed execution ID" }),
+    executionId: arg(z.string(), {
+      positional: true,
+      description: "Failed execution ID",
+    }),
     ...waitArgs,
   }),
   run: withCommonArgs(async (args) => {

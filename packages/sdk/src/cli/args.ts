@@ -106,15 +106,23 @@ export const commonArgs = {
   "env-file-if-exists": arg(z.string().optional(), {
     description: "Path to the environment file (ignored if not found)",
   }),
-  verbose: arg(z.boolean().default(false), { description: "Enable verbose logging" }),
+  verbose: arg(z.boolean().default(false), {
+    description: "Enable verbose logging",
+  }),
 };
 
 /**
  * Arguments for commands that require workspace context
  */
 export const workspaceArgs = {
-  "workspace-id": arg(z.string().optional(), { alias: "w", description: "Workspace ID" }),
-  profile: arg(z.string().optional(), { alias: "p", description: "Workspace profile" }),
+  "workspace-id": arg(z.string().optional(), {
+    alias: "w",
+    description: "Workspace ID",
+  }),
+  profile: arg(z.string().optional(), {
+    alias: "p",
+    description: "Workspace profile",
+  }),
 };
 
 /**
@@ -132,14 +140,20 @@ export const deploymentArgs = {
  * Arguments for commands that require confirmation
  */
 export const confirmationArgs = {
-  yes: arg(z.boolean().default(false), { alias: "y", description: "Skip confirmation prompts" }),
+  yes: arg(z.boolean().default(false), {
+    alias: "y",
+    description: "Skip confirmation prompts",
+  }),
 };
 
 /**
  * Arguments for JSON output
  */
 export const jsonArgs = {
-  json: arg(z.boolean().default(false), { alias: "j", description: "Output as JSON" }),
+  json: arg(z.boolean().default(false), {
+    alias: "j",
+    description: "Output as JSON",
+  }),
 };
 
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;

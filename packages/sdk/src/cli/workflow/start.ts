@@ -244,8 +244,14 @@ export const startCommand = defineCommand({
     ...jsonArgs,
     ...deploymentArgs,
     ...nameArgs,
-    machineuser: arg(z.string(), { alias: "m", description: "Machine user name" }),
-    arg: arg(z.string().optional(), { alias: "a", description: "Workflow argument (JSON string)" }),
+    machineuser: arg(z.string(), {
+      alias: "m",
+      description: "Machine user name",
+    }),
+    arg: arg(z.string().optional(), {
+      alias: "a",
+      description: "Workflow argument (JSON string)",
+    }),
     ...waitArgs,
   }),
   run: withCommonArgs(async (args) => {

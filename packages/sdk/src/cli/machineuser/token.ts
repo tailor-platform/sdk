@@ -81,7 +81,10 @@ export const tokenCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-    name: arg(z.string(), { positional: true, description: "Machine user name" }),
+    name: arg(z.string(), {
+      positional: true,
+      description: "Machine user name",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     // Execute machineuser token logic

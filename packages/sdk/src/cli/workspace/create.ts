@@ -83,7 +83,10 @@ export const createCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    name: arg(z.string(), { alias: "n", description: "Workspace name" }),
+    name: arg(z.string(), {
+      alias: "n",
+      description: "Workspace name",
+    }),
     region: arg(z.string(), {
       alias: "r",
       description: "Workspace region (us-west, asia-northeast)",

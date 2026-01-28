@@ -70,7 +70,10 @@ export const apiCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    body: arg(z.string().default("{}"), { alias: "b", description: "Request body as JSON" }),
+    body: arg(z.string().default("{}"), {
+      alias: "b",
+      description: "Request body as JSON",
+    }),
     endpoint: arg(z.string(), {
       positional: true,
       description:

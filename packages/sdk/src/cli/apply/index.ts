@@ -308,7 +308,10 @@ export const applyCommand = defineCommand({
       alias: "w",
       description: "ID of the workspace to apply the configuration to",
     }),
-    profile: arg(z.string().optional(), { alias: "p", description: "Workspace profile to use" }),
+    profile: arg(z.string().optional(), {
+      alias: "p",
+      description: "Workspace profile to use",
+    }),
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",

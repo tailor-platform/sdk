@@ -11,7 +11,10 @@ export const deleteCommand = defineCommand({
   description: "Delete personal access token",
   args: z.object({
     ...commonArgs,
-    name: arg(z.string(), { positional: true, description: "Token name" }),
+    name: arg(z.string(), {
+      positional: true,
+      description: "Token name",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();

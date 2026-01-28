@@ -12,9 +12,18 @@ export const updateCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    name: arg(z.string(), { positional: true, description: "Profile name" }),
-    user: arg(z.string().optional(), { alias: "u", description: "New user email" }),
-    "workspace-id": arg(z.string().optional(), { alias: "w", description: "New workspace ID" }),
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
+    user: arg(z.string().optional(), {
+      alias: "u",
+      description: "New user email",
+    }),
+    "workspace-id": arg(z.string().optional(), {
+      alias: "w",
+      description: "New workspace ID",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();

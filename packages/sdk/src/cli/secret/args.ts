@@ -5,7 +5,10 @@ import { z } from "zod";
  * Arguments for specify secret key
  */
 export const vaultArgs = {
-  "vault-name": arg(z.string(), { alias: "V", description: "Vault name" }),
+  "vault-name": arg(z.string(), {
+    alias: "V",
+    description: "Vault name",
+  }),
 };
 
 /**
@@ -13,7 +16,10 @@ export const vaultArgs = {
  */
 export const secretIdentifyArgs = {
   ...vaultArgs,
-  name: arg(z.string(), { alias: "n", description: "Secret name" }),
+  name: arg(z.string(), {
+    alias: "n",
+    description: "Secret name",
+  }),
 };
 
 /**
@@ -21,5 +27,8 @@ export const secretIdentifyArgs = {
  */
 export const secretValueArgs = {
   ...secretIdentifyArgs,
-  value: arg(z.string(), { alias: "v", description: "Secret value" }),
+  value: arg(z.string(), {
+    alias: "v",
+    description: "Secret value",
+  }),
 };

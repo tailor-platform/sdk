@@ -65,7 +65,10 @@ export const getCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-    name: arg(z.string(), { positional: true, description: "OAuth2 client name" }),
+    name: arg(z.string(), {
+      positional: true,
+      description: "OAuth2 client name",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const credentials = await getOAuth2Client({

@@ -72,8 +72,14 @@ export const showCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": arg(z.string().optional(), { alias: "w", description: "Workspace ID" }),
-    profile: arg(z.string().optional(), { alias: "p", description: "Workspace profile" }),
+    "workspace-id": arg(z.string().optional(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    profile: arg(z.string().optional(), {
+      alias: "p",
+      description: "Workspace profile",
+    }),
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",

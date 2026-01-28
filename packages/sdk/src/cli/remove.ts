@@ -115,13 +115,22 @@ export const removeCommand = defineCommand({
   description: "Remove all resources managed by the application",
   args: z.object({
     ...commonArgs,
-    "workspace-id": arg(z.string().optional(), { alias: "w", description: "Workspace ID" }),
-    profile: arg(z.string().optional(), { alias: "p", description: "Workspace profile" }),
+    "workspace-id": arg(z.string().optional(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    profile: arg(z.string().optional(), {
+      alias: "p",
+      description: "Workspace profile",
+    }),
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",
     }),
-    yes: arg(z.boolean().default(false), { alias: "y", description: "Skip confirmation prompt" }),
+    yes: arg(z.boolean().default(false), {
+      alias: "y",
+      description: "Skip confirmation prompt",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, application, config } = await loadOptions({

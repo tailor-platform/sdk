@@ -9,7 +9,10 @@ export const deleteCommand = defineCommand({
   description: "Delete profile",
   args: z.object({
     ...commonArgs,
-    name: arg(z.string(), { positional: true, description: "Profile name" }),
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();

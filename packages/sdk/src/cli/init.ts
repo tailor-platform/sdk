@@ -19,8 +19,14 @@ export const initCommand = defineCommand({
   description: "Initialize a new project using create-sdk",
   args: z.object({
     ...commonArgs,
-    name: arg(z.string().optional(), { positional: true, description: "Project name" }),
-    template: arg(z.string().optional(), { alias: "t", description: "Template name" }),
+    name: arg(z.string().optional(), {
+      positional: true,
+      description: "Project name",
+    }),
+    template: arg(z.string().optional(), {
+      alias: "t",
+      description: "Template name",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const packageJson = await readPackageJson();

@@ -10,7 +10,10 @@ export const switchCommand = defineCommand({
   description: "Set current user",
   args: z.object({
     ...commonArgs,
-    user: arg(z.string(), { positional: true, description: "User email" }),
+    user: arg(z.string(), {
+      positional: true,
+      description: "User email",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();

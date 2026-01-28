@@ -13,7 +13,10 @@ export const getCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    name: arg(z.string(), { positional: true, description: "Static website name" }),
+    name: arg(z.string(), {
+      positional: true,
+      description: "Static website name",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({

@@ -231,8 +231,14 @@ export const deployCommand = defineCommand({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    name: arg(z.string(), { alias: "n", description: "Static website name" }),
-    dir: arg(z.string(), { alias: "d", description: "Path to the static website files" }),
+    name: arg(z.string(), {
+      alias: "n",
+      description: "Static website name",
+    }),
+    dir: arg(z.string(), {
+      alias: "d",
+      description: "Path to the static website files",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);

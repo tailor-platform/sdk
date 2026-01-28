@@ -253,7 +253,10 @@ export const truncateCommand = defineCommand({
   description: "Truncate TailorDB tables",
   args: z.object({
     ...commonArgs,
-    types: arg(z.string().optional(), { positional: true, description: "Type names to truncate" }),
+    types: arg(z.string().optional(), {
+      positional: true,
+      description: "Type names to truncate",
+    }),
     all: arg(z.boolean().default(false), {
       alias: "a",
       description: "Truncate all tables in all namespaces",
@@ -262,7 +265,10 @@ export const truncateCommand = defineCommand({
       alias: "n",
       description: "Truncate all tables in specified namespace",
     }),
-    yes: arg(z.boolean().default(false), { alias: "y", description: "Skip confirmation prompt" }),
+    yes: arg(z.boolean().default(false), {
+      alias: "y",
+      description: "Skip confirmation prompt",
+    }),
     ...deploymentArgs,
   }),
   run: withCommonArgs(async (args) => {

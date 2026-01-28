@@ -47,8 +47,14 @@ export const deleteCommand = defineCommand({
   description: "Delete workspace",
   args: z.object({
     ...commonArgs,
-    "workspace-id": arg(z.string(), { alias: "w", description: "Workspace ID" }),
-    yes: arg(z.boolean().default(false), { alias: "y", description: "Skip confirmation prompt" }),
+    "workspace-id": arg(z.string(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    yes: arg(z.boolean().default(false), {
+      alias: "y",
+      description: "Skip confirmation prompt",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     // Load and validate options

@@ -12,7 +12,10 @@ export const createCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    name: arg(z.string(), { positional: true, description: "Token name" }),
+    name: arg(z.string(), {
+      positional: true,
+      description: "Token name",
+    }),
     write: arg(z.boolean().default(false), {
       alias: "W",
       description: "Grant write permission (default: read-only)",
