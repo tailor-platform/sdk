@@ -91,6 +91,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
+    "@tailor-platform/function-kysely-tailordb": "0.1.3",
     "@tailor-platform/function-types": "0.8.0",
     "@toiroakr/lines-db": "0.6.1",
     "@types/madge": "5.0.3",
@@ -103,6 +104,7 @@
     "eslint-plugin-jsdoc": "62.1.0",
     "eslint-plugin-oxlint": "1.39.0",
     "globals": "17.0.0",
+    "kysely": "0.28.2",
     "oxlint": "1.39.0",
     "oxlint-tsgolint": "0.11.1",
     "sonda": "0.10.1",
@@ -113,10 +115,18 @@
   },
   "peerDependencies": {
     "@liam-hq/cli": "*",
+    "@tailor-platform/function-kysely-tailordb": "*",
+    "kysely": "*",
     "serve": "*"
   },
   "peerDependenciesMeta": {
     "@liam-hq/cli": {
+      "optional": true
+    },
+    "@tailor-platform/function-kysely-tailordb": {
+      "optional": true
+    },
+    "kysely": {
       "optional": true
     },
     "serve": {
