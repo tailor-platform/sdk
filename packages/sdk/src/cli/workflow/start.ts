@@ -76,7 +76,7 @@ export async function waitForExecution(
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
-  const spinner = showProgress ? ora().start("Waiting...") : null;
+  const spinner = showProgress ? ora().start("Waiting for workflow to complete...") : null;
 
   try {
     while (true) {
@@ -98,7 +98,7 @@ export async function waitForExecution(
         if (showProgress) {
           spinner?.stop();
           logger.info(`Status: ${coloredStatus}`, { mode: "stream" });
-          spinner?.start(`Polling...`);
+          spinner?.start(`Waiting for workflow to complete...`);
         }
         lastStatus = execution.status;
       }
@@ -112,14 +112,14 @@ export async function waitForExecution(
             logger.info(`Job | ${runningJobs}: ${coloredStatus}`, {
               mode: "stream",
             });
-            spinner?.start(`Polling...`);
+            spinner?.start(`Waiting for workflow to complete...`);
           }
           lastRunningJobs = runningJobs;
         }
       }
 
       if (spinner) {
-        spinner.text = `Polling... (${now})`;
+        spinner.text = `Waiting for workflow to complete... (${now})`;
       }
 
       // Terminal states: SUCCESS, FAILED, or PENDING_RESUME

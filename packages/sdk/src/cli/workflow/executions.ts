@@ -275,12 +275,12 @@ async function waitWithSpinner(
   interval: number,
   json: boolean,
 ): Promise<WorkflowExecutionDetailInfo> {
-  const spinner = !json ? ora().start("Waiting...") : null;
+  const spinner = !json ? ora().start("Waiting for workflow to complete...") : null;
 
   const updateInterval = setInterval(() => {
     if (spinner) {
       const now = formatTime(new Date());
-      spinner.text = `Polling... (${now})`;
+      spinner.text = `Waiting for workflow to complete... (${now})`;
     }
   }, interval);
 
