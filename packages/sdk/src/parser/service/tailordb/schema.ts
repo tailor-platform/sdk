@@ -58,13 +58,7 @@ export const TailorDBTypeSchema = z.object({
   metadata: z.object({
     name: z.string(),
     description: z.string().optional(),
-    settings: z
-      .object({
-        pluralForm: z.string().optional(),
-        aggregation: z.boolean().optional(),
-        bulkUpsert: z.boolean().optional(),
-      })
-      .optional(),
+    settings: z.unknown().optional(),
     permissions: z.unknown(),
     files: z.record(z.string(), z.string()),
     indexes: z
