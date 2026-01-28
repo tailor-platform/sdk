@@ -5,8 +5,10 @@
  * for help output generation. The actual help rendering is handled by politty.
  */
 
+import { extractFields } from "politty";
 import { describe, it, expect, vi } from "vitest";
-import type { AnyCommand } from "politty";
+import type { AnyCommand, ExtractedFields } from "politty";
+import type { z } from "zod";
 
 // Mock node:module to avoid tsx registration issues
 vi.mock("node:module", async () => {
@@ -33,8 +35,20 @@ type CommandWithSubCommands = AnyCommand & {
 
 // Helper type for runnable commands (have args)
 type RunnableCommandWithArgs = AnyCommand & {
-  args?: unknown;
+  args?: z.ZodType;
 };
+
+/**
+ * Extract fields from command args if present
+ * @param cmd - Command with args schema
+ * @returns Extracted fields or undefined if no args
+ */
+function getExtractedFields(cmd: RunnableCommandWithArgs): ExtractedFields | undefined {
+  if (cmd.args) {
+    return extractFields(cmd.args);
+  }
+  return undefined;
+}
 
 describe("help metadata", () => {
   describe("main command", () => {
@@ -126,6 +140,33 @@ describe("help metadata", () => {
       const generateCmd = subCommands.generate;
 
       expect(generateCmd.args).toBeDefined();
+    });
+
+    it("apply command includes common args (env-file)", async () => {
+      const { mainCommand } = await import("../index");
+
+      const subCommands = mainCommand.subCommands as Record<string, RunnableCommandWithArgs>;
+      const applyCmd = subCommands.apply;
+      const extracted = getExtractedFields(applyCmd);
+
+      expect(extracted).toBeDefined();
+      const envFileField = extracted!.fields.find((f) => f.name === "env-file");
+      expect(envFileField).toBeDefined();
+      expect(envFileField!.alias).toBe("e");
+    });
+
+    it("commands have descriptions for all args", async () => {
+      const { mainCommand } = await import("../index");
+
+      const subCommands = mainCommand.subCommands as Record<string, RunnableCommandWithArgs>;
+      const applyCmd = subCommands.apply;
+      const extracted = getExtractedFields(applyCmd);
+
+      expect(extracted).toBeDefined();
+      for (const field of extracted!.fields) {
+        expect(field.description).toBeDefined();
+        expect(field.description).not.toBe("");
+      }
     });
   });
 });
