@@ -28,6 +28,7 @@ export const erdDeployCommand = defineCommand({
       workspaceId,
       config,
       namespace: args.namespace,
+      requireErdSite: true,
     });
 
     const deployResults = await Promise.all(
@@ -61,14 +62,16 @@ export const erdDeployCommand = defineCommand({
         };
       }),
     );
+    logger.newline();
 
     if (args.json) {
       logger.out(deployResults);
     } else {
       for (const result of deployResults) {
+        logSkippedFiles(result.skippedFiles);
+        logger.newline();
         logger.success(`ERD site "${result.erdSite}" deployed successfully.`);
         logger.out(result.url);
-        logSkippedFiles(result.skippedFiles);
       }
     }
   }),
