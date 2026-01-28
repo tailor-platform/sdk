@@ -82,6 +82,8 @@ export type LogMode = "default" | "stream" | "plain";
 export interface LogOptions {
   /** Output mode (default: "default") */
   mode?: LogMode;
+  /** Number of spaces to indent the entire line (default: 0) */
+  indent?: number;
 }
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
@@ -109,6 +111,65 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
   log: (text) => text,
 };
 
+interface ParsedLogTag {
+  mode: string;
+  indent: number;
+}
+
+/**
+ * Parses a log tag in "mode:indent" format
+ * @param tag - Tag string (e.g., "default:4", "stream:2", "plain:0")
+ * @returns Parsed mode and indent values
+ */
+export function parseLogTag(tag: string | undefined): ParsedLogTag {
+  const [mode, indentStr] = (tag || "default:0").split(":");
+  const indent = Number(indentStr) || 0;
+  return { mode, indent };
+}
+
+/**
+ * Builds a log tag from LogOptions
+ * @param opts - Log options
+ * @returns Tag string in "mode:indent" format
+ */
+export function buildLogTag(opts?: LogOptions): string {
+  const mode = opts?.mode ?? "default";
+  const indent = opts?.indent ?? 0;
+  return `${mode}:${indent}`;
+}
+
+interface FormatLogLineOptions {
+  mode: string;
+  indent: number;
+  type: string;
+  message: string;
+  timestamp?: string;
+}
+
+/**
+ * Formats a log line with the appropriate prefix and indentation
+ * @param opts - Formatting options
+ * @returns Formatted log line
+ */
+export function formatLogLine(opts: FormatLogLineOptions): string {
+  const { mode, indent, type, message, timestamp } = opts;
+  const indentPrefix = indent > 0 ? " ".repeat(indent) : "";
+  const colorFn = TYPE_COLORS[type] || ((text: string) => text);
+
+  // Plain mode: color only, no icon, no timestamp
+  if (mode === "plain") {
+    return `${indentPrefix}${colorFn(message)}\n`;
+  }
+
+  // Default/Stream mode: with icon and color
+  const icon = TYPE_ICONS[type] || "";
+  const prefix = icon ? `${icon} ` : "";
+  const coloredOutput = colorFn(`${prefix}${message}`);
+  const timestampPrefix = timestamp ?? "";
+
+  return `${indentPrefix}${timestampPrefix}${coloredOutput}\n`;
+}
+
 /**
  * Creates a reporter that handles all log output modes.
  *
@@ -121,7 +182,8 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
 function createReporter(): ConsolaReporter {
   return {
     log(logObj: LogObject, ctx: { options: ConsolaOptions }) {
-      const mode = logObj.tag || "default";
+      const { mode, indent } = parseLogTag(logObj.tag);
+
       const stdout = ctx.options.stdout || process.stdout;
       const stderr = ctx.options.stderr || process.stderr;
       const formatOptions = ctx.options.formatOptions;
@@ -131,24 +193,18 @@ function createReporter(): ConsolaReporter {
       };
       const message = formatWithOptions(inspectOpts, ...logObj.args);
 
-      // Apply color based on log type
-      const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
-
-      // Plain mode: color only, no icon, no timestamp
-      if (mode === "plain") {
-        stderr.write(`${colorFn(message)}\n`);
-        return;
-      }
-
-      // Default/Stream mode: with icon and color
-      const icon = TYPE_ICONS[logObj.type] || "";
-      const prefix = icon ? `${icon} ` : "";
-      const coloredOutput = colorFn(`${prefix}${message}`);
-
-      // Add timestamp for stream mode
       const timestamp =
-        mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
-      stderr.write(`${timestamp}${coloredOutput}\n`);
+        mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : undefined;
+
+      const output = formatLogLine({
+        mode,
+        indent,
+        type: logObj.type,
+        message,
+        timestamp,
+      });
+
+      stderr.write(output);
     },
   };
 }
@@ -167,23 +223,19 @@ export const logger = {
   },
 
   info(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).info(message);
+    consola.withTag(buildLogTag(opts)).info(message);
   },
 
   success(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).success(message);
+    consola.withTag(buildLogTag(opts)).success(message);
   },
 
   warn(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).warn(message);
+    consola.withTag(buildLogTag(opts)).warn(message);
   },
 
   error(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).error(message);
+    consola.withTag(buildLogTag(opts)).error(message);
   },
 
   log(message: string): void {
