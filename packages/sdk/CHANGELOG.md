@@ -1,5 +1,75 @@
 # @tailor-platform/sdk
 
+## 1.6.0
+
+### Minor Changes
+
+- [#462](https://github.com/tailor-platform/sdk/pull/462) [`f83a3ed`](https://github.com/tailor-platform/sdk/commit/f83a3ed25a0c3019a97aaada32d5398db12865ba) Thanks [@toiroakr](https://github.com/toiroakr)! - Add TailorDB schema migration feature (beta). Migrations allow you to safely evolve your database schema with type-safe data transformations.
+
+  > **Note:** This feature is currently in beta. The API and behavior may change in future releases.
+
+  **Key Features:**
+
+  - **Local snapshot-based diff detection** - Detects field-level schema differences between current types and previous snapshots
+  - **Type-safe migration scripts** - Generates TypeScript migration scripts with Kysely transaction types
+  - **Transaction-wrapped execution** - All changes commit or rollback together for atomicity
+  - **Automatic execution during apply** - Pending migrations run as part of `tailor-sdk apply`
+  - **Migration checkpoint management** - Manually control which migrations have been applied
+  - **Migration status tracking** - View current state and pending migrations
+
+  **Commands:**
+
+  - `tailordb migration generate` - Generate migration files from schema changes (supports `--name`, `--yes`, `--init`)
+  - `tailordb migration set <number>` - Manually set migration checkpoint
+  - `tailordb migration status` - Show migration status and pending migrations
+
+  **Supported Schema Changes:**
+
+  The migration system automatically handles:
+
+  - Adding/removing optional fields (non-breaking)
+  - Adding required fields (breaking - migration script generated)
+  - Changing optional→required (breaking - migration script generated)
+  - Adding/removing indexes (non-breaking)
+  - Adding unique constraints (breaking - migration script generated)
+  - Adding/removing enum values (removing is breaking - migration script generated)
+  - Adding/removing types (non-breaking)
+
+  **Unsupported Changes:**
+
+  The following changes require a 3-step migration process:
+
+  - **Field type changes** (e.g., `string` → `integer`) - Add new field, migrate data, remove old field, then re-add with original name
+  - **Array to single value changes** - Add new single-value field, migrate data, remove array field, then re-add with original name
+
+  **Configuration:**
+
+  Configure migrations in `tailor.config.ts`:
+
+  ```typescript
+  db: {
+    tailordb: {
+      files: ["./tailordb/*.ts"],
+      migration: {
+        directory: "./migrations",
+        // Optional: specify machine user for migration execution
+        // If not specified, the first machine user from auth.machineUsers is used
+        machineUser: "admin-machine-user",
+      },
+    },
+  }
+  ```
+
+### Patch Changes
+
+- [#488](https://github.com/tailor-platform/sdk/pull/488) [`f26a33d`](https://github.com/tailor-platform/sdk/commit/f26a33d1519d444f03e0e40cf43b16b2f5693348) Thanks [@riku99](https://github.com/riku99)! - Moved workflow service config types to the parser layer and updated CLI imports
+
+- [#493](https://github.com/tailor-platform/sdk/pull/493) [`8111b0f`](https://github.com/tailor-platform/sdk/commit/8111b0f69bd924db51283b16eb20b650384ad3a1) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: improve ERD command UX
+
+  - Allow `erd export` and `erd serve` to work without `erdSite` configuration (only `erd deploy` requires it)
+  - Suppress verbose liam CLI output during ERD build
+  - Improve `erd export` log output with success message for build path
+
 ## 1.5.0
 
 ### Minor Changes
