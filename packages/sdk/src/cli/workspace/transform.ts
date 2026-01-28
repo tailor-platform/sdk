@@ -1,5 +1,4 @@
-import { timestampDate } from "@bufbuild/protobuf/wkt";
-import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { formatTimestamp } from "../utils/format";
 import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
 
 export interface WorkspaceInfo {
@@ -10,16 +9,11 @@ export interface WorkspaceInfo {
   updatedAt: string;
 }
 
-const formatTimestamp = (timestamp: Timestamp | undefined): string => {
-  if (!timestamp) {
-    return "N/A";
-  }
-  const date = timestampDate(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return "N/A";
-  }
-  return date.toISOString();
-};
+export interface WorkspaceDetails extends WorkspaceInfo {
+  deleteProtection: boolean;
+  organizationId: string;
+  folderId: string;
+}
 
 export const workspaceInfo = (workspace: Workspace): WorkspaceInfo => {
   return {
@@ -28,5 +22,14 @@ export const workspaceInfo = (workspace: Workspace): WorkspaceInfo => {
     region: workspace.region,
     createdAt: formatTimestamp(workspace.createTime),
     updatedAt: formatTimestamp(workspace.updateTime),
+  };
+};
+
+export const workspaceDetails = (workspace: Workspace): WorkspaceDetails => {
+  return {
+    ...workspaceInfo(workspace),
+    deleteProtection: workspace.deleteProtection,
+    organizationId: workspace.organizationId,
+    folderId: workspace.folderId,
   };
 };
