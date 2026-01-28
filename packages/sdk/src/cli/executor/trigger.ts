@@ -151,12 +151,22 @@ export const triggerCommand = defineCommand({
             for (const jobLog of watchResult.workflowJobLogs) {
               logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
               if (jobLog.logs) {
-                logger.log(styles.dim("  Logs:"));
-                logger.log(jobLog.logs);
+                logger.log(styles.dim("    Logs:"));
+                for (const line of jobLog.logs.split("\n")) {
+                  logger.log(`      ${line}`);
+                }
               }
               if (jobLog.result) {
-                logger.log(styles.dim("  Result:"));
-                logger.log(jobLog.result);
+                logger.log(styles.dim("    Result:"));
+                try {
+                  const parsed = JSON.parse(jobLog.result);
+                  const formatted = JSON.stringify(parsed, null, 2);
+                  for (const line of formatted.split("\n")) {
+                    logger.log(`      ${line}`);
+                  }
+                } catch {
+                  logger.log(`      ${jobLog.result}`);
+                }
               }
             }
           }
@@ -168,8 +178,10 @@ export const triggerCommand = defineCommand({
             logger.log(`  Status: ${watchResult.functionStatus}`);
           }
           if (watchResult.functionLogs) {
-            logger.log(styles.bold("\nLogs:"));
-            logger.log(watchResult.functionLogs);
+            logger.log(styles.dim("  Logs:"));
+            for (const line of watchResult.functionLogs.split("\n")) {
+              logger.log(`    ${line}`);
+            }
           }
         }
       } else {

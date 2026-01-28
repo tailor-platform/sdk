@@ -20,6 +20,7 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { formatKeyValueTable } from "../utils/format";
 import { logger, styles } from "../utils/logger";
 import { getWorkflowExecution } from "../workflow/executions";
+import { waitForExecution } from "../workflow/start";
 import {
   colorizeExecutorJobStatus,
   colorizeFunctionExecutionStatus,
@@ -290,86 +291,49 @@ export async function watchExecutorJob(
     if (operationReference) {
       switch (targetType) {
         case ExecutorTargetType.WORKFLOW: {
-          // Wait for workflow execution
-          spinner.start(`Waiting for workflow execution ${operationReference}...`);
+          // Wait for workflow execution with progress display
+          spinner.stop();
 
           try {
-            const { execution, wait } = await getWorkflowExecution({
+            // Use waitForExecution with progress display (same as workflow start)
+            const executionResult = await waitForExecution({
+              client,
+              workspaceId,
               executionId: operationReference,
-              workspaceId: options.workspaceId,
-              profile: options.profile,
               interval,
-              logs: options.logs,
+              showProgress: true,
+              trackJobs: true,
             });
 
-            // Helper to extract workflow job logs
-            const extractWorkflowJobLogs = (
-              exec: typeof execution,
-            ): WorkflowJobLog[] | undefined => {
-              if (!options.logs || !exec.jobDetails) return undefined;
-              return exec.jobDetails
-                .filter((job) => job.logs || job.result)
-                .map((job) => ({
-                  jobName: job.stackedJobName || job.id,
-                  logs: job.logs,
-                  result: job.result,
-                }));
+            // Fetch logs if requested
+            let workflowJobLogs: WorkflowJobLog[] | undefined;
+            if (options.logs) {
+              const { execution: execWithLogs } = await getWorkflowExecution({
+                executionId: operationReference,
+                workspaceId: options.workspaceId,
+                profile: options.profile,
+                logs: true,
+              });
+              if (execWithLogs.jobDetails) {
+                workflowJobLogs = execWithLogs.jobDetails
+                  .filter((job) => job.logs || job.result)
+                  .map((job) => ({
+                    jobName: job.stackedJobName || job.id,
+                    logs: job.logs,
+                    result: job.result,
+                  }));
+              }
+            }
+
+            return {
+              job: jobDetail,
+              targetType: targetTypeStr,
+              workflowExecutionId: operationReference,
+              workflowStatus: executionResult.status,
+              workflowJobLogs,
             };
-
-            // Check if already completed (SUCCESS, FAILED, PENDING_RESUME are terminal states)
-            if (
-              execution.status === "SUCCESS" ||
-              execution.status === "FAILED" ||
-              execution.status === "PENDING_RESUME"
-            ) {
-              if (execution.status === "SUCCESS") {
-                spinner.succeed(
-                  `Workflow execution completed: ${styles.success(execution.status)}`,
-                );
-              } else if (execution.status === "PENDING_RESUME") {
-                spinner.warn(`Workflow execution paused: ${styles.warning(execution.status)}`);
-              } else {
-                spinner.fail(`Workflow execution completed: ${styles.error(execution.status)}`);
-              }
-              return {
-                job: jobDetail,
-                targetType: targetTypeStr,
-                workflowExecutionId: operationReference,
-                workflowStatus: execution.status,
-                workflowJobLogs: extractWorkflowJobLogs(execution),
-              };
-            }
-
-            // Wait for completion
-            const updateInterval = setInterval(() => {
-              spinner.text = `Waiting for workflow execution... (${formatTime(new Date())})`;
-            }, interval);
-
-            try {
-              const finalExecution = await wait();
-              if (finalExecution.status === "SUCCESS") {
-                spinner.succeed(
-                  `Workflow execution completed: ${styles.success(finalExecution.status)}`,
-                );
-              } else if (finalExecution.status === "PENDING_RESUME") {
-                spinner.warn(`Workflow execution paused: ${styles.warning(finalExecution.status)}`);
-              } else {
-                spinner.fail(
-                  `Workflow execution completed: ${styles.error(finalExecution.status)}`,
-                );
-              }
-              return {
-                job: jobDetail,
-                targetType: targetTypeStr,
-                workflowExecutionId: operationReference,
-                workflowStatus: finalExecution.status,
-                workflowJobLogs: extractWorkflowJobLogs(finalExecution),
-              };
-            } finally {
-              clearInterval(updateInterval);
-            }
           } catch (error) {
-            spinner.warn(
+            logger.warn(
               `Could not track workflow execution: ${error instanceof Error ? error.message : error}`,
             );
             return {
@@ -549,12 +513,22 @@ export const jobsCommand = defineCommand({
               for (const jobLog of result.workflowJobLogs) {
                 logger.log(styles.bold(`\n  Job: ${jobLog.jobName}`));
                 if (jobLog.logs) {
-                  logger.log(styles.dim("  Logs:"));
-                  logger.log(jobLog.logs);
+                  logger.log(styles.dim("    Logs:"));
+                  for (const line of jobLog.logs.split("\n")) {
+                    logger.log(`      ${line}`);
+                  }
                 }
                 if (jobLog.result) {
-                  logger.log(styles.dim("  Result:"));
-                  logger.log(jobLog.result);
+                  logger.log(styles.dim("    Result:"));
+                  try {
+                    const parsed = JSON.parse(jobLog.result);
+                    const formatted = JSON.stringify(parsed, null, 2);
+                    for (const line of formatted.split("\n")) {
+                      logger.log(`      ${line}`);
+                    }
+                  } catch {
+                    logger.log(`      ${jobLog.result}`);
+                  }
                 }
               }
             }
@@ -566,8 +540,10 @@ export const jobsCommand = defineCommand({
               logger.log(`  Status: ${result.functionStatus}`);
             }
             if (result.functionLogs) {
-              logger.log(styles.bold("\nLogs:"));
-              logger.log(result.functionLogs);
+              logger.log(styles.dim("  Logs:"));
+              for (const line of result.functionLogs.split("\n")) {
+                logger.log(`    ${line}`);
+              }
             }
           }
         } else {
