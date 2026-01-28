@@ -15,8 +15,6 @@ import {
   type RawPermissions,
   type RawRelationConfig,
   type RelationType,
-  type TailorAnyDBType,
-  type TailorDBType,
 } from "@/parser/service/tailordb/types";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
@@ -64,6 +62,10 @@ function isRelationSelfConfig(
 // Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyDBField = TailorDBField<any, any>;
+
+// Helper alias
+// oxlint-disable-next-line no-explicit-any
+export type TailorAnyDBType = TailorDBType<any, any>;
 
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
@@ -696,6 +698,101 @@ function object<
     { type: "nested"; array: Opt extends { array: true } ? true : false },
     FieldOutput<InferFieldsOutput<F>, Opt>
   >;
+}
+
+/**
+ * TailorDBType interface representing a database type definition with fields, permissions, and settings.
+ */
+export interface TailorDBType<
+  // Default kept loose to avoid forcing callers to supply generics.
+  // oxlint-disable-next-line no-explicit-any
+  Fields extends Record<string, TailorAnyDBField> = any,
+  User extends object = InferredAttributeMap,
+> {
+  readonly name: string;
+  readonly fields: Fields;
+  readonly _output: InferFieldsOutput<Fields>;
+  _description?: string;
+
+  /** Returns metadata for the type */
+  readonly metadata: TailorDBTypeMetadata;
+
+  /**
+   * Add hooks for fields
+   */
+  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
+
+  /**
+   * Add validators for fields
+   */
+  validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
+
+  /**
+   * Configure type features
+   */
+  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
+
+  /**
+   * Define composite indexes
+   */
+  indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
+
+  /**
+   * Define file fields
+   */
+  files<const F extends string>(
+    files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
+  ): TailorDBType<Fields, User>;
+
+  /**
+   * Set record-level permissions
+   */
+  permission<
+    U extends object = User,
+    P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
+      U,
+      output<TailorDBType<Fields, User>>
+    >,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U>;
+
+  /**
+   * Set GraphQL-level permissions
+   */
+  gqlPermission<
+    U extends object = User,
+    P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U>;
+
+  /**
+   * Set type description
+   */
+  description(description: string): TailorDBType<Fields, User>;
+
+  /**
+   * Pick specific fields from the type
+   */
+  pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
+    keys: K[],
+    options: Opt,
+  ): {
+    [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
+      ? TailorDBField<
+          Omit<D, "array"> & {
+            array: Opt extends { array: true } ? true : D["array"];
+          },
+          FieldOutput<TailorToTs[D["type"]], Opt>
+        >
+      : never;
+  };
+
+  /**
+   * Omit specific fields from the type
+   */
+  omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
 }
 
 /**

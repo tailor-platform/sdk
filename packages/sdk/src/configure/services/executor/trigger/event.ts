@@ -1,11 +1,11 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
+import type { TailorDBType } from "@/configure/services/tailordb";
 import type { TailorEnv } from "@/configure/types/env";
 import type { output } from "@/configure/types/helpers";
 import type {
   RecordTrigger as ParserRecordTrigger,
   ResolverExecutedTrigger as ParserResolverExecutedTrigger,
 } from "@/parser/service/executor/types";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 interface EventArgs {
   workspaceId: string;

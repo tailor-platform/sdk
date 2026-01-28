@@ -7,8 +7,8 @@ import {
   TailorDBTypeSchema,
   type ParsedTailorDBType,
   type TypeSourceInfo,
-  type TailorDBType,
   type TailorDBServiceConfig,
+  type TailorDBTypeInput,
 } from "@/parser/service/tailordb";
 
 export type TailorDBService = {
@@ -29,12 +29,13 @@ export function createTailorDBService(
   namespace: string,
   config: TailorDBServiceConfig,
 ): TailorDBService {
-  const rawTypes: Record<string, Record<string, TailorDBType>> = {};
+  type ParsedInputTypes = Record<string, TailorDBTypeInput>;
+  const rawTypes: Record<string, ParsedInputTypes> = {};
   let types: Record<string, ParsedTailorDBType> = {};
   const typeSourceInfo: TypeSourceInfo = {};
 
   const doParseTypes = (): void => {
-    const allTypes: Record<string, TailorDBType> = {};
+    const allTypes: ParsedInputTypes = {};
     for (const fileTypes of Object.values(rawTypes)) {
       for (const [typeName, type] of Object.entries(fileTypes)) {
         allTypes[typeName] = type;
@@ -44,9 +45,9 @@ export function createTailorDBService(
     types = parseTypes(allTypes, namespace, typeSourceInfo);
   };
 
-  const loadTypeFile = async (typeFile: string): Promise<Record<string, TailorDBType>> => {
+  const loadTypeFile = async (typeFile: string): Promise<ParsedInputTypes> => {
     rawTypes[typeFile] = {};
-    const loadedTypes: Record<string, TailorDBType> = {};
+    const loadedTypes: ParsedInputTypes = {};
     try {
       const module = await import(pathToFileURL(typeFile).href);
 

@@ -10,8 +10,8 @@ import { t } from "@/configure/types";
 import { type Resolver } from "@/parser/service/resolver";
 import { parseTypes } from "@/parser/service/tailordb";
 import { createGenerationManager } from "./index";
+import type { TailorDBType } from "@/configure/services/tailordb";
 import type { AppConfig } from "@/parser/app-config";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {

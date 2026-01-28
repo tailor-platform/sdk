@@ -1,6 +1,6 @@
 import type { output, TailorUser } from "@/configure";
+import type { TailorDBType } from "@/configure/services/tailordb";
 import type { TailorField } from "@/configure/types/type";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 export { WORKFLOW_TEST_ENV_KEY } from "@/configure/services/workflow/job";

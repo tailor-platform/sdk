@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { createKyselyGenerator } from "./index";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType } from "@/configure/services/tailordb";
 import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
