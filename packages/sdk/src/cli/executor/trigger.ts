@@ -69,10 +69,15 @@ export const triggerCommand = defineCommand({
       description: "Executor name",
       required: true,
     },
-    payload: {
+    data: {
       type: "string",
-      description: "Payload data (JSON string)",
+      description: "Request body (JSON string)",
       alias: "d",
+    },
+    header: {
+      type: "string",
+      description: "Request header (format: 'Key: Value', can be specified multiple times)",
+      alias: "H",
     },
     wait: {
       type: "boolean",
@@ -96,14 +101,38 @@ export const triggerCommand = defineCommand({
   },
   run: withCommonArgs(async (args) => {
     let payload: JsonObject | undefined;
-    if (args.payload) {
+
+    // Parse data (body)
+    let body: JsonObject | undefined;
+    if (args.data) {
       try {
-        payload = JSON.parse(args.payload);
+        body = JSON.parse(args.data);
       } catch {
-        throw new Error(
-          `Invalid JSON payload: ${args.payload}. Please provide a valid JSON string.`,
-        );
+        throw new Error(`Invalid JSON data: ${args.data}. Please provide a valid JSON string.`);
       }
+    }
+
+    // Parse headers (can be string or string[])
+    const headers: Record<string, string> = {};
+    if (args.header) {
+      const headerValues = Array.isArray(args.header) ? args.header : [args.header];
+      for (const h of headerValues) {
+        const colonIndex = h.indexOf(":");
+        if (colonIndex === -1) {
+          throw new Error(`Invalid header format: '${h}'. Expected format: 'Key: Value'`);
+        }
+        const key = h.slice(0, colonIndex).trim();
+        const value = h.slice(colonIndex + 1).trim();
+        headers[key] = value;
+      }
+    }
+
+    // Build payload if body or headers are provided
+    if (body !== undefined || Object.keys(headers).length > 0) {
+      payload = {
+        body: body ?? {},
+        headers,
+      };
     }
 
     const result = await triggerExecutor({
