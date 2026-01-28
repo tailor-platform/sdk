@@ -1,5 +1,6 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { type Application, defineApplication } from "@/cli/application";
 import { type PlanContext } from "@/cli/apply";
 import { applyApplication, planApplication } from "@/cli/apply/services/application";
@@ -110,35 +111,18 @@ export async function remove(options?: RemoveOptions): Promise<void> {
 }
 
 export const removeCommand = defineCommand({
-  meta: {
-    name: "remove",
-    description: "Remove all resources managed by the application",
-  },
-  args: {
+  name: "remove",
+  description: "Remove all resources managed by the application",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
+    "workspace-id": arg(z.string().optional(), { alias: "w", description: "Workspace ID" }),
+    profile: arg(z.string().optional(), { alias: "p", description: "Workspace profile" }),
+    config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
-      default: "tailor.config.ts",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
-  },
+      description: "Path to SDK config file",
+    }),
+    yes: arg(z.boolean().default(false), { alias: "y", description: "Skip confirmation prompt" }),
+  }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],

@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -52,15 +53,13 @@ export async function listOAuth2Clients(
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all OAuth2 clients",
-  },
-  args: {
+  name: "list",
+  description: "List all OAuth2 clients",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const oauth2Clients = await listOAuth2Clients({
       workspaceId: args["workspace-id"],

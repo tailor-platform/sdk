@@ -1,19 +1,18 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig } from "../context";
 import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all profiles",
-  },
-  args: {
+  name: "list",
+  description: "List all profiles",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-  },
+  }),
   run: withCommonArgs(async () => {
     const config = readPlatformConfig();
 

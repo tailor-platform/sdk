@@ -1,28 +1,21 @@
+import { arg } from "politty";
+import { z } from "zod";
+
 export const nameArgs = {
-  name: {
-    type: "positional",
-    description: "Workflow name",
-    required: true,
-  },
-} as const;
+  name: arg(z.string(), { positional: true, description: "Workflow name" }),
+};
 
 export const waitArgs = {
-  wait: {
-    type: "boolean",
+  wait: arg(z.boolean().default(false), {
     alias: "W",
     description: "Wait for execution to complete",
-    default: false,
-  },
-  interval: {
-    type: "string",
-    description: "Polling interval when using --wait",
+  }),
+  interval: arg(z.string().default("3s"), {
     alias: "i",
-    default: "3s",
-  },
-  logs: {
-    type: "boolean",
+    description: "Polling interval when using --wait",
+  }),
+  logs: arg(z.boolean().default(false), {
     alias: "l",
     description: "Display job execution logs after completion (requires --wait)",
-    default: false,
-  },
-} as const;
+  }),
+};

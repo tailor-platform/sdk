@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { mainCommand } from "./index";
-import type { CommandDef } from "citty";
+import type { AnyCommand } from "politty";
 
 vi.mock("node:module", async () => {
   const actual = await vi.importActual("node:module");
@@ -10,8 +10,8 @@ vi.mock("node:module", async () => {
   };
 });
 
-vi.mock("citty", async () => {
-  const actual = await vi.importActual("citty");
+vi.mock("politty", async () => {
+  const actual = await vi.importActual("politty");
   return {
     ...actual,
     runMain: vi.fn(),
@@ -22,44 +22,18 @@ type Resolvable<T> = T | Promise<T> | (() => T | Promise<T>);
 
 // The CLI option test only needs the command shape; arg typing is irrelevant here.
 // oxlint-disable-next-line no-explicit-any
-async function resolveCommand<T extends CommandDef<any>>(cmd: Resolvable<T>): Promise<T> {
+async function resolveCommand<T extends AnyCommand>(cmd: Resolvable<T>): Promise<T> {
   if (typeof cmd === "function") {
     return await cmd();
   }
   return await cmd;
 }
 
-type ArgDef = {
-  alias?: string | string[];
-  [key: string]: unknown;
-};
-
-type CommandArgs = Record<string, ArgDef>;
-
-const checkArgs = (args: CommandArgs, path: string[]) => {
-  const seen = new Map<string, string>();
-
-  for (const [name, def] of Object.entries(args)) {
-    const aliases = Array.isArray(def.alias) ? def.alias : def.alias ? [def.alias] : [];
-    for (const alias of aliases) {
-      const prev = seen.get(alias);
-      if (prev) {
-        throw new Error(
-          `Command "${path.join(" ")}": alias "-${alias}" is duplicated between args "${prev}" and "${name}"`,
-        );
-      }
-      seen.set(alias, name);
-    }
-  }
-};
-
 // The CLI option test only needs the command shape; arg typing is irrelevant here.
 // oxlint-disable-next-line no-explicit-any
-async function walkCommand<T extends CommandDef<any>>(cmd: Resolvable<T>, path: string[] = []) {
+async function walkCommand<T extends AnyCommand>(cmd: Resolvable<T>, path: string[] = []) {
   const resolved = await resolveCommand(cmd);
-  if (resolved.args) {
-    checkArgs(resolved.args, path);
-  }
+  // politty validates args via Zod schemas internally
 
   if (resolved.subCommands) {
     for (const [name, sub] of Object.entries(resolved.subCommands)) {

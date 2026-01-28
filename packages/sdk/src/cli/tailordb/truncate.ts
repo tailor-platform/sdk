@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -248,39 +249,25 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 }
 
 export const truncateCommand = defineCommand({
-  meta: {
-    name: "truncate",
-    description: "Truncate TailorDB tables",
-  },
-  args: {
+  name: "truncate",
+  description: "Truncate TailorDB tables",
+  args: z.object({
     ...commonArgs,
-    types: {
-      type: "positional",
-      description: "Type names to truncate",
-      required: false,
-    },
-    all: {
-      type: "boolean",
-      description: "Truncate all tables in all namespaces",
-      default: false,
+    types: arg(z.string().optional(), { positional: true, description: "Type names to truncate" }),
+    all: arg(z.boolean().default(false), {
       alias: "a",
-    },
-    namespace: {
-      type: "string",
-      description: "Truncate all tables in specified namespace",
+      description: "Truncate all tables in all namespaces",
+    }),
+    namespace: arg(z.string().optional(), {
       alias: "n",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
+      description: "Truncate all tables in specified namespace",
+    }),
+    yes: arg(z.boolean().default(false), { alias: "y", description: "Skip confirmation prompt" }),
     ...deploymentArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     // Get type names from rest arguments (_)
-    const types = args._.length > 0 ? args._.map((arg) => String(arg)).filter(Boolean) : undefined;
+    const types = args.types ? [args.types] : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,

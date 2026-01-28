@@ -1,23 +1,18 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
 import { logger } from "../../utils/logger";
 
 export const deleteCommand = defineCommand({
-  meta: {
-    name: "delete",
-    description: "Delete personal access token",
-  },
-  args: {
+  name: "delete",
+  description: "Delete personal access token",
+  args: z.object({
     ...commonArgs,
-    name: {
-      type: "positional",
-      description: "Token name",
-      required: true,
-    },
-  },
+    name: arg(z.string(), { positional: true, description: "Token name" }),
+  }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

@@ -6,8 +6,9 @@ import {
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import { defineCommand } from "citty";
 import ora from "ora";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -350,36 +351,29 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
 }
 
 export const executionsCommand = defineCommand({
-  meta: {
-    name: "executions",
-    description: "List or get workflow executions",
-  },
-  args: {
+  name: "executions",
+  description: "List or get workflow executions",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    executionId: {
-      type: "positional",
+    executionId: arg(z.string().optional(), {
+      positional: true,
       description: "Execution ID (if provided, shows details)",
-      required: false,
-    },
-    "workflow-name": {
-      type: "string",
-      description: "Filter by workflow name (list mode only)",
+    }),
+    "workflow-name": arg(z.string().optional(), {
       alias: "n",
-    },
-    status: {
-      type: "string",
-      description: "Filter by status (list mode only)",
+      description: "Filter by workflow name (list mode only)",
+    }),
+    status: arg(z.string().optional(), {
       alias: "s",
-    },
+      description: "Filter by status (list mode only)",
+    }),
     ...waitArgs,
-    logs: {
-      type: "boolean",
+    logs: arg(z.boolean().default(false), {
       description: "Display job execution logs (detail mode only)",
-      default: false,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     if (args.executionId) {
       const interval = parseDuration(args.interval);

@@ -1,22 +1,17 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, withCommonArgs } from "../args";
 import { readPlatformConfig, writePlatformConfig } from "../context";
 import { logger } from "../utils/logger";
 
 export const switchCommand = defineCommand({
-  meta: {
-    name: "switch",
-    description: "Set current user",
-  },
-  args: {
+  name: "switch",
+  description: "Set current user",
+  args: z.object({
     ...commonArgs,
-    user: {
-      type: "positional",
-      description: "User email",
-      required: true,
-    },
-  },
+    user: arg(z.string(), { positional: true, description: "User email" }),
+  }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

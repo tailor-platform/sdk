@@ -1,4 +1,4 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
@@ -65,19 +65,16 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all Tailor Platform workspaces",
-  },
-  args: {
+  name: "list",
+  description: "List all Tailor Platform workspaces",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    limit: {
-      type: "string",
+    limit: arg(z.string().optional(), {
       alias: "l",
       description: "Maximum number of workspaces to list",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     // Parse and validate limit
     let limit: number | undefined;

@@ -5,8 +5,9 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import { defineCommand } from "citty";
 import ora from "ora";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, parseDuration, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -236,28 +237,17 @@ export async function startWorkflow(
 }
 
 export const startCommand = defineCommand({
-  meta: {
-    name: "start",
-    description: "Start a workflow execution",
-  },
-  args: {
+  name: "start",
+  description: "Start a workflow execution",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
     ...nameArgs,
-    machineuser: {
-      type: "string",
-      description: "Machine user name",
-      alias: "m",
-      required: true,
-    },
-    arg: {
-      type: "string",
-      description: "Workflow argument (JSON string)",
-      alias: "a",
-    },
+    machineuser: arg(z.string(), { alias: "m", description: "Machine user name" }),
+    arg: arg(z.string().optional(), { alias: "a", description: "Workflow argument (JSON string)" }),
     ...waitArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const interval = parseDuration(args.interval);
 

@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import { defineCommand } from "citty";
 import * as path from "pathe";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { resolveCliBinPath } from "../../utils/resolve-cli-bin";
@@ -229,27 +230,22 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
 }
 
 export const erdExportCommand = defineCommand({
-  meta: {
-    name: "export",
-    description: "Export Liam ERD dist from applied TailorDB schema (beta)",
-  },
-  args: {
+  name: "export",
+  description: "Export Liam ERD dist from applied TailorDB schema (beta)",
+  args: z.object({
     ...commonArgs,
     ...deploymentArgs,
     ...jsonArgs,
-    namespace: {
-      type: "string",
-      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
+    namespace: arg(z.string().optional(), {
       alias: "n",
-    },
-    output: {
-      type: "string",
+      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
+    }),
+    output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
+      alias: "o",
       description:
         "Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json)",
-      alias: "o",
-      default: DEFAULT_ERD_BASE_DIR,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
     const outputDir = path.resolve(process.cwd(), String(args.output));

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, withCommonArgs } from "./args";
 import { logger } from "./utils/logger";
 import { readPackageJson } from "./utils/package-json";
@@ -14,24 +15,13 @@ const detectPackageManager = () => {
 };
 
 export const initCommand = defineCommand({
-  meta: {
-    name: "init",
-    description: "Initialize a new project using create-sdk",
-  },
-  args: {
+  name: "init",
+  description: "Initialize a new project using create-sdk",
+  args: z.object({
     ...commonArgs,
-    name: {
-      type: "positional",
-      description: "Project name",
-      required: false,
-    },
-    template: {
-      type: "string",
-      description: "Template name",
-      required: false,
-      alias: "t",
-    },
-  },
+    name: arg(z.string().optional(), { positional: true, description: "Project name" }),
+    template: arg(z.string().optional(), { alias: "t", description: "Template name" }),
+  }),
   run: withCommonArgs(async (args) => {
     const packageJson = await readPackageJson();
     const version =

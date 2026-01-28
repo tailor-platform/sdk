@@ -1,9 +1,10 @@
 import * as fs from "fs";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
 import * as path from "pathe";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { withCommonArgs, commonArgs, jsonArgs, workspaceArgs } from "../args";
 import { initOperatorClient, type OperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -224,27 +225,15 @@ export function logSkippedFiles(skippedFiles: string[]) {
 }
 
 export const deployCommand = defineCommand({
-  meta: {
-    name: "deploy",
-    description: "Deploy a static website",
-  },
-  args: {
+  name: "deploy",
+  description: "Deploy a static website",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    name: {
-      type: "string",
-      description: "Static website name",
-      alias: "n",
-      required: true,
-    },
-    dir: {
-      type: "string",
-      description: "Path to the static website files",
-      alias: "d",
-      required: true,
-    },
-  },
+    name: arg(z.string(), { alias: "n", description: "Static website name" }),
+    dir: arg(z.string(), { alias: "d", description: "Path to the static website files" }),
+  }),
   run: withCommonArgs(async (args) => {
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);
     const accessToken = await loadAccessToken({

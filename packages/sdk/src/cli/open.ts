@@ -1,5 +1,6 @@
-import { defineCommand } from "citty";
 import open from "open";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, withCommonArgs } from "./args";
 import { loadConfig } from "./config-loader";
 import { loadWorkspaceId } from "./context";
@@ -8,14 +9,12 @@ import { logger } from "./utils/logger";
 const consoleBaseUrl = "https://console.tailor.tech";
 
 export const openCommand = defineCommand({
-  meta: {
-    name: "open",
-    description: "Open Tailor Platform Console for the application",
-  },
-  args: {
+  name: "open",
+  description: "Open Tailor Platform Console for the application",
+  args: z.object({
     ...commonArgs,
     ...deploymentArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const workspaceId = loadWorkspaceId({
       workspaceId: args["workspace-id"],

@@ -35,6 +35,7 @@
     "lefthook": "2.0.15",
     "oxfmt": "0.24.0",
     "pkg-pr-new": "0.0.62",
+    "ts-morph": "^27.0.2",
     "tsx": "4.21.0",
     "turbo": "2.7.5",
     "typescript": "5.9.3",

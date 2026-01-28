@@ -1,17 +1,15 @@
-import { defineCommand, runCommand } from "citty";
+import { defineCommand, runCommand } from "politty";
 import { listCommand } from "./list";
 import { tokenCommand } from "./token";
 
 export const machineuserCommand = defineCommand({
-  meta: {
-    name: "machineuser",
-    description: "Manage machine users",
-  },
+  name: "machineuser",
+  description: "Manage machine users",
   subCommands: {
     list: listCommand,
     token: tokenCommand,
   },
   async run() {
-    await runCommand(listCommand, { rawArgs: [] });
+    await runCommand(listCommand, []);
   },
 });

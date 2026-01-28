@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { resolveCliBinPath } from "../../utils/resolve-cli-bin";
@@ -65,19 +66,16 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
 }
 
 export const erdServeCommand = defineCommand({
-  meta: {
-    name: "serve",
-    description: "Generate and serve ERD (liam build + `serve dist`) (beta)",
-  },
-  args: {
+  name: "serve",
+  description: "Generate and serve ERD (liam build + `serve dist`) (beta)",
+  args: z.object({
     ...commonArgs,
     ...deploymentArgs,
-    namespace: {
-      type: "string",
-      description: "TailorDB namespace name (uses first namespace in config if not specified)",
+    namespace: arg(z.string().optional(), {
       alias: "n",
-    },
-  },
+      description: "TailorDB namespace name (uses first namespace in config if not specified)",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
 

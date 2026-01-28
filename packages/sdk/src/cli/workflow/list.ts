@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -39,15 +40,13 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all workflows",
-  },
-  args: {
+  name: "list",
+  description: "List all workflows",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],

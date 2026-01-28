@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "citty";
+import { defineCommand, runCommand } from "politty";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
 import { listCommand } from "./list";
@@ -11,10 +11,8 @@ export interface ProfileInfo {
 }
 
 export const profileCommand = defineCommand({
-  meta: {
-    name: "profile",
-    description: "Manage workspace profiles (user + workspace combinations)",
-  },
+  name: "profile",
+  description: "Manage workspace profiles (user + workspace combinations)",
   subCommands: {
     create: createCommand,
     delete: deleteCommand,
@@ -22,6 +20,6 @@ export const profileCommand = defineCommand({
     update: updateCommand,
   },
   async run() {
-    await runCommand(listCommand, { rawArgs: [] });
+    await runCommand(listCommand, []);
   },
 });
