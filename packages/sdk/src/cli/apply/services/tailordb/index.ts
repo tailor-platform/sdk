@@ -83,8 +83,8 @@ import type {
 } from "../../../tailordb/migrate/types";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
-import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type { Executor } from "@/parser/service/executor";
+import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // ============================================================================

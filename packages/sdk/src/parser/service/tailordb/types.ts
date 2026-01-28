@@ -14,10 +14,22 @@ export type {
   TailorTypeGqlPermission,
 } from "@/configure/services/tailordb";
 
+/**
+ * Migration configuration for TailorDB
+ */
+export type TailorDBMigrationConfig = {
+  /** Directory path for migration files */
+  directory: string;
+  /** Machine user name for executing migration scripts (must be defined in auth.machineUsers) */
+  machineUser?: string;
+};
+
 export type TailorDBServiceConfig = {
   files: string[];
   ignores?: string[];
   erdSite?: string;
+  /** Migration configuration */
+  migration?: TailorDBMigrationConfig;
 };
 
 export type TailorDBTypeInput = z.input<typeof TailorDBTypeSchema>;

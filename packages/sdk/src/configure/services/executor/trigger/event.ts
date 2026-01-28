@@ -1,5 +1,5 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
-import type { TailorDBType } from "@/configure/services/tailordb";
+import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { TailorEnv } from "@/configure/types/env";
 import type { output } from "@/configure/types/helpers";
 import type {

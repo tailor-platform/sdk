@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { processKyselyType } from "./type-processor";
-import type { TailorDBType } from "@/configure/services/tailordb";
+import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBType): NormalizedTailorDBType {
