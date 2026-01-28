@@ -320,14 +320,6 @@ export async function executeMigrations(
       const result = await executeSingleMigration(options, migration);
 
       if (result.success) {
-        // Update the migration label
-        await updateMigrationLabel(
-          options.client,
-          options.workspaceId,
-          migration.namespace,
-          migration.number,
-        );
-
         spinner.succeed(`Migration ${migrationLabel} completed successfully`);
 
         // Show logs if any

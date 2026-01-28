@@ -421,18 +421,18 @@ export async function applyTailorDB(
         // Script execution (only if this migration requires a script)
         if (migration.diff.requiresMigrationScript && migrationCtx) {
           await executeMigrations(migrationCtx, [migration]);
-        } else {
-          // Update migration label for non-breaking migrations (those without scripts)
-          await updateMigrationLabel(
-            client,
-            migrationContext.workspaceId,
-            migration.namespace,
-            migration.number,
-          );
         }
 
         // Post-migration phase: Apply final types (required: true) and deletions
         await executeSingleMigrationPostPhase(client, changeSet, migration);
+
+        // Update migration label only after all phases complete successfully
+        await updateMigrationLabel(
+          client,
+          migrationContext.workspaceId,
+          migration.namespace,
+          migration.number,
+        );
       }
 
       if (migrationsRequiringScripts.length > 0) {
