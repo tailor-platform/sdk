@@ -104,7 +104,7 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
       process.execPath,
       [liamBinPath, "erd", "build", "--format", "tbls", "--input", schemaPath],
       {
-        stdio: "pipe",
+        stdio: ["pipe", "ignore", "pipe"],
         cwd,
       },
     );
