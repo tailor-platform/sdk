@@ -57,10 +57,7 @@ function resolveAllNamespaces(
   const results: Array<{ namespace: string; erdSite: string | undefined }> = [];
 
   for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
-    if (dbConfig && typeof dbConfig === "object" && !("external" in dbConfig)) {
-      if (options?.requireErdSite && !dbConfig.erdSite) {
-        continue;
-      }
+    if (dbConfig && !("external" in dbConfig) && !(options?.requireErdSite && !dbConfig.erdSite)) {
       results.push({ namespace, erdSite: dbConfig.erdSite });
     }
   }
