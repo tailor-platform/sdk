@@ -42,7 +42,7 @@ import {
   type StandardTailorTypeGqlPermission,
   type StandardTailorTypePermission,
   type OperatorFieldConfig,
-  type ParsedTailorDBType,
+  type NormalizedTailorDBType,
 } from "@/parser/service/tailordb/types";
 import { fetchAll, type OperatorClient } from "../../client";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "./label";
@@ -386,7 +386,7 @@ async function planTypes(
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
 // This will need refactoring later.
 function generateTailorDBTypeManifest(
-  type: ParsedTailorDBType,
+  type: NormalizedTailorDBType,
   executorUsedTypes: ReadonlySet<string>,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
   // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"

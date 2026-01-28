@@ -1,5 +1,5 @@
 import type { GqlIngestMetadata } from "./types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Processes TailorDB types to generate GraphQL Ingest metadata
@@ -7,7 +7,10 @@ import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
  * @param  namespace - Namespace of the type
  * @returns Generated GraphQL Ingest metadata
  */
-export function processGqlIngest(type: ParsedTailorDBType, namespace: string): GqlIngestMetadata {
+export function processGqlIngest(
+  type: NormalizedTailorDBType,
+  namespace: string,
+): GqlIngestMetadata {
   // Extract dependencies from relations
   const dependencies = Array.from(
     Object.values(type.fields).reduce<Set<string>>((set, field) => {

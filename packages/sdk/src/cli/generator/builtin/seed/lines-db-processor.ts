@@ -1,6 +1,6 @@
 import ml from "multiline-ts";
 import type { LinesDbMetadata } from "./types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 type LinesDbSource = {
@@ -14,7 +14,10 @@ type LinesDbSource = {
  * @param source - Source file info
  * @returns Generated lines-db metadata
  */
-export function processLinesDb(type: ParsedTailorDBType, source: LinesDbSource): LinesDbMetadata {
+export function processLinesDb(
+  type: NormalizedTailorDBType,
+  source: LinesDbSource,
+): LinesDbMetadata {
   if (!source.filePath || !source.exportName) {
     throw new Error(`Missing source info for type ${type.name}`);
   }

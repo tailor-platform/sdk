@@ -5,7 +5,7 @@ import { logger, styles } from "@/cli/utils/logger";
 import {
   parseTypes,
   TailorDBTypeSchema,
-  type ParsedTailorDBType,
+  type NormalizedTailorDBType,
   type TypeSourceInfo,
   type TailorDBServiceConfig,
   type TailorDBTypeInput,
@@ -14,9 +14,9 @@ import {
 export type TailorDBService = {
   readonly namespace: string;
   readonly config: TailorDBServiceConfig;
-  getTypes: () => Readonly<Record<string, ParsedTailorDBType>>;
+  getTypes: () => Readonly<Record<string, NormalizedTailorDBType>>;
   getTypeSourceInfo: () => Readonly<TypeSourceInfo>;
-  loadTypes: () => Promise<Record<string, ParsedTailorDBType> | undefined>;
+  loadTypes: () => Promise<Record<string, NormalizedTailorDBType> | undefined>;
 };
 
 /**
@@ -31,7 +31,7 @@ export function createTailorDBService(
 ): TailorDBService {
   type ParsedInputTypes = Record<string, TailorDBTypeInput>;
   const rawTypes: Record<string, ParsedInputTypes> = {};
-  let types: Record<string, ParsedTailorDBType> = {};
+  let types: Record<string, NormalizedTailorDBType> = {};
   const typeSourceInfo: TypeSourceInfo = {};
 
   const doParseTypes = (): void => {

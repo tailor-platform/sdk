@@ -193,7 +193,7 @@ export interface ParsedRelationship {
 /**
  * Parsed and normalized TailorDB type information
  */
-export interface ParsedTailorDBType {
+export interface NormalizedTailorDBType {
   name: string;
   pluralForm: string;
   description?: string;

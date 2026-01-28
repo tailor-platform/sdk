@@ -7,7 +7,7 @@ import {
 import { generateUnifiedFileUtils } from "./generate-file-utils";
 import { processFileType } from "./process-file-type";
 import { type FileUtilMetadata } from "./types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const FileUtilsGeneratorID = "@tailor-platform/file-utils";
 
@@ -28,7 +28,7 @@ export function createFileUtilsGenerator(options: FileUtilsGeneratorOptions) {
     dependencies: ["tailordb"] as const,
 
     async processType(args: {
-      type: ParsedTailorDBType;
+      type: NormalizedTailorDBType;
       namespace: string;
     }): Promise<FileUtilMetadata> {
       return await processFileType(args.type);

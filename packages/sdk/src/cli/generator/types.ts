@@ -1,7 +1,7 @@
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import type { IdProviderConfig, OAuth2ClientInput } from "@/parser/service/auth/types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 // ========================================
 // Basic types
@@ -72,7 +72,7 @@ export type HasDependency<
 
 export interface TailorDBProcessMethods<T, Ts> {
   processType(args: {
-    type: ParsedTailorDBType;
+    type: NormalizedTailorDBType;
     namespace: string;
     source: { filePath: string; exportName: string };
   }): T | Promise<T>;
@@ -279,7 +279,7 @@ export interface AnyCodeGenerator {
   readonly dependencies: readonly DependencyKind[];
 
   processType?(args: {
-    type: ParsedTailorDBType;
+    type: NormalizedTailorDBType;
     namespace: string;
     source: { filePath: string; exportName: string };
   }): unknown | Promise<unknown>;

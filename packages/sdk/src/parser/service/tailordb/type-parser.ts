@@ -11,7 +11,7 @@ import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script
 import type {
   TailorDBTypeInput,
   TailorDBField,
-  ParsedTailorDBType,
+  NormalizedTailorDBType,
   ParsedField,
   ParsedRelationship,
 } from "./types";
@@ -30,8 +30,8 @@ export function parseTypes(
   rawTypes: Record<string, TailorDBTypeInput>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
-): Record<string, ParsedTailorDBType> {
-  const types: Record<string, ParsedTailorDBType> = {};
+): Record<string, NormalizedTailorDBType> {
+  const types: Record<string, NormalizedTailorDBType> = {};
   const allTypeNames = new Set(Object.keys(rawTypes));
 
   for (const [typeName, type] of Object.entries(rawTypes)) {
@@ -45,7 +45,7 @@ export function parseTypes(
 }
 
 /**
- * Parse a TailorDBType into a ParsedTailorDBType.
+ * Parse a TailorDBType into a NormalizedTailorDBType.
  * @param type - TailorDB type to parse
  * @param allTypeNames - Set of all TailorDB type names
  * @param rawTypes - All raw TailorDB types keyed by name
@@ -55,7 +55,7 @@ function parseTailorDBType(
   type: TailorDBTypeInput,
   allTypeNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeInput>,
-): ParsedTailorDBType {
+): NormalizedTailorDBType {
   const metadata = type.metadata;
 
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
@@ -136,7 +136,7 @@ function parseTailorDBType(
  * @param typeSourceInfo - Optional type source information
  */
 function buildBackwardRelationships(
-  types: Record<string, ParsedTailorDBType>,
+  types: Record<string, NormalizedTailorDBType>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
 ): void {
@@ -256,7 +256,7 @@ function buildBackwardRelationships(
  * @param typeSourceInfo - Optional type source information
  */
 function validatePluralFormUniqueness(
-  types: Record<string, ParsedTailorDBType>,
+  types: Record<string, NormalizedTailorDBType>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
 ): void {

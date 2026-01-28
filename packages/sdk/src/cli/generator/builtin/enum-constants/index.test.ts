@@ -6,9 +6,9 @@ import { processEnumType } from "./process-enum-type";
 import { createEnumConstantsGenerator } from "./index";
 import type { EnumDefinition } from "./types";
 import type { TailorDBType } from "@/configure/services/tailordb";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
-function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
+function parseTailorDBType(type: TailorDBType): NormalizedTailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
   return types[type.name];
 }

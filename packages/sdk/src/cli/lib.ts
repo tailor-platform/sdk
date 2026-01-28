@@ -25,7 +25,7 @@ export type {
   GeneratorResult,
   DependencyKind,
 } from "./generator/types";
-export type { ParsedTailorDBType as TailorDBType } from "@/parser/service/tailordb/types";
+export type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
 
