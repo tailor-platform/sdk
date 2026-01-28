@@ -24,7 +24,8 @@ tailor-sdk executor trigger <executorName> [options]
 
 **Options:**
 
-- `-d, --payload` - Payload data (JSON string)
+- `-d, --data` - Request body (JSON string)
+- `-H, --header` - Request header (format: `Key: Value`, can be specified multiple times)
 - `-W, --wait` - Wait for job completion and downstream execution (workflow/function) if applicable
 - `-i, --interval` - Polling interval when using --wait (default: `3s`)
 - `-l, --logs` - Display function execution logs after completion (requires --wait)
@@ -38,8 +39,11 @@ tailor-sdk executor trigger <executorName> [options]
 # Trigger an executor
 tailor-sdk executor trigger my-executor
 
-# Trigger with payload
-tailor-sdk executor trigger my-executor -d '{"userId": "123"}'
+# Trigger with data
+tailor-sdk executor trigger my-executor -d '{"message": "hello"}'
+
+# Trigger with data and headers
+tailor-sdk executor trigger my-executor -d '{"message": "hello"}' -H "X-Custom: value" -H "X-Another: value2"
 
 # Trigger and wait for completion
 tailor-sdk executor trigger my-executor -W
@@ -47,6 +51,8 @@ tailor-sdk executor trigger my-executor -W
 # Trigger, wait, and show logs
 tailor-sdk executor trigger my-executor -W -l
 ```
+
+**Note:** The `--data` and `--header` options are combined into a payload structure `{ "body": {...}, "headers": {...} }` for `incomingWebhookTrigger` executors.
 
 ### executor jobs
 
