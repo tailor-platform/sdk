@@ -316,12 +316,18 @@ export async function watchExecutorJob(
                 }));
             };
 
-            // Check if already completed
-            if (execution.status === "SUCCESS" || execution.status === "FAILED") {
+            // Check if already completed (SUCCESS, FAILED, PENDING_RESUME are terminal states)
+            if (
+              execution.status === "SUCCESS" ||
+              execution.status === "FAILED" ||
+              execution.status === "PENDING_RESUME"
+            ) {
               if (execution.status === "SUCCESS") {
                 spinner.succeed(
                   `Workflow execution completed: ${styles.success(execution.status)}`,
                 );
+              } else if (execution.status === "PENDING_RESUME") {
+                spinner.warn(`Workflow execution paused: ${styles.warning(execution.status)}`);
               } else {
                 spinner.fail(`Workflow execution completed: ${styles.error(execution.status)}`);
               }
@@ -345,6 +351,8 @@ export async function watchExecutorJob(
                 spinner.succeed(
                   `Workflow execution completed: ${styles.success(finalExecution.status)}`,
                 );
+              } else if (finalExecution.status === "PENDING_RESUME") {
+                spinner.warn(`Workflow execution paused: ${styles.warning(finalExecution.status)}`);
               } else {
                 spinner.fail(
                   `Workflow execution completed: ${styles.error(finalExecution.status)}`,
