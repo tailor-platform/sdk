@@ -15,6 +15,7 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { formatKeyValueTable } from "../utils/format";
 import { styles, logger } from "../utils/logger";
 import { waitArgs } from "./args";
+import { isWorkflowExecutionTerminalStatus } from "./status";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
@@ -253,11 +254,8 @@ export async function getWorkflowExecution(
         throw new Error(`Execution '${options.executionId}' not found.`);
       }
 
-      // Terminal states
-      if (
-        execution.status === WorkflowExecution_Status.SUCCESS ||
-        execution.status === WorkflowExecution_Status.FAILED
-      ) {
+      // Terminal states (SUCCESS, FAILED, PENDING_RESUME)
+      if (isWorkflowExecutionTerminalStatus(execution.status)) {
         return await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
       }
 

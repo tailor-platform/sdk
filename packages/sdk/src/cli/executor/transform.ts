@@ -28,12 +28,7 @@ export interface ExecutorJobAttemptInfo {
   operationReference: string;
 }
 
-/**
- * Convert executor job status enum to string.
- * @param status - Executor job status enum
- * @returns Status string
- */
-export function executorJobStatusToString(status: ExecutorJobStatus): string {
+function executorJobStatusToString(status: ExecutorJobStatus): string {
   switch (status) {
     case ExecutorJobStatus.PENDING:
       return "PENDING";
