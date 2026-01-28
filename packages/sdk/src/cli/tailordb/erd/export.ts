@@ -45,9 +45,7 @@ function resolveDbConfig(
  * @param config - Loaded Tailor SDK config.
  * @returns Namespaces with erdSite.
  */
-export function resolveAllErdSites(
-  config: AppConfig,
-): Array<{ namespace: string; erdSite: string }> {
+function resolveAllErdSites(config: AppConfig): Array<{ namespace: string; erdSite: string }> {
   const results: Array<{ namespace: string; erdSite: string }> = [];
 
   for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
@@ -159,6 +157,10 @@ async function prepareErdBuild(options: ErdBuildOptions): Promise<void> {
   await writeTblsSchemaToFile(options);
 
   await runLiamBuild(options.outputPath, options.erdDir);
+
+  const distDir = path.join(options.erdDir, "dist");
+  const relativePath = path.relative(process.cwd(), distDir);
+  logger.success(`Built ERD to ${relativePath}`);
 }
 
 export interface ErdBuildResult {
@@ -267,6 +269,7 @@ export const erdExportCommand = defineCommand({
       outputDir,
     });
 
+    logger.newline();
     if (args.json) {
       logger.out(
         results.map((result) => ({
