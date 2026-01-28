@@ -1,8 +1,9 @@
 import * as fs from "node:fs";
-import { defineCommand } from "citty";
 import * as path from "pathe";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { trnPrefix } from "../../apply/services/label";
-import { commonArgs, workspaceArgs, deploymentArgs, withCommonArgs } from "../../args";
+import { commonArgs, workspaceArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -120,26 +121,26 @@ async function status(options: StatusOptions): Promise<void> {
 }
 
 export const statusCommand = defineCommand({
-  meta: {
-    name: "status",
-    description: "Show migration status for TailorDB namespaces",
-  },
-  args: {
+  name: "status",
+  description: "Show migration status for TailorDB namespaces",
+  args: z.object({
     ...commonArgs,
     ...workspaceArgs,
-    ...deploymentArgs,
-    namespace: {
-      type: "string",
-      description: "Target TailorDB namespace (shows all namespaces if not specified)",
+    config: arg(z.string().default("tailor.config.ts"), {
+      alias: "c",
+      description: "Path to SDK config file",
+    }),
+    namespace: arg(z.string().optional(), {
       alias: "n",
-    },
-  },
+      description: "Target TailorDB namespace (shows all namespaces if not specified)",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     await status({
-      configPath: typeof args.config === "string" ? args.config : undefined,
-      namespace: typeof args.namespace === "string" ? args.namespace : undefined,
-      workspaceId: typeof args["workspace-id"] === "string" ? args["workspace-id"] : undefined,
-      profile: typeof args.profile === "string" ? args.profile : undefined,
+      configPath: args.config,
+      namespace: args.namespace,
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
     });
   }),
 });

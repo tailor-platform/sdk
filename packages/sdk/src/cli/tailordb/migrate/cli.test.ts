@@ -1,16 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { generateCommand, migrationCommand, setCommand, statusCommand } from "./index";
-import type { CommandMeta } from "citty";
-
-// Helper to resolve citty Resolvable types for testing
-type ResolvedArgs<T> = T extends (...args: unknown[]) => infer R ? Awaited<R> : Awaited<T>;
 
 describe("migration CLI commands", () => {
   describe("migrationCommand", () => {
     it("should have correct meta information", () => {
-      const meta = migrationCommand.meta as CommandMeta;
-      expect(meta?.name).toBe("migration");
-      expect(meta?.description).toContain("migration");
+      expect(migrationCommand.name).toBe("migration");
+      expect(migrationCommand.description).toContain("migration");
     });
 
     it("should have generate subcommand", () => {
@@ -28,58 +23,40 @@ describe("migration CLI commands", () => {
 
   describe("generateCommand", () => {
     it("should have correct meta information", () => {
-      const meta = generateCommand.meta as CommandMeta;
-      expect(meta?.name).toBe("generate");
-      expect(meta?.description).toContain("migration");
+      expect(generateCommand.name).toBe("generate");
+      expect(generateCommand.description).toContain("migration");
     });
 
-    it("should have required args", () => {
-      const args = generateCommand.args as ResolvedArgs<typeof generateCommand.args>;
-      expect(args).toHaveProperty("name");
-      expect(args).toHaveProperty("yes");
-    });
-
-    it("should have name option with alias", () => {
-      const args = generateCommand.args as ResolvedArgs<typeof generateCommand.args>;
-      const nameArg = args?.name;
-      expect(nameArg?.type).toBe("string");
-      expect(nameArg?.alias).toBe("n");
-    });
-
-    it("should have yes flag with alias", () => {
-      const args = generateCommand.args as ResolvedArgs<typeof generateCommand.args>;
-      const yesArg = args?.yes;
-      expect(yesArg?.type).toBe("boolean");
-      expect(yesArg?.alias).toBe("y");
-      expect(yesArg?.default).toBe(false);
+    it("should have required args schema", () => {
+      const shape = generateCommand.args.shape;
+      expect(shape).toHaveProperty("name");
+      expect(shape).toHaveProperty("yes");
     });
   });
 
   describe("setCommand", () => {
     it("should have correct meta information", () => {
-      const meta = setCommand.meta as CommandMeta;
-      expect(meta?.name).toBe("set");
-      expect(meta?.description).toContain("migration");
+      expect(setCommand.name).toBe("set");
+      expect(setCommand.description).toContain("migration");
     });
 
-    it("should have required args", () => {
-      const args = setCommand.args as ResolvedArgs<typeof setCommand.args>;
-      expect(args).toHaveProperty("number");
-      expect(args).toHaveProperty("namespace");
-      expect(args).toHaveProperty("yes");
+    it("should have required args schema", () => {
+      const shape = setCommand.args.shape;
+      expect(shape).toHaveProperty("number");
+      expect(shape).toHaveProperty("namespace");
+      expect(shape).toHaveProperty("yes");
     });
   });
 
   describe("statusCommand", () => {
     it("should have correct meta information", () => {
-      const meta = statusCommand.meta as CommandMeta;
-      expect(meta?.name).toBe("status");
-      expect(meta?.description).toContain("migration");
+      expect(statusCommand.name).toBe("status");
+      expect(statusCommand.description).toContain("migration");
     });
 
-    it("should have required args", () => {
-      const args = statusCommand.args as ResolvedArgs<typeof statusCommand.args>;
-      expect(args).toHaveProperty("namespace");
+    it("should have required args schema", () => {
+      const shape = statusCommand.args.shape;
+      expect(shape).toHaveProperty("namespace");
     });
   });
 });
