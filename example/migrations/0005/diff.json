@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-01-20T06:56:02.648Z",
+  "changes": [
+    {
+      "kind": "type_modified",
+      "typeName": "SalesOrder",
+      "reason": "Index \"idx_status_createdAt\" added",
+      "before": {},
+      "after": {
+        "indexes": {
+          "idx_status_createdAt": {
+            "fields": ["status", "createdAt"],
+            "unique": false
+          },
+          "idx_customerID_status": {
+            "fields": ["customerID", "status"],
+            "unique": false
+          }
+        }
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "SalesOrder",
+      "reason": "Index \"idx_customerID_status\" added",
+      "before": {},
+      "after": {
+        "indexes": {
+          "idx_status_createdAt": {
+            "fields": ["status", "createdAt"],
+            "unique": false
+          },
+          "idx_customerID_status": {
+            "fields": ["customerID", "status"],
+            "unique": false
+          }
+        }
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "SalesOrder",
+      "reason": "File field \"receipt\" added",
+      "before": {},
+      "after": {
+        "files": {
+          "receipt": "receipt file",
+          "form": "order form file"
+        }
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "SalesOrder",
+      "reason": "File field \"form\" added",
+      "before": {},
+      "after": {
+        "files": {
+          "receipt": "receipt file",
+          "form": "order form file"
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Supplier",
+      "fieldName": "name",
+      "before": {
+        "type": "string",
+        "required": false
+      },
+      "after": {
+        "type": "string",
+        "required": true
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Supplier",
+      "fieldName": "country",
+      "before": {
+        "type": "string",
+        "required": false
+      },
+      "after": {
+        "type": "string",
+        "required": true
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "User",
+      "fieldName": "role",
+      "before": {
+        "type": "enum",
+        "required": true,
+        "allowedValues": ["MANAGER", "STAFF", "UNKNOWN"]
+      },
+      "after": {
+        "type": "enum",
+        "required": true,
+        "allowedValues": ["MANAGER", "STAFF"]
+      }
+    }
+  ],
+  "hasBreakingChanges": true,
+  "breakingChanges": [
+    {
+      "typeName": "Supplier",
+      "fieldName": "name",
+      "reason": "Field changed from optional to required"
+    },
+    {
+      "typeName": "Supplier",
+      "fieldName": "country",
+      "reason": "Field changed from optional to required"
+    },
+    {
+      "typeName": "User",
+      "fieldName": "role",
+      "reason": "Enum values removed: UNKNOWN"
+    }
+  ],
+  "requiresMigrationScript": true
+}

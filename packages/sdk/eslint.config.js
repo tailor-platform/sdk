@@ -3,16 +3,16 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import importPlugin from "eslint-plugin-import";
-import jsdoc from "eslint-plugin-jsdoc";
+import jsdocPlugin from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
-  globalIgnores(["dist/"]),
+  globalIgnores(["dist/", "e2e/fixtures/"]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
   importPlugin.flatConfigs.typescript,
-  jsdoc.configs["flat/recommended"],
+  jsdocPlugin.configs["flat/recommended"],
   {
     linterOptions: {
       reportUnusedDisableDirectives: "off",
@@ -42,7 +42,7 @@ export default defineConfig([
         "error",
         { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },

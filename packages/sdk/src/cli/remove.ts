@@ -9,7 +9,7 @@ import { applyIdP, planIdP } from "@/cli/apply/services/idp";
 import { applyPipeline, planPipeline } from "@/cli/apply/services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "@/cli/apply/services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
-import { loadConfig } from "@/cli/config-loader";
+import { loadConfig, type LoadedConfig } from "@/cli/config-loader";
 import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
 import { commonArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
@@ -38,6 +38,7 @@ async function loadOptions(options?: RemoveOptions) {
     client,
     workspaceId,
     application,
+    config,
   };
 }
 
@@ -45,6 +46,7 @@ async function execRemove(
   client: OperatorClient,
   workspaceId: string,
   application: Application,
+  config: LoadedConfig,
   confirm?: () => Promise<void>,
 ) {
   // Plan all resources with forRemoval=true
@@ -53,6 +55,7 @@ async function execRemove(
     workspaceId,
     application,
     forRemoval: true,
+    config,
   };
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
@@ -102,8 +105,8 @@ async function execRemove(
  * @returns Promise that resolves when removal completes
  */
 export async function remove(options?: RemoveOptions): Promise<void> {
-  const { client, workspaceId, application } = await loadOptions(options);
-  await execRemove(client, workspaceId, application);
+  const { client, workspaceId, application, config } = await loadOptions(options);
+  await execRemove(client, workspaceId, application, config);
 }
 
 export const removeCommand = defineCommand({
@@ -137,7 +140,7 @@ export const removeCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
-    const { client, workspaceId, application } = await loadOptions({
+    const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
@@ -146,7 +149,7 @@ export const removeCommand = defineCommand({
     logger.info(`Planning removal of resources managed by "${application.name}"...`);
     logger.newline();
 
-    await execRemove(client, workspaceId, application, async () => {
+    await execRemove(client, workspaceId, application, config, async () => {
       if (!args.yes) {
         const confirmed = await logger.prompt("Are you sure you want to remove all resources?", {
           type: "confirm",
