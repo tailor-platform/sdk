@@ -40,35 +40,27 @@ function resolveDbConfig(
   return { namespace, erdSite: dbConfig.erdSite };
 }
 
-/**
- * Get all namespaces with erdSite configured.
- * @param config - Loaded Tailor SDK config.
- * @returns Namespaces with erdSite.
- */
-function resolveAllErdSites(config: AppConfig): Array<{ namespace: string; erdSite: string }> {
-  const results: Array<{ namespace: string; erdSite: string }> = [];
-
-  for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
-    if (dbConfig && typeof dbConfig === "object" && !("external" in dbConfig) && dbConfig.erdSite) {
-      results.push({ namespace, erdSite: dbConfig.erdSite });
-    }
-  }
-
-  return results;
-}
+type ResolveNamespacesOptions = {
+  requireErdSite?: boolean;
+};
 
 /**
- * Get all namespaces (regardless of erdSite configuration).
+ * Get all namespaces from config.
  * @param config - Loaded Tailor SDK config.
+ * @param options - Options for filtering namespaces.
  * @returns All namespaces with optional erdSite.
  */
 function resolveAllNamespaces(
   config: AppConfig,
+  options?: ResolveNamespacesOptions,
 ): Array<{ namespace: string; erdSite: string | undefined }> {
   const results: Array<{ namespace: string; erdSite: string | undefined }> = [];
 
   for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
     if (dbConfig && typeof dbConfig === "object" && !("external" in dbConfig)) {
+      if (options?.requireErdSite && !dbConfig.erdSite) {
+        continue;
+      }
       results.push({ namespace, erdSite: dbConfig.erdSite });
     }
   }
@@ -194,9 +186,7 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
       },
     ];
   } else {
-    const namespaces = options.requireErdSite
-      ? resolveAllErdSites(config)
-      : resolveAllNamespaces(config);
+    const namespaces = resolveAllNamespaces(config, { requireErdSite: options.requireErdSite });
     if (namespaces.length === 0) {
       throw new Error(
         options.requireErdSite
