@@ -108,7 +108,7 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
       reject(error);
     });
 
-    child.on("exit", (code) => {
+    child.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
@@ -172,6 +172,12 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
 
   if (options.namespace) {
     const { namespace, erdSite } = resolveDbConfig(config, options.namespace);
+    if (options.requireErdSite && !erdSite) {
+      throw new Error(
+        `No erdSite configured for namespace "${namespace}". ` +
+          `Add erdSite: "<static-website-name>" to db.${namespace} in tailor.config.ts.`,
+      );
+    }
     const erdDir = path.join(baseDir, namespace);
     targets = [
       {
