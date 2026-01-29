@@ -14,6 +14,9 @@ export interface ShowOptions {
 }
 
 export interface ApplicationInfo {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceRegion?: string;
   name: string;
   domain: string;
   url: string;
@@ -25,7 +28,9 @@ export interface ApplicationInfo {
   updatedAt: string;
 }
 
-function applicationInfo(app: Application): ApplicationInfo {
+function applicationInfo(
+  app: Application,
+): Omit<ApplicationInfo, "workspaceId" | "workspaceName" | "workspaceRegion"> {
   return {
     name: app.name,
     domain: app.domain,
@@ -56,13 +61,32 @@ export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
     profile: options?.profile,
   });
 
-  // Get application
   const { config } = await loadConfig(options?.configPath);
-  const resp = await client.getApplication({
+  const [workspaceResp, resp] = await Promise.all([
+    client.getWorkspace({
+      workspaceId,
+    }),
+    client.getApplication({
+      workspaceId,
+      applicationName: config.name,
+    }),
+  ]);
+  const appInfo = applicationInfo(resp.application!);
+
+  return {
+    name: appInfo.name,
     workspaceId,
-    applicationName: config.name,
-  });
-  return applicationInfo(resp.application!);
+    workspaceName: workspaceResp.workspace?.name ?? "N/A",
+    workspaceRegion: workspaceResp.workspace?.region ?? "N/A",
+    domain: appInfo.domain,
+    url: appInfo.url,
+    auth: appInfo.auth,
+    cors: appInfo.cors,
+    allowedIpAddresses: appInfo.allowedIpAddresses,
+    disableIntrospection: appInfo.disableIntrospection,
+    createdAt: appInfo.createdAt,
+    updatedAt: appInfo.updatedAt,
+  };
 }
 
 export const showCommand = defineCommand({
