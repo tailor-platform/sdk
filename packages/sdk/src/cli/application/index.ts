@@ -4,10 +4,10 @@ import { createResolverService, type ResolverService } from "@/cli/application/r
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
 import { type AuthConfig } from "@/configure/services/auth";
 import { type ExecutorServiceInput } from "@/configure/services/executor/types";
-import { type ResolverServiceInput } from "@/configure/services/resolver/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { type AppConfig } from "@/parser/app-config";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
+import { type ResolverServiceInput } from "@/parser/service/resolver/types";
 import {
   StaticWebsiteSchema,
   type StaticWebsite,

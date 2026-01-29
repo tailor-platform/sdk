@@ -33,8 +33,8 @@ import { executeScript } from "../../../utils/script-executor";
 import { trnPrefix } from "../label";
 import type { Application } from "@/cli/application";
 import type { LoadedConfig } from "@/cli/config-loader";
-import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 // ============================================================================
 // Types
@@ -390,17 +390,17 @@ export function groupMigrationsByNamespace(
  * @param {number} maxVersion - Maximum migration version to reconstruct
  * @param {Application} application - Application instance
  * @param {LoadedConfig} config - Loaded application config (includes path)
- * @returns {Promise<Map<string, Record<string, ParsedTailorDBType>>>} Filtered types by namespace
+ * @returns {Promise<Map<string, Record<string, NormalizedTailorDBType>>>} Filtered types by namespace
  */
 export async function buildFilteredTypesForVersion(
   maxVersion: number,
   application: Readonly<Application>,
   config: LoadedConfig,
-): Promise<Map<string, Record<string, ParsedTailorDBType>>> {
+): Promise<Map<string, Record<string, NormalizedTailorDBType>>> {
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
 
-  const filteredTypesByNamespace = new Map<string, Record<string, ParsedTailorDBType>>();
+  const filteredTypesByNamespace = new Map<string, Record<string, NormalizedTailorDBType>>();
 
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     // Reconstruct snapshot up to maxVersion
@@ -419,7 +419,7 @@ export async function buildFilteredTypesForVersion(
     const localTypes = tailordb.getTypes();
 
     // Filter local types to match snapshot state
-    const filteredTypes: Record<string, ParsedTailorDBType> = {};
+    const filteredTypes: Record<string, NormalizedTailorDBType> = {};
     for (const typeName of Object.keys(snapshot.types)) {
       const localType = localTypes[typeName];
       if (localType) {

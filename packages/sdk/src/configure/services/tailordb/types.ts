@@ -2,6 +2,11 @@ import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
+import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
+export type {
+  TailorDBMigrationConfig,
+  TailorDBServiceConfig,
+} from "@/parser/service/tailordb/types";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
@@ -77,24 +82,6 @@ export type Hooks<
       ? never
       : K]?: Hook<TData, output<F[K]>>;
 }>;
-
-/**
- * Migration configuration for TailorDB
- */
-export type TailorDBMigrationConfig = {
-  /** Directory path for migration files */
-  directory: string;
-  /** Machine user name for executing migration scripts (must be defined in auth.machineUsers) */
-  machineUser?: string;
-};
-
-export type TailorDBServiceConfig = {
-  files: string[];
-  ignores?: string[];
-  erdSite?: string;
-  /** Migration configuration */
-  migration?: TailorDBMigrationConfig;
-};
 
 export type TailorDBExternalConfig = { external: true };
 

@@ -11,7 +11,7 @@ import {
   type EnumDefinition,
   type EnumNamespaceMetadata,
 } from "./types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const EnumConstantsGeneratorID = "@tailor-platform/enum-constants";
 
@@ -32,7 +32,7 @@ export function createEnumConstantsGenerator(options: EnumConstantsGeneratorOpti
     dependencies: ["tailordb"] as const,
 
     async processType(args: {
-      type: ParsedTailorDBType;
+      type: NormalizedTailorDBType;
       namespace: string;
     }): Promise<EnumConstantMetadata> {
       return await processEnumType(args.type);

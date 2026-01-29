@@ -1,11 +1,11 @@
 import type { EnumConstantMetadata } from "./types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 function capitalizeFirst(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function collectEnums(type: ParsedTailorDBType): EnumConstantMetadata["enums"] {
+function collectEnums(type: NormalizedTailorDBType): EnumConstantMetadata["enums"] {
   const enums: EnumConstantMetadata["enums"] = [];
 
   for (const [fieldName, parsedField] of Object.entries(type.fields)) {
@@ -44,7 +44,7 @@ function collectEnums(type: ParsedTailorDBType): EnumConstantMetadata["enums"] {
  * @param type - The parsed TailorDB type to process
  * @returns Enum constant metadata for the type
  */
-export async function processEnumType(type: ParsedTailorDBType): Promise<EnumConstantMetadata> {
+export async function processEnumType(type: NormalizedTailorDBType): Promise<EnumConstantMetadata> {
   const enums = collectEnums(type);
 
   return {

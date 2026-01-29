@@ -2,21 +2,21 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import { type TailorDBType } from "@/configure/services/tailordb/schema";
 import {
   parseTypes,
   TailorDBTypeSchema,
-  type ParsedTailorDBType,
+  type NormalizedTailorDBType,
   type TypeSourceInfo,
+  type TailorDBServiceConfig,
+  type TailorDBType,
 } from "@/parser/service/tailordb";
-import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 
 export type TailorDBService = {
   readonly namespace: string;
   readonly config: TailorDBServiceConfig;
-  getTypes: () => Readonly<Record<string, ParsedTailorDBType>>;
+  getTypes: () => Readonly<Record<string, NormalizedTailorDBType>>;
   getTypeSourceInfo: () => Readonly<TypeSourceInfo>;
-  loadTypes: () => Promise<Record<string, ParsedTailorDBType> | undefined>;
+  loadTypes: () => Promise<Record<string, NormalizedTailorDBType> | undefined>;
 };
 
 /**
@@ -29,12 +29,13 @@ export function createTailorDBService(
   namespace: string,
   config: TailorDBServiceConfig,
 ): TailorDBService {
-  const rawTypes: Record<string, Record<string, TailorDBType>> = {};
-  let types: Record<string, ParsedTailorDBType> = {};
+  type TailorDBTypesByName = Record<string, TailorDBType>;
+  const rawTypes: Record<string, TailorDBTypesByName> = {};
+  let types: Record<string, NormalizedTailorDBType> = {};
   const typeSourceInfo: TypeSourceInfo = {};
 
   const doParseTypes = (): void => {
-    const allTypes: Record<string, TailorDBType> = {};
+    const allTypes: TailorDBTypesByName = {};
     for (const fileTypes of Object.values(rawTypes)) {
       for (const [typeName, type] of Object.entries(fileTypes)) {
         allTypes[typeName] = type;
@@ -44,9 +45,9 @@ export function createTailorDBService(
     types = parseTypes(allTypes, namespace, typeSourceInfo);
   };
 
-  const loadTypeFile = async (typeFile: string): Promise<Record<string, TailorDBType>> => {
+  const loadTypeFile = async (typeFile: string): Promise<TailorDBTypesByName> => {
     rawTypes[typeFile] = {};
-    const loadedTypes: Record<string, TailorDBType> = {};
+    const loadedTypes: TailorDBTypesByName = {};
     try {
       const module = await import(pathToFileURL(typeFile).href);
 
@@ -62,8 +63,8 @@ export function createTailorDBService(
         logger.log(
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        rawTypes[typeFile][result.data.name] = exportedValue;
-        loadedTypes[result.data.name] = exportedValue;
+        rawTypes[typeFile][result.data.name] = result.data;
+        loadedTypes[result.data.name] = result.data;
         // Store source info mapping
         typeSourceInfo[result.data.name] = {
           filePath: typeFile,

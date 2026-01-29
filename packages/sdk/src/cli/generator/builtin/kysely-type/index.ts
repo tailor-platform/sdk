@@ -6,7 +6,7 @@ import {
 } from "@/cli/generator/types";
 import { processKyselyType, generateUnifiedKyselyTypes } from "./type-processor";
 import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 
@@ -27,7 +27,7 @@ export function createKyselyGenerator(options: KyselyGeneratorOptions) {
     dependencies: ["tailordb"] as const,
 
     async processType(args: {
-      type: ParsedTailorDBType;
+      type: NormalizedTailorDBType;
       namespace: string;
     }): Promise<KyselyTypeMetadata> {
       return await processKyselyType(args.type);

@@ -22,12 +22,12 @@ import { type Resolver } from "@/parser/service/resolver";
 import { commonArgs, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
 
 type TypeInfo = {
-  types: Record<string, ParsedTailorDBType>;
+  types: Record<string, NormalizedTailorDBType>;
   sourceInfo: Record<string, { filePath: string; exportName: string }>;
 };
 

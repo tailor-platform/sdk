@@ -3,9 +3,9 @@ import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { processKyselyType } from "./type-processor";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
 
-function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
+function parseTailorDBType(type: TailorDBType): NormalizedTailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
   return types[type.name];
 }

@@ -4,6 +4,7 @@ import type {
   Hook,
   OperatorFieldConfig,
   RawRelationConfig,
+  TailorDBType,
 } from "./types";
 
 // Since there's naming difference between platform and sdk,
@@ -51,7 +52,7 @@ const convertHookToExpr = (
  * @param field - TailorDB field definition
  * @returns Parsed operator field configuration
  */
-export function parseFieldConfig(field: TailorAnyDBField): OperatorFieldConfig {
+export function parseFieldConfig(field: TailorDBType["fields"][string]): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
   // Access rawRelation via getter (if available)
