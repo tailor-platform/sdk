@@ -13,10 +13,13 @@ export interface ShowOptions {
   configPath?: string;
 }
 
-export interface ApplicationInfo {
+export interface WorkspaceInfo {
   workspaceId: string;
   workspaceName: string;
   workspaceRegion?: string;
+}
+
+export interface ApplicationInfo {
   name: string;
   domain: string;
   url: string;
@@ -28,9 +31,9 @@ export interface ApplicationInfo {
   updatedAt: string;
 }
 
-function applicationInfo(
-  app: Application,
-): Omit<ApplicationInfo, "workspaceId" | "workspaceName" | "workspaceRegion"> {
+export interface ShowInfo extends ApplicationInfo, WorkspaceInfo {}
+
+function applicationInfo(app: Application): ApplicationInfo {
   return {
     name: app.name,
     domain: app.domain,
@@ -49,7 +52,7 @@ function applicationInfo(
  * @param options - Show options
  * @returns Application information
  */
-export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
+export async function show(options?: ShowOptions): Promise<ShowInfo> {
   // Load and validate options
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -76,8 +79,8 @@ export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
   return {
     name: appInfo.name,
     workspaceId,
-    workspaceName: workspaceResp.workspace?.name ?? "N/A",
-    workspaceRegion: workspaceResp.workspace?.region ?? "N/A",
+    workspaceName: workspaceResp.workspace?.name ?? "",
+    workspaceRegion: workspaceResp.workspace?.region ?? "",
     domain: appInfo.domain,
     url: appInfo.url,
     auth: appInfo.auth,
