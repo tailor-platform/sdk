@@ -1,6 +1,7 @@
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
+  ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { FunctionExecution_Status } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { styles } from "../utils/logger";
@@ -141,5 +142,27 @@ export function executorTargetTypeToString(targetType: ExecutorTargetType): stri
       return "WORKFLOW";
     default:
       return "UNSPECIFIED";
+  }
+}
+
+// ============================================================================
+// Executor Trigger Type
+// ============================================================================
+
+/**
+ * Convert executor trigger type enum to string.
+ * @param triggerType - Executor trigger type enum
+ * @returns Trigger type string
+ */
+export function executorTriggerTypeToString(triggerType: ExecutorTriggerType): string {
+  switch (triggerType) {
+    case ExecutorTriggerType.SCHEDULE:
+      return "schedule";
+    case ExecutorTriggerType.EVENT:
+      return "event";
+    case ExecutorTriggerType.INCOMING_WEBHOOK:
+      return "incomingWebhook";
+    default:
+      return "unspecified";
   }
 }

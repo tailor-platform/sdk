@@ -14,6 +14,10 @@ tailor-sdk executor <subcommand> [options]
 
 Trigger an executor manually.
 
+Only executors with `incomingWebhook` or `schedule` trigger types can be triggered manually. Executors with `event` trigger types (such as `recordCreated`, `recordUpdated`, `recordDeleted`) cannot be triggered manually.
+
+The `--data` and `--header` options are only available for `incomingWebhook` trigger type.
+
 ```bash
 tailor-sdk executor trigger <executorName> [options]
 ```
@@ -52,8 +56,6 @@ tailor-sdk executor trigger my-executor -W
 tailor-sdk executor trigger my-executor -W -l
 ```
 
-**Note:** The `--data` and `--header` options are combined into a payload structure `{ "body": {...}, "headers": {...} }` for `incomingWebhookTrigger` executors.
-
 ### executor jobs
 
 List or get executor jobs.
@@ -70,6 +72,7 @@ tailor-sdk executor jobs <executorName> [jobId] [options]
 **Options:**
 
 - `-s, --status` - Filter by status: `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `CANCELED` (list mode only)
+- `--limit` - Maximum number of jobs to list (default: `50`, max: `1000`) (list mode only)
 - `--attempts` - Show job attempts (detail mode only)
 - `-W, --wait` - Wait for job completion and downstream execution (detail mode only)
 - `-i, --interval` - Polling interval when using --wait (default: `3s`)
@@ -81,8 +84,11 @@ tailor-sdk executor jobs <executorName> [jobId] [options]
 **Usage Examples:**
 
 ```bash
-# List all jobs for an executor
+# List jobs for an executor (default: 50 jobs)
 tailor-sdk executor jobs my-executor
+
+# Limit the number of jobs
+tailor-sdk executor jobs my-executor --limit 10
 
 # Filter by status
 tailor-sdk executor jobs my-executor -s RUNNING
