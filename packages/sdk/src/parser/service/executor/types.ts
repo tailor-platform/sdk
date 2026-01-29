@@ -1,7 +1,9 @@
 import type {
+  AuthAccessTokenTriggerSchema,
   ExecutorSchema,
   FunctionOperationSchema,
   GqlOperationSchema,
+  IdpUserTriggerSchema,
   IncomingWebhookTriggerSchema,
   RecordTriggerSchema,
   ResolverExecutedTriggerSchema,
@@ -16,6 +18,8 @@ export type RecordTrigger = z.infer<typeof RecordTriggerSchema>;
 export type ResolverExecutedTrigger = z.infer<typeof ResolverExecutedTriggerSchema>;
 export type ScheduleTriggerInput = z.input<typeof ScheduleTriggerSchema>;
 export type IncomingWebhookTrigger = z.infer<typeof IncomingWebhookTriggerSchema>;
+export type IdpUserTrigger = z.infer<typeof IdpUserTriggerSchema>;
+export type AuthAccessTokenTrigger = z.infer<typeof AuthAccessTokenTriggerSchema>;
 export type Trigger = z.infer<typeof TriggerSchema>;
 
 export type FunctionOperation = z.infer<typeof FunctionOperationSchema>;

@@ -1,7 +1,7 @@
 import { initOperatorClient } from "../../client";
 import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
-import { logErdBetaWarning } from "../../utils/beta";
+import { logBetaWarning } from "../../utils/beta";
 import type { OperatorClient } from "../../client";
 import type { AppConfig } from "@/parser/app-config";
 
@@ -23,7 +23,7 @@ type ErdCommandOptions = {
  * @returns Initialized context.
  */
 export async function initErdContext(args: ErdCommandOptions): Promise<ErdCommandContext> {
-  logErdBetaWarning();
+  logBetaWarning("tailordb erd");
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: args.profile,

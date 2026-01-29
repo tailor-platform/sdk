@@ -1,0 +1,443 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-01-20T03:12:00.525Z",
+  "types": {
+    "Customer": {
+      "name": "Customer",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "email": {
+          "type": "string",
+          "required": true
+        },
+        "phone": {
+          "type": "string",
+          "required": false
+        },
+        "country": {
+          "type": "string",
+          "required": true
+        },
+        "postalCode": {
+          "type": "string",
+          "required": true
+        },
+        "address": {
+          "type": "string",
+          "required": false
+        },
+        "city": {
+          "type": "string",
+          "required": false
+        },
+        "fullAddress": {
+          "type": "string",
+          "required": true
+        },
+        "state": {
+          "type": "string",
+          "required": true
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "Customers",
+      "description": "Customer information",
+      "settings": {}
+    },
+    "Invoice": {
+      "name": "Invoice",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "invoiceNumber": {
+          "type": "string",
+          "required": true
+        },
+        "salesOrderID": {
+          "type": "uuid",
+          "required": true,
+          "index": true,
+          "unique": true,
+          "foreignKey": true,
+          "foreignKeyType": "SalesOrder",
+          "foreignKeyField": "id"
+        },
+        "amount": {
+          "type": "integer",
+          "required": false
+        },
+        "sequentialId": {
+          "type": "integer",
+          "required": true
+        },
+        "status": {
+          "type": "enum",
+          "required": false,
+          "allowedValues": ["draft", "sent", "paid", "cancelled"]
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "Invoices",
+      "settings": {}
+    },
+    "NestedProfile": {
+      "name": "NestedProfile",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "userInfo": {
+          "type": "nested",
+          "required": true
+        },
+        "metadata": {
+          "type": "nested",
+          "required": true
+        },
+        "archived": {
+          "type": "boolean",
+          "required": false
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "NestedProfiles",
+      "description": "Nested Profile Type",
+      "settings": {}
+    },
+    "PurchaseOrder": {
+      "name": "PurchaseOrder",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "supplierID": {
+          "type": "uuid",
+          "required": true,
+          "index": true,
+          "foreignKey": true,
+          "foreignKeyType": "Supplier",
+          "foreignKeyField": "id"
+        },
+        "totalPrice": {
+          "type": "integer",
+          "required": true
+        },
+        "discount": {
+          "type": "float",
+          "required": false
+        },
+        "status": {
+          "type": "string",
+          "required": true
+        },
+        "attachedFiles": {
+          "type": "nested",
+          "required": true,
+          "array": true
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "PurchaseOrderList",
+      "settings": {}
+    },
+    "SalesOrder": {
+      "name": "SalesOrder",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "customerID": {
+          "type": "uuid",
+          "required": true,
+          "index": true,
+          "foreignKey": true,
+          "foreignKeyType": "Customer",
+          "foreignKeyField": "id"
+        },
+        "approvedByUserIDs": {
+          "type": "uuid",
+          "required": false,
+          "array": true,
+          "foreignKey": true,
+          "foreignKeyType": "User",
+          "foreignKeyField": "id"
+        },
+        "totalPrice": {
+          "type": "integer",
+          "required": false
+        },
+        "discount": {
+          "type": "float",
+          "required": false
+        },
+        "status": {
+          "type": "string",
+          "required": false
+        },
+        "cancelReason": {
+          "type": "string",
+          "required": false
+        },
+        "canceledAt": {
+          "type": "datetime",
+          "required": false
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "SalesOrderList",
+      "settings": {}
+    },
+    "SalesOrderCreated": {
+      "name": "SalesOrderCreated",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "salesOrderID": {
+          "type": "uuid",
+          "required": true
+        },
+        "customerID": {
+          "type": "uuid",
+          "required": true
+        },
+        "totalPrice": {
+          "type": "integer",
+          "required": false
+        },
+        "status": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "pluralForm": "SalesOrderCreatedList",
+      "settings": {}
+    },
+    "Selfie": {
+      "name": "Selfie",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "parentID": {
+          "type": "uuid",
+          "required": false,
+          "index": true,
+          "foreignKey": true,
+          "foreignKeyType": "Selfie",
+          "foreignKeyField": "id"
+        },
+        "dependId": {
+          "type": "uuid",
+          "required": false,
+          "index": true,
+          "unique": true,
+          "foreignKey": true,
+          "foreignKeyType": "Selfie",
+          "foreignKeyField": "id"
+        }
+      },
+      "pluralForm": "Selfies",
+      "settings": {}
+    },
+    "Supplier": {
+      "name": "Supplier",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": false
+        },
+        "phone": {
+          "type": "string",
+          "required": true
+        },
+        "fax": {
+          "type": "string",
+          "required": false
+        },
+        "email": {
+          "type": "string",
+          "required": false
+        },
+        "postalCode": {
+          "type": "string",
+          "required": true
+        },
+        "country": {
+          "type": "string",
+          "required": false
+        },
+        "state": {
+          "type": "enum",
+          "required": true,
+          "allowedValues": ["Alabama", "Alaska"]
+        },
+        "city": {
+          "type": "string",
+          "required": true
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "Suppliers",
+      "settings": {}
+    },
+    "User": {
+      "name": "User",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "email": {
+          "type": "string",
+          "required": true,
+          "index": true,
+          "unique": true
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "Users",
+      "settings": {}
+    },
+    "UserLog": {
+      "name": "UserLog",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "userID": {
+          "type": "uuid",
+          "required": true,
+          "index": true,
+          "foreignKey": true,
+          "foreignKeyType": "User",
+          "foreignKeyField": "id"
+        },
+        "message": {
+          "type": "string",
+          "required": true
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "UserLogs",
+      "settings": {}
+    },
+    "UserSetting": {
+      "name": "UserSetting",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "language": {
+          "type": "enum",
+          "required": true,
+          "allowedValues": ["jp", "en"]
+        },
+        "userID": {
+          "type": "uuid",
+          "required": true,
+          "index": true,
+          "unique": true,
+          "foreignKey": true,
+          "foreignKeyType": "User",
+          "foreignKeyField": "id"
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false
+        }
+      },
+      "pluralForm": "UserSettings",
+      "settings": {}
+    }
+  }
+}

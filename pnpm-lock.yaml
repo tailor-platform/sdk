@@ -427,6 +427,9 @@ importers:
       '@eslint/js':
         specifier: 9.39.2
         version: 9.39.2
+      '@tailor-platform/function-kysely-tailordb':
+        specifier: 0.1.3
+        version: 0.1.3(kysely@0.28.2)
       '@tailor-platform/function-types':
         specifier: 0.8.0
         version: 0.8.0
@@ -463,6 +466,9 @@ importers:
       globals:
         specifier: 17.0.0
         version: 17.0.0
+      kysely:
+        specifier: 0.28.2
+        version: 0.28.2
       oxlint:
         specifier: 1.39.0
         version: 1.39.0(oxlint-tsgolint@0.11.1)
@@ -3802,6 +3808,10 @@ packages:
     resolution: {integrity: sha512-ksNxfzIW77OcZ+QWSAPC7yDqUSaIVwkTWnTPNiIy//vifNbwsSgQ57OkkncHxxpcBHM3LRfLAZVEh7kjq5twVA==}
     engines: {node: '>=20.0.0'}
 
+  kysely@0.28.2:
+    resolution: {integrity: sha512-4YAVLoF0Sf0UTqlhgQMFU9iQECdah7n+13ANkiuVfRvlK+uI0Etbgd7bVP36dKlG+NXWbhGua8vnGt+sdhvT7A==}
+    engines: {node: '>=18.0.0'}
+
   lefthook-darwin-arm64@2.0.15:
     resolution: {integrity: sha512-ygAqG/NzOgY9bEiqeQtiOmCRTtp9AmOd3eyrpEaSrRB9V9f3RHRgWDrWbde9BiHSsCzcbeY9/X2NuKZ69eUsNA==}
     cpu: [arm64]
@@ -6626,6 +6636,10 @@ snapshots:
     dependencies:
       kysely: 0.28.10
 
+  '@tailor-platform/function-kysely-tailordb@0.1.3(kysely@0.28.2)':
+    dependencies:
+      kysely: 0.28.2
+
   '@tailor-platform/function-types@0.8.0': {}
 
   '@toiroakr/lines-db@0.6.1(valibot@1.1.0(typescript@5.9.3))':
@@ -8387,6 +8401,8 @@ snapshots:
       zod: 4.3.5
 
   kysely@0.28.10: {}
+
+  kysely@0.28.2: {}
 
   lefthook-darwin-arm64@2.0.15:
     optional: true

@@ -554,12 +554,12 @@ export function createGenerationManager(
  */
 export async function generate(options?: GenerateOptions) {
   // Load and validate options
-  const { config, generators, configPath } = await loadConfig(options?.configPath);
+  const { config, generators } = await loadConfig(options?.configPath);
   const watch = options?.watch ?? false;
 
   // Generate user types from loaded config
-  await generateUserTypes(config, configPath);
-  const manager = createGenerationManager(config, generators, configPath);
+  await generateUserTypes(config, config.path);
+  const manager = createGenerationManager(config, generators, config.path);
   await manager.generate(watch);
   if (watch) {
     await manager.watch();
