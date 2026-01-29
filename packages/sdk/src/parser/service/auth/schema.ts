@@ -198,4 +198,15 @@ export const AuthConfigSchema = z
     tenantProvider: TenantProviderSchema.optional(),
     publishSessionEvents: z.boolean().optional(),
   })
+  .superRefine((value, ctx) => {
+    const hasUserProfile = value.userProfile !== undefined;
+    const hasMachineUserAttributes = value.machineUserAttributes !== undefined;
+
+    if (hasUserProfile && hasMachineUserAttributes) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Provide either userProfile or machineUserAttributes, not both.",
+      });
+    }
+  })
   .brand("AuthConfig");
