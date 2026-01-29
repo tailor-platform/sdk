@@ -22,8 +22,6 @@ The following command creates a new project with the required configuration file
 npm create @tailor-platform/sdk -- --template hello-world example-app
 ```
 
-Note: npm 7+ requires `--` before create-sdk options.
-
 Before deploying your app, you need to create a workspace:
 
 ```bash

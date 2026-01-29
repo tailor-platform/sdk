@@ -8,8 +8,6 @@ For a complete working example with full test code, use the `testing` template:
 npm create @tailor-platform/sdk -- --template testing <your-project-name>
 ```
 
-Note: npm 7+ requires `--` before create-sdk options.
-
 ## Unit Tests
 
 Unit tests verify resolver logic without requiring deployment.

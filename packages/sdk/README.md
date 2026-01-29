@@ -38,7 +38,6 @@ Create a new project using the CLI:
 
 ```bash
 npm create @tailor-platform/sdk -- --template hello-world my-app
-# Note: npm 7+ requires `--` before create-sdk options.
 cd my-app
 npm run deploy -- --workspace-id <your-workspace-id>
 ```
