@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "./args";
 import { platformBaseUrl, userAgent } from "./client";
 import { loadAccessToken } from "./context";
@@ -63,27 +64,22 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
 }
 
 export const apiCommand = defineCommand({
-  meta: {
-    name: "api",
-    description: "Call Tailor Platform API endpoints directly",
-  },
-  args: {
+  name: "api",
+  description: "Call Tailor Platform API endpoints directly",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    body: {
-      type: "string",
-      description: "Request body as JSON",
+    body: arg(z.string().default("{}"), {
       alias: "b",
-      default: "{}",
-    },
-    endpoint: {
-      type: "positional",
+      description: "Request body as JSON",
+    }),
+    endpoint: arg(z.string(), {
+      positional: true,
       description:
         "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication')",
-      required: true,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const result = await apiCall({
       profile: args.profile,

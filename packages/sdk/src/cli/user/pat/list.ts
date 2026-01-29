@@ -1,5 +1,6 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
@@ -7,14 +8,12 @@ import { logger } from "../../utils/logger";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all personal access tokens",
-  },
-  args: {
+  name: "list",
+  description: "List all personal access tokens",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

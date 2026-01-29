@@ -1,7 +1,9 @@
+import { arg } from "politty";
+import { z } from "zod";
+
 export const nameArgs = {
-  name: {
-    type: "positional",
+  name: arg(z.string(), {
+    positional: true,
     description: "Vault name",
-    required: true,
-  },
-} as const;
+  }),
+};

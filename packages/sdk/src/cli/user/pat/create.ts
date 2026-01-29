@@ -1,30 +1,26 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { fetchLatestToken, readPlatformConfig } from "../../context";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
 export const createCommand = defineCommand({
-  meta: {
-    name: "create",
-    description: "Create new personal access token",
-  },
-  args: {
+  name: "create",
+  description: "Create new personal access token",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    name: {
-      type: "positional",
+    name: arg(z.string(), {
+      positional: true,
       description: "Token name",
-      required: true,
-    },
-    write: {
-      type: "boolean",
-      description: "Grant write permission (default: read-only)",
+    }),
+    write: arg(z.boolean().default(false), {
       alias: "W",
-      default: false,
-    },
-  },
+      description: "Grant write permission (default: read-only)",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

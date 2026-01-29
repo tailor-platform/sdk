@@ -1,15 +1,16 @@
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, withCommonArgs } from "./args";
 import { initOAuth2Client } from "./client";
 import { readPlatformConfig, writePlatformConfig } from "./context";
 import { logger } from "./utils/logger";
 
 export const logoutCommand = defineCommand({
-  meta: {
-    name: "logout",
-    description: "Logout from Tailor Platform",
-  },
-  args: commonArgs,
+  name: "logout",
+  description: "Logout from Tailor Platform",
+  args: z.object({
+    ...commonArgs,
+  }),
   run: withCommonArgs(async () => {
     const pfConfig = readPlatformConfig();
     const tokens = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;

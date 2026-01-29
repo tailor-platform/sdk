@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
 import * as path from "pathe";
+import { arg } from "politty";
 import { z } from "zod";
 import { isCLIError } from "./utils/errors";
 import { logger } from "./utils/logger";
-import type { ParsedArgs } from "citty";
 
 // ============================================================================
 // Validators
@@ -99,78 +99,64 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
  * script path, causing warnings (twice due to tsx loader).
  */
 export const commonArgs = {
-  "env-file": {
-    type: "string",
-    description: "Path to the environment file (error if not found)",
+  "env-file": arg(z.string().optional(), {
     alias: "e",
-  },
-  "env-file-if-exists": {
-    type: "string",
+    description: "Path to the environment file (error if not found)",
+  }),
+  "env-file-if-exists": arg(z.string().optional(), {
     description: "Path to the environment file (ignored if not found)",
-  },
-  verbose: {
-    type: "boolean",
+  }),
+  verbose: arg(z.boolean().default(false), {
     description: "Enable verbose logging",
-    default: false,
-  },
-} as const;
+  }),
+};
 
 /**
  * Arguments for commands that require workspace context
  */
 export const workspaceArgs = {
-  "workspace-id": {
-    type: "string",
-    description: "Workspace ID",
+  "workspace-id": arg(z.string().optional(), {
     alias: "w",
-  },
-  profile: {
-    type: "string",
-    description: "Workspace profile",
+    description: "Workspace ID",
+  }),
+  profile: arg(z.string().optional(), {
     alias: "p",
-  },
-} as const;
+    description: "Workspace profile",
+  }),
+};
 
 /**
  * Arguments for commands that interact with deployed resources (includes config)
  */
 export const deploymentArgs = {
   ...workspaceArgs,
-  config: {
-    type: "string",
-    description: "Path to SDK config file",
+  config: arg(z.string().default("tailor.config.ts"), {
     alias: "c",
-    default: "tailor.config.ts",
-  },
-} as const;
+    description: "Path to SDK config file",
+  }),
+};
 
 /**
  * Arguments for commands that require confirmation
  */
 export const confirmationArgs = {
-  yes: {
-    type: "boolean",
-    description: "Skip confirmation prompts",
+  yes: arg(z.boolean().default(false), {
     alias: "y",
-    default: false,
-  },
-} as const;
+    description: "Skip confirmation prompts",
+  }),
+};
 
 /**
  * Arguments for JSON output
  */
 export const jsonArgs = {
-  json: {
-    type: "boolean",
-    description: "Output as JSON",
+  json: arg(z.boolean().default(false), {
     alias: "j",
-    default: false,
-  },
-} as const;
-
-type WithCommonArgsContext<T> = {
-  args: T;
+    description: "Output as JSON",
+  }),
 };
+
+export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
 
 /**
  * Wrapper for command handlers that provides:
@@ -181,10 +167,10 @@ type WithCommonArgsContext<T> = {
  * @param handler - Command handler function
  * @returns Wrapped handler
  */
-export const withCommonArgs =
-  <T extends ParsedArgs<typeof commonArgs>>(handler: (args: T) => Promise<void>) =>
-  async (context: WithCommonArgsContext<T>) => {
-    const { args } = context;
+export function withCommonArgs<T extends CommonArgsType>(
+  handler: (args: T) => Promise<void>,
+): (args: T) => Promise<void> {
+  return async (args: T) => {
     try {
       // Set JSON mode if --json flag is provided
       if ("json" in args && typeof args.json === "boolean") {
@@ -213,3 +199,4 @@ export const withCommonArgs =
     }
     process.exit(0);
   };
+}

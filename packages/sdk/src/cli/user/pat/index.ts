@@ -1,24 +1,21 @@
-import { defineCommand, runCommand } from "citty";
+import { defineCommand } from "politty";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
 import { listCommand } from "./list";
 import { updateCommand } from "./update";
 
 export const patCommand = defineCommand({
-  meta: {
-    name: "pat",
-    description: "Manage personal access tokens",
-  },
+  name: "pat",
+  description: "Manage personal access tokens",
+  args: listCommand.args,
   subCommands: {
     create: createCommand,
     delete: deleteCommand,
     list: listCommand,
     update: updateCommand,
   },
-  async run(context) {
+  async run(args) {
     // Default to list when no subcommand is provided
-    await runCommand(listCommand, {
-      rawArgs: context.rawArgs || [],
-    });
+    await listCommand.run(args);
   },
 });

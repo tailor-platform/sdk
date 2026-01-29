@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "citty";
+import { defineCommand, runCommand } from "politty";
 import { executionsCommand } from "./executions";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
@@ -6,10 +6,8 @@ import { resumeCommand } from "./resume";
 import { startCommand } from "./start";
 
 export const workflowCommand = defineCommand({
-  meta: {
-    name: "workflow",
-    description: "Manage workflows",
-  },
+  name: "workflow",
+  description: "Manage workflows",
   subCommands: {
     list: listCommand,
     get: getCommand,
@@ -18,6 +16,6 @@ export const workflowCommand = defineCommand({
     resume: resumeCommand,
   },
   async run() {
-    await runCommand(listCommand, { rawArgs: [] });
+    await runCommand(listCommand, []);
   },
 });

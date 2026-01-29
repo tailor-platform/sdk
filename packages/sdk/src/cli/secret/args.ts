@@ -1,37 +1,34 @@
+import { arg } from "politty";
+import { z } from "zod";
+
 /**
  * Arguments for specify secret key
  */
 export const vaultArgs = {
-  "vault-name": {
-    type: "string",
-    description: "Vault name",
+  "vault-name": arg(z.string(), {
     alias: "V",
-    required: true,
-  },
-} as const;
+    description: "Vault name",
+  }),
+};
 
 /**
  * Arguments for specify secret key
  */
 export const secretIdentifyArgs = {
   ...vaultArgs,
-  name: {
-    type: "string",
-    description: "Secret name",
+  name: arg(z.string(), {
     alias: "n",
-    required: true,
-  },
-} as const;
+    description: "Secret name",
+  }),
+};
 
 /**
  * Arguments for specify secret key
  */
 export const secretValueArgs = {
   ...secretIdentifyArgs,
-  value: {
-    type: "string",
-    description: "Secret value",
+  value: arg(z.string(), {
     alias: "v",
-    required: true,
-  },
-} as const;
+    description: "Secret value",
+  }),
+};
