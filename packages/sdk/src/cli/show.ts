@@ -13,6 +13,12 @@ export interface ShowOptions {
   configPath?: string;
 }
 
+export interface WorkspaceInfo {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceRegion?: string;
+}
+
 export interface ApplicationInfo {
   name: string;
   domain: string;
@@ -24,6 +30,8 @@ export interface ApplicationInfo {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ShowInfo extends ApplicationInfo, WorkspaceInfo {}
 
 function applicationInfo(app: Application): ApplicationInfo {
   return {
@@ -44,7 +52,7 @@ function applicationInfo(app: Application): ApplicationInfo {
  * @param options - Show options
  * @returns Application information
  */
-export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
+export async function show(options?: ShowOptions): Promise<ShowInfo> {
   // Load and validate options
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -56,13 +64,32 @@ export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
     profile: options?.profile,
   });
 
-  // Get application
   const { config } = await loadConfig(options?.configPath);
-  const resp = await client.getApplication({
+  const [workspaceResp, resp] = await Promise.all([
+    client.getWorkspace({
+      workspaceId,
+    }),
+    client.getApplication({
+      workspaceId,
+      applicationName: config.name,
+    }),
+  ]);
+  const appInfo = applicationInfo(resp.application!);
+
+  return {
+    name: appInfo.name,
     workspaceId,
-    applicationName: config.name,
-  });
-  return applicationInfo(resp.application!);
+    workspaceName: workspaceResp.workspace?.name ?? "",
+    workspaceRegion: workspaceResp.workspace?.region ?? "",
+    domain: appInfo.domain,
+    url: appInfo.url,
+    auth: appInfo.auth,
+    cors: appInfo.cors,
+    allowedIpAddresses: appInfo.allowedIpAddresses,
+    disableIntrospection: appInfo.disableIntrospection,
+    createdAt: appInfo.createdAt,
+    updatedAt: appInfo.updatedAt,
+  };
 }
 
 export const showCommand = defineCommand({
