@@ -8,7 +8,7 @@ import {
   type NormalizedTailorDBType,
   type TypeSourceInfo,
   type TailorDBServiceConfig,
-  type TailorDBTypeInput,
+  type TailorDBType,
 } from "@/parser/service/tailordb";
 
 export type TailorDBService = {
@@ -29,7 +29,7 @@ export function createTailorDBService(
   namespace: string,
   config: TailorDBServiceConfig,
 ): TailorDBService {
-  type ParsedInputTypes = Record<string, TailorDBTypeInput>;
+  type ParsedInputTypes = Record<string, TailorDBType>;
   const rawTypes: Record<string, ParsedInputTypes> = {};
   let types: Record<string, NormalizedTailorDBType> = {};
   const typeSourceInfo: TypeSourceInfo = {};
@@ -63,8 +63,8 @@ export function createTailorDBService(
         logger.log(
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        rawTypes[typeFile][result.data.name] = exportedValue;
-        loadedTypes[result.data.name] = exportedValue;
+        rawTypes[typeFile][result.data.name] = result.data;
+        loadedTypes[result.data.name] = result.data;
         // Store source info mapping
         typeSourceInfo[result.data.name] = {
           filePath: typeFile,

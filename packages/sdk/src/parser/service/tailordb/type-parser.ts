@@ -9,11 +9,11 @@ import {
 } from "./relation";
 import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import type {
-  TailorDBTypeInput,
   TailorDBField,
   NormalizedTailorDBType,
   ParsedField,
   ParsedRelationship,
+  TailorDBType,
 } from "./types";
 
 export type TypeSourceInfo = Record<string, { filePath: string; exportName: string }>;
@@ -35,7 +35,7 @@ function getStringProperty(obj: unknown, key: string): string | undefined {
  * @returns Parsed types
  */
 export function parseTypes(
-  rawTypes: Record<string, TailorDBTypeInput>,
+  rawTypes: Record<string, TailorDBType>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
 ): Record<string, NormalizedTailorDBType> {
@@ -60,9 +60,9 @@ export function parseTypes(
  * @returns Parsed TailorDB type
  */
 function parseTailorDBType(
-  type: TailorDBTypeInput,
+  type: TailorDBType,
   allTypeNames: Set<string>,
-  rawTypes: Record<string, TailorDBTypeInput>,
+  rawTypes: Record<string, TailorDBType>,
 ): NormalizedTailorDBType {
   const metadata = type.metadata;
   const pluralForm =

@@ -32,7 +32,7 @@ export type TailorDBServiceConfig = {
   migration?: TailorDBMigrationConfig;
 };
 
-export type TailorDBTypeInput = z.input<typeof TailorDBTypeSchema>;
+export type TailorDBType = z.output<typeof TailorDBTypeSchema>;
 
 export interface Script {
   expr: string;
