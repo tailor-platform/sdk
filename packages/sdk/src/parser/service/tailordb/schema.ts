@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
+import type { TailorDBFieldOutput } from "./types";
 
 const TailorFieldTypeSchema = z.enum([
   "uuid",
@@ -19,7 +20,7 @@ const AllowedValueSchema = z.object({
   description: z.string().optional(),
 });
 
-const DBFieldMetadataSchema = z.object({
+export const DBFieldMetadataSchema = z.object({
   required: z.boolean().optional(),
   array: z.boolean().optional(),
   description: z.string().optional(),
@@ -49,7 +50,7 @@ const DBFieldMetadataSchema = z.object({
 
 const RelationTypeSchema = z.enum(["1-1", "oneToOne", "n-1", "manyToOne", "N-1", "keyOnly"]);
 
-const RawRelationConfigSchema = z.object({
+export const RawRelationConfigSchema = z.object({
   type: RelationTypeSchema,
   toward: z.object({
     type: z.string(),
@@ -58,17 +59,6 @@ const RawRelationConfigSchema = z.object({
   }),
   backward: z.string().optional(),
 });
-
-type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;
-type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
-
-type TailorDBFieldOutput = {
-  type: string;
-  fields?: Record<string, TailorDBFieldOutput>;
-  _metadata: DBFieldMetadataOutput;
-  metadata: DBFieldMetadataOutput;
-  rawRelation?: RawRelationConfigOutput;
-};
 
 const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
   z.object({

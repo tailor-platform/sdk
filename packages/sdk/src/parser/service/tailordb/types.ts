@@ -1,5 +1,5 @@
 import type { RelationType } from "./relation";
-import type { TailorDBTypeSchema } from "./schema";
+import type { DBFieldMetadataSchema, RawRelationConfigSchema, TailorDBTypeSchema } from "./schema";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "@/configure/services/tailordb";
 import type { ValueOperand } from "@/parser/service/auth/types";
 import type { z } from "zod";
@@ -33,6 +33,17 @@ export type TailorDBServiceConfig = {
 };
 
 export type TailorDBType = z.output<typeof TailorDBTypeSchema>;
+
+export type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;
+export type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
+
+export type TailorDBFieldOutput = {
+  type: string;
+  fields?: Record<string, TailorDBFieldOutput>;
+  _metadata: DBFieldMetadataOutput;
+  metadata: DBFieldMetadataOutput;
+  rawRelation?: RawRelationConfigOutput;
+};
 
 export interface Script {
   expr: string;
