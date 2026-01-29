@@ -205,6 +205,12 @@ function protoExecutor(
     recordUpdated: "tailordb.type_record.updated",
     recordDeleted: "tailordb.type_record.deleted",
     resolverExecuted: "pipeline.resolver.executed",
+    idpUserCreated: "idp.user.created",
+    idpUserUpdated: "idp.user.updated",
+    idpUserDeleted: "idp.user.deleted",
+    authAccessTokenIssued: "auth.access_token.issued",
+    authAccessTokenRefreshed: "auth.access_token.refreshed",
+    authAccessTokenRevoked: "auth.access_token.revoked",
   };
   switch (trigger.kind) {
     case "schedule":
@@ -267,6 +273,22 @@ function protoExecutor(
         config: {
           case: "incomingWebhook",
           value: {},
+        },
+      };
+      break;
+    case "idpUserCreated":
+    case "idpUserUpdated":
+    case "idpUserDeleted":
+    case "authAccessTokenIssued":
+    case "authAccessTokenRefreshed":
+    case "authAccessTokenRevoked":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = {
+        config: {
+          case: "event",
+          value: {
+            eventType: eventType[trigger.kind],
+          },
         },
       };
       break;
