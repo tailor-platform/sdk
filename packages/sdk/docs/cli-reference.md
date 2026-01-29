@@ -152,6 +152,15 @@ Commands for managing workflows and executions.
 | [workflow executions](./cli/workflow.md#workflow-executions) | List or get executions     |
 | [workflow resume](./cli/workflow.md#workflow-resume)         | Resume a failed execution  |
 
+### [Executor Commands](./cli/executor.md)
+
+Commands for managing executors and executor jobs.
+
+| Command                                                | Description                  |
+| ------------------------------------------------------ | ---------------------------- |
+| [executor trigger](./cli/executor.md#executor-trigger) | Trigger an executor manually |
+| [executor jobs](./cli/executor.md#executor-jobs)       | List or get executor jobs    |
+
 ### [Secret Commands](./cli/secret.md)
 
 Commands for managing secrets and vaults.
