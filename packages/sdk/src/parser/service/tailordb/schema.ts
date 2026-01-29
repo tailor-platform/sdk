@@ -64,7 +64,6 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
   z.object({
     type: TailorFieldTypeSchema,
     fields: z.record(z.string(), TailorDBFieldSchema).optional(),
-    _metadata: DBFieldMetadataSchema,
     metadata: DBFieldMetadataSchema,
     rawRelation: RawRelationConfigSchema.optional(),
   }),

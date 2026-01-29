@@ -40,7 +40,6 @@ export type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
 export type TailorDBFieldOutput = {
   type: string;
   fields?: Record<string, TailorDBFieldOutput>;
-  _metadata: DBFieldMetadataOutput;
   metadata: DBFieldMetadataOutput;
   rawRelation?: RawRelationConfigOutput;
 };
