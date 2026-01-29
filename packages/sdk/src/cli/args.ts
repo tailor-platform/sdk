@@ -167,10 +167,9 @@ export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
  * @param handler - Command handler function
  * @returns Wrapped handler
  */
-export function withCommonArgs<T extends CommonArgsType>(
-  handler: (args: T) => Promise<void>,
-): (args: T) => Promise<void> {
-  return async (args: T) => {
+export const withCommonArgs =
+  <T extends CommonArgsType>(handler: (args: T) => Promise<void>) =>
+  async (args: T) => {
     try {
       // Set JSON mode if --json flag is provided
       if ("json" in args && typeof args.json === "boolean") {
@@ -199,4 +198,3 @@ export function withCommonArgs<T extends CommonArgsType>(
     }
     process.exit(0);
   };
-}

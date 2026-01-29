@@ -253,7 +253,7 @@ export const truncateCommand = defineCommand({
   description: "Truncate TailorDB tables",
   args: z.object({
     ...commonArgs,
-    types: arg(z.string().optional(), {
+    types: arg(z.string().array().optional(), {
       positional: true,
       description: "Type names to truncate",
     }),
@@ -272,8 +272,7 @@ export const truncateCommand = defineCommand({
     ...deploymentArgs,
   }),
   run: withCommonArgs(async (args) => {
-    // Get type names from rest arguments (_)
-    const types = args.types ? [args.types] : undefined;
+    const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,

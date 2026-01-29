@@ -30,12 +30,7 @@ async function resolveCommand<T extends AnyCommand>(cmd: Resolvable<T>): Promise
   return await cmd;
 }
 
-/**
- * Check for duplicate short option aliases in a command's args
- * @param extracted - Extracted fields from command args
- * @param path - Command path for error messages
- */
-function checkArgs(extracted: ExtractedFields, path: string[]): void {
+const checkArgs = (extracted: ExtractedFields, path: string[]): void => {
   const seen = new Map<string, string>();
 
   for (const field of extracted.fields) {
@@ -52,7 +47,7 @@ function checkArgs(extracted: ExtractedFields, path: string[]): void {
       }
     }
   }
-}
+};
 
 // The CLI option test only needs the command shape; arg typing is irrelevant here.
 // oxlint-disable-next-line no-explicit-any

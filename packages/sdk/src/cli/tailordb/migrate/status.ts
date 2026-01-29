@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { trnPrefix } from "../../apply/services/label";
-import { commonArgs, workspaceArgs, withCommonArgs } from "../../args";
+import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -125,11 +125,7 @@ export const statusCommand = defineCommand({
   description: "Show migration status for TailorDB namespaces",
   args: z.object({
     ...commonArgs,
-    ...workspaceArgs,
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-    }),
+    ...deploymentArgs,
     namespace: arg(z.string().optional(), {
       alias: "n",
       description: "Target TailorDB namespace (shows all namespaces if not specified)",
