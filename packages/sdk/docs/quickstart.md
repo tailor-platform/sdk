@@ -19,8 +19,10 @@ The SDK requires Node.js 22 or later. Install Node.js via your package manager b
 The following command creates a new project with the required configuration files and example code.
 
 ```bash
-npm create @tailor-platform/sdk example-app --template hello-world
+npm create @tailor-platform/sdk -- --template hello-world example-app
 ```
+
+Note: npm 7+ requires `--` before create-sdk options.
 
 Before deploying your app, you need to create a workspace:
 
