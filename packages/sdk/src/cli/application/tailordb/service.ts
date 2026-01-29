@@ -29,13 +29,13 @@ export function createTailorDBService(
   namespace: string,
   config: TailorDBServiceConfig,
 ): TailorDBService {
-  type ParsedInputTypes = Record<string, TailorDBType>;
-  const rawTypes: Record<string, ParsedInputTypes> = {};
+  type TailorDBTypesByName = Record<string, TailorDBType>;
+  const rawTypes: Record<string, TailorDBTypesByName> = {};
   let types: Record<string, NormalizedTailorDBType> = {};
   const typeSourceInfo: TypeSourceInfo = {};
 
   const doParseTypes = (): void => {
-    const allTypes: ParsedInputTypes = {};
+    const allTypes: TailorDBTypesByName = {};
     for (const fileTypes of Object.values(rawTypes)) {
       for (const [typeName, type] of Object.entries(fileTypes)) {
         allTypes[typeName] = type;
@@ -45,9 +45,9 @@ export function createTailorDBService(
     types = parseTypes(allTypes, namespace, typeSourceInfo);
   };
 
-  const loadTypeFile = async (typeFile: string): Promise<ParsedInputTypes> => {
+  const loadTypeFile = async (typeFile: string): Promise<TailorDBTypesByName> => {
     rawTypes[typeFile] = {};
-    const loadedTypes: ParsedInputTypes = {};
+    const loadedTypes: TailorDBTypesByName = {};
     try {
       const module = await import(pathToFileURL(typeFile).href);
 
