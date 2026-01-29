@@ -2,7 +2,7 @@ import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { trnPrefix } from "../../apply/services/label";
-import { commonArgs, deploymentArgs, withCommonArgs } from "../../args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadConfig } from "../../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -153,6 +153,7 @@ export const setCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,
+    ...confirmationArgs,
     number: arg(z.string(), {
       positional: true,
       description: "Migration number to set (e.g., 0001 or 1)",
@@ -160,10 +161,6 @@ export const setCommand = defineCommand({
     namespace: arg(z.string().optional(), {
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
-    }),
-    yes: arg(z.boolean().default(false), {
-      alias: "y",
-      description: "Skip confirmation prompt",
     }),
   }),
   run: withCommonArgs(async (args) => {

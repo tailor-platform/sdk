@@ -16,7 +16,7 @@ import {
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
@@ -304,25 +304,11 @@ export const applyCommand = defineCommand({
   description: "Apply Tailor configuration to generate files",
   args: z.object({
     ...commonArgs,
-    "workspace-id": arg(z.string().optional(), {
-      alias: "w",
-      description: "ID of the workspace to apply the configuration to",
-    }),
-    profile: arg(z.string().optional(), {
-      alias: "p",
-      description: "Workspace profile to use",
-    }),
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-    }),
+    ...deploymentArgs,
+    ...confirmationArgs,
     "dry-run": arg(z.boolean().optional(), {
       alias: "d",
       description: "Run the command without making any changes",
-    }),
-    yes: arg(z.boolean().optional(), {
-      alias: "y",
-      description: "Skip all confirmation prompts",
     }),
     "no-schema-check": arg(z.boolean().optional(), {
       description: "Skip schema diff check against migration snapshots",

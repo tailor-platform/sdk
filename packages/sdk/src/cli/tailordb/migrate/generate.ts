@@ -12,7 +12,7 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "../../args";
+import { commonArgs, confirmationArgs, withCommonArgs } from "../../args";
 import { loadConfig } from "../../config-loader";
 import { logBetaWarning } from "../../utils/beta";
 import { logger, styles } from "../../utils/logger";
@@ -344,6 +344,7 @@ export const generateCommand = defineCommand({
   description: "Generate migration files for TailorDB schema changes",
   args: z.object({
     ...commonArgs,
+    ...confirmationArgs,
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",
@@ -351,10 +352,6 @@ export const generateCommand = defineCommand({
     name: arg(z.string().optional(), {
       alias: "n",
       description: "Optional description for the migration",
-    }),
-    yes: arg(z.boolean().default(false), {
-      alias: "y",
-      description: "Skip confirmation prompts",
     }),
     init: arg(z.boolean().default(false), {
       description: "Delete existing migrations and start fresh",

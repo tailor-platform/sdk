@@ -1,6 +1,6 @@
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -253,6 +253,8 @@ export const truncateCommand = defineCommand({
   description: "Truncate TailorDB tables",
   args: z.object({
     ...commonArgs,
+    ...deploymentArgs,
+    ...confirmationArgs,
     types: arg(z.string().array().optional(), {
       positional: true,
       description: "Type names to truncate",
@@ -265,11 +267,6 @@ export const truncateCommand = defineCommand({
       alias: "n",
       description: "Truncate all tables in specified namespace",
     }),
-    yes: arg(z.boolean().default(false), {
-      alias: "y",
-      description: "Skip confirmation prompt",
-    }),
-    ...deploymentArgs,
   }),
   run: withCommonArgs(async (args) => {
     const types = args.types && args.types.length > 0 ? args.types : undefined;

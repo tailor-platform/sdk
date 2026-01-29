@@ -1,6 +1,6 @@
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { logger } from "../utils/logger";
@@ -51,10 +51,7 @@ export const deleteCommand = defineCommand({
       alias: "w",
       description: "Workspace ID",
     }),
-    yes: arg(z.boolean().default(false), {
-      alias: "y",
-      description: "Skip confirmation prompt",
-    }),
+    ...confirmationArgs,
   }),
   run: withCommonArgs(async (args) => {
     // Load and validate options

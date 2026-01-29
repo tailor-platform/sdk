@@ -1,5 +1,5 @@
 import ml from "multiline-ts";
-import { defineCommand, arg } from "politty";
+import { defineCommand } from "politty";
 import { z } from "zod";
 import { type Application, defineApplication } from "@/cli/application";
 import { type PlanContext } from "@/cli/apply";
@@ -12,7 +12,7 @@ import { applyStaticWebsite, planStaticWebsite } from "@/cli/apply/services/stat
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig, type LoadedConfig } from "@/cli/config-loader";
 import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
-import { commonArgs, withCommonArgs } from "./args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
 import { loadAccessToken, loadWorkspaceId } from "./context";
 import { logger } from "./utils/logger";
@@ -115,22 +115,8 @@ export const removeCommand = defineCommand({
   description: "Remove all resources managed by the application",
   args: z.object({
     ...commonArgs,
-    "workspace-id": arg(z.string().optional(), {
-      alias: "w",
-      description: "Workspace ID",
-    }),
-    profile: arg(z.string().optional(), {
-      alias: "p",
-      description: "Workspace profile",
-    }),
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-    }),
-    yes: arg(z.boolean().default(false), {
-      alias: "y",
-      description: "Skip confirmation prompt",
-    }),
+    ...deploymentArgs,
+    ...confirmationArgs,
   }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, application, config } = await loadOptions({
