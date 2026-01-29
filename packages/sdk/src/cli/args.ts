@@ -6,6 +6,8 @@ import { z } from "zod";
 import { isCLIError } from "./utils/errors";
 import { logger } from "./utils/logger";
 
+type ArgsShape = Record<string, z.ZodType>;
+
 // ============================================================================
 // Validators
 // ============================================================================
@@ -109,7 +111,7 @@ export const commonArgs = {
   verbose: arg(z.boolean().default(false), {
     description: "Enable verbose logging",
   }),
-};
+} satisfies ArgsShape;
 
 /**
  * Arguments for commands that require workspace context
@@ -123,7 +125,7 @@ export const workspaceArgs = {
     alias: "p",
     description: "Workspace profile",
   }),
-};
+} satisfies ArgsShape;
 
 /**
  * Arguments for commands that interact with deployed resources (includes config)
@@ -134,7 +136,7 @@ export const deploymentArgs = {
     alias: "c",
     description: "Path to SDK config file",
   }),
-};
+} satisfies ArgsShape;
 
 /**
  * Arguments for commands that require confirmation
@@ -144,7 +146,7 @@ export const confirmationArgs = {
     alias: "y",
     description: "Skip confirmation prompts",
   }),
-};
+} satisfies ArgsShape;
 
 /**
  * Arguments for JSON output
@@ -154,7 +156,7 @@ export const jsonArgs = {
     alias: "j",
     description: "Output as JSON",
   }),
-};
+} satisfies ArgsShape;
 
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
 
