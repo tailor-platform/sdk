@@ -42,6 +42,7 @@ import {
 export interface ListExecutorJobsOptions {
   executorName: string;
   status?: string;
+  limit?: number;
   workspaceId?: string;
   profile?: string;
 }
@@ -124,15 +125,12 @@ export async function listExecutorJobs(
   const filter = filters.length > 0 ? create(FilterSchema, { and: filters }) : undefined;
 
   try {
-    const jobs = await fetchAll(async (pageToken) => {
-      const { jobs, nextPageToken } = await client.listExecutorJobs({
-        workspaceId,
-        executorName: options.executorName,
-        pageToken,
-        pageDirection: PageDirection.DESC,
-        filter,
-      });
-      return [jobs, nextPageToken];
+    const { jobs } = await client.listExecutorJobs({
+      workspaceId,
+      executorName: options.executorName,
+      pageSize: options.limit,
+      pageDirection: PageDirection.DESC,
+      filter,
     });
 
     return jobs.map(toExecutorJobListInfo);
@@ -485,6 +483,10 @@ export const jobsCommand = defineCommand({
       default: false,
       alias: "l",
     },
+    limit: {
+      type: "string",
+      description: "Maximum number of jobs to list (default: 50, max: 1000)",
+    },
   },
   run: withCommonArgs(async (args) => {
     if (args.jobId) {
@@ -571,6 +573,7 @@ export const jobsCommand = defineCommand({
       const jobs = await listExecutorJobs({
         executorName: args.executorName as string,
         status: args.status,
+        limit: args.limit ? Number.parseInt(args.limit, 10) : undefined,
         workspaceId: args["workspace-id"],
         profile: args.profile,
       });

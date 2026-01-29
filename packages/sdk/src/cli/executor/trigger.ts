@@ -1,10 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand } from "citty";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger, styles } from "../utils/logger";
 import { watchExecutorJob } from "./jobs";
+import { executorTriggerTypeToString } from "./status";
 import type { JsonObject } from "@bufbuild/protobuf";
 
 export interface TriggerExecutorOptions {
@@ -100,6 +102,42 @@ export const triggerCommand = defineCommand({
     },
   },
   run: withCommonArgs(async (args) => {
+    // Validate trigger type before processing
+    const accessToken = await loadAccessToken({
+      useProfile: true,
+      profile: args.profile,
+    });
+    const client = await initOperatorClient(accessToken);
+    const workspaceId = loadWorkspaceId({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+    });
+
+    const { executor } = await client.getExecutorExecutor({
+      workspaceId,
+      name: args.executorName,
+    });
+
+    if (!executor) {
+      throw new Error(`Executor '${args.executorName}' not found.`);
+    }
+
+    // EVENT trigger type cannot be triggered manually
+    if (executor.triggerType === ExecutorTriggerType.EVENT) {
+      throw new Error(
+        `Executor '${args.executorName}' has '${executorTriggerTypeToString(executor.triggerType)}' trigger type and cannot be triggered manually. ` +
+          `Only executors with 'incomingWebhook' or 'schedule' triggers can be triggered manually.`,
+      );
+    }
+
+    // SCHEDULE trigger type does not accept --data or --header options
+    if (executor.triggerType === ExecutorTriggerType.SCHEDULE && (args.data || args.header)) {
+      throw new Error(
+        `Executor '${args.executorName}' has 'schedule' trigger type. ` +
+          `The --data and --header options are only available for 'incomingWebhook' trigger type.`,
+      );
+    }
+
     let payload: JsonObject | undefined;
 
     // Parse data (body)
