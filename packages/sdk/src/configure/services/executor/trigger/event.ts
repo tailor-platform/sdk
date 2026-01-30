@@ -14,7 +14,7 @@ interface EventArgs {
   workspaceId: string;
   appNamespace: string;
   env: TailorEnv;
-  actor: TailorActor;
+  actor: TailorActor | null;
 }
 
 interface RecordArgs extends EventArgs {
