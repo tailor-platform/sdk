@@ -37,7 +37,7 @@ pnpm add @tailor-platform/sdk
 Create a new project using the CLI:
 
 ```bash
-npm create @tailor-platform/sdk my-app --template hello-world
+npm create @tailor-platform/sdk -- --template hello-world my-app
 cd my-app
 npm run deploy -- --workspace-id <your-workspace-id>
 ```
