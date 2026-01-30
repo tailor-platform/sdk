@@ -1,5 +1,6 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
+import type { TailorActor } from "@/configure/types/actor";
 import type { TailorEnv } from "@/configure/types/env";
 import type { output } from "@/configure/types/helpers";
 import type {
@@ -13,6 +14,7 @@ interface EventArgs {
   workspaceId: string;
   appNamespace: string;
   env: TailorEnv;
+  actor: TailorActor | null;
 }
 
 interface RecordArgs extends EventArgs {
