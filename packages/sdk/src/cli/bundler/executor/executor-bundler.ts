@@ -100,18 +100,7 @@ async function bundleSingleExecutor(
   const entryContent = ml /* js */ `
     import _internalExecutor from "${absoluteSourcePath}";
 
-    const __executor_function = (args) => {
-      // Transform actor fields to match TailorActor type
-      if (args.actor) {
-        const { attributeMap, attributes: attrList, ...rest } = args.actor;
-        args.actor = {
-          ...rest,
-          attributes: attributeMap,
-          attributeList: attrList,
-        };
-      }
-      return _internalExecutor.operation.body(args);
-    };
+    const __executor_function = _internalExecutor.operation.body;
 
     export { __executor_function as main };
   `;

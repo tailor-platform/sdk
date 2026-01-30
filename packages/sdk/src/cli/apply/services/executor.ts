@@ -176,6 +176,9 @@ export async function planExecutor(context: PlanContext) {
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
+// Transform actor fields from server format to SDK format
+const actorTransformExpr = `actor: args.actor ? (({ attributeMap, attributes: attrList, ...rest }) => ({ ...rest, attributes: attributeMap, attributeList: attrList }))(args.actor) : null`;
+
 /**
  * Build args expression for resolverExecuted trigger.
  * Transforms server's succeeded/failed fields to success/result/error fields.
@@ -183,7 +186,7 @@ export async function planExecutor(context: PlanContext) {
  * @returns JavaScript expression for resolverExecuted trigger args
  */
 function buildResolverExecutedArgsExpr(additionalFields?: string): string {
-  const baseFields = `...args, appNamespace: args.namespaceName, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error`;
+  const baseFields = `...args, appNamespace: args.namespaceName, ${actorTransformExpr}, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error`;
   return additionalFields ? `({ ${baseFields}, ${additionalFields} })` : `({ ${baseFields} })`;
 }
 
@@ -196,9 +199,9 @@ function protoExecutor(
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
 
-  // Common args expressions with env
+  // Common args expressions with env and actor transformation
   const envField = `env: ${JSON.stringify(env)}`;
-  const baseArgsExpr = `({ ...args, appNamespace: args.namespaceName, ${envField} })`;
+  const baseArgsExpr = `({ ...args, appNamespace: args.namespaceName, ${actorTransformExpr}, ${envField} })`;
 
   const eventType: { [key in Trigger["kind"]]?: string } = {
     recordCreated: "tailordb.type_record.created",
