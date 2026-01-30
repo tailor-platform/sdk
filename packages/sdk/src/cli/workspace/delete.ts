@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { z } from "zod";
 import { commonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken } from "../context";
+import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "../context";
 import { logger } from "../utils/logger";
 
 const deleteWorkspaceOptionsSchema = z.object({
@@ -96,6 +96,18 @@ export const deleteCommand = defineCommand({
     await client.deleteWorkspace({
       workspaceId,
     });
+
+    // Remove profiles associated with the deleted workspace
+    const pfConfig = readPlatformConfig();
+    const profilesToDelete = Object.entries(pfConfig.profiles).filter(
+      ([, profile]) => profile?.workspace_id === workspaceId,
+    );
+    if (profilesToDelete.length > 0) {
+      for (const [profileName] of profilesToDelete) {
+        delete pfConfig.profiles[profileName];
+      }
+      writePlatformConfig(pfConfig);
+    }
 
     // Show success message
     logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
