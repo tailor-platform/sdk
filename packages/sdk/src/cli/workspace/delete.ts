@@ -101,6 +101,12 @@ export const deleteCommand = defineCommand({
     }
 
     // Show success message
-    logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
+    if (profilesToDelete.length > 0) {
+      logger.success(
+        `Workspace "${args["workspace-id"]}" and ${profilesToDelete.length} associated profile(s) deleted successfully.`,
+      );
+    } else {
+      logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
+    }
   }),
 });
