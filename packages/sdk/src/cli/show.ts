@@ -1,7 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand, arg } from "politty";
+import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "./args";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadWorkspaceId } from "./context";
@@ -72,18 +72,7 @@ export const showCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": arg(z.string().optional(), {
-      alias: "w",
-      description: "Workspace ID",
-    }),
-    profile: arg(z.string().optional(), {
-      alias: "p",
-      description: "Workspace profile",
-    }),
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-    }),
+    ...deploymentArgs,
   }),
   run: withCommonArgs(async (args) => {
     // Execute show logic
