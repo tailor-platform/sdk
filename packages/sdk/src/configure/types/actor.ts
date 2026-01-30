@@ -9,10 +9,16 @@ export type TailorActor = {
   workspaceId: string;
   /** The ID of the user. */
   userId: string;
-  /** A list of the user's attributes. */
-  attributes: InferredAttributeList;
-  /** A map of the user's attributes. */
-  attributeMap: InferredAttributeMap | null;
+  /**
+   * A map of the user's attributes.
+   * Maps from server's `attributeMap` field.
+   */
+  attributes: InferredAttributeMap | null;
+  /**
+   * A list of the user's attributes.
+   * Maps from server's `attributes` field.
+   */
+  attributeList: InferredAttributeList;
   /** The type of the user. */
   userType: TailorActorType;
 };
