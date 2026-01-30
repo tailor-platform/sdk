@@ -74,21 +74,14 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
       applicationName: config.name,
     }),
   ]);
-  const appInfo = applicationInfo(resp.application!);
+  const { name, ...appInfo } = applicationInfo(resp.application!);
 
   return {
-    name: appInfo.name,
+    name,
     workspaceId,
     workspaceName: workspaceResp.workspace?.name ?? "",
     workspaceRegion: workspaceResp.workspace?.region ?? "",
-    domain: appInfo.domain,
-    url: appInfo.url,
-    auth: appInfo.auth,
-    cors: appInfo.cors,
-    allowedIpAddresses: appInfo.allowedIpAddresses,
-    disableIntrospection: appInfo.disableIntrospection,
-    createdAt: appInfo.createdAt,
-    updatedAt: appInfo.updatedAt,
+    ...appInfo,
   };
 }
 
