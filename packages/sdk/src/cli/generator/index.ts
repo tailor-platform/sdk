@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import { defineCommand } from "citty";
 import * as path from "pathe";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { defineApplication, type Application } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
 import {
@@ -567,25 +568,19 @@ export async function generate(options?: GenerateOptions) {
 }
 
 export const generateCommand = defineCommand({
-  meta: {
-    name: "generate",
-    description: "Generate files using Tailor configuration",
-  },
-  args: {
+  name: "generate",
+  description: "Generate files using Tailor configuration",
+  args: z.object({
     ...commonArgs,
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
+    config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
-      default: "tailor.config.ts",
-    },
-    watch: {
-      type: "boolean",
-      description: "Watch for type/resolver changes and regenerate",
+      description: "Path to SDK config file",
+    }),
+    watch: arg(z.boolean().default(false), {
       alias: "W",
-      default: false,
-    },
-  },
+      description: "Watch for type/resolver changes and regenerate",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     await generate({
       configPath: args.config,

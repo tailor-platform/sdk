@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -63,16 +64,14 @@ export async function getWorkflow(options: GetWorkflowOptions): Promise<Workflow
 }
 
 export const getCommand = defineCommand({
-  meta: {
-    name: "get",
-    description: "Get workflow details",
-  },
-  args: {
+  name: "get",
+  description: "Get workflow details",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
     ...nameArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const workflow = await getWorkflow({
       name: args.name,

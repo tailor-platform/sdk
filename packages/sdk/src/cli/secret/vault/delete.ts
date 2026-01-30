@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, confirmationArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -7,16 +8,14 @@ import { logger } from "../../utils/logger";
 import { nameArgs } from "./args";
 
 export const deleteCommand = defineCommand({
-  meta: {
-    name: "delete",
-    description: "Delete a Secret Manager vault",
-  },
-  args: {
+  name: "delete",
+  description: "Delete a Secret Manager vault",
+  args: z.object({
     ...commonArgs,
     ...workspaceArgs,
     ...nameArgs,
     ...confirmationArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,

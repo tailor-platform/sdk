@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "citty";
+import { defineCommand, runCommand } from "politty";
 import { createSecretCommand } from "./create";
 import { deleteSecretCommand } from "./delete";
 import { listSecretCommand } from "./list";
@@ -6,10 +6,8 @@ import { updateSecretCommand } from "./update";
 import { vaultCommand } from "./vault";
 
 export const secretCommand = defineCommand({
-  meta: {
-    name: "secret",
-    description: "Manage secrets and vaults",
-  },
+  name: "secret",
+  description: "Manage secrets and vaults",
   subCommands: {
     create: createSecretCommand,
     delete: deleteSecretCommand,
@@ -18,6 +16,6 @@ export const secretCommand = defineCommand({
     vault: vaultCommand,
   },
   async run() {
-    await runCommand(vaultCommand, { rawArgs: [] });
+    await runCommand(vaultCommand, []);
   },
 });

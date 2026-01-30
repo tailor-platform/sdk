@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { logger } from "../utils/logger";
@@ -43,25 +43,16 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
 }
 
 export const deleteCommand = defineCommand({
-  meta: {
-    name: "delete",
-    description: "Delete workspace",
-  },
-  args: {
+  name: "delete",
+  description: "Delete workspace",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      required: true,
+    "workspace-id": arg(z.string(), {
       alias: "w",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
-  },
+      description: "Workspace ID",
+    }),
+    ...confirmationArgs,
+  }),
   run: withCommonArgs(async (args) => {
     // Load and validate options
     const { client, workspaceId } = await loadOptions({

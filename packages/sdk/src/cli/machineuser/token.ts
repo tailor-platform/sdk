@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -74,20 +75,17 @@ export async function getMachineUserToken(
 }
 
 export const tokenCommand = defineCommand({
-  meta: {
-    name: "token",
-    description: "Get machine user token",
-  },
-  args: {
+  name: "token",
+  description: "Get machine user token",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-    name: {
-      type: "positional",
+    name: arg(z.string(), {
+      positional: true,
       description: "Machine user name",
-      required: true,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     // Execute machineuser token logic
     const token = await getMachineUserToken({

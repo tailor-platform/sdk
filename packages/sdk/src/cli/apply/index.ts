@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { defineApplication } from "@/cli/application";
 import {
   loadAndCollectJobs,
@@ -15,7 +16,7 @@ import {
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
@@ -299,43 +300,20 @@ async function buildWorkflow(
 }
 
 export const applyCommand = defineCommand({
-  meta: {
-    name: "apply",
-    description: "Apply Tailor configuration to generate files",
-  },
-  args: {
+  name: "apply",
+  description: "Apply Tailor configuration to generate files",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "ID of the workspace to apply the configuration to",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile to use",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
-      alias: "c",
-      default: "tailor.config.ts",
-    },
-    "dry-run": {
-      type: "boolean",
-      description: "Run the command without making any changes",
+    ...deploymentArgs,
+    ...confirmationArgs,
+    "dry-run": arg(z.boolean().optional(), {
       alias: "d",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip all confirmation prompts",
-      alias: "y",
-    },
-    "no-schema-check": {
-      type: "boolean",
+      description: "Run the command without making any changes",
+    }),
+    "no-schema-check": arg(z.boolean().optional(), {
       description: "Skip schema diff check against migration snapshots",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     await apply({
       workspaceId: args["workspace-id"],
@@ -343,7 +321,7 @@ export const applyCommand = defineCommand({
       configPath: args.config,
       dryRun: args["dry-run"],
       yes: args.yes,
-      noSchemaCheck: args["schema-check"] === false,
+      noSchemaCheck: args["no-schema-check"],
     });
   }),
 });

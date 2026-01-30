@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { register } from "node:module";
-import { defineCommand, runMain } from "citty";
+import { defineCommand, runMain } from "politty";
 import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
 import { generateCommand } from "./generator";
@@ -27,12 +27,9 @@ register("tsx", import.meta.url, { data: {} });
 const packageJson = await readPackageJson();
 
 export const mainCommand = defineCommand({
-  meta: {
-    name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
-    version: packageJson.version,
-    description:
-      packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
-  },
+  name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
+  description:
+    packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
   subCommands: {
     api: apiCommand,
     apply: applyCommand,
@@ -55,4 +52,4 @@ export const mainCommand = defineCommand({
   },
 });
 
-runMain(mainCommand);
+runMain(mainCommand, { version: packageJson.version });
