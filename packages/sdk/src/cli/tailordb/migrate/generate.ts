@@ -9,9 +9,10 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
-import { defineCommand } from "citty";
 import * as path from "pathe";
-import { commonArgs, withCommonArgs } from "../../args";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
+import { commonArgs, confirmationArgs, withCommonArgs } from "../../args";
 import { loadConfig } from "../../config-loader";
 import { logBetaWarning } from "../../utils/beta";
 import { logger, styles } from "../../utils/logger";
@@ -339,35 +340,29 @@ async function openInEditor(filePath: string): Promise<void> {
  * CLI command definition for generate
  */
 export const generateCommand = defineCommand({
-  meta: {
-    name: "generate",
-    description: "Generate migration files for TailorDB schema changes",
-  },
-  args: {
+  name: "generate",
+  description: "Generate migration files for TailorDB schema changes",
+  args: z.object({
     ...commonArgs,
-    name: {
-      type: "string",
-      description: "Optional description for the migration",
+    ...confirmationArgs,
+    config: arg(z.string().default("tailor.config.ts"), {
+      alias: "c",
+      description: "Path to SDK config file",
+    }),
+    name: arg(z.string().optional(), {
       alias: "n",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompts",
-      alias: "y",
-      default: false,
-    },
-    init: {
-      type: "boolean",
+      description: "Optional description for the migration",
+    }),
+    init: arg(z.boolean().default(false), {
       description: "Delete existing migrations and start fresh",
-      default: false,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     await generate({
-      configPath: typeof args.config === "string" ? args.config : undefined,
-      name: typeof args.name === "string" ? args.name : undefined,
-      yes: Boolean(args.yes),
-      init: Boolean(args.init),
+      configPath: args.config,
+      name: args.name,
+      yes: args.yes,
+      init: args.init,
     });
   }),
 });

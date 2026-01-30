@@ -1,6 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -57,16 +58,14 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
 }
 
 export const listSecretCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List secrets in a vault",
-  },
-  args: {
+  name: "list",
+  description: "List secrets in a vault",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
     ...vaultArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     try {
       const secrets = await secretList({

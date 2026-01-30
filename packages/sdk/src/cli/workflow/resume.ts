@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -70,21 +71,18 @@ export async function resumeWorkflow(
 }
 
 export const resumeCommand = defineCommand({
-  meta: {
-    name: "resume",
-    description: "Resume a failed workflow execution",
-  },
-  args: {
+  name: "resume",
+  description: "Resume a failed workflow execution",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    executionId: {
-      type: "positional",
+    executionId: arg(z.string(), {
+      positional: true,
       description: "Failed execution ID",
-      required: true,
-    },
+    }),
     ...waitArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const interval = parseDuration(args.interval);
 

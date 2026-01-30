@@ -1,5 +1,6 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { type Application, defineApplication } from "@/cli/application";
 import { type PlanContext } from "@/cli/apply";
 import { applyApplication, planApplication } from "@/cli/apply/services/application";
@@ -11,7 +12,7 @@ import { applyStaticWebsite, planStaticWebsite } from "@/cli/apply/services/stat
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig, type LoadedConfig } from "@/cli/config-loader";
 import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
-import { commonArgs, withCommonArgs } from "./args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
 import { loadAccessToken, loadWorkspaceId } from "./context";
 import { logger } from "./utils/logger";
@@ -110,35 +111,13 @@ export async function remove(options?: RemoveOptions): Promise<void> {
 }
 
 export const removeCommand = defineCommand({
-  meta: {
-    name: "remove",
-    description: "Remove all resources managed by the application",
-  },
-  args: {
+  name: "remove",
+  description: "Remove all resources managed by the application",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
-      alias: "c",
-      default: "tailor.config.ts",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
-  },
+    ...deploymentArgs,
+    ...confirmationArgs,
+  }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],

@@ -1,25 +1,23 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
 
 export const getCommand = defineCommand({
-  meta: {
-    name: "get",
-    description: "Get static website details",
-  },
-  args: {
+  name: "get",
+  description: "Get static website details",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    name: {
-      type: "positional",
+    name: arg(z.string(), {
+      positional: true,
       description: "Static website name",
-      required: true,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,

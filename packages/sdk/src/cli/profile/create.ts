@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "../context";
@@ -6,31 +7,24 @@ import { logger } from "../utils/logger";
 import type { ProfileInfo } from ".";
 
 export const createCommand = defineCommand({
-  meta: {
-    name: "create",
-    description: "Create new profile",
-  },
-  args: {
+  name: "create",
+  description: "Create new profile",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    name: {
-      type: "positional",
+    name: arg(z.string(), {
+      positional: true,
       description: "Profile name",
-      required: true,
-    },
-    user: {
-      type: "string",
-      description: "User email",
-      required: true,
+    }),
+    user: arg(z.string(), {
       alias: "u",
-    },
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      required: true,
+      description: "User email",
+    }),
+    "workspace-id": arg(z.string(), {
       alias: "w",
-    },
-  },
+      description: "Workspace ID",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

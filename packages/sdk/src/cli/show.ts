@@ -1,6 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "citty";
-import { commonArgs, jsonArgs, withCommonArgs } from "./args";
+import { defineCommand } from "politty";
+import { z } from "zod";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "./args";
 import { initOperatorClient } from "./client";
 import { loadConfig } from "./config-loader";
 import { loadAccessToken, loadWorkspaceId } from "./context";
@@ -66,30 +67,13 @@ export async function show(options?: ShowOptions): Promise<ApplicationInfo> {
 }
 
 export const showCommand = defineCommand({
-  meta: {
-    name: "show",
-    description: "Show applied application information",
-  },
-  args: {
+  name: "show",
+  description: "Show applied application information",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
-      alias: "c",
-      default: "tailor.config.ts",
-    },
-  },
+    ...deploymentArgs,
+  }),
   run: withCommonArgs(async (args) => {
     // Execute show logic
     const appInfo = await show({

@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.6.2
+
+### Patch Changes
+
+- [#498](https://github.com/tailor-platform/sdk/pull/498) [`254fb04`](https://github.com/tailor-platform/sdk/commit/254fb048302668cd15298138baa9bff77a90bec5) Thanks [@dqn](https://github.com/dqn)! - Migrate CLI framework from citty to politty
+
 ## 1.6.1
 
 ### Patch Changes

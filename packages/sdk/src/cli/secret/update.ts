@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -7,15 +8,13 @@ import { logger } from "../utils/logger";
 import { secretValueArgs } from "./args";
 
 export const updateSecretCommand = defineCommand({
-  meta: {
-    name: "update",
-    description: "Update a secret in a vault",
-  },
-  args: {
+  name: "update",
+  description: "Update a secret in a vault",
+  args: z.object({
     ...commonArgs,
     ...workspaceArgs,
     ...secretValueArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,
