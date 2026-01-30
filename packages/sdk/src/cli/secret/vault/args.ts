@@ -1,7 +1,11 @@
+import { arg } from "politty";
+import { z } from "zod";
+
+type ArgsShape = Record<string, z.ZodType>;
+
 export const nameArgs = {
-  name: {
-    type: "positional",
+  name: arg(z.string(), {
+    positional: true,
     description: "Vault name",
-    required: true,
-  },
-} as const;
+  }),
+} satisfies ArgsShape;

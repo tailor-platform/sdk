@@ -7,16 +7,14 @@
  * - status: Show migration status for TailorDB namespaces
  */
 
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
 import { generateCommand } from "./generate";
 import { setCommand } from "./set";
 import { statusCommand } from "./status";
 
 export const migrationCommand = defineCommand({
-  meta: {
-    name: "migration",
-    description: "Manage TailorDB schema migrations (beta)",
-  },
+  name: "migration",
+  description: "Manage TailorDB schema migrations (beta)",
   subCommands: {
     generate: generateCommand,
     set: setCommand,

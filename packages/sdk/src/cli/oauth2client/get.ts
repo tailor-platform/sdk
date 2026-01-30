@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -58,20 +59,17 @@ export async function getOAuth2Client(
 }
 
 export const getCommand = defineCommand({
-  meta: {
-    name: "get",
-    description: "Get OAuth2 client credentials",
-  },
-  args: {
+  name: "get",
+  description: "Get OAuth2 client credentials",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-    name: {
-      type: "positional",
+    name: arg(z.string(), {
+      positional: true,
       description: "OAuth2 client name",
-      required: true,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const credentials = await getOAuth2Client({
       name: args.name,

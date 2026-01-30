@@ -1,5 +1,26 @@
 # @tailor-platform/sdk
 
+## 1.6.2
+
+### Patch Changes
+
+- [#498](https://github.com/tailor-platform/sdk/pull/498) [`254fb04`](https://github.com/tailor-platform/sdk/commit/254fb048302668cd15298138baa9bff77a90bec5) Thanks [@dqn](https://github.com/dqn)! - Migrate CLI framework from citty to politty
+
+## 1.6.1
+
+### Patch Changes
+
+- [#499](https://github.com/tailor-platform/sdk/pull/499) [`b8c3e77`](https://github.com/tailor-platform/sdk/commit/b8c3e77400c86577cd9609924fd0ee29885fe74b) Thanks [@k1LoW](https://github.com/k1LoW)! - Add IdP and Auth event triggers for executor
+
+  New trigger functions:
+
+  - `idpUserCreatedTrigger()` - fires when an IdP user is created
+  - `idpUserUpdatedTrigger()` - fires when an IdP user is updated
+  - `idpUserDeletedTrigger()` - fires when an IdP user is deleted
+  - `authAccessTokenIssuedTrigger()` - fires when an access token is issued
+  - `authAccessTokenRefreshedTrigger()` - fires when an access token is refreshed
+  - `authAccessTokenRevokedTrigger()` - fires when an access token is revoked
+
 ## 1.6.0
 
 ### Minor Changes

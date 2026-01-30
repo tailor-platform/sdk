@@ -1,5 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -53,15 +54,13 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List Secret Manager vaults",
-  },
-  args: {
+  name: "list",
+  description: "List Secret Manager vaults",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const vaults = await vaultList({
       workspaceId: args["workspace-id"],

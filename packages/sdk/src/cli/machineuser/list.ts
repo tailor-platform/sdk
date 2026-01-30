@@ -1,5 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -79,15 +80,13 @@ export async function listMachineUsers(
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all machine users",
-  },
-  args: {
+  name: "list",
+  description: "List all machine users",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     // Execute machineuser list logic
     const machineUsers = await listMachineUsers({
