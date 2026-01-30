@@ -1,5 +1,18 @@
 # @tailor-platform/sdk
 
+## 1.6.3
+
+### Patch Changes
+
+- [#505](https://github.com/tailor-platform/sdk/pull/505) [`c3329a9`](https://github.com/tailor-platform/sdk/commit/c3329a991ab7fc2f60dc4558ba33ea60ed18394e) Thanks [@k1LoW](https://github.com/k1LoW)! - Add actor field to executor event trigger args
+
+  - Added `TailorActor` type to represent actors in event triggers
+  - Added `actor` field to `EventArgs` interface (nullable)
+  - Field names are aligned with `TailorUser` for consistency (`attributes`, `attributeList`)
+  - Added transformation in executor bundler to convert server field names to SDK field names
+
+- [#489](https://github.com/tailor-platform/sdk/pull/489) [`2f17481`](https://github.com/tailor-platform/sdk/commit/2f17481f26577249c8dd0ac93d1b04b0f91cb377) Thanks [@riku99](https://github.com/riku99)! - Moved executor service config types to parser and updated CLI imports
+
 ## 1.6.2
 
 ### Patch Changes
