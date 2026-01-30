@@ -186,27 +186,31 @@ const MachineUserSchema = z.object({
   attributeList: z.array(z.uuid()).optional(),
 });
 
-export const AuthConfigSchema = z
-  .object({
-    name: z.string(),
-    userProfile: UserProfileSchema.optional(),
-    machineUserAttributes: z.record(z.string(), TailorFieldSchema).optional(),
-    machineUsers: z.record(z.string(), MachineUserSchema).optional(),
-    oauth2Clients: z.record(z.string(), OAuth2ClientSchema).optional(),
-    idProvider: IdProviderSchema.optional(),
-    scim: SCIMSchema.optional(),
-    tenantProvider: TenantProviderSchema.optional(),
-    publishSessionEvents: z.boolean().optional(),
-  })
-  .superRefine((value, ctx) => {
-    const hasUserProfile = value.userProfile !== undefined;
-    const hasMachineUserAttributes = value.machineUserAttributes !== undefined;
+const AuthConfigBaseSchema = z.object({
+  name: z.string(),
+  machineUsers: z.record(z.string(), MachineUserSchema).optional(),
+  oauth2Clients: z.record(z.string(), OAuth2ClientSchema).optional(),
+  idProvider: IdProviderSchema.optional(),
+  scim: SCIMSchema.optional(),
+  tenantProvider: TenantProviderSchema.optional(),
+  publishSessionEvents: z.boolean().optional(),
+});
 
-    if (hasUserProfile && hasMachineUserAttributes) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Provide either userProfile or machineUserAttributes, not both.",
-      });
-    }
-  })
+export const AuthConfigSchema = z
+  .union([
+    AuthConfigBaseSchema.extend({
+      userProfile: z.undefined().optional(),
+      machineUserAttributes: z.undefined().optional(),
+    }),
+    z.xor([
+      AuthConfigBaseSchema.extend({
+        userProfile: UserProfileSchema,
+        machineUserAttributes: z.undefined().optional(),
+      }),
+      AuthConfigBaseSchema.extend({
+        userProfile: z.undefined().optional(),
+        machineUserAttributes: z.record(z.string(), TailorFieldSchema),
+      }),
+    ]),
+  ])
   .brand("AuthConfig");
