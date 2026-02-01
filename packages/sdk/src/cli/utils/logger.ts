@@ -7,9 +7,9 @@ import {
   type LogObject,
   type PromptOptions,
 } from "consola";
+import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
 import { getBorderCharacters, table } from "table";
-import { humanizeRelativeTime } from "./format";
 
 /**
  * Error thrown when a prompt is attempted in a CI environment
@@ -269,16 +269,23 @@ export const logger = {
       return;
     }
 
+    // Helper to format a value for table display
+    const formatValue = (value: unknown, pretty = false): string => {
+      if (value === null || value === undefined) return "N/A";
+      if (value instanceof Date) {
+        return formatDistanceToNowStrict(value, { addSuffix: true });
+      }
+      if (typeof value === "object") {
+        return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+      }
+      return String(value);
+    };
+
     if (!Array.isArray(data)) {
       const entries = Object.entries(data).filter(
         ([key]) => !options?.excludeFields?.includes(key),
       );
-      const formattedEntries = entries.map(([key, value]) => [
-        key,
-        typeof value === "object" && value !== null
-          ? JSON.stringify(value, null, 2)
-          : String(value ?? ""),
-      ]);
+      const formattedEntries = entries.map(([key, value]) => [key, formatValue(value, true)]);
       const t = table(formattedEntries, {
         singleLine: false,
         border: getBorderCharacters("norc"),
@@ -291,21 +298,10 @@ export const logger = {
       return;
     }
 
-    const headers = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const allHeaders = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const headers = allHeaders.filter((h) => !options?.excludeFields?.includes(h));
     const rows = data.map((item) =>
-      headers.map((header) => {
-        const value = (item as Record<string, unknown>)[header];
-        if (value === null || value === undefined) {
-          return "";
-        }
-        if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
-          return humanizeRelativeTime(value);
-        }
-        if (typeof value === "object") {
-          return JSON.stringify(value);
-        }
-        return String(value);
-      }),
+      headers.map((header) => formatValue((item as Record<string, unknown>)[header])),
     );
 
     const t = table([headers, ...rows], {
