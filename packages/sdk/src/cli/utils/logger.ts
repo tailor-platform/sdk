@@ -86,6 +86,11 @@ export interface LogOptions {
   indent?: number;
 }
 
+export interface OutOptions {
+  /** Fields to exclude from table display */
+  excludeFields?: string[];
+}
+
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
 let _jsonMode = false;
 
@@ -252,7 +257,7 @@ export const logger = {
     }
   },
 
-  out(data: string | object | object[]): void {
+  out(data: string | object | object[], options?: OutOptions): void {
     if (typeof data === "string") {
       process.stdout.write(data.endsWith("\n") ? data : data + "\n");
       return;
@@ -265,8 +270,17 @@ export const logger = {
     }
 
     if (!Array.isArray(data)) {
-      const t = table(Object.entries(data), {
-        singleLine: true,
+      const entries = Object.entries(data).filter(
+        ([key]) => !options?.excludeFields?.includes(key),
+      );
+      const formattedEntries = entries.map(([key, value]) => [
+        key,
+        typeof value === "object" && value !== null
+          ? JSON.stringify(value, null, 2)
+          : String(value ?? ""),
+      ]);
+      const t = table(formattedEntries, {
+        singleLine: false,
         border: getBorderCharacters("norc"),
       });
       process.stdout.write(t);

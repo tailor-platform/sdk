@@ -20,7 +20,7 @@ export interface WorkflowInfo {
   name: string;
   id: string;
   mainJob: string;
-  jobFunctions: string;
+  jobFunctions: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }
@@ -114,7 +114,7 @@ export function toWorkflowInfo(workflow: Workflow): WorkflowInfo {
     name: workflow.name,
     id: workflow.id,
     mainJob: workflow.mainJobFunctionName,
-    jobFunctions: JSON.stringify(jobFunctions),
+    jobFunctions: jobFunctions,
     createdAt: workflow.createdAt ? timestampDate(workflow.createdAt).toISOString() : "N/A",
     updatedAt: workflow.updatedAt ? timestampDate(workflow.updatedAt).toISOString() : "N/A",
   };
