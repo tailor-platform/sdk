@@ -2,7 +2,7 @@ import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { commonArgs, confirmationArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken } from "../context";
+import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "../context";
 import { logger } from "../utils/logger";
 
 const deleteWorkspaceOptionsSchema = z.object({
@@ -88,7 +88,25 @@ export const deleteCommand = defineCommand({
       workspaceId,
     });
 
+    // Remove profiles associated with the deleted workspace
+    const pfConfig = readPlatformConfig();
+    const profilesToDelete = Object.entries(pfConfig.profiles).filter(
+      ([, profile]) => profile?.workspace_id === workspaceId,
+    );
+    if (profilesToDelete.length > 0) {
+      for (const [profileName] of profilesToDelete) {
+        delete pfConfig.profiles[profileName];
+      }
+      writePlatformConfig(pfConfig);
+    }
+
     // Show success message
-    logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
+    if (profilesToDelete.length > 0) {
+      logger.success(
+        `Workspace "${args["workspace-id"]}" and ${profilesToDelete.length} associated profile(s) deleted successfully.`,
+      );
+    } else {
+      logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
+    }
   }),
 });
