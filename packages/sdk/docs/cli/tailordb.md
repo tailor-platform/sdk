@@ -2,26 +2,252 @@
 
 Commands for managing TailorDB tables, data, and schema migrations.
 
-## tailordb truncate
+<!-- politty:command:tailordb:start -->
+## tailordb
 
-Truncate (delete all records from) TailorDB tables.
+Manage TailorDB tables and data
 
-```bash
-tailor-sdk tailordb truncate [types...] [options]
+**Usage**
+
+```
+tailor-sdk tailordb [command]
 ```
 
-**Arguments:**
+**Commands**
 
-- `types...` - Space-separated list of type names to truncate (optional)
+| Command | Description |
+|---------|-------------|
+| [`tailordb erd`](#tailordb-erd) | ERD utilities for TailorDB (beta) |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations (beta) |
+| [`tailordb truncate`](#tailordb-truncate) | Truncate TailorDB tables |
 
-**Options:**
+<!-- politty:command:tailordb:end -->
+<!-- politty:command:tailordb truncate:start -->
+### tailordb truncate
 
-- `-a, --all` - Truncate all tables in all namespaces
-- `-n, --namespace` - Truncate all tables in the specified namespace
-- `-y, --yes` - Skip confirmation prompt
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+Truncate TailorDB tables
+
+**Usage**
+
+```
+tailor-sdk tailordb truncate [options] [types]
+```
+
+**Arguments**
+
+| Argument | Description | Required |
+|----------|-------------|----------|
+| `types` | Type names to truncate | No |
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
+| `--yes` | `-y` | Skip confirmation prompts | `false` |
+| `--all` | `-a` | Truncate all tables in all namespaces | `false` |
+| `--namespace <NAMESPACE>` | `-n` | Truncate all tables in specified namespace | - |
+
+<!-- politty:command:tailordb truncate:end -->
+<!-- politty:command:tailordb migration:start -->
+### tailordb migration
+
+Manage TailorDB schema migrations (beta)
+
+**Usage**
+
+```
+tailor-sdk tailordb migration [command]
+```
+
+**Commands**
+
+| Command | Description |
+|---------|-------------|
+| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files for TailorDB schema changes |
+| [`tailordb migration set`](#tailordb-migration-set) | Set migration checkpoint to a specific number |
+| [`tailordb migration status`](#tailordb-migration-status) | Show migration status for TailorDB namespaces |
+
+<!-- politty:command:tailordb migration:end -->
+<!-- politty:command:tailordb migration generate:start -->
+#### tailordb migration generate
+
+Generate migration files for TailorDB schema changes
+
+**Usage**
+
+```
+tailor-sdk tailordb migration generate [options]
+```
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--yes` | `-y` | Skip confirmation prompts | `false` |
+| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
+| `--name <NAME>` | `-n` | Optional description for the migration | - |
+| `--init` | - | Delete existing migrations and start fresh | `false` |
+
+<!-- politty:command:tailordb migration generate:end -->
+<!-- politty:command:tailordb migration set:start -->
+#### tailordb migration set
+
+Set migration checkpoint to a specific number
+
+**Usage**
+
+```
+tailor-sdk tailordb migration set [options] <number>
+```
+
+**Arguments**
+
+| Argument | Description | Required |
+|----------|-------------|----------|
+| `number` | Migration number to set (e.g., 0001 or 1) | Yes |
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
+| `--yes` | `-y` | Skip confirmation prompts | `false` |
+| `--namespace <NAMESPACE>` | `-n` | Target TailorDB namespace (required if multiple namespaces exist) | - |
+
+<!-- politty:command:tailordb migration set:end -->
+<!-- politty:command:tailordb migration status:start -->
+#### tailordb migration status
+
+Show migration status for TailorDB namespaces
+
+**Usage**
+
+```
+tailor-sdk tailordb migration status [options]
+```
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
+| `--namespace <NAMESPACE>` | `-n` | Target TailorDB namespace (shows all namespaces if not specified) | - |
+
+<!-- politty:command:tailordb migration status:end -->
+<!-- politty:command:tailordb erd:start -->
+### tailordb erd
+
+ERD utilities for TailorDB (beta)
+
+**Usage**
+
+```
+tailor-sdk tailordb erd [command]
+```
+
+**Commands**
+
+| Command | Description |
+|---------|-------------|
+| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema (beta) |
+| [`tailordb erd serve`](#tailordb-erd-serve) | Generate and serve ERD (liam build + `serve dist`) (beta) |
+| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s) (beta) |
+
+<!-- politty:command:tailordb erd:end -->
+<!-- politty:command:tailordb erd export:start -->
+#### tailordb erd export
+
+Export Liam ERD dist from applied TailorDB schema (beta)
+
+**Usage**
+
+```
+tailor-sdk tailordb erd export [options]
+```
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
+| `--json` | `-j` | Output as JSON | `false` |
+| `--namespace <NAMESPACE>` | `-n` | TailorDB namespace name (optional if only one namespace is defined in config) | - |
+| `--output <OUTPUT>` | `-o` | Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json) | `".tailor-sdk/erd"` |
+
+<!-- politty:command:tailordb erd export:end -->
+<!-- politty:command:tailordb erd serve:start -->
+#### tailordb erd serve
+
+Generate and serve ERD (liam build + `serve dist`) (beta)
+
+**Usage**
+
+```
+tailor-sdk tailordb erd serve [options]
+```
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
+| `--namespace <NAMESPACE>` | `-n` | TailorDB namespace name (uses first namespace in config if not specified) | - |
+
+<!-- politty:command:tailordb erd serve:end -->
+<!-- politty:command:tailordb erd deploy:start -->
+#### tailordb erd deploy
+
+Deploy ERD static website for TailorDB namespace(s) (beta)
+
+**Usage**
+
+```
+tailor-sdk tailordb erd deploy [options]
+```
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
+| `--json` | `-j` | Output as JSON | `false` |
+| `--namespace <NAMESPACE>` | `-n` | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | - |
+
+<!-- politty:command:tailordb erd deploy:end -->
 
 **Usage Examples:**
 
@@ -52,14 +278,6 @@ tailor-sdk tailordb truncate User Post --yes
   - Specific types: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
 
-## tailordb migration
-
-Manage TailorDB schema migrations. Migrations allow you to safely evolve your database schema with data transformations.
-
-```bash
-tailor-sdk tailordb migration <subcommand> [options]
-```
-
 ### Overview
 
 The migration system detects field-level schema differences between your local type definitions and the previous snapshot, then generates migration files to safely apply those changes with data transformations.
@@ -70,21 +288,6 @@ The migration system detects field-level schema differences between your local t
 - **Transaction-wrapped data migrations** for atomicity - all changes commit or rollback together
 - **Automatic execution during apply** - pending migrations run as part of `tailor-sdk apply`
 - **TypeScript migration scripts** - type-safe data transformations using Kysely
-
-### tailordb migration generate
-
-Generate migration files by detecting schema differences between current local types and the previous migration snapshot.
-
-```bash
-tailor-sdk tailordb migration generate [options]
-```
-
-**Options:**
-
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-n, --name` - Optional description for the migration
-- `-y, --yes` - Skip confirmation prompts
-- `--init` - Delete existing migrations and start fresh
 
 **Usage Examples:**
 
@@ -142,26 +345,6 @@ tailor-sdk tailordb migration generate
 # → After generation, vim opens XXXX/migrate.ts
 ```
 
-### tailordb migration set
-
-Manually set the migration checkpoint to a specific number. This is useful for skipping failed migrations or resetting migration state.
-
-```bash
-tailor-sdk tailordb migration set <number> [options]
-```
-
-**Arguments:**
-
-- `number` - Migration number to set (e.g., `0001` or `1`)
-
-**Options:**
-
-- `-n, --namespace` - Target TailorDB namespace (required if multiple exist)
-- `-y, --yes` - Skip confirmation prompt
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-
 **Usage Examples:**
 
 ```bash
@@ -186,21 +369,6 @@ Setting the migration checkpoint changes which migrations will be executed on ne
 - **Backward** (e.g., 0003 → 0001): Migrations 0002 and 0003 become pending and will re-execute
 
 The command always displays a warning and requires confirmation unless `--yes` is specified.
-
-### tailordb migration status
-
-Show the current migration status for TailorDB namespaces, including applied and pending migrations.
-
-```bash
-tailor-sdk tailordb migration status [options]
-```
-
-**Options:**
-
-- `-n, --namespace` - Show status for specific namespace only
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
 
 **Usage Examples:**
 
@@ -491,14 +659,6 @@ tailor-sdk apply --no-schema-check
 3. Fix the script
 4. Apply again: `tailor-sdk apply`
 
-## tailordb erd (beta)
-
-Generate ERD artifacts for TailorDB namespaces using [Liam ERD](https://liambx.com/erd).
-
-```bash
-tailor-sdk tailordb erd <subcommand> [options]
-```
-
 **Notes:**
 
 - This command is a beta feature and may introduce breaking changes in future releases
@@ -514,83 +674,6 @@ yarn add -D @liam-hq/cli serve
 # OR
 pnpm add -D @liam-hq/cli serve
 ```
-
-### tailordb erd export
-
-Export Liam ERD dist from applied TailorDB schema.
-
-```bash
-tailor-sdk tailordb erd export [options]
-```
-
-**Options:**
-
-- `-n, --namespace` - TailorDB namespace name (optional - exports all namespaces with erdSite if omitted)
-- `-o, --output` - Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) (default: `.tailor-sdk/erd`)
-- `-j, --json` - Output as JSON
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-e, --env-file` - Path to the environment file
-
-**Usage Examples:**
-
-```bash
-# Export ERD for all namespaces with erdSite configured
-tailor-sdk tailordb erd export
-
-# Export ERD for a specific namespace
-tailor-sdk tailordb erd export --namespace myNamespace
-
-# Export ERD with custom output directory
-tailor-sdk tailordb erd export --output ./my-erd
-
-# Export ERD with JSON output
-tailor-sdk tailordb erd export --json
-```
-
-### tailordb erd serve
-
-Generate and serve ERD locally (liam build + `serve dist`).
-
-```bash
-tailor-sdk tailordb erd serve [options]
-```
-
-**Options:**
-
-- `-n, --namespace` - TailorDB namespace name (uses first namespace with erdSite if not specified)
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-e, --env-file` - Path to the environment file
-
-**Usage Examples:**
-
-```bash
-# Serve ERD for the first namespace with erdSite configured
-tailor-sdk tailordb erd serve
-
-# Serve ERD for a specific namespace
-tailor-sdk tailordb erd serve --namespace myNamespace
-```
-
-### tailordb erd deploy
-
-Deploy ERD static website for TailorDB namespace(s).
-
-```bash
-tailor-sdk tailordb erd deploy [options]
-```
-
-**Options:**
-
-- `-n, --namespace` - TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)
-- `-j, --json` - Output as JSON
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-e, --env-file` - Path to the environment file
 
 **Usage Examples:**
 

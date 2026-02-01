@@ -2,29 +2,103 @@
 
 Commands for managing and deploying static websites.
 
+<!-- politty:command:staticwebsite:start -->
 ## staticwebsite
 
-Manage static websites in your workspace.
+Manage static websites
 
-```bash
-tailor-sdk staticwebsite <subcommand> [options]
+**Usage**
+
+```
+tailor-sdk staticwebsite [command]
 ```
 
+**Commands**
+
+| Command | Description |
+|---------|-------------|
+| [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website |
+| [`staticwebsite get`](#staticwebsite-get) | Get static website details |
+| [`staticwebsite list`](#staticwebsite-list) | List static websites |
+
+<!-- politty:command:staticwebsite:end -->
+<!-- politty:command:staticwebsite deploy:start -->
 ### staticwebsite deploy
 
-Deploy a static website from a local build directory.
+Deploy a static website
 
-```bash
+**Usage**
+
+```
 tailor-sdk staticwebsite deploy [options]
 ```
 
-**Options:**
+**Options**
 
-- `-n, --name` - Static website name (required)
-- `-d, --dir` - Path to the static website files (required)
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--json` | `-j` | Output as JSON | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| `--name <NAME>` | `-n` | Static website name | - |
+| `--dir <DIR>` | `-d` | Path to the static website files | - |
+
+<!-- politty:command:staticwebsite deploy:end -->
+<!-- politty:command:staticwebsite list:start -->
+### staticwebsite list
+
+List static websites
+
+**Usage**
+
+```
+tailor-sdk staticwebsite list [options]
+```
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--json` | `-j` | Output as JSON | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+
+<!-- politty:command:staticwebsite list:end -->
+<!-- politty:command:staticwebsite get:start -->
+### staticwebsite get
+
+Get static website details
+
+**Usage**
+
+```
+tailor-sdk staticwebsite get [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description | Required |
+|----------|-------------|----------|
+| `name` | Static website name | Yes |
+
+**Options**
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
+| `--verbose` | - | Enable verbose logging | `false` |
+| `--json` | `-j` | Output as JSON | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
+| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+
+<!-- politty:command:staticwebsite get:end -->
 
 **Example:**
 
@@ -43,20 +117,6 @@ tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 - Unsupported file types or invalid files will be skipped with warnings
 - The deployment URL is returned after successful deployment
 
-### staticwebsite list
-
-List all static websites in a workspace.
-
-```bash
-tailor-sdk staticwebsite list [options]
-```
-
-**Options:**
-
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
-
 **Example:**
 
 ```bash
@@ -66,24 +126,6 @@ tailor-sdk staticwebsite list
 # List with JSON output
 tailor-sdk staticwebsite list --json
 ```
-
-### staticwebsite get
-
-Get details of a specific static website.
-
-```bash
-tailor-sdk staticwebsite get <name> [options]
-```
-
-**Arguments:**
-
-- `name` - Static website name (required)
-
-**Options:**
-
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
 
 **Example:**
 
