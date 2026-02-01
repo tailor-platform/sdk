@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -58,49 +59,39 @@ export async function triggerExecutor(
 }
 
 export const triggerCommand = defineCommand({
-  meta: {
-    name: "trigger",
-    description: "Trigger an executor manually",
-  },
-  args: {
+  name: "trigger",
+  description: "Trigger an executor manually",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    executorName: {
-      type: "positional",
+    executorName: arg(z.string(), {
+      positional: true,
       description: "Executor name",
-      required: true,
-    },
-    data: {
-      type: "string",
-      description: "Request body (JSON string)",
+    }),
+    data: arg(z.string().optional(), {
       alias: "d",
-    },
-    header: {
-      type: "string",
-      description: "Request header (format: 'Key: Value', can be specified multiple times)",
+      description: "Request body (JSON string)",
+    }),
+    header: arg(z.string().array().optional(), {
       alias: "H",
-    },
-    wait: {
-      type: "boolean",
+      overrideBuiltinAlias: true,
+      description: "Request header (format: 'Key: Value', can be specified multiple times)",
+    }),
+    wait: arg(z.boolean().default(false), {
+      alias: "W",
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
-      default: false,
-      alias: "W",
-    },
-    interval: {
-      type: "string",
-      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
-      default: "3s",
+    }),
+    interval: arg(z.string().default("3s"), {
       alias: "i",
-    },
-    logs: {
-      type: "boolean",
-      description: "Display function execution logs after completion (requires --wait)",
-      default: false,
+      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
+    }),
+    logs: arg(z.boolean().default(false), {
       alias: "l",
-    },
-  },
+      description: "Display function execution logs after completion (requires --wait)",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     // Validate trigger type before processing
     const accessToken = await loadAccessToken({

@@ -12,8 +12,9 @@ import {
   FilterSchema,
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
-import { defineCommand } from "citty";
 import ora from "ora";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -436,65 +437,51 @@ function printJobWithAttempts(job: ExecutorJobDetailInfo): void {
 }
 
 export const jobsCommand = defineCommand({
-  meta: {
-    name: "jobs",
-    description: "List or get executor jobs",
-  },
-  args: {
+  name: "jobs",
+  description: "List or get executor jobs",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    executorName: {
-      type: "positional",
+    executorName: arg(z.string(), {
+      positional: true,
       description: "Executor name",
-      required: true,
-    },
-    jobId: {
-      type: "positional",
+    }),
+    jobId: arg(z.string().optional(), {
+      positional: true,
       description: "Job ID (if provided, shows job details)",
-      required: false,
-    },
-    status: {
-      type: "string",
-      description: "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED)",
+    }),
+    status: arg(z.string().optional(), {
       alias: "s",
-    },
-    attempts: {
-      type: "boolean",
+      description: "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED)",
+    }),
+    attempts: arg(z.boolean().default(false), {
       description: "Show job attempts (only with job ID)",
-      default: false,
-    },
-    wait: {
-      type: "boolean",
+    }),
+    wait: arg(z.boolean().default(false), {
+      alias: "W",
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
-      default: false,
-      alias: "W",
-    },
-    interval: {
-      type: "string",
-      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
-      default: "3s",
+    }),
+    interval: arg(z.string().default("3s"), {
       alias: "i",
-    },
-    logs: {
-      type: "boolean",
-      description: "Display function execution logs after completion (requires --wait)",
-      default: false,
+      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
+    }),
+    logs: arg(z.boolean().default(false), {
       alias: "l",
-    },
-    limit: {
-      type: "string",
+      description: "Display function execution logs after completion (requires --wait)",
+    }),
+    limit: arg(z.string().optional(), {
       description: "Maximum number of jobs to list (default: 50, max: 1000)",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     if (args.jobId) {
       if (args.wait) {
-        const interval = parseDuration(args.interval as string);
+        const interval = parseDuration(args.interval);
         const result = await watchExecutorJob({
-          executorName: args.executorName as string,
-          jobId: args.jobId as string,
+          executorName: args.executorName,
+          jobId: args.jobId,
           workspaceId: args["workspace-id"],
           profile: args.profile,
           interval,
@@ -555,8 +542,8 @@ export const jobsCommand = defineCommand({
       }
 
       const job = await getExecutorJob({
-        executorName: args.executorName as string,
-        jobId: args.jobId as string,
+        executorName: args.executorName,
+        jobId: args.jobId,
         attempts: args.attempts,
         workspaceId: args["workspace-id"],
         profile: args.profile,
@@ -571,7 +558,7 @@ export const jobsCommand = defineCommand({
         logger.warn("--wait flag is ignored in list mode. Specify a job ID to wait.");
       }
       const jobs = await listExecutorJobs({
-        executorName: args.executorName as string,
+        executorName: args.executorName,
         status: args.status,
         limit: args.limit ? Number.parseInt(args.limit, 10) : undefined,
         workspaceId: args["workspace-id"],
