@@ -62,15 +62,15 @@ export function formatValue(value: unknown): string {
 /**
  * Format a Date or ISO timestamp string as a human-readable relative time.
  * @param value - Date object, ISO date string, or null
- * @returns Relative time (e.g., "5 minutes ago") or empty string for null
+ * @returns Relative time (e.g., "5 minutes ago") or "N/A" for null/invalid
  */
 export function humanizeRelativeTime(value: Date | string | null): string {
   if (value === null) {
-    return "";
+    return "N/A";
   }
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return typeof value === "string" ? value : "";
+    return typeof value === "string" ? value : "N/A";
   }
   return formatDistanceToNowStrict(date, { addSuffix: true });
 }
