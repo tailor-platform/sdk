@@ -68,13 +68,9 @@ export function humanizeRelativeTime(value: Date | string | null): string {
   if (value === null) {
     return "";
   }
-  if (value instanceof Date) {
-    return formatDistanceToNowStrict(value, { addSuffix: true });
-  }
-  const date = new Date(value);
+  const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return typeof value === "string" ? value : "";
   }
-
   return formatDistanceToNowStrict(date, { addSuffix: true });
 }
