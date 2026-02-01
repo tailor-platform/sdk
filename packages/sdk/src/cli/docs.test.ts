@@ -1,5 +1,6 @@
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
 import { describe, it, vi } from "vitest";
+import { commonArgs } from "./args";
 import { mainCommand } from "./index";
 import type { FileConfig, OptionsRenderContext } from "politty/docs";
 
@@ -13,8 +14,8 @@ vi.mock("politty", async () => {
   return { ...actual, runMain: vi.fn() };
 });
 
-// Options to exclude from documentation (commonArgs)
-const excludedOptions = new Set(["env-file", "env-file-if-exists", "verbose"]);
+// Options to exclude from documentation (auto-generated from commonArgs)
+const excludedOptions = new Set(Object.keys(commonArgs));
 
 /**
  * Custom options renderer that filters out commonArgs
@@ -157,79 +158,8 @@ const files = {
   "docs/cli/staticwebsite.md": staticwebsiteConfig,
 };
 
-// All target commands across all files
-const targetCommands = [
-  // application.md
-  "init",
-  "generate",
-  "apply",
-  "remove",
-  "show",
-  "open",
-  "api",
-  // tailordb.md
-  "tailordb",
-  "tailordb truncate",
-  "tailordb migration",
-  "tailordb migration generate",
-  "tailordb migration set",
-  "tailordb migration status",
-  "tailordb erd",
-  "tailordb erd export",
-  "tailordb erd serve",
-  "tailordb erd deploy",
-  // user.md
-  "login",
-  "logout",
-  "user",
-  "user current",
-  "user list",
-  "user switch",
-  "user pat",
-  "user pat list",
-  "user pat create",
-  "user pat delete",
-  "user pat update",
-  // workspace.md
-  "workspace",
-  "workspace create",
-  "workspace list",
-  "workspace delete",
-  "profile",
-  "profile create",
-  "profile list",
-  "profile update",
-  "profile delete",
-  // auth.md
-  "machineuser",
-  "machineuser list",
-  "machineuser token",
-  "oauth2client",
-  "oauth2client list",
-  "oauth2client get",
-  // workflow.md
-  "workflow",
-  "workflow list",
-  "workflow get",
-  "workflow start",
-  "workflow executions",
-  "workflow resume",
-  // secret.md
-  "secret",
-  "secret vault",
-  "secret vault create",
-  "secret vault delete",
-  "secret vault list",
-  "secret create",
-  "secret update",
-  "secret list",
-  "secret delete",
-  // staticwebsite.md
-  "staticwebsite",
-  "staticwebsite deploy",
-  "staticwebsite list",
-  "staticwebsite get",
-];
+// Auto-generate targetCommands from files
+const targetCommands = Object.values(files).flatMap((config) => config.commands);
 
 describe("CLI Documentation", () => {
   it("matches golden files", async () => {
