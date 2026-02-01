@@ -60,14 +60,20 @@ export function formatValue(value: unknown): string {
 }
 
 /**
- * Format an ISO timestamp string as a human-readable relative time.
- * @param isoString - ISO date string
- * @returns Relative time (e.g., "5 minutes ago")
+ * Format a Date or ISO timestamp string as a human-readable relative time.
+ * @param value - Date object, ISO date string, or null
+ * @returns Relative time (e.g., "5 minutes ago") or empty string for null
  */
-export function humanizeRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
+export function humanizeRelativeTime(value: Date | string | null): string {
+  if (value === null) {
+    return "";
+  }
+  if (value instanceof Date) {
+    return formatDistanceToNowStrict(value, { addSuffix: true });
+  }
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return isoString;
+    return value;
   }
 
   return formatDistanceToNowStrict(date, { addSuffix: true });

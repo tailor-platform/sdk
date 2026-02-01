@@ -307,14 +307,17 @@ async function waitWithSpinner(
  * @param execution - Workflow execution detail info
  */
 export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
+  // Helper to format Date as ISO string or "N/A"
+  const formatDate = (date: Date | null): string => (date ? date.toISOString() : "N/A");
+
   // Print execution summary
   const summaryData: [string, string][] = [
     ["id", execution.id],
     ["workflowName", execution.workflowName],
     ["status", execution.status],
     ["jobExecutions", execution.jobExecutions.toString()],
-    ["startedAt", execution.startedAt],
-    ["finishedAt", execution.finishedAt],
+    ["startedAt", formatDate(execution.startedAt)],
+    ["finishedAt", formatDate(execution.finishedAt)],
   ];
   logger.out(formatKeyValueTable(summaryData));
 
@@ -324,8 +327,8 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
     for (const job of execution.jobDetails) {
       logger.log(styles.info(`\n--- ${job.stackedJobName} ---`));
       logger.log(`  Status: ${job.status}`);
-      logger.log(`  Started: ${job.startedAt}`);
-      logger.log(`  Finished: ${job.finishedAt}`);
+      logger.log(`  Started: ${formatDate(job.startedAt)}`);
+      logger.log(`  Finished: ${formatDate(job.finishedAt)}`);
 
       if (job.logs) {
         logger.log(styles.warning("\n  Logs:"));

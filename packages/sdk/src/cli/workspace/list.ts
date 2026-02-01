@@ -3,7 +3,6 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { humanizeRelativeTime } from "../utils/format";
 import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
@@ -86,14 +85,6 @@ export const listCommand = defineCommand({
 
     // Execute workspace list logic
     const workspaces = await listWorkspaces({ limit });
-
-    const formattedWorkspaces = args.json
-      ? workspaces
-      : workspaces.map(({ updatedAt: _, createdAt, ...rest }) => ({
-          ...rest,
-          createdAt: humanizeRelativeTime(createdAt),
-        }));
-
-    logger.out(formattedWorkspaces);
+    logger.out(workspaces, { excludeFields: ["updatedAt"] });
   }),
 });

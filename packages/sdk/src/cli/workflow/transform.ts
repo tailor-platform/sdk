@@ -13,7 +13,7 @@ export interface WorkflowListInfo {
   name: string;
   mainJob: string;
   jobFunctions: number;
-  updatedAt: string;
+  updatedAt: Date | null;
 }
 
 export interface WorkflowInfo {
@@ -21,8 +21,8 @@ export interface WorkflowInfo {
   id: string;
   mainJob: string;
   jobFunctions: Record<string, string>;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 export interface WorkflowJobExecutionInfo {
@@ -30,8 +30,8 @@ export interface WorkflowJobExecutionInfo {
   stackedJobName: string;
   status: string;
   executionId: string;
-  startedAt: string;
-  finishedAt: string;
+  startedAt: Date | null;
+  finishedAt: Date | null;
 }
 
 export interface WorkflowExecutionInfo {
@@ -39,8 +39,8 @@ export interface WorkflowExecutionInfo {
   workflowName: string;
   status: string;
   jobExecutions: number;
-  startedAt: string;
-  finishedAt: string;
+  startedAt: Date | null;
+  finishedAt: Date | null;
 }
 
 /**
@@ -95,7 +95,7 @@ export function toWorkflowListInfo(workflow: Workflow): WorkflowListInfo {
     name: workflow.name,
     mainJob: workflow.mainJobFunctionName,
     jobFunctions: Object.keys(workflow.jobFunctions).length,
-    updatedAt: workflow.updatedAt ? timestampDate(workflow.updatedAt).toISOString() : "N/A",
+    updatedAt: workflow.updatedAt ? timestampDate(workflow.updatedAt) : null,
   };
 }
 
@@ -115,8 +115,8 @@ export function toWorkflowInfo(workflow: Workflow): WorkflowInfo {
     id: workflow.id,
     mainJob: workflow.mainJobFunctionName,
     jobFunctions: jobFunctions,
-    createdAt: workflow.createdAt ? timestampDate(workflow.createdAt).toISOString() : "N/A",
-    updatedAt: workflow.updatedAt ? timestampDate(workflow.updatedAt).toISOString() : "N/A",
+    createdAt: workflow.createdAt ? timestampDate(workflow.createdAt) : null,
+    updatedAt: workflow.updatedAt ? timestampDate(workflow.updatedAt) : null,
   };
 }
 
@@ -133,10 +133,8 @@ export function toWorkflowJobExecutionInfo(
     stackedJobName: jobExecution.stackedJobName,
     status: workflowJobExecutionStatusToString(jobExecution.status),
     executionId: jobExecution.executionId,
-    startedAt: jobExecution.startedAt ? timestampDate(jobExecution.startedAt).toISOString() : "N/A",
-    finishedAt: jobExecution.finishedAt
-      ? timestampDate(jobExecution.finishedAt).toISOString()
-      : "N/A",
+    startedAt: jobExecution.startedAt ? timestampDate(jobExecution.startedAt) : null,
+    finishedAt: jobExecution.finishedAt ? timestampDate(jobExecution.finishedAt) : null,
   };
 }
 
@@ -151,7 +149,7 @@ export function toWorkflowExecutionInfo(execution: WorkflowExecution): WorkflowE
     workflowName: execution.workflowName,
     status: workflowExecutionStatusToString(execution.status),
     jobExecutions: execution.jobExecutions.length,
-    startedAt: execution.startedAt ? timestampDate(execution.startedAt).toISOString() : "N/A",
-    finishedAt: execution.finishedAt ? timestampDate(execution.finishedAt).toISOString() : "N/A",
+    startedAt: execution.startedAt ? timestampDate(execution.startedAt) : null,
+    finishedAt: execution.finishedAt ? timestampDate(execution.finishedAt) : null,
   };
 }
