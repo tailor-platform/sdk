@@ -1,5 +1,5 @@
 import { type TailorDBService } from "@/cli/application/tailordb/service";
-import { AuthConfigSchema } from "@/parser/service/auth";
+import { IdProviderSchema } from "@/parser/service/auth";
 import type { AuthOwnConfig } from "@/configure/services/auth";
 import type { IdProviderConfig } from "@/parser/service/auth";
 
@@ -28,10 +28,9 @@ export function createAuthService(
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
 ): AuthService {
-  const validatedConfig = AuthConfigSchema.parse(config);
   const parsedConfig = {
     ...config,
-    idProvider: validatedConfig.idProvider,
+    idProvider: IdProviderSchema.optional().parse(config.idProvider),
   };
 
   let userProfile: UserProfile | undefined;
