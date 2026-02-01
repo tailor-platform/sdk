@@ -41,7 +41,7 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List all workflows.",
+  description: "List all workflows in the workspace.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

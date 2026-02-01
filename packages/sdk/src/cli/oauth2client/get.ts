@@ -60,7 +60,7 @@ export async function getOAuth2Client(
 
 export const getCommand = defineCommand({
   name: "get",
-  description: "Get OAuth2 client credentials.",
+  description: "Get OAuth2 client credentials (including client secret).",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

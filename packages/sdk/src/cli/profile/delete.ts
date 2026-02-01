@@ -6,7 +6,7 @@ import { logger } from "../utils/logger";
 
 export const deleteCommand = defineCommand({
   name: "delete",
-  description: "Delete profile.",
+  description: "Delete a profile.",
   args: z.object({
     ...commonArgs,
     name: arg(z.string(), {

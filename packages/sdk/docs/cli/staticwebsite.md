@@ -5,7 +5,7 @@ Commands for managing and deploying static websites.
 <!-- politty:command:staticwebsite:start -->
 ## staticwebsite
 
-Manage static websites.
+Manage static websites in your workspace.
 
 **Usage**
 
@@ -17,15 +17,15 @@ tailor-sdk staticwebsite [command]
 
 | Command | Description |
 |---------|-------------|
-| [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website. |
-| [`staticwebsite get`](#staticwebsite-get) | Get static website details. |
-| [`staticwebsite list`](#staticwebsite-list) | List static websites. |
+| [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website from a local build directory. |
+| [`staticwebsite get`](#staticwebsite-get) | Get details of a specific static website. |
+| [`staticwebsite list`](#staticwebsite-list) | List all static websites in a workspace. |
 
 <!-- politty:command:staticwebsite:end -->
 <!-- politty:command:staticwebsite deploy:start -->
 ### staticwebsite deploy
 
-Deploy a static website.
+Deploy a static website from a local build directory.
 
 **Usage**
 
@@ -47,7 +47,7 @@ tailor-sdk staticwebsite deploy [options]
 <!-- politty:command:staticwebsite list:start -->
 ### staticwebsite list
 
-List static websites.
+List all static websites in a workspace.
 
 **Usage**
 
@@ -67,7 +67,7 @@ tailor-sdk staticwebsite list [options]
 <!-- politty:command:staticwebsite get:start -->
 ### staticwebsite get
 
-Get static website details.
+Get details of a specific static website.
 
 **Usage**
 

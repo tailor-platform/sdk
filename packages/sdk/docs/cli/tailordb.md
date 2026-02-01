@@ -17,15 +17,15 @@ tailor-sdk tailordb [command]
 
 | Command | Description |
 |---------|-------------|
-| [`tailordb erd`](#tailordb-erd) | ERD utilities for TailorDB (beta). |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations (beta). |
-| [`tailordb truncate`](#tailordb-truncate) | Truncate TailorDB tables. |
+| [`tailordb erd`](#tailordb-erd) | Generate ERD artifacts for TailorDB namespaces using Liam ERD. |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations. |
+| [`tailordb truncate`](#tailordb-truncate) | Truncate (delete all records from) TailorDB tables. |
 
 <!-- politty:command:tailordb:end -->
 <!-- politty:command:tailordb truncate:start -->
 ### tailordb truncate
 
-Truncate TailorDB tables.
+Truncate (delete all records from) TailorDB tables.
 
 **Usage**
 
@@ -54,7 +54,7 @@ tailor-sdk tailordb truncate [options] [types]
 <!-- politty:command:tailordb migration:start -->
 ### tailordb migration
 
-Manage TailorDB schema migrations (beta).
+Manage TailorDB schema migrations.
 
 **Usage**
 
@@ -66,15 +66,15 @@ tailor-sdk tailordb migration [command]
 
 | Command | Description |
 |---------|-------------|
-| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files for TailorDB schema changes. |
+| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
 | [`tailordb migration set`](#tailordb-migration-set) | Set migration checkpoint to a specific number. |
-| [`tailordb migration status`](#tailordb-migration-status) | Show migration status for TailorDB namespaces. |
+| [`tailordb migration status`](#tailordb-migration-status) | Show the current migration status for TailorDB namespaces, including applied and pending migrations. |
 
 <!-- politty:command:tailordb migration:end -->
 <!-- politty:command:tailordb migration generate:start -->
 #### tailordb migration generate
 
-Generate migration files for TailorDB schema changes.
+Generate migration files by detecting schema differences between current local types and the previous migration snapshot.
 
 **Usage**
 
@@ -123,7 +123,7 @@ tailor-sdk tailordb migration set [options] <number>
 <!-- politty:command:tailordb migration status:start -->
 #### tailordb migration status
 
-Show migration status for TailorDB namespaces.
+Show the current migration status for TailorDB namespaces, including applied and pending migrations.
 
 **Usage**
 
@@ -144,7 +144,7 @@ tailor-sdk tailordb migration status [options]
 <!-- politty:command:tailordb erd:start -->
 ### tailordb erd
 
-ERD utilities for TailorDB (beta).
+Generate ERD artifacts for TailorDB namespaces using Liam ERD.
 
 **Usage**
 
@@ -156,15 +156,15 @@ tailor-sdk tailordb erd [command]
 
 | Command | Description |
 |---------|-------------|
-| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema (beta). |
-| [`tailordb erd serve`](#tailordb-erd-serve) | Generate and serve ERD (liam build + `serve dist`) (beta). |
-| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s) (beta). |
+| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema. |
+| [`tailordb erd serve`](#tailordb-erd-serve) | Generate and serve ERD locally (liam build + serve dist). |
+| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s). |
 
 <!-- politty:command:tailordb erd:end -->
 <!-- politty:command:tailordb erd export:start -->
 #### tailordb erd export
 
-Export Liam ERD dist from applied TailorDB schema (beta).
+Export Liam ERD dist from applied TailorDB schema.
 
 **Usage**
 
@@ -187,7 +187,7 @@ tailor-sdk tailordb erd export [options]
 <!-- politty:command:tailordb erd serve:start -->
 #### tailordb erd serve
 
-Generate and serve ERD (liam build + `serve dist`) (beta).
+Generate and serve ERD locally (liam build + serve dist).
 
 **Usage**
 
@@ -208,7 +208,7 @@ tailor-sdk tailordb erd serve [options]
 <!-- politty:command:tailordb erd deploy:start -->
 #### tailordb erd deploy
 
-Deploy ERD static website for TailorDB namespace(s) (beta).
+Deploy ERD static website for TailorDB namespace(s).
 
 **Usage**
 

@@ -72,7 +72,7 @@ export async function resumeWorkflow(
 
 export const resumeCommand = defineCommand({
   name: "resume",
-  description: "Resume a failed workflow execution.",
+  description: "Resume a failed or pending workflow execution.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

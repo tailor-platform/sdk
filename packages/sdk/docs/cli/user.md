@@ -118,10 +118,10 @@ tailor-sdk user pat [options] [command]
 
 | Command | Description |
 |---------|-------------|
-| [`user pat create`](#user-pat-create) | Create new personal access token. |
-| [`user pat delete`](#user-pat-delete) | Delete personal access token. |
+| [`user pat create`](#user-pat-create) | Create a new personal access token. |
+| [`user pat delete`](#user-pat-delete) | Delete a personal access token. |
 | [`user pat list`](#user-pat-list) | List all personal access tokens. |
-| [`user pat update`](#user-pat-update) | Update personal access token (delete and recreate). |
+| [`user pat update`](#user-pat-update) | Update a personal access token (delete and recreate). |
 
 <!-- politty:command:user pat:end -->
 <!-- politty:command:user pat list:start -->
@@ -145,7 +145,7 @@ tailor-sdk user pat list [options]
 <!-- politty:command:user pat create:start -->
 #### user pat create
 
-Create new personal access token.
+Create a new personal access token.
 
 **Usage**
 
@@ -170,7 +170,7 @@ tailor-sdk user pat create [options] <name>
 <!-- politty:command:user pat delete:start -->
 #### user pat delete
 
-Delete personal access token.
+Delete a personal access token.
 
 **Usage**
 
@@ -188,7 +188,7 @@ tailor-sdk user pat delete [options] <name>
 <!-- politty:command:user pat update:start -->
 #### user pat update
 
-Update personal access token (delete and recreate).
+Update a personal access token (delete and recreate).
 
 **Usage**
 

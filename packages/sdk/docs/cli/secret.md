@@ -5,7 +5,7 @@ Commands for managing Secret Manager vaults and secrets.
 <!-- politty:command:secret:start -->
 ## secret
 
-Manage secrets and vaults.
+Manage Secret Manager vaults and secrets.
 
 **Usage**
 
@@ -19,7 +19,7 @@ tailor-sdk secret [command]
 |---------|-------------|
 | [`secret create`](#secret-create) | Create a secret in a vault. |
 | [`secret delete`](#secret-delete) | Delete a secret in a vault. |
-| [`secret list`](#secret-list) | List secrets in a vault. |
+| [`secret list`](#secret-list) | List all secrets in a vault. |
 | [`secret update`](#secret-update) | Update a secret in a vault. |
 | [`secret vault`](#secret-vault) | Manage Secret Manager vaults. |
 
@@ -39,15 +39,15 @@ tailor-sdk secret vault [command]
 
 | Command | Description |
 |---------|-------------|
-| [`secret vault create`](#secret-vault-create) | Create a Secret Manager vault. |
+| [`secret vault create`](#secret-vault-create) | Create a new Secret Manager vault. |
 | [`secret vault delete`](#secret-vault-delete) | Delete a Secret Manager vault. |
-| [`secret vault list`](#secret-vault-list) | List Secret Manager vaults. |
+| [`secret vault list`](#secret-vault-list) | List all Secret Manager vaults in the workspace. |
 
 <!-- politty:command:secret vault:end -->
 <!-- politty:command:secret vault create:start -->
 #### secret vault create
 
-Create a Secret Manager vault.
+Create a new Secret Manager vault.
 
 **Usage**
 
@@ -98,7 +98,7 @@ tailor-sdk secret vault delete [options] <name>
 <!-- politty:command:secret vault list:start -->
 #### secret vault list
 
-List Secret Manager vaults.
+List all Secret Manager vaults in the workspace.
 
 **Usage**
 
@@ -162,7 +162,7 @@ tailor-sdk secret update [options]
 <!-- politty:command:secret list:start -->
 ### secret list
 
-List secrets in a vault.
+List all secrets in a vault.
 
 **Usage**
 

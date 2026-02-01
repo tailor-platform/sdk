@@ -9,7 +9,7 @@ import { nameArgs } from "./args";
 
 export const createCommand = defineCommand({
   name: "create",
-  description: "Create a Secret Manager vault.",
+  description: "Create a new Secret Manager vault.",
   args: z.object({
     ...commonArgs,
     ...workspaceArgs,

@@ -17,15 +17,15 @@ tailor-sdk workspace [command]
 
 | Command | Description |
 |---------|-------------|
-| [`workspace create`](#workspace-create) | Create new workspace. |
-| [`workspace delete`](#workspace-delete) | Delete workspace. |
+| [`workspace create`](#workspace-create) | Create a new Tailor Platform workspace. |
+| [`workspace delete`](#workspace-delete) | Delete a Tailor Platform workspace. |
 | [`workspace list`](#workspace-list) | List all Tailor Platform workspaces. |
 
 <!-- politty:command:workspace:end -->
 <!-- politty:command:workspace create:start -->
 ### workspace create
 
-Create new workspace.
+Create a new Tailor Platform workspace.
 
 **Usage**
 
@@ -69,7 +69,7 @@ tailor-sdk workspace list [options]
 <!-- politty:command:workspace delete:start -->
 ### workspace delete
 
-Delete workspace.
+Delete a Tailor Platform workspace.
 
 **Usage**
 
@@ -100,8 +100,8 @@ tailor-sdk profile [command]
 
 | Command | Description |
 |---------|-------------|
-| [`profile create`](#profile-create) | Create new profile. |
-| [`profile delete`](#profile-delete) | Delete profile. |
+| [`profile create`](#profile-create) | Create a new profile. |
+| [`profile delete`](#profile-delete) | Delete a profile. |
 | [`profile list`](#profile-list) | List all profiles. |
 | [`profile update`](#profile-update) | Update profile properties. |
 
@@ -109,7 +109,7 @@ tailor-sdk profile [command]
 <!-- politty:command:profile create:start -->
 ### profile create
 
-Create new profile.
+Create a new profile.
 
 **Usage**
 
@@ -179,7 +179,7 @@ tailor-sdk profile update [options] <name>
 <!-- politty:command:profile delete:start -->
 ### profile delete
 
-Delete profile.
+Delete a profile.
 
 **Usage**
 

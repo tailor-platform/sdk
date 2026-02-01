@@ -5,7 +5,7 @@ Commands for managing workflows and workflow executions.
 <!-- politty:command:workflow:start -->
 ## workflow
 
-Manage workflows.
+Manage workflows and workflow executions.
 
 **Usage**
 
@@ -17,17 +17,17 @@ tailor-sdk workflow [command]
 
 | Command | Description |
 |---------|-------------|
-| [`workflow list`](#workflow-list) | List all workflows. |
+| [`workflow list`](#workflow-list) | List all workflows in the workspace. |
 | [`workflow get`](#workflow-get) | Get workflow details. |
 | [`workflow start`](#workflow-start) | Start a workflow execution. |
 | [`workflow executions`](#workflow-executions) | List or get workflow executions. |
-| [`workflow resume`](#workflow-resume) | Resume a failed workflow execution. |
+| [`workflow resume`](#workflow-resume) | Resume a failed or pending workflow execution. |
 
 <!-- politty:command:workflow:end -->
 <!-- politty:command:workflow list:start -->
 ### workflow list
 
-List all workflows.
+List all workflows in the workspace.
 
 **Usage**
 
@@ -136,7 +136,7 @@ tailor-sdk workflow executions [options] [executionId]
 <!-- politty:command:workflow resume:start -->
 ### workflow resume
 
-Resume a failed workflow execution.
+Resume a failed or pending workflow execution.
 
 **Usage**
 

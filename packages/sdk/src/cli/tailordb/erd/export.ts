@@ -231,7 +231,7 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
 
 export const erdExportCommand = defineCommand({
   name: "export",
-  description: "Export Liam ERD dist from applied TailorDB schema (beta).",
+  description: "Export Liam ERD dist from applied TailorDB schema.",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

@@ -8,7 +8,7 @@ import type { ProfileInfo } from ".";
 
 export const createCommand = defineCommand({
   name: "create",
-  description: "Create new profile.",
+  description: "Create a new profile.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
