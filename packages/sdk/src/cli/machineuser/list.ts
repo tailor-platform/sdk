@@ -1,4 +1,5 @@
-import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { toJson } from "@bufbuild/protobuf";
+import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
@@ -18,8 +19,8 @@ export interface MachineUserInfo {
   name: string;
   clientId: string;
   clientSecret: string;
-  createdAt: string;
-  updatedAt: string;
+  attributes: Record<string, unknown>;
+  attributeList: string[];
 }
 
 /**
@@ -28,12 +29,16 @@ export interface MachineUserInfo {
  * @returns Flattened machine user info
  */
 function machineUserInfo(user: MachineUser): MachineUserInfo {
+  const attributes: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(user.attributeMap)) {
+    attributes[key] = toJson(ValueSchema, value);
+  }
   return {
     name: user.name,
     clientId: user.clientId,
     clientSecret: user.clientSecret,
-    createdAt: user.createdAt ? timestampDate(user.createdAt).toISOString() : "N/A",
-    updatedAt: user.updatedAt ? timestampDate(user.updatedAt).toISOString() : "N/A",
+    attributes,
+    attributeList: user.attributes,
   };
 }
 
