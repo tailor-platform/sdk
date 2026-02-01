@@ -45,6 +45,8 @@ export type { UserInfo } from "./workspace/user/transform";
 export { listApps, type ListAppsOptions } from "./workspace/app/list";
 export { getAppHealth, type HealthOptions as GetAppHealthOptions } from "./workspace/app/health";
 export type { AppInfo, AppHealthInfo } from "./workspace/app/transform";
+export { getFunctionRegistry } from "./workspace/function/registry/get";
+export { listFunctionRegistries } from "./workspace/function/registry/list";
 export {
   listMachineUsers,
   type ListMachineUsersOptions,
