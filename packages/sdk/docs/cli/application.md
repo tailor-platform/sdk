@@ -56,7 +56,7 @@ tailor-sdk generate [options]
 <!-- politty:command:apply:start -->
 ## apply
 
-Apply Tailor configuration to generate files
+Deploy Tailor configuration to workspace
 
 **Usage**
 
