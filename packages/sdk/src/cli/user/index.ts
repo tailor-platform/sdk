@@ -6,7 +6,7 @@ import { switchCommand } from "./switch";
 
 export const userCommand = defineCommand({
   name: "user",
-  description: "Manage Tailor Platform users",
+  description: "Manage Tailor Platform users.",
   subCommands: {
     current: currentCommand,
     list: listCommand,

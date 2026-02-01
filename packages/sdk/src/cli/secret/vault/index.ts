@@ -5,7 +5,7 @@ import { listCommand } from "./list";
 
 export const vaultCommand = defineCommand({
   name: "vault",
-  description: "Manage Secret Manager vaults",
+  description: "Manage Secret Manager vaults.",
   subCommands: {
     create: createCommand,
     delete: deleteCommand,

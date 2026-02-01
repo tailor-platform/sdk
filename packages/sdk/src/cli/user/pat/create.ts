@@ -8,7 +8,7 @@ import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
 export const createCommand = defineCommand({
   name: "create",
-  description: "Create new personal access token",
+  description: "Create new personal access token.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

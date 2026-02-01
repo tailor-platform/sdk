@@ -55,7 +55,7 @@ async function listStaticWebsites(
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List static websites",
+  description: "List static websites.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

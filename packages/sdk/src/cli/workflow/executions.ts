@@ -352,7 +352,7 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
 
 export const executionsCommand = defineCommand({
   name: "executions",
-  description: "List or get workflow executions",
+  description: "List or get workflow executions.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

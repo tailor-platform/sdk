@@ -59,7 +59,7 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
 
 export const listSecretCommand = defineCommand({
   name: "list",
-  description: "List secrets in a vault",
+  description: "List secrets in a vault.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

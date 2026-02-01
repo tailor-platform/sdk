@@ -44,7 +44,7 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
 
 export const deleteCommand = defineCommand({
   name: "delete",
-  description: "Delete workspace",
+  description: "Delete workspace.",
   args: z.object({
     ...commonArgs,
     "workspace-id": arg(z.string(), {

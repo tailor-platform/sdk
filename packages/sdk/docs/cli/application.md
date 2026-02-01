@@ -5,7 +5,7 @@ Commands for managing Tailor Platform applications. These commands work with `ta
 <!-- politty:command:init:start -->
 ## init
 
-Initialize a new project using create-sdk
+Initialize a new project using create-sdk.
 
 **Usage**
 
@@ -30,7 +30,7 @@ tailor-sdk init [options] [name]
 <!-- politty:command:generate:start -->
 ## generate
 
-Generate files using Tailor configuration
+Generate files using Tailor configuration.
 
 **Usage**
 
@@ -50,7 +50,7 @@ tailor-sdk generate [options]
 <!-- politty:command:apply:start -->
 ## apply
 
-Deploy Tailor configuration to workspace
+Apply Tailor configuration to deploy your application.
 
 **Usage**
 
@@ -96,7 +96,7 @@ Use `--no-schema-check` to skip both verifications (not recommended for producti
 <!-- politty:command:remove:start -->
 ## remove
 
-Remove all resources managed by the application
+Remove all resources managed by the application from the workspace.
 
 **Usage**
 
@@ -118,7 +118,7 @@ tailor-sdk remove [options]
 <!-- politty:command:show:start -->
 ## show
 
-Show applied application information
+Show information about the deployed application.
 
 **Usage**
 
@@ -140,7 +140,7 @@ tailor-sdk show [options]
 <!-- politty:command:open:start -->
 ## open
 
-Open Tailor Platform Console for the application
+Open Tailor Platform Console.
 
 **Usage**
 
@@ -161,7 +161,7 @@ tailor-sdk open [options]
 <!-- politty:command:api:start -->
 ## api
 
-Call Tailor Platform API endpoints directly
+Call Tailor Platform API endpoints directly.
 
 **Usage**
 

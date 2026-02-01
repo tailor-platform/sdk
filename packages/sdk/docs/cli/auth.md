@@ -5,7 +5,7 @@ Commands for managing Auth service resources (machine users and OAuth2 clients).
 <!-- politty:command:machineuser:start -->
 ## machineuser
 
-Manage machine users
+Manage machine users.
 
 **Usage**
 
@@ -17,14 +17,14 @@ tailor-sdk machineuser [command]
 
 | Command | Description |
 |---------|-------------|
-| [`machineuser list`](#machineuser-list) | List all machine users |
-| [`machineuser token`](#machineuser-token) | Get machine user token |
+| [`machineuser list`](#machineuser-list) | List all machine users. |
+| [`machineuser token`](#machineuser-token) | Get machine user token. |
 
 <!-- politty:command:machineuser:end -->
 <!-- politty:command:machineuser list:start -->
 ### machineuser list
 
-List all machine users
+List all machine users.
 
 **Usage**
 
@@ -45,7 +45,7 @@ tailor-sdk machineuser list [options]
 <!-- politty:command:machineuser token:start -->
 ### machineuser token
 
-Get machine user token
+Get machine user token.
 
 **Usage**
 
@@ -72,7 +72,7 @@ tailor-sdk machineuser token [options] <name>
 <!-- politty:command:oauth2client:start -->
 ## oauth2client
 
-Manage OAuth2 clients
+Manage OAuth2 clients.
 
 **Usage**
 
@@ -84,14 +84,14 @@ tailor-sdk oauth2client [command]
 
 | Command | Description |
 |---------|-------------|
-| [`oauth2client get`](#oauth2client-get) | Get OAuth2 client credentials |
-| [`oauth2client list`](#oauth2client-list) | List all OAuth2 clients |
+| [`oauth2client get`](#oauth2client-get) | Get OAuth2 client credentials. |
+| [`oauth2client list`](#oauth2client-list) | List all OAuth2 clients. |
 
 <!-- politty:command:oauth2client:end -->
 <!-- politty:command:oauth2client list:start -->
 ### oauth2client list
 
-List all OAuth2 clients
+List all OAuth2 clients.
 
 **Usage**
 
@@ -112,7 +112,7 @@ tailor-sdk oauth2client list [options]
 <!-- politty:command:oauth2client get:start -->
 ### oauth2client get
 
-Get OAuth2 client credentials
+Get OAuth2 client credentials.
 
 **Usage**
 

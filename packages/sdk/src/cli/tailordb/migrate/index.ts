@@ -14,7 +14,7 @@ import { statusCommand } from "./status";
 
 export const migrationCommand = defineCommand({
   name: "migration",
-  description: "Manage TailorDB schema migrations (beta)",
+  description: "Manage TailorDB schema migrations (beta).",
   subCommands: {
     generate: generateCommand,
     set: setCommand,

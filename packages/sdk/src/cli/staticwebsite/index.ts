@@ -5,7 +5,7 @@ import { listCommand } from "./list";
 
 export const staticwebsiteCommand = defineCommand({
   name: "staticwebsite",
-  description: "Manage static websites",
+  description: "Manage static websites.",
   subCommands: {
     deploy: deployCommand,
     get: getCommand,

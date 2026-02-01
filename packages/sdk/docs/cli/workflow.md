@@ -5,7 +5,7 @@ Commands for managing workflows and workflow executions.
 <!-- politty:command:workflow:start -->
 ## workflow
 
-Manage workflows
+Manage workflows.
 
 **Usage**
 
@@ -17,17 +17,17 @@ tailor-sdk workflow [command]
 
 | Command | Description |
 |---------|-------------|
-| [`workflow list`](#workflow-list) | List all workflows |
-| [`workflow get`](#workflow-get) | Get workflow details |
-| [`workflow start`](#workflow-start) | Start a workflow execution |
-| [`workflow executions`](#workflow-executions) | List or get workflow executions |
-| [`workflow resume`](#workflow-resume) | Resume a failed workflow execution |
+| [`workflow list`](#workflow-list) | List all workflows. |
+| [`workflow get`](#workflow-get) | Get workflow details. |
+| [`workflow start`](#workflow-start) | Start a workflow execution. |
+| [`workflow executions`](#workflow-executions) | List or get workflow executions. |
+| [`workflow resume`](#workflow-resume) | Resume a failed workflow execution. |
 
 <!-- politty:command:workflow:end -->
 <!-- politty:command:workflow list:start -->
 ### workflow list
 
-List all workflows
+List all workflows.
 
 **Usage**
 
@@ -47,7 +47,7 @@ tailor-sdk workflow list [options]
 <!-- politty:command:workflow get:start -->
 ### workflow get
 
-Get workflow details
+Get workflow details.
 
 **Usage**
 
@@ -73,7 +73,7 @@ tailor-sdk workflow get [options] <name>
 <!-- politty:command:workflow start:start -->
 ### workflow start
 
-Start a workflow execution
+Start a workflow execution.
 
 **Usage**
 
@@ -105,7 +105,7 @@ tailor-sdk workflow start [options] <name>
 <!-- politty:command:workflow executions:start -->
 ### workflow executions
 
-List or get workflow executions
+List or get workflow executions.
 
 **Usage**
 
@@ -136,7 +136,7 @@ tailor-sdk workflow executions [options] [executionId]
 <!-- politty:command:workflow resume:start -->
 ### workflow resume
 
-Resume a failed workflow execution
+Resume a failed workflow execution.
 
 **Usage**
 

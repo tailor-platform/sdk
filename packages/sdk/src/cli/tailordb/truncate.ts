@@ -250,7 +250,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 
 export const truncateCommand = defineCommand({
   name: "truncate",
-  description: "Truncate TailorDB tables",
+  description: "Truncate TailorDB tables.",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

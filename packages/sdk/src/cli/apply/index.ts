@@ -301,7 +301,7 @@ async function buildWorkflow(
 
 export const applyCommand = defineCommand({
   name: "apply",
-  description: "Deploy Tailor configuration to workspace",
+  description: "Apply Tailor configuration to deploy your application.",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

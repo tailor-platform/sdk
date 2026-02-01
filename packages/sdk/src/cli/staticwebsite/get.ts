@@ -8,7 +8,7 @@ import { logger } from "../utils/logger";
 
 export const getCommand = defineCommand({
   name: "get",
-  description: "Get static website details",
+  description: "Get static website details.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

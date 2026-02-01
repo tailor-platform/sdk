@@ -5,7 +5,7 @@ Commands for managing TailorDB tables, data, and schema migrations.
 <!-- politty:command:tailordb:start -->
 ## tailordb
 
-Manage TailorDB tables and data
+Manage TailorDB tables and data.
 
 **Usage**
 
@@ -17,15 +17,15 @@ tailor-sdk tailordb [command]
 
 | Command | Description |
 |---------|-------------|
-| [`tailordb erd`](#tailordb-erd) | ERD utilities for TailorDB (beta) |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations (beta) |
-| [`tailordb truncate`](#tailordb-truncate) | Truncate TailorDB tables |
+| [`tailordb erd`](#tailordb-erd) | ERD utilities for TailorDB (beta). |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations (beta). |
+| [`tailordb truncate`](#tailordb-truncate) | Truncate TailorDB tables. |
 
 <!-- politty:command:tailordb:end -->
 <!-- politty:command:tailordb truncate:start -->
 ### tailordb truncate
 
-Truncate TailorDB tables
+Truncate TailorDB tables.
 
 **Usage**
 
@@ -54,7 +54,7 @@ tailor-sdk tailordb truncate [options] [types]
 <!-- politty:command:tailordb migration:start -->
 ### tailordb migration
 
-Manage TailorDB schema migrations (beta)
+Manage TailorDB schema migrations (beta).
 
 **Usage**
 
@@ -66,15 +66,15 @@ tailor-sdk tailordb migration [command]
 
 | Command | Description |
 |---------|-------------|
-| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files for TailorDB schema changes |
-| [`tailordb migration set`](#tailordb-migration-set) | Set migration checkpoint to a specific number |
-| [`tailordb migration status`](#tailordb-migration-status) | Show migration status for TailorDB namespaces |
+| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files for TailorDB schema changes. |
+| [`tailordb migration set`](#tailordb-migration-set) | Set migration checkpoint to a specific number. |
+| [`tailordb migration status`](#tailordb-migration-status) | Show migration status for TailorDB namespaces. |
 
 <!-- politty:command:tailordb migration:end -->
 <!-- politty:command:tailordb migration generate:start -->
 #### tailordb migration generate
 
-Generate migration files for TailorDB schema changes
+Generate migration files for TailorDB schema changes.
 
 **Usage**
 
@@ -95,7 +95,7 @@ tailor-sdk tailordb migration generate [options]
 <!-- politty:command:tailordb migration set:start -->
 #### tailordb migration set
 
-Set migration checkpoint to a specific number
+Set migration checkpoint to a specific number.
 
 **Usage**
 
@@ -123,7 +123,7 @@ tailor-sdk tailordb migration set [options] <number>
 <!-- politty:command:tailordb migration status:start -->
 #### tailordb migration status
 
-Show migration status for TailorDB namespaces
+Show migration status for TailorDB namespaces.
 
 **Usage**
 
@@ -144,7 +144,7 @@ tailor-sdk tailordb migration status [options]
 <!-- politty:command:tailordb erd:start -->
 ### tailordb erd
 
-ERD utilities for TailorDB (beta)
+ERD utilities for TailorDB (beta).
 
 **Usage**
 
@@ -156,15 +156,15 @@ tailor-sdk tailordb erd [command]
 
 | Command | Description |
 |---------|-------------|
-| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema (beta) |
-| [`tailordb erd serve`](#tailordb-erd-serve) | Generate and serve ERD (liam build + `serve dist`) (beta) |
-| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s) (beta) |
+| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema (beta). |
+| [`tailordb erd serve`](#tailordb-erd-serve) | Generate and serve ERD (liam build + `serve dist`) (beta). |
+| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s) (beta). |
 
 <!-- politty:command:tailordb erd:end -->
 <!-- politty:command:tailordb erd export:start -->
 #### tailordb erd export
 
-Export Liam ERD dist from applied TailorDB schema (beta)
+Export Liam ERD dist from applied TailorDB schema (beta).
 
 **Usage**
 
@@ -187,7 +187,7 @@ tailor-sdk tailordb erd export [options]
 <!-- politty:command:tailordb erd serve:start -->
 #### tailordb erd serve
 
-Generate and serve ERD (liam build + `serve dist`) (beta)
+Generate and serve ERD (liam build + `serve dist`) (beta).
 
 **Usage**
 
@@ -208,7 +208,7 @@ tailor-sdk tailordb erd serve [options]
 <!-- politty:command:tailordb erd deploy:start -->
 #### tailordb erd deploy
 
-Deploy ERD static website for TailorDB namespace(s) (beta)
+Deploy ERD static website for TailorDB namespace(s) (beta).
 
 **Usage**
 

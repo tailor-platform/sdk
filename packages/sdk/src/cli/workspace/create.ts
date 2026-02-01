@@ -79,7 +79,7 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
 
 export const createCommand = defineCommand({
   name: "create",
-  description: "Create new workspace",
+  description: "Create new workspace.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

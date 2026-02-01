@@ -55,7 +55,7 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List Secret Manager vaults",
+  description: "List Secret Manager vaults.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

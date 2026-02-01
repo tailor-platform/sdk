@@ -10,7 +10,7 @@ const consoleBaseUrl = "https://console.tailor.tech";
 
 export const openCommand = defineCommand({
   name: "open",
-  description: "Open Tailor Platform Console for the application",
+  description: "Open Tailor Platform Console.",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

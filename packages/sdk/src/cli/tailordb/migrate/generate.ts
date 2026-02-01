@@ -341,7 +341,7 @@ async function openInEditor(filePath: string): Promise<void> {
  */
 export const generateCommand = defineCommand({
   name: "generate",
-  description: "Generate migration files for TailorDB schema changes",
+  description: "Generate migration files for TailorDB schema changes.",
   args: z.object({
     ...commonArgs,
     ...confirmationArgs,

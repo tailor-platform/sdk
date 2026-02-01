@@ -8,7 +8,7 @@ import { initErdContext } from "./utils";
 
 export const erdDeployCommand = defineCommand({
   name: "deploy",
-  description: "Deploy ERD static website for TailorDB namespace(s) (beta)",
+  description: "Deploy ERD static website for TailorDB namespace(s) (beta).",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

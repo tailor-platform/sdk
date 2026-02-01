@@ -65,7 +65,7 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
 
 export const apiCommand = defineCommand({
   name: "api",
-  description: "Call Tailor Platform API endpoints directly",
+  description: "Call Tailor Platform API endpoints directly.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

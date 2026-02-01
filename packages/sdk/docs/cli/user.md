@@ -5,7 +5,7 @@ Commands for authentication and user management.
 <!-- politty:command:login:start -->
 ## login
 
-Login to Tailor Platform
+Login to Tailor Platform.
 
 **Usage**
 
@@ -18,7 +18,7 @@ tailor-sdk login [options]
 <!-- politty:command:logout:start -->
 ## logout
 
-Logout from Tailor Platform
+Logout from Tailor Platform.
 
 **Usage**
 
@@ -31,7 +31,7 @@ tailor-sdk logout [options]
 <!-- politty:command:user:start -->
 ## user
 
-Manage Tailor Platform users
+Manage Tailor Platform users.
 
 **Usage**
 
@@ -43,16 +43,16 @@ tailor-sdk user [command]
 
 | Command | Description |
 |---------|-------------|
-| [`user current`](#user-current) | Show current user |
-| [`user list`](#user-list) | List all users |
-| [`user pat`](#user-pat) | Manage personal access tokens |
-| [`user switch`](#user-switch) | Set current user |
+| [`user current`](#user-current) | Show current user. |
+| [`user list`](#user-list) | List all users. |
+| [`user pat`](#user-pat) | Manage personal access tokens. |
+| [`user switch`](#user-switch) | Set current user. |
 
 <!-- politty:command:user:end -->
 <!-- politty:command:user current:start -->
 ### user current
 
-Show current user
+Show current user.
 
 **Usage**
 
@@ -64,7 +64,7 @@ tailor-sdk user current [options]
 <!-- politty:command:user list:start -->
 ### user list
 
-List all users
+List all users.
 
 **Usage**
 
@@ -82,7 +82,7 @@ tailor-sdk user list [options]
 <!-- politty:command:user switch:start -->
 ### user switch
 
-Set current user
+Set current user.
 
 **Usage**
 
@@ -100,7 +100,7 @@ tailor-sdk user switch [options] <user>
 <!-- politty:command:user pat:start -->
 ### user pat
 
-Manage personal access tokens
+Manage personal access tokens.
 
 **Usage**
 
@@ -118,16 +118,16 @@ tailor-sdk user pat [options] [command]
 
 | Command | Description |
 |---------|-------------|
-| [`user pat create`](#user-pat-create) | Create new personal access token |
-| [`user pat delete`](#user-pat-delete) | Delete personal access token |
-| [`user pat list`](#user-pat-list) | List all personal access tokens |
-| [`user pat update`](#user-pat-update) | Update personal access token (delete and recreate) |
+| [`user pat create`](#user-pat-create) | Create new personal access token. |
+| [`user pat delete`](#user-pat-delete) | Delete personal access token. |
+| [`user pat list`](#user-pat-list) | List all personal access tokens. |
+| [`user pat update`](#user-pat-update) | Update personal access token (delete and recreate). |
 
 <!-- politty:command:user pat:end -->
 <!-- politty:command:user pat list:start -->
 #### user pat list
 
-List all personal access tokens
+List all personal access tokens.
 
 **Usage**
 
@@ -145,7 +145,7 @@ tailor-sdk user pat list [options]
 <!-- politty:command:user pat create:start -->
 #### user pat create
 
-Create new personal access token
+Create new personal access token.
 
 **Usage**
 
@@ -170,7 +170,7 @@ tailor-sdk user pat create [options] <name>
 <!-- politty:command:user pat delete:start -->
 #### user pat delete
 
-Delete personal access token
+Delete personal access token.
 
 **Usage**
 
@@ -188,7 +188,7 @@ tailor-sdk user pat delete [options] <name>
 <!-- politty:command:user pat update:start -->
 #### user pat update
 
-Update personal access token (delete and recreate)
+Update personal access token (delete and recreate).
 
 **Usage**
 

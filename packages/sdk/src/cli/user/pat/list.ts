@@ -9,7 +9,7 @@ import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./tr
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List all personal access tokens",
+  description: "List all personal access tokens.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
