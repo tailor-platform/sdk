@@ -301,6 +301,9 @@ export const logger = {
         if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
           return humanizeRelativeTime(value);
         }
+        if (typeof value === "object") {
+          return JSON.stringify(value);
+        }
         return String(value);
       }),
     );
