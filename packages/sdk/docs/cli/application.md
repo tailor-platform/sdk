@@ -23,9 +23,6 @@ tailor-sdk init [options] [name]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--template <TEMPLATE>` | `-t` | Template name | - |
 
 <!-- politty:command:init:end -->
@@ -45,9 +42,6 @@ tailor-sdk generate [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
 | `--watch` | `-W` | Watch for type/resolver changes and regenerate | `false` |
 
@@ -68,9 +62,6 @@ tailor-sdk apply [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -117,9 +108,6 @@ tailor-sdk remove [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -142,9 +130,6 @@ tailor-sdk show [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
@@ -167,9 +152,6 @@ tailor-sdk open [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -197,9 +179,6 @@ tailor-sdk api [options] <endpoint>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |

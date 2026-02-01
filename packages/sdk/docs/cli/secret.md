@@ -65,9 +65,6 @@ tailor-sdk secret vault create [options] <name>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 
@@ -93,9 +90,6 @@ tailor-sdk secret vault delete [options] <name>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--yes` | `-y` | Skip confirmation prompts | `false` |
@@ -116,9 +110,6 @@ tailor-sdk secret vault list [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
@@ -139,9 +130,6 @@ tailor-sdk secret create [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--vault-name <VAULT_NAME>` | `-V` | Vault name | - |
@@ -164,9 +152,6 @@ tailor-sdk secret update [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--vault-name <VAULT_NAME>` | `-V` | Vault name | - |
@@ -189,9 +174,6 @@ tailor-sdk secret list [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
@@ -213,9 +195,6 @@ tailor-sdk secret delete [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--vault-name <VAULT_NAME>` | `-V` | Vault name | - |

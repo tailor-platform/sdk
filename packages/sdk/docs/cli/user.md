@@ -13,14 +13,6 @@ Login to Tailor Platform
 tailor-sdk login [options]
 ```
 
-**Options**
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
-
 <!-- politty:command:login:end -->
 
 <!-- politty:command:logout:start -->
@@ -33,14 +25,6 @@ Logout from Tailor Platform
 ```
 tailor-sdk logout [options]
 ```
-
-**Options**
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 
 <!-- politty:command:logout:end -->
 
@@ -76,14 +60,6 @@ Show current user
 tailor-sdk user current [options]
 ```
 
-**Options**
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
-
 <!-- politty:command:user current:end -->
 <!-- politty:command:user list:start -->
 ### user list
@@ -100,9 +76,6 @@ tailor-sdk user list [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 
 <!-- politty:command:user list:end -->
@@ -123,14 +96,6 @@ tailor-sdk user switch [options] <user>
 |----------|-------------|----------|
 | `user` | User email | Yes |
 
-**Options**
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
-
 <!-- politty:command:user switch:end -->
 <!-- politty:command:user pat:start -->
 ### user pat
@@ -147,9 +112,6 @@ tailor-sdk user pat [options] [command]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 
 **Commands**
@@ -177,9 +139,6 @@ tailor-sdk user pat list [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 
 <!-- politty:command:user pat list:end -->
@@ -204,9 +163,6 @@ tailor-sdk user pat create [options] <name>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--write` | `-W` | Grant write permission (default: read-only) | `false` |
 
@@ -227,14 +183,6 @@ tailor-sdk user pat delete [options] <name>
 | Argument | Description | Required |
 |----------|-------------|----------|
 | `name` | Token name | Yes |
-
-**Options**
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 
 <!-- politty:command:user pat delete:end -->
 <!-- politty:command:user pat update:start -->
@@ -258,9 +206,6 @@ tailor-sdk user pat update [options] <name>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--write` | `-W` | Grant write permission (if not specified, keeps read-only) | `false` |
 

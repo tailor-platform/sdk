@@ -37,9 +37,6 @@ tailor-sdk workspace create [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--name <NAME>` | `-n` | Workspace name | - |
 | `--region <REGION>` | `-r` | Workspace region (us-west, asia-northeast) | - |
@@ -65,9 +62,6 @@ tailor-sdk workspace list [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--limit <LIMIT>` | `-l` | Maximum number of workspaces to list | - |
 
@@ -87,9 +81,6 @@ tailor-sdk workspace delete [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--yes` | `-y` | Skip confirmation prompts | `false` |
 
@@ -136,9 +127,6 @@ tailor-sdk profile create [options] <name>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--user <USER>` | `-u` | User email | - |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
@@ -159,9 +147,6 @@ tailor-sdk profile list [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 
 <!-- politty:command:profile list:end -->
@@ -186,9 +171,6 @@ tailor-sdk profile update [options] <name>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--user <USER>` | `-u` | New user email | - |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | New workspace ID | - |
@@ -210,13 +192,5 @@ tailor-sdk profile delete [options] <name>
 | Argument | Description | Required |
 |----------|-------------|----------|
 | `name` | Profile name | Yes |
-
-**Options**
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 
 <!-- politty:command:profile delete:end -->

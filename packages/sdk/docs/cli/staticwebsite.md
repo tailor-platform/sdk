@@ -37,9 +37,6 @@ tailor-sdk staticwebsite deploy [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
@@ -62,9 +59,6 @@ tailor-sdk staticwebsite list [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
@@ -91,9 +85,6 @@ tailor-sdk staticwebsite get [options] <name>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--json` | `-j` | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |

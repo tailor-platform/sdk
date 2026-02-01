@@ -43,9 +43,6 @@ tailor-sdk tailordb truncate [options] [types]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -89,9 +86,6 @@ tailor-sdk tailordb migration generate [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--yes` | `-y` | Skip confirmation prompts | `false` |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
 | `--name <NAME>` | `-n` | Optional description for the migration | - |
@@ -119,9 +113,6 @@ tailor-sdk tailordb migration set [options] <number>
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -144,9 +135,6 @@ tailor-sdk tailordb migration status [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -188,9 +176,6 @@ tailor-sdk tailordb erd export [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -214,9 +199,6 @@ tailor-sdk tailordb erd serve [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
@@ -238,9 +220,6 @@ tailor-sdk tailordb erd deploy [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | - |
-| `--verbose` | - | Enable verbose logging | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
 | `--profile <PROFILE>` | `-p` | Workspace profile | - |
 | `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
