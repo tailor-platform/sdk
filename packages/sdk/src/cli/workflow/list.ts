@@ -52,7 +52,7 @@ export const listCommand = defineCommand({
       profile: args.profile,
     });
 
-    if (workflows.length === 0) {
+    if (workflows.length === 0 && !args.json) {
       logger.info("No workflows found.");
       return;
     }

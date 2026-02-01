@@ -34,7 +34,7 @@ export const listCommand = defineCommand({
       return [personalAccessTokens, nextPageToken];
     });
 
-    if (pats.length === 0) {
+    if (pats.length === 0 && !args.json) {
       logger.info(ml`
         No personal access tokens found.
         Please create a token using 'tailor-sdk user pat create' command.
@@ -42,10 +42,13 @@ export const listCommand = defineCommand({
       return;
     }
 
+    const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
     if (args.json) {
-      // JSON format with scopes as array
-      const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
       logger.out(patInfos);
+      return;
+    }
+
+    if (pats.length === 0) {
       return;
     }
 
