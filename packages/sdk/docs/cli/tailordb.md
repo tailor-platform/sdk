@@ -16,11 +16,11 @@ tailor-sdk tailordb [command]
 
 **Commands**
 
-| Command                                     | Description                                                    |
-| ------------------------------------------- | -------------------------------------------------------------- |
-| [`tailordb erd`](#tailordb-erd)             | Generate ERD artifacts for TailorDB namespaces using Liam ERD. |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                             |
-| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.            |
+| Command                                     | Description                                                           |
+| ------------------------------------------- | --------------------------------------------------------------------- |
+| [`tailordb erd`](#tailordb-erd)             | Generate ERD artifacts for TailorDB namespaces using Liam ERD. (beta) |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                                    |
+| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.                   |
 
 <!-- politty:command:tailordb:end -->
 <!-- politty:command:tailordb truncate:start -->
@@ -151,7 +151,7 @@ tailor-sdk tailordb migration status [options]
 
 ### tailordb erd
 
-Generate ERD artifacts for TailorDB namespaces using Liam ERD.
+Generate ERD artifacts for TailorDB namespaces using Liam ERD. (beta)
 
 **Usage**
 
@@ -161,11 +161,11 @@ tailor-sdk tailordb erd [command]
 
 **Commands**
 
-| Command                                       | Description                                               |
-| --------------------------------------------- | --------------------------------------------------------- |
-| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema.        |
-| [`tailordb erd serve`](#tailordb-erd-serve)   | Generate and serve ERD locally (liam build + serve dist). |
-| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s).      |
+| Command                                       | Description                                                      |
+| --------------------------------------------- | ---------------------------------------------------------------- |
+| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema.               |
+| [`tailordb erd serve`](#tailordb-erd-serve)   | Generate and serve ERD locally (liam build + serve dist). (beta) |
+| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s).             |
 
 <!-- politty:command:tailordb erd:end -->
 <!-- politty:command:tailordb erd export:start -->
@@ -196,7 +196,7 @@ tailor-sdk tailordb erd export [options]
 
 #### tailordb erd serve
 
-Generate and serve ERD locally (liam build + serve dist).
+Generate and serve ERD locally (liam build + serve dist). (beta)
 
 **Usage**
 
