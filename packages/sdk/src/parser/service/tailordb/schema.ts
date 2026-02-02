@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
+import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "./types";
 
 const TailorFieldTypeSchema = z.enum([
@@ -48,7 +49,7 @@ export const DBFieldMetadataSchema = z.object({
     .optional(),
 });
 
-const RelationTypeSchema = z.enum(["1-1", "oneToOne", "n-1", "manyToOne", "N-1", "keyOnly"]);
+const RelationTypeSchema = z.enum(relationTypesKeys);
 
 export const RawRelationConfigSchema = z.object({
   type: RelationTypeSchema,
