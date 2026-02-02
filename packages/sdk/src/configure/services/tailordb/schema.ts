@@ -773,11 +773,12 @@ export interface TailorDBType<
   description(description: string): TailorDBType<Fields, User>;
 
   /**
-   * Disable all GraphQL mutations (create, update, delete) for this type.
+   * Enable or disable all GraphQL mutations (create, update, delete) for this type.
+   * @param enabled - true to enable mutations (default), false to disable
    * Useful for audit logs or types only written by executors/workflows.
-   * Equivalent to: .features({ disableGqlOperations: { create: true, update: true, delete: true } })
+   * Equivalent to: .features({ gqlOperations: { create: enabled, update: enabled, delete: enabled } })
    */
-  disableGqlMutations(): TailorDBType<Fields, User>;
+  gqlMutations(enabled: boolean): TailorDBType<Fields, User>;
 
   /**
    * Pick specific fields from the type
@@ -902,14 +903,14 @@ function createTailorDBType<
       return this;
     },
 
-    disableGqlMutations() {
+    gqlMutations(enabled: boolean) {
       _settings = {
         ..._settings,
-        disableGqlOperations: {
-          ...(_settings.disableGqlOperations ?? {}),
-          create: true,
-          update: true,
-          delete: true,
+        gqlOperations: {
+          ...(_settings.gqlOperations ?? {}),
+          create: enabled,
+          update: enabled,
+          delete: enabled,
         },
       };
       return this;

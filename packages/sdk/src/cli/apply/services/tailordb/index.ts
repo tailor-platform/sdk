@@ -1210,7 +1210,7 @@ async function planTypes(
       const tailordbType = generateTailorDBTypeManifest(
         types[typeName],
         executorUsedTypes,
-        tailordb.config.disableGqlMutations,
+        tailordb.config.gqlMutations,
       );
       if (existingNameSet.has(typeName)) {
         changeSet.updates.push({
@@ -1266,13 +1266,13 @@ async function planTypes(
  * Generate a TailorDB type manifest from parsed type
  * @param {ParsedTailorDBType} type - Parsed TailorDB type
  * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
- * @param {boolean} [namespaceDisableGqlMutations] - Whether to disable GraphQL mutations for all types in the namespace
+ * @param {boolean} [namespaceGqlMutations] - Whether GraphQL mutations are enabled for all types in the namespace (default: true)
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 function generateTailorDBTypeManifest(
   type: ParsedTailorDBType,
   executorUsedTypes: ReadonlySet<string>,
-  namespaceDisableGqlMutations?: boolean,
+  namespaceGqlMutations?: boolean,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
   // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
   const pluralForm = inflection.camelize(type.pluralForm, true);
@@ -1303,16 +1303,19 @@ function generateTailorDBTypeManifest(
   if (executorUsedTypes.has(type.name)) {
     defaultSettings.publishRecordEvents = true;
   }
-  // Apply disableGqlOperations: type-level settings take precedence over namespace-level disableGqlMutations
-  if (type.settings?.disableGqlOperations) {
+  // Apply gqlOperations: type-level settings take precedence over namespace-level gqlMutations
+  // SDK uses true=enabled, false=disabled; backend proto uses true=disabled
+  // Default: all operations enabled (disableGqlOperations all false)
+  if (type.settings?.gqlOperations) {
+    const ops = type.settings.gqlOperations;
     defaultSettings.disableGqlOperations = {
-      create: type.settings.disableGqlOperations.create || false,
-      update: type.settings.disableGqlOperations.update || false,
-      delete: type.settings.disableGqlOperations.delete || false,
-      read: type.settings.disableGqlOperations.read || false,
+      create: ops.create === false,
+      update: ops.update === false,
+      delete: ops.delete === false,
+      read: ops.read === false,
     };
-  } else if (namespaceDisableGqlMutations) {
-    // Namespace-level disableGqlMutations: disable all mutations (create, update, delete)
+  } else if (namespaceGqlMutations === false) {
+    // Namespace-level gqlMutations: false means disable all mutations (create, update, delete)
     defaultSettings.disableGqlOperations = {
       create: true,
       update: true,

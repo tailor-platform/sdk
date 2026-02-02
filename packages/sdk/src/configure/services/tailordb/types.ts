@@ -95,11 +95,12 @@ export type TailorDBServiceConfig = {
   /** Migration configuration */
   migration?: TailorDBMigrationConfig;
   /**
-   * Disable all GraphQL mutations (create, update, delete) for types in this namespace.
+   * Enable/disable GraphQL mutations (create, update, delete) for all types in this namespace.
+   * Defaults to true (enabled). Set to false to disable mutations.
    * Useful for audit logs, historical records, or external data sources.
-   * Individual types can still override this with their own disableGqlOperations settings.
+   * Individual types can still override this with their own gqlOperations settings.
    */
-  disableGqlMutations?: boolean;
+  gqlMutations?: boolean;
 };
 
 export type TailorDBExternalConfig = { external: true };
@@ -115,17 +116,17 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
 };
 
 /**
- * Configuration to disable specific GraphQL operations for a TailorDB type.
- * All operations are enabled by default (undefined or false = enabled).
+ * Configuration for GraphQL operations on a TailorDB type.
+ * All operations are enabled by default (undefined or true = enabled, false = disabled).
  */
-export interface DisableGqlOperations {
-  /** Disable create mutation */
+export interface GqlOperations {
+  /** Enable create mutation (default: true) */
   create?: boolean;
-  /** Disable update mutation */
+  /** Enable update mutation (default: true) */
   update?: boolean;
-  /** Disable delete mutation */
+  /** Enable delete mutation (default: true) */
   delete?: boolean;
-  /** Disable all read queries (get, list, aggregation) */
+  /** Enable read queries - get, list, aggregation (default: true) */
   read?: boolean;
 }
 
@@ -133,6 +134,6 @@ export interface TypeFeatures {
   pluralForm?: string;
   aggregation?: true;
   bulkUpsert?: true;
-  /** Disable specific GraphQL operations for this type */
-  disableGqlOperations?: DisableGqlOperations;
+  /** Configure GraphQL operations for this type (true = enabled, false = disabled) */
+  gqlOperations?: GqlOperations;
 }

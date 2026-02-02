@@ -78,7 +78,7 @@ export interface SnapshotType {
   settings?: {
     aggregation?: boolean;
     bulkUpsert?: boolean;
-    disableGqlOperations?: {
+    gqlOperations?: {
       create?: boolean;
       update?: boolean;
       delete?: boolean;
@@ -256,19 +256,19 @@ function createSnapshotType(type: ParsedTailorDBType): SnapshotType {
     if (type.settings.bulkUpsert !== undefined) {
       snapshotType.settings.bulkUpsert = type.settings.bulkUpsert;
     }
-    if (type.settings.disableGqlOperations) {
-      snapshotType.settings.disableGqlOperations = {
-        ...(type.settings.disableGqlOperations.create !== undefined && {
-          create: type.settings.disableGqlOperations.create,
+    if (type.settings.gqlOperations) {
+      snapshotType.settings.gqlOperations = {
+        ...(type.settings.gqlOperations.create !== undefined && {
+          create: type.settings.gqlOperations.create,
         }),
-        ...(type.settings.disableGqlOperations.update !== undefined && {
-          update: type.settings.disableGqlOperations.update,
+        ...(type.settings.gqlOperations.update !== undefined && {
+          update: type.settings.gqlOperations.update,
         }),
-        ...(type.settings.disableGqlOperations.delete !== undefined && {
-          delete: type.settings.disableGqlOperations.delete,
+        ...(type.settings.gqlOperations.delete !== undefined && {
+          delete: type.settings.gqlOperations.delete,
         }),
-        ...(type.settings.disableGqlOperations.read !== undefined && {
-          read: type.settings.disableGqlOperations.read,
+        ...(type.settings.gqlOperations.read !== undefined && {
+          read: type.settings.gqlOperations.read,
         }),
       };
     }

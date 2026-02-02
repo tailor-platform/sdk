@@ -142,7 +142,7 @@ export interface TailorDBTypeMetadata {
     pluralForm?: string;
     aggregation?: boolean;
     bulkUpsert?: boolean;
-    disableGqlOperations?: {
+    gqlOperations?: {
       create?: boolean;
       update?: boolean;
       delete?: boolean;
