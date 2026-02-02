@@ -7,9 +7,9 @@ import {
   type LogObject,
   type PromptOptions,
 } from "consola";
+import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
 import { getBorderCharacters, table } from "table";
-import { humanizeRelativeTime } from "./format";
 
 /**
  * Error thrown when a prompt is attempted in a CI environment
@@ -84,6 +84,11 @@ export interface LogOptions {
   mode?: LogMode;
   /** Number of spaces to indent the entire line (default: 0) */
   indent?: number;
+}
+
+export interface OutOptions {
+  /** Fields to exclude from table display */
+  excludeFields?: string[];
 }
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
@@ -252,7 +257,7 @@ export const logger = {
     }
   },
 
-  out(data: string | object | object[]): void {
+  out(data: string | object | object[], options?: OutOptions): void {
     if (typeof data === "string") {
       process.stdout.write(data.endsWith("\n") ? data : data + "\n");
       return;
@@ -264,9 +269,25 @@ export const logger = {
       return;
     }
 
+    // Helper to format a value for table display
+    const formatValue = (value: unknown, pretty = false): string => {
+      if (value === null || value === undefined) return "N/A";
+      if (value instanceof Date) {
+        return formatDistanceToNowStrict(value, { addSuffix: true });
+      }
+      if (typeof value === "object") {
+        return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+      }
+      return String(value);
+    };
+
     if (!Array.isArray(data)) {
-      const t = table(Object.entries(data), {
-        singleLine: true,
+      const entries = Object.entries(data).filter(
+        ([key]) => !options?.excludeFields?.includes(key),
+      );
+      const formattedEntries = entries.map(([key, value]) => [key, formatValue(value, true)]);
+      const t = table(formattedEntries, {
+        singleLine: false,
         border: getBorderCharacters("norc"),
       });
       process.stdout.write(t);
@@ -277,18 +298,10 @@ export const logger = {
       return;
     }
 
-    const headers = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const allHeaders = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const headers = allHeaders.filter((h) => !options?.excludeFields?.includes(h));
     const rows = data.map((item) =>
-      headers.map((header) => {
-        const value = (item as Record<string, unknown>)[header];
-        if (value === null || value === undefined) {
-          return "";
-        }
-        if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
-          return humanizeRelativeTime(value);
-        }
-        return String(value);
-      }),
+      headers.map((header) => formatValue((item as Record<string, unknown>)[header])),
     );
 
     const t = table([headers, ...rows], {

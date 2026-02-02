@@ -17,15 +17,15 @@ export interface SecretListOptions {
 
 export interface SecretInfo {
   name: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 function secretInfo(secret: SecretManagerSecret): SecretInfo {
   return {
     name: secret.name,
-    createdAt: secret.createTime ? timestampDate(secret.createTime).toISOString() : "N/A",
-    updatedAt: secret.updateTime ? timestampDate(secret.updateTime).toISOString() : "N/A",
+    createdAt: secret.createTime ? timestampDate(secret.createTime) : null,
+    updatedAt: secret.updateTime ? timestampDate(secret.updateTime) : null,
   };
 }
 

@@ -6,19 +6,19 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   region: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
-const formatTimestamp = (timestamp: Timestamp | undefined): string => {
+const formatTimestamp = (timestamp: Timestamp | undefined): Date | null => {
   if (!timestamp) {
-    return "N/A";
+    return null;
   }
   const date = timestampDate(timestamp);
   if (Number.isNaN(date.getTime())) {
-    return "N/A";
+    return null;
   }
-  return date.toISOString();
+  return date;
 };
 
 export const workspaceInfo = (workspace: Workspace): WorkspaceInfo => {
