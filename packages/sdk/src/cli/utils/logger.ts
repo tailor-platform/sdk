@@ -7,9 +7,9 @@ import {
   type LogObject,
   type PromptOptions,
 } from "consola";
-import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
 import { getBorderCharacters, table } from "table";
+import { humanizeRelativeTime } from "./format";
 
 /**
  * Error thrown when a prompt is attempted in a CI environment
@@ -233,11 +233,7 @@ export const logger = {
           return "";
         }
         if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
-          const date = new Date(value);
-          if (Number.isNaN(date.getTime())) {
-            return value;
-          }
-          return formatDistanceToNowStrict(date, { addSuffix: true });
+          return humanizeRelativeTime(value);
         }
         return String(value);
       }),
