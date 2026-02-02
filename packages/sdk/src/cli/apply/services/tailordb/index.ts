@@ -44,7 +44,7 @@ import {
   type StandardTailorTypeGqlPermission,
   type StandardTailorTypePermission,
   type OperatorFieldConfig,
-  type TailorDBType as ParsedTailorDBType,
+  type TailorDBType,
 } from "@/parser/service/tailordb/types";
 import { createChangeSet } from "..";
 import { fetchAll, type OperatorClient } from "../../../client";
@@ -236,7 +236,7 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
  * Validate migration files and detect pending migrations
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
- * @param {ReadonlyMap<string, Record<string, ParsedTailorDBType>>} typesByNamespace - Types by namespace
+ * @param {ReadonlyMap<string, Record<string, TailorDBType>>} typesByNamespace - Types by namespace
  * @param {LoadedConfig} config - Loaded application config (includes path)
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
  * @returns {Promise<PendingMigration[]>} List of pending migrations
@@ -244,7 +244,7 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
 async function validateAndDetectMigrations(
   client: OperatorClient,
   workspaceId: string,
-  typesByNamespace: ReadonlyMap<string, Record<string, ParsedTailorDBType>>,
+  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBType>>,
   config: LoadedConfig,
   noSchemaCheck: boolean,
 ): Promise<PendingMigration[]> {
@@ -350,7 +350,7 @@ export async function applyTailorDB(
 
     // Validate and detect migrations
     // Build types by namespace map
-    const typesByNamespace = new Map<string, Record<string, ParsedTailorDBType>>();
+    const typesByNamespace = new Map<string, Record<string, TailorDBType>>();
     for (const tailordb of migrationContext.application.tailorDBServices) {
       const types = tailordb.getTypes();
       if (types) {
@@ -948,7 +948,7 @@ export async function planTailorDB(context: PlanContext) {
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
 
   // Check for TAILOR_INTERNAL_APPLY_MIGRATION_VERSION and build filtered types if set (only for non-removal)
-  let filteredTypesByNamespace: Map<string, Record<string, ParsedTailorDBType>> | undefined;
+  let filteredTypesByNamespace: Map<string, Record<string, TailorDBType>> | undefined;
   let skipSchemaCheck = false;
   if (!forRemoval) {
     const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
@@ -1165,7 +1165,7 @@ async function planTypes(
   tailordbs: ReadonlyArray<TailorDBService>,
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
-  filteredTypesByNamespace?: Map<string, Record<string, ParsedTailorDBType>>,
+  filteredTypesByNamespace?: Map<string, Record<string, TailorDBType>>,
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
 
@@ -1260,12 +1260,12 @@ async function planTypes(
 // This will need refactoring later.
 /**
  * Generate a TailorDB type manifest from parsed type
- * @param {ParsedTailorDBType} type - Parsed TailorDB type
+ * @param {TailorDBType} type - Parsed TailorDB type
  * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 function generateTailorDBTypeManifest(
-  type: ParsedTailorDBType,
+  type: TailorDBType,
   executorUsedTypes: ReadonlySet<string>,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
   // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
@@ -1812,12 +1812,12 @@ interface MigrationCheckResult {
 
 /**
  * Check if there are schema differences between migration snapshots and local definitions
- * @param {ReadonlyMap<string, Record<string, ParsedTailorDBType>>} typesByNamespace - Types by namespace
+ * @param {ReadonlyMap<string, Record<string, TailorDBType>>} typesByNamespace - Types by namespace
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
  * @returns {Promise<MigrationCheckResult[]>} Results for each namespace
  */
 async function checkMigrationDiffs(
-  typesByNamespace: ReadonlyMap<string, Record<string, ParsedTailorDBType>>,
+  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBType>>,
   namespacesWithMigrations: NamespaceWithMigrations[],
 ): Promise<MigrationCheckResult[]> {
   const results: MigrationCheckResult[] = [];
