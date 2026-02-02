@@ -547,6 +547,11 @@ export declare type ListWorkflowExecutionsRequest = Message<"tailor.v1.ListWorkf
   workspaceId: string;
 
   /**
+   * @generated from field: string workflow_name = 6;
+   */
+  workflowName: string;
+
+  /**
    * @generated from field: string page_token = 2;
    */
   pageToken: string;

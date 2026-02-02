@@ -1389,3 +1389,141 @@ describe("TailorDBType files method tests", () => {
     expectTypeOf<{ avatar?: never }>().not.toExtend<FilesParam>();
   });
 });
+
+describe("TailorDBType disableGqlOperations tests", () => {
+  it("disableGqlOperations can be set via features()", () => {
+    const orderType = db
+      .type("Order", {
+        name: db.string(),
+      })
+      .features({
+        disableGqlOperations: {
+          delete: true,
+        },
+      });
+
+    expect(orderType.metadata.settings?.disableGqlOperations?.delete).toBe(true);
+    expect(orderType.metadata.settings?.disableGqlOperations?.create).toBeUndefined();
+    expect(orderType.metadata.settings?.disableGqlOperations?.update).toBeUndefined();
+    expect(orderType.metadata.settings?.disableGqlOperations?.read).toBeUndefined();
+  });
+
+  it("disableGqlOperations can disable multiple operations", () => {
+    const archiveType = db
+      .type("Archive", {
+        data: db.string(),
+      })
+      .features({
+        disableGqlOperations: {
+          create: true,
+          update: true,
+          delete: true,
+        },
+      });
+
+    expect(archiveType.metadata.settings?.disableGqlOperations?.create).toBe(true);
+    expect(archiveType.metadata.settings?.disableGqlOperations?.update).toBe(true);
+    expect(archiveType.metadata.settings?.disableGqlOperations?.delete).toBe(true);
+    expect(archiveType.metadata.settings?.disableGqlOperations?.read).toBeUndefined();
+  });
+
+  it("disableGqlOperations can disable read operations", () => {
+    const secretType = db
+      .type("Secret", {
+        value: db.string(),
+      })
+      .features({
+        disableGqlOperations: {
+          read: true,
+        },
+      });
+
+    expect(secretType.metadata.settings?.disableGqlOperations?.read).toBe(true);
+  });
+
+  it("disableGqlOperations works with other features", () => {
+    const logType = db
+      .type("Log", {
+        message: db.string(),
+      })
+      .features({
+        aggregation: true,
+        bulkUpsert: true,
+        disableGqlOperations: {
+          delete: true,
+        },
+      });
+
+    expect(logType.metadata.settings?.aggregation).toBe(true);
+    expect(logType.metadata.settings?.bulkUpsert).toBe(true);
+    expect(logType.metadata.settings?.disableGqlOperations?.delete).toBe(true);
+  });
+});
+
+describe("TailorDBType disableGqlMutations() method tests", () => {
+  it("disableGqlMutations() disables create, update, delete mutations", () => {
+    const auditLogType = db
+      .type("AuditLog", {
+        action: db.string(),
+        timestamp: db.datetime(),
+      })
+      .disableGqlMutations();
+
+    expect(auditLogType.metadata.settings?.disableGqlOperations?.create).toBe(true);
+    expect(auditLogType.metadata.settings?.disableGqlOperations?.update).toBe(true);
+    expect(auditLogType.metadata.settings?.disableGqlOperations?.delete).toBe(true);
+    expect(auditLogType.metadata.settings?.disableGqlOperations?.read).toBeUndefined();
+  });
+
+  it("disableGqlMutations() can be chained with features()", () => {
+    const archiveType = db
+      .type("Archive", {
+        data: db.string(),
+      })
+      .disableGqlMutations()
+      .features({ aggregation: true });
+
+    expect(archiveType.metadata.settings?.aggregation).toBe(true);
+    expect(archiveType.metadata.settings?.disableGqlOperations?.create).toBe(true);
+    expect(archiveType.metadata.settings?.disableGqlOperations?.update).toBe(true);
+    expect(archiveType.metadata.settings?.disableGqlOperations?.delete).toBe(true);
+  });
+
+  it("features() after disableGqlMutations() preserves disableGqlOperations", () => {
+    const logType = db
+      .type("Log", {
+        message: db.string(),
+      })
+      .disableGqlMutations()
+      .features({ bulkUpsert: true });
+
+    expect(logType.metadata.settings?.bulkUpsert).toBe(true);
+    expect(logType.metadata.settings?.disableGqlOperations?.create).toBe(true);
+    expect(logType.metadata.settings?.disableGqlOperations?.update).toBe(true);
+    expect(logType.metadata.settings?.disableGqlOperations?.delete).toBe(true);
+  });
+
+  it("disableGqlMutations() does not affect type inference", () => {
+    const mutationsDisabledType = db
+      .type("MutationsDisabled", {
+        name: db.string(),
+        value: db.int({ optional: true }),
+      })
+      .disableGqlMutations();
+
+    expectTypeOf<output<typeof mutationsDisabledType>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+      value?: number | null;
+    }>();
+  });
+
+  it("disableGqlMutations() works with plural form", () => {
+    const eventType = db.type(["Event", "Events"], { name: db.string() }).disableGqlMutations();
+
+    expect(eventType.metadata.settings?.pluralForm).toBe("Events");
+    expect(eventType.metadata.settings?.disableGqlOperations?.create).toBe(true);
+    expect(eventType.metadata.settings?.disableGqlOperations?.update).toBe(true);
+    expect(eventType.metadata.settings?.disableGqlOperations?.delete).toBe(true);
+  });
+});

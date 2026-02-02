@@ -78,6 +78,12 @@ export interface SnapshotType {
   settings?: {
     aggregation?: boolean;
     bulkUpsert?: boolean;
+    disableGqlOperations?: {
+      create?: boolean;
+      update?: boolean;
+      delete?: boolean;
+      read?: boolean;
+    };
   };
   indexes?: Record<string, SnapshotIndexConfig>;
   files?: Record<string, string>;
@@ -249,6 +255,22 @@ function createSnapshotType(type: ParsedTailorDBType): SnapshotType {
     }
     if (type.settings.bulkUpsert !== undefined) {
       snapshotType.settings.bulkUpsert = type.settings.bulkUpsert;
+    }
+    if (type.settings.disableGqlOperations) {
+      snapshotType.settings.disableGqlOperations = {
+        ...(type.settings.disableGqlOperations.create !== undefined && {
+          create: type.settings.disableGqlOperations.create,
+        }),
+        ...(type.settings.disableGqlOperations.update !== undefined && {
+          update: type.settings.disableGqlOperations.update,
+        }),
+        ...(type.settings.disableGqlOperations.delete !== undefined && {
+          delete: type.settings.disableGqlOperations.delete,
+        }),
+        ...(type.settings.disableGqlOperations.read !== undefined && {
+          read: type.settings.disableGqlOperations.read,
+        }),
+      };
     }
   }
 

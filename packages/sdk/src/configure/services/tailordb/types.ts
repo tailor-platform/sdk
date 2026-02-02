@@ -94,6 +94,12 @@ export type TailorDBServiceConfig = {
   erdSite?: string;
   /** Migration configuration */
   migration?: TailorDBMigrationConfig;
+  /**
+   * Disable all GraphQL mutations (create, update, delete) for types in this namespace.
+   * Useful for audit logs, historical records, or external data sources.
+   * Individual types can still override this with their own disableGqlOperations settings.
+   */
+  disableGqlMutations?: boolean;
 };
 
 export type TailorDBExternalConfig = { external: true };
@@ -108,8 +114,25 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   name?: string;
 };
 
+/**
+ * Configuration to disable specific GraphQL operations for a TailorDB type.
+ * All operations are enabled by default (undefined or false = enabled).
+ */
+export interface DisableGqlOperations {
+  /** Disable create mutation */
+  create?: boolean;
+  /** Disable update mutation */
+  update?: boolean;
+  /** Disable delete mutation */
+  delete?: boolean;
+  /** Disable all read queries (get, list, aggregation) */
+  read?: boolean;
+}
+
 export interface TypeFeatures {
   pluralForm?: string;
   aggregation?: true;
   bulkUpsert?: true;
+  /** Disable specific GraphQL operations for this type */
+  disableGqlOperations?: DisableGqlOperations;
 }

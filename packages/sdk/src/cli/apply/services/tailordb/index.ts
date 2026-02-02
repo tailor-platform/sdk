@@ -1207,7 +1207,11 @@ async function planTypes(
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.getTypes();
 
     for (const typeName of Object.keys(types)) {
-      const tailordbType = generateTailorDBTypeManifest(types[typeName], executorUsedTypes);
+      const tailordbType = generateTailorDBTypeManifest(
+        types[typeName],
+        executorUsedTypes,
+        tailordb.config.disableGqlMutations,
+      );
       if (existingNameSet.has(typeName)) {
         changeSet.updates.push({
           name: typeName,
@@ -1262,16 +1266,32 @@ async function planTypes(
  * Generate a TailorDB type manifest from parsed type
  * @param {ParsedTailorDBType} type - Parsed TailorDB type
  * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
+ * @param {boolean} [namespaceDisableGqlMutations] - Whether to disable GraphQL mutations for all types in the namespace
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 function generateTailorDBTypeManifest(
   type: ParsedTailorDBType,
   executorUsedTypes: ReadonlySet<string>,
+  namespaceDisableGqlMutations?: boolean,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
   // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
   const pluralForm = inflection.camelize(type.pluralForm, true);
 
-  const defaultSettings = {
+  const defaultSettings: {
+    aggregation: boolean;
+    bulkUpsert: boolean;
+    draft: boolean;
+    defaultQueryLimitSize: bigint;
+    maxBulkUpsertSize: bigint;
+    pluralForm: string;
+    publishRecordEvents: boolean;
+    disableGqlOperations?: {
+      create: boolean;
+      update: boolean;
+      delete: boolean;
+      read: boolean;
+    };
+  } = {
     aggregation: type.settings?.aggregation || false,
     bulkUpsert: type.settings?.bulkUpsert || false,
     draft: false,
@@ -1282,6 +1302,23 @@ function generateTailorDBTypeManifest(
   };
   if (executorUsedTypes.has(type.name)) {
     defaultSettings.publishRecordEvents = true;
+  }
+  // Apply disableGqlOperations: type-level settings take precedence over namespace-level disableGqlMutations
+  if (type.settings?.disableGqlOperations) {
+    defaultSettings.disableGqlOperations = {
+      create: type.settings.disableGqlOperations.create || false,
+      update: type.settings.disableGqlOperations.update || false,
+      delete: type.settings.disableGqlOperations.delete || false,
+      read: type.settings.disableGqlOperations.read || false,
+    };
+  } else if (namespaceDisableGqlMutations) {
+    // Namespace-level disableGqlMutations: disable all mutations (create, update, delete)
+    defaultSettings.disableGqlOperations = {
+      create: true,
+      update: true,
+      delete: true,
+      read: false,
+    };
   }
 
   const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};

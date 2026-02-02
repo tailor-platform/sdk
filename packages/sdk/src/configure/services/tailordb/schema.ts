@@ -773,6 +773,13 @@ export interface TailorDBType<
   description(description: string): TailorDBType<Fields, User>;
 
   /**
+   * Disable all GraphQL mutations (create, update, delete) for this type.
+   * Useful for audit logs or types only written by executors/workflows.
+   * Equivalent to: .features({ disableGqlOperations: { create: true, update: true, delete: true } })
+   */
+  disableGqlMutations(): TailorDBType<Fields, User>;
+
+  /**
    * Pick specific fields from the type
    */
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
@@ -892,6 +899,19 @@ function createTailorDBType<
 
     features(features: Omit<TypeFeatures, "pluralForm">) {
       _settings = { ..._settings, ...features };
+      return this;
+    },
+
+    disableGqlMutations() {
+      _settings = {
+        ..._settings,
+        disableGqlOperations: {
+          ...(_settings.disableGqlOperations ?? {}),
+          create: true,
+          update: true,
+          delete: true,
+        },
+      };
       return this;
     },
 
