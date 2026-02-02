@@ -3,6 +3,7 @@
 Commands for managing and deploying static websites.
 
 <!-- politty:command:staticwebsite:start -->
+
 ## staticwebsite
 
 Manage static websites in your workspace.
@@ -15,14 +16,15 @@ tailor-sdk staticwebsite [command]
 
 **Commands**
 
-| Command | Description |
-|---------|-------------|
+| Command                                         | Description                                           |
+| ----------------------------------------------- | ----------------------------------------------------- |
 | [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website from a local build directory. |
-| [`staticwebsite get`](#staticwebsite-get) | Get details of a specific static website. |
-| [`staticwebsite list`](#staticwebsite-list) | List all static websites in a workspace. |
+| [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
+| [`staticwebsite list`](#staticwebsite-list)     | List all static websites in a workspace.              |
 
 <!-- politty:command:staticwebsite:end -->
 <!-- politty:command:staticwebsite deploy:start -->
+
 ### staticwebsite deploy
 
 Deploy a static website from a local build directory.
@@ -35,16 +37,17 @@ tailor-sdk staticwebsite deploy [options]
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--json` | `-j` | Output as JSON | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
-| `--name <NAME>` | `-n` | Static website name | - |
-| `--dir <DIR>` | `-d` | Path to the static website files | - |
+| Option                          | Alias | Description                      | Default |
+| ------------------------------- | ----- | -------------------------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON                   | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                | -       |
+| `--name <NAME>`                 | `-n`  | Static website name              | -       |
+| `--dir <DIR>`                   | `-d`  | Path to the static website files | -       |
 
 <!-- politty:command:staticwebsite deploy:end -->
 <!-- politty:command:staticwebsite list:start -->
+
 ### staticwebsite list
 
 List all static websites in a workspace.
@@ -57,14 +60,15 @@ tailor-sdk staticwebsite list [options]
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--json` | `-j` | Output as JSON | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| Option                          | Alias | Description       | Default |
+| ------------------------------- | ----- | ----------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
 
 <!-- politty:command:staticwebsite list:end -->
 <!-- politty:command:staticwebsite get:start -->
+
 ### staticwebsite get
 
 Get details of a specific static website.
@@ -77,17 +81,17 @@ tailor-sdk staticwebsite get [options] <name>
 
 **Arguments**
 
-| Argument | Description | Required |
-|----------|-------------|----------|
-| `name` | Static website name | Yes |
+| Argument | Description         | Required |
+| -------- | ------------------- | -------- |
+| `name`   | Static website name | Yes      |
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--json` | `-j` | Output as JSON | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
+| Option                          | Alias | Description       | Default |
+| ------------------------------- | ----- | ----------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
 
 <!-- politty:command:staticwebsite get:end -->
 

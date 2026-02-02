@@ -3,6 +3,7 @@
 Commands for managing TailorDB tables, data, and schema migrations.
 
 <!-- politty:command:tailordb:start -->
+
 ## tailordb
 
 Manage TailorDB tables and data.
@@ -15,14 +16,15 @@ tailor-sdk tailordb [command]
 
 **Commands**
 
-| Command | Description |
-|---------|-------------|
-| [`tailordb erd`](#tailordb-erd) | Generate ERD artifacts for TailorDB namespaces using Liam ERD. |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations. |
-| [`tailordb truncate`](#tailordb-truncate) | Truncate (delete all records from) TailorDB tables. |
+| Command                                     | Description                                                    |
+| ------------------------------------------- | -------------------------------------------------------------- |
+| [`tailordb erd`](#tailordb-erd)             | Generate ERD artifacts for TailorDB namespaces using Liam ERD. |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                             |
+| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.            |
 
 <!-- politty:command:tailordb:end -->
 <!-- politty:command:tailordb truncate:start -->
+
 ### tailordb truncate
 
 Truncate (delete all records from) TailorDB tables.
@@ -35,23 +37,24 @@ tailor-sdk tailordb truncate [options] [types]
 
 **Arguments**
 
-| Argument | Description | Required |
-|----------|-------------|----------|
-| `types` | Type names to truncate | No |
+| Argument | Description            | Required |
+| -------- | ---------------------- | -------- |
+| `types`  | Type names to truncate | No       |
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
-| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
-| `--yes` | `-y` | Skip confirmation prompts | `false` |
-| `--all` | `-a` | Truncate all tables in all namespaces | `false` |
-| `--namespace <NAMESPACE>` | `-n` | Truncate all tables in specified namespace | - |
+| Option                          | Alias | Description                                | Default              |
+| ------------------------------- | ----- | ------------------------------------------ | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                    | `"tailor.config.ts"` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                  | `false`              |
+| `--all`                         | `-a`  | Truncate all tables in all namespaces      | `false`              |
+| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace | -                    |
 
 <!-- politty:command:tailordb truncate:end -->
 <!-- politty:command:tailordb migration:start -->
+
 ### tailordb migration
 
 Manage TailorDB schema migrations.
@@ -64,14 +67,15 @@ tailor-sdk tailordb migration [command]
 
 **Commands**
 
-| Command | Description |
-|---------|-------------|
+| Command                                                       | Description                                                                                                               |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
-| [`tailordb migration set`](#tailordb-migration-set) | Set migration checkpoint to a specific number. |
-| [`tailordb migration status`](#tailordb-migration-status) | Show the current migration status for TailorDB namespaces, including applied and pending migrations. |
+| [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
+| [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 
 <!-- politty:command:tailordb migration:end -->
 <!-- politty:command:tailordb migration generate:start -->
+
 #### tailordb migration generate
 
 Generate migration files by detecting schema differences between current local types and the previous migration snapshot.
@@ -84,15 +88,16 @@ tailor-sdk tailordb migration generate [options]
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--yes` | `-y` | Skip confirmation prompts | `false` |
-| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
-| `--name <NAME>` | `-n` | Optional description for the migration | - |
-| `--init` | - | Delete existing migrations and start fresh | `false` |
+| Option              | Alias | Description                                | Default              |
+| ------------------- | ----- | ------------------------------------------ | -------------------- |
+| `--yes`             | `-y`  | Skip confirmation prompts                  | `false`              |
+| `--config <CONFIG>` | `-c`  | Path to SDK config file                    | `"tailor.config.ts"` |
+| `--name <NAME>`     | `-n`  | Optional description for the migration     | -                    |
+| `--init`            | -     | Delete existing migrations and start fresh | `false`              |
 
 <!-- politty:command:tailordb migration generate:end -->
 <!-- politty:command:tailordb migration set:start -->
+
 #### tailordb migration set
 
 Set migration checkpoint to a specific number.
@@ -105,22 +110,23 @@ tailor-sdk tailordb migration set [options] <number>
 
 **Arguments**
 
-| Argument | Description | Required |
-|----------|-------------|----------|
-| `number` | Migration number to set (e.g., 0001 or 1) | Yes |
+| Argument | Description                               | Required |
+| -------- | ----------------------------------------- | -------- |
+| `number` | Migration number to set (e.g., 0001 or 1) | Yes      |
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
-| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
-| `--yes` | `-y` | Skip confirmation prompts | `false` |
-| `--namespace <NAMESPACE>` | `-n` | Target TailorDB namespace (required if multiple namespaces exist) | - |
+| Option                          | Alias | Description                                                       | Default              |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | `"tailor.config.ts"` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | `false`              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | -                    |
 
 <!-- politty:command:tailordb migration set:end -->
 <!-- politty:command:tailordb migration status:start -->
+
 #### tailordb migration status
 
 Show the current migration status for TailorDB namespaces, including applied and pending migrations.
@@ -133,15 +139,16 @@ tailor-sdk tailordb migration status [options]
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
-| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
-| `--namespace <NAMESPACE>` | `-n` | Target TailorDB namespace (shows all namespaces if not specified) | - |
+| Option                          | Alias | Description                                                       | Default              |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | `"tailor.config.ts"` |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | -                    |
 
 <!-- politty:command:tailordb migration status:end -->
 <!-- politty:command:tailordb erd:start -->
+
 ### tailordb erd
 
 Generate ERD artifacts for TailorDB namespaces using Liam ERD.
@@ -154,14 +161,15 @@ tailor-sdk tailordb erd [command]
 
 **Commands**
 
-| Command | Description |
-|---------|-------------|
-| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema. |
-| [`tailordb erd serve`](#tailordb-erd-serve) | Generate and serve ERD locally (liam build + serve dist). |
-| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s). |
+| Command                                       | Description                                               |
+| --------------------------------------------- | --------------------------------------------------------- |
+| [`tailordb erd export`](#tailordb-erd-export) | Export Liam ERD dist from applied TailorDB schema.        |
+| [`tailordb erd serve`](#tailordb-erd-serve)   | Generate and serve ERD locally (liam build + serve dist). |
+| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s).      |
 
 <!-- politty:command:tailordb erd:end -->
 <!-- politty:command:tailordb erd export:start -->
+
 #### tailordb erd export
 
 Export Liam ERD dist from applied TailorDB schema.
@@ -174,17 +182,18 @@ tailor-sdk tailordb erd export [options]
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
-| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
-| `--json` | `-j` | Output as JSON | `false` |
-| `--namespace <NAMESPACE>` | `-n` | TailorDB namespace name (optional if only one namespace is defined in config) | - |
-| `--output <OUTPUT>` | `-o` | Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json) | `".tailor-sdk/erd"` |
+| Option                          | Alias | Description                                                                                        | Default              |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                  | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                            | `"tailor.config.ts"` |
+| `--json`                        | `-j`  | Output as JSON                                                                                     | `false`              |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                      | -                    |
+| `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json) | `".tailor-sdk/erd"`  |
 
 <!-- politty:command:tailordb erd export:end -->
 <!-- politty:command:tailordb erd serve:start -->
+
 #### tailordb erd serve
 
 Generate and serve ERD locally (liam build + serve dist).
@@ -197,15 +206,16 @@ tailor-sdk tailordb erd serve [options]
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
-| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
-| `--namespace <NAMESPACE>` | `-n` | TailorDB namespace name (uses first namespace in config if not specified) | - |
+| Option                          | Alias | Description                                                               | Default              |
+| ------------------------------- | ----- | ------------------------------------------------------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                              | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                         | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                   | `"tailor.config.ts"` |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | -                    |
 
 <!-- politty:command:tailordb erd serve:end -->
 <!-- politty:command:tailordb erd deploy:start -->
+
 #### tailordb erd deploy
 
 Deploy ERD static website for TailorDB namespace(s).
@@ -218,13 +228,13 @@ tailor-sdk tailordb erd deploy [options]
 
 **Options**
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--workspace-id <WORKSPACE_ID>` | `-w` | Workspace ID | - |
-| `--profile <PROFILE>` | `-p` | Workspace profile | - |
-| `--config <CONFIG>` | `-c` | Path to SDK config file | `"tailor.config.ts"` |
-| `--json` | `-j` | Output as JSON | `false` |
-| `--namespace <NAMESPACE>` | `-n` | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | - |
+| Option                          | Alias | Description                                                                         | Default              |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                             | `"tailor.config.ts"` |
+| `--json`                        | `-j`  | Output as JSON                                                                      | `false`              |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | -                    |
 
 <!-- politty:command:tailordb erd deploy:end -->
 

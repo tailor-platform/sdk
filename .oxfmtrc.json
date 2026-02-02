@@ -23,7 +23,6 @@
     "example/seed/",
     "packages/tailor-proto/",
     "packages/create-sdk/templates/inventory-management/src/generated/",
-    "packages/create-sdk/templates/testing/src/generated/",
-    "packages/sdk/docs/cli/"
+    "packages/create-sdk/templates/testing/src/generated/"
   ]
 }
