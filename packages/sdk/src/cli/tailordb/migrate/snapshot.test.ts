@@ -25,8 +25,8 @@ import {
   type SchemaSnapshot,
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
-import type { ParsedTailorDBType, ParsedField } from "@/parser/service/tailordb/types";
-import type { TailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { ParsedField, TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
   const migDir = path.join(baseDir, formatMigrationNumber(num));
@@ -47,15 +47,15 @@ function writeDiffToDir(baseDir: string, num: number, content: MigrationDiff | o
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations__");
 
 /**
- * Create a minimal ParsedTailorDBType for testing
+ * Create a minimal TailorDBType for testing
  * @param {string} name - Type name
  * @param {Record<string, { name: string; config: Partial<ParsedField["config"]> }>} fields - Field definitions
- * @returns {ParsedTailorDBType} Mock type with required properties filled
+ * @returns {TailorDBType} Mock type with required properties filled
  */
 function createMockType(
   name: string,
   fields: Record<string, { name: string; config: Partial<ParsedField["config"]> }>,
-): ParsedTailorDBType {
+): TailorDBType {
   const parsedFields: Record<string, ParsedField> = {};
   for (const [key, field] of Object.entries(fields)) {
     parsedFields[key] = {
@@ -104,7 +104,7 @@ describe("snapshot", () => {
   // ==========================================================================
   describe("createSnapshotFromLocalTypes", () => {
     it("creates snapshot with correct structure", () => {
-      const mockTypes: Record<string, ParsedTailorDBType> = {
+      const mockTypes: Record<string, TailorDBType> = {
         User: createMockType("User", {
           id: { name: "id", config: { type: "uuid", required: true } },
           name: { name: "name", config: { type: "string", required: true } },
@@ -123,7 +123,7 @@ describe("snapshot", () => {
     });
 
     it("captures field attributes", () => {
-      const mockTypes: Record<string, ParsedTailorDBType> = {
+      const mockTypes: Record<string, TailorDBType> = {
         Product: createMockType("Product", {
           id: { name: "id", config: { type: "uuid", required: true } },
           sku: {
@@ -145,7 +145,7 @@ describe("snapshot", () => {
     });
 
     it("captures foreign key relationships", () => {
-      const mockTypes: Record<string, ParsedTailorDBType> = {
+      const mockTypes: Record<string, TailorDBType> = {
         Order: createMockType("Order", {
           id: { name: "id", config: { type: "uuid", required: true } },
           customerId: {
@@ -169,7 +169,7 @@ describe("snapshot", () => {
     });
 
     it("captures enum fields with allowedValues", () => {
-      const mockTypes: Record<string, ParsedTailorDBType> = {
+      const mockTypes: Record<string, TailorDBType> = {
         Task: createMockType("Task", {
           id: { name: "id", config: { type: "uuid", required: true } },
           status: {
@@ -194,7 +194,7 @@ describe("snapshot", () => {
     });
 
     it("handles empty types object", () => {
-      const mockTypes: Record<string, ParsedTailorDBType> = {};
+      const mockTypes: Record<string, TailorDBType> = {};
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
       expect(snapshot.version).toBe(SCHEMA_SNAPSHOT_VERSION);
@@ -626,7 +626,7 @@ describe("snapshot", () => {
         },
       };
 
-      const localTypes: Record<string, ParsedTailorDBType> = {
+      const localTypes: Record<string, TailorDBType> = {
         User: createMockType("User", {
           id: { name: "id", config: { type: "uuid", required: true } },
           email: { name: "email", config: { type: "string", required: false } },
@@ -1291,7 +1291,7 @@ describe("snapshot", () => {
      * Create a mock TailorDBType for testing
      * @param {string} name - Type name
      * @param {Record<string, object>} fields - Field configurations
-     * @returns {TailorDBType} Mock TailorDBType
+     * @returns {ProtoTailorDBType} Mock TailorDBType
      */
     function createMockRemoteType(
       name: string,
@@ -1307,7 +1307,7 @@ describe("snapshot", () => {
           allowedValues?: { value: string }[];
         }
       >,
-    ): TailorDBType {
+    ): ProtoTailorDBType {
       const fieldConfigs: Record<string, unknown> = {};
       for (const [fieldName, config] of Object.entries(fields)) {
         fieldConfigs[fieldName] = {
@@ -1326,7 +1326,7 @@ describe("snapshot", () => {
         schema: {
           fields: fieldConfigs,
         },
-      } as unknown as TailorDBType;
+      } as unknown as ProtoTailorDBType;
     }
 
     it("returns empty array when remote and snapshot match exactly", () => {

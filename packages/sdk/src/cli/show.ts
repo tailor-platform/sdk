@@ -88,7 +88,7 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
 
 export const showCommand = defineCommand({
   name: "show",
-  description: "Show applied application information",
+  description: "Show information about the deployed application.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

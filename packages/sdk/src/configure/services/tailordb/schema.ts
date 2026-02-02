@@ -64,6 +64,10 @@ function isRelationSelfConfig(
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyDBField = TailorDBField<any, any>;
 
+// Helper alias
+// oxlint-disable-next-line no-explicit-any
+export type TailorAnyDBType = TailorDBType<any, any>;
+
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
@@ -696,10 +700,6 @@ function object<
     FieldOutput<InferFieldsOutput<F>, Opt>
   >;
 }
-
-// Helper alias
-// oxlint-disable-next-line no-explicit-any
-export type TailorAnyDBType = TailorDBType<any, any>;
 
 /**
  * TailorDBType interface representing a database type definition with fields, permissions, and settings.

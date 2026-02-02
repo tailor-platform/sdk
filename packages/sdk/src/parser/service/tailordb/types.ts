@@ -1,17 +1,58 @@
 import type { RelationType } from "./relation";
-import type { TailorTypePermission, TailorTypeGqlPermission } from "@/configure/services/tailordb";
+import type { DBFieldMetadataSchema, RawRelationConfigSchema, TailorDBTypeSchema } from "./schema";
+import type {
+  GqlOperationsConfig,
+  TailorTypeGqlPermission,
+  TailorTypePermission,
+} from "@/configure/services/tailordb";
 import type { ValueOperand } from "@/parser/service/auth/types";
+import type { z } from "zod";
 
 export type { RelationType } from "./relation";
 export type {
   TailorAnyDBField,
   TailorDBField,
-  TailorDBType,
   DBFieldMetadata,
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
 } from "@/configure/services/tailordb";
+
+/**
+ * Migration configuration for TailorDB
+ */
+export type TailorDBMigrationConfig = {
+  /** Directory path for migration files */
+  directory: string;
+  /** Machine user name for executing migration scripts (must be defined in auth.machineUsers) */
+  machineUser?: string;
+};
+
+export type TailorDBServiceConfig = {
+  files: string[];
+  ignores?: string[];
+  erdSite?: string;
+  /** Migration configuration */
+  migration?: TailorDBMigrationConfig;
+  /**
+   * Default GraphQL operations for all types in this namespace.
+   * Use "query" for read-only (disables all mutations).
+   * Individual types can override with their own gqlOperations settings.
+   */
+  gqlOperations?: GqlOperationsConfig;
+};
+
+export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
+
+export type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;
+export type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
+
+export type TailorDBFieldOutput = {
+  type: string;
+  fields?: Record<string, TailorDBFieldOutput>;
+  metadata: DBFieldMetadataOutput;
+  rawRelation?: RawRelationConfigOutput;
+};
 
 export interface Script {
   expr: string;
@@ -192,7 +233,7 @@ export interface ParsedRelationship {
 /**
  * Parsed and normalized TailorDB type information
  */
-export interface ParsedTailorDBType {
+export interface TailorDBType {
   name: string;
   pluralForm: string;
   description?: string;

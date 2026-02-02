@@ -102,7 +102,7 @@ const startAuthServer = async () => {
 
 export const loginCommand = defineCommand({
   name: "login",
-  description: "Login to Tailor Platform",
+  description: "Login to Tailor Platform.",
   args: z.object({
     ...commonArgs,
   }),

@@ -149,7 +149,7 @@ async function set(options: SetOptions): Promise<void> {
 
 export const setCommand = defineCommand({
   name: "set",
-  description: "Set migration checkpoint to a specific number",
+  description: "Set migration checkpoint to a specific number.",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

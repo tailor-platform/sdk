@@ -16,7 +16,7 @@ const detectPackageManager = () => {
 
 export const initCommand = defineCommand({
   name: "init",
-  description: "Initialize a new project using create-sdk",
+  description: "Initialize a new project using create-sdk.",
   args: z.object({
     ...commonArgs,
     name: arg(z.string().optional(), {

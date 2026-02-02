@@ -13,7 +13,7 @@ interface CodeGenerator<T, R, E, Ts, Rs> {
 
   // Process individual items
   processType(args: {
-    type: ParsedTailorDBType;
+    type: TailorDBType;
     namespace: string;
     source: { filePath: string; exportName: string };
   }): T | Promise<T>;
@@ -110,7 +110,7 @@ export const generators = defineGenerators(
 
 ## Available Input Data
 
-### ParsedTailorDBType
+### TailorDBType
 
 Contains full type information including:
 

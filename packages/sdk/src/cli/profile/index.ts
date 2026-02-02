@@ -12,7 +12,7 @@ export interface ProfileInfo {
 
 export const profileCommand = defineCommand({
   name: "profile",
-  description: "Manage workspace profiles (user + workspace combinations)",
+  description: "Manage workspace profiles (user + workspace combinations).",
   subCommands: {
     create: createCommand,
     delete: deleteCommand,

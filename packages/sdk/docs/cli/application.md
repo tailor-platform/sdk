@@ -2,51 +2,77 @@
 
 Commands for managing Tailor Platform applications. These commands work with `tailor.config.ts`.
 
+<!-- politty:command:init:start -->
+
 ## init
 
 Initialize a new project using create-sdk.
 
-```bash
-tailor-sdk init [name] [options]
+**Usage**
+
+```
+tailor-sdk init [options] [name]
 ```
 
-**Arguments:**
+**Arguments**
 
-- `name` - Project name
+| Argument | Description  | Required |
+| -------- | ------------ | -------- |
+| `name`   | Project name | No       |
 
-**Options:**
+**Options**
 
-- `-t, --template` - Template name
+| Option                  | Alias | Description   | Default |
+| ----------------------- | ----- | ------------- | ------- |
+| `--template <TEMPLATE>` | `-t`  | Template name | -       |
+
+<!-- politty:command:init:end -->
+
+<!-- politty:command:generate:start -->
 
 ## generate
 
 Generate files using Tailor configuration.
 
-```bash
+**Usage**
+
+```
 tailor-sdk generate [options]
 ```
 
-**Options:**
+**Options**
 
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-W, --watch` - Watch for type/resolver changes and regenerate
+| Option              | Alias | Description                                    | Default              |
+| ------------------- | ----- | ---------------------------------------------- | -------------------- |
+| `--config <CONFIG>` | `-c`  | Path to SDK config file                        | `"tailor.config.ts"` |
+| `--watch`           | `-W`  | Watch for type/resolver changes and regenerate | `false`              |
+
+<!-- politty:command:generate:end -->
+
+<!-- politty:command:apply:start -->
 
 ## apply
 
 Apply Tailor configuration to deploy your application.
 
-```bash
+**Usage**
+
+```
 tailor-sdk apply [options]
 ```
 
-**Options:**
+**Options**
 
-- `-w, --workspace-id` - ID of the workspace to apply the configuration to
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-d, --dry-run` - Run the command without making any changes
-- `-y, --yes` - Skip confirmation prompt
-- `--no-schema-check` - Skip schema diff check against migration snapshots
+| Option                          | Alias | Description                                        | Default              |
+| ------------------------------- | ----- | -------------------------------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                  | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | `"tailor.config.ts"` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                          | `false`              |
+| `--dry-run`                     | `-d`  | Run the command without making any changes         | -                    |
+| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | -                    |
+
+<!-- politty:command:apply:end -->
 
 **Migration Handling:**
 
@@ -70,46 +96,99 @@ If remote schema drift is detected, the apply will fail with an error showing th
 
 Use `--no-schema-check` to skip both verifications (not recommended for production).
 
+<!-- politty:command:remove:start -->
+
 ## remove
 
 Remove all resources managed by the application from the workspace.
 
-```bash
+**Usage**
+
+```
 tailor-sdk remove [options]
 ```
 
-**Options:**
+**Options**
 
-- `-w, --workspace-id` - ID of the workspace to remove resources from
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-y, --yes` - Skip confirmation prompt
+| Option                          | Alias | Description               | Default              |
+| ------------------------------- | ----- | ------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file   | `"tailor.config.ts"` |
+| `--yes`                         | `-y`  | Skip confirmation prompts | `false`              |
+
+<!-- politty:command:remove:end -->
+
+<!-- politty:command:show:start -->
 
 ## show
 
 Show information about the deployed application.
 
-```bash
+**Usage**
+
+```
 tailor-sdk show [options]
 ```
 
-**Options:**
+**Options**
 
-- `-w, --workspace-id` - ID of the workspace to show the application from
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-j, --json` - Output as JSON
+| Option                          | Alias | Description             | Default              |
+| ------------------------------- | ----- | ----------------------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON          | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
+
+<!-- politty:command:show:end -->
+
+<!-- politty:command:open:start -->
 
 ## open
 
 Open Tailor Platform Console.
 
-```bash
+**Usage**
+
+```
 tailor-sdk open [options]
 ```
 
-**Options:**
+**Options**
 
-- `-w, --workspace-id` - ID of the workspace to open in Console
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
+| Option                          | Alias | Description             | Default              |
+| ------------------------------- | ----- | ----------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
+
+<!-- politty:command:open:end -->
+
+<!-- politty:command:api:start -->
+
+## api
+
+Call Tailor Platform API endpoints directly.
+
+**Usage**
+
+```
+tailor-sdk api [options] <endpoint>
+```
+
+**Arguments**
+
+| Argument   | Description                                                                                 | Required |
+| ---------- | ------------------------------------------------------------------------------------------- | -------- |
+| `endpoint` | API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication') | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description          | Default |
+| ------------------------------- | ----- | -------------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON       | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile    | -       |
+| `--body <BODY>`                 | `-b`  | Request body as JSON | `"{}"`  |
+
+<!-- politty:command:api:end -->

@@ -76,7 +76,7 @@ export async function getMachineUserToken(
 
 export const tokenCommand = defineCommand({
   name: "token",
-  description: "Get machine user token",
+  description: "Get an access token for a machine user.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

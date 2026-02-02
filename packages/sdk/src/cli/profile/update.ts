@@ -8,7 +8,7 @@ import type { ProfileInfo } from ".";
 
 export const updateCommand = defineCommand({
   name: "update",
-  description: "Update profile properties",
+  description: "Update profile properties.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

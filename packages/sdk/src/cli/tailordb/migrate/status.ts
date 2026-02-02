@@ -122,7 +122,8 @@ async function status(options: StatusOptions): Promise<void> {
 
 export const statusCommand = defineCommand({
   name: "status",
-  description: "Show migration status for TailorDB namespaces",
+  description:
+    "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

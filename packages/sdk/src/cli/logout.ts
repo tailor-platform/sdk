@@ -7,7 +7,7 @@ import { logger } from "./utils/logger";
 
 export const logoutCommand = defineCommand({
   name: "logout",
-  description: "Logout from Tailor Platform",
+  description: "Logout from Tailor Platform.",
   args: z.object({
     ...commonArgs,
   }),

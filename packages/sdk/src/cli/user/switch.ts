@@ -7,7 +7,7 @@ import { logger } from "../utils/logger";
 
 export const switchCommand = defineCommand({
   name: "switch",
-  description: "Set current user",
+  description: "Set current user.",
   args: z.object({
     ...commonArgs,
     user: arg(z.string(), {

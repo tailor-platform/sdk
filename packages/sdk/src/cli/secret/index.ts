@@ -7,7 +7,7 @@ import { vaultCommand } from "./vault";
 
 export const secretCommand = defineCommand({
   name: "secret",
-  description: "Manage secrets and vaults",
+  description: "Manage Secret Manager vaults and secrets.",
   subCommands: {
     create: createSecretCommand,
     delete: deleteSecretCommand,

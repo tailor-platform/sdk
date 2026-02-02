@@ -28,6 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm test path/to/test.ts` - Run specific test file
 - `pnpm test -t "test name"` - Run tests matching pattern
 - `pnpm build` - Build SDK with tsdown
+- `pnpm docs:check` - Check CLI documentation matches command definitions
+- `pnpm docs:update` - Update CLI documentation from command definitions
 
 ### CLI Commands
 

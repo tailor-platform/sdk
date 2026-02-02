@@ -7,7 +7,7 @@ import { startCommand } from "./start";
 
 export const workflowCommand = defineCommand({
   name: "workflow",
-  description: "Manage workflows",
+  description: "Manage workflows and workflow executions.",
   subCommands: {
     list: listCommand,
     get: getCommand,

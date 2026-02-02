@@ -65,7 +65,7 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List all Tailor Platform workspaces",
+  description: "List all Tailor Platform workspaces.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
