@@ -81,7 +81,7 @@ export async function listMachineUsers(
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List all machine users",
+  description: "List all machine users in the application.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

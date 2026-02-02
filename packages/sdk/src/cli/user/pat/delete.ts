@@ -8,7 +8,7 @@ import { logger } from "../../utils/logger";
 
 export const deleteCommand = defineCommand({
   name: "delete",
-  description: "Delete personal access token",
+  description: "Delete a personal access token.",
   args: z.object({
     ...commonArgs,
     name: arg(z.string(), {

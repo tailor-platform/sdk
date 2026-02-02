@@ -67,7 +67,7 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
 
 export const erdServeCommand = defineCommand({
   name: "serve",
-  description: "Generate and serve ERD (liam build + `serve dist`) (beta)",
+  description: "Generate and serve ERD locally (liam build + serve dist). (beta)",
   args: z.object({
     ...commonArgs,
     ...deploymentArgs,

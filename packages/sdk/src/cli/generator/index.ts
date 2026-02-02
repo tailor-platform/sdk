@@ -569,7 +569,7 @@ export async function generate(options?: GenerateOptions) {
 
 export const generateCommand = defineCommand({
   name: "generate",
-  description: "Generate files using Tailor configuration",
+  description: "Generate files using Tailor configuration.",
   args: z.object({
     ...commonArgs,
     config: arg(z.string().default("tailor.config.ts"), {

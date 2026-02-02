@@ -6,7 +6,7 @@ import { updateCommand } from "./update";
 
 export const patCommand = defineCommand({
   name: "pat",
-  description: "Manage personal access tokens",
+  description: "Manage personal access tokens.",
   args: listCommand.args,
   subCommands: {
     create: createCommand,

@@ -226,7 +226,7 @@ export function logSkippedFiles(skippedFiles: string[]) {
 
 export const deployCommand = defineCommand({
   name: "deploy",
-  description: "Deploy a static website",
+  description: "Deploy a static website from a local build directory.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

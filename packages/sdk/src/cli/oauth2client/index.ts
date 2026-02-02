@@ -4,7 +4,7 @@ import { listCommand } from "./list";
 
 export const oauth2clientCommand = defineCommand({
   name: "oauth2client",
-  description: "Manage OAuth2 clients",
+  description: "Manage OAuth2 clients in your Tailor Platform application.",
   subCommands: {
     get: getCommand,
     list: listCommand,

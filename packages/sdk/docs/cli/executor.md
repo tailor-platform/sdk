@@ -2,40 +2,62 @@
 
 Commands for managing executors and executor jobs.
 
+<!-- politty:command:executor:start -->
+
 ## executor
 
 Manage executors and executor jobs.
 
-```bash
-tailor-sdk executor <subcommand> [options]
+**Usage**
+
 ```
+tailor-sdk executor [command]
+```
+
+**Commands**
+
+| Command                                 | Description                   |
+| --------------------------------------- | ----------------------------- |
+| [`executor jobs`](#executor-jobs)       | List or get executor jobs.    |
+| [`executor trigger`](#executor-trigger) | Trigger an executor manually. |
+
+<!-- politty:command:executor:end -->
+<!-- politty:command:executor trigger:start -->
 
 ### executor trigger
 
 Trigger an executor manually.
 
+**Usage**
+
+```
+tailor-sdk executor trigger [options] <executorName>
+```
+
+**Arguments**
+
+| Argument       | Description   | Required |
+| -------------- | ------------- | -------- |
+| `executorName` | Executor name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                                                        | Default |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON                                                                     | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                  | -       |
+| `--data <DATA>`                 | `-d`  | Request body (JSON string)                                                         | -       |
+| `--header <HEADER>`             | `-H`  | Request header (format: 'Key: Value', can be specified multiple times)             | -       |
+| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable | `false` |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                     | `"3s"`  |
+| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                 | `false` |
+
+<!-- politty:command:executor trigger:end -->
+
 Only executors with `incomingWebhook` or `schedule` trigger types can be triggered manually. Executors with `event` trigger types (such as `recordCreated`, `recordUpdated`, `recordDeleted`) cannot be triggered manually.
 
 The `--data` and `--header` options are only available for `incomingWebhook` trigger type.
-
-```bash
-tailor-sdk executor trigger <executorName> [options]
-```
-
-**Arguments:**
-
-- `executorName` - Executor name (required)
-
-**Options:**
-
-- `-d, --data` - Request body (JSON string)
-- `-H, --header` - Request header (format: `Key: Value`, can be specified multiple times)
-- `-W, --wait` - Wait for job completion and downstream execution (workflow/function) if applicable
-- `-i, --interval` - Polling interval when using --wait (default: `3s`)
-- `-l, --logs` - Display function execution logs after completion (requires --wait)
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
 
 **Usage Examples:**
 
@@ -56,30 +78,40 @@ tailor-sdk executor trigger my-executor -W
 tailor-sdk executor trigger my-executor -W -l
 ```
 
+<!-- politty:command:executor jobs:start -->
+
 ### executor jobs
 
 List or get executor jobs.
 
-```bash
-tailor-sdk executor jobs <executorName> [jobId] [options]
+**Usage**
+
+```
+tailor-sdk executor jobs [options] <executorName> [jobId]
 ```
 
-**Arguments:**
+**Arguments**
 
-- `executorName` - Executor name (required)
-- `jobId` - Job ID (optional, if provided shows job details)
+| Argument       | Description                             | Required |
+| -------------- | --------------------------------------- | -------- |
+| `executorName` | Executor name                           | Yes      |
+| `jobId`        | Job ID (if provided, shows job details) | No       |
 
-**Options:**
+**Options**
 
-- `-s, --status` - Filter by status: `PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `CANCELED` (list mode only)
-- `--limit` - Maximum number of jobs to list (default: `50`, max: `1000`) (list mode only)
-- `--attempts` - Show job attempts (detail mode only)
-- `-W, --wait` - Wait for job completion and downstream execution (detail mode only)
-- `-i, --interval` - Polling interval when using --wait (default: `3s`)
-- `-l, --logs` - Display function execution logs after completion (requires --wait)
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
+| Option                          | Alias | Description                                                                                           | Default |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON                                                                                        | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                          | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                     | -       |
+| `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)                       | -       |
+| `--attempts`                    | -     | Show job attempts (only with job ID) (detail mode only)                                               | `false` |
+| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only) | `false` |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | `"3s"`  |
+| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                    | `false` |
+| `--limit <LIMIT>`               | -     | Maximum number of jobs to list (default: 50, max: 1000) (list mode only)                              | -       |
+
+<!-- politty:command:executor jobs:end -->
 
 **Usage Examples:**
 

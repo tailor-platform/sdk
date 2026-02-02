@@ -238,7 +238,7 @@ export async function startWorkflow(
 
 export const startCommand = defineCommand({
   name: "start",
-  description: "Start a workflow execution",
+  description: "Start a workflow execution.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

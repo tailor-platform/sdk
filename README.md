@@ -34,6 +34,12 @@ pnpm format:check
 
 # Run all checks (format, lint:fix, typecheck)
 pnpm check
+
+# Check CLI documentation matches command definitions
+pnpm -C packages/sdk docs:check
+
+# Update CLI documentation from command definitions
+pnpm -C packages/sdk docs:update
 ```
 
 ## Structure

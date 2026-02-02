@@ -8,7 +8,7 @@ import type { ProfileInfo } from ".";
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List all profiles",
+  description: "List all profiles.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

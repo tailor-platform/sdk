@@ -438,7 +438,7 @@ function printJobWithAttempts(job: ExecutorJobDetailInfo): void {
 
 export const jobsCommand = defineCommand({
   name: "jobs",
-  description: "List or get executor jobs",
+  description: "List or get executor jobs.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
@@ -453,15 +453,16 @@ export const jobsCommand = defineCommand({
     }),
     status: arg(z.string().optional(), {
       alias: "s",
-      description: "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED)",
+      description:
+        "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)",
     }),
     attempts: arg(z.boolean().default(false), {
-      description: "Show job attempts (only with job ID)",
+      description: "Show job attempts (only with job ID) (detail mode only)",
     }),
     wait: arg(z.boolean().default(false), {
       alias: "W",
       description:
-        "Wait for job completion and downstream execution (workflow/function) if applicable",
+        "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
     }),
     interval: arg(z.string().default("3s"), {
       alias: "i",
@@ -472,7 +473,7 @@ export const jobsCommand = defineCommand({
       description: "Display function execution logs after completion (requires --wait)",
     }),
     limit: arg(z.string().optional(), {
-      description: "Maximum number of jobs to list (default: 50, max: 1000)",
+      description: "Maximum number of jobs to list (default: 50, max: 1000) (list mode only)",
     }),
   }),
   run: withCommonArgs(async (args) => {
