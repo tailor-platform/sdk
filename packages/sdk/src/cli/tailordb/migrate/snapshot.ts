@@ -4,6 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { normalizeGqlOperations } from "@/configure/services/tailordb/types";
 import {
   type MigrationDiff,
   type DiffChange,
@@ -257,18 +258,19 @@ function createSnapshotType(type: ParsedTailorDBType): SnapshotType {
       snapshotType.settings.bulkUpsert = type.settings.bulkUpsert;
     }
     if (type.settings.gqlOperations) {
+      const ops = normalizeGqlOperations(type.settings.gqlOperations);
       snapshotType.settings.gqlOperations = {
-        ...(type.settings.gqlOperations.create !== undefined && {
-          create: type.settings.gqlOperations.create,
+        ...(ops.create !== undefined && {
+          create: ops.create,
         }),
-        ...(type.settings.gqlOperations.update !== undefined && {
-          update: type.settings.gqlOperations.update,
+        ...(ops.update !== undefined && {
+          update: ops.update,
         }),
-        ...(type.settings.gqlOperations.delete !== undefined && {
-          delete: type.settings.gqlOperations.delete,
+        ...(ops.delete !== undefined && {
+          delete: ops.delete,
         }),
-        ...(type.settings.gqlOperations.read !== undefined && {
-          read: type.settings.gqlOperations.read,
+        ...(ops.read !== undefined && {
+          read: ops.read,
         }),
       };
     }

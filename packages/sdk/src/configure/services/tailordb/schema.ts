@@ -18,6 +18,7 @@ import {
 } from "@/parser/service/tailordb/types";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
+  normalizeGqlOperations,
   type DBFieldMetadata,
   type DefinedDBFieldMetadata,
   type Hooks,
@@ -773,14 +774,6 @@ export interface TailorDBType<
   description(description: string): TailorDBType<Fields, User>;
 
   /**
-   * Enable or disable all GraphQL mutations (create, update, delete) for this type.
-   * @param enabled - true to enable mutations (default), false to disable
-   * Useful for audit logs or types only written by executors/workflows.
-   * Equivalent to: .features({ gqlOperations: { create: enabled, update: enabled, delete: enabled } })
-   */
-  gqlMutations(enabled: boolean): TailorDBType<Fields, User>;
-
-  /**
    * Pick specific fields from the type
    */
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
@@ -899,19 +892,11 @@ function createTailorDBType<
     },
 
     features(features: Omit<TypeFeatures, "pluralForm">) {
-      _settings = { ..._settings, ...features };
-      return this;
-    },
-
-    gqlMutations(enabled: boolean) {
+      const { gqlOperations, ...rest } = features;
       _settings = {
         ..._settings,
-        gqlOperations: {
-          ...(_settings.gqlOperations ?? {}),
-          create: enabled,
-          update: enabled,
-          delete: enabled,
-        },
+        ...rest,
+        ...(gqlOperations && { gqlOperations: normalizeGqlOperations(gqlOperations) }),
       };
       return this;
     },

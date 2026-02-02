@@ -95,12 +95,11 @@ export type TailorDBServiceConfig = {
   /** Migration configuration */
   migration?: TailorDBMigrationConfig;
   /**
-   * Enable/disable GraphQL mutations (create, update, delete) for all types in this namespace.
-   * Defaults to true (enabled). Set to false to disable mutations.
-   * Useful for audit logs, historical records, or external data sources.
-   * Individual types can still override this with their own gqlOperations settings.
+   * Default GraphQL operations for all types in this namespace.
+   * Use "query" for read-only (disables all mutations).
+   * Individual types can override with their own gqlOperations settings.
    */
-  gqlMutations?: boolean;
+  gqlOperations?: GqlOperationsConfig;
 };
 
 export type TailorDBExternalConfig = { external: true };
@@ -130,10 +129,34 @@ export interface GqlOperations {
   read?: boolean;
 }
 
+/**
+ * Alias for common GqlOperations configurations.
+ * - "query": Read-only mode - disables all mutations (create, update, delete)
+ */
+export type GqlOperationsAliasQuery = "query";
+
+/**
+ * Configuration for GraphQL operations - either an alias string or detailed object.
+ */
+export type GqlOperationsConfig = GqlOperationsAliasQuery | GqlOperations;
+
+/**
+ * Normalize GqlOperationsConfig (alias or object) to GqlOperations object.
+ * "query" alias expands to read-only mode: { create: false, update: false, delete: false, read: true }
+ * @param config - The GqlOperationsConfig to normalize
+ * @returns The normalized GqlOperations object
+ */
+export function normalizeGqlOperations(config: GqlOperationsConfig): GqlOperations {
+  if (config === "query") {
+    return { create: false, update: false, delete: false, read: true };
+  }
+  return config;
+}
+
 export interface TypeFeatures {
   pluralForm?: string;
   aggregation?: true;
   bulkUpsert?: true;
-  /** Configure GraphQL operations for this type (true = enabled, false = disabled) */
-  gqlOperations?: GqlOperations;
+  /** Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control. */
+  gqlOperations?: GqlOperationsConfig;
 }

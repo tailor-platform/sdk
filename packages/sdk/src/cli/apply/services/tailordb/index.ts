@@ -37,6 +37,11 @@ import * as inflection from "inflection";
 import * as path from "pathe";
 import { type TailorDBService } from "@/cli/application/tailordb/service";
 import {
+  normalizeGqlOperations,
+  type GqlOperationsConfig,
+  type TailorDBServiceConfig,
+} from "@/configure/services/tailordb/types";
+import {
   type PermissionOperand,
   type StandardActionPermission,
   type StandardGqlPermissionPolicy,
@@ -83,7 +88,6 @@ import type {
 } from "../../../tailordb/migrate/types";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
-import type { TailorDBServiceConfig } from "@/configure/services/tailordb/types";
 import type { Executor } from "@/parser/service/executor";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -1210,7 +1214,7 @@ async function planTypes(
       const tailordbType = generateTailorDBTypeManifest(
         types[typeName],
         executorUsedTypes,
-        tailordb.config.gqlMutations,
+        tailordb.config.gqlOperations,
       );
       if (existingNameSet.has(typeName)) {
         changeSet.updates.push({
@@ -1266,13 +1270,13 @@ async function planTypes(
  * Generate a TailorDB type manifest from parsed type
  * @param {ParsedTailorDBType} type - Parsed TailorDB type
  * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
- * @param {boolean} [namespaceGqlMutations] - Whether GraphQL mutations are enabled for all types in the namespace (default: true)
+ * @param {GqlOperationsConfig} [namespaceGqlOperations] - Default gqlOperations for the namespace
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 function generateTailorDBTypeManifest(
   type: ParsedTailorDBType,
   executorUsedTypes: ReadonlySet<string>,
-  namespaceGqlMutations?: boolean,
+  namespaceGqlOperations?: GqlOperationsConfig,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
   // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
   const pluralForm = inflection.camelize(type.pluralForm, true);
@@ -1303,24 +1307,14 @@ function generateTailorDBTypeManifest(
   if (executorUsedTypes.has(type.name)) {
     defaultSettings.publishRecordEvents = true;
   }
-  // Apply gqlOperations: type-level settings take precedence over namespace-level gqlMutations
-  // SDK uses true=enabled, false=disabled; backend proto uses true=disabled
-  // Default: all operations enabled (disableGqlOperations all false)
-  if (type.settings?.gqlOperations) {
-    const ops = type.settings.gqlOperations;
+  const gqlOpsConfig = type.settings?.gqlOperations ?? namespaceGqlOperations;
+  if (gqlOpsConfig) {
+    const ops = normalizeGqlOperations(gqlOpsConfig);
     defaultSettings.disableGqlOperations = {
       create: ops.create === false,
       update: ops.update === false,
       delete: ops.delete === false,
       read: ops.read === false,
-    };
-  } else if (namespaceGqlMutations === false) {
-    // Namespace-level gqlMutations: false means disable all mutations (create, update, delete)
-    defaultSettings.disableGqlOperations = {
-      create: true,
-      update: true,
-      delete: true,
-      read: false,
     };
   }
 
