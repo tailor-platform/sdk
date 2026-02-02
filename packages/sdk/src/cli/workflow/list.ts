@@ -3,7 +3,6 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { formatTableWithHeaders, humanizeRelativeTime } from "../utils/format";
 import { logger } from "../utils/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
@@ -53,21 +52,10 @@ export const listCommand = defineCommand({
       profile: args.profile,
     });
 
-    if (args.json) {
-      logger.out(workflows);
-    } else {
-      if (workflows.length === 0) {
-        logger.info("No workflows found.");
-        return;
-      }
-      const headers = ["name", "mainJob", "jobFunctions", "updatedAt"];
-      const rows = workflows.map((w) => [
-        w.name,
-        w.mainJob,
-        w.jobFunctions.toString(),
-        humanizeRelativeTime(w.updatedAt),
-      ]);
-      logger.out(formatTableWithHeaders(headers, rows));
+    if (workflows.length === 0 && !args.json) {
+      logger.info("No workflows found.");
+      return;
     }
+    logger.out(workflows);
   }),
 });

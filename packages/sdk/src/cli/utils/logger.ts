@@ -82,6 +82,13 @@ export type LogMode = "default" | "stream" | "plain";
 export interface LogOptions {
   /** Output mode (default: "default") */
   mode?: LogMode;
+  /** Number of spaces to indent the entire line (default: 0) */
+  indent?: number;
+}
+
+export interface OutOptions {
+  /** Fields to exclude from table display */
+  excludeFields?: string[];
 }
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
@@ -109,6 +116,65 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
   log: (text) => text,
 };
 
+interface ParsedLogTag {
+  mode: string;
+  indent: number;
+}
+
+/**
+ * Parses a log tag in "mode:indent" format
+ * @param tag - Tag string (e.g., "default:4", "stream:2", "plain:0")
+ * @returns Parsed mode and indent values
+ */
+export function parseLogTag(tag: string | undefined): ParsedLogTag {
+  const [mode, indentStr] = (tag || "default:0").split(":");
+  const indent = Number(indentStr) || 0;
+  return { mode, indent };
+}
+
+/**
+ * Builds a log tag from LogOptions
+ * @param opts - Log options
+ * @returns Tag string in "mode:indent" format
+ */
+export function buildLogTag(opts?: LogOptions): string {
+  const mode = opts?.mode ?? "default";
+  const indent = opts?.indent ?? 0;
+  return `${mode}:${indent}`;
+}
+
+interface FormatLogLineOptions {
+  mode: string;
+  indent: number;
+  type: string;
+  message: string;
+  timestamp?: string;
+}
+
+/**
+ * Formats a log line with the appropriate prefix and indentation
+ * @param opts - Formatting options
+ * @returns Formatted log line
+ */
+export function formatLogLine(opts: FormatLogLineOptions): string {
+  const { mode, indent, type, message, timestamp } = opts;
+  const indentPrefix = indent > 0 ? " ".repeat(indent) : "";
+  const colorFn = TYPE_COLORS[type] || ((text: string) => text);
+
+  // Plain mode: color only, no icon, no timestamp
+  if (mode === "plain") {
+    return `${indentPrefix}${colorFn(message)}\n`;
+  }
+
+  // Default/Stream mode: with icon and color
+  const icon = TYPE_ICONS[type] || "";
+  const prefix = icon ? `${icon} ` : "";
+  const coloredOutput = colorFn(`${prefix}${message}`);
+  const timestampPrefix = timestamp ?? "";
+
+  return `${indentPrefix}${timestampPrefix}${coloredOutput}\n`;
+}
+
 /**
  * Creates a reporter that handles all log output modes.
  *
@@ -121,7 +187,8 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
 function createReporter(): ConsolaReporter {
   return {
     log(logObj: LogObject, ctx: { options: ConsolaOptions }) {
-      const mode = logObj.tag || "default";
+      const { mode, indent } = parseLogTag(logObj.tag);
+
       const stdout = ctx.options.stdout || process.stdout;
       const stderr = ctx.options.stderr || process.stderr;
       const formatOptions = ctx.options.formatOptions;
@@ -131,24 +198,18 @@ function createReporter(): ConsolaReporter {
       };
       const message = formatWithOptions(inspectOpts, ...logObj.args);
 
-      // Apply color based on log type
-      const colorFn = TYPE_COLORS[logObj.type] || ((text) => text);
-
-      // Plain mode: color only, no icon, no timestamp
-      if (mode === "plain") {
-        stderr.write(`${colorFn(message)}\n`);
-        return;
-      }
-
-      // Default/Stream mode: with icon and color
-      const icon = TYPE_ICONS[logObj.type] || "";
-      const prefix = icon ? `${icon} ` : "";
-      const coloredOutput = colorFn(`${prefix}${message}`);
-
-      // Add timestamp for stream mode
       const timestamp =
         mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
-      stderr.write(`${timestamp}${coloredOutput}\n`);
+
+      const output = formatLogLine({
+        mode,
+        indent,
+        type: logObj.type,
+        message,
+        timestamp,
+      });
+
+      stderr.write(output);
     },
   };
 }
@@ -167,23 +228,19 @@ export const logger = {
   },
 
   info(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).info(message);
+    consola.withTag(buildLogTag(opts)).info(message);
   },
 
   success(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).success(message);
+    consola.withTag(buildLogTag(opts)).success(message);
   },
 
   warn(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).warn(message);
+    consola.withTag(buildLogTag(opts)).warn(message);
   },
 
   error(message: string, opts?: LogOptions): void {
-    const mode = opts?.mode ?? "default";
-    consola.withTag(mode).error(message);
+    consola.withTag(buildLogTag(opts)).error(message);
   },
 
   log(message: string): void {
@@ -200,7 +257,7 @@ export const logger = {
     }
   },
 
-  out(data: string | object | object[]): void {
+  out(data: string | object | object[], options?: OutOptions): void {
     if (typeof data === "string") {
       process.stdout.write(data.endsWith("\n") ? data : data + "\n");
       return;
@@ -212,9 +269,25 @@ export const logger = {
       return;
     }
 
+    // Helper to format a value for table display
+    const formatValue = (value: unknown, pretty = false): string => {
+      if (value === null || value === undefined) return "N/A";
+      if (value instanceof Date) {
+        return formatDistanceToNowStrict(value, { addSuffix: true });
+      }
+      if (typeof value === "object") {
+        return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+      }
+      return String(value);
+    };
+
     if (!Array.isArray(data)) {
-      const t = table(Object.entries(data), {
-        singleLine: true,
+      const entries = Object.entries(data).filter(
+        ([key]) => !options?.excludeFields?.includes(key),
+      );
+      const formattedEntries = entries.map(([key, value]) => [key, formatValue(value, true)]);
+      const t = table(formattedEntries, {
+        singleLine: false,
         border: getBorderCharacters("norc"),
       });
       process.stdout.write(t);
@@ -225,22 +298,10 @@ export const logger = {
       return;
     }
 
-    const headers = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const allHeaders = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
+    const headers = allHeaders.filter((h) => !options?.excludeFields?.includes(h));
     const rows = data.map((item) =>
-      headers.map((header) => {
-        const value = (item as Record<string, unknown>)[header];
-        if (value === null || value === undefined) {
-          return "";
-        }
-        if ((header === "createdAt" || header === "updatedAt") && typeof value === "string") {
-          const date = new Date(value);
-          if (Number.isNaN(date.getTime())) {
-            return value;
-          }
-          return formatDistanceToNowStrict(date, { addSuffix: true });
-        }
-        return String(value);
-      }),
+      headers.map((header) => formatValue((item as Record<string, unknown>)[header])),
     );
 
     const t = table([headers, ...rows], {

@@ -28,8 +28,8 @@ export interface ApplicationInfo {
   cors: string[];
   allowedIpAddresses: string[];
   disableIntrospection: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 export interface ShowInfo extends ApplicationInfo, WorkspaceInfo {}
@@ -43,8 +43,8 @@ function applicationInfo(app: Application): ApplicationInfo {
     cors: app.cors,
     allowedIpAddresses: app.allowedIpAddresses,
     disableIntrospection: app.disableIntrospection,
-    createdAt: app.createTime ? timestampDate(app.createTime).toISOString() : "N/A",
-    updatedAt: app.updateTime ? timestampDate(app.updateTime).toISOString() : "N/A",
+    createdAt: app.createTime ? timestampDate(app.createTime) : null,
+    updatedAt: app.updateTime ? timestampDate(app.updateTime) : null,
   };
 }
 

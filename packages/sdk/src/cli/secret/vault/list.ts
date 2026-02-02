@@ -14,15 +14,15 @@ export interface VaultListOptions {
 
 export interface VaultInfo {
   name: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 function vaultInfo(vault: SecretManagerVault): VaultInfo {
   return {
     name: vault.name,
-    createdAt: vault.createTime ? timestampDate(vault.createTime).toISOString() : "N/A",
-    updatedAt: vault.updateTime ? timestampDate(vault.updateTime).toISOString() : "N/A",
+    createdAt: vault.createTime ? timestampDate(vault.createTime) : null,
+    updatedAt: vault.updateTime ? timestampDate(vault.updateTime) : null,
   };
 }
 
