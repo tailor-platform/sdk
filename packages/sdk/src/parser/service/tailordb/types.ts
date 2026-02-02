@@ -32,7 +32,7 @@ export type TailorDBServiceConfig = {
   migration?: TailorDBMigrationConfig;
 };
 
-export type TailorDBType = z.output<typeof TailorDBTypeSchema>;
+export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
 
 export type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;
 export type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
@@ -215,7 +215,7 @@ export interface ParsedRelationship {
 /**
  * Parsed and normalized TailorDB type information
  */
-export interface NormalizedTailorDBType {
+export interface TailorDBType {
   name: string;
   pluralForm: string;
   description?: string;

@@ -1,6 +1,6 @@
 import multiline from "multiline-ts";
 import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
-import type { OperatorFieldConfig, NormalizedTailorDBType } from "@/parser/service/tailordb/types";
+import type { OperatorFieldConfig, TailorDBType } from "@/parser/service/tailordb/types";
 
 type UsedUtilityTypes = { Timestamp: boolean; Serial: boolean };
 
@@ -142,7 +142,7 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
  * @param type - The parsed TailorDB type
  * @returns The type definition and used utility types
  */
-function generateTableInterface(type: NormalizedTailorDBType): {
+function generateTableInterface(type: TailorDBType): {
   typeDef: string;
   usedUtilityTypes: UsedUtilityTypes;
 } {
@@ -176,11 +176,11 @@ function generateTableInterface(type: NormalizedTailorDBType): {
 }
 
 /**
- * Convert a NormalizedTailorDBType into KyselyTypeMetadata.
+ * Convert a TailorDBType into KyselyTypeMetadata.
  * @param type - Parsed TailorDB type
  * @returns Generated Kysely type metadata
  */
-export async function processKyselyType(type: NormalizedTailorDBType): Promise<KyselyTypeMetadata> {
+export async function processKyselyType(type: TailorDBType): Promise<KyselyTypeMetadata> {
   const result = generateTableInterface(type);
 
   return {

@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { createKyselyGenerator } from "./index";
-import type { TailorDBType } from "@/configure/services/tailordb/schema";
-import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType as ConfigTailorDBType } from "@/configure/services/tailordb/schema";
+import type { TailorDBType as ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
-function parseTailorDBType(type: TailorDBType): NormalizedTailorDBType {
+function parseTailorDBType(type: ConfigTailorDBType): ParsedTailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
   return types[type.name];
 }
@@ -289,7 +289,7 @@ describe("KyselyGenerator integration tests", () => {
   describe("error handling tests", () => {
     it("handles errors appropriately with invalid type definitions", async () => {
       const validType = parseTailorDBType(mockBasicType);
-      const invalidType: NormalizedTailorDBType = {
+      const invalidType: ParsedTailorDBType = {
         ...validType,
         name: "Invalid",
         // @ts-expect-error - intentionally invalid to verify runtime error handling

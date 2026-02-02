@@ -11,7 +11,10 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import type { SchemaDrift } from "./types";
-import type { NormalizedTailorDBType, ParsedField } from "@/parser/service/tailordb/types";
+import type {
+  ParsedField,
+  TailorDBType as ParsedTailorDBType,
+} from "@/parser/service/tailordb/types";
 import type { TailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // ============================================================================
@@ -225,10 +228,10 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
 
 /**
  * Create a snapshot type from a parsed type
- * @param {NormalizedTailorDBType} type - Parsed TailorDB type definition
+ * @param {ParsedTailorDBType} type - Parsed TailorDB type definition
  * @returns {SnapshotType} Snapshot type configuration
  */
-function createSnapshotType(type: NormalizedTailorDBType): SnapshotType {
+function createSnapshotType(type: ParsedTailorDBType): SnapshotType {
   const fields: Record<string, SnapshotFieldConfig> = {};
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
@@ -271,12 +274,12 @@ function createSnapshotType(type: NormalizedTailorDBType): SnapshotType {
 
 /**
  * Create a schema snapshot from local type definitions
- * @param {Record<string, NormalizedTailorDBType>} types - Local type definitions
+ * @param {Record<string, ParsedTailorDBType>} types - Local type definitions
  * @param {string} namespace - Namespace for the snapshot
  * @returns {SchemaSnapshot} Schema snapshot
  */
 export function createSnapshotFromLocalTypes(
-  types: Record<string, NormalizedTailorDBType>,
+  types: Record<string, ParsedTailorDBType>,
   namespace: string,
 ): SchemaSnapshot {
   const snapshotTypes: Record<string, SnapshotType> = {};
@@ -907,13 +910,13 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
 /**
  * Compare local types with a snapshot and generate a diff
  * @param {SchemaSnapshot} snapshot - Schema snapshot to compare against
- * @param {Record<string, NormalizedTailorDBType>} localTypes - Local type definitions
+ * @param {Record<string, ParsedTailorDBType>} localTypes - Local type definitions
  * @param {string} namespace - Namespace for comparison
  * @returns {MigrationDiff} Migration diff
  */
 export function compareLocalTypesWithSnapshot(
   snapshot: SchemaSnapshot,
-  localTypes: Record<string, NormalizedTailorDBType>,
+  localTypes: Record<string, ParsedTailorDBType>,
   namespace: string,
 ): MigrationDiff {
   const currentSnapshot = createSnapshotFromLocalTypes(localTypes, namespace);
@@ -1098,17 +1101,17 @@ export function assertValidMigrationFiles(migrationsDir: string, namespace: stri
 // ============================================================================
 
 /**
- * Filter a NormalizedTailorDBType to match the schema state in a snapshot
+ * Filter a TailorDBType to match the schema state in a snapshot
  * This is used when TAILOR_INTERNAL_APPLY_MIGRATION_VERSION is specified to ensure
  * the deployed schema matches the specified migration version
- * @param {NormalizedTailorDBType} type - Local parsed type (latest state)
+ * @param {ParsedTailorDBType} type - Local parsed type (latest state)
  * @param {SnapshotType} snapshotType - Target snapshot state
- * @returns {NormalizedTailorDBType} Filtered type matching the snapshot
+ * @returns {ParsedTailorDBType} Filtered type matching the snapshot
  */
 export function filterTypeToSnapshot(
-  type: NormalizedTailorDBType,
+  type: ParsedTailorDBType,
   snapshotType: SnapshotType,
-): NormalizedTailorDBType {
+): ParsedTailorDBType {
   // Filter fields to only include those in the snapshot
   const filteredFields: Record<string, ParsedField> = {};
 

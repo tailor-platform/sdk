@@ -5,10 +5,10 @@ import { generateUnifiedEnumConstants } from "./generate-enum-constants";
 import { processEnumType } from "./process-enum-type";
 import { createEnumConstantsGenerator } from "./index";
 import type { EnumDefinition } from "./types";
-import type { TailorDBType } from "@/configure/services/tailordb/schema";
-import type { NormalizedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType as ConfigTailorDBType } from "@/configure/services/tailordb/schema";
+import type { TailorDBType as ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
-function parseTailorDBType(type: TailorDBType): NormalizedTailorDBType {
+function parseTailorDBType(type: ConfigTailorDBType): ParsedTailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
   return types[type.name];
 }
