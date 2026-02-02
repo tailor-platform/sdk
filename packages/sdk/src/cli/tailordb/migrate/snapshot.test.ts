@@ -29,7 +29,7 @@ import type {
   ParsedField,
   TailorDBType as ParsedTailorDBType,
 } from "@/parser/service/tailordb/types";
-import type { TailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
   const migDir = path.join(baseDir, formatMigrationNumber(num));
@@ -1294,7 +1294,7 @@ describe("snapshot", () => {
      * Create a mock TailorDBType for testing
      * @param {string} name - Type name
      * @param {Record<string, object>} fields - Field configurations
-     * @returns {TailorDBType} Mock TailorDBType
+     * @returns {ProtoTailorDBType} Mock TailorDBType
      */
     function createMockRemoteType(
       name: string,
@@ -1310,7 +1310,7 @@ describe("snapshot", () => {
           allowedValues?: { value: string }[];
         }
       >,
-    ): TailorDBType {
+    ): ProtoTailorDBType {
       const fieldConfigs: Record<string, unknown> = {};
       for (const [fieldName, config] of Object.entries(fields)) {
         fieldConfigs[fieldName] = {
@@ -1329,7 +1329,7 @@ describe("snapshot", () => {
         schema: {
           fields: fieldConfigs,
         },
-      } as unknown as TailorDBType;
+      } as unknown as ProtoTailorDBType;
     }
 
     it("returns empty array when remote and snapshot match exactly", () => {

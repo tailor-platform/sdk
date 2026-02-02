@@ -19,7 +19,7 @@ import {
   TailorDBGQLPermission_Permit,
   type TailorDBGQLPermission_PolicySchema,
   type TailorDBGQLPermissionSchema,
-  type TailorDBType,
+  type TailorDBType as ProtoTailorDBType,
   type TailorDBType_FieldConfigSchema,
   type TailorDBType_FileConfigSchema,
   type TailorDBType_IndexSchema,
@@ -96,13 +96,13 @@ import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {string} namespace - TailorDB namespace
- * @returns {Promise<TailorDBType[]>} Remote TailorDB types
+ * @returns {Promise<ProtoTailorDBType[]>} Remote TailorDB types
  */
 async function fetchRemoteTypes(
   client: OperatorClient,
   workspaceId: string,
   namespace: string,
-): Promise<TailorDBType[]> {
+): Promise<ProtoTailorDBType[]> {
   return fetchAll(async (pageToken) => {
     try {
       const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({

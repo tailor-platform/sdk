@@ -15,7 +15,7 @@ import type {
   ParsedField,
   TailorDBType as ParsedTailorDBType,
 } from "@/parser/service/tailordb/types";
-import type { TailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // ============================================================================
 // Constants
@@ -1179,11 +1179,11 @@ export function filterTypeToSnapshot(
 
 /**
  * Convert remote TailorDBType to SnapshotFieldConfig for comparison
- * @param {TailorDBType} remoteType - Remote TailorDB type from API
+ * @param {ProtoTailorDBType} remoteType - Remote TailorDB type from API
  * @returns {Record<string, SnapshotFieldConfig>} Converted field configs
  */
 function convertRemoteFieldsToSnapshot(
-  remoteType: TailorDBType,
+  remoteType: ProtoTailorDBType,
 ): Record<string, SnapshotFieldConfig> {
   const fields: Record<string, SnapshotFieldConfig> = {};
   const remoteFields = remoteType.schema?.fields ?? {};
@@ -1309,18 +1309,18 @@ const SYSTEM_FIELDS = new Set(["id"]);
 
 /**
  * Compare remote TailorDB types with a local snapshot
- * @param {TailorDBType[]} remoteTypes - Remote types from listTailorDBTypes API
+ * @param {ProtoTailorDBType[]} remoteTypes - Remote types from listTailorDBTypes API
  * @param {SchemaSnapshot} snapshot - Local schema snapshot
  * @returns {SchemaDrift[]} List of drifts detected
  */
 export function compareRemoteWithSnapshot(
-  remoteTypes: TailorDBType[],
+  remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
 ): SchemaDrift[] {
   const drifts: SchemaDrift[] = [];
 
   // Build maps for easy lookup
-  const remoteTypeMap = new Map<string, TailorDBType>();
+  const remoteTypeMap = new Map<string, ProtoTailorDBType>();
   for (const remoteType of remoteTypes) {
     remoteTypeMap.set(remoteType.name, remoteType);
   }
