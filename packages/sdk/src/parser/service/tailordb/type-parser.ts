@@ -18,14 +18,6 @@ import type {
 
 export type TypeSourceInfo = Record<string, { filePath: string; exportName: string }>;
 
-function getStringProperty(obj: unknown, key: string): string | undefined {
-  if (obj && typeof obj === "object" && key in obj) {
-    const value = (obj as Record<string, unknown>)[key];
-    return typeof value === "string" ? value : undefined;
-  }
-  return undefined;
-}
-
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.
  * This is the main entry point for parsing TailorDB types.
@@ -65,8 +57,7 @@ function parseTailorDBType(
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
 ): TailorDBType {
   const metadata = type.metadata;
-  const pluralForm =
-    getStringProperty(metadata.settings, "pluralForm") || inflection.pluralize(type.name);
+  const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
 
   const fields: Record<string, ParsedField> = {};
   const forwardRelationships: Record<string, ParsedRelationship> = {};
