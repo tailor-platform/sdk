@@ -1,4 +1,4 @@
-export { db, type TailorDBType, type TailorDBField, type TailorAnyDBField } from "./schema";
+export { db, type TailorAnyDBField, type TailorDBField, type TailorDBType } from "./schema";
 export type { TailorDBInstance } from "./schema";
 export {
   unsafeAllowAllTypePermission,

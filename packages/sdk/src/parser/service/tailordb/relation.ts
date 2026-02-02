@@ -1,5 +1,6 @@
 import * as inflection from "inflection";
 import type { RawRelationConfig, OperatorFieldConfig } from "./types";
+import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {
   "1-1": "1-1",
@@ -10,6 +11,10 @@ const relationTypes = {
   keyOnly: "keyOnly",
 } as const;
 export type RelationType = keyof typeof relationTypes;
+
+export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
+  keyof typeof relationTypes
+>;
 
 export interface RelationProcessingContext {
   typeName: string;
@@ -50,13 +55,13 @@ export function validateRelationConfig(
   if (!rawRelation.type) {
     throw new Error(
       `${fieldRef(context)} has a relation but is missing the required 'type' property. ` +
-        `Valid values: ${Object.keys(relationTypes).join(", ")}.`,
+        `Valid values: ${relationTypesKeys.join(", ")}.`,
     );
   }
   if (!(rawRelation.type in relationTypes)) {
     throw new Error(
       `${fieldRef(context)} has invalid relation type '${rawRelation.type}'. ` +
-        `Valid values: ${Object.keys(relationTypes).join(", ")}.`,
+        `Valid values: ${relationTypesKeys.join(", ")}.`,
     );
   }
 
