@@ -60,7 +60,7 @@ export async function triggerExecutor(
 
 export const triggerCommand = defineCommand({
   name: "trigger",
-  description: "Trigger an executor manually",
+  description: "Trigger an executor manually.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

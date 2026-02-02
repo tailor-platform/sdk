@@ -83,6 +83,10 @@ const files: Record<string, FileConfig> = {
     commands: ["workflow"],
     render: defaultRender,
   },
+  "docs/cli/executor.md": {
+    commands: ["executor"],
+    render: defaultRender,
+  },
   "docs/cli/secret.md": {
     commands: ["secret"],
     render: defaultRender,
