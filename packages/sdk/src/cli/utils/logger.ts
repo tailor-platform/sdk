@@ -194,7 +194,7 @@ function createReporter(): ConsolaReporter {
       const message = formatWithOptions(inspectOpts, ...logObj.args);
 
       const timestamp =
-        mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : undefined;
+        mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
 
       const output = formatLogLine({
         mode,
