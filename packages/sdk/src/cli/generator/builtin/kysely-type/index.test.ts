@@ -234,13 +234,25 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.files[0].path).toBe(testDistPath);
 
       const content = result.files[0].content;
-      expect(content).toContain(
-        'import { type ColumnType, Kysely, type KyselyConfig } from "kysely"',
-      );
+      expect(content).toContain("type ColumnType");
+      expect(content).toContain("type Transaction as KyselyTransaction");
+      expect(content).toContain("type Insertable as KyselyInsertable");
+      expect(content).toContain("type Selectable as KyselySelectable");
+      expect(content).toContain("type Updateable as KyselyUpdateable");
       expect(content).toContain("interface Namespace {");
       expect(content).toContain('"test-namespace": {');
       expect(content).toContain("User: {");
       expect(content).toContain("export function getDB");
+      expect(content).toContain("export type Transaction<K extends keyof Namespace | DB");
+      expect(content).toContain(
+        "export type Insertable<T extends keyof Namespace[keyof Namespace]>",
+      );
+      expect(content).toContain(
+        "export type Selectable<T extends keyof Namespace[keyof Namespace]>",
+      );
+      expect(content).toContain(
+        "export type Updateable<T extends keyof Namespace[keyof Namespace]>",
+      );
       expect(result.errors).toBeUndefined();
     });
 

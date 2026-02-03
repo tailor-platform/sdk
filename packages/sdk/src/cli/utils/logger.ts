@@ -86,9 +86,12 @@ export interface LogOptions {
   indent?: number;
 }
 
+/** Field transformer function. null excludes the field from table output. */
+export type FieldTransformer = ((value: unknown, item: object) => string) | null;
+
 export interface OutOptions {
-  /** Fields to exclude from table display */
-  excludeFields?: string[];
+  /** Table display field transform/exclude settings. Only applied in table mode (not JSON). */
+  display?: Record<string, FieldTransformer>;
 }
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
@@ -269,6 +272,8 @@ export const logger = {
       return;
     }
 
+    const display = options?.display;
+
     // Helper to format a value for table display
     const formatValue = (value: unknown, pretty = false): string => {
       if (value === null || value === undefined) return "N/A";
@@ -281,11 +286,28 @@ export const logger = {
       return String(value);
     };
 
+    // Helper to check if field should be excluded
+    const isExcluded = (key: string): boolean => {
+      return display !== undefined && key in display && display[key] === null;
+    };
+
+    // Helper to apply transformer or default formatting
+    const transformValue = (key: string, value: unknown, item: object, pretty = false): string => {
+      if (display && key in display) {
+        const transformer = display[key];
+        if (transformer) {
+          return transformer(value, item);
+        }
+      }
+      return formatValue(value, pretty);
+    };
+
     if (!Array.isArray(data)) {
-      const entries = Object.entries(data).filter(
-        ([key]) => !options?.excludeFields?.includes(key),
-      );
-      const formattedEntries = entries.map(([key, value]) => [key, formatValue(value, true)]);
+      const entries = Object.entries(data).filter(([key]) => !isExcluded(key));
+      const formattedEntries = entries.map(([key, value]) => [
+        key,
+        transformValue(key, value, data, true),
+      ]);
       const t = table(formattedEntries, {
         singleLine: false,
         border: getBorderCharacters("norc"),
@@ -299,9 +321,11 @@ export const logger = {
     }
 
     const allHeaders = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
-    const headers = allHeaders.filter((h) => !options?.excludeFields?.includes(h));
+    const headers = allHeaders.filter((h) => !isExcluded(h));
     const rows = data.map((item) =>
-      headers.map((header) => formatValue((item as Record<string, unknown>)[header])),
+      headers.map((header) =>
+        transformValue(header, (item as Record<string, unknown>)[header], item),
+      ),
     );
 
     const t = table([headers, ...rows], {

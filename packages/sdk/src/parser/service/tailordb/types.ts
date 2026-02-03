@@ -42,6 +42,12 @@ export type TailorDBServiceConfig = {
   gqlOperations?: GqlOperationsConfig;
 };
 
+export type TailorDBExternalConfig = { external: true };
+
+export type TailorDBServiceInput = {
+  [namespace: string]: TailorDBServiceConfig | TailorDBExternalConfig;
+};
+
 export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
 
 export type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;

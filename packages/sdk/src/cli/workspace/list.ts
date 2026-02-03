@@ -1,6 +1,6 @@
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, positiveIntArg, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { logger } from "../utils/logger";
@@ -9,8 +9,6 @@ import { workspaceInfo, type WorkspaceInfo } from "./transform";
 export interface ListWorkspacesOptions {
   limit?: number;
 }
-
-const limitSchema = z.coerce.number().int().positive().optional();
 
 /**
  * List workspaces with an optional limit.
@@ -69,22 +67,13 @@ export const listCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    limit: arg(z.string().optional(), {
+    limit: arg(positiveIntArg.optional(), {
       alias: "l",
       description: "Maximum number of workspaces to list",
     }),
   }),
   run: withCommonArgs(async (args) => {
-    // Parse and validate limit
-    let limit: number | undefined;
-    try {
-      limit = limitSchema.parse(args.limit);
-    } catch {
-      throw new Error(`--limit must be a positive integer, got '${args.limit}'`);
-    }
-
-    // Execute workspace list logic
-    const workspaces = await listWorkspaces({ limit });
-    logger.out(workspaces, { excludeFields: ["updatedAt"] });
+    const workspaces = await listWorkspaces({ limit: args.limit });
+    logger.out(workspaces, { display: { updatedAt: null } });
   }),
 });

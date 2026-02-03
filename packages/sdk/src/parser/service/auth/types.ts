@@ -23,6 +23,9 @@ import type { IsAny } from "type-fest";
 import type { z } from "zod";
 
 export type AuthInvoker = z.output<typeof AuthInvokerSchema>;
+export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUserName"> & {
+  machineUserName: M;
+};
 
 // Types derived from zod schemas
 export type OIDC = z.output<typeof OIDCSchema>;
@@ -262,3 +265,27 @@ export type AuthServiceInput<
   tenantProvider?: TenantProviderConfig;
   publishSessionEvents?: boolean;
 };
+
+declare const authDefinitionBrand: unique symbol;
+export type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
+
+export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
+  name: Name;
+  invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
+} & AuthDefinitionBrand;
+
+export type AuthExternalConfig = { name: string; external: true };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AuthServiceInputLoose = AuthServiceInput<any, any, any, string, any>;
+
+export type AuthOwnConfig = DefinedAuth<
+  string,
+  // Intentionally permissive: AuthConfig is the “container” type for AppConfig.auth.
+  // We want any concrete `defineAuth(...)` result to be assignable here, while the
+  // strong typing remains on the `defineAuth` return type itself.
+  AuthServiceInputLoose,
+  string
+>;
+
+export type AuthConfig = AuthOwnConfig | AuthExternalConfig;
