@@ -8,17 +8,17 @@ import type { TableUserConfig } from "table";
 /**
  * Format a protobuf Timestamp to ISO string.
  * @param timestamp - Protobuf timestamp
- * @returns ISO date string or "N/A" if invalid
+ * @returns Date object or null if invalid
  */
-export function formatTimestamp(timestamp: Timestamp | undefined): string {
+export function formatTimestamp(timestamp: Timestamp | undefined): Date | null {
   if (!timestamp) {
-    return "N/A";
+    return null;
   }
   const date = timestampDate(timestamp);
   if (Number.isNaN(date.getTime())) {
-    return "N/A";
+    return null;
   }
-  return date.toISOString();
+  return date;
 }
 
 /**
