@@ -5,6 +5,7 @@ import { arg } from "politty";
 import { z } from "zod";
 import { isCLIError } from "./utils/errors";
 import { logger } from "./utils/logger";
+import type { JsonObject } from "@bufbuild/protobuf";
 
 type ArgsShape = Record<string, z.ZodType>;
 
@@ -38,17 +39,7 @@ export const durationArg = z
  * Schema for positive integer validation (from string input)
  * Transforms the string to a number
  */
-export const positiveIntArg = z
-  .string()
-  .superRefine((val, ctx) => {
-    if (!/^\d+$/.test(val) || Number.parseInt(val, 10) <= 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `--limit must be a positive integer, got '${val}'`,
-      });
-    }
-  })
-  .transform((val) => Number.parseInt(val, 10));
+export const positiveIntArg = z.coerce.number().int().positive();
 
 /**
  * Schema for JSON string validation
@@ -66,7 +57,7 @@ export const jsonDataArg = z
       });
     }
   })
-  .transform((val) => JSON.parse(val) as Record<string, unknown>);
+  .transform((val) => JSON.parse(val) as JsonObject);
 
 /**
  * Schema for header string validation (format: "Key: Value")

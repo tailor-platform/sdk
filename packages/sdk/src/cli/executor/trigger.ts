@@ -140,7 +140,7 @@ export const triggerCommand = defineCommand({
     let payload: JsonObject | undefined;
 
     // Build payload if data or headers are provided
-    const body = args.data as JsonObject | undefined;
+    const body: JsonObject | undefined = args.data;
     const headers: Record<string, string> = {};
     if (args.header) {
       for (const h of args.header) {
