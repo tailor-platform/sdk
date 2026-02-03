@@ -1,7 +1,7 @@
 import ml from "multiline-ts";
 import type { LinesDbMetadata, PluginSourceInfo } from "./types";
 import type { TypeSourceInfoEntry } from "@/cli/generator/types";
-import type { ParsedTailorDBType, OperatorFieldConfig } from "@/parser/service/tailordb/types";
+import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /**
