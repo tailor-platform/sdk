@@ -2,7 +2,7 @@ import { db, t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
 
-const UserChangeApproval = db.type("UserChangeApproval", {
+const UserChangeApproval = db.type(["UserChangeApproval", "UserChangeApprovals"], {
   request: db.uuid().index(),
   iteration: db.int(),
   stepNo: db.int(),

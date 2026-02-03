@@ -2,7 +2,7 @@ import { db, t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
 
-const UserChangeReworkEvent = db.type("UserChangeReworkEvent", {
+const UserChangeReworkEvent = db.type(["UserChangeReworkEvent", "UserChangeReworkEvents"], {
   request: db.uuid().index(),
   iteration: db.int(),
   fromStepNo: db.int(),

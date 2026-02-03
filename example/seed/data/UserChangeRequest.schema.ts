@@ -2,7 +2,7 @@ import { db, t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
 
-const UserChangeRequest = db.type("UserChangeRequest", {
+const UserChangeRequest = db.type(["UserChangeRequest", "UserChangeRequests"], {
   recordId: db.uuid().index(),
   draft: db.uuid().index(),
   status: db.enum(["RUNNING", "REWORK", "APPROVED", "REJECTED", "CANCELED"]).index(),
