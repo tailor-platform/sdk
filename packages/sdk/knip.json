@@ -6,6 +6,10 @@
   },
   "tags": ["-lintignore"],
   "ignore": ["scripts/**", "e2e/fixtures/**"],
+  "ignoreFiles": [
+    "src/cli/workspace/function/index.ts",
+    "src/cli/workspace/function/registry/index.ts"
+  ],
   "ignoreDependencies": [
     "@tailor-platform/function-kysely-tailordb",
     "@typescript/native-preview",

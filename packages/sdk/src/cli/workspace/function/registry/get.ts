@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../../args";
 import { initOperatorClient } from "../../../client";
@@ -66,22 +66,20 @@ export async function getFunctionRegistry(
   }
 }
 
+// oxlint-disable-next-line jsdoc/check-tag-names
+/** @lintignore */
 export const getCommand = defineCommand({
-  meta: {
-    name: "get",
-    description: "Get a function registry by name",
-  },
-  args: {
+  name: "get",
+  description: "Get a function registry by name",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    name: {
-      type: "string",
+    name: arg(z.string(), {
       description: "Function name",
-      required: true,
       alias: "n",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const fn = await getFunctionRegistry({
       workspaceId: args["workspace-id"],

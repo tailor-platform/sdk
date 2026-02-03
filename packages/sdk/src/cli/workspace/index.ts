@@ -3,7 +3,7 @@ import { appCommand } from "./app";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
 import { describeCommand } from "./describe";
-import { functionCommand } from "./function";
+// import { functionCommand } from "./function";
 import { listCommand } from "./list";
 import { restoreCommand } from "./restore";
 import { userCommand } from "./user";
@@ -16,7 +16,7 @@ export const workspaceCommand = defineCommand({
     create: createCommand,
     delete: deleteCommand,
     describe: describeCommand,
-    function: functionCommand,
+    // function: functionCommand,
     list: listCommand,
     restore: restoreCommand,
     user: userCommand,

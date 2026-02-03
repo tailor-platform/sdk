@@ -1,12 +1,12 @@
-import { defineCommand } from "citty";
-import { registryCommand } from "./registry";
+import { defineCommand } from "politty";
+// import { registryCommand } from "./registry";
 
 export const functionCommand = defineCommand({
-  meta: {
-    name: "function",
-    description: "Manage workspace functions",
-  },
+  name: "function",
+  description: "Manage workspace functions",
   subCommands: {
-    registry: registryCommand,
+    // The implementation of Registry get-type commands is complete, but currently the registry is not deployed,
+    // resulting in always returning 0 records. This command will be enabled after the fix.
+    // registry: registryCommand,
   },
 });
