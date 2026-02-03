@@ -1,5 +1,5 @@
 import multiline from "multiline-ts";
-import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
+import { type KyselyNamespaceMetadata, type KyselyTypeMetadata } from "./types";
 import type { OperatorFieldConfig, TailorDBType } from "@/parser/service/tailordb/types";
 
 type UsedUtilityTypes = { Timestamp: boolean; Serial: boolean };
@@ -231,7 +231,15 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   }
 
   const importsSection = multiline /* ts */ `
-    import { type ColumnType, Kysely, type KyselyConfig } from "kysely";
+    import {
+      type ColumnType,
+      Kysely,
+      type KyselyConfig,
+      type Transaction as KyselyTransaction,
+      type Insertable as KyselyInsertable,
+      type Selectable as KyselySelectable,
+      type Updateable as KyselyUpdateable,
+    } from "kysely";
     import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
     ${utilityTypeDeclarations.join("\n")}
@@ -270,5 +278,34 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
     export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;
   `;
 
-  return [importsSection, namespaceInterface, getDBFunction].join("\n\n") + "\n";
+  const utilityTypeExports = multiline /* ts */ `
+    export type Transaction<K extends keyof Namespace | DB = keyof Namespace> =
+      K extends DB<infer N>
+        ? KyselyTransaction<Namespace[N]>
+        : K extends keyof Namespace
+          ? KyselyTransaction<Namespace[K]>
+          : never;
+
+    type TableName = {
+      [N in keyof Namespace]: keyof Namespace[N];
+    }[keyof Namespace];
+    export type Table<T extends TableName> = {
+      [N in keyof Namespace]: T extends keyof Namespace[N] ? Namespace[N][T]
+        : never;
+    }[keyof Namespace];
+
+    export type Insertable<T extends keyof Namespace[keyof Namespace]> = KyselyInsertable<
+      Table<T>
+    >;
+    export type Selectable<T extends keyof Namespace[keyof Namespace]> = KyselySelectable<
+      Table<T>
+    >;
+    export type Updateable<T extends keyof Namespace[keyof Namespace]> = KyselyUpdateable<
+      Table<T>
+    >;
+  `;
+
+  return (
+    [importsSection, namespaceInterface, getDBFunction, utilityTypeExports].join("\n\n") + "\n"
+  );
 }
