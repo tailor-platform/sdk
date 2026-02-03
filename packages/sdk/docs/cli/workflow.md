@@ -102,7 +102,7 @@ tailor-sdk workflow start [options] <name>
 | `--machineuser <MACHINEUSER>`   | `-m`  | Machine user name                                              | -                    |
 | `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                | -                    |
 | `--wait`                        | `-W`  | Wait for execution to complete                                 | `false`              |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `3000`               |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `"3s"`               |
 | `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | `false`              |
 
 <!-- politty:command:workflow start:end -->
@@ -134,7 +134,7 @@ tailor-sdk workflow executions [options] [executionId]
 | `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | -       |
 | `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | -       |
 | `--wait`                          | `-W`  | Wait for execution to complete                                 | `false` |
-| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `3000`  |
+| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `"3s"`  |
 | `--logs`                          | -     | Display job execution logs (detail mode only)                  | `false` |
 
 <!-- politty:command:workflow executions:end -->
@@ -164,7 +164,7 @@ tailor-sdk workflow resume [options] <executionId>
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | -       |
 | `--wait`                        | `-W`  | Wait for execution to complete                                 | `false` |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `3000`  |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `"3s"`  |
 | `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | `false` |
 
 <!-- politty:command:workflow resume:end -->

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { loadEnvFiles } from "./args";
+import { loadEnvFiles, durationArg, positiveIntArg, jsonDataArg, headerArg } from "./args";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
@@ -127,5 +127,94 @@ describe("loadEnvFiles", () => {
     it("handles empty arrays", () => {
       expect(() => loadEnvFiles([], [])).not.toThrow();
     });
+  });
+});
+
+describe("durationArg", () => {
+  it("parses seconds to milliseconds", () => {
+    expect(durationArg.parse("3s")).toBe(3000);
+    expect(durationArg.parse("1s")).toBe(1000);
+  });
+
+  it("parses milliseconds", () => {
+    expect(durationArg.parse("500ms")).toBe(500);
+    expect(durationArg.parse("1ms")).toBe(1);
+  });
+
+  it("parses minutes to milliseconds", () => {
+    expect(durationArg.parse("1m")).toBe(60000);
+    expect(durationArg.parse("2m")).toBe(120000);
+  });
+
+  it("rejects invalid format", () => {
+    expect(() => durationArg.parse("3")).toThrow();
+    expect(() => durationArg.parse("3x")).toThrow();
+    expect(() => durationArg.parse("abc")).toThrow();
+    expect(() => durationArg.parse("")).toThrow();
+  });
+});
+
+describe("positiveIntArg", () => {
+  it("parses positive integers", () => {
+    expect(positiveIntArg.parse("1")).toBe(1);
+    expect(positiveIntArg.parse("100")).toBe(100);
+  });
+
+  it("coerces numbers", () => {
+    expect(positiveIntArg.parse(5)).toBe(5);
+  });
+
+  it("rejects zero", () => {
+    expect(() => positiveIntArg.parse("0")).toThrow();
+  });
+
+  it("rejects negative numbers", () => {
+    expect(() => positiveIntArg.parse("-1")).toThrow();
+  });
+
+  it("rejects non-integers", () => {
+    expect(() => positiveIntArg.parse("1.5")).toThrow();
+  });
+});
+
+describe("jsonDataArg", () => {
+  it("parses valid JSON object", () => {
+    expect(jsonDataArg.parse('{"key": "value"}')).toEqual({ key: "value" });
+  });
+
+  it("parses nested JSON", () => {
+    expect(jsonDataArg.parse('{"a": {"b": 1}}')).toEqual({ a: { b: 1 } });
+  });
+
+  it("rejects invalid JSON", () => {
+    expect(() => jsonDataArg.parse("not json")).toThrow(/Invalid JSON data/);
+    expect(() => jsonDataArg.parse("{invalid}")).toThrow(/Invalid JSON data/);
+  });
+});
+
+describe("headerArg", () => {
+  it("parses valid header format", () => {
+    expect(headerArg.parse("Content-Type: application/json")).toEqual({
+      key: "Content-Type",
+      value: "application/json",
+    });
+  });
+
+  it("trims whitespace", () => {
+    expect(headerArg.parse("  Key  :  Value  ")).toEqual({
+      key: "Key",
+      value: "Value",
+    });
+  });
+
+  it("handles values with colons", () => {
+    expect(headerArg.parse("Time: 12:30:00")).toEqual({
+      key: "Time",
+      value: "12:30:00",
+    });
+  });
+
+  it("rejects header without colon", () => {
+    expect(() => headerArg.parse("no-colon")).toThrow(/Invalid header format/);
   });
 });

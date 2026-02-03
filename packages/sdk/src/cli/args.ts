@@ -22,14 +22,19 @@ const unitToMs: Record<DurationUnit, number> = {
   m: 60 * 1000,
 };
 
+const durationPattern = /^(\d+)(ms|s|m)$/;
+
 /**
  * Schema for duration string validation (e.g., "3s", "500ms", "1m")
  * Transforms the string to milliseconds
  */
 export const durationArg = z
-  .templateLiteral([z.number().int().positive(), z.enum(durationUnits)])
+  .string()
+  .refine((val) => durationPattern.test(val), {
+    message: "Invalid duration format. Expected format: '3s', '500ms', '1m'",
+  })
   .transform((duration) => {
-    const match = duration.match(/^(\d+)(ms|s|m)$/)!;
+    const match = duration.match(durationPattern)!;
     const value = parseInt(match[1], 10);
     const unit = match[2] as DurationUnit;
     return value * unitToMs[unit];
