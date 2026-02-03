@@ -152,6 +152,12 @@ describe("durationArg", () => {
     expect(() => durationArg.parse("abc")).toThrow();
     expect(() => durationArg.parse("")).toThrow();
   });
+
+  it("rejects zero duration", () => {
+    expect(() => durationArg.parse("0ms")).toThrow(/Duration must be greater than 0/);
+    expect(() => durationArg.parse("0s")).toThrow(/Duration must be greater than 0/);
+    expect(() => durationArg.parse("0m")).toThrow(/Duration must be greater than 0/);
+  });
 });
 
 describe("positiveIntArg", () => {

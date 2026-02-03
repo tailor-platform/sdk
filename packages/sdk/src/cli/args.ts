@@ -38,6 +38,9 @@ export const durationArg = z
     const value = parseInt(match[1], 10);
     const unit = match[2] as DurationUnit;
     return value * unitToMs[unit];
+  })
+  .refine((ms) => ms > 0, {
+    message: "Duration must be greater than 0",
   });
 
 /**
