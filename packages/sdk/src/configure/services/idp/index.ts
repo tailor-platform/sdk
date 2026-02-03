@@ -8,8 +8,8 @@ import type { IdPInput, IdpDefinitionBrand } from "@/parser/service/idp/types";
  * @param config - IdP configuration
  * @returns Defined IdP service
  */
-export function defineIdp<const Name extends string, const TClients extends string[]>(
-  name: Name,
+export function defineIdp<const TClients extends string[]>(
+  name: string,
   config: Omit<IdPInput, "name" | "clients"> & { clients: TClients },
 ) {
   const result = {

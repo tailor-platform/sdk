@@ -2,7 +2,6 @@ import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
-import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
 export type {
   TailorDBExternalConfig,
   TailorDBMigrationConfig,
