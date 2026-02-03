@@ -1,5 +1,5 @@
 import multiline from "multiline-ts";
-import { type KyselyTypeMetadata, type KyselyNamespaceMetadata } from "./types";
+import { type KyselyNamespaceMetadata, type KyselyTypeMetadata } from "./types";
 import type { OperatorFieldConfig, ParsedTailorDBType } from "@/parser/service/tailordb/types";
 
 type UsedUtilityTypes = { Timestamp: boolean; Serial: boolean };
@@ -286,16 +286,22 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
           ? KyselyTransaction<Namespace[K]>
           : never;
 
+    type TableName = {
+      [N in keyof Namespace]: keyof Namespace[N];
+    }[keyof Namespace];
+    export type Table<T extends TableName> = {
+      [N in keyof Namespace]: T extends keyof Namespace[N] ? Namespace[N][T]
+        : never;
+    }[keyof Namespace];
+
     export type Insertable<T extends keyof Namespace[keyof Namespace]> = KyselyInsertable<
-      Namespace[keyof Namespace][T]
+      Table<T>
     >;
-
     export type Selectable<T extends keyof Namespace[keyof Namespace]> = KyselySelectable<
-      Namespace[keyof Namespace][T]
+      Table<T>
     >;
-
     export type Updateable<T extends keyof Namespace[keyof Namespace]> = KyselyUpdateable<
-      Namespace[keyof Namespace][T]
+      Table<T>
     >;
   `;
 
