@@ -1,8 +1,5 @@
 import type { BuiltinIdP } from "@/parser/service/auth/types";
-import type { IdPInput } from "@/parser/service/idp/types";
-
-declare const idpDefinitionBrand: unique symbol;
-type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };
+import type { IdPInput, IdpDefinitionBrand } from "@/parser/service/idp/types";
 
 /**
  * Define an IdP service configuration for the Tailor SDK.
@@ -11,8 +8,8 @@ type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };
  * @param config - IdP configuration
  * @returns Defined IdP service
  */
-export function defineIdp<const TClients extends string[]>(
-  name: string,
+export function defineIdp<const Name extends string, const TClients extends string[]>(
+  name: Name,
   config: Omit<IdPInput, "name" | "clients"> & { clients: TClients },
 ) {
   const result = {
@@ -33,6 +30,4 @@ export function defineIdp<const TClients extends string[]>(
   return result as typeof result & IdpDefinitionBrand;
 }
 
-export type IdPExternalConfig = { name: string; external: true };
-
-export type IdPConfig = Omit<ReturnType<typeof defineIdp>, "provider"> | IdPExternalConfig;
+export type { IdPConfig, IdPExternalConfig } from "@/parser/service/idp/types";

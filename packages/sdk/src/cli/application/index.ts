@@ -6,6 +6,7 @@ import { type AppConfig } from "@/parser/app-config";
 import { type AuthConfig } from "@/parser/service/auth";
 import { type ExecutorServiceInput } from "@/parser/service/executor";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
+import { type IdPConfig } from "@/parser/service/idp/types";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
 import {
   StaticWebsiteSchema,
@@ -14,7 +15,6 @@ import {
 } from "@/parser/service/staticwebsite";
 import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
-import type { IdPConfig } from "@/configure/services/idp";
 
 export type Application = {
   readonly name: string;
