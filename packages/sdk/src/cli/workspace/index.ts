@@ -5,7 +5,7 @@ import { listCommand } from "./list";
 
 export const workspaceCommand = defineCommand({
   name: "workspace",
-  description: "Manage Tailor Platform workspaces",
+  description: "Manage Tailor Platform workspaces.",
   subCommands: {
     create: createCommand,
     delete: deleteCommand,

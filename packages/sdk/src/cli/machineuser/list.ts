@@ -18,8 +18,8 @@ export interface MachineUserInfo {
   name: string;
   clientId: string;
   clientSecret: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 /**
@@ -32,8 +32,8 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
     name: user.name,
     clientId: user.clientId,
     clientSecret: user.clientSecret,
-    createdAt: user.createdAt ? timestampDate(user.createdAt).toISOString() : "N/A",
-    updatedAt: user.updatedAt ? timestampDate(user.updatedAt).toISOString() : "N/A",
+    createdAt: user.createdAt ? timestampDate(user.createdAt) : null,
+    updatedAt: user.updatedAt ? timestampDate(user.updatedAt) : null,
   };
 }
 
@@ -81,7 +81,7 @@ export async function listMachineUsers(
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List all machine users",
+  description: "List all machine users in the application.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

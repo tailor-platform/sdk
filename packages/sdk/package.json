@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -43,6 +43,8 @@
     "test:unit": "vitest --project=unit",
     "test:e2e": "vitest --project=e2e",
     "test:coverage": "vitest --coverage",
+    "docs:check": "vitest run --project=unit src/cli/docs.test.ts",
+    "docs:update": "POLITTY_DOCS_UPDATE=true vitest run --project=unit src/cli/docs.test.ts",
     "build": "tsdown && cross-env FORCE_CREATE=1 node postinstall.mjs",
     "lint": "oxlint --type-aware . && eslint --cache .",
     "lint:fix": "oxlint --type-aware . --fix && eslint --cache . --fix",

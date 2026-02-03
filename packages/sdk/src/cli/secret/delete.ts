@@ -9,7 +9,7 @@ import { secretIdentifyArgs } from "./args";
 
 export const deleteSecretCommand = defineCommand({
   name: "delete",
-  description: "Delete a secret in a vault",
+  description: "Delete a secret in a vault.",
   args: z.object({
     ...commonArgs,
     ...workspaceArgs,

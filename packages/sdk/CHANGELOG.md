@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 1.7.0
+
+### Minor Changes
+
+- [#503](https://github.com/tailor-platform/sdk/pull/503) [`d6d16e2`](https://github.com/tailor-platform/sdk/commit/d6d16e26f329088926eb07d89d0c7dbbefc0bcd5) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - reject configs with both userProfile and machineUserAttributes
+
+### Patch Changes
+
+- [#512](https://github.com/tailor-platform/sdk/pull/512) [`8cf6a9b`](https://github.com/tailor-platform/sdk/commit/8cf6a9b52075dd511f691709eb5779e9b05ce767) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve CLI table output formatting: humanize Date fields, pretty-print JSON objects, and output empty array in JSON mode for list commands
+
+- [#502](https://github.com/tailor-platform/sdk/pull/502) [`080053f`](https://github.com/tailor-platform/sdk/commit/080053fb56fcc9fd28bcd1b1400094a8c35d4d17) Thanks [@riku99](https://github.com/riku99)! - Add workspace info to show command'
+
+- [#509](https://github.com/tailor-platform/sdk/pull/509) [`502050f`](https://github.com/tailor-platform/sdk/commit/502050f0946a1c314ef4c8d2a79ce924973b0daa) Thanks [@riku99](https://github.com/riku99)! - Delete profile when deleting workspace
+
 ## 1.6.3
 
 ### Patch Changes

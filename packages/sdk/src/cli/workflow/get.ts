@@ -65,7 +65,7 @@ export async function getWorkflow(options: GetWorkflowOptions): Promise<Workflow
 
 export const getCommand = defineCommand({
   name: "get",
-  description: "Get workflow details",
+  description: "Get workflow details.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

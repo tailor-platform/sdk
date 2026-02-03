@@ -15,6 +15,7 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { formatKeyValueTable } from "../utils/format";
 import { styles, logger } from "../utils/logger";
 import { waitArgs } from "./args";
+import { isWorkflowExecutionTerminalStatus } from "./status";
 import {
   type WorkflowExecutionInfo,
   type WorkflowJobExecutionInfo,
@@ -253,11 +254,8 @@ export async function getWorkflowExecution(
         throw new Error(`Execution '${options.executionId}' not found.`);
       }
 
-      // Terminal states
-      if (
-        execution.status === WorkflowExecution_Status.SUCCESS ||
-        execution.status === WorkflowExecution_Status.FAILED
-      ) {
+      // Terminal states (SUCCESS, FAILED, PENDING_RESUME)
+      if (isWorkflowExecutionTerminalStatus(execution.status)) {
         return await fetchExecutionWithLogs(options.executionId, options.logs ?? false);
       }
 
@@ -278,12 +276,12 @@ async function waitWithSpinner(
   interval: number,
   json: boolean,
 ): Promise<WorkflowExecutionDetailInfo> {
-  const spinner = !json ? ora().start("Waiting...") : null;
+  const spinner = !json ? ora().start("Waiting for workflow to complete...") : null;
 
   const updateInterval = setInterval(() => {
     if (spinner) {
       const now = formatTime(new Date());
-      spinner.text = `Polling... (${now})`;
+      spinner.text = `Waiting for workflow to complete... (${now})`;
     }
   }, interval);
 
@@ -309,14 +307,17 @@ async function waitWithSpinner(
  * @param execution - Workflow execution detail info
  */
 export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): void {
+  // Helper to format Date as ISO string or "N/A"
+  const formatDate = (date: Date | null): string => (date ? date.toISOString() : "N/A");
+
   // Print execution summary
   const summaryData: [string, string][] = [
     ["id", execution.id],
     ["workflowName", execution.workflowName],
     ["status", execution.status],
     ["jobExecutions", execution.jobExecutions.toString()],
-    ["startedAt", execution.startedAt],
-    ["finishedAt", execution.finishedAt],
+    ["startedAt", formatDate(execution.startedAt)],
+    ["finishedAt", formatDate(execution.finishedAt)],
   ];
   logger.out(formatKeyValueTable(summaryData));
 
@@ -326,8 +327,8 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
     for (const job of execution.jobDetails) {
       logger.log(styles.info(`\n--- ${job.stackedJobName} ---`));
       logger.log(`  Status: ${job.status}`);
-      logger.log(`  Started: ${job.startedAt}`);
-      logger.log(`  Finished: ${job.finishedAt}`);
+      logger.log(`  Started: ${formatDate(job.startedAt)}`);
+      logger.log(`  Finished: ${formatDate(job.finishedAt)}`);
 
       if (job.logs) {
         logger.log(styles.warning("\n  Logs:"));
@@ -352,7 +353,7 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
 
 export const executionsCommand = defineCommand({
   name: "executions",
-  description: "List or get workflow executions",
+  description: "List or get workflow executions.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

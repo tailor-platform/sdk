@@ -154,6 +154,8 @@ export function defineAuth<
     invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
   };
 
+  validateAuthConfig(result);
+
   return result as typeof result & AuthDefinitionBrand;
 }
 
@@ -172,3 +174,15 @@ export type AuthOwnConfig = DefinedAuth<
 >;
 
 export type AuthConfig = AuthOwnConfig | AuthExternalConfig;
+
+function validateAuthConfig(config: {
+  userProfile?: unknown;
+  machineUserAttributes?: unknown;
+}): void {
+  const hasUserProfile = config.userProfile !== undefined;
+  const hasMachineUserAttributes = config.machineUserAttributes !== undefined;
+
+  if (hasUserProfile && hasMachineUserAttributes) {
+    throw new Error("Provide either userProfile or machineUserAttributes, not both.");
+  }
+}

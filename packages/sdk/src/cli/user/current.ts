@@ -7,7 +7,7 @@ import { logger } from "../utils/logger";
 
 export const currentCommand = defineCommand({
   name: "current",
-  description: "Show current user",
+  description: "Show current user.",
   args: z.object({
     ...commonArgs,
   }),

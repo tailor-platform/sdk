@@ -14,15 +14,15 @@ export interface VaultListOptions {
 
 export interface VaultInfo {
   name: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 function vaultInfo(vault: SecretManagerVault): VaultInfo {
   return {
     name: vault.name,
-    createdAt: vault.createTime ? timestampDate(vault.createTime).toISOString() : "N/A",
-    updatedAt: vault.updateTime ? timestampDate(vault.updateTime).toISOString() : "N/A",
+    createdAt: vault.createTime ? timestampDate(vault.createTime) : null,
+    updatedAt: vault.updateTime ? timestampDate(vault.updateTime) : null,
   };
 }
 
@@ -55,7 +55,7 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
 
 export const listCommand = defineCommand({
   name: "list",
-  description: "List Secret Manager vaults",
+  description: "List all Secret Manager vaults in the workspace.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,

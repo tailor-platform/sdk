@@ -25,7 +25,7 @@ export type {
   GeneratorResult,
   DependencyKind,
 } from "./generator/types";
-export type { ParsedTailorDBType as TailorDBType } from "@/parser/service/tailordb/types";
+export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
 
@@ -74,6 +74,26 @@ export type {
   WorkflowExecutionInfo,
   WorkflowJobExecutionInfo,
 } from "./workflow/transform";
+export {
+  triggerExecutor,
+  type TriggerExecutorOptions,
+  type TriggerExecutorResult,
+} from "./executor/trigger";
+export {
+  listExecutorJobs,
+  getExecutorJob,
+  watchExecutorJob,
+  type ListExecutorJobsOptions,
+  type GetExecutorJobOptions,
+  type WatchExecutorJobOptions,
+  type ExecutorJobDetailInfo,
+  type WatchExecutorJobResult,
+} from "./executor/jobs";
+export type {
+  ExecutorJobListInfo,
+  ExecutorJobInfo,
+  ExecutorJobAttemptInfo,
+} from "./executor/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
 export { truncate, type TruncateOptions } from "./tailordb/truncate";

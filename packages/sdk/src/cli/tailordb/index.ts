@@ -5,7 +5,7 @@ import { truncateCommand } from "./truncate";
 
 export const tailordbCommand = defineCommand({
   name: "tailordb",
-  description: "Manage TailorDB tables and data",
+  description: "Manage TailorDB tables and data.",
   subCommands: {
     erd: erdCommand,
     migration: migrationCommand,
