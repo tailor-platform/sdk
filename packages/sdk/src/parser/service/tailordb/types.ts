@@ -16,6 +16,8 @@ export type {
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
+  GqlOperationsConfig,
+  GqlOperations,
 } from "@/configure/services/tailordb";
 
 /**

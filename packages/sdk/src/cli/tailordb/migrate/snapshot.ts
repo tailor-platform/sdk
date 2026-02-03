@@ -4,7 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { normalizeGqlOperations } from "@/configure/services/tailordb/types";
+import { normalizeGqlOperations } from "@/parser/service/tailordb";
 import {
   type MigrationDiff,
   type DiffChange,

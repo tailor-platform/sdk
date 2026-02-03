@@ -36,20 +36,7 @@ import {
 import * as inflection from "inflection";
 import * as path from "pathe";
 import { type TailorDBService } from "@/cli/application/tailordb/service";
-import {
-  normalizeGqlOperations,
-  type GqlOperationsConfig,
-} from "@/configure/services/tailordb/types";
-import {
-  type PermissionOperand,
-  type StandardActionPermission,
-  type StandardGqlPermissionPolicy,
-  type StandardPermissionCondition,
-  type StandardTailorTypeGqlPermission,
-  type StandardTailorTypePermission,
-  type OperatorFieldConfig,
-  type TailorDBType,
-} from "@/parser/service/tailordb/types";
+import { normalizeGqlOperations } from "@/parser/service/tailordb";
 import { createChangeSet } from "..";
 import { fetchAll, type OperatorClient } from "../../../client";
 import {
@@ -88,7 +75,18 @@ import type {
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { Executor } from "@/parser/service/executor";
-import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
+import type {
+  GqlOperationsConfig,
+  PermissionOperand,
+  StandardActionPermission,
+  StandardGqlPermissionPolicy,
+  StandardPermissionCondition,
+  StandardTailorTypeGqlPermission,
+  StandardTailorTypePermission,
+  OperatorFieldConfig,
+  TailorDBType,
+  TailorDBServiceConfig,
+} from "@/parser/service/tailordb/types";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // ============================================================================
