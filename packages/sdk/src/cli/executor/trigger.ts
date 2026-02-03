@@ -2,21 +2,55 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import {
-  commonArgs,
-  durationArg,
-  headerArg,
-  jsonArgs,
-  jsonDataArg,
-  withCommonArgs,
-  workspaceArgs,
-} from "../args";
+import { commonArgs, durationArg, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger, styles } from "../utils/logger";
 import { watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
 import type { JsonObject } from "@bufbuild/protobuf";
+
+/**
+ * Schema for JSON string validation (object only)
+ * Transforms the string to a parsed object
+ */
+const jsonDataArg = z
+  .string()
+  .transform((val) => {
+    try {
+      return JSON.parse(val) as unknown;
+    } catch {
+      throw new Error(`Invalid JSON data: ${val}. Please provide a valid JSON string.`);
+    }
+  })
+  .refine((v): v is JsonObject => typeof v === "object" && v !== null && !Array.isArray(v), {
+    message: "JSON data must be an object, not an array or primitive value",
+  });
+
+/**
+ * Schema for header string validation (format: "Key: Value")
+ * Transforms the string to an object with key and value properties
+ */
+const headerArg = z
+  .string()
+  .superRefine((val, ctx) => {
+    if (!val.includes(":")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid header format: '${val}'. Expected format: 'Key: Value'`,
+      });
+    }
+  })
+  .transform((val) => {
+    const colonIndex = val.indexOf(":");
+    return {
+      key: val.slice(0, colonIndex).trim(),
+      value: val.slice(colonIndex + 1).trim(),
+    };
+  })
+  .refine((h) => h.key.length > 0, {
+    message: "Header name cannot be empty",
+  });
 
 export interface TriggerExecutorOptions {
   executorName: string;

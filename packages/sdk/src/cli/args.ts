@@ -5,7 +5,6 @@ import { arg } from "politty";
 import { z } from "zod";
 import { isCLIError } from "./utils/errors";
 import { logger } from "./utils/logger";
-import type { JsonObject } from "@bufbuild/protobuf";
 
 type ArgsShape = Record<string, z.ZodType>;
 
@@ -48,46 +47,6 @@ export const durationArg = z
  * Transforms the string to a number
  */
 export const positiveIntArg = z.coerce.number().int().positive();
-
-/**
- * Schema for JSON string validation
- * Transforms the string to a parsed object
- */
-export const jsonDataArg = z
-  .string()
-  .superRefine((val, ctx) => {
-    try {
-      JSON.parse(val);
-    } catch {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Invalid JSON data: ${val}. Please provide a valid JSON string.`,
-      });
-    }
-  })
-  .transform((val) => JSON.parse(val) as JsonObject);
-
-/**
- * Schema for header string validation (format: "Key: Value")
- * Transforms the string to an object with key and value properties
- */
-export const headerArg = z
-  .string()
-  .superRefine((val, ctx) => {
-    if (!val.includes(":")) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Invalid header format: '${val}'. Expected format: 'Key: Value'`,
-      });
-    }
-  })
-  .transform((val) => {
-    const colonIndex = val.indexOf(":");
-    return {
-      key: val.slice(0, colonIndex).trim(),
-      value: val.slice(colonIndex + 1).trim(),
-    };
-  });
 
 // ============================================================================
 // Env File Helpers
