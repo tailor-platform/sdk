@@ -93,6 +93,7 @@ function filterJobFunctionVersions(
  * Register job functions used by any workflow.
  * Only registers jobs that are actually used (based on usedJobNames in changeSet).
  * Uses create for new jobs and update for existing jobs.
+ * For jobs with scriptRef, uses Function Registry reference instead of inline script.
  * Sets metadata on used JobFunctions and removes metadata from unused ones.
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
@@ -106,13 +107,13 @@ async function registerJobFunctions(
 ): Promise<{ [key: string]: bigint }> {
   const jobFunctionVersions: { [key: string]: bigint } = {};
 
-  // Get scripts from the first workflow (all workflows share the same scripts)
+  // Get scripts and scriptRefs from the first workflow (all workflows share the same scripts)
   const firstWorkflow = changeSet.creates[0] || changeSet.updates[0];
   if (!firstWorkflow) {
     return jobFunctionVersions;
   }
 
-  const { workspaceId, scripts } = firstWorkflow;
+  const { workspaceId, scripts, jobScriptRefs } = firstWorkflow;
 
   // Collect all job names used by any workflow
   const allUsedJobNames = new Set<string>();
@@ -136,8 +137,11 @@ async function registerJobFunctions(
   // Use create for new jobs, update for existing jobs
   const results = await Promise.all(
     Array.from(allUsedJobNames).map(async (jobName) => {
+      const scriptRef = jobScriptRefs[jobName];
       const script = scripts.get(jobName);
-      if (!script) {
+
+      // Validate: either scriptRef or script must exist
+      if (!scriptRef && !script) {
         throw new Error(
           `No bundled script found for job "${jobName}". ` +
             `Please run "generate" command before "apply".`,
@@ -145,17 +149,35 @@ async function registerJobFunctions(
       }
 
       const isExisting = existingJobNamesSet.has(jobName);
-      const response = isExisting
-        ? await client.updateWorkflowJobFunction({
-            workspaceId,
-            jobFunctionName: jobName,
-            script,
-          })
-        : await client.createWorkflowJobFunction({
-            workspaceId,
-            jobFunctionName: jobName,
-            script,
-          });
+
+      let response;
+      if (scriptRef) {
+        // Use Function Registry reference
+        response = isExisting
+          ? await client.updateWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              scriptRef,
+            })
+          : await client.createWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              scriptRef,
+            });
+      } else {
+        // Use inline script
+        response = isExisting
+          ? await client.updateWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              script,
+            })
+          : await client.createWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              script,
+            });
+      }
 
       // Set metadata to mark this JobFunction as owned by this app
       await client.setMetadata(
@@ -201,6 +223,7 @@ type CreateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   scripts: Map<string, string>;
+  jobScriptRefs: Record<string, string>;
   usedJobNames: string[];
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -210,6 +233,7 @@ type UpdateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   scripts: Map<string, string>;
+  jobScriptRefs: Record<string, string>;
   usedJobNames: string[];
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -235,6 +259,7 @@ function jobFunctionTrn(workspaceId: string, name: string) {
  * @param appName - Application name
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
+ * @param jobScriptRefs - Maps job name to scriptRef (Function Registry reference)
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -243,6 +268,7 @@ export async function planWorkflow(
   appName: string,
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
+  jobScriptRefs: Record<string, string> = {},
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
@@ -308,6 +334,7 @@ export async function planWorkflow(
         workspaceId,
         workflow,
         scripts: allScripts,
+        jobScriptRefs,
         usedJobNames,
         metaRequest,
       });
@@ -318,6 +345,7 @@ export async function planWorkflow(
         workspaceId,
         workflow,
         scripts: allScripts,
+        jobScriptRefs,
         usedJobNames,
         metaRequest,
       });

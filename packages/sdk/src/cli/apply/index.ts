@@ -8,6 +8,10 @@ import {
   type WorkflowLoadResult,
 } from "@/cli/application/workflow/service";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
+import {
+  bundleFunctionRegistry,
+  type BundledFunction,
+} from "@/cli/bundler/function-registry/function-registry-bundler";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
 import { buildTriggerContext, type TriggerContext } from "@/cli/bundler/trigger-context";
 import {
@@ -31,6 +35,7 @@ import {
   type UnmanagedResource,
 } from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
+import { applyFunctionRegistry, planFunctionRegistry } from "./services/function-registry";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
@@ -99,6 +104,14 @@ export async function apply(options?: ApplyOptions) {
   if (application.executorService) {
     await buildExecutor(application.executorService.config, triggerContext);
   }
+  // Bundle function registry files
+  let bundledFunctions: BundledFunction[] = [];
+  if (application.functionRegistryService) {
+    const functions = await application.functionRegistryService.loadFunctions();
+    if (functions && functions.length > 0) {
+      bundledFunctions = await bundleFunctionRegistry(functions);
+    }
+  }
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
     const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
@@ -156,12 +169,14 @@ export async function apply(options?: ApplyOptions) {
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
+  const functionRegistry = await planFunctionRegistry(ctx, bundledFunctions);
   const workflow = await planWorkflow(
     client,
     workspaceId,
     application.name,
     workflowResult?.workflows ?? {},
     workflowBuildResult?.mainJobDeps ?? {},
+    workflowBuildResult?.jobScriptRefs ?? {},
   );
 
   // Confirm conflicts
@@ -172,6 +187,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.conflicts,
     ...pipeline.conflicts,
     ...executor.conflicts,
+    ...functionRegistry.conflicts,
     ...workflow.conflicts,
   ];
   await confirmOwnerConflict(allConflicts, application.name, yes);
@@ -183,6 +199,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.unmanaged,
     ...pipeline.unmanaged,
     ...executor.unmanaged,
+    ...functionRegistry.unmanaged,
     ...workflow.unmanaged,
   ];
   await confirmUnmanagedResources(allUnmanaged, application.name, yes);
@@ -212,6 +229,7 @@ export async function apply(options?: ApplyOptions) {
     ...auth.resourceOwners,
     ...pipeline.resourceOwners,
     ...executor.resourceOwners,
+    ...functionRegistry.resourceOwners,
     ...workflow.resourceOwners,
   ]);
   const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
@@ -236,6 +254,9 @@ export async function apply(options?: ApplyOptions) {
 
   // TailorDB: Automatically validates migrations and handles migration flow internally
   await applyTailorDB(client, tailorDB, "create-update");
+
+  // Function Registry: Apply after TailorDB, before services that may reference functions
+  await applyFunctionRegistry(client, functionRegistry, "create-update");
 
   // Other services: Apply after TailorDB migrations complete
   await applyStaticWebsite(client, staticWebsite, "create-update");
@@ -262,6 +283,8 @@ export async function apply(options?: ApplyOptions) {
   // Phase 6: Delete services that depend on Application
   await applyWorkflow(client, workflow, "delete");
   await applyExecutor(client, executor, "delete");
+  // Function Registry: Delete after services that may reference functions
+  await applyFunctionRegistry(client, functionRegistry, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
 
   // Phase 7: Delete Application

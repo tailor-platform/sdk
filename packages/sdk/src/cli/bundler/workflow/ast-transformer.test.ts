@@ -85,7 +85,8 @@ const job = createWorkflowJob({ name: "test", body: () => { return 42; } });`;
       const jobs = findAllJobs(program, source);
 
       expect(jobs).toHaveLength(1);
-      const bodyCode = source.slice(jobs[0].bodyValueRange.start, jobs[0].bodyValueRange.end);
+      expect(jobs[0].bodyValueRange).toBeDefined();
+      const bodyCode = source.slice(jobs[0].bodyValueRange!.start, jobs[0].bodyValueRange!.end);
       expect(bodyCode).toBe("() => { return 42; }");
     });
 

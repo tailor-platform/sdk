@@ -164,7 +164,7 @@ export function transformWorkflowSource(
         end: endPos,
         text: "",
       });
-    } else if (!job.statementRange) {
+    } else if (!job.statementRange && job.bodyValueRange) {
       // Fallback: replace body with empty function if we can't find the statement
       replacements.push({
         start: job.bodyValueRange.start,

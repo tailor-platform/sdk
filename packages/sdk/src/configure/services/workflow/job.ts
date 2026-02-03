@@ -141,20 +141,76 @@ type WorkflowJobBody<I, O> =
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
-export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(config: {
+/**
+ * Workflow job with Function Registry reference.
+ * Uses scriptRef instead of inline body.
+ */
+export interface WorkflowJobWithScriptRef<Name extends string = string> {
+  name: Name;
+  trigger: (input?: unknown) => Promise<unknown>;
+  scriptRef: string;
+}
+
+type WorkflowJobConfigWithBody<Name extends string, I, O> = {
   readonly name: Name;
   readonly body: WorkflowJobBody<I, O>;
-}): WorkflowJob<Name, I, Awaited<O>> => {
+  readonly scriptRef?: never;
+};
+
+type WorkflowJobConfigWithScriptRef<Name extends string> = {
+  readonly name: Name;
+  readonly body?: never;
+  readonly scriptRef: string;
+};
+
+/**
+ * Create a workflow job with inline body function.
+ * @template Name
+ * @template I - Input type
+ * @template O - Output type
+ * @param config - Job configuration with body
+ * @returns Workflow job
+ */
+export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
+  config: WorkflowJobConfigWithBody<Name, I, O>,
+): WorkflowJob<Name, I, Awaited<O>>;
+
+/**
+ * Create a workflow job with Function Registry reference.
+ * @template Name
+ * @param config - Job configuration with scriptRef
+ * @returns Workflow job with scriptRef
+ */
+export function createWorkflowJob<const Name extends string>(
+  config: WorkflowJobConfigWithScriptRef<Name>,
+): WorkflowJobWithScriptRef<Name>;
+
+export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
+  config: WorkflowJobConfigWithBody<Name, I, O> | WorkflowJobConfigWithScriptRef<Name>,
+): WorkflowJob<Name, I, Awaited<O>> | WorkflowJobWithScriptRef<Name> {
+  if ("scriptRef" in config && config.scriptRef) {
+    return {
+      name: config.name,
+      trigger: async () => {
+        throw new Error(
+          `Cannot trigger job "${config.name}" locally: uses scriptRef. Deploy to platform first.`,
+        );
+      },
+      scriptRef: config.scriptRef,
+    };
+  }
+
+  const bodyConfig = config as WorkflowJobConfigWithBody<Name, I, O>;
   return {
-    name: config.name,
+    name: bodyConfig.name,
     // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
     // This converts Date objects to strings, matching actual runtime behavior.
     // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
     trigger: async (args?: unknown) => {
       const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-      const result = await config.body(args as I, { env });
+      const result = await bodyConfig.body(args as I, { env });
       return result ? JSON.parse(JSON.stringify(result)) : result;
     },
-    body: config.body,
+    body: bodyConfig.body,
   } as WorkflowJob<Name, I, Awaited<O>>;
-};
+}

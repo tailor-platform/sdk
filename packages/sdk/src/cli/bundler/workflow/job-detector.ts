@@ -13,9 +13,11 @@ export interface JobLocation {
   name: string;
   exportName?: string;
   nameRange: { start: number; end: number };
-  bodyValueRange: { start: number; end: number };
+  bodyValueRange?: { start: number; end: number };
   // Range of the entire variable declaration statement (for removal)
   statementRange?: { start: number; end: number };
+  // True if this job uses scriptRef (Function Registry reference)
+  scriptRef?: string;
 }
 
 export interface TriggerCall {
@@ -50,12 +52,9 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
         const nameProp = findProperty(configObj.properties, "name");
         const bodyProp = findProperty(configObj.properties, "body");
 
-        if (
-          nameProp &&
-          isStringLiteral(nameProp.value) &&
-          bodyProp &&
-          isFunctionExpression(bodyProp.value)
-        ) {
+        if (nameProp && isStringLiteral(nameProp.value)) {
+          const scriptRefProp = findProperty(configObj.properties, "scriptRef");
+
           // Find the outermost enclosing statement and export name
           // Iterate from closest parent (end of array) to farthest (start of array)
           let statementRange: { start: number; end: number } | undefined;
@@ -80,16 +79,29 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
             }
           }
 
-          jobs.push({
-            name: nameProp.value.value,
-            exportName,
-            nameRange: { start: nameProp.start, end: nameProp.end },
-            bodyValueRange: {
-              start: bodyProp.value.start,
-              end: bodyProp.value.end,
-            },
-            statementRange,
-          });
+          // Handle scriptRef jobs (no body, uses Function Registry)
+          if (scriptRefProp && isStringLiteral(scriptRefProp.value)) {
+            jobs.push({
+              name: nameProp.value.value,
+              exportName,
+              nameRange: { start: nameProp.start, end: nameProp.end },
+              statementRange,
+              scriptRef: scriptRefProp.value.value,
+            });
+          }
+          // Handle body jobs (inline function)
+          else if (bodyProp && isFunctionExpression(bodyProp.value)) {
+            jobs.push({
+              name: nameProp.value.value,
+              exportName,
+              nameRange: { start: nameProp.start, end: nameProp.end },
+              bodyValueRange: {
+                start: bodyProp.value.start,
+                end: bodyProp.value.end,
+              },
+              statementRange,
+            });
+          }
         }
       }
     }

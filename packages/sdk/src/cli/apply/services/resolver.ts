@@ -372,28 +372,47 @@ function processResolver(
   executorUsedResolvers: ReadonlySet<string>,
   env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof PipelineResolverSchema> {
-  // Read body function code
-  const functionPath = path.join(getDistDir(), "resolvers", `${resolver.name}.js`);
-  let functionCode = "";
-  try {
-    functionCode = fs.readFileSync(functionPath, "utf-8");
-  } catch {
-    logger.warn(`Function file not found: ${functionPath}`);
-  }
+  let pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[];
 
-  const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
-    {
-      name: "body",
-      operationName: "body",
-      description: `${resolver.name} function body`,
-      operationType: PipelineResolver_OperationType.FUNCTION,
-      operationSource: functionCode,
-      operationHook: {
-        expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
+  if (resolver.scriptRef) {
+    // Use Function Registry reference
+    pipelines = [
+      {
+        name: "body",
+        operationName: "body",
+        description: `${resolver.name} function body (Function Registry: ${resolver.scriptRef})`,
+        operationType: PipelineResolver_OperationType.FUNCTION,
+        operationSourceRef: resolver.scriptRef,
+        operationHook: {
+          expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
+        },
+        postScript: `args.body`,
       },
-      postScript: `args.body`,
-    },
-  ];
+    ];
+  } else {
+    // Read body function code (inline)
+    const functionPath = path.join(getDistDir(), "resolvers", `${resolver.name}.js`);
+    let functionCode = "";
+    try {
+      functionCode = fs.readFileSync(functionPath, "utf-8");
+    } catch {
+      logger.warn(`Function file not found: ${functionPath}`);
+    }
+
+    pipelines = [
+      {
+        name: "body",
+        operationName: "body",
+        description: `${resolver.name} function body`,
+        operationType: PipelineResolver_OperationType.FUNCTION,
+        operationSource: functionCode,
+        operationHook: {
+          expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
+        },
+        postScript: `args.body`,
+      },
+    ];
+  }
 
   const typeBaseName = inflection.camelize(resolver.name);
 

@@ -8,8 +8,16 @@ import type {
 } from "@/parser/service/executor/types";
 import type { Client } from "@urql/core";
 
-export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
+export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "scriptRef"> & {
   body: (args: Args) => void | Promise<void>;
+};
+
+/**
+ * Function operation with Function Registry reference.
+ * Use this type when referencing a function from Function Registry via scriptRef.
+ */
+export type FunctionOperationWithScriptRef = Omit<ParserFunctionOperation, "body"> & {
+  body?: undefined;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;

@@ -1,5 +1,6 @@
 import type { AuthConfig } from "@/configure/services/auth";
 import type { ExecutorServiceInput } from "@/configure/services/executor/types";
+import type { FunctionRegistryServiceInput } from "@/configure/services/function-registry/types";
 import type { IdPConfig } from "@/configure/services/idp";
 import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
 import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
@@ -24,4 +25,5 @@ export interface AppConfig<
   executor?: ExecutorServiceInput;
   workflow?: WorkflowServiceInput;
   staticWebsites?: StaticWebsites;
+  functionRegistry?: FunctionRegistryServiceInput;
 }

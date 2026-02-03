@@ -43,11 +43,16 @@ export const TailorFieldSchema = z.object({
   },
 });
 
-export const ResolverSchema = z.object({
-  operation: QueryTypeSchema,
-  name: z.string(),
-  description: z.string().optional(),
-  input: z.record(z.string(), TailorFieldSchema).optional(),
-  body: functionSchema,
-  output: TailorFieldSchema,
-});
+export const ResolverSchema = z
+  .object({
+    operation: QueryTypeSchema,
+    name: z.string(),
+    description: z.string().optional(),
+    input: z.record(z.string(), TailorFieldSchema).optional(),
+    body: functionSchema.optional(),
+    scriptRef: z.string().optional(),
+    output: TailorFieldSchema,
+  })
+  .refine((data) => (data.body !== undefined) !== (data.scriptRef !== undefined), {
+    message: "Exactly one of 'body' or 'scriptRef' must be provided",
+  });

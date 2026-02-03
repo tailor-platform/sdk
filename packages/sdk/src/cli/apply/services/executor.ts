@@ -374,22 +374,40 @@ function protoExecutor(
         targetType = ExecutorTargetType.JOB_FUNCTION;
       }
 
-      const scriptPath = path.join(getDistDir(), "executors", `${executor.name}.js`);
-      const script = fs.readFileSync(scriptPath, "utf-8");
-
-      targetConfig = {
-        config: {
-          case: "function",
-          value: {
-            name: `${executor.name}__target`,
-            script,
-            variables: {
-              expr: argsExpr,
+      if ("scriptRef" in target && target.scriptRef) {
+        // Use Function Registry reference
+        targetConfig = {
+          config: {
+            case: "function",
+            value: {
+              name: `${executor.name}__target`,
+              scriptRef: target.scriptRef,
+              variables: {
+                expr: argsExpr,
+              },
+              invoker: target.authInvoker ?? undefined,
             },
-            invoker: target.authInvoker ?? undefined,
           },
-        },
-      };
+        };
+      } else {
+        // Use inline script
+        const scriptPath = path.join(getDistDir(), "executors", `${executor.name}.js`);
+        const script = fs.readFileSync(scriptPath, "utf-8");
+
+        targetConfig = {
+          config: {
+            case: "function",
+            value: {
+              name: `${executor.name}__target`,
+              script,
+              variables: {
+                expr: argsExpr,
+              },
+              invoker: target.authInvoker ?? undefined,
+            },
+          },
+        };
+      }
       break;
     }
     case "workflow": {

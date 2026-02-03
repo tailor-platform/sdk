@@ -1,8 +1,13 @@
 import { createAuthService, type AuthService } from "@/cli/application/auth/service";
 import { createExecutorService, type ExecutorService } from "@/cli/application/executor/service";
+import {
+  createFunctionRegistryService,
+  type FunctionRegistryService,
+} from "@/cli/application/function-registry/service";
 import { createResolverService, type ResolverService } from "@/cli/application/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
 import { type AuthConfig } from "@/configure/services/auth";
+import { type FunctionRegistryServiceInput } from "@/configure/services/function-registry/types";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { type AppConfig } from "@/parser/app-config";
 import { type ExecutorServiceInput } from "@/parser/service/executor";
@@ -28,6 +33,7 @@ export type Application = {
   readonly executorService: Readonly<ExecutorService> | undefined;
   readonly workflowConfig: WorkflowServiceConfig | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
+  readonly functionRegistryService: Readonly<FunctionRegistryService> | undefined;
   readonly env: Readonly<Record<string, string | number | boolean>>;
   readonly applications: ReadonlyArray<Application>;
 };
@@ -180,6 +186,19 @@ function defineStaticWebsites(
   return { staticWebsiteServices };
 }
 
+type DefineFunctionRegistryResult = {
+  functionRegistryService: FunctionRegistryService | undefined;
+};
+
+function defineFunctionRegistry(
+  config: FunctionRegistryServiceInput | undefined,
+): DefineFunctionRegistryResult {
+  if (!config) {
+    return { functionRegistryService: undefined };
+  }
+  return { functionRegistryService: createFunctionRegistryService(config) };
+}
+
 /**
  * Define a Tailor application from the given configuration.
  * @param config - Application configuration object
@@ -197,6 +216,7 @@ export function defineApplication(config: AppConfig): Application {
   const executorResult = defineExecutor(config.executor);
   const workflowResult = defineWorkflow(config.workflow);
   const staticWebsiteResult = defineStaticWebsites(config.staticWebsites);
+  const functionRegistryResult = defineFunctionRegistry(config.functionRegistry);
 
   const subgraphs = [
     ...tailordbResult.subgraphs,
@@ -217,6 +237,7 @@ export function defineApplication(config: AppConfig): Application {
     executorService: executorResult.executorService,
     workflowConfig: workflowResult.workflowConfig,
     staticWebsiteServices: staticWebsiteResult.staticWebsiteServices,
+    functionRegistryService: functionRegistryResult.functionRegistryService,
     env: config.env ?? {},
     get applications() {
       return [application];

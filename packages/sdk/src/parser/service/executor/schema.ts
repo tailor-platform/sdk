@@ -44,6 +44,7 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
 export const FunctionOperationSchema = z.object({
   kind: z.enum(["function", "jobFunction"]),
   body: functionSchema,
+  scriptRef: z.string().optional(),
   authInvoker: AuthInvokerSchema.optional(),
 });
 

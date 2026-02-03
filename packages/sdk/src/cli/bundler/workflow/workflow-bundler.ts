@@ -16,11 +16,14 @@ interface JobInfo {
   name: string;
   exportName: string;
   sourceFile: string;
+  scriptRef?: string;
 }
 
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
   mainJobDeps: Record<string, string[]>;
+  /** Maps jobName -> scriptRef (Function Registry reference) for jobs that use scriptRef */
+  jobScriptRefs: Record<string, string>;
 }
 
 /**
@@ -46,11 +49,20 @@ export async function bundleWorkflowJobs(
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
-    return { mainJobDeps: {} };
+    return { mainJobDeps: {}, jobScriptRefs: {} };
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
-  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames);
+  const { usedJobs: allUsedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames);
+
+  // Filter out jobs that use scriptRef (Function Registry reference)
+  const usedJobs = allUsedJobs.filter((job) => {
+    if (job.scriptRef) {
+      logger.debug(`  Skipping: ${job.name} (uses scriptRef)`);
+      return false;
+    }
+    return true;
+  });
 
   logger.newline();
   logger.log(
@@ -79,7 +91,15 @@ export async function bundleWorkflowJobs(
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
 
-  return { mainJobDeps };
+  // Collect scriptRef mappings from allUsedJobs (includes scriptRef jobs that were filtered out)
+  const jobScriptRefs: Record<string, string> = {};
+  for (const job of allUsedJobs) {
+    if (job.scriptRef) {
+      jobScriptRefs[job.name] = job.scriptRef;
+    }
+  }
+
+  return { mainJobDeps, jobScriptRefs };
 }
 
 interface FilterUsedJobsResult {

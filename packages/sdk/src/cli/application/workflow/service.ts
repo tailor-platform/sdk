@@ -13,6 +13,7 @@ export interface CollectedJob {
   name: string;
   exportName: string;
   sourceFile: string;
+  scriptRef?: string;
 }
 
 export interface WorkflowLoadResult {

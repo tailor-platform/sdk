@@ -33,7 +33,7 @@ type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyFi
 type ResolverReturn<
   Input extends Record<string, TailorAnyField> | undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body"> &
+> = Omit<ResolverInput, "input" | "output" | "body" | "scriptRef"> &
   Readonly<{
     input?: Input;
     output: NormalizedOutput<Output>;
@@ -41,23 +41,71 @@ type ResolverReturn<
   }>;
 
 /**
+ * Resolver return type with Function Registry reference.
+ * Does not include body function since scriptRef references external function.
+ */
+export type ResolverReturnWithScriptRef<
+  Input extends Record<string, TailorAnyField> | undefined,
+  Output extends TailorAnyField | Record<string, TailorAnyField>,
+> = Omit<ResolverInput, "input" | "output" | "body" | "scriptRef"> &
+  Readonly<{
+    input?: Input;
+    output: NormalizedOutput<Output>;
+    scriptRef: string;
+  }>;
+
+type ResolverConfigWithBody<
+  Input extends Record<string, TailorAnyField> | undefined,
+  Output extends TailorAnyField | Record<string, TailorAnyField>,
+> = Omit<ResolverInput, "input" | "output" | "body" | "scriptRef"> &
+  Readonly<{
+    input?: Input;
+    output: Output;
+    body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+    scriptRef?: never;
+  }>;
+
+type ResolverConfigWithScriptRef<
+  Input extends Record<string, TailorAnyField> | undefined,
+  Output extends TailorAnyField | Record<string, TailorAnyField>,
+> = Omit<ResolverInput, "input" | "output" | "body" | "scriptRef"> &
+  Readonly<{
+    input?: Input;
+    output: Output;
+    body?: never;
+    scriptRef: string;
+  }>;
+
+/**
  * Create a resolver definition for the Tailor SDK.
  * @template Input
  * @template Output
- * @param config - Resolver configuration
+ * @param config - Resolver configuration with body function
  * @returns Normalized resolver configuration
  */
 export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
+>(config: ResolverConfigWithBody<Input, Output>): ResolverReturn<Input, Output>;
+
+/**
+ * Create a resolver definition with Function Registry reference.
+ * @template Input
+ * @template Output
+ * @param config - Resolver configuration with scriptRef
+ * @returns Normalized resolver configuration
+ */
+export function createResolver<
+  Input extends Record<string, TailorAnyField> | undefined = undefined,
+  Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
+>(config: ResolverConfigWithScriptRef<Input, Output>): ResolverReturnWithScriptRef<Input, Output>;
+
+export function createResolver<
+  Input extends Record<string, TailorAnyField> | undefined = undefined,
+  Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body"> &
-    Readonly<{
-      input?: Input;
-      output: Output;
-      body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-    }>,
-): ResolverReturn<Input, Output> {
+  config: ResolverConfigWithBody<Input, Output> | ResolverConfigWithScriptRef<Input, Output>,
+): ResolverReturn<Input, Output> | ResolverReturnWithScriptRef<Input, Output> {
   // Check if output is already a TailorField using duck typing.
   // TailorField has `type: string` (e.g., "uuid", "string"), while
   // Record<string, TailorField> either lacks `type` or has TailorField as value.
@@ -75,6 +123,6 @@ export function createResolver<
   } as ResolverReturn<Input, Output>;
 }
 
-// A loose config alias for userland use-cases
+// A loose config alias for userland use-cases (only for resolvers with body)
 // oxlint-disable-next-line no-explicit-any
-export type ResolverConfig = ReturnType<typeof createResolver<any, any>>;
+export type ResolverConfig = ResolverReturn<any, any>;

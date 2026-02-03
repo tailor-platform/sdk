@@ -51,6 +51,13 @@ export async function bundleResolvers(
       logger.debug(`  Skipping: ${file} (could not be loaded)`);
       continue;
     }
+
+    // Skip resolvers that use scriptRef (Function Registry reference)
+    if (resolver.scriptRef) {
+      logger.debug(`  Skipping: ${resolver.name} (uses scriptRef)`);
+      continue;
+    }
+
     resolvers.push({
       name: resolver.name,
       sourceFile: file,

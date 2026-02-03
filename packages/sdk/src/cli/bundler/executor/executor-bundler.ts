@@ -55,6 +55,12 @@ export async function bundleExecutors(
       continue;
     }
 
+    // Skip executors that use scriptRef (Function Registry reference)
+    if ("scriptRef" in executor.operation && executor.operation.scriptRef) {
+      logger.debug(`  Skipping: ${executor.name} (uses scriptRef)`);
+      continue;
+    }
+
     executors.push({
       name: executor.name,
       sourceFile: file,
