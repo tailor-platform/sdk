@@ -1,4 +1,8 @@
-import { db,  unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+import {
+  db,
+  unsafeAllowAllGqlPermission,
+  unsafeAllowAllTypePermission,
+} from "@tailor-platform/sdk";
 
 export const user = db
   .type("User", {
@@ -8,7 +12,7 @@ export const user = db
     ...db.fields.timestamps(),
   })
   .features({
-    gqlOperations: "query"
+    gqlOperations: "query",
   })
   .permission(unsafeAllowAllTypePermission)
   .gqlPermission(unsafeAllowAllGqlPermission);
