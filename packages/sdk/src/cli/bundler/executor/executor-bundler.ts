@@ -100,17 +100,7 @@ async function bundleSingleExecutor(
   const entryContent = ml /* js */ `
     import _internalExecutor from "${absoluteSourcePath}";
 
-    const __original_function = _internalExecutor.operation.body;
-
-    function __transformArgs(args) {
-      if (args && 'raw_body' in args) {
-        const { raw_body, ...rest } = args;
-        return { ...rest, rawBody: raw_body };
-      }
-      return args;
-    }
-
-    const __executor_function = (args) => __original_function(__transformArgs(args));
+    const __executor_function = _internalExecutor.operation.body;
 
     export { __executor_function as main };
   `;
