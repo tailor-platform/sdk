@@ -1,4 +1,5 @@
-import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { toJson } from "@bufbuild/protobuf";
+import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
 import { defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
@@ -20,6 +21,7 @@ export interface MachineUserInfo {
   clientSecret: string;
   createdAt: Date | null;
   updatedAt: Date | null;
+  attributes: Record<string, unknown>;
 }
 
 /**
@@ -34,6 +36,9 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
     clientSecret: user.clientSecret,
     createdAt: user.createdAt ? timestampDate(user.createdAt) : null,
     updatedAt: user.updatedAt ? timestampDate(user.updatedAt) : null,
+    attributes: Object.fromEntries(
+      Object.entries(user.attributeMap).map(([key, value]) => [key, toJson(ValueSchema, value)]),
+    ),
   };
 }
 
@@ -96,6 +101,6 @@ export const listCommand = defineCommand({
     });
 
     // Show machine users info
-    logger.out(machineUsers);
+    logger.out(machineUsers, { excludeFields: ["createdAt", "updatedAt"] });
   }),
 });
