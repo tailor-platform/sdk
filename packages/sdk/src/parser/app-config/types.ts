@@ -1,10 +1,10 @@
-import type { AuthConfig } from "@/configure/services/auth";
 import type { ExecutorServiceInput } from "@/configure/services/executor/types";
-import type { IdPConfig } from "@/configure/services/idp";
 import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
-import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import type { WorkflowServiceInput } from "@/configure/services/workflow/types";
+import type { AuthConfig } from "@/parser/service/auth/types";
+import type { IdPConfig } from "@/parser/service/idp/types";
 import type { ResolverServiceInput } from "@/parser/service/resolver/types";
+import type { TailorDBServiceInput } from "@/parser/service/tailordb/types";
 
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
