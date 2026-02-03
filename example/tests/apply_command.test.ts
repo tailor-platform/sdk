@@ -14,13 +14,20 @@ describe("pnpm apply command integration tests", () => {
   const expectedGeneratedFiles = [
     "db.ts",
     // Executor bundler creates entry files (.entry.js) in same directory as output files
+    // Note: order-scriptref uses scriptRef, so no bundle files are generated
     "executors/test-webhook.entry.js",
     "executors/test-webhook.js",
     "executors/test-webhook.js.map",
     "executors/user-created.entry.js",
     "executors/user-created.js",
     "executors/user-created.js.map",
+    // Function Registry files (referenced by scriptRef)
+    "function-registry/hello.js",
+    "function-registry/hello.js.map",
+    "function-registry/processOrder.js",
+    "function-registry/processOrder.js.map",
     // Resolver bundler creates entry files (.entry.js) in same directory as output files
+    // Note: helloScriptRef uses scriptRef, so no bundle files are generated
     "resolvers/add.entry.js",
     "resolvers/add.js",
     "resolvers/add.js.map",
@@ -52,6 +59,10 @@ describe("pnpm apply command integration tests", () => {
     "workflow-jobs/process-payment.entry.js",
     "workflow-jobs/process-payment.js",
     "workflow-jobs/process-payment.js.map",
+    // scriptref-process-job uses scriptRef but workflow jobs still generate entry files
+    "workflow-jobs/scriptref-process-job.entry.js",
+    "workflow-jobs/scriptref-process-job.js",
+    "workflow-jobs/scriptref-process-job.js.map",
     "workflow-jobs/send-notification.entry.js",
     "workflow-jobs/send-notification.js",
     "workflow-jobs/send-notification.js.map",
