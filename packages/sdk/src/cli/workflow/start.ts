@@ -5,8 +5,9 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import { defineCommand } from "citty";
 import ora from "ora";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, parseDuration, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -76,7 +77,7 @@ export async function waitForExecution(
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
-  const spinner = showProgress ? ora().start("Waiting...") : null;
+  const spinner = showProgress ? ora().start("Waiting for workflow to complete...") : null;
 
   try {
     while (true) {
@@ -98,7 +99,7 @@ export async function waitForExecution(
         if (showProgress) {
           spinner?.stop();
           logger.info(`Status: ${coloredStatus}`, { mode: "stream" });
-          spinner?.start(`Polling...`);
+          spinner?.start(`Waiting for workflow to complete...`);
         }
         lastStatus = execution.status;
       }
@@ -112,14 +113,14 @@ export async function waitForExecution(
             logger.info(`Job | ${runningJobs}: ${coloredStatus}`, {
               mode: "stream",
             });
-            spinner?.start(`Polling...`);
+            spinner?.start(`Waiting for workflow to complete...`);
           }
           lastRunningJobs = runningJobs;
         }
       }
 
       if (spinner) {
-        spinner.text = `Polling... (${now})`;
+        spinner.text = `Waiting for workflow to complete... (${now})`;
       }
 
       // Terminal states: SUCCESS, FAILED, or PENDING_RESUME
@@ -236,31 +237,24 @@ export async function startWorkflow(
 }
 
 export const startCommand = defineCommand({
-  meta: {
-    name: "start",
-    description: "Start a workflow execution",
-  },
-  args: {
+  name: "start",
+  description: "Start a workflow execution.",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
     ...nameArgs,
-    machineuser: {
-      type: "string",
-      description: "Machine user name",
+    machineuser: arg(z.string(), {
       alias: "m",
-      required: true,
-    },
-    arg: {
-      type: "string",
-      description: "Workflow argument (JSON string)",
+      description: "Machine user name",
+    }),
+    arg: arg(z.string().optional(), {
       alias: "a",
-    },
+      description: "Workflow argument (JSON string)",
+    }),
     ...waitArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
-    const interval = parseDuration(args.interval);
-
     const { executionId, wait } = await startWorkflow({
       name: args.name,
       machineUser: args.machineuser,
@@ -268,7 +262,7 @@ export const startCommand = defineCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      interval,
+      interval: parseDuration(args.interval),
     });
 
     logger.info(`Execution ID: ${executionId}`, { mode: "stream" });

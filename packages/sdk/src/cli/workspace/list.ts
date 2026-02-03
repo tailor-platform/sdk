@@ -1,17 +1,14 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, positiveIntArg, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
-import { humanizeRelativeTime } from "../utils/format";
 import { logger } from "../utils/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 
 export interface ListWorkspacesOptions {
   limit?: number;
 }
-
-const limitSchema = z.coerce.number().int().positive().optional();
 
 /**
  * List workspaces with an optional limit.
@@ -65,38 +62,18 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all Tailor Platform workspaces",
-  },
-  args: {
+  name: "list",
+  description: "List all Tailor Platform workspaces.",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    limit: {
-      type: "string",
+    limit: arg(positiveIntArg.optional(), {
       alias: "l",
       description: "Maximum number of workspaces to list",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
-    // Parse and validate limit
-    let limit: number | undefined;
-    try {
-      limit = limitSchema.parse(args.limit);
-    } catch {
-      throw new Error(`--limit must be a positive integer, got '${args.limit}'`);
-    }
-
-    // Execute workspace list logic
-    const workspaces = await listWorkspaces({ limit });
-
-    const formattedWorkspaces = args.json
-      ? workspaces
-      : workspaces.map(({ updatedAt: _, createdAt, ...rest }) => ({
-          ...rest,
-          createdAt: humanizeRelativeTime(createdAt),
-        }));
-
-    logger.out(formattedWorkspaces);
+    const workspaces = await listWorkspaces({ limit: args.limit });
+    logger.out(workspaces, { display: { updatedAt: null } });
   }),
 });

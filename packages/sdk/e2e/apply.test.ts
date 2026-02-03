@@ -73,6 +73,9 @@ describe("E2E: Service deletion order", () => {
     // Create temp directory and symlink @tailor-platform/sdk for module resolution
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-test-"));
+
+    // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
+    process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
     const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
     fs.mkdirSync(nodeModulesDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
@@ -109,6 +112,96 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
+   * Helper to list all TailorDB service namespaces in the workspace
+   * @returns List of TailorDB service namespace names
+   */
+  async function listTailorDBServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBServices({ workspaceId, pageToken });
+      for (const svc of resp.tailordbServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to list all TailorDB type names in a namespace
+   * @param namespace - TailorDB namespace name
+   * @returns List of type names in the namespace
+   */
+  async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
+    const types: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+      });
+      for (const t of resp.tailordbTypes) {
+        if (t.name) {
+          types.push(t.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return types;
+  }
+
+  /**
+   * Helper to list all IdP service names in the workspace
+   * @returns List of IdP service namespace names
+   */
+  async function listIdPServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listIdPServices({ workspaceId, pageToken });
+      for (const svc of resp.idpServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to list all Auth service names in the workspace
+   * @returns List of Auth service namespace names
+   */
+  async function listAuthServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listAuthServices({ workspaceId, pageToken });
+      for (const svc of resp.authServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to get the absolute path pattern for tailordb files
+   * This is needed because file patterns are resolved from process.cwd(), not config file location
+   * @returns Absolute path pattern for tailordb files
+   */
+  function getTailordbFilesPattern(): string {
+    return path.join(tempDir, "tailordb", "*.ts").replace(/\\/g, "/");
+  }
+
+  /**
    * Helper to create TailorDB type file
    */
   function createTailorDBTypeFile(): void {
@@ -139,12 +232,11 @@ export type user = typeof user;
 
     const baseConfig = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -155,6 +247,14 @@ export default defineConfig({
       configPath,
       yes: true,
     });
+
+    // Verify: TailorDB service should exist
+    const services = await listTailorDBServiceNames();
+    expect(services).toContain(sharedTailordbName);
+
+    // Verify: User type should exist in the namespace
+    const types = await listTailorDBTypeNames(sharedTailordbName);
+    expect(types).toContain("User");
   }, 120000);
 
   /**
@@ -169,13 +269,12 @@ export default defineConfig({
     // Step 1: Add an additional TailorDB service
     const configWithExtra = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
-    "${additionalTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+    "${additionalTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -187,15 +286,25 @@ export default defineConfig({
       yes: true,
     });
 
+    // Verify: Both TailorDB services should exist
+    const servicesAfterAdd = await listTailorDBServiceNames();
+    expect(servicesAfterAdd).toContain(sharedTailordbName);
+    expect(servicesAfterAdd).toContain(additionalTailordbName);
+
+    // Verify: User type should exist in both namespaces
+    const typesInShared = await listTailorDBTypeNames(sharedTailordbName);
+    expect(typesInShared).toContain("User");
+    const typesInAdditional = await listTailorDBTypeNames(additionalTailordbName);
+    expect(typesInAdditional).toContain("User");
+
     // Step 2: Remove the additional TailorDB (keep shared one)
     const configWithoutExtra = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -203,13 +312,16 @@ export default defineConfig({
     const configPath2 = createTestConfig(configWithoutExtra);
 
     // Step 3: Apply - this should delete the extra TailorDB without error
-    await expect(
-      apply({
-        workspaceId,
-        configPath: configPath2,
-        yes: true,
-      }),
-    ).resolves.not.toThrow();
+    await apply({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: Additional TailorDB service should be deleted
+    const servicesAfterDelete = await listTailorDBServiceNames();
+    expect(servicesAfterDelete).toContain(sharedTailordbName);
+    expect(servicesAfterDelete).not.toContain(additionalTailordbName);
   }, 120000);
 
   /**
@@ -221,7 +333,6 @@ export default defineConfig({
     // Step 1: Add IdP service to the application
     const configWithIdP = `
 import { defineConfig, defineIdp } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 const idp = defineIdp("${idpName}", {
   authorization: "loggedIn",
@@ -231,7 +342,7 @@ const idp = defineIdp("${idpName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
   idp: [idp],
 });
@@ -244,15 +355,18 @@ export default defineConfig({
       yes: true,
     });
 
+    // Verify: IdP service should exist
+    const idpServicesAfterAdd = await listIdPServiceNames();
+    expect(idpServicesAfterAdd).toContain(idpName);
+
     // Step 2: Remove IdP from config (keep TailorDB)
     const configWithoutIdP = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;
@@ -262,13 +376,15 @@ export default defineConfig({
     // Step 3: Apply - this should delete IdP without error
     // Before the fix, this would fail with:
     // "Failed to delete IdPService: idp xxx is used by gateway(s)"
-    await expect(
-      apply({
-        workspaceId,
-        configPath: configPath2,
-        yes: true,
-      }),
-    ).resolves.not.toThrow();
+    await apply({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: IdP service should be deleted
+    const idpServicesAfterDelete = await listIdPServiceNames();
+    expect(idpServicesAfterDelete).not.toContain(idpName);
   }, 120000);
 
   /**
@@ -288,7 +404,6 @@ export default defineConfig({
     // Step 1: Add Auth service (without userProfile to avoid SDL composition issues)
     const configWithAuth = `
 import { defineConfig, defineAuth, defineIdp } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 const idp = defineIdp("${idpName}", {
   authorization: "loggedIn",
@@ -302,7 +417,7 @@ const auth = defineAuth("${authName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
   idp: [idp],
   auth,
@@ -316,10 +431,15 @@ export default defineConfig({
       yes: true,
     });
 
+    // Verify: Auth and IdP services should exist
+    const authServicesAfterAdd = await listAuthServiceNames();
+    expect(authServicesAfterAdd).toContain(authName);
+    const idpServicesAfterAdd = await listIdPServiceNames();
+    expect(idpServicesAfterAdd).toContain(idpName);
+
     // Step 2: Remove Auth from config (keep TailorDB and IdP)
     const configWithoutAuth = `
 import { defineConfig, defineIdp } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 const idp = defineIdp("${idpName}", {
   authorization: "loggedIn",
@@ -329,7 +449,7 @@ const idp = defineIdp("${idpName}", {
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
   idp: [idp],
 });
@@ -340,13 +460,123 @@ export default defineConfig({
     // Step 3: Apply - this should delete Auth without error
     // Before the fix, this would fail with:
     // "Failed to delete AuthService: auth xxx is used by gateway(s)"
+    await apply({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: Auth service should be deleted, IdP should remain
+    const authServicesAfterDelete = await listAuthServiceNames();
+    expect(authServicesAfterDelete).not.toContain(authName);
+    const idpServicesAfterDelete = await listIdPServiceNames();
+    expect(idpServicesAfterDelete).toContain(idpName);
+  }, 120000);
+
+  /**
+   * Test: --no-schema-check option should skip schema validation
+   *
+   * This test verifies that the --no-schema-check flag properly skips
+   * schema diff validation against migration snapshots.
+   */
+  test("should skip schema check with --no-schema-check option", async () => {
+    // Create a config with migrations enabled
+    const migrationsDir = path.join(tempDir, "migrations");
+    fs.mkdirSync(migrationsDir, { recursive: true });
+
+    // Create initial snapshot (0000/schema.json)
+    const initialSnapshotDir = path.join(migrationsDir, "0000");
+    fs.mkdirSync(initialSnapshotDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(initialSnapshotDir, "schema.json"),
+      JSON.stringify({
+        version: 1,
+        namespace: sharedTailordbName,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              name: { type: "string", required: true },
+              email: { type: "string", required: true },
+              role: { type: "string", required: false },
+            },
+          },
+        },
+      }),
+    );
+
+    // Update type file to add a new field (causing schema diff)
+    const tailordbDir = path.join(tempDir, "tailordb");
+    fs.writeFileSync(
+      path.join(tailordbDir, "user.ts"),
+      `
+import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  name: db.string(),
+  email: db.string(),
+  role: db.string({ optional: true }),
+  newField: db.string({ optional: true }), // New field added
+});
+
+export type user = typeof user;
+`,
+    );
+
+    const configWithMigrations = `
+import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": {
+      files: ["${getTailordbFilesPattern()}"],
+      migration: {
+        directory: "${migrationsDir.replace(/\\/g, "\\\\")}",
+      },
+    },
+  },
+});
+`;
+
+    const configPath = createTestConfig(configWithMigrations);
+
+    // Without --no-schema-check, this should fail due to schema diff
     await expect(
       apply({
         workspaceId,
-        configPath: configPath2,
+        configPath,
         yes: true,
+        noSchemaCheck: false,
+      }),
+    ).rejects.toThrow(/Schema migration check failed/);
+
+    // With --no-schema-check, this should succeed despite schema diff
+    await expect(
+      apply({
+        workspaceId,
+        configPath,
+        yes: true,
+        noSchemaCheck: true,
       }),
     ).resolves.not.toThrow();
+
+    // Reset user type file to original state for cleanup
+    fs.writeFileSync(
+      path.join(tailordbDir, "user.ts"),
+      `
+import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  name: db.string(),
+  email: db.string(),
+  role: db.string({ optional: true }),
+});
+
+export type user = typeof user;
+`,
+    );
   }, 120000);
 
   /**
@@ -355,12 +585,11 @@ export default defineConfig({
   test("cleanup: remove remaining services", async () => {
     const cleanupConfig = `
 import { defineConfig } from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
 
 export default defineConfig({
   name: "${testAppName}",
   db: {
-    "${sharedTailordbName}": { types: [user] },
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
   },
 });
 `;

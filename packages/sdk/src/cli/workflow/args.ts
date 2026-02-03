@@ -1,28 +1,27 @@
+import { arg } from "politty";
+import { z } from "zod";
+import { durationArg } from "../args";
+
+type ArgsShape = Record<string, z.ZodType>;
+
 export const nameArgs = {
-  name: {
-    type: "positional",
+  name: arg(z.string(), {
+    positional: true,
     description: "Workflow name",
-    required: true,
-  },
-} as const;
+  }),
+} satisfies ArgsShape;
 
 export const waitArgs = {
-  wait: {
-    type: "boolean",
+  wait: arg(z.boolean().default(false), {
     alias: "W",
     description: "Wait for execution to complete",
-    default: false,
-  },
-  interval: {
-    type: "string",
-    description: "Polling interval when using --wait",
+  }),
+  interval: arg(durationArg.default("3s"), {
     alias: "i",
-    default: "3s",
-  },
-  logs: {
-    type: "boolean",
+    description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
+  }),
+  logs: arg(z.boolean().default(false), {
     alias: "l",
     description: "Display job execution logs after completion (requires --wait)",
-    default: false,
-  },
-} as const;
+  }),
+} satisfies ArgsShape;

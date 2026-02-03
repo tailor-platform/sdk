@@ -2,69 +2,172 @@
 
 Commands for managing workflows and workflow executions.
 
+<!-- politty:command:workflow:start -->
+
 ## workflow
 
 Manage workflows and workflow executions.
 
-```bash
-tailor-sdk workflow <subcommand> [options]
+**Usage**
+
 ```
+tailor-sdk workflow [command]
+```
+
+**Commands**
+
+| Command                                       | Description                                    |
+| --------------------------------------------- | ---------------------------------------------- |
+| [`workflow list`](#workflow-list)             | List all workflows in the workspace.           |
+| [`workflow get`](#workflow-get)               | Get workflow details.                          |
+| [`workflow start`](#workflow-start)           | Start a workflow execution.                    |
+| [`workflow executions`](#workflow-executions) | List or get workflow executions.               |
+| [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution. |
+
+<!-- politty:command:workflow:end -->
+<!-- politty:command:workflow list:start -->
 
 ### workflow list
 
 List all workflows in the workspace.
 
-```bash
+**Usage**
+
+```
 tailor-sdk workflow list [options]
 ```
 
-**Options:**
+**Options**
 
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
+| Option                          | Alias | Description       | Default |
+| ------------------------------- | ----- | ----------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+
+<!-- politty:command:workflow list:end -->
+<!-- politty:command:workflow get:start -->
 
 ### workflow get
 
 Get workflow details.
 
-```bash
-tailor-sdk workflow get <name> [options]
+**Usage**
+
+```
+tailor-sdk workflow get [options] <name>
 ```
 
-**Arguments:**
+**Arguments**
 
-- `name` - Workflow name (required)
+| Argument | Description   | Required |
+| -------- | ------------- | -------- |
+| `name`   | Workflow name | Yes      |
 
-**Options:**
+**Options**
 
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
+| Option                          | Alias | Description       | Default |
+| ------------------------------- | ----- | ----------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+
+<!-- politty:command:workflow get:end -->
+<!-- politty:command:workflow start:start -->
 
 ### workflow start
 
 Start a workflow execution.
 
-```bash
-tailor-sdk workflow start <name> [options]
+**Usage**
+
+```
+tailor-sdk workflow start [options] <name>
 ```
 
-**Arguments:**
+**Arguments**
 
-- `name` - Workflow name (required)
+| Argument | Description   | Required |
+| -------- | ------------- | -------- |
+| `name`   | Workflow name | Yes      |
 
-**Options:**
+**Options**
 
-- `-m, --machineuser` - Machine user name (required)
-- `-a, --arg` - Workflow argument (JSON string)
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-c, --config` - Path to the SDK config file (default: `tailor.config.ts`)
-- `-W, --wait` - Wait for execution to complete
-- `-i, --interval` - Polling interval when using --wait (default: `3s`)
-- `-l, --logs` - Display job execution logs after completion (requires --wait)
-- `-j, --json` - Output as JSON
+| Option                          | Alias | Description                                                    | Default              |
+| ------------------------------- | ----- | -------------------------------------------------------------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON                                                 | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                        | `"tailor.config.ts"` |
+| `--machineuser <MACHINEUSER>`   | `-m`  | Machine user name                                              | -                    |
+| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                | -                    |
+| `--wait`                        | `-W`  | Wait for execution to complete                                 | `false`              |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `"3s"`               |
+| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | `false`              |
+
+<!-- politty:command:workflow start:end -->
+<!-- politty:command:workflow executions:start -->
+
+### workflow executions
+
+List or get workflow executions.
+
+**Usage**
+
+```
+tailor-sdk workflow executions [options] [executionId]
+```
+
+**Arguments**
+
+| Argument      | Description                               | Required |
+| ------------- | ----------------------------------------- | -------- |
+| `executionId` | Execution ID (if provided, shows details) | No       |
+
+**Options**
+
+| Option                            | Alias | Description                                                    | Default |
+| --------------------------------- | ----- | -------------------------------------------------------------- | ------- |
+| `--json`                          | `-j`  | Output as JSON                                                 | `false` |
+| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | -       |
+| `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | -       |
+| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | -       |
+| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | -       |
+| `--wait`                          | `-W`  | Wait for execution to complete                                 | `false` |
+| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `"3s"`  |
+| `--logs`                          | -     | Display job execution logs (detail mode only)                  | `false` |
+
+<!-- politty:command:workflow executions:end -->
+<!-- politty:command:workflow resume:start -->
+
+### workflow resume
+
+Resume a failed or pending workflow execution.
+
+**Usage**
+
+```
+tailor-sdk workflow resume [options] <executionId>
+```
+
+**Arguments**
+
+| Argument      | Description         | Required |
+| ------------- | ------------------- | -------- |
+| `executionId` | Failed execution ID | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                                    | Default |
+| ------------------------------- | ----- | -------------------------------------------------------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON                                                 | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | -       |
+| `--wait`                        | `-W`  | Wait for execution to complete                                 | `false` |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | `"3s"`  |
+| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | `false` |
+
+<!-- politty:command:workflow resume:end -->
 
 **Usage Examples:**
 
@@ -78,29 +181,6 @@ tailor-sdk workflow start my-workflow -m admin -a '{"userId": "123"}'
 # Start and wait for completion
 tailor-sdk workflow start my-workflow -m admin -W
 ```
-
-### workflow executions
-
-List or get workflow executions.
-
-```bash
-tailor-sdk workflow executions [executionId] [options]
-```
-
-**Arguments:**
-
-- `executionId` - Execution ID (optional, if provided shows details)
-
-**Options:**
-
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-n, --workflow-name` - Filter by workflow name (list mode only)
-- `-s, --status` - Filter by status: `PENDING`, `PENDING_RESUME`, `RUNNING`, `SUCCESS`, `FAILED` (list mode only)
-- `-W, --wait` - Wait for execution to complete (detail mode only)
-- `-i, --interval` - Polling interval when using --wait (default: `3s`)
-- `-l, --logs` - Display job execution logs (detail mode only)
-- `-j, --json` - Output as JSON
 
 **Usage Examples:**
 
@@ -123,24 +203,3 @@ tailor-sdk workflow executions <execution-id> --logs
 # Wait for execution to complete
 tailor-sdk workflow executions <execution-id> -W
 ```
-
-### workflow resume
-
-Resume a failed or pending workflow execution.
-
-```bash
-tailor-sdk workflow resume <executionId> [options]
-```
-
-**Arguments:**
-
-- `executionId` - Failed or pending execution ID (required)
-
-**Options:**
-
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-W, --wait` - Wait for execution to complete after resuming
-- `-i, --interval` - Polling interval when using --wait (default: `3s`)
-- `-l, --logs` - Display job execution logs after completion (requires --wait)
-- `-j, --json` - Output as JSON

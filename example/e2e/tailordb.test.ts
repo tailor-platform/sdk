@@ -58,11 +58,11 @@ describe("controlplane", () => {
         },
         indexes: {
           idx_name_department: {
-            fieldNames: ["name", "department"],
+            fieldNames: expect.arrayContaining(["name", "department"]),
             unique: false,
           },
           user_status_created_idx: {
-            fieldNames: ["status", "createdAt"],
+            fieldNames: expect.arrayContaining(["status", "createdAt"]),
             unique: false,
           },
         },

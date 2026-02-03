@@ -2,29 +2,98 @@
 
 Commands for managing and deploying static websites.
 
+<!-- politty:command:staticwebsite:start -->
+
 ## staticwebsite
 
 Manage static websites in your workspace.
 
-```bash
-tailor-sdk staticwebsite <subcommand> [options]
+**Usage**
+
 ```
+tailor-sdk staticwebsite [command]
+```
+
+**Commands**
+
+| Command                                         | Description                                           |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website from a local build directory. |
+| [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
+| [`staticwebsite list`](#staticwebsite-list)     | List all static websites in a workspace.              |
+
+<!-- politty:command:staticwebsite:end -->
+<!-- politty:command:staticwebsite deploy:start -->
 
 ### staticwebsite deploy
 
 Deploy a static website from a local build directory.
 
-```bash
+**Usage**
+
+```
 tailor-sdk staticwebsite deploy [options]
 ```
 
-**Options:**
+**Options**
 
-- `-n, --name` - Static website name (required)
-- `-d, --dir` - Path to the static website files (required)
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
+| Option                          | Alias | Description                      | Default |
+| ------------------------------- | ----- | -------------------------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON                   | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                | -       |
+| `--name <NAME>`                 | `-n`  | Static website name              | -       |
+| `--dir <DIR>`                   | `-d`  | Path to the static website files | -       |
+
+<!-- politty:command:staticwebsite deploy:end -->
+<!-- politty:command:staticwebsite list:start -->
+
+### staticwebsite list
+
+List all static websites in a workspace.
+
+**Usage**
+
+```
+tailor-sdk staticwebsite list [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description       | Default |
+| ------------------------------- | ----- | ----------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+
+<!-- politty:command:staticwebsite list:end -->
+<!-- politty:command:staticwebsite get:start -->
+
+### staticwebsite get
+
+Get details of a specific static website.
+
+**Usage**
+
+```
+tailor-sdk staticwebsite get [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description         | Required |
+| -------- | ------------------- | -------- |
+| `name`   | Static website name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description       | Default |
+| ------------------------------- | ----- | ----------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+
+<!-- politty:command:staticwebsite get:end -->
 
 **Example:**
 
@@ -43,20 +112,6 @@ tailor-sdk staticwebsite deploy -n my-website -d ./dist -w ws_abc123
 - Unsupported file types or invalid files will be skipped with warnings
 - The deployment URL is returned after successful deployment
 
-### staticwebsite list
-
-List all static websites in a workspace.
-
-```bash
-tailor-sdk staticwebsite list [options]
-```
-
-**Options:**
-
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
-
 **Example:**
 
 ```bash
@@ -66,24 +121,6 @@ tailor-sdk staticwebsite list
 # List with JSON output
 tailor-sdk staticwebsite list --json
 ```
-
-### staticwebsite get
-
-Get details of a specific static website.
-
-```bash
-tailor-sdk staticwebsite get <name> [options]
-```
-
-**Arguments:**
-
-- `name` - Static website name (required)
-
-**Options:**
-
-- `-w, --workspace-id` - ID of the workspace
-- `-p, --profile` - Workspace profile to use
-- `-j, --json` - Output as JSON
 
 **Example:**
 

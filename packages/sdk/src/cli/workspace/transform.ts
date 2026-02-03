@@ -5,8 +5,8 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   region: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 export interface WorkspaceDetails extends WorkspaceInfo {

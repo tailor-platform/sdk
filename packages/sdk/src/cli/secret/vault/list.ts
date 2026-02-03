@@ -1,5 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { fetchAll, initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
@@ -13,15 +14,15 @@ export interface VaultListOptions {
 
 export interface VaultInfo {
   name: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 function vaultInfo(vault: SecretManagerVault): VaultInfo {
   return {
     name: vault.name,
-    createdAt: vault.createTime ? timestampDate(vault.createTime).toISOString() : "N/A",
-    updatedAt: vault.updateTime ? timestampDate(vault.updateTime).toISOString() : "N/A",
+    createdAt: vault.createTime ? timestampDate(vault.createTime) : null,
+    updatedAt: vault.updateTime ? timestampDate(vault.updateTime) : null,
   };
 }
 
@@ -53,15 +54,13 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List Secret Manager vaults",
-  },
-  args: {
+  name: "list",
+  description: "List all Secret Manager vaults in the workspace.",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const vaults = await vaultList({
       workspaceId: args["workspace-id"],

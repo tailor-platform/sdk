@@ -3,13 +3,12 @@ import type { TailorField } from "@/configure/types/type";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
 import type {
   AuthInvoker as ParserAuthInvoker,
+  AuthDefinitionBrand,
   AuthServiceInput,
+  DefinedAuth,
   UserAttributeListKey,
   UserAttributeMap,
 } from "@/parser/service/auth/types";
-
-declare const authDefinitionBrand: unique symbol;
-type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
 type MachineUserAttributeFields = Record<
   string,
@@ -52,11 +51,6 @@ type MachineUserOnlyAuthInput<
   machineUserAttributes: MachineUserAttributes;
 };
 
-type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
-  name: Name;
-  invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
-} & AuthDefinitionBrand;
-
 export type {
   OIDC,
   SAML,
@@ -78,6 +72,10 @@ export type {
   UserAttributeListKey,
   UserAttributeMap,
   AuthServiceInput,
+  AuthConfig,
+  AuthExternalConfig,
+  AuthOwnConfig,
+  DefinedAuth,
 } from "@/parser/service/auth/types";
 
 /**
@@ -154,21 +152,19 @@ export function defineAuth<
     invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
   };
 
+  validateAuthConfig(result);
+
   return result as typeof result & AuthDefinitionBrand;
 }
 
-export type AuthExternalConfig = { name: string; external: true };
+function validateAuthConfig(config: {
+  userProfile?: unknown;
+  machineUserAttributes?: unknown;
+}): void {
+  const hasUserProfile = config.userProfile !== undefined;
+  const hasMachineUserAttributes = config.machineUserAttributes !== undefined;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AuthServiceInputLoose = AuthServiceInput<any, any, any, string, any>;
-
-export type AuthOwnConfig = DefinedAuth<
-  string,
-  // Intentionally permissive: AuthConfig is the “container” type for AppConfig.auth.
-  // We want any concrete `defineAuth(...)` result to be assignable here, while the
-  // strong typing remains on the `defineAuth` return type itself.
-  AuthServiceInputLoose,
-  string
->;
-
-export type AuthConfig = AuthOwnConfig | AuthExternalConfig;
+  if (hasUserProfile && hasMachineUserAttributes) {
+    throw new Error("Provide either userProfile or machineUserAttributes, not both.");
+  }
+}

@@ -1,8 +1,1 @@
-export type WorkflowServiceConfig = {
-  files: string[];
-  job_files?: string[];
-  ignores?: string[];
-  job_ignores?: string[];
-};
-
-export type WorkflowServiceInput = WorkflowServiceConfig;
+export type { WorkflowServiceConfig, WorkflowServiceInput } from "@/parser/service/workflow/types";

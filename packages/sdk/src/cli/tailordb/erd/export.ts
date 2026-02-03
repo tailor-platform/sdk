@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import { defineCommand } from "citty";
 import * as path from "pathe";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { logger } from "../../utils/logger";
 import { resolveCliBinPath } from "../../utils/resolve-cli-bin";
@@ -40,16 +41,24 @@ function resolveDbConfig(
   return { namespace, erdSite: dbConfig.erdSite };
 }
 
+type ResolveNamespacesOptions = {
+  requireErdSite?: boolean;
+};
+
 /**
- * Get all namespaces with erdSite configured.
+ * Get all namespaces from config.
  * @param config - Loaded Tailor SDK config.
- * @returns Namespaces with erdSite.
+ * @param options - Options for filtering namespaces.
+ * @returns All namespaces with optional erdSite.
  */
-function resolveAllErdSites(config: AppConfig): Array<{ namespace: string; erdSite: string }> {
-  const results: Array<{ namespace: string; erdSite: string }> = [];
+function resolveAllNamespaces(
+  config: AppConfig,
+  options?: ResolveNamespacesOptions,
+): Array<{ namespace: string; erdSite: string | undefined }> {
+  const results: Array<{ namespace: string; erdSite: string | undefined }> = [];
 
   for (const [namespace, dbConfig] of Object.entries(config.db ?? {})) {
-    if (dbConfig && typeof dbConfig === "object" && !("external" in dbConfig) && dbConfig.erdSite) {
+    if (dbConfig && !("external" in dbConfig) && !(options?.requireErdSite && !dbConfig.erdSite)) {
       results.push({ namespace, erdSite: dbConfig.erdSite });
     }
   }
@@ -85,20 +94,28 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
       process.execPath,
       [liamBinPath, "erd", "build", "--format", "tbls", "--input", schemaPath],
       {
-        stdio: "inherit",
+        stdio: ["pipe", "ignore", "pipe"],
         cwd,
       },
     );
+
+    let stderrOutput = "";
+    child.stderr?.on("data", (data: Buffer) => {
+      stderrOutput += data.toString();
+    });
 
     child.on("error", (error) => {
       logger.error("Failed to run `@liam-hq/cli`. Ensure it is installed in your project.");
       reject(error);
     });
 
-    child.on("exit", (code) => {
+    child.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
+        if (stderrOutput) {
+          logger.error(stderrOutput);
+        }
         logger.error(
           "liam CLI exited with a non-zero code. Ensure `@liam-hq/cli erd build --format tbls --input schema.json` works in your project.",
         );
@@ -119,6 +136,7 @@ type ErdBuildsOptions = {
   config: AppConfig;
   namespace?: string;
   outputDir?: string;
+  requireErdSite?: boolean;
 };
 
 /**
@@ -129,6 +147,10 @@ async function prepareErdBuild(options: ErdBuildOptions): Promise<void> {
   await writeTblsSchemaToFile(options);
 
   await runLiamBuild(options.outputPath, options.erdDir);
+
+  const distDir = path.join(options.erdDir, "dist");
+  const relativePath = path.relative(process.cwd(), distDir);
+  logger.success(`Built ERD to ${relativePath}`);
 }
 
 export interface ErdBuildResult {
@@ -151,6 +173,12 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
 
   if (options.namespace) {
     const { namespace, erdSite } = resolveDbConfig(config, options.namespace);
+    if (options.requireErdSite && !erdSite) {
+      throw new Error(
+        `No erdSite configured for namespace "${namespace}". ` +
+          `Add erdSite: "<static-website-name>" to db.${namespace} in tailor.config.ts.`,
+      );
+    }
     const erdDir = path.join(baseDir, namespace);
     targets = [
       {
@@ -162,15 +190,19 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
       },
     ];
   } else {
-    const erdSites = resolveAllErdSites(config);
-    if (erdSites.length === 0) {
+    const namespaces = resolveAllNamespaces(config, { requireErdSite: options.requireErdSite });
+    if (namespaces.length === 0) {
       throw new Error(
-        "No namespaces with erdSite configured found. " +
-          'Add erdSite: "<static-website-name>" to db.<namespace> in tailor.config.ts.',
+        options.requireErdSite
+          ? "No namespaces with erdSite configured found. " +
+              'Add erdSite: "<static-website-name>" to db.<namespace> in tailor.config.ts.'
+          : "No TailorDB namespaces found in config. Please define db services in tailor.config.ts.",
       );
     }
-    logger.info(`Found ${erdSites.length} namespace(s) with erdSite configured.`);
-    targets = erdSites.map(({ namespace, erdSite }) => {
+    logger.info(
+      `Found ${namespaces.length} namespace(s)${options.requireErdSite ? " with erdSite configured" : ""}.`,
+    );
+    targets = namespaces.map(({ namespace, erdSite }) => {
       const erdDir = path.join(baseDir, namespace);
       return {
         namespace,
@@ -198,27 +230,22 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
 }
 
 export const erdExportCommand = defineCommand({
-  meta: {
-    name: "export",
-    description: "Export Liam ERD dist from applied TailorDB schema (beta)",
-  },
-  args: {
+  name: "export",
+  description: "Export Liam ERD dist from applied TailorDB schema.",
+  args: z.object({
     ...commonArgs,
     ...deploymentArgs,
     ...jsonArgs,
-    namespace: {
-      type: "string",
-      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
+    namespace: arg(z.string().optional(), {
       alias: "n",
-    },
-    output: {
-      type: "string",
+      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
+    }),
+    output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
+      alias: "o",
       description:
         "Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json)",
-      alias: "o",
-      default: DEFAULT_ERD_BASE_DIR,
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
     const outputDir = path.resolve(process.cwd(), String(args.output));
@@ -231,6 +258,7 @@ export const erdExportCommand = defineCommand({
       outputDir,
     });
 
+    logger.newline();
     if (args.json) {
       logger.out(
         results.map((result) => ({

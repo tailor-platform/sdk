@@ -2,6 +2,12 @@ import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
+export type {
+  TailorDBExternalConfig,
+  TailorDBMigrationConfig,
+  TailorDBServiceConfig,
+  TailorDBServiceInput,
+} from "@/parser/service/tailordb/types";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
@@ -77,18 +83,6 @@ export type Hooks<
       ? never
       : K]?: Hook<TData, output<F[K]>>;
 }>;
-
-export type TailorDBServiceConfig = {
-  files: string[];
-  ignores?: string[];
-  erdSite?: string;
-};
-
-export type TailorDBExternalConfig = { external: true };
-
-export type TailorDBServiceInput = {
-  [namespace: string]: TailorDBServiceConfig | TailorDBExternalConfig;
-};
 
 export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   fields: [keyof T["fields"], keyof T["fields"], ...(keyof T["fields"])[]];

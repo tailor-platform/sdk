@@ -8,7 +8,7 @@ export { apply } from "./apply/index";
 export type { ApplyOptions } from "./apply/index";
 export { generate } from "./generator/index";
 export type { GenerateOptions } from "./generator/options";
-export { loadConfig } from "./config-loader";
+export { loadConfig, type LoadedConfig } from "./config-loader";
 export { generateUserTypes } from "./type-generator";
 export type {
   CodeGenerator,
@@ -25,7 +25,7 @@ export type {
   GeneratorResult,
   DependencyKind,
 } from "./generator/types";
-export type { ParsedTailorDBType as TailorDBType } from "@/parser/service/tailordb/types";
+export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
 
@@ -84,6 +84,66 @@ export type {
   WorkflowExecutionInfo,
   WorkflowJobExecutionInfo,
 } from "./workflow/transform";
+export {
+  triggerExecutor,
+  type TriggerExecutorOptions,
+  type TriggerExecutorResult,
+} from "./executor/trigger";
+export {
+  listExecutorJobs,
+  getExecutorJob,
+  watchExecutorJob,
+  type ListExecutorJobsOptions,
+  type GetExecutorJobOptions,
+  type WatchExecutorJobOptions,
+  type ExecutorJobDetailInfo,
+  type WatchExecutorJobResult,
+} from "./executor/jobs";
+export type {
+  ExecutorJobListInfo,
+  ExecutorJobInfo,
+  ExecutorJobAttemptInfo,
+} from "./executor/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
 export { truncate, type TruncateOptions } from "./tailordb/truncate";
+
+// Migration exports
+export {
+  generate as migrateGenerate,
+  type GenerateOptions as MigrateGenerateOptions,
+} from "./tailordb/migrate/generate";
+export {
+  createSnapshotFromLocalTypes,
+  reconstructSnapshotFromMigrations,
+  compareSnapshots,
+  getNextMigrationNumber,
+  getLatestMigrationNumber,
+  getMigrationFiles,
+  compareLocalTypesWithSnapshot,
+} from "./tailordb/migrate/snapshot";
+export {
+  getNamespacesWithMigrations,
+  type NamespaceWithMigrations,
+} from "./tailordb/migrate/config";
+export {
+  hasChanges,
+  formatMigrationDiff,
+  formatDiffSummary,
+  type MigrationDiff,
+  type BreakingChangeInfo,
+} from "./tailordb/migrate/diff-calculator";
+export {
+  SCHEMA_FILE_NAME,
+  DIFF_FILE_NAME,
+  MIGRATE_FILE_NAME,
+  DB_TYPES_FILE_NAME,
+  INITIAL_SCHEMA_NUMBER,
+  getMigrationDirPath,
+  getMigrationFilePath,
+  type SchemaSnapshot,
+  type SnapshotType,
+  type SnapshotFieldConfig,
+  type MigrationInfo,
+} from "./tailordb/migrate/snapshot";
+export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";

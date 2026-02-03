@@ -1,16 +1,20 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
+import type { TailorActor } from "@/configure/types/actor";
 import type { TailorEnv } from "@/configure/types/env";
 import type { output } from "@/configure/types/helpers";
 import type {
   RecordTrigger as ParserRecordTrigger,
   ResolverExecutedTrigger as ParserResolverExecutedTrigger,
+  IdpUserTrigger as ParserIdpUserTrigger,
+  AuthAccessTokenTrigger as ParserAuthAccessTokenTrigger,
 } from "@/parser/service/executor/types";
 
 interface EventArgs {
   workspaceId: string;
   appNamespace: string;
   env: TailorEnv;
+  actor: TailorActor | null;
 }
 
 interface RecordArgs extends EventArgs {
@@ -132,5 +136,91 @@ export function resolverExecutedTrigger<R extends ResolverConfig>(
     resolverName: resolver.name,
     condition,
     __args: {} as ResolverExecutedArgs<R>,
+  };
+}
+
+// IdP User Event Triggers
+export interface IdpUserArgs extends EventArgs {
+  namespaceName: string;
+  userId: string;
+}
+
+export type IdpUserTrigger<Args> = ParserIdpUserTrigger & {
+  __args: Args;
+};
+
+/**
+ * Create a trigger that fires when an IdP user is created.
+ * @returns IdP user created trigger
+ */
+export function idpUserCreatedTrigger(): IdpUserTrigger<IdpUserArgs> {
+  return {
+    kind: "idpUserCreated",
+    __args: {} as IdpUserArgs,
+  };
+}
+
+/**
+ * Create a trigger that fires when an IdP user is updated.
+ * @returns IdP user updated trigger
+ */
+export function idpUserUpdatedTrigger(): IdpUserTrigger<IdpUserArgs> {
+  return {
+    kind: "idpUserUpdated",
+    __args: {} as IdpUserArgs,
+  };
+}
+
+/**
+ * Create a trigger that fires when an IdP user is deleted.
+ * @returns IdP user deleted trigger
+ */
+export function idpUserDeletedTrigger(): IdpUserTrigger<IdpUserArgs> {
+  return {
+    kind: "idpUserDeleted",
+    __args: {} as IdpUserArgs,
+  };
+}
+
+// Auth Access Token Event Triggers
+export interface AuthAccessTokenArgs extends EventArgs {
+  namespaceName: string;
+  userId: string;
+}
+
+export type AuthAccessTokenTrigger<Args> = ParserAuthAccessTokenTrigger & {
+  __args: Args;
+};
+
+/**
+ * Create a trigger that fires when an access token is issued.
+ * @returns Auth access token issued trigger
+ */
+export function authAccessTokenIssuedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenArgs> {
+  return {
+    kind: "authAccessTokenIssued",
+    __args: {} as AuthAccessTokenArgs,
+  };
+}
+
+/**
+ * Create a trigger that fires when an access token is refreshed.
+ * @returns Auth access token refreshed trigger
+ */
+export function authAccessTokenRefreshedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenArgs> {
+  return {
+    kind: "authAccessTokenRefreshed",
+    __args: {} as AuthAccessTokenArgs,
+  };
+}
+
+/**
+ * Create a trigger that fires when an access token is revoked.
+ * @returns Auth access token revoked trigger
+ */
+export function authAccessTokenRevokedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenArgs> {
+  return {
+    kind: "authAccessTokenRevoked",
+    __args: {} as AuthAccessTokenArgs,
   };
 }

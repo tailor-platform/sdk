@@ -9,11 +9,11 @@ import {
 } from "./relation";
 import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import type {
-  TailorDBType,
   TailorDBField,
-  ParsedTailorDBType,
   ParsedField,
   ParsedRelationship,
+  TailorDBType,
+  TailorDBTypeSchemaOutput,
 } from "./types";
 
 export type TypeSourceInfo = Record<string, { filePath: string; exportName: string }>;
@@ -27,11 +27,11 @@ export type TypeSourceInfo = Record<string, { filePath: string; exportName: stri
  * @returns Parsed types
  */
 export function parseTypes(
-  rawTypes: Record<string, TailorDBType>,
+  rawTypes: Record<string, TailorDBTypeSchemaOutput>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
-): Record<string, ParsedTailorDBType> {
-  const types: Record<string, ParsedTailorDBType> = {};
+): Record<string, TailorDBType> {
+  const types: Record<string, TailorDBType> = {};
   const allTypeNames = new Set(Object.keys(rawTypes));
 
   for (const [typeName, type] of Object.entries(rawTypes)) {
@@ -45,19 +45,18 @@ export function parseTypes(
 }
 
 /**
- * Parse a TailorDBType into a ParsedTailorDBType.
+ * Parse a TailorDBTypeSchemaOutput into a TailorDBType.
  * @param type - TailorDB type to parse
  * @param allTypeNames - Set of all TailorDB type names
  * @param rawTypes - All raw TailorDB types keyed by name
  * @returns Parsed TailorDB type
  */
 function parseTailorDBType(
-  type: TailorDBType,
+  type: TailorDBTypeSchemaOutput,
   allTypeNames: Set<string>,
-  rawTypes: Record<string, TailorDBType>,
-): ParsedTailorDBType {
+  rawTypes: Record<string, TailorDBTypeSchemaOutput>,
+): TailorDBType {
   const metadata = type.metadata;
-
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
 
   const fields: Record<string, ParsedField> = {};
@@ -136,7 +135,7 @@ function parseTailorDBType(
  * @param typeSourceInfo - Optional type source information
  */
 function buildBackwardRelationships(
-  types: Record<string, ParsedTailorDBType>,
+  types: Record<string, TailorDBType>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
 ): void {
@@ -256,7 +255,7 @@ function buildBackwardRelationships(
  * @param typeSourceInfo - Optional type source information
  */
 function validatePluralFormUniqueness(
-  types: Record<string, ParsedTailorDBType>,
+  types: Record<string, TailorDBType>,
   namespace: string,
   typeSourceInfo?: TypeSourceInfo,
 ): void {

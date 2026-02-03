@@ -14,6 +14,9 @@ describe("pnpm apply command integration tests", () => {
   const expectedGeneratedFiles = [
     "db.ts",
     // Executor bundler creates entry files (.entry.js) in same directory as output files
+    "executors/test-webhook.entry.js",
+    "executors/test-webhook.js",
+    "executors/test-webhook.js.map",
     "executors/user-created.entry.js",
     "executors/user-created.js",
     "executors/user-created.js.map",

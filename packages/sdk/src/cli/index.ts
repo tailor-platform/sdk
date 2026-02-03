@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { register } from "node:module";
-import { defineCommand, runMain } from "citty";
+import { defineCommand, runMain } from "politty";
 import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
+import { executorCommand } from "./executor";
 import { generateCommand } from "./generator";
 import { initCommand } from "./init";
 import { loginCommand } from "./login";
@@ -27,22 +28,20 @@ register("tsx", import.meta.url, { data: {} });
 const packageJson = await readPackageJson();
 
 export const mainCommand = defineCommand({
-  meta: {
-    name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
-    version: packageJson.version,
-    description:
-      packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
-  },
+  name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
+  description:
+    packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
   subCommands: {
     api: apiCommand,
     apply: applyCommand,
-    open: openCommand,
+    executor: executorCommand,
     generate: generateCommand,
     init: initCommand,
     login: loginCommand,
     logout: logoutCommand,
     machineuser: machineuserCommand,
     oauth2client: oauth2clientCommand,
+    open: openCommand,
     profile: profileCommand,
     remove: removeCommand,
     secret: secretCommand,
@@ -55,4 +54,4 @@ export const mainCommand = defineCommand({
   },
 });
 
-runMain(mainCommand);
+runMain(mainCommand, { version: packageJson.version });
