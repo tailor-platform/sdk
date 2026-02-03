@@ -21,6 +21,15 @@ export interface GqlIngestMetadata {
 }
 
 /**
+ * Plugin source information for type generation
+ */
+export interface PluginSourceInfo {
+  pluginId: string;
+  originalFilePath: string;
+  originalExportName: string;
+}
+
+/**
  * Metadata for lines-db schema generation
  */
 export interface LinesDbMetadata {
@@ -31,6 +40,8 @@ export interface LinesDbMetadata {
   omitFields: string[];
   foreignKeys: ForeignKeyDefinition[];
   indexes: IndexDefinition[];
+  /** Plugin source info if this is a plugin-generated type */
+  pluginSource?: PluginSourceInfo;
 }
 
 /**
@@ -39,4 +50,6 @@ export interface LinesDbMetadata {
 export interface SeedTypeMetadata {
   gqlIngest: GqlIngestMetadata;
   linesDb: LinesDbMetadata;
+  /** Generated type definition code for plugin-generated types (to embed in schema file) */
+  pluginTypeDefinition?: string;
 }

@@ -8,7 +8,12 @@ import {
 } from "@/cli/generator/types";
 import { processGqlIngest } from "./gql-ingest-processor";
 import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
-import { processLinesDb, generateLinesDbSchemaFile } from "./lines-db-processor";
+import {
+  processLinesDb,
+  generateLinesDbSchemaFile,
+  generateLinesDbSchemaFileWithEmbeddedType,
+  generatePluginTypeDefinition,
+} from "./lines-db-processor";
 import type { SeedTypeMetadata } from "./types";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
@@ -299,7 +304,9 @@ export function createSeedGenerator(
     processType: ({ type, source, namespace }) => {
       const gqlIngest = processGqlIngest(type, namespace);
       const linesDb = processLinesDb(type, source);
-      return { gqlIngest, linesDb };
+      // Generate type definition for plugin-generated types (to embed in schema file)
+      const pluginTypeDefinition = source.pluginId ? generatePluginTypeDefinition(type) : undefined;
+      return { gqlIngest, linesDb, pluginTypeDefinition };
     },
 
     processTailorDBNamespace: ({ types }) => types,
@@ -324,7 +331,7 @@ export function createSeedGenerator(
         }
 
         for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
-          const { gqlIngest, linesDb } = metadata;
+          const { gqlIngest, linesDb, pluginTypeDefinition } = metadata;
 
           entityDependencies[outputBaseDir][gqlIngest.name] = {
             namespace: gqlIngest.namespace,
@@ -354,14 +361,26 @@ export function createSeedGenerator(
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
-          const importPath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
-          const normalizedImportPath = importPath.replace(/\.ts$/, "").startsWith(".")
-            ? importPath.replace(/\.ts$/, "")
-            : `./${importPath.replace(/\.ts$/, "")}`;
+
+          let schemaContent: string;
+          if (pluginTypeDefinition) {
+            // Plugin-generated type: embed type definition directly in schema file
+            schemaContent = generateLinesDbSchemaFileWithEmbeddedType(
+              linesDb,
+              pluginTypeDefinition,
+            );
+          } else {
+            // User-defined type: import from source file
+            const relativePath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
+            const typeImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+              ? relativePath.replace(/\.ts$/, "")
+              : `./${relativePath.replace(/\.ts$/, "")}`;
+            schemaContent = generateLinesDbSchemaFile(linesDb, typeImportPath);
+          }
 
           files.push({
             path: schemaOutputPath,
-            content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
+            content: schemaContent,
           });
         }
       }

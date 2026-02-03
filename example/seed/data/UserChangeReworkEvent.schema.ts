@@ -1,7 +1,16 @@
-import { t } from "@tailor-platform/sdk";
+import { db, t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
-import { UserChangeReworkEvent } from "../../.tailor-sdk/types/tailordb/UserChangeReworkEvent";
+
+const UserChangeReworkEvent = db.type("UserChangeReworkEvent", {
+  request: db.uuid().index(),
+  iteration: db.int(),
+  fromStepNo: db.int(),
+  requestedBy: db.uuid().index(),
+  requestedAt: db.datetime(),
+  reason: db.string({ optional: true }),
+  ...db.fields.timestamps(),
+});
 
 const schemaType = t.object({
   ...UserChangeReworkEvent.pickFields(["id","createdAt"], { optional: true }),

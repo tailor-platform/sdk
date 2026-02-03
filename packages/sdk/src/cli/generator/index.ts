@@ -13,12 +13,7 @@ import {
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
-import {
-  generateUserTypes,
-  generatePluginTypeFiles,
-  writePluginTypeFiles,
-  type PluginTypeGenerationInput,
-} from "@/cli/type-generator";
+import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { type AppConfig } from "@/parser/app-config";
@@ -494,20 +489,6 @@ export function createGenerationManager(
             throw error;
           }
         }
-      }
-
-      // Phase 1.5: Generate plugin type files for plugin-generated types
-      // These files are needed by generators (e.g., seed generator) for imports
-      const pluginTypeInputs: PluginTypeGenerationInput[] = Object.entries(services.tailordb).map(
-        ([namespace, typeInfo]) => ({
-          namespace,
-          types: typeInfo.types,
-          sourceInfo: typeInfo.sourceInfo,
-        }),
-      );
-      const pluginTypeFiles = generatePluginTypeFiles(pluginTypeInputs);
-      if (pluginTypeFiles.length > 0) {
-        writePluginTypeFiles(pluginTypeFiles);
       }
 
       // Phase 2: Auth resolveNamespaces (depends on TailorDB)

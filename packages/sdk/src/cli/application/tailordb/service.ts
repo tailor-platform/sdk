@@ -97,9 +97,15 @@ export function createTailorDBService(
       result = result.gqlPermission(originalAny._permissions.gql);
     }
 
-    // Copy indexes
-    if (originalAny._indexes && originalAny._indexes.length > 0) {
-      result = result.indexes(...originalAny._indexes);
+    // Copy indexes from metadata (indexes are stored in metadata, not as a direct property)
+    if (metadata.indexes && Object.keys(metadata.indexes).length > 0) {
+      const indexDefs = Object.entries(metadata.indexes).map(([name, def]) => ({
+        name,
+        // Cast fields array to tuple type (IndexDef expects [T, T, ...T[]])
+        fields: def.fields as [string, string, ...string[]],
+        unique: def.unique,
+      }));
+      result = result.indexes(...indexDefs);
     }
 
     // Copy plugins (but don't re-process them)
@@ -197,15 +203,10 @@ export function createTailorDBService(
       // Add generated types to rawTypes
       for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
         rawTypes[sourceFilePath][generatedType.name] = generatedType as TailorDBType;
-        const generatedFilePath = path.join(
-          process.cwd(),
-          ".tailor-sdk",
-          "types",
-          namespace,
-          `${generatedType.name}.ts`,
-        );
+        // Plugin-generated types don't have a source file.
+        // Generators that need to import these types should generate their own type files.
         typeSourceInfo[generatedType.name] = {
-          filePath: generatedFilePath,
+          filePath: "",
           exportName: generatedType.name,
           pluginId: attachment.pluginId,
           pluginImportPath: pluginManager.getPluginImportPath(attachment.pluginId),
