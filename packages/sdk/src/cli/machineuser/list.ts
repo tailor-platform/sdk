@@ -21,7 +21,7 @@ export interface MachineUserInfo {
   clientSecret: string;
   createdAt: Date | null;
   updatedAt: Date | null;
-  attributeMap: Record<string, unknown>;
+  attributes: Record<string, unknown>;
 }
 
 /**
@@ -36,7 +36,7 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
     clientSecret: user.clientSecret,
     createdAt: user.createdAt ? timestampDate(user.createdAt) : null,
     updatedAt: user.updatedAt ? timestampDate(user.updatedAt) : null,
-    attributeMap: Object.fromEntries(
+    attributes: Object.fromEntries(
       Object.entries(user.attributeMap).map(([key, value]) => [key, toJson(ValueSchema, value)]),
     ),
   };
