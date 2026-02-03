@@ -7,7 +7,7 @@ const UserChangeRequest = db.type("UserChangeRequest", {
   draft: db.uuid().index(),
   status: db.enum(["RUNNING", "REWORK", "APPROVED", "REJECTED", "CANCELED"]).index(),
   reworkIteration: db.int(),
-  currentStepNo: db.int(),
+  currentStepNo: db.int().hooks({ create: () => 1 }).validate([({ value }) => value >= 1, "currentStepNo must be >= 1"]),
   templateKey: db.string(),
   templateVersion: db.int(),
   requestedBy: db.uuid().index(),
@@ -17,11 +17,11 @@ const UserChangeRequest = db.type("UserChangeRequest", {
   activationStatus: db.enum(["PENDING", "ACTIVATED"]).index(),
   activatedAt: db.datetime({ optional: true }),
   ...db.fields.timestamps(),
-});
+}).gqlPermission([{ conditions: [[{ user: "_loggedIn" }, "=", true]], actions: ["read"], permit: true }]);
 
 const schemaType = t.object({
-  ...UserChangeRequest.pickFields(["id","createdAt"], { optional: true }),
-  ...UserChangeRequest.omitFields(["id","createdAt"]),
+  ...UserChangeRequest.pickFields(["id","currentStepNo","createdAt"], { optional: true }),
+  ...UserChangeRequest.omitFields(["id","currentStepNo","createdAt"]),
 });
 
 const hook = createTailorDBHook(UserChangeRequest);
