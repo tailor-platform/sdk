@@ -13,6 +13,7 @@ export default defineConfig([
     "scripts/perf",
     "seed",
     "migrations",
+    "functions",
   ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,

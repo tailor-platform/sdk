@@ -84,6 +84,9 @@ export default defineConfig({
   workflow: {
     files: ["./workflows/**/*.ts"],
   },
+  functionRegistry: {
+    files: ["./functions/*.js"],
+  },
   staticWebsites: [website, erdSite],
 });
 
