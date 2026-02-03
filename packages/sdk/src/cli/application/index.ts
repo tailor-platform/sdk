@@ -2,7 +2,6 @@ import { createAuthService, type AuthService } from "@/cli/application/auth/serv
 import { createExecutorService, type ExecutorService } from "@/cli/application/executor/service";
 import { createResolverService, type ResolverService } from "@/cli/application/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
-import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { type AppConfig } from "@/parser/app-config";
 import { type AuthConfig } from "@/parser/service/auth";
 import { type ExecutorServiceInput } from "@/parser/service/executor";
@@ -13,6 +12,7 @@ import {
   type StaticWebsite,
   type StaticWebsiteInput,
 } from "@/parser/service/staticwebsite";
+import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
 import type { IdPConfig } from "@/configure/services/idp";
 

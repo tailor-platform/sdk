@@ -4,8 +4,10 @@ import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
 import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
 export type {
+  TailorDBExternalConfig,
   TailorDBMigrationConfig,
   TailorDBServiceConfig,
+  TailorDBServiceInput,
 } from "@/parser/service/tailordb/types";
 import type { NonEmptyObject } from "type-fest";
 
@@ -82,12 +84,6 @@ export type Hooks<
       ? never
       : K]?: Hook<TData, output<F[K]>>;
 }>;
-
-export type TailorDBExternalConfig = { external: true };
-
-export type TailorDBServiceInput = {
-  [namespace: string]: TailorDBServiceConfig | TailorDBExternalConfig;
-};
 
 export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   fields: [keyof T["fields"], keyof T["fields"], ...(keyof T["fields"])[]];
