@@ -1,7 +1,6 @@
 import { type TailorDBService } from "@/cli/application/tailordb/service";
 import { IdProviderSchema } from "@/parser/service/auth";
-import type { AuthOwnConfig } from "@/configure/services/auth";
-import type { IdProviderConfig } from "@/parser/service/auth";
+import type { AuthOwnConfig, IdProviderConfig } from "@/parser/service/auth";
 
 type UserProfile = AuthOwnConfig["userProfile"] & {
   namespace: string;

@@ -190,6 +190,17 @@ function buildResolverExecutedArgsExpr(additionalFields?: string): string {
   return additionalFields ? `({ ${baseFields}, ${additionalFields} })` : `({ ${baseFields} })`;
 }
 
+/**
+ * Build args expression for incomingWebhook trigger.
+ * Transforms server's raw_body field to rawBody field.
+ * @param additionalFields - Additional fields to include in the args expression
+ * @returns JavaScript expression for incomingWebhook trigger args
+ */
+function buildIncomingWebhookArgsExpr(additionalFields?: string): string {
+  const baseFields = `...args, appNamespace: args.namespaceName, rawBody: args.raw_body`;
+  return additionalFields ? `({ ${baseFields}, ${additionalFields} })` : `({ ${baseFields} })`;
+}
+
 function protoExecutor(
   appName: string,
   executor: Executor,
@@ -305,7 +316,11 @@ function protoExecutor(
 
   // Build args expression for target operations
   const argsExpr =
-    trigger.kind === "resolverExecuted" ? buildResolverExecutedArgsExpr(envField) : baseArgsExpr;
+    trigger.kind === "resolverExecuted"
+      ? buildResolverExecutedArgsExpr(envField)
+      : trigger.kind === "incomingWebhook"
+        ? buildIncomingWebhookArgsExpr(envField)
+        : baseArgsExpr;
 
   switch (target.kind) {
     case "webhook": {

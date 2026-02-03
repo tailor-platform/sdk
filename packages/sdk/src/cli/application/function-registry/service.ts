@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
-import type { FunctionRegistryServiceConfig } from "@/configure/services/function-registry/types";
+import type { FunctionRegistryServiceConfig } from "@/parser/service/function-registry/types";
 
 export interface LoadedFunction {
   name: string;

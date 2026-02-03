@@ -6,20 +6,20 @@ import {
 } from "@/cli/application/function-registry/service";
 import { createResolverService, type ResolverService } from "@/cli/application/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
-import { type AuthConfig } from "@/configure/services/auth";
-import { type FunctionRegistryServiceInput } from "@/configure/services/function-registry/types";
-import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { type AppConfig } from "@/parser/app-config";
+import { type AuthConfig } from "@/parser/service/auth";
 import { type ExecutorServiceInput } from "@/parser/service/executor";
+import { type FunctionRegistryServiceInput } from "@/parser/service/function-registry/types";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
+import { type IdPConfig } from "@/parser/service/idp/types";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
 import {
   StaticWebsiteSchema,
   type StaticWebsite,
   type StaticWebsiteInput,
 } from "@/parser/service/staticwebsite";
+import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
-import type { IdPConfig } from "@/configure/services/idp";
 
 export type Application = {
   readonly name: string;

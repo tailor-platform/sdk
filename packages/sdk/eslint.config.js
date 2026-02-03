@@ -139,22 +139,24 @@ export default defineConfig([
       ],
     },
   },
-  // {
-  //   files: ["src/cli/**/*.ts"],
-  //   rules: {
-  //     "@typescript-eslint/no-restricted-imports": [
-  //       "error",
-  //       {
-  //         patterns: [
-  //           {
-  //             group: ["**/configure/**", "@/configure/**"],
-  //             message: "Cli module should not import from configure module. Please use parser module as an intermediary.",
-  //           },
-  //         ],
-  //       },
-  //     ],
-  //   },
-  // },
+  {
+    files: ["src/cli/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message:
+                "Cli module should not import from configure module. Please use parser module as an intermediary.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     files: ["src/cli/**/*.ts"],
     ignores: ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts", "src/cli/utils/format.ts"],
