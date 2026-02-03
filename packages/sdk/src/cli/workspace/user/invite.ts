@@ -1,4 +1,4 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
@@ -9,7 +9,7 @@ import { stringToRole, validRoles } from "./transform";
 const inviteUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  email: z.string().email({ message: "email must be a valid email address" }),
+  email: z.email({ message: "email must be a valid email address" }),
   role: z.enum(validRoles, { message: `role must be one of: ${validRoles.join(", ")}` }),
 });
 
@@ -52,25 +52,19 @@ export async function inviteUser(options: InviteUserOptions): Promise<void> {
 }
 
 export const inviteCommand = defineCommand({
-  meta: {
-    name: "invite",
-    description: "Invite a user to a workspace",
-  },
-  args: {
+  name: "invite",
+  description: "Invite a user to a workspace",
+  args: z.object({
     ...commonArgs,
     ...workspaceArgs,
-    email: {
-      type: "string",
+    email: arg(z.email(), {
       description: "Email address of the user to invite",
-      required: true,
-    },
-    role: {
-      type: "string",
+    }),
+    role: arg(z.enum(validRoles), {
       description: `Role to assign (${validRoles.join(", ")})`,
-      required: true,
       alias: "r",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     await inviteUser({
       workspaceId: args["workspace-id"],

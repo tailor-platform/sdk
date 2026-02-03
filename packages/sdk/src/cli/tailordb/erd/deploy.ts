@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../../args";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { logger } from "../../utils/logger";
@@ -6,21 +7,18 @@ import { prepareErdBuilds } from "./export";
 import { initErdContext } from "./utils";
 
 export const erdDeployCommand = defineCommand({
-  meta: {
-    name: "deploy",
-    description: "Deploy ERD static website for TailorDB namespace(s) (beta)",
-  },
-  args: {
+  name: "deploy",
+  description: "Deploy ERD static website for TailorDB namespace(s).",
+  args: z.object({
     ...commonArgs,
     ...deploymentArgs,
     ...jsonArgs,
-    namespace: {
-      type: "string",
+    namespace: arg(z.string().optional(), {
+      alias: "n",
       description:
         "TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)",
-      alias: "n",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
     const buildResults = await prepareErdBuilds({
@@ -28,6 +26,7 @@ export const erdDeployCommand = defineCommand({
       workspaceId,
       config,
       namespace: args.namespace,
+      requireErdSite: true,
     });
 
     const deployResults = await Promise.all(
@@ -61,14 +60,16 @@ export const erdDeployCommand = defineCommand({
         };
       }),
     );
+    logger.newline();
 
     if (args.json) {
       logger.out(deployResults);
     } else {
       for (const result of deployResults) {
+        logSkippedFiles(result.skippedFiles);
+        logger.newline();
         logger.success(`ERD site "${result.erdSite}" deployed successfully.`);
         logger.out(result.url);
-        logSkippedFiles(result.skippedFiles);
       }
     }
   }),

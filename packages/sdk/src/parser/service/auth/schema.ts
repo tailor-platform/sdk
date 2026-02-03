@@ -186,16 +186,31 @@ const MachineUserSchema = z.object({
   attributeList: z.array(z.uuid()).optional(),
 });
 
+const AuthConfigBaseSchema = z.object({
+  name: z.string(),
+  machineUsers: z.record(z.string(), MachineUserSchema).optional(),
+  oauth2Clients: z.record(z.string(), OAuth2ClientSchema).optional(),
+  idProvider: IdProviderSchema.optional(),
+  scim: SCIMSchema.optional(),
+  tenantProvider: TenantProviderSchema.optional(),
+  publishSessionEvents: z.boolean().optional(),
+});
+
 export const AuthConfigSchema = z
-  .object({
-    name: z.string(),
-    userProfile: UserProfileSchema.optional(),
-    machineUserAttributes: z.record(z.string(), TailorFieldSchema).optional(),
-    machineUsers: z.record(z.string(), MachineUserSchema).optional(),
-    oauth2Clients: z.record(z.string(), OAuth2ClientSchema).optional(),
-    idProvider: IdProviderSchema.optional(),
-    scim: SCIMSchema.optional(),
-    tenantProvider: TenantProviderSchema.optional(),
-    publishSessionEvents: z.boolean().optional(),
-  })
+  .union([
+    AuthConfigBaseSchema.extend({
+      userProfile: z.undefined().optional(),
+      machineUserAttributes: z.undefined().optional(),
+    }),
+    z.xor([
+      AuthConfigBaseSchema.extend({
+        userProfile: UserProfileSchema,
+        machineUserAttributes: z.undefined().optional(),
+      }),
+      AuthConfigBaseSchema.extend({
+        userProfile: z.undefined().optional(),
+        machineUserAttributes: z.record(z.string(), TailorFieldSchema),
+      }),
+    ]),
+  ])
   .brand("AuthConfig");

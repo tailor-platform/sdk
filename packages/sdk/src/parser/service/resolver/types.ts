@@ -6,3 +6,9 @@ export type TailorFieldInput = z.input<typeof TailorFieldSchema>;
 export type QueryType = z.output<typeof QueryTypeSchema>;
 export type ResolverInput = z.input<typeof ResolverSchema>;
 export type Resolver = z.output<typeof ResolverSchema>;
+
+export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
+export type ResolverExternalConfig = { external: true };
+export type ResolverServiceInput = {
+  [namespace: string]: ResolverServiceConfig | ResolverExternalConfig;
+};

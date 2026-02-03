@@ -1,5 +1,6 @@
-import { defineCommand } from "citty";
-import { commonArgs, deploymentArgs, withCommonArgs } from "../args";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -248,39 +249,27 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 }
 
 export const truncateCommand = defineCommand({
-  meta: {
-    name: "truncate",
-    description: "Truncate TailorDB tables",
-  },
-  args: {
+  name: "truncate",
+  description: "Truncate (delete all records from) TailorDB tables.",
+  args: z.object({
     ...commonArgs,
-    types: {
-      type: "positional",
-      description: "Type names to truncate",
-      required: false,
-    },
-    all: {
-      type: "boolean",
-      description: "Truncate all tables in all namespaces",
-      default: false,
-      alias: "a",
-    },
-    namespace: {
-      type: "string",
-      description: "Truncate all tables in specified namespace",
-      alias: "n",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
     ...deploymentArgs,
-  },
+    ...confirmationArgs,
+    types: arg(z.string().array().optional(), {
+      positional: true,
+      description: "Type names to truncate",
+    }),
+    all: arg(z.boolean().default(false), {
+      alias: "a",
+      description: "Truncate all tables in all namespaces",
+    }),
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "Truncate all tables in specified namespace",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
-    // Get type names from rest arguments (_)
-    const types = args._.length > 0 ? args._.map((arg) => String(arg)).filter(Boolean) : undefined;
+    const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,

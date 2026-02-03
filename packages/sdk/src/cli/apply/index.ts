@@ -1,4 +1,5 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
+import { z } from "zod";
 import { defineApplication } from "@/cli/application";
 import {
   loadAndCollectJobs,
@@ -15,7 +16,7 @@ import {
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
@@ -38,6 +39,7 @@ import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
+import type { LoadedConfig } from "@/cli/config-loader";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -45,6 +47,7 @@ export interface ApplyOptions {
   configPath?: string;
   dryRun?: boolean;
   yes?: boolean;
+  noSchemaCheck?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
@@ -55,6 +58,8 @@ export interface PlanContext {
   workspaceId: string;
   application: Readonly<Application>;
   forRemoval: boolean;
+  config: LoadedConfig;
+  noSchemaCheck?: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
@@ -66,13 +71,13 @@ export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "dele
  */
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
-  const { config, configPath } = await loadConfig(options?.configPath);
+  const { config } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
   // Generate user types from loaded config
-  await generateUserTypes(config, configPath);
+  await generateUserTypes(config, config.path);
   const application = defineApplication(config);
 
   // Load files first (before building)
@@ -122,6 +127,7 @@ export async function apply(options?: ApplyOptions) {
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
   }
+
   for (const pipeline of application.resolverServices) {
     await pipeline.loadResolvers();
   }
@@ -140,6 +146,8 @@ export async function apply(options?: ApplyOptions) {
     workspaceId,
     application,
     forRemoval: false,
+    config,
+    noSchemaCheck: options?.noSchemaCheck,
   };
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
@@ -225,7 +233,11 @@ export async function apply(options?: ApplyOptions) {
   // Phase 2: Create/Update services that Application depends on
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
+
+  // TailorDB: Automatically validates migrations and handles migration flow internally
   await applyTailorDB(client, tailorDB, "create-update");
+
+  // Other services: Apply after TailorDB migrations complete
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
@@ -234,10 +246,11 @@ export async function apply(options?: ApplyOptions) {
   // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
   // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
   // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
+  // NOTE: TailorDB resource deletions are handled within create-update phase (above)
+  //       because migration flow requires: pre-migration → script execution → post-migration (with deletions)
   await applyPipeline(client, pipeline, "delete-resources");
   await applyAuth(client, auth, "delete-resources");
   await applyIdP(client, idp, "delete-resources");
-  await applyTailorDB(client, tailorDB, "delete-resources");
 
   // Phase 4: Create/Update Application (after subgraph resource changes complete)
   await applyApplication(client, app, "create-update");
@@ -287,39 +300,20 @@ async function buildWorkflow(
 }
 
 export const applyCommand = defineCommand({
-  meta: {
-    name: "apply",
-    description: "Apply Tailor configuration to generate files",
-  },
-  args: {
+  name: "apply",
+  description: "Apply Tailor configuration to deploy your application.",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "ID of the workspace to apply the configuration to",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile to use",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
-      alias: "c",
-      default: "tailor.config.ts",
-    },
-    "dry-run": {
-      type: "boolean",
-      description: "Run the command without making any changes",
+    ...deploymentArgs,
+    ...confirmationArgs,
+    "dry-run": arg(z.boolean().optional(), {
       alias: "d",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip all confirmation prompts",
-      alias: "y",
-    },
-  },
+      description: "Run the command without making any changes",
+    }),
+    "no-schema-check": arg(z.boolean().optional(), {
+      description: "Skip schema diff check against migration snapshots",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     await apply({
       workspaceId: args["workspace-id"],
@@ -327,6 +321,7 @@ export const applyCommand = defineCommand({
       configPath: args.config,
       dryRun: args["dry-run"],
       yes: args.yes,
+      noSchemaCheck: args["no-schema-check"],
     });
   }),
 });

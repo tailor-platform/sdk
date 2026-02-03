@@ -2,10 +2,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { createKyselyGenerator } from "./index";
-import type { TailorDBType } from "@/configure/services/tailordb/schema";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType, TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 
-function parseTailorDBType(type: TailorDBType): ParsedTailorDBType {
+function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});
   return types[type.name];
 }
@@ -235,13 +234,25 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.files[0].path).toBe(testDistPath);
 
       const content = result.files[0].content;
-      expect(content).toContain(
-        'import { type ColumnType, Kysely, type KyselyConfig } from "kysely"',
-      );
+      expect(content).toContain("type ColumnType");
+      expect(content).toContain("type Transaction as KyselyTransaction");
+      expect(content).toContain("type Insertable as KyselyInsertable");
+      expect(content).toContain("type Selectable as KyselySelectable");
+      expect(content).toContain("type Updateable as KyselyUpdateable");
       expect(content).toContain("interface Namespace {");
       expect(content).toContain('"test-namespace": {');
       expect(content).toContain("User: {");
       expect(content).toContain("export function getDB");
+      expect(content).toContain("export type Transaction<K extends keyof Namespace | DB");
+      expect(content).toContain(
+        "export type Insertable<T extends keyof Namespace[keyof Namespace]>",
+      );
+      expect(content).toContain(
+        "export type Selectable<T extends keyof Namespace[keyof Namespace]>",
+      );
+      expect(content).toContain(
+        "export type Updateable<T extends keyof Namespace[keyof Namespace]>",
+      );
       expect(result.errors).toBeUndefined();
     });
 
@@ -289,7 +300,7 @@ describe("KyselyGenerator integration tests", () => {
   describe("error handling tests", () => {
     it("handles errors appropriately with invalid type definitions", async () => {
       const validType = parseTailorDBType(mockBasicType);
-      const invalidType: ParsedTailorDBType = {
+      const invalidType: TailorDBType = {
         ...validType,
         name: "Invalid",
         // @ts-expect-error - intentionally invalid to verify runtime error handling

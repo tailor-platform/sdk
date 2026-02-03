@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../args";
+import { commonArgs, jsonArgs, positiveIntArg, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
@@ -78,33 +78,22 @@ export async function listUsers(options: ListUsersOptions): Promise<UserInfo[]> 
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List users in a workspace",
-  },
-  args: {
+  name: "list",
+  description: "List users in a workspace",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    limit: {
-      type: "string",
+    limit: arg(positiveIntArg.optional(), {
       alias: "l",
       description: "Maximum number of users to list",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
-    let limit: number | undefined;
-    if (args.limit) {
-      limit = parseInt(args.limit, 10);
-      if (Number.isNaN(limit) || limit <= 0) {
-        throw new Error(`--limit must be a positive integer, got '${args.limit}'`);
-      }
-    }
-
     const users = await listUsers({
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      limit,
+      limit: args.limit,
     });
 
     logger.out(users);

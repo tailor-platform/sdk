@@ -200,15 +200,21 @@
                 "name": "node:path",
                 "message": "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling."
               }
+            ],
+            "patterns": [
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Cli module should not import from configure module. Please use parser module as an intermediary."
+              }
             ]
-            // "patterns": [
-            //   {
-            //     "group": ["**/configure/**", "@/configure/**"],
-            //     "message": "Cli module should not import from configure module. Please use parser module as an intermediary."
-            //   }
-            // ]
           }
         ]
+      }
+    },
+    {
+      "files": ["src/cli/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
       }
     },
     {

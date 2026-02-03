@@ -1,8 +1,8 @@
-import { defineCommand } from "citty";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { formatTableWithHeaders, humanizeRelativeTime } from "../utils/format";
 import { logger } from "../utils/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
@@ -39,36 +39,23 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all workflows",
-  },
-  args: {
+  name: "list",
+  description: "List all workflows in the workspace.",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
-    if (args.json) {
-      logger.out(workflows);
-    } else {
-      if (workflows.length === 0) {
-        logger.info("No workflows found.");
-        return;
-      }
-      const headers = ["name", "mainJob", "jobFunctions", "updatedAt"];
-      const rows = workflows.map((w) => [
-        w.name,
-        w.mainJob,
-        w.jobFunctions.toString(),
-        humanizeRelativeTime(w.updatedAt),
-      ]);
-      logger.out(formatTableWithHeaders(headers, rows));
+    if (workflows.length === 0 && !args.json) {
+      logger.info("No workflows found.");
+      return;
     }
+    logger.out(workflows);
   }),
 });

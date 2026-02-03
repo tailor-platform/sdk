@@ -1,5 +1,7 @@
-import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "citty";
+import { toJson } from "@bufbuild/protobuf";
+import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -17,8 +19,9 @@ export interface MachineUserInfo {
   name: string;
   clientId: string;
   clientSecret: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  attributes: Record<string, unknown>;
 }
 
 /**
@@ -31,8 +34,11 @@ function machineUserInfo(user: MachineUser): MachineUserInfo {
     name: user.name,
     clientId: user.clientId,
     clientSecret: user.clientSecret,
-    createdAt: user.createdAt ? timestampDate(user.createdAt).toISOString() : "N/A",
-    updatedAt: user.updatedAt ? timestampDate(user.updatedAt).toISOString() : "N/A",
+    createdAt: user.createdAt ? timestampDate(user.createdAt) : null,
+    updatedAt: user.updatedAt ? timestampDate(user.updatedAt) : null,
+    attributes: Object.fromEntries(
+      Object.entries(user.attributeMap).map(([key, value]) => [key, toJson(ValueSchema, value)]),
+    ),
   };
 }
 
@@ -79,15 +85,13 @@ export async function listMachineUsers(
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List all machine users",
-  },
-  args: {
+  name: "list",
+  description: "List all machine users in the application.",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...deploymentArgs,
-  },
+  }),
   run: withCommonArgs(async (args) => {
     // Execute machineuser list logic
     const machineUsers = await listMachineUsers({
@@ -97,6 +101,6 @@ export const listCommand = defineCommand({
     });
 
     // Show machine users info
-    logger.out(machineUsers);
+    logger.out(machineUsers, { display: { createdAt: null, updatedAt: null } });
   }),
 });

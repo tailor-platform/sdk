@@ -1,4 +1,4 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
@@ -52,25 +52,19 @@ export async function updateUser(options: UpdateUserOptions): Promise<void> {
 }
 
 export const updateCommand = defineCommand({
-  meta: {
-    name: "update",
-    description: "Update a user's role in a workspace",
-  },
-  args: {
+  name: "update",
+  description: "Update a user's role in a workspace",
+  args: z.object({
     ...commonArgs,
     ...workspaceArgs,
-    email: {
-      type: "string",
+    email: arg(z.email(), {
       description: "Email address of the user to update",
-      required: true,
-    },
-    role: {
-      type: "string",
+    }),
+    role: arg(z.enum(validRoles), {
       description: `New role to assign (${validRoles.join(", ")})`,
-      required: true,
       alias: "r",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     await updateUser({
       workspaceId: args["workspace-id"],

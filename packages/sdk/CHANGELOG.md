@@ -1,5 +1,139 @@
 # @tailor-platform/sdk
 
+## 1.8.0
+
+### Minor Changes
+
+- [#515](https://github.com/tailor-platform/sdk/pull/515) [`fce8058`](https://github.com/tailor-platform/sdk/commit/fce80580d49d784feb232918341c5643da2d96dc) Thanks [@toiroakr](https://github.com/toiroakr)! - Add Kysely utility types (Transaction, Insertable, Selectable, Updateable) to generated code
+
+- [#521](https://github.com/tailor-platform/sdk/pull/521) [`fa17d60`](https://github.com/tailor-platform/sdk/commit/fa17d601d8e3a13e593eb5f1da6cbf5c6802a034) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `display` option to `logger.out` for field transformation and exclusion in non-JSON mode
+
+### Patch Changes
+
+- [#519](https://github.com/tailor-platform/sdk/pull/519) [`3124bb2`](https://github.com/tailor-platform/sdk/commit/3124bb2bd755fe9fe9f781b6dadc28472d11969b) Thanks [@riku99](https://github.com/riku99)! - Normalized packages/sdk/src/cli/application/index.ts imports to use parser and enabled the ESLint/Oxlint rule blocking cli → configure imports (tests excluded).
+
+- [#508](https://github.com/tailor-platform/sdk/pull/508) [`49d3fd5`](https://github.com/tailor-platform/sdk/commit/49d3fd5a255607145ce28c895dbdd2d94bea80b7) Thanks [@haru0017](https://github.com/haru0017)! - Transform webhook args `raw_body` to `rawBody` in executor bundler
+
+- [#484](https://github.com/tailor-platform/sdk/pull/484) [`56ee4ff`](https://github.com/tailor-platform/sdk/commit/56ee4ff2dc23bd275ef9556c47363315e9d4e981) Thanks [@riku99](https://github.com/riku99)! - Updated imports of confgure tailordb and resolver in cli
+
+## 1.7.0
+
+### Minor Changes
+
+- [#503](https://github.com/tailor-platform/sdk/pull/503) [`d6d16e2`](https://github.com/tailor-platform/sdk/commit/d6d16e26f329088926eb07d89d0c7dbbefc0bcd5) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - reject configs with both userProfile and machineUserAttributes
+
+### Patch Changes
+
+- [#512](https://github.com/tailor-platform/sdk/pull/512) [`8cf6a9b`](https://github.com/tailor-platform/sdk/commit/8cf6a9b52075dd511f691709eb5779e9b05ce767) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve CLI table output formatting: humanize Date fields, pretty-print JSON objects, and output empty array in JSON mode for list commands
+
+- [#502](https://github.com/tailor-platform/sdk/pull/502) [`080053f`](https://github.com/tailor-platform/sdk/commit/080053fb56fcc9fd28bcd1b1400094a8c35d4d17) Thanks [@riku99](https://github.com/riku99)! - Add workspace info to show command'
+
+- [#509](https://github.com/tailor-platform/sdk/pull/509) [`502050f`](https://github.com/tailor-platform/sdk/commit/502050f0946a1c314ef4c8d2a79ce924973b0daa) Thanks [@riku99](https://github.com/riku99)! - Delete profile when deleting workspace
+
+## 1.6.3
+
+### Patch Changes
+
+- [#505](https://github.com/tailor-platform/sdk/pull/505) [`c3329a9`](https://github.com/tailor-platform/sdk/commit/c3329a991ab7fc2f60dc4558ba33ea60ed18394e) Thanks [@k1LoW](https://github.com/k1LoW)! - Add actor field to executor event trigger args
+
+  - Added `TailorActor` type to represent actors in event triggers
+  - Added `actor` field to `EventArgs` interface (nullable)
+  - Field names are aligned with `TailorUser` for consistency (`attributes`, `attributeList`)
+  - Added transformation in executor bundler to convert server field names to SDK field names
+
+- [#489](https://github.com/tailor-platform/sdk/pull/489) [`2f17481`](https://github.com/tailor-platform/sdk/commit/2f17481f26577249c8dd0ac93d1b04b0f91cb377) Thanks [@riku99](https://github.com/riku99)! - Moved executor service config types to parser and updated CLI imports
+
+## 1.6.2
+
+### Patch Changes
+
+- [#498](https://github.com/tailor-platform/sdk/pull/498) [`254fb04`](https://github.com/tailor-platform/sdk/commit/254fb048302668cd15298138baa9bff77a90bec5) Thanks [@dqn](https://github.com/dqn)! - Migrate CLI framework from citty to politty
+
+## 1.6.1
+
+### Patch Changes
+
+- [#499](https://github.com/tailor-platform/sdk/pull/499) [`b8c3e77`](https://github.com/tailor-platform/sdk/commit/b8c3e77400c86577cd9609924fd0ee29885fe74b) Thanks [@k1LoW](https://github.com/k1LoW)! - Add IdP and Auth event triggers for executor
+
+  New trigger functions:
+
+  - `idpUserCreatedTrigger()` - fires when an IdP user is created
+  - `idpUserUpdatedTrigger()` - fires when an IdP user is updated
+  - `idpUserDeletedTrigger()` - fires when an IdP user is deleted
+  - `authAccessTokenIssuedTrigger()` - fires when an access token is issued
+  - `authAccessTokenRefreshedTrigger()` - fires when an access token is refreshed
+  - `authAccessTokenRevokedTrigger()` - fires when an access token is revoked
+
+## 1.6.0
+
+### Minor Changes
+
+- [#462](https://github.com/tailor-platform/sdk/pull/462) [`f83a3ed`](https://github.com/tailor-platform/sdk/commit/f83a3ed25a0c3019a97aaada32d5398db12865ba) Thanks [@toiroakr](https://github.com/toiroakr)! - Add TailorDB schema migration feature (beta). Migrations allow you to safely evolve your database schema with type-safe data transformations.
+
+  > **Note:** This feature is currently in beta. The API and behavior may change in future releases.
+
+  **Key Features:**
+
+  - **Local snapshot-based diff detection** - Detects field-level schema differences between current types and previous snapshots
+  - **Type-safe migration scripts** - Generates TypeScript migration scripts with Kysely transaction types
+  - **Transaction-wrapped execution** - All changes commit or rollback together for atomicity
+  - **Automatic execution during apply** - Pending migrations run as part of `tailor-sdk apply`
+  - **Migration checkpoint management** - Manually control which migrations have been applied
+  - **Migration status tracking** - View current state and pending migrations
+
+  **Commands:**
+
+  - `tailordb migration generate` - Generate migration files from schema changes (supports `--name`, `--yes`, `--init`)
+  - `tailordb migration set <number>` - Manually set migration checkpoint
+  - `tailordb migration status` - Show migration status and pending migrations
+
+  **Supported Schema Changes:**
+
+  The migration system automatically handles:
+
+  - Adding/removing optional fields (non-breaking)
+  - Adding required fields (breaking - migration script generated)
+  - Changing optional→required (breaking - migration script generated)
+  - Adding/removing indexes (non-breaking)
+  - Adding unique constraints (breaking - migration script generated)
+  - Adding/removing enum values (removing is breaking - migration script generated)
+  - Adding/removing types (non-breaking)
+
+  **Unsupported Changes:**
+
+  The following changes require a 3-step migration process:
+
+  - **Field type changes** (e.g., `string` → `integer`) - Add new field, migrate data, remove old field, then re-add with original name
+  - **Array to single value changes** - Add new single-value field, migrate data, remove array field, then re-add with original name
+
+  **Configuration:**
+
+  Configure migrations in `tailor.config.ts`:
+
+  ```typescript
+  db: {
+    tailordb: {
+      files: ["./tailordb/*.ts"],
+      migration: {
+        directory: "./migrations",
+        // Optional: specify machine user for migration execution
+        // If not specified, the first machine user from auth.machineUsers is used
+        machineUser: "admin-machine-user",
+      },
+    },
+  }
+  ```
+
+### Patch Changes
+
+- [#488](https://github.com/tailor-platform/sdk/pull/488) [`f26a33d`](https://github.com/tailor-platform/sdk/commit/f26a33d1519d444f03e0e40cf43b16b2f5693348) Thanks [@riku99](https://github.com/riku99)! - Moved workflow service config types to the parser layer and updated CLI imports
+
+- [#493](https://github.com/tailor-platform/sdk/pull/493) [`8111b0f`](https://github.com/tailor-platform/sdk/commit/8111b0f69bd924db51283b16eb20b650384ad3a1) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: improve ERD command UX
+
+  - Allow `erd export` and `erd serve` to work without `erdSite` configuration (only `erd deploy` requires it)
+  - Suppress verbose liam CLI output during ERD build
+  - Improve `erd export` log output with success message for build path
+
 ## 1.5.0
 
 ### Minor Changes

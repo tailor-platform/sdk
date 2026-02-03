@@ -24,11 +24,21 @@ export const IncomingWebhookTriggerSchema = z.object({
   kind: z.literal("incomingWebhook"),
 });
 
+export const IdpUserTriggerSchema = z.object({
+  kind: z.enum(["idpUserCreated", "idpUserUpdated", "idpUserDeleted"]),
+});
+
+export const AuthAccessTokenTriggerSchema = z.object({
+  kind: z.enum(["authAccessTokenIssued", "authAccessTokenRefreshed", "authAccessTokenRevoked"]),
+});
+
 export const TriggerSchema = z.discriminatedUnion("kind", [
   RecordTriggerSchema,
   ResolverExecutedTriggerSchema,
   ScheduleTriggerSchema,
   IncomingWebhookTriggerSchema,
+  IdpUserTriggerSchema,
+  AuthAccessTokenTriggerSchema,
 ]);
 
 export const FunctionOperationSchema = z.object({

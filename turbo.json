@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "cacheDir": ".turbo/cache",
   "globalDependencies": ["**/.env"],
   "globalPassThroughEnv": [
     "TAILOR_PLATFORM_TOKEN",

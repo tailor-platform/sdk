@@ -37,3 +37,10 @@ coverage/
 user-defined.d.ts
 
 .mcp.json
+
+# AI
+.agent/
+.claude/*
+!.claude/rules
+!.claude/rules/**
+CLAUDE.local.md

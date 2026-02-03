@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { loadEnvFiles } from "./args";
+import { loadEnvFiles, durationArg, parseDuration, positiveIntArg } from "./args";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
@@ -127,5 +127,66 @@ describe("loadEnvFiles", () => {
     it("handles empty arrays", () => {
       expect(() => loadEnvFiles([], [])).not.toThrow();
     });
+  });
+});
+
+describe("durationArg", () => {
+  it("validates and returns duration string as-is", () => {
+    expect(durationArg.parse("3s")).toBe("3s");
+    expect(durationArg.parse("500ms")).toBe("500ms");
+    expect(durationArg.parse("1m")).toBe("1m");
+  });
+
+  it("rejects invalid format", () => {
+    expect(() => durationArg.parse("3")).toThrow();
+    expect(() => durationArg.parse("3x")).toThrow();
+    expect(() => durationArg.parse("abc")).toThrow();
+    expect(() => durationArg.parse("")).toThrow();
+  });
+
+  it("rejects zero duration", () => {
+    expect(() => durationArg.parse("0ms")).toThrow(/Duration must be greater than 0/);
+    expect(() => durationArg.parse("0s")).toThrow(/Duration must be greater than 0/);
+    expect(() => durationArg.parse("0m")).toThrow(/Duration must be greater than 0/);
+  });
+});
+
+describe("parseDuration", () => {
+  it("converts seconds to milliseconds", () => {
+    expect(parseDuration("3s")).toBe(3000);
+    expect(parseDuration("1s")).toBe(1000);
+  });
+
+  it("returns milliseconds as-is", () => {
+    expect(parseDuration("500ms")).toBe(500);
+    expect(parseDuration("1ms")).toBe(1);
+  });
+
+  it("converts minutes to milliseconds", () => {
+    expect(parseDuration("1m")).toBe(60000);
+    expect(parseDuration("2m")).toBe(120000);
+  });
+});
+
+describe("positiveIntArg", () => {
+  it("parses positive integers", () => {
+    expect(positiveIntArg.parse("1")).toBe(1);
+    expect(positiveIntArg.parse("100")).toBe(100);
+  });
+
+  it("coerces numbers", () => {
+    expect(positiveIntArg.parse(5)).toBe(5);
+  });
+
+  it("rejects zero", () => {
+    expect(() => positiveIntArg.parse("0")).toThrow();
+  });
+
+  it("rejects negative numbers", () => {
+    expect(() => positiveIntArg.parse("-1")).toThrow();
+  });
+
+  it("rejects non-integers", () => {
+    expect(() => positiveIntArg.parse("1.5")).toThrow();
   });
 });

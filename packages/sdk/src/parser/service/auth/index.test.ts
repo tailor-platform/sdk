@@ -1,12 +1,13 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
+import { t } from "@/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "./types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
 // Define userType for type inference
-const _userType = db.type("User", {
+const userType = db.type("User", {
   email: db.string().unique(),
   role: db.string(),
   isActive: db.bool(),
@@ -23,7 +24,7 @@ type AttributeMap = {
 
 type AttributeList = ["externalId"];
 
-type AuthInput = AuthServiceInput<typeof _userType, AttributeMap, AttributeList, "admin">;
+type AuthInput = AuthServiceInput<typeof userType, AttributeMap, AttributeList, "admin">;
 
 type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
@@ -294,5 +295,22 @@ describe("AuthConfigSchema publishSessionEvents validation", () => {
 
     const result = AuthConfigSchema.parse(config);
     expect(result.publishSessionEvents).toBeUndefined();
+  });
+});
+
+describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => {
+  it("rejects configs that include both userProfile and machineUserAttributes", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+      },
+      machineUserAttributes: {
+        role: t.string(),
+      },
+    };
+
+    expect(() => AuthConfigSchema.parse(config)).toThrow();
   });
 });

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { chdir } from "node:process";
 import { intro, outro } from "@clack/prompts";
-import { defineCommand, runMain } from "citty";
 import pc from "picocolors";
 import { readPackageJSON } from "pkg-types";
+import { arg, defineCommand, runMain } from "politty";
+import { z } from "zod";
 import { collectContext } from "./context";
 import { copyProject } from "./copy";
 import { initProject } from "./init";
@@ -12,24 +13,18 @@ const main = async () => {
   const packageJson = await readPackageJSON(import.meta.url);
 
   const cmd = defineCommand({
-    meta: {
-      name: packageJson.name,
-      version: packageJson.version,
-      description: packageJson.description,
-    },
-    args: {
-      name: {
-        type: "positional",
+    name: packageJson.name ?? "create-sdk",
+    description: packageJson.description,
+    args: z.object({
+      name: arg(z.string().optional(), {
+        positional: true,
         description: "Project name",
-        required: false,
-      },
-      template: {
-        type: "string",
+      }),
+      template: arg(z.string().optional(), {
         description: "Template name",
-        required: false,
-      },
-    },
-    async run({ args }) {
+      }),
+    }),
+    async run(args) {
       intro(pc.bold(pc.cyan("✨ Welcome to Tailor Platform SDK")));
 
       const ctx = await collectContext({
@@ -57,7 +52,7 @@ const main = async () => {
     },
   });
 
-  await runMain(cmd);
+  await runMain(cmd, { version: packageJson.version });
 };
 
 await main();

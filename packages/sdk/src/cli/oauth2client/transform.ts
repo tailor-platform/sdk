@@ -21,7 +21,7 @@ export interface OAuth2ClientInfo {
   clientId: string;
   grantTypes: string[];
   redirectUris: string[];
-  createdAt: string;
+  createdAt: Date | null;
 }
 
 export interface OAuth2ClientCredentials {
@@ -31,7 +31,7 @@ export interface OAuth2ClientCredentials {
   clientSecret: string;
   grantTypes: string[];
   redirectUris: string[];
-  createdAt: string;
+  createdAt: Date | null;
 }
 
 /**
@@ -46,7 +46,7 @@ export function toOAuth2ClientInfo(client: AuthOAuth2Client): OAuth2ClientInfo {
     clientId: client.clientId,
     grantTypes: client.grantTypes.map(grantTypeToString),
     redirectUris: client.redirectUris,
-    createdAt: client.createdAt ? timestampDate(client.createdAt).toISOString() : "N/A",
+    createdAt: client.createdAt ? timestampDate(client.createdAt) : null,
   };
 }
 
@@ -63,6 +63,6 @@ export function toOAuth2ClientCredentials(client: AuthOAuth2Client): OAuth2Clien
     clientSecret: client.clientSecret,
     grantTypes: client.grantTypes.map(grantTypeToString),
     redirectUris: client.redirectUris,
-    createdAt: client.createdAt ? timestampDate(client.createdAt).toISOString() : "N/A",
+    createdAt: client.createdAt ? timestampDate(client.createdAt) : null,
   };
 }

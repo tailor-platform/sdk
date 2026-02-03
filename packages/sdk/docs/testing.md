@@ -5,7 +5,7 @@ This guide covers testing patterns for Tailor Platform SDK applications using [V
 For a complete working example with full test code, use the `testing` template:
 
 ```bash
-npm create @tailor-platform/sdk <your-project-name> --template testing
+npm create @tailor-platform/sdk -- --template testing <your-project-name>
 ```
 
 ## Unit Tests

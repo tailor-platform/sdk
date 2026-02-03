@@ -1,8 +1,8 @@
-import { defineCommand } from "citty";
+import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken } from "../context";
+import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "../context";
 import { logger } from "../utils/logger";
 
 const deleteWorkspaceOptionsSchema = z.object({
@@ -43,25 +43,16 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
 }
 
 export const deleteCommand = defineCommand({
-  meta: {
-    name: "delete",
-    description: "Delete workspace",
-  },
-  args: {
+  name: "delete",
+  description: "Delete a Tailor Platform workspace.",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      required: true,
+    "workspace-id": arg(z.string(), {
       alias: "w",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
-  },
+      description: "Workspace ID",
+    }),
+    ...confirmationArgs,
+  }),
   run: withCommonArgs(async (args) => {
     // Load and validate options
     const { client, workspaceId } = await loadOptions({
@@ -97,7 +88,25 @@ export const deleteCommand = defineCommand({
       workspaceId,
     });
 
+    // Remove profiles associated with the deleted workspace
+    const pfConfig = readPlatformConfig();
+    const profilesToDelete = Object.entries(pfConfig.profiles).filter(
+      ([, profile]) => profile?.workspace_id === workspaceId,
+    );
+    if (profilesToDelete.length > 0) {
+      for (const [profileName] of profilesToDelete) {
+        delete pfConfig.profiles[profileName];
+      }
+      writePlatformConfig(pfConfig);
+    }
+
     // Show success message
-    logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
+    if (profilesToDelete.length > 0) {
+      logger.success(
+        `Workspace "${args["workspace-id"]}" and ${profilesToDelete.length} associated profile(s) deleted successfully.`,
+      );
+    } else {
+      logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
+    }
   }),
 });

@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, confirmationArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken } from "../context";
 import { logger } from "../utils/logger";
@@ -40,25 +40,16 @@ export async function restoreWorkspace(options: RestoreWorkspaceOptions): Promis
 }
 
 export const restoreCommand = defineCommand({
-  meta: {
-    name: "restore",
-    description: "Restore a deleted workspace",
-  },
-  args: {
+  name: "restore",
+  description: "Restore a deleted workspace",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID to restore",
-      required: true,
+    "workspace-id": arg(z.string(), {
       alias: "w",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
-  },
+      description: "Workspace ID",
+    }),
+    ...confirmationArgs,
+  }),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId } = await loadOptions({
       workspaceId: args["workspace-id"],

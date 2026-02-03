@@ -5,12 +5,14 @@
 ## Usage
 
 ```bash
-npm create @tailor-platform/sdk [OPTIONS] [NAME]
+npm create @tailor-platform/sdk -- [OPTIONS] [NAME]
 # OR
 yarn create @tailor-platform/sdk [OPTIONS] [NAME]
 # OR
 pnpm create @tailor-platform/sdk [OPTIONS] [NAME]
 ```
+
+Note: npm 7+ requires `--` before create-sdk options (for example, `--template`).
 
 ### Arguments
 

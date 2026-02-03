@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "citty";
+import { defineCommand, runCommand } from "politty";
 import { appCommand } from "./app";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
@@ -9,10 +9,8 @@ import { restoreCommand } from "./restore";
 import { userCommand } from "./user";
 
 export const workspaceCommand = defineCommand({
-  meta: {
-    name: "workspace",
-    description: "Manage Tailor Platform workspaces",
-  },
+  name: "workspace",
+  description: "Manage Tailor Platform workspaces.",
   subCommands: {
     app: appCommand,
     create: createCommand,
@@ -24,6 +22,6 @@ export const workspaceCommand = defineCommand({
     user: userCommand,
   },
   async run() {
-    await runCommand(listCommand, { rawArgs: [] });
+    await runCommand(listCommand, []);
   },
 });

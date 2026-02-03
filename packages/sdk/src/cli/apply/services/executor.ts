@@ -176,6 +176,9 @@ export async function planExecutor(context: PlanContext) {
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
+// Transform actor fields from server format to SDK format
+const actorTransformExpr = `actor: args.actor ? (({ attributeMap, attributes: attrList, ...rest }) => ({ ...rest, attributes: attributeMap, attributeList: attrList }))(args.actor) : null`;
+
 /**
  * Build args expression for resolverExecuted trigger.
  * Transforms server's succeeded/failed fields to success/result/error fields.
@@ -183,7 +186,18 @@ export async function planExecutor(context: PlanContext) {
  * @returns JavaScript expression for resolverExecuted trigger args
  */
 function buildResolverExecutedArgsExpr(additionalFields?: string): string {
-  const baseFields = `...args, appNamespace: args.namespaceName, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error`;
+  const baseFields = `...args, appNamespace: args.namespaceName, ${actorTransformExpr}, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error`;
+  return additionalFields ? `({ ${baseFields}, ${additionalFields} })` : `({ ${baseFields} })`;
+}
+
+/**
+ * Build args expression for incomingWebhook trigger.
+ * Transforms server's raw_body field to rawBody field.
+ * @param additionalFields - Additional fields to include in the args expression
+ * @returns JavaScript expression for incomingWebhook trigger args
+ */
+function buildIncomingWebhookArgsExpr(additionalFields?: string): string {
+  const baseFields = `...args, appNamespace: args.namespaceName, rawBody: args.raw_body`;
   return additionalFields ? `({ ${baseFields}, ${additionalFields} })` : `({ ${baseFields} })`;
 }
 
@@ -196,15 +210,21 @@ function protoExecutor(
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
 
-  // Common args expressions with env
+  // Common args expressions with env and actor transformation
   const envField = `env: ${JSON.stringify(env)}`;
-  const baseArgsExpr = `({ ...args, appNamespace: args.namespaceName, ${envField} })`;
+  const baseArgsExpr = `({ ...args, appNamespace: args.namespaceName, ${actorTransformExpr}, ${envField} })`;
 
   const eventType: { [key in Trigger["kind"]]?: string } = {
     recordCreated: "tailordb.type_record.created",
     recordUpdated: "tailordb.type_record.updated",
     recordDeleted: "tailordb.type_record.deleted",
     resolverExecuted: "pipeline.resolver.executed",
+    idpUserCreated: "idp.user.created",
+    idpUserUpdated: "idp.user.updated",
+    idpUserDeleted: "idp.user.deleted",
+    authAccessTokenIssued: "auth.access_token.issued",
+    authAccessTokenRefreshed: "auth.access_token.refreshed",
+    authAccessTokenRevoked: "auth.access_token.revoked",
   };
   switch (trigger.kind) {
     case "schedule":
@@ -270,6 +290,22 @@ function protoExecutor(
         },
       };
       break;
+    case "idpUserCreated":
+    case "idpUserUpdated":
+    case "idpUserDeleted":
+    case "authAccessTokenIssued":
+    case "authAccessTokenRefreshed":
+    case "authAccessTokenRevoked":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = {
+        config: {
+          case: "event",
+          value: {
+            eventType: eventType[trigger.kind],
+          },
+        },
+      };
+      break;
     default:
       throw new Error(`Unknown trigger: ${trigger satisfies never}`);
   }
@@ -280,7 +316,11 @@ function protoExecutor(
 
   // Build args expression for target operations
   const argsExpr =
-    trigger.kind === "resolverExecuted" ? buildResolverExecutedArgsExpr(envField) : baseArgsExpr;
+    trigger.kind === "resolverExecuted"
+      ? buildResolverExecutedArgsExpr(envField)
+      : trigger.kind === "incomingWebhook"
+        ? buildIncomingWebhookArgsExpr(envField)
+        : baseArgsExpr;
 
   switch (target.kind) {
     case "webhook": {

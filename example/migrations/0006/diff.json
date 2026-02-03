@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-01-20T06:59:20.132Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "User",
+      "fieldName": "name",
+      "before": {
+        "type": "string",
+        "required": true
+      },
+      "after": {
+        "type": "string",
+        "required": true,
+        "index": true,
+        "unique": true
+      }
+    }
+  ],
+  "hasBreakingChanges": true,
+  "breakingChanges": [
+    {
+      "typeName": "User",
+      "fieldName": "name",
+      "reason": "Unique constraint added to field"
+    }
+  ],
+  "requiresMigrationScript": true
+}

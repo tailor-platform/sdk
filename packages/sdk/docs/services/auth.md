@@ -86,7 +86,53 @@ export const user = db.type("User", {
 
 **usernameField**: The field in the TailorDB type used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 
-**attributes**: Specifies which fields from the TailorDB type are used as user attributes. Set to `true` to enable a field. Enabled attributes must be assigned values in all machine user definitions.
+**attributes**: Specifies which fields from the TailorDB type are used as user attributes. Set to `true` to enable a field. Enabled attributes must be assigned values in all machine user definitions. Only fields with ValueOperand types (string, boolean, string[], boolean[]) can be used as attributes. The `id` field and datetime/date/time types are excluded.
+
+## Attribute List
+
+In addition to `attributes` (key-value map), you can configure `attributeList` to expose UUID-type fields as an ordered list. This is useful for referencing related records by their IDs.
+
+```typescript
+userProfile: {
+  type: user,
+  usernameField: "email",
+  attributes: { role: true },
+  attributeList: ["organizationId", "teamId"],
+},
+```
+
+**attributeList**: An array of field names from the TailorDB type. These fields will be exposed as an ordered list of UUIDs. Only UUID-type fields (non-array) can be included in the attribute list.
+
+Example TailorDB type with UUID fields for attribute list:
+
+```typescript
+// tailordb/user.ts
+import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  email: db.string().unique(),
+  role: db.enum(["admin", "user"]),
+  organizationId: db.uuid(), // Can be used in attributeList
+  teamId: db.uuid(), // Can be used in attributeList
+  ...db.fields.timestamps(),
+});
+```
+
+The `attributeList` values are accessible via `user.attributeList` as a tuple:
+
+```typescript
+// In a resolver
+body: (context) => {
+  const [organizationId, teamId] = context.user.attributeList;
+},
+
+// In TailorDB hooks
+.hooks({
+  field: {
+    create: ({ user }) => user.attributeList[0], // First UUID from list
+  },
+})
+```
 
 ## Machine User Attributes (without userProfile)
 
@@ -139,6 +185,36 @@ machineUsers: {
 // In a resolver
 body: (context) => {
   const role = context.user.attributes?.role;
+},
+```
+
+**attributeList**: Values for fields enabled in `userProfile.attributeList`. Must be an array of valid UUIDs in the same order as declared in userProfile:
+
+```typescript
+// userProfile with attributeList
+userProfile: {
+  type: user,
+  usernameField: "email",
+  attributes: { role: true },
+  attributeList: ["organizationId", "teamId"],
+},
+machineUsers: {
+  "admin-machine-user": {
+    attributes: { role: "ADMIN" },
+    attributeList: [
+      "550e8400-e29b-41d4-a716-446655440000",
+      "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    ],
+  },
+},
+```
+
+These values are accessible via `user.attributeList`:
+
+```typescript
+// In a resolver
+body: (context) => {
+  const [organizationId, teamId] = context.user.attributeList;
 },
 
 // In TailorDB hooks
@@ -284,3 +360,14 @@ tailor-sdk oauth2client get <name>
 ```
 
 See [Auth Resource Commands](../cli/auth.md) for full documentation.
+
+## SDK vs Platform Naming
+
+> **Note for Platform developers**: The SDK uses different names than the underlying Platform API for user attributes:
+>
+> | SDK             | Platform API    | Description                      |
+> | --------------- | --------------- | -------------------------------- |
+> | `attributes`    | `attribute_map` | Key-value map of user attributes |
+> | `attributeList` | `attributes`    | Ordered list of UUID values      |
+>
+> This mapping is handled automatically by the SDK. If you're reading Platform documentation or API responses, be aware of this naming difference.

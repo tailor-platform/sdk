@@ -10,16 +10,16 @@ export interface AppInfo {
   name: string;
   domain: string;
   authNamespace: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 export interface AppHealthInfo {
   name: string;
   status: string;
-  currentServingSchemaUpdatedAt: string;
+  currentServingSchemaUpdatedAt: Date | null;
   lastAttemptStatus: string;
-  lastAttemptAt: string;
+  lastAttemptAt: Date | null;
   lastAttemptError: string;
 }
 

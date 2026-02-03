@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs, workspaceArgs } from "../../args";
+import { commonArgs, confirmationArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { logger } from "../../utils/logger";
@@ -48,25 +48,16 @@ export async function removeUser(options: RemoveUserOptions): Promise<void> {
 }
 
 export const removeCommand = defineCommand({
-  meta: {
-    name: "remove",
-    description: "Remove a user from a workspace",
-  },
-  args: {
+  name: "remove",
+  description: "Remove a user from a workspace",
+  args: z.object({
     ...commonArgs,
     ...workspaceArgs,
-    email: {
-      type: "string",
+    email: arg(z.email(), {
       description: "Email address of the user to remove",
-      required: true,
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
-  },
+    }),
+    ...confirmationArgs,
+  }),
   run: withCommonArgs(async (args) => {
     if (!args.yes) {
       const confirmation = await logger.prompt(

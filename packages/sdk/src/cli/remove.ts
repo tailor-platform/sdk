@@ -1,5 +1,6 @@
-import { defineCommand } from "citty";
 import ml from "multiline-ts";
+import { defineCommand } from "politty";
+import { z } from "zod";
 import { type Application, defineApplication } from "@/cli/application";
 import { type PlanContext } from "@/cli/apply";
 import { applyApplication, planApplication } from "@/cli/apply/services/application";
@@ -9,9 +10,9 @@ import { applyIdP, planIdP } from "@/cli/apply/services/idp";
 import { applyPipeline, planPipeline } from "@/cli/apply/services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "@/cli/apply/services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
-import { loadConfig } from "@/cli/config-loader";
+import { loadConfig, type LoadedConfig } from "@/cli/config-loader";
 import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
-import { commonArgs, withCommonArgs } from "./args";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
 import { loadAccessToken, loadWorkspaceId } from "./context";
 import { logger } from "./utils/logger";
@@ -38,6 +39,7 @@ async function loadOptions(options?: RemoveOptions) {
     client,
     workspaceId,
     application,
+    config,
   };
 }
 
@@ -45,6 +47,7 @@ async function execRemove(
   client: OperatorClient,
   workspaceId: string,
   application: Application,
+  config: LoadedConfig,
   confirm?: () => Promise<void>,
 ) {
   // Plan all resources with forRemoval=true
@@ -53,6 +56,7 @@ async function execRemove(
     workspaceId,
     application,
     forRemoval: true,
+    config,
   };
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
@@ -102,42 +106,20 @@ async function execRemove(
  * @returns Promise that resolves when removal completes
  */
 export async function remove(options?: RemoveOptions): Promise<void> {
-  const { client, workspaceId, application } = await loadOptions(options);
-  await execRemove(client, workspaceId, application);
+  const { client, workspaceId, application, config } = await loadOptions(options);
+  await execRemove(client, workspaceId, application, config);
 }
 
 export const removeCommand = defineCommand({
-  meta: {
-    name: "remove",
-    description: "Remove all resources managed by the application",
-  },
-  args: {
+  name: "remove",
+  description: "Remove all resources managed by the application from the workspace.",
+  args: z.object({
     ...commonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      alias: "w",
-    },
-    profile: {
-      type: "string",
-      description: "Workspace profile",
-      alias: "p",
-    },
-    config: {
-      type: "string",
-      description: "Path to SDK config file",
-      alias: "c",
-      default: "tailor.config.ts",
-    },
-    yes: {
-      type: "boolean",
-      description: "Skip confirmation prompt",
-      alias: "y",
-      default: false,
-    },
-  },
+    ...deploymentArgs,
+    ...confirmationArgs,
+  }),
   run: withCommonArgs(async (args) => {
-    const { client, workspaceId, application } = await loadOptions({
+    const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
@@ -146,7 +128,7 @@ export const removeCommand = defineCommand({
     logger.info(`Planning removal of resources managed by "${application.name}"...`);
     logger.newline();
 
-    await execRemove(client, workspaceId, application, async () => {
+    await execRemove(client, workspaceId, application, config, async () => {
       if (!args.yes) {
         const confirmed = await logger.prompt("Are you sure you want to remove all resources?", {
           type: "confirm",
