@@ -1,14 +1,12 @@
-import { defineCommand, runCommand } from "citty";
+import { defineCommand, runCommand } from "politty";
 import { inviteCommand } from "./invite";
 import { listCommand } from "./list";
 import { removeCommand } from "./remove";
 import { updateCommand } from "./update";
 
 export const userCommand = defineCommand({
-  meta: {
-    name: "user",
-    description: "Manage workspace users",
-  },
+  name: "user",
+  description: "Manage workspace users",
   subCommands: {
     invite: inviteCommand,
     list: listCommand,
@@ -16,6 +14,6 @@ export const userCommand = defineCommand({
     update: updateCommand,
   },
   async run() {
-    await runCommand(listCommand, { rawArgs: [] });
+    await runCommand(listCommand, []);
   },
 });

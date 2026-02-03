@@ -1,4 +1,4 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
@@ -52,21 +52,17 @@ export async function getAppHealth(options: HealthOptions): Promise<AppHealthInf
 }
 
 export const healthCommand = defineCommand({
-  meta: {
-    name: "health",
-    description: "Check application schema health",
-  },
-  args: {
+  name: "health",
+  description: "Check application schema health",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    name: {
-      type: "string",
+    name: arg(z.string(), {
       description: "Application name",
-      required: true,
       alias: "n",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const health = await getAppHealth({
       workspaceId: args["workspace-id"],

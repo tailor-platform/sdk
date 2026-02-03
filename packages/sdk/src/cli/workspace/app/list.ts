@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../../args";
+import { commonArgs, jsonArgs, positiveIntArg, withCommonArgs, workspaceArgs } from "../../args";
 import { initOperatorClient } from "../../client";
 import { loadAccessToken, loadWorkspaceId } from "../../context";
 import { humanizeRelativeTime } from "../../utils/format";
@@ -79,33 +79,22 @@ export async function listApps(options: ListAppsOptions): Promise<AppInfo[]> {
 }
 
 export const listCommand = defineCommand({
-  meta: {
-    name: "list",
-    description: "List applications in a workspace",
-  },
-  args: {
+  name: "list",
+  description: "List applications in a workspace",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
-    limit: {
-      type: "string",
+    limit: arg(positiveIntArg.optional(), {
       alias: "l",
       description: "Maximum number of applications to list",
-    },
-  },
+    }),
+  }),
   run: withCommonArgs(async (args) => {
-    let limit: number | undefined;
-    if (args.limit) {
-      limit = parseInt(args.limit, 10);
-      if (Number.isNaN(limit) || limit <= 0) {
-        throw new Error(`--limit must be a positive integer, got '${args.limit}'`);
-      }
-    }
-
     const apps = await listApps({
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      limit,
+      limit: args.limit,
     });
 
     const formattedApps = args.json

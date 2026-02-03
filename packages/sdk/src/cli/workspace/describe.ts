@@ -1,4 +1,4 @@
-import { defineCommand } from "citty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
@@ -50,20 +50,16 @@ export async function describeWorkspace(
 }
 
 export const describeCommand = defineCommand({
-  meta: {
-    name: "describe",
-    description: "Show detailed information about a workspace",
-  },
-  args: {
+  name: "describe",
+  description: "Show detailed information about a workspace",
+  args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": {
-      type: "string",
-      description: "Workspace ID",
-      required: true,
+    "workspace-id": arg(z.string(), {
       alias: "w",
-    },
-  },
+      description: "Workspace ID",
+    }),
+  }),
   run: withCommonArgs(async (args) => {
     const workspace = await describeWorkspace({
       workspaceId: args["workspace-id"],
