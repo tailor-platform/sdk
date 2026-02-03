@@ -63,6 +63,14 @@ function processChangeset(
       activatedAt: db.datetime({ optional: true }),
       ...db.fields.timestamps(),
     })
+    .description("Approval request for change management")
+    .indexes({ fields: ["recordId", "status"], unique: false, name: "request_record_status_idx" })
+    .permission({
+      create: [[{ user: "_loggedIn" }, "=", true]],
+      read: [[{ user: "_loggedIn" }, "=", true]],
+      update: [[{ user: "_loggedIn" }, "=", true]],
+      delete: [[{ user: "_loggedIn" }, "=", true]],
+    })
     .gqlPermission([
       {
         actions: ["read"],

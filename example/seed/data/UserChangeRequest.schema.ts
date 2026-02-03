@@ -17,7 +17,7 @@ const UserChangeRequest = db.type("UserChangeRequest", {
   activationStatus: db.enum(["PENDING", "ACTIVATED"]).index(),
   activatedAt: db.datetime({ optional: true }),
   ...db.fields.timestamps(),
-}).gqlPermission([{ conditions: [[{ user: "_loggedIn" }, "=", true]], actions: ["read"], permit: true }]);
+}).description("Approval request for change management").indexes({ fields: ["recordId", "status"], name: "request_record_status_idx" }).permission({ create: [[{ user: "_loggedIn" }, "=", true]], read: [[{ user: "_loggedIn" }, "=", true]], update: [[{ user: "_loggedIn" }, "=", true]], delete: [[{ user: "_loggedIn" }, "=", true]] }).gqlPermission([{ conditions: [[{ user: "_loggedIn" }, "=", true]], actions: ["read"], permit: true }]);
 
 const schemaType = t.object({
   ...UserChangeRequest.pickFields(["id","currentStepNo","createdAt"], { optional: true }),
@@ -28,4 +28,9 @@ const hook = createTailorDBHook(UserChangeRequest);
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),
+  {
+    indexes: [
+      {"name":"request_record_status_idx","columns":["recordId","status"],"unique":false},
+    ],
+  }
 );
