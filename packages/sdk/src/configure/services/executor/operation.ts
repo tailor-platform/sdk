@@ -300,6 +300,7 @@ export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
 
 export type Operation<Args> =
   | FunctionOperation<Args>
+  | FunctionOperationWithScriptRef
   | GqlOperation<Args>
   | WebhookOperation<Args>
   | WorkflowOperation<Args>;

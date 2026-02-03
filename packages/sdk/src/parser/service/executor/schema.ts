@@ -41,12 +41,16 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
   AuthAccessTokenTriggerSchema,
 ]);
 
-export const FunctionOperationSchema = z.object({
-  kind: z.enum(["function", "jobFunction"]),
-  body: functionSchema,
-  scriptRef: z.string().optional(),
-  authInvoker: AuthInvokerSchema.optional(),
-});
+export const FunctionOperationSchema = z
+  .object({
+    kind: z.enum(["function", "jobFunction"]),
+    body: functionSchema.optional(),
+    scriptRef: z.string().optional(),
+    authInvoker: AuthInvokerSchema.optional(),
+  })
+  .refine((data) => (data.body !== undefined) !== (data.scriptRef !== undefined), {
+    message: "Exactly one of 'body' or 'scriptRef' must be provided",
+  });
 
 export const GqlOperationSchema = z.object({
   kind: z.literal("graphql"),
