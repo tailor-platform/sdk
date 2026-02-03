@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.8.0
+
+### Minor Changes
+
+- [#515](https://github.com/tailor-platform/sdk/pull/515) [`fce8058`](https://github.com/tailor-platform/sdk/commit/fce80580d49d784feb232918341c5643da2d96dc) Thanks [@toiroakr](https://github.com/toiroakr)! - Add Kysely utility types (Transaction, Insertable, Selectable, Updateable) to generated code
+
+- [#521](https://github.com/tailor-platform/sdk/pull/521) [`fa17d60`](https://github.com/tailor-platform/sdk/commit/fa17d601d8e3a13e593eb5f1da6cbf5c6802a034) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `display` option to `logger.out` for field transformation and exclusion in non-JSON mode
+
+### Patch Changes
+
+- [#519](https://github.com/tailor-platform/sdk/pull/519) [`3124bb2`](https://github.com/tailor-platform/sdk/commit/3124bb2bd755fe9fe9f781b6dadc28472d11969b) Thanks [@riku99](https://github.com/riku99)! - Normalized packages/sdk/src/cli/application/index.ts imports to use parser and enabled the ESLint/Oxlint rule blocking cli → configure imports (tests excluded).
+
+- [#508](https://github.com/tailor-platform/sdk/pull/508) [`49d3fd5`](https://github.com/tailor-platform/sdk/commit/49d3fd5a255607145ce28c895dbdd2d94bea80b7) Thanks [@haru0017](https://github.com/haru0017)! - Transform webhook args `raw_body` to `rawBody` in executor bundler
+
+- [#484](https://github.com/tailor-platform/sdk/pull/484) [`56ee4ff`](https://github.com/tailor-platform/sdk/commit/56ee4ff2dc23bd275ef9556c47363315e9d4e981) Thanks [@riku99](https://github.com/riku99)! - Updated imports of confgure tailordb and resolver in cli
+
 ## 1.7.0
 
 ### Minor Changes

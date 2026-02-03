@@ -101,6 +101,6 @@ export const listCommand = defineCommand({
     });
 
     // Show machine users info
-    logger.out(machineUsers, { excludeFields: ["createdAt", "updatedAt"] });
+    logger.out(machineUsers, { display: { createdAt: null, updatedAt: null } });
   }),
 });
