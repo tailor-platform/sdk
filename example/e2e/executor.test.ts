@@ -11,7 +11,7 @@ describe("controlplane", async () => {
 
   test("executor applied", async () => {
     const { executors } = await client.listExecutorExecutors({ workspaceId });
-    expect(executors.length).toBe(5);
+    expect(executors.length).toBe(6);
 
     const salesOrderCreated = executors.find((e) => e.name === "sales-order-created");
     expect(salesOrderCreated).toMatchObject({

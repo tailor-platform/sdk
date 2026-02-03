@@ -15,8 +15,8 @@ describe("controlplane", async () => {
       const { workflows } = await client.listWorkflows({ workspaceId });
       const ownedWorkflows = await filterByMetadataWithName(client, workflows, workflowTrn);
 
-      // There are 2 workflows defined in example/workflows
-      expect(ownedWorkflows.length).toBe(2);
+      // There are 3 workflows defined in example/workflows
+      expect(ownedWorkflows.length).toBe(3);
 
       // Verify order-processing workflow
       const orderProcessing = ownedWorkflows.find((w) => w.name === "order-processing");
@@ -41,6 +41,15 @@ describe("controlplane", async () => {
       expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("validate-order");
       expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("check-inventory");
       expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("process-payment");
+
+      // Verify scriptref-workflow (uses Function Registry)
+      const scriptRefWorkflow = ownedWorkflows.find((w) => w.name === "scriptref-workflow");
+      expect(scriptRefWorkflow).toBeDefined();
+      expect(scriptRefWorkflow).toMatchObject({
+        name: "scriptref-workflow",
+        mainJobFunctionName: "scriptref-process-job",
+      });
+      expect(Object.keys(scriptRefWorkflow?.jobFunctions ?? {})).toContain("scriptref-process-job");
     });
   });
 
@@ -54,8 +63,8 @@ describe("controlplane", async () => {
       const jobNames = jobFunctions.map((j) => j.name);
       const ownedJobNames = await filterUniqueNamesByMetadata(client, jobNames, jobFunctionTrn);
 
-      // There are exactly 6 job functions used by the 2 workflows
-      expect(ownedJobNames).toHaveLength(6);
+      // There are exactly 7 job functions used by the 3 workflows
+      expect(ownedJobNames).toHaveLength(7);
 
       // Jobs from order-processing workflow
       expect(ownedJobNames).toContain("process-order");
@@ -66,6 +75,9 @@ describe("controlplane", async () => {
       expect(ownedJobNames).toContain("validate-order");
       expect(ownedJobNames).toContain("check-inventory");
       expect(ownedJobNames).toContain("process-payment");
+
+      // Jobs from scriptref-workflow (uses Function Registry)
+      expect(ownedJobNames).toContain("scriptref-process-job");
     });
 
     test("job function script is bundled", async () => {
@@ -82,10 +94,12 @@ describe("controlplane", async () => {
         jobFunctions.find((j) => j.name === name),
       );
 
-      // Verify each owned job function has a non-empty script
+      // Verify each owned job function has a non-empty script or scriptRef
       for (const jobFunction of ownedJobFunctions) {
-        expect(jobFunction?.script).toBeTruthy();
-        expect(jobFunction?.script?.length).toBeGreaterThan(0);
+        const hasScript = jobFunction?.script && jobFunction.script.length > 0;
+        const hasScriptRef = jobFunction?.scriptRef && jobFunction.scriptRef.length > 0;
+        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- Boolean OR, not nullish coalescing
+        expect(hasScript || hasScriptRef).toBe(true);
       }
 
       // Verify specific job function content
