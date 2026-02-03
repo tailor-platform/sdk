@@ -6,8 +6,8 @@ export interface FunctionRegistryInfo {
   description: string;
   sizeBytes: string;
   contentHash: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
 }
 
 export const functionRegistryInfo = (fn: FunctionRegistry): FunctionRegistryInfo => {
