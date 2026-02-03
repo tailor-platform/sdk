@@ -25,7 +25,7 @@ const unitToMs: Record<DurationUnit, number> = {
  * Schema for duration string validation (e.g., "3s", "500ms", "1m")
  * Transforms the string to milliseconds
  */
-const durationSchema = z
+export const durationArg = z
   .templateLiteral([z.number().int().positive(), z.enum(durationUnits)])
   .transform((duration) => {
     const match = duration.match(/^(\d+)(ms|s|m)$/)!;
@@ -35,13 +35,60 @@ const durationSchema = z
   });
 
 /**
- * Parse a duration string (e.g., "3s", "500ms", "1m") to milliseconds
- * @param duration - Duration string with unit suffix (ms, s, m)
- * @returns Duration in milliseconds
+ * Schema for positive integer validation (from string input)
+ * Transforms the string to a number
  */
-export function parseDuration(duration: string): number {
-  return durationSchema.parse(duration);
-}
+export const positiveIntArg = z
+  .string()
+  .superRefine((val, ctx) => {
+    if (!/^\d+$/.test(val) || Number.parseInt(val, 10) <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `--limit must be a positive integer, got '${val}'`,
+      });
+    }
+  })
+  .transform((val) => Number.parseInt(val, 10));
+
+/**
+ * Schema for JSON string validation
+ * Transforms the string to a parsed object
+ */
+export const jsonDataArg = z
+  .string()
+  .superRefine((val, ctx) => {
+    try {
+      JSON.parse(val);
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid JSON data: ${val}. Please provide a valid JSON string.`,
+      });
+    }
+  })
+  .transform((val) => JSON.parse(val) as Record<string, unknown>);
+
+/**
+ * Schema for header string validation (format: "Key: Value")
+ * Transforms the string to an object with key and value properties
+ */
+export const headerArg = z
+  .string()
+  .superRefine((val, ctx) => {
+    if (!val.includes(":")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid header format: '${val}'. Expected format: 'Key: Value'`,
+      });
+    }
+  })
+  .transform((val) => {
+    const colonIndex = val.indexOf(":");
+    return {
+      key: val.slice(0, colonIndex).trim(),
+      value: val.slice(colonIndex + 1).trim(),
+    };
+  });
 
 // ============================================================================
 // Env File Helpers

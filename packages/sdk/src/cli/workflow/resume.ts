@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
@@ -84,13 +84,11 @@ export const resumeCommand = defineCommand({
     ...waitArgs,
   }),
   run: withCommonArgs(async (args) => {
-    const interval = parseDuration(args.interval);
-
     const { executionId, wait } = await resumeWorkflow({
       executionId: args.executionId,
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      interval,
+      interval: args.interval,
     });
 
     if (!args.json) {

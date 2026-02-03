@@ -50,7 +50,7 @@ tailor-sdk executor trigger [options] <executorName>
 | `--data <DATA>`                 | `-d`  | Request body (JSON string)                                                         | -       |
 | `--header <HEADER>`             | `-H`  | Request header (format: 'Key: Value', can be specified multiple times)             | -       |
 | `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable | `false` |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                     | `"3s"`  |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                     | `3000`  |
 | `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                 | `false` |
 
 <!-- politty:command:executor trigger:end -->
@@ -107,7 +107,7 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 | `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)                       | -       |
 | `--attempts`                    | -     | Show job attempts (only with job ID) (detail mode only)                                               | `false` |
 | `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only) | `false` |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | `"3s"`  |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | `3000`  |
 | `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                    | `false` |
 | `--limit <LIMIT>`               | -     | Maximum number of jobs to list (default: 50, max: 1000) (list mode only)                              | -       |
 

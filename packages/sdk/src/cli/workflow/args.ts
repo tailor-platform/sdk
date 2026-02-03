@@ -1,5 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
+import { durationArg } from "../args";
 
 type ArgsShape = Record<string, z.ZodType>;
 
@@ -15,9 +16,9 @@ export const waitArgs = {
     alias: "W",
     description: "Wait for execution to complete",
   }),
-  interval: arg(z.string().default("3s"), {
+  interval: arg(durationArg.default(3000), {
     alias: "i",
-    description: "Polling interval when using --wait",
+    description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
   }),
   logs: arg(z.boolean().default(false), {
     alias: "l",

@@ -2,7 +2,15 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
+import {
+  commonArgs,
+  durationArg,
+  headerArg,
+  jsonArgs,
+  jsonDataArg,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger, styles } from "../utils/logger";
@@ -69,11 +77,11 @@ export const triggerCommand = defineCommand({
       positional: true,
       description: "Executor name",
     }),
-    data: arg(z.string().optional(), {
+    data: arg(jsonDataArg.optional(), {
       alias: "d",
       description: "Request body (JSON string)",
     }),
-    header: arg(z.string().array().optional(), {
+    header: arg(headerArg.array().optional(), {
       alias: "H",
       overrideBuiltinAlias: true,
       description: "Request header (format: 'Key: Value', can be specified multiple times)",
@@ -83,7 +91,7 @@ export const triggerCommand = defineCommand({
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
     }),
-    interval: arg(z.string().default("3s"), {
+    interval: arg(durationArg.default(3000), {
       alias: "i",
       description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
     }),
@@ -131,32 +139,15 @@ export const triggerCommand = defineCommand({
 
     let payload: JsonObject | undefined;
 
-    // Parse data (body)
-    let body: JsonObject | undefined;
-    if (args.data) {
-      try {
-        body = JSON.parse(args.data);
-      } catch {
-        throw new Error(`Invalid JSON data: ${args.data}. Please provide a valid JSON string.`);
-      }
-    }
-
-    // Parse headers (can be string or string[])
+    // Build payload if data or headers are provided
+    const body = args.data as JsonObject | undefined;
     const headers: Record<string, string> = {};
     if (args.header) {
-      const headerValues = Array.isArray(args.header) ? args.header : [args.header];
-      for (const h of headerValues) {
-        const colonIndex = h.indexOf(":");
-        if (colonIndex === -1) {
-          throw new Error(`Invalid header format: '${h}'. Expected format: 'Key: Value'`);
-        }
-        const key = h.slice(0, colonIndex).trim();
-        const value = h.slice(colonIndex + 1).trim();
-        headers[key] = value;
+      for (const h of args.header) {
+        headers[h.key] = h.value;
       }
     }
 
-    // Build payload if body or headers are provided
     if (body !== undefined || Object.keys(headers).length > 0) {
       payload = {
         body: body ?? {},
@@ -184,13 +175,12 @@ export const triggerCommand = defineCommand({
     );
 
     if (args.wait) {
-      const interval = parseDuration(args.interval as string);
       const watchResult = await watchExecutorJob({
         executorName: args.executorName,
         jobId: result.jobId,
         workspaceId: args["workspace-id"],
         profile: args.profile,
-        interval,
+        interval: args.interval,
         logs: args.logs,
       });
 

@@ -9,7 +9,7 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 import ora from "ora";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { formatKeyValueTable } from "../utils/format";
@@ -377,12 +377,11 @@ export const executionsCommand = defineCommand({
   }),
   run: withCommonArgs(async (args) => {
     if (args.executionId) {
-      const interval = parseDuration(args.interval);
       const { execution, wait } = await getWorkflowExecution({
         executionId: args.executionId,
         workspaceId: args["workspace-id"],
         profile: args.profile,
-        interval,
+        interval: args.interval,
         logs: args.logs,
       });
 
@@ -390,7 +389,7 @@ export const executionsCommand = defineCommand({
         logger.info(`Execution ID: ${execution.id}`, { mode: "stream" });
       }
 
-      const result = args.wait ? await waitWithSpinner(wait, interval, args.json) : execution;
+      const result = args.wait ? await waitWithSpinner(wait, args.interval, args.json) : execution;
 
       if (args.logs && !args.json) {
         printExecutionWithLogs(result);
