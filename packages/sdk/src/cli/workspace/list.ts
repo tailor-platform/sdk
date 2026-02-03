@@ -85,6 +85,6 @@ export const listCommand = defineCommand({
 
     // Execute workspace list logic
     const workspaces = await listWorkspaces({ limit });
-    logger.out(workspaces, { excludeFields: ["updatedAt"] });
+    logger.out(workspaces, { display: { updatedAt: null } });
   }),
 });
