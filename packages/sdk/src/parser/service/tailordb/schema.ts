@@ -81,6 +81,17 @@ export const TailorDBTypeSchema = z.object({
         pluralForm: z.string().optional(),
         aggregation: z.boolean().optional(),
         bulkUpsert: z.boolean().optional(),
+        gqlOperations: z
+          .union([
+            z.literal("query"),
+            z.object({
+              create: z.boolean().optional(),
+              update: z.boolean().optional(),
+              delete: z.boolean().optional(),
+              read: z.boolean().optional(),
+            }),
+          ])
+          .optional(),
       })
       .optional(),
     permissions: z.unknown(),

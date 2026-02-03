@@ -10,7 +10,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node", "@tailor-platform/function-types"]
   },
   "include": ["**/*.ts"]
 }
