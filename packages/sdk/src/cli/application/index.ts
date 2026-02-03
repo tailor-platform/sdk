@@ -2,9 +2,9 @@ import { createAuthService, type AuthService } from "@/cli/application/auth/serv
 import { createExecutorService, type ExecutorService } from "@/cli/application/executor/service";
 import { createResolverService, type ResolverService } from "@/cli/application/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
-import { type AuthConfig } from "@/configure/services/auth";
 import { type TailorDBServiceInput } from "@/configure/services/tailordb/types";
 import { type AppConfig } from "@/parser/app-config";
+import { type AuthConfig } from "@/parser/service/auth";
 import { type ExecutorServiceInput } from "@/parser/service/executor";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
