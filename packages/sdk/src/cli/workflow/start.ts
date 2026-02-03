@@ -255,8 +255,6 @@ export const startCommand = defineCommand({
     ...waitArgs,
   }),
   run: withCommonArgs(async (args) => {
-    const interval = parseDuration(args.interval);
-
     const { executionId, wait } = await startWorkflow({
       name: args.name,
       machineUser: args.machineuser,
@@ -264,7 +262,7 @@ export const startCommand = defineCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      interval,
+      interval: parseDuration(args.interval),
     });
 
     logger.info(`Execution ID: ${executionId}`, { mode: "stream" });

@@ -21,27 +21,42 @@ const unitToMs: Record<DurationUnit, number> = {
   m: 60 * 1000,
 };
 
-/**
- * Schema for duration string validation (e.g., "3s", "500ms", "1m")
- * Transforms the string to milliseconds
- */
-const durationSchema = z
-  .templateLiteral([z.number().int().positive(), z.enum(durationUnits)])
-  .transform((duration) => {
-    const match = duration.match(/^(\d+)(ms|s|m)$/)!;
-    const value = parseInt(match[1], 10);
-    const unit = match[2] as DurationUnit;
-    return value * unitToMs[unit];
-  });
+const durationPattern = /^(\d+)(ms|s|m)$/;
 
 /**
- * Parse a duration string (e.g., "3s", "500ms", "1m") to milliseconds
- * @param duration - Duration string with unit suffix (ms, s, m)
+ * Schema for duration string validation (e.g., "3s", "500ms", "1m")
+ * Only validates format; use parseDuration() to convert to milliseconds
+ */
+export const durationArg = z
+  .string()
+  .refine((val) => durationPattern.test(val), {
+    message: "Invalid duration format. Expected format: '3s', '500ms', '1m'",
+  })
+  .refine(
+    (val) => {
+      const match = val.match(durationPattern)!;
+      return parseInt(match[1], 10) > 0;
+    },
+    { message: "Duration must be greater than 0" },
+  );
+
+/**
+ * Parse a validated duration string into milliseconds
+ * @param duration - Duration string (e.g., "3s", "500ms", "1m")
  * @returns Duration in milliseconds
  */
 export function parseDuration(duration: string): number {
-  return durationSchema.parse(duration);
+  const match = duration.match(durationPattern)!;
+  const value = parseInt(match[1], 10);
+  const unit = match[2] as DurationUnit;
+  return value * unitToMs[unit];
 }
+
+/**
+ * Schema for positive integer validation (from string input)
+ * Transforms the string to a number
+ */
+export const positiveIntArg = z.coerce.number().int().positive();
 
 // ============================================================================
 // Env File Helpers

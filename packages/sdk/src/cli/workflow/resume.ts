@@ -84,13 +84,11 @@ export const resumeCommand = defineCommand({
     ...waitArgs,
   }),
   run: withCommonArgs(async (args) => {
-    const interval = parseDuration(args.interval);
-
     const { executionId, wait } = await resumeWorkflow({
       executionId: args.executionId,
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      interval,
+      interval: parseDuration(args.interval),
     });
 
     if (!args.json) {

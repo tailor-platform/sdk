@@ -15,7 +15,15 @@ import {
 import ora from "ora";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
+import {
+  commonArgs,
+  durationArg,
+  jsonArgs,
+  parseDuration,
+  positiveIntArg,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { formatKeyValueTable } from "../utils/format";
@@ -464,7 +472,7 @@ export const jobsCommand = defineCommand({
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
     }),
-    interval: arg(z.string().default("3s"), {
+    interval: arg(durationArg.default("3s"), {
       alias: "i",
       description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
     }),
@@ -472,20 +480,19 @@ export const jobsCommand = defineCommand({
       alias: "l",
       description: "Display function execution logs after completion (requires --wait)",
     }),
-    limit: arg(z.string().optional(), {
+    limit: arg(positiveIntArg.optional(), {
       description: "Maximum number of jobs to list (default: 50, max: 1000) (list mode only)",
     }),
   }),
   run: withCommonArgs(async (args) => {
     if (args.jobId) {
       if (args.wait) {
-        const interval = parseDuration(args.interval);
         const result = await watchExecutorJob({
           executorName: args.executorName,
           jobId: args.jobId,
           workspaceId: args["workspace-id"],
           profile: args.profile,
-          interval,
+          interval: parseDuration(args.interval),
           logs: args.logs,
         });
 
@@ -561,7 +568,7 @@ export const jobsCommand = defineCommand({
       const jobs = await listExecutorJobs({
         executorName: args.executorName,
         status: args.status,
-        limit: args.limit ? Number.parseInt(args.limit, 10) : undefined,
+        limit: args.limit,
         workspaceId: args["workspace-id"],
         profile: args.profile,
       });
