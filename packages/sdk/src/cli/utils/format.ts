@@ -3,6 +3,7 @@ import { formatDistanceToNowStrict } from "date-fns";
 // eslint-disable-next-line no-restricted-imports
 import { getBorderCharacters, table } from "table";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { logger } from "./logger";
 import type { TableUserConfig } from "table";
 
 /**
@@ -91,4 +92,13 @@ export function humanizeRelativeTime(value: Date | string | null): string {
     return typeof value === "string" ? value : "N/A";
   }
   return formatDistanceToNowStrict(date, { addSuffix: true });
+}
+
+/**
+ * Print data in JSON or table format based on the json flag.
+ * @param data - Data to print
+ * @param _json - Whether to print as JSON (unused, kept for API compatibility)
+ */
+export function printData(data: object | object[], _json: boolean): void {
+  logger.out(data);
 }
