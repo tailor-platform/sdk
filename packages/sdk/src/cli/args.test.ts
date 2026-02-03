@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { loadEnvFiles, durationArg, positiveIntArg } from "./args";
+import { loadEnvFiles, durationArg, parseDuration, positiveIntArg } from "./args";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
@@ -131,19 +131,10 @@ describe("loadEnvFiles", () => {
 });
 
 describe("durationArg", () => {
-  it("parses seconds to milliseconds", () => {
-    expect(durationArg.parse("3s")).toBe(3000);
-    expect(durationArg.parse("1s")).toBe(1000);
-  });
-
-  it("parses milliseconds", () => {
-    expect(durationArg.parse("500ms")).toBe(500);
-    expect(durationArg.parse("1ms")).toBe(1);
-  });
-
-  it("parses minutes to milliseconds", () => {
-    expect(durationArg.parse("1m")).toBe(60000);
-    expect(durationArg.parse("2m")).toBe(120000);
+  it("validates and returns duration string as-is", () => {
+    expect(durationArg.parse("3s")).toBe("3s");
+    expect(durationArg.parse("500ms")).toBe("500ms");
+    expect(durationArg.parse("1m")).toBe("1m");
   });
 
   it("rejects invalid format", () => {
@@ -157,6 +148,23 @@ describe("durationArg", () => {
     expect(() => durationArg.parse("0ms")).toThrow(/Duration must be greater than 0/);
     expect(() => durationArg.parse("0s")).toThrow(/Duration must be greater than 0/);
     expect(() => durationArg.parse("0m")).toThrow(/Duration must be greater than 0/);
+  });
+});
+
+describe("parseDuration", () => {
+  it("converts seconds to milliseconds", () => {
+    expect(parseDuration("3s")).toBe(3000);
+    expect(parseDuration("1s")).toBe(1000);
+  });
+
+  it("returns milliseconds as-is", () => {
+    expect(parseDuration("500ms")).toBe(500);
+    expect(parseDuration("1ms")).toBe(1);
+  });
+
+  it("converts minutes to milliseconds", () => {
+    expect(parseDuration("1m")).toBe(60000);
+    expect(parseDuration("2m")).toBe(120000);
   });
 });
 

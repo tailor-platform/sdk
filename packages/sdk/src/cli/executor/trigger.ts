@@ -2,7 +2,14 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, durationArg, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
+import {
+  commonArgs,
+  durationArg,
+  jsonArgs,
+  parseDuration,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger, styles } from "../utils/logger";
@@ -125,8 +132,7 @@ export const triggerCommand = defineCommand({
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
     }),
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsgo incorrectly infers default() expects output type
-    interval: arg(durationArg.default("3s" as unknown as number), {
+    interval: arg(durationArg.default("3s"), {
       alias: "i",
       description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
     }),
@@ -215,7 +221,7 @@ export const triggerCommand = defineCommand({
         jobId: result.jobId,
         workspaceId: args["workspace-id"],
         profile: args.profile,
-        interval: args.interval,
+        interval: parseDuration(args.interval),
         logs: args.logs,
       });
 

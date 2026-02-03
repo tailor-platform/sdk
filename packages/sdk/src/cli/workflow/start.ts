@@ -8,7 +8,7 @@ import {
 import ora from "ora";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, deploymentArgs, jsonArgs, parseDuration, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -262,7 +262,7 @@ export const startCommand = defineCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      interval: args.interval,
+      interval: parseDuration(args.interval),
     });
 
     logger.info(`Execution ID: ${executionId}`, { mode: "stream" });

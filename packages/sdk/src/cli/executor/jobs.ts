@@ -19,6 +19,7 @@ import {
   commonArgs,
   durationArg,
   jsonArgs,
+  parseDuration,
   positiveIntArg,
   withCommonArgs,
   workspaceArgs,
@@ -471,8 +472,7 @@ export const jobsCommand = defineCommand({
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
     }),
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsgo incorrectly infers default() expects output type
-    interval: arg(durationArg.default("3s" as unknown as number), {
+    interval: arg(durationArg.default("3s"), {
       alias: "i",
       description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
     }),
@@ -492,7 +492,7 @@ export const jobsCommand = defineCommand({
           jobId: args.jobId,
           workspaceId: args["workspace-id"],
           profile: args.profile,
-          interval: args.interval,
+          interval: parseDuration(args.interval),
           logs: args.logs,
         });
 

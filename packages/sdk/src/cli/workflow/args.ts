@@ -16,8 +16,7 @@ export const waitArgs = {
     alias: "W",
     description: "Wait for execution to complete",
   }),
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsgo incorrectly infers default() expects output type
-  interval: arg(durationArg.default("3s" as unknown as number), {
+  interval: arg(durationArg.default("3s"), {
     alias: "i",
     description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
   }),
