@@ -115,3 +115,21 @@ export const TailorDBServiceConfigSchema = z.object({
   migration: TailorDBMigrationConfigSchema.optional(),
   gqlOperations: GqlOperationsSchema.optional(),
 });
+
+/**
+ * Input type for TailorDB service configuration (before schema parsing).
+ * gqlOperations accepts both alias ("query") and object format.
+ */
+export type TailorDBServiceConfigInput = z.input<typeof TailorDBServiceConfigSchema>;
+
+/**
+ * Parsed TailorDB service configuration (after schema parsing).
+ * gqlOperations is normalized to object format.
+ */
+export type TailorDBServiceConfig = z.output<typeof TailorDBServiceConfigSchema>;
+
+export type TailorDBExternalConfig = { external: true };
+
+export type TailorDBServiceInput = {
+  [namespace: string]: TailorDBServiceConfigInput | TailorDBExternalConfig;
+};

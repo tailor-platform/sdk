@@ -1,5 +1,10 @@
 import type { RelationType } from "./relation";
-import type { DBFieldMetadataSchema, RawRelationConfigSchema, TailorDBTypeSchema } from "./schema";
+import type {
+  DBFieldMetadataSchema,
+  RawRelationConfigSchema,
+  TailorDBTypeSchema,
+  TailorDBServiceConfig as TailorDBServiceConfigType,
+} from "./schema";
 import type {
   GqlOperations,
   GqlOperationsConfig,
@@ -20,57 +25,18 @@ export type {
   GqlOperationsConfig,
   GqlOperations,
 } from "@/configure/services/tailordb";
+export type {
+  TailorDBServiceConfigInput,
+  TailorDBServiceConfig,
+  TailorDBExternalConfig,
+  TailorDBServiceInput,
+} from "./schema";
 
 /**
  * Migration configuration for TailorDB
+ * @public
  */
-export type TailorDBMigrationConfig = {
-  /** Directory path for migration files */
-  directory: string;
-  /** Machine user name for executing migration scripts (must be defined in auth.machineUsers) */
-  machineUser?: string;
-};
-
-/**
- * Input type for TailorDB service configuration (before schema parsing).
- * gqlOperations accepts both alias ("query") and object format.
- */
-export type TailorDBServiceConfigInput = {
-  files: string[];
-  ignores?: string[];
-  erdSite?: string;
-  /** Migration configuration */
-  migration?: TailorDBMigrationConfig;
-  /**
-   * Default GraphQL operations for all types in this namespace.
-   * Use "query" for read-only (disables all mutations).
-   * Individual types can override with their own gqlOperations settings.
-   */
-  gqlOperations?: GqlOperationsConfig;
-};
-
-/**
- * Parsed TailorDB service configuration (after schema parsing).
- * gqlOperations is normalized to object format.
- */
-export type TailorDBServiceConfig = {
-  files: string[];
-  ignores?: string[];
-  erdSite?: string;
-  /** Migration configuration */
-  migration?: TailorDBMigrationConfig;
-  /**
-   * Default GraphQL operations for all types in this namespace.
-   * Normalized to object format (never "query" alias).
-   */
-  gqlOperations?: GqlOperations;
-};
-
-export type TailorDBExternalConfig = { external: true };
-
-export type TailorDBServiceInput = {
-  [namespace: string]: TailorDBServiceConfigInput | TailorDBExternalConfig;
-};
+export type TailorDBMigrationConfig = NonNullable<TailorDBServiceConfigType["migration"]>;
 
 export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
 
