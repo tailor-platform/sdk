@@ -169,6 +169,7 @@ function processChangeset(
 export const changesetPlugin: PluginBase = {
   id: "@tailor-platform/changeset",
   description: "Generates approval flow types for changeset management",
+  importPath: "@tailor-platform/sdk/changeset-plugin",
   configSchema,
   process: processChangeset,
 };

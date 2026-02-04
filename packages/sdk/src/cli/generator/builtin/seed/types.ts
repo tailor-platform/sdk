@@ -25,6 +25,8 @@ export interface GqlIngestMetadata {
  */
 export interface PluginSourceInfo {
   pluginId: string;
+  /** Plugin import path for code generators (e.g., "@tailor-platform/sdk/changeset-plugin") */
+  pluginImportPath?: string;
   originalFilePath: string;
   originalExportName: string;
   /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */

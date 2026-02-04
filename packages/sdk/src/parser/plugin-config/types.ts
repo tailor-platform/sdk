@@ -159,6 +159,13 @@ export interface PluginBase {
   /** Human-readable description of the plugin */
   readonly description: string;
   /**
+   * Import path for this plugin's public API.
+   * Used by code generators to create correct import statements.
+   * @example "@tailor-platform/sdk/changeset-plugin"
+   * @example "@my-company/audit-log-plugin"
+   */
+  readonly importPath: string;
+  /**
    * Schema defining the expected configuration for this plugin.
    * Uses the same field types as createResolver's input (t.string(), t.number(), etc.).
    * This schema is used to:

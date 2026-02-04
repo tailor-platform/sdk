@@ -9,8 +9,26 @@
  */
 
 import { db, t } from "@/configure";
-import { registerGeneratedType } from "./registry";
-import type { PluginBase, StandalonePluginProcessContext } from "@/parser/plugin-config/types";
+import { registerGeneratedType, type GeneratedTypeKind } from "./registry";
+import type {
+  PluginBase,
+  PluginGeneratedType,
+  StandalonePluginProcessContext,
+  TailorDBTypeForPlugin,
+} from "@/parser/plugin-config/types";
+
+/**
+ * Helper to attach kind metadata to a generated type.
+ * @param type - The TailorDB type to add kind to
+ * @param kind - The kind identifier for this generated type
+ * @returns The type with kind metadata attached
+ */
+function withKind<T extends TailorDBTypeForPlugin>(
+  type: T,
+  kind: GeneratedTypeKind,
+): T & PluginGeneratedType {
+  return Object.assign(type, { kind });
+}
 
 /**
  * Audit log plugin that generates an AuditLog type for tracking
@@ -19,6 +37,7 @@ import type { PluginBase, StandalonePluginProcessContext } from "@/parser/plugin
 export const auditLogPlugin: PluginBase = {
   id: "@tailor-platform/audit-log",
   description: "Generates audit log types for tracking changes",
+  importPath: "@tailor-platform/sdk/audit-log-plugin",
   configSchema: t.bool(),
 
   /**
@@ -58,11 +77,12 @@ export const auditLogPlugin: PluginBase = {
         fields: ["targetType", "targetId"],
       });
 
-    // Register generated type in the registry for later retrieval
-    registerGeneratedType(auditLogType);
+    // Add kind metadata and register for later retrieval
+    const auditLogWithKind = withKind(auditLogType, "audit-log");
+    registerGeneratedType("audit-log", auditLogType);
 
     return {
-      types: [auditLogType],
+      types: [auditLogWithKind],
     };
   },
 };

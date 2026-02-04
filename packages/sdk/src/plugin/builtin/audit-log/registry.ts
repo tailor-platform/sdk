@@ -7,36 +7,45 @@
 import type { TailorAnyDBType } from "@/configure/services/tailordb/schema";
 
 /**
- * Registry mapping typeName → generatedType
+ * Generated type kinds for audit-log plugin.
  */
-const registry = new Map<string, TailorAnyDBType>();
+export type GeneratedTypeKind = "audit-log";
+
+/**
+ * Registry mapping kind → generatedType
+ */
+const registry = new Map<GeneratedTypeKind, TailorAnyDBType>();
 
 /**
  * Register a generated type in the registry.
+ * @param kind - The kind identifier for this generated type
  * @param generatedType - The generated TailorDB type
  */
-export function registerGeneratedType(generatedType: TailorAnyDBType): void {
-  registry.set(generatedType.name, generatedType);
+export function registerGeneratedType(
+  kind: GeneratedTypeKind,
+  generatedType: TailorAnyDBType,
+): void {
+  registry.set(kind, generatedType);
 }
 
 /**
- * Get a generated type from the registry by name.
+ * Get a generated type from the registry by kind.
  * @example
  * ```typescript
  * import { getGeneratedType } from "@tailor-platform/sdk/audit-log-plugin";
  *
  * // Get the AuditLog type
- * const AuditLog = getGeneratedType("AuditLog");
+ * const AuditLog = getGeneratedType("audit-log");
  * ```
- * @param typeName - The name of the generated type to retrieve
+ * @param kind - The kind of the generated type to retrieve
  * @returns The generated TailorDB type
  * @throws Error if the type is not found in the registry
  */
-export function getGeneratedType(typeName: string): TailorAnyDBType {
-  const generatedType = registry.get(typeName);
+export function getGeneratedType(kind: GeneratedTypeKind): TailorAnyDBType {
+  const generatedType = registry.get(kind);
   if (!generatedType) {
     throw new Error(
-      `Generated type "${typeName}" not found. ` + `Make sure the audit-log plugin is configured.`,
+      `Generated type "${kind}" not found. ` + `Make sure the audit-log plugin is configured.`,
     );
   }
   return generatedType;
@@ -55,5 +64,5 @@ export function getGeneratedType(typeName: string): TailorAnyDBType {
  * @throws Error if the AuditLog type is not found in the registry
  */
 export function getAuditLogType(): TailorAnyDBType {
-  return getGeneratedType("AuditLog");
+  return getGeneratedType("audit-log");
 }

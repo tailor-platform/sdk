@@ -385,7 +385,7 @@ export function createSeedGenerator(
           );
 
           // Plugin-generated type: use getGeneratedType API
-          if (linesDb.pluginSource) {
+          if (linesDb.pluginSource && linesDb.pluginSource.pluginImportPath) {
             // Build original type import path
             let originalImportPath: string | undefined;
             if (linesDb.pluginSource.originalFilePath && linesDb.pluginSource.originalExportName) {
@@ -400,6 +400,7 @@ export function createSeedGenerator(
 
             const pluginImport: PluginTypeImport = {
               pluginId: linesDb.pluginSource.pluginId,
+              pluginImportPath: linesDb.pluginSource.pluginImportPath,
               originalExportName: linesDb.pluginSource.originalExportName || undefined,
               originalImportPath,
               generatedTypeKind: linesDb.pluginSource.generatedTypeKind,

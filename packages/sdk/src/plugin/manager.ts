@@ -184,4 +184,13 @@ export class PluginManager {
   get pluginCount(): number {
     return this.plugins.size;
   }
+
+  /**
+   * Get the import path for a plugin
+   * @param pluginId - The plugin ID to look up
+   * @returns The plugin's import path, or undefined if not found
+   */
+  getPluginImportPath(pluginId: string): string | undefined {
+    return this.plugins.get(pluginId)?.importPath;
+  }
 }

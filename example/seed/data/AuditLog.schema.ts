@@ -3,7 +3,7 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { defineSchema } from "@toiroakr/lines-db";
 import { getGeneratedType } from "@tailor-platform/sdk/audit-log-plugin";
 
-const AuditLog = getGeneratedType("AuditLog");
+const AuditLog = getGeneratedType("audit-log");
 
 const schemaType = t.object({
   ...AuditLog.pickFields(["id","createdAt"], { optional: true }),
