@@ -1,5 +1,16 @@
 # @tailor-platform/sdk
 
+## 1.9.0
+
+### Minor Changes
+
+- [#516](https://github.com/tailor-platform/sdk/pull/516) [`425ead7`](https://github.com/tailor-platform/sdk/commit/425ead7f90c408605027537ee0e157b9d35651b6) Thanks [@jackchuka](https://github.com/jackchuka)! - Add support for configuring GraphQL operations on TailorDB types
+
+  - Add `gqlOperations` option to `.features()` for granular control (true = enabled, false = disabled)
+  - Add `"query"` alias for read-only mode: `gqlOperations: "query"` disables all mutations while keeping read enabled
+  - Add `gqlOperations` option to `TailorDBServiceConfig` for namespace-level defaults
+  - Regenerate proto definitions from latest `tailor-inc/proto`
+
 ## 1.8.0
 
 ### Minor Changes
