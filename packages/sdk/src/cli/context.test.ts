@@ -95,6 +95,7 @@ beforeAll(() => {
 describe("loadWorkspaceId", () => {
   const originalEnv = process.env;
   const validUUID = "12345678-1234-4abc-8def-123456789012";
+  const otherUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const invalidUUID = "not-a-uuid";
 
   beforeEach(() => {
@@ -128,7 +129,7 @@ describe("loadWorkspaceId", () => {
     });
 
     it("opts.workspaceId takes precedence over env variable", () => {
-      process.env.TAILOR_PLATFORM_WORKSPACE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = otherUUID;
       const result = loadWorkspaceId({ workspaceId: validUUID });
       expect(result).toBe(validUUID);
     });
@@ -154,7 +155,7 @@ describe("loadWorkspaceId", () => {
         version: 1,
         users: {},
         profiles: {
-          myprofile: { user: "test", workspace_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+          myprofile: { user: "test", workspace_id: otherUUID },
         },
         current_user: null,
       });
@@ -219,7 +220,7 @@ describe("loadWorkspaceId", () => {
         version: 1,
         users: {},
         profiles: {
-          envprofile: { user: "testuser", workspace_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+          envprofile: { user: "testuser", workspace_id: otherUUID },
           optsprofile: { user: "testuser", workspace_id: validUUID },
         },
         current_user: null,
