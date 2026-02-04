@@ -1,8 +1,27 @@
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
-import { registerGeneratedType } from "./registry";
+import { registerGeneratedType, type GeneratedTypeKind } from "./registry";
 import type { output } from "@/configure/types/helpers";
-import type { PluginBase, PluginProcessContext, PluginOutput } from "@/parser/plugin-config/types";
+import type {
+  PluginBase,
+  PluginProcessContext,
+  PluginOutput,
+  PluginGeneratedType,
+  TailorDBTypeForPlugin,
+} from "@/parser/plugin-config/types";
+
+/**
+ * Attach a kind identifier to a generated type for getGeneratedType() API.
+ * @param type - The TailorDB type to attach kind to
+ * @param kind - The kind identifier (e.g., "request", "step")
+ * @returns The type with kind attached
+ */
+function withKind<T extends TailorDBTypeForPlugin>(
+  type: T,
+  kind: GeneratedTypeKind,
+): T & PluginGeneratedType {
+  return Object.assign(type, { kind });
+}
 
 /**
  * Changeset plugin configuration schema
@@ -126,7 +145,12 @@ function processChangeset(
   registerGeneratedType(type, "rework", changeReworkEvent);
 
   return {
-    types: [changeRequest, changeStep, changeApproval, changeReworkEvent],
+    types: [
+      withKind(changeRequest, "request"),
+      withKind(changeStep, "step"),
+      withKind(changeApproval, "approval"),
+      withKind(changeReworkEvent, "rework"),
+    ],
     extends: { fields: extendFields },
   };
 }
