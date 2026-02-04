@@ -90,8 +90,49 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   name?: string;
 };
 
+/**
+ * Configuration for GraphQL operations on a TailorDB type.
+ * All operations are enabled by default (undefined or true = enabled, false = disabled).
+ */
+export interface GqlOperations {
+  /** Enable create mutation (default: true) */
+  create?: boolean;
+  /** Enable update mutation (default: true) */
+  update?: boolean;
+  /** Enable delete mutation (default: true) */
+  delete?: boolean;
+  /** Enable read queries - get, list, aggregation (default: true) */
+  read?: boolean;
+}
+
+/**
+ * Alias for common GqlOperations configurations.
+ * - "query": Read-only mode - disables all mutations (create, update, delete)
+ */
+export type GqlOperationsAliasQuery = "query";
+
+/**
+ * Configuration for GraphQL operations - either an alias string or detailed object.
+ */
+export type GqlOperationsConfig = GqlOperationsAliasQuery | GqlOperations;
+
+/**
+ * Normalize GqlOperationsConfig (alias or object) to GqlOperations object.
+ * "query" alias expands to read-only mode: { create: false, update: false, delete: false, read: true }
+ * @param config - The GqlOperationsConfig to normalize
+ * @returns The normalized GqlOperations object
+ */
+export function normalizeGqlOperations(config: GqlOperationsConfig): GqlOperations {
+  if (config === "query") {
+    return { create: false, update: false, delete: false, read: true };
+  }
+  return config;
+}
+
 export interface TypeFeatures {
   pluralForm?: string;
   aggregation?: true;
   bulkUpsert?: true;
+  /** Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control. */
+  gqlOperations?: GqlOperationsConfig;
 }

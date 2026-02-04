@@ -1,9 +1,18 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { t } from "@/configure/types";
 import { db } from "./schema";
-import type { Hook } from "./types";
+import {
+  normalizeGqlOperations,
+  type GqlOperations,
+  type GqlOperationsConfig,
+  type Hook,
+} from "./types";
 import type { output } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
+
+function getGqlOps(ops: GqlOperationsConfig | undefined): GqlOperations | undefined {
+  return ops ? normalizeGqlOperations(ops) : undefined;
+}
 
 describe("TailorDBField basic field type tests", () => {
   it("string field outputs string type correctly", () => {
@@ -1387,5 +1396,115 @@ describe("TailorDBType files method tests", () => {
     // "avatar" is not an existing field, so it should be allowed
     expectTypeOf<{ avatar: string }>().toExtend<FilesParam>();
     expectTypeOf<{ avatar?: never }>().not.toExtend<FilesParam>();
+  });
+});
+
+describe("TailorDBType gqlOperations tests", () => {
+  it("gqlOperations can disable specific operations via features()", () => {
+    const orderType = db
+      .type("Order", {
+        name: db.string(),
+      })
+      .features({
+        gqlOperations: {
+          delete: false, // disabled
+        },
+      });
+
+    const ops = getGqlOps(orderType.metadata.settings?.gqlOperations);
+    expect(ops?.delete).toBe(false);
+    expect(ops?.create).toBeUndefined();
+    expect(ops?.update).toBeUndefined();
+    expect(ops?.read).toBeUndefined();
+  });
+
+  it("gqlOperations can disable multiple operations", () => {
+    const archiveType = db
+      .type("Archive", {
+        data: db.string(),
+      })
+      .features({
+        gqlOperations: {
+          create: false,
+          update: false,
+          delete: false,
+        },
+      });
+
+    const ops = getGqlOps(archiveType.metadata.settings?.gqlOperations);
+    expect(ops?.create).toBe(false);
+    expect(ops?.update).toBe(false);
+    expect(ops?.delete).toBe(false);
+    expect(ops?.read).toBeUndefined();
+  });
+
+  it("gqlOperations can disable read operations", () => {
+    const secretType = db
+      .type("Secret", {
+        value: db.string(),
+      })
+      .features({
+        gqlOperations: {
+          read: false,
+        },
+      });
+
+    const ops = getGqlOps(secretType.metadata.settings?.gqlOperations);
+    expect(ops?.read).toBe(false);
+  });
+
+  it("gqlOperations works with other features", () => {
+    const logType = db
+      .type("Log", {
+        message: db.string(),
+      })
+      .features({
+        aggregation: true,
+        bulkUpsert: true,
+        gqlOperations: {
+          delete: false,
+        },
+      });
+
+    expect(logType.metadata.settings?.aggregation).toBe(true);
+    expect(logType.metadata.settings?.bulkUpsert).toBe(true);
+    const ops = getGqlOps(logType.metadata.settings?.gqlOperations);
+    expect(ops?.delete).toBe(false);
+  });
+});
+
+describe("TailorDBType gqlOperations alias tests", () => {
+  it("gqlOperations: 'query' disables all mutations and enables read", () => {
+    const readOnlyType = db
+      .type("ReadOnly", {
+        data: db.string(),
+      })
+      .features({
+        gqlOperations: "query",
+      });
+
+    const ops = getGqlOps(readOnlyType.metadata.settings?.gqlOperations);
+    expect(ops?.create).toBe(false);
+    expect(ops?.update).toBe(false);
+    expect(ops?.delete).toBe(false);
+    expect(ops?.read).toBe(true);
+  });
+
+  it("gqlOperations: 'query' works with other features", () => {
+    const auditType = db
+      .type("Audit", {
+        action: db.string(),
+      })
+      .features({
+        aggregation: true,
+        gqlOperations: "query",
+      });
+
+    expect(auditType.metadata.settings?.aggregation).toBe(true);
+    const ops = getGqlOps(auditType.metadata.settings?.gqlOperations);
+    expect(ops?.create).toBe(false);
+    expect(ops?.update).toBe(false);
+    expect(ops?.delete).toBe(false);
+    expect(ops?.read).toBe(true);
   });
 });

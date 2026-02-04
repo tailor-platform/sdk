@@ -297,6 +297,8 @@ export declare type ExecutorTargetFunctionConfig = Message<"tailor.v1.ExecutorTa
   name: string;
 
   /**
+   * script contains inline JavaScript code. Mutually exclusive with script_ref.
+   *
    * @generated from field: string script = 2;
    */
   script: string;
@@ -310,6 +312,13 @@ export declare type ExecutorTargetFunctionConfig = Message<"tailor.v1.ExecutorTa
    * @generated from field: tailor.v1.AuthInvoker invoker = 4;
    */
   invoker?: AuthInvoker;
+
+  /**
+   * script_ref references a function in the function registry. Mutually exclusive with script.
+   *
+   * @generated from field: optional string script_ref = 5;
+   */
+  scriptRef?: string;
 };
 
 /**

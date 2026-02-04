@@ -33,8 +33,7 @@ import { executeScript } from "../../../utils/script-executor";
 import { trnPrefix } from "../label";
 import type { Application } from "@/cli/application";
 import type { LoadedConfig } from "@/cli/config-loader";
-import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBServiceConfig, TailorDBType } from "@/parser/service/tailordb/types";
 
 // ============================================================================
 // Types

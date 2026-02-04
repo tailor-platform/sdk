@@ -18,6 +18,7 @@ import {
 } from "@/parser/service/tailordb/types";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
+  normalizeGqlOperations,
   type DBFieldMetadata,
   type DefinedDBFieldMetadata,
   type Hooks,
@@ -891,7 +892,12 @@ function createTailorDBType<
     },
 
     features(features: Omit<TypeFeatures, "pluralForm">) {
-      _settings = { ..._settings, ...features };
+      const { gqlOperations, ...rest } = features;
+      _settings = {
+        ..._settings,
+        ...rest,
+        ...(gqlOperations && { gqlOperations: normalizeGqlOperations(gqlOperations) }),
+      };
       return this;
     },
 

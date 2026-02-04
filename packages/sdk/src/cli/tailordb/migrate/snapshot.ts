@@ -4,6 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { normalizeGqlOperations } from "@/parser/service/tailordb";
 import {
   type MigrationDiff,
   type DiffChange,
@@ -78,6 +79,12 @@ export interface SnapshotType {
   settings?: {
     aggregation?: boolean;
     bulkUpsert?: boolean;
+    gqlOperations?: {
+      create?: boolean;
+      update?: boolean;
+      delete?: boolean;
+      read?: boolean;
+    };
   };
   indexes?: Record<string, SnapshotIndexConfig>;
   files?: Record<string, string>;
@@ -249,6 +256,23 @@ function createSnapshotType(type: TailorDBType): SnapshotType {
     }
     if (type.settings.bulkUpsert !== undefined) {
       snapshotType.settings.bulkUpsert = type.settings.bulkUpsert;
+    }
+    if (type.settings.gqlOperations) {
+      const ops = normalizeGqlOperations(type.settings.gqlOperations);
+      snapshotType.settings.gqlOperations = {
+        ...(ops.create !== undefined && {
+          create: ops.create,
+        }),
+        ...(ops.update !== undefined && {
+          update: ops.update,
+        }),
+        ...(ops.delete !== undefined && {
+          delete: ops.delete,
+        }),
+        ...(ops.read !== undefined && {
+          read: ops.read,
+        }),
+      };
     }
   }
 

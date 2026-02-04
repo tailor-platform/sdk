@@ -1,6 +1,10 @@
 import type { RelationType } from "./relation";
 import type { DBFieldMetadataSchema, RawRelationConfigSchema, TailorDBTypeSchema } from "./schema";
-import type { TailorTypeGqlPermission, TailorTypePermission } from "@/configure/services/tailordb";
+import type {
+  GqlOperationsConfig,
+  TailorTypeGqlPermission,
+  TailorTypePermission,
+} from "@/configure/services/tailordb";
 import type { ValueOperand } from "@/parser/service/auth/types";
 import type { z } from "zod";
 
@@ -12,6 +16,8 @@ export type {
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
+  GqlOperationsConfig,
+  GqlOperations,
 } from "@/configure/services/tailordb";
 
 /**
@@ -30,6 +36,12 @@ export type TailorDBServiceConfig = {
   erdSite?: string;
   /** Migration configuration */
   migration?: TailorDBMigrationConfig;
+  /**
+   * Default GraphQL operations for all types in this namespace.
+   * Use "query" for read-only (disables all mutations).
+   * Individual types can override with their own gqlOperations settings.
+   */
+  gqlOperations?: GqlOperationsConfig;
 };
 
 export type TailorDBExternalConfig = { external: true };
@@ -179,6 +191,14 @@ export interface TailorDBTypeMetadata {
     pluralForm?: string;
     aggregation?: boolean;
     bulkUpsert?: boolean;
+    gqlOperations?:
+      | "query"
+      | {
+          create?: boolean;
+          update?: boolean;
+          delete?: boolean;
+          read?: boolean;
+        };
   };
   permissions: RawPermissions;
   files: Record<string, string>;
