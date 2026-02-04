@@ -27,6 +27,8 @@ export interface PluginSourceInfo {
   pluginId: string;
   originalFilePath: string;
   originalExportName: string;
+  /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */
+  generatedTypeKind?: string;
 }
 
 /**
@@ -50,8 +52,6 @@ export interface LinesDbMetadata {
 export interface SeedTypeMetadata {
   gqlIngest: GqlIngestMetadata;
   linesDb: LinesDbMetadata;
-  /** Generated type definition code for plugin-generated types (to embed in schema file) */
-  pluginTypeDefinition?: string;
   /** Types that this type has relations to (for dependency resolution) */
   relationTargets?: string[];
 }

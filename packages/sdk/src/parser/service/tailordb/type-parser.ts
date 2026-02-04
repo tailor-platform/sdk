@@ -34,6 +34,8 @@ export type TypeSourceInfo = Record<
     originalFilePath?: string;
     /** Original export name (for plugin-generated types) */
     originalExportName?: string;
+    /** Generated type kind for getGeneratedType() API (e.g., "request", "step", "approval", "rework") */
+    generatedTypeKind?: string;
   }
 >;
 
