@@ -1,8 +1,14 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { loadConfigPath } from "./context";
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
+import { loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
+
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
+
+vi.mock("xdg-basedir", () => ({
+  xdgConfig: xdgTempDir,
+}));
 
 describe("loadConfigPath", () => {
   const originalEnv = process.env;
@@ -80,4 +86,157 @@ describe("loadConfigPath", () => {
     const result = loadConfigPath();
     expect(result).toBeUndefined();
   });
+});
+
+beforeAll(() => {
+  fs.mkdirSync(xdgTempDir, { recursive: true });
+});
+
+describe("loadWorkspaceId", () => {
+  const originalEnv = process.env;
+  const validUUID = "12345678-1234-4abc-8def-123456789012";
+  const otherUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const invalidUUID = "not-a-uuid";
+
+  beforeEach(() => {
+    vi.resetModules();
+    process.env = { ...originalEnv };
+    delete process.env.TAILOR_PLATFORM_WORKSPACE_ID;
+    delete process.env.TAILOR_PLATFORM_PROFILE;
+    writePlatformConfig({
+      version: 1,
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.restoreAllMocks();
+  });
+
+  describe("opts.workspaceId", () => {
+    it("returns workspaceId from options when provided", () => {
+      const result = loadWorkspaceId({ workspaceId: validUUID });
+      expect(result).toBe(validUUID);
+    });
+
+    it("throws error when opts.workspaceId is invalid UUID", () => {
+      expect(() => loadWorkspaceId({ workspaceId: invalidUUID })).toThrow(
+        "Invalid value from --workspace-id option: must be a valid UUID",
+      );
+    });
+
+    it("opts.workspaceId takes precedence over env variable", () => {
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = otherUUID;
+      const result = loadWorkspaceId({ workspaceId: validUUID });
+      expect(result).toBe(validUUID);
+    });
+  });
+
+  describe("env.TAILOR_PLATFORM_WORKSPACE_ID", () => {
+    it("returns workspaceId from env when opts not provided", () => {
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
+      const result = loadWorkspaceId();
+      expect(result).toBe(validUUID);
+    });
+
+    it("throws error when env workspaceId is invalid UUID", () => {
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = invalidUUID;
+      expect(() => loadWorkspaceId()).toThrow(
+        "Invalid value from TAILOR_PLATFORM_WORKSPACE_ID environment variable: must be a valid UUID",
+      );
+    });
+
+    it("env takes precedence over profile", () => {
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
+      writePlatformConfig({
+        version: 1,
+        users: {},
+        profiles: {
+          myprofile: { user: "test", workspace_id: otherUUID },
+        },
+        current_user: null,
+      });
+      const result = loadWorkspaceId({ profile: "myprofile" });
+      expect(result).toBe(validUUID);
+    });
+  });
+
+  describe("opts.profile", () => {
+    it("returns workspaceId from profile when opts.profile provided", () => {
+      writePlatformConfig({
+        version: 1,
+        users: {},
+        profiles: { myprofile: { user: "testuser", workspace_id: validUUID } },
+        current_user: null,
+      });
+      const result = loadWorkspaceId({ profile: "myprofile" });
+      expect(result).toBe(validUUID);
+    });
+
+    it("throws error when profile not found", () => {
+      writePlatformConfig({
+        version: 1,
+        users: {},
+        profiles: {},
+        current_user: null,
+      });
+      expect(() => loadWorkspaceId({ profile: "nonexistent" })).toThrow(
+        'Profile "nonexistent" not found',
+      );
+    });
+
+    it("throws error when profile workspace_id is invalid UUID", () => {
+      writePlatformConfig({
+        version: 1,
+        users: {},
+        profiles: { badprofile: { user: "testuser", workspace_id: invalidUUID } },
+        current_user: null,
+      });
+      expect(() => loadWorkspaceId({ profile: "badprofile" })).toThrow(
+        'Invalid value from profile "badprofile": must be a valid UUID',
+      );
+    });
+  });
+
+  describe("env.TAILOR_PLATFORM_PROFILE", () => {
+    it("returns workspaceId from env profile when set", () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      writePlatformConfig({
+        version: 1,
+        users: {},
+        profiles: { envprofile: { user: "testuser", workspace_id: validUUID } },
+        current_user: null,
+      });
+      const result = loadWorkspaceId();
+      expect(result).toBe(validUUID);
+    });
+
+    it("opts.profile takes precedence over env profile", () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      writePlatformConfig({
+        version: 1,
+        users: {},
+        profiles: {
+          envprofile: { user: "testuser", workspace_id: otherUUID },
+          optsprofile: { user: "testuser", workspace_id: validUUID },
+        },
+        current_user: null,
+      });
+      const result = loadWorkspaceId({ profile: "optsprofile" });
+      expect(result).toBe(validUUID);
+    });
+  });
+
+  describe("error case: no workspace ID source", () => {
+    it("throws error when no workspaceId source is available", () => {
+      expect(() => loadWorkspaceId()).toThrow("Workspace ID not found");
+    });
+  });
+});
+
+afterAll(() => {
+  fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
