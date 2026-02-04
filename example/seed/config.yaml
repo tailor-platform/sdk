@@ -8,7 +8,7 @@ entityDependencies:
   Selfie: []
   Supplier: []
   User: []
-  UserChangeRequest: []
+  UserChangeRequest: [User]
   UserChangeStep: [UserChangeRequest]
   UserChangeApproval: [UserChangeRequest]
   UserChangeReworkEvent: [UserChangeRequest]

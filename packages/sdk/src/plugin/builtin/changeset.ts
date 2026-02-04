@@ -46,7 +46,7 @@ function processChangeset(
   const changeRequest = db
     .type(`${typeName}ChangeRequest`, {
       recordId: db.uuid().index(),
-      draft: db.uuid().index(),
+      draft: db.uuid().index().relation({ type: "n-1", toward: { type } }),
       status: db.enum(["RUNNING", "REWORK", "APPROVED", "REJECTED", "CANCELED"]).index(),
       reworkIteration: db.int(),
       currentStepNo: db

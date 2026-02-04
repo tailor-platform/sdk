@@ -15,6 +15,7 @@ import {
   generateLinesDbSchemaFileWithMultipleTypes,
   generatePluginTypeDefinition,
   type GroupedTypeMetadata,
+  type UserDefinedTypeImport,
 } from "./lines-db-processor";
 import type { SeedTypeMetadata } from "./types";
 
@@ -432,6 +433,10 @@ export function createSeedGenerator(
       // All plugin-generated type names for reference
       const allPluginTypeNames = new Set<string>();
 
+      // User-defined type info for import generation
+      // Key: typeName, Value: { exportName, importPath }
+      const userDefinedTypeInfo = new Map<string, { exportName: string; importPath: string }>();
+
       for (const nsResult of input.tailordb) {
         if (!nsResult.types) continue;
 
@@ -478,7 +483,12 @@ export function createSeedGenerator(
             });
             allPluginTypeNames.add(linesDb.typeName);
           } else {
-            // User-defined type: generate individual schema file
+            // User-defined type: store info for import generation and generate schema file
+            userDefinedTypeInfo.set(linesDb.typeName, {
+              exportName: linesDb.exportName,
+              importPath: linesDb.importPath,
+            });
+
             const schemaOutputPath = path.join(
               outputBaseDir,
               "data",
@@ -501,6 +511,33 @@ export function createSeedGenerator(
       // Generate schema files for plugin-generated types
       // Types with inter-type relations are grouped into a single file
       const outputBaseDir = options.distPath;
+
+      // Helper function to build user-defined type imports for a schema file
+      const buildUserDefinedImports = (
+        relationTargets: string[],
+        schemaOutputPath: string,
+      ): UserDefinedTypeImport[] => {
+        const imports: UserDefinedTypeImport[] = [];
+        for (const target of relationTargets) {
+          const userTypeInfo = userDefinedTypeInfo.get(target);
+          if (userTypeInfo) {
+            const relativePath = path.relative(
+              path.dirname(schemaOutputPath),
+              userTypeInfo.importPath,
+            );
+            const typeImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+              ? relativePath.replace(/\.ts$/, "")
+              : `./${relativePath.replace(/\.ts$/, "")}`;
+            imports.push({
+              typeName: target,
+              exportName: userTypeInfo.exportName,
+              importPath: typeImportPath,
+            });
+          }
+        }
+        return imports;
+      };
+
       for (const [_groupKey, groupTypes] of pluginTypeGroups) {
         // Filter relation targets to only include types within the same plugin group
         const groupTypeNames = new Set(groupTypes.map((t) => t.typeName));
@@ -517,7 +554,7 @@ export function createSeedGenerator(
           // Generate a combined schema file for each type (each type gets its own file,
           // but includes all dependency type definitions)
           for (const typeEntry of sortedTypes) {
-            const { typeName, metadata } = typeEntry;
+            const { typeName, metadata, relationTargets } = typeEntry;
 
             // Find all types that this type depends on (directly or indirectly)
             const dependencyTypes = findDependencies(typeName, sortedTypes, groupTypeNames);
@@ -542,9 +579,31 @@ export function createSeedGenerator(
             }
 
             const schemaOutputPath = path.join(outputBaseDir, "data", `${typeName}.schema.ts`);
+
+            // Collect all relation targets from all included types
+            const allRelationTargets = new Set<string>();
+            for (const depType of dependencyTypes) {
+              const depEntry = sortedTypes.find((t) => t.typeName === depType);
+              if (depEntry) {
+                for (const target of depEntry.relationTargets) {
+                  allRelationTargets.add(target);
+                }
+              }
+            }
+            for (const target of relationTargets) {
+              allRelationTargets.add(target);
+            }
+
+            // Build imports for user-defined types (excluding plugin-generated types)
+            const userDefinedImports = buildUserDefinedImports(
+              [...allRelationTargets].filter((t) => !allPluginTypeNames.has(t)),
+              schemaOutputPath,
+            );
+
             const schemaContent = generateLinesDbSchemaFileWithMultipleTypes(
               typesToInclude,
               typeName,
+              userDefinedImports,
             );
 
             files.push({
@@ -554,18 +613,45 @@ export function createSeedGenerator(
           }
         } else {
           // No internal relations or single type: generate individual schema files
-          for (const { typeName, metadata } of groupTypes) {
+          for (const { typeName, metadata, relationTargets } of groupTypes) {
             if (metadata.pluginTypeDefinition) {
               const schemaOutputPath = path.join(outputBaseDir, "data", `${typeName}.schema.ts`);
-              const schemaContent = generateLinesDbSchemaFileWithEmbeddedType(
-                metadata.linesDb,
-                metadata.pluginTypeDefinition,
+
+              // Build imports for user-defined types
+              const userDefinedImports = buildUserDefinedImports(
+                relationTargets.filter((t) => !allPluginTypeNames.has(t)),
+                schemaOutputPath,
               );
 
-              files.push({
-                path: schemaOutputPath,
-                content: schemaContent,
-              });
+              if (userDefinedImports.length > 0) {
+                // Use generateLinesDbSchemaFileWithMultipleTypes with just the main type
+                // to get import support
+                const schemaContent = generateLinesDbSchemaFileWithMultipleTypes(
+                  [
+                    {
+                      metadata: metadata.linesDb,
+                      typeDefinition: metadata.pluginTypeDefinition,
+                    },
+                  ],
+                  typeName,
+                  userDefinedImports,
+                );
+
+                files.push({
+                  path: schemaOutputPath,
+                  content: schemaContent,
+                });
+              } else {
+                const schemaContent = generateLinesDbSchemaFileWithEmbeddedType(
+                  metadata.linesDb,
+                  metadata.pluginTypeDefinition,
+                );
+
+                files.push({
+                  path: schemaOutputPath,
+                  content: schemaContent,
+                });
+              }
             }
           }
         }

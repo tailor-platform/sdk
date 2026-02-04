@@ -1,10 +1,11 @@
 import { db, t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
+import { user as User } from "../../tailordb/user";
 
 const UserChangeRequest = db.type(["UserChangeRequest", "UserChangeRequests"], {
   recordId: db.uuid().index(),
-  draft: db.uuid().index(),
+  draft: db.uuid().index().relation({ type: "n-1", toward: { type: User } }),
   status: db.enum(["RUNNING", "REWORK", "APPROVED", "REJECTED", "CANCELED"]).index(),
   reworkIteration: db.int(),
   currentStepNo: db.int().hooks({ create: () => 1 }).validate([({ value }) => value >= 1, "currentStepNo must be >= 1"]),
@@ -29,6 +30,9 @@ const hook = createTailorDBHook(UserChangeRequest);
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),
   {
+    foreignKeys: [
+      {"column":"draft","references":{"table":"User","column":"id"}},
+    ],
     indexes: [
       {"name":"request_record_status_idx","columns":["recordId","status"],"unique":false},
     ],
