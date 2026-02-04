@@ -13,5 +13,8 @@ export type {
   GqlOperations,
   GqlOperationsAliasQuery,
   GqlOperationsConfig,
+  TailorDBMigrationConfig,
+  TailorDBServiceConfig,
+  TailorDBServiceInput,
   TypeFeatures,
 } from "./types";

@@ -1,18 +1,9 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { t } from "@/configure/types";
 import { db } from "./schema";
-import {
-  normalizeGqlOperations,
-  type GqlOperations,
-  type GqlOperationsConfig,
-  type Hook,
-} from "./types";
+import type { Hook } from "./types";
 import type { output } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
-
-function getGqlOps(ops: GqlOperationsConfig | undefined): GqlOperations | undefined {
-  return ops ? normalizeGqlOperations(ops) : undefined;
-}
 
 describe("TailorDBField basic field type tests", () => {
   it("string field outputs string type correctly", () => {
@@ -1400,25 +1391,23 @@ describe("TailorDBType files method tests", () => {
 });
 
 describe("TailorDBType gqlOperations tests", () => {
-  it("gqlOperations can disable specific operations via features()", () => {
+  it("gqlOperations stores raw config via features()", () => {
     const orderType = db
       .type("Order", {
         name: db.string(),
       })
       .features({
         gqlOperations: {
-          delete: false, // disabled
+          delete: false,
         },
       });
 
-    const ops = getGqlOps(orderType.metadata.settings?.gqlOperations);
-    expect(ops?.delete).toBe(false);
-    expect(ops?.create).toBeUndefined();
-    expect(ops?.update).toBeUndefined();
-    expect(ops?.read).toBeUndefined();
+    // Configure layer stores raw data without normalization
+    const ops = orderType.metadata.settings?.gqlOperations;
+    expect(ops).toEqual({ delete: false });
   });
 
-  it("gqlOperations can disable multiple operations", () => {
+  it("gqlOperations stores multiple operations config", () => {
     const archiveType = db
       .type("Archive", {
         data: db.string(),
@@ -1431,14 +1420,11 @@ describe("TailorDBType gqlOperations tests", () => {
         },
       });
 
-    const ops = getGqlOps(archiveType.metadata.settings?.gqlOperations);
-    expect(ops?.create).toBe(false);
-    expect(ops?.update).toBe(false);
-    expect(ops?.delete).toBe(false);
-    expect(ops?.read).toBeUndefined();
+    const ops = archiveType.metadata.settings?.gqlOperations;
+    expect(ops).toEqual({ create: false, update: false, delete: false });
   });
 
-  it("gqlOperations can disable read operations", () => {
+  it("gqlOperations stores read config", () => {
     const secretType = db
       .type("Secret", {
         value: db.string(),
@@ -1449,8 +1435,8 @@ describe("TailorDBType gqlOperations tests", () => {
         },
       });
 
-    const ops = getGqlOps(secretType.metadata.settings?.gqlOperations);
-    expect(ops?.read).toBe(false);
+    const ops = secretType.metadata.settings?.gqlOperations;
+    expect(ops).toEqual({ read: false });
   });
 
   it("gqlOperations works with other features", () => {
@@ -1468,13 +1454,12 @@ describe("TailorDBType gqlOperations tests", () => {
 
     expect(logType.metadata.settings?.aggregation).toBe(true);
     expect(logType.metadata.settings?.bulkUpsert).toBe(true);
-    const ops = getGqlOps(logType.metadata.settings?.gqlOperations);
-    expect(ops?.delete).toBe(false);
+    expect(logType.metadata.settings?.gqlOperations).toEqual({ delete: false });
   });
 });
 
 describe("TailorDBType gqlOperations alias tests", () => {
-  it("gqlOperations: 'query' disables all mutations and enables read", () => {
+  it("gqlOperations: 'query' stores alias as raw value", () => {
     const readOnlyType = db
       .type("ReadOnly", {
         data: db.string(),
@@ -1483,11 +1468,9 @@ describe("TailorDBType gqlOperations alias tests", () => {
         gqlOperations: "query",
       });
 
-    const ops = getGqlOps(readOnlyType.metadata.settings?.gqlOperations);
-    expect(ops?.create).toBe(false);
-    expect(ops?.update).toBe(false);
-    expect(ops?.delete).toBe(false);
-    expect(ops?.read).toBe(true);
+    // Configure layer stores the alias without normalization
+    const ops = readOnlyType.metadata.settings?.gqlOperations;
+    expect(ops).toBe("query");
   });
 
   it("gqlOperations: 'query' works with other features", () => {
@@ -1501,10 +1484,6 @@ describe("TailorDBType gqlOperations alias tests", () => {
       });
 
     expect(auditType.metadata.settings?.aggregation).toBe(true);
-    const ops = getGqlOps(auditType.metadata.settings?.gqlOperations);
-    expect(ops?.create).toBe(false);
-    expect(ops?.update).toBe(false);
-    expect(ops?.delete).toBe(false);
-    expect(ops?.read).toBe(true);
+    expect(auditType.metadata.settings?.gqlOperations).toBe("query");
   });
 });

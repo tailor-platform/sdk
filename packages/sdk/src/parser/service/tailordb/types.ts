@@ -1,6 +1,13 @@
 import type { RelationType } from "./relation";
-import type { DBFieldMetadataSchema, RawRelationConfigSchema, TailorDBTypeSchema } from "./schema";
 import type {
+  DBFieldMetadataSchema,
+  RawRelationConfigSchema,
+  TailorDBTypeSchema,
+  TailorDBServiceConfig as TailorDBServiceConfigType,
+  TailorDBTypeSettingsSchema,
+} from "./schema";
+import type {
+  GqlOperations,
   GqlOperationsConfig,
   TailorTypeGqlPermission,
   TailorTypePermission,
@@ -19,36 +26,25 @@ export type {
   GqlOperationsConfig,
   GqlOperations,
 } from "@/configure/services/tailordb";
+export type {
+  TailorDBServiceConfigInput,
+  TailorDBServiceConfig,
+  TailorDBExternalConfig,
+  TailorDBServiceInput,
+} from "./schema";
+
+/**
+ * Parsed and normalized settings for TailorDB type.
+ * gqlOperations is normalized from alias to object format.
+ * @public
+ */
+export type TailorDBTypeParsedSettings = z.output<typeof TailorDBTypeSettingsSchema>;
 
 /**
  * Migration configuration for TailorDB
+ * @public
  */
-export type TailorDBMigrationConfig = {
-  /** Directory path for migration files */
-  directory: string;
-  /** Machine user name for executing migration scripts (must be defined in auth.machineUsers) */
-  machineUser?: string;
-};
-
-export type TailorDBServiceConfig = {
-  files: string[];
-  ignores?: string[];
-  erdSite?: string;
-  /** Migration configuration */
-  migration?: TailorDBMigrationConfig;
-  /**
-   * Default GraphQL operations for all types in this namespace.
-   * Use "query" for read-only (disables all mutations).
-   * Individual types can override with their own gqlOperations settings.
-   */
-  gqlOperations?: GqlOperationsConfig;
-};
-
-export type TailorDBExternalConfig = { external: true };
-
-export type TailorDBServiceInput = {
-  [namespace: string]: TailorDBServiceConfig | TailorDBExternalConfig;
-};
+export type TailorDBMigrationConfig = NonNullable<TailorDBServiceConfigType["migration"]>;
 
 export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
 
@@ -191,14 +187,7 @@ export interface TailorDBTypeMetadata {
     pluralForm?: string;
     aggregation?: boolean;
     bulkUpsert?: boolean;
-    gqlOperations?:
-      | "query"
-      | {
-          create?: boolean;
-          update?: boolean;
-          delete?: boolean;
-          read?: boolean;
-        };
+    gqlOperations?: GqlOperationsConfig;
   };
   permissions: RawPermissions;
   files: Record<string, string>;
@@ -248,7 +237,7 @@ export interface TailorDBType {
   fields: Record<string, ParsedField>;
   forwardRelationships: Record<string, ParsedRelationship>;
   backwardRelationships: Record<string, ParsedRelationship>;
-  settings: TailorDBTypeMetadata["settings"];
+  settings: TailorDBTypeParsedSettings;
   permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];

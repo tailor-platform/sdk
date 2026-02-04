@@ -13,6 +13,7 @@ import {
   type StaticWebsite,
   type StaticWebsiteInput,
 } from "@/parser/service/staticwebsite";
+import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
 
@@ -51,7 +52,9 @@ function defineTailorDB(config: TailorDBServiceInput | undefined): DefineTailorD
     if ("external" in serviceConfig) {
       externalTailorDBNamespaces.push(namespace);
     } else {
-      const tailorDB = createTailorDBService(namespace, serviceConfig);
+      // Parse config through schema to normalize gqlOperations
+      const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
+      const tailorDB = createTailorDBService(namespace, parsedConfig);
       tailorDBServices.push(tailorDB);
     }
     subgraphs.push({ Type: "tailordb", Name: namespace });

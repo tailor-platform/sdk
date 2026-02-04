@@ -9,6 +9,7 @@ import { db } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types";
 import { type Resolver } from "@/parser/service/resolver";
 import { parseTypes } from "@/parser/service/tailordb";
+import { toSchemaOutputs } from "@/utils/test/internal";
 import { createGenerationManager } from "./index";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { AppConfig } from "@/parser/app-config";
@@ -161,7 +162,11 @@ describe("GenerationManager", () => {
       const types = {
         testType: db.type("TestType", {}),
       };
-      const parsedTypes = parseTypes({ TestType: types.testType }, "test-namespace", {});
+      const parsedTypes = parseTypes(
+        toSchemaOutputs({ TestType: types.testType }),
+        "test-namespace",
+        {},
+      );
 
       manager.services = {
         tailordb: {
@@ -236,7 +241,11 @@ describe("GenerationManager", () => {
       const types = {
         testType: db.type("TestType", {}),
       };
-      const parsedTypes = parseTypes({ TestType: types.testType }, "test-namespace", {});
+      const parsedTypes = parseTypes(
+        toSchemaOutputs({ TestType: types.testType }),
+        "test-namespace",
+        {},
+      );
 
       // Modify existing object instead of reassigning (closure pattern)
       manager.services.tailordb["test-namespace"] = {
@@ -311,7 +320,7 @@ describe("GenerationManager", () => {
       };
 
       const parsedTypes = parseTypes(
-        { Type1: types.type1, Type2: types.type2, Type3: types.type3 },
+        toSchemaOutputs({ Type1: types.type1, Type2: types.type2, Type3: types.type3 }),
         "test-namespace",
         {},
       );
@@ -369,7 +378,11 @@ describe("GenerationManager", () => {
           exportName: "TestType",
         },
       };
-      const parsedTypes = parseTypes({ TestType: types.TestType }, "test-namespace", sourceInfo);
+      const parsedTypes = parseTypes(
+        toSchemaOutputs({ TestType: types.TestType }),
+        "test-namespace",
+        sourceInfo,
+      );
 
       // Initialize generatorResults
       manager.generatorResults[testGenerator.id] = {
@@ -692,7 +705,7 @@ describe("Integration Tests", () => {
               types[`Type${nsIdx}_${typeIdx}`] = db.type(`Type${nsIdx}_${typeIdx}`, {});
             });
 
-          const parsedTypes = parseTypes(types, namespace, {});
+          const parsedTypes = parseTypes(toSchemaOutputs(types), namespace, {});
 
           manager.services.tailordb[namespace] = {
             types: parsedTypes,

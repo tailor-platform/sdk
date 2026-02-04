@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { parseTypes } from "@/parser/service/tailordb";
+import { toSchemaOutput } from "@/utils/test/internal";
 import { generateUnifiedEnumConstants } from "./generate-enum-constants";
 import { processEnumType } from "./process-enum-type";
 import { createEnumConstantsGenerator } from "./index";
@@ -38,7 +39,7 @@ describe("EnumConstantsGenerator", () => {
         status: db.enum(["ACTIVE", "INACTIVE"], { optional: true }),
       });
 
-      const result = await processEnumType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.enums).toHaveLength(2);
       expect(result.enums[0].name).toBe("UserRole");
@@ -65,7 +66,7 @@ describe("EnumConstantsGenerator", () => {
         ),
       });
 
-      const result = await processEnumType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.enums).toHaveLength(1);
       expect(result.enums[0].name).toBe("PurchaseOrderAttachedFilesType");
@@ -81,7 +82,7 @@ describe("EnumConstantsGenerator", () => {
         age: db.int(),
       });
 
-      const result = await processEnumType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.enums).toEqual([]);
     });
@@ -95,7 +96,7 @@ describe("EnumConstantsGenerator", () => {
         ]),
       });
 
-      const result = await processEnumType(parseTailorDBType(type));
+      const result = await processEnumType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.enums).toHaveLength(1);
       expect(result.enums[0].name).toBe("InvoiceStatus");

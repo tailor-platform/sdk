@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
+import { GqlOperationsSchema } from "./gql-operations";
 import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "./types";
 
@@ -70,30 +71,24 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
   }),
 );
 
+/**
+ * Schema for TailorDB type settings.
+ * Normalizes gqlOperations from alias ("query") to object format.
+ */
+export const TailorDBTypeSettingsSchema = z.object({
+  pluralForm: z.string().optional(),
+  aggregation: z.boolean().optional(),
+  bulkUpsert: z.boolean().optional(),
+  gqlOperations: GqlOperationsSchema.optional(),
+});
+
 export const TailorDBTypeSchema = z.object({
   name: z.string(),
   fields: z.record(z.string(), TailorDBFieldSchema),
   metadata: z.object({
     name: z.string(),
     description: z.string().optional(),
-    settings: z
-      .object({
-        pluralForm: z.string().optional(),
-        aggregation: z.boolean().optional(),
-        bulkUpsert: z.boolean().optional(),
-        gqlOperations: z
-          .union([
-            z.literal("query"),
-            z.object({
-              create: z.boolean().optional(),
-              update: z.boolean().optional(),
-              delete: z.boolean().optional(),
-              read: z.boolean().optional(),
-            }),
-          ])
-          .optional(),
-      })
-      .optional(),
+    settings: TailorDBTypeSettingsSchema.optional(),
     permissions: z.unknown(),
     files: z.record(z.string(), z.string()),
     indexes: z
@@ -107,3 +102,38 @@ export const TailorDBTypeSchema = z.object({
       .optional(),
   }),
 });
+
+const TailorDBMigrationConfigSchema = z.object({
+  directory: z.string(),
+  machineUser: z.string().optional(),
+});
+
+/**
+ * Schema for TailorDB service configuration.
+ * Normalizes gqlOperations from alias ("query") to object format.
+ */
+export const TailorDBServiceConfigSchema = z.object({
+  files: z.array(z.string()),
+  ignores: z.array(z.string()).optional(),
+  erdSite: z.string().optional(),
+  migration: TailorDBMigrationConfigSchema.optional(),
+  gqlOperations: GqlOperationsSchema.optional(),
+});
+
+/**
+ * Input type for TailorDB service configuration (before schema parsing).
+ * gqlOperations accepts both alias ("query") and object format.
+ */
+export type TailorDBServiceConfigInput = z.input<typeof TailorDBServiceConfigSchema>;
+
+/**
+ * Parsed TailorDB service configuration (after schema parsing).
+ * gqlOperations is normalized to object format.
+ */
+export type TailorDBServiceConfig = z.output<typeof TailorDBServiceConfigSchema>;
+
+export type TailorDBExternalConfig = { external: true };
+
+export type TailorDBServiceInput = {
+  [namespace: string]: TailorDBServiceConfigInput | TailorDBExternalConfig;
+};

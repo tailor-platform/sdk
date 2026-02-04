@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { parseTypes } from "@/parser/service/tailordb";
+import { toSchemaOutput } from "@/utils/test/internal";
 import { generateUnifiedFileUtils } from "./generate-file-utils";
 import { processFileType } from "./process-file-type";
 import { createFileUtilsGenerator } from "./index";
@@ -42,7 +43,7 @@ describe("FileUtilsGenerator", () => {
           avatar: "profile image",
         });
 
-      const result = await processFileType(parseTailorDBType(type));
+      const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.fileFields).toEqual(["avatar"]);
     });
@@ -57,7 +58,7 @@ describe("FileUtilsGenerator", () => {
           form: "order form",
         });
 
-      const result = await processFileType(parseTailorDBType(type));
+      const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.fileFields).toEqual(["receipt", "form"]);
     });
@@ -67,7 +68,7 @@ describe("FileUtilsGenerator", () => {
         name: db.string(),
       });
 
-      const result = await processFileType(parseTailorDBType(type));
+      const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.fileFields).toEqual([]);
     });

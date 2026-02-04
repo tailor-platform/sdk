@@ -116,19 +116,6 @@ export type GqlOperationsAliasQuery = "query";
  */
 export type GqlOperationsConfig = GqlOperationsAliasQuery | GqlOperations;
 
-/**
- * Normalize GqlOperationsConfig (alias or object) to GqlOperations object.
- * "query" alias expands to read-only mode: { create: false, update: false, delete: false, read: true }
- * @param config - The GqlOperationsConfig to normalize
- * @returns The normalized GqlOperations object
- */
-export function normalizeGqlOperations(config: GqlOperationsConfig): GqlOperations {
-  if (config === "query") {
-    return { create: false, update: false, delete: false, read: true };
-  }
-  return config;
-}
-
 export interface TypeFeatures {
   pluralForm?: string;
   aggregation?: true;

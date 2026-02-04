@@ -36,7 +36,6 @@ import {
 import * as inflection from "inflection";
 import * as path from "pathe";
 import { type TailorDBService } from "@/cli/application/tailordb/service";
-import { normalizeGqlOperations } from "@/parser/service/tailordb";
 import { createChangeSet } from "..";
 import { fetchAll, type OperatorClient } from "../../../client";
 import {
@@ -76,7 +75,7 @@ import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { Executor } from "@/parser/service/executor";
 import type {
-  GqlOperationsConfig,
+  GqlOperations,
   PermissionOperand,
   StandardActionPermission,
   StandardGqlPermissionPolicy,
@@ -1268,13 +1267,13 @@ async function planTypes(
  * Generate a TailorDB type manifest from parsed type
  * @param {TailorDBType} type - Parsed TailorDB type
  * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
- * @param {GqlOperationsConfig} [namespaceGqlOperations] - Default gqlOperations for the namespace
+ * @param {GqlOperations} [namespaceGqlOperations] - Default gqlOperations for the namespace (already normalized)
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 function generateTailorDBTypeManifest(
   type: TailorDBType,
   executorUsedTypes: ReadonlySet<string>,
-  namespaceGqlOperations?: GqlOperationsConfig,
+  namespaceGqlOperations?: GqlOperations,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
   // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
   const pluralForm = inflection.camelize(type.pluralForm, true);
@@ -1305,9 +1304,9 @@ function generateTailorDBTypeManifest(
   if (executorUsedTypes.has(type.name)) {
     defaultSettings.publishRecordEvents = true;
   }
-  const gqlOpsConfig = type.settings?.gqlOperations ?? namespaceGqlOperations;
-  if (gqlOpsConfig) {
-    const ops = normalizeGqlOperations(gqlOpsConfig);
+  // Both type.settings.gqlOperations and namespaceGqlOperations are already normalized by schema
+  const ops = type.settings?.gqlOperations ?? namespaceGqlOperations;
+  if (ops) {
     defaultSettings.disableGqlOperations = {
       create: ops.create === false,
       update: ops.update === false,
