@@ -7,7 +7,7 @@ import {
   type Generator,
 } from "@/parser/generator-config";
 import { createPluginConfigSchema, type PluginBase, type Plugin } from "@/parser/plugin-config";
-import { changesetPlugin } from "@/plugin/builtin";
+import { changesetPlugin, auditLogPlugin } from "@/plugin/builtin";
 import { loadConfigPath } from "./context";
 import {
   createEnumConstantsGenerator,
@@ -41,6 +41,7 @@ export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerato
 // Register built-in plugins with their constructor functions
 const builtinPlugins = new Map<string, (options: unknown) => PluginBase>([
   [changesetPlugin.id, () => changesetPlugin],
+  [auditLogPlugin.id, () => auditLogPlugin],
 ]);
 
 const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);

@@ -94,6 +94,13 @@ export const UserSettingLanguage = {
 } as const;
 export type UserSettingLanguage = (typeof UserSettingLanguage)[keyof typeof UserSettingLanguage];
 
+export const AuditLogAction = {
+  "CREATE": "CREATE",
+  "UPDATE": "UPDATE",
+  "DELETE": "DELETE"
+} as const;
+export type AuditLogAction = (typeof AuditLogAction)[keyof typeof AuditLogAction];
+
 export const EventName = {
   "CLICK": "CLICK",
   "VIEW": "VIEW",

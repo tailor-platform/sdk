@@ -42,6 +42,17 @@ export interface PluginProcessContext<Config = unknown> {
 }
 
 /**
+ * Context passed to plugin's processStandalone method.
+ * Used for plugins that generate types without requiring a source type.
+ */
+export interface StandalonePluginProcessContext<Config = unknown> {
+  /** Plugin-specific configuration passed via definePlugins() */
+  config: Config;
+  /** Target namespace for generated types */
+  namespace: string;
+}
+
+/**
  * Interface representing a TailorDB type for plugin output.
  * This interface is satisfied by db.type() instances.
  */
@@ -155,16 +166,27 @@ export interface PluginBase {
   readonly configSchema: TailorAnyField;
 
   /**
-   * Process a single TailorDB type and generate outputs
+   * Process a single TailorDB type and generate outputs.
+   * This method is called for each type that has this plugin attached via .plugin().
    * @param context - Context containing the type, config, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  process(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+
+  /**
+   * Process standalone plugin without requiring a source type.
+   * This method is called once per namespace for plugins configured via definePlugins().
+   * Use this for plugins that generate types independently of user-defined types.
+   * @param context - Context containing the config and target namespace
+   * @returns Plugin output with generated types, resolvers, and executors
+   */
+  processStandalone?(context: StandalonePluginProcessContext): PluginOutput | Promise<PluginOutput>;
 }
 
 /**
  * Plugin configuration input type for definePlugins()
  * Can be either a tuple [pluginId, options] for built-in plugins
- * or a PluginBase object for custom plugins
+ * or a PluginBase object for custom plugins.
+ * Options can be any value - the plugin's configSchema handles validation.
  */
-export type PluginConfig = readonly [string, Record<string, unknown>] | PluginBase;
+export type PluginConfig = readonly [string, unknown] | PluginBase;

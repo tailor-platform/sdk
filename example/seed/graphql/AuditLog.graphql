@@ -1,0 +1,5 @@
+mutation CreateAuditLog($input: AuditLogCreateInput!) {
+  createAuditLog(input: $input) {
+    id
+  }
+}

@@ -146,11 +146,41 @@ export interface Namespace {
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }
+
+    AuditLog: {
+      id: Generated<string>;
+      targetType: string;
+      targetId: string;
+      action: "CREATE" | "UPDATE" | "DELETE";
+      performedBy: string;
+      performedAt: Timestamp;
+      changes: string | null;
+      previousValues: string | null;
+      newValues: string | null;
+      metadata: string | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
   },
   "analyticsdb": {
     Event: {
       id: Generated<string>;
       name: "CLICK" | "VIEW" | "PURCHASE";
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    AuditLog: {
+      id: Generated<string>;
+      targetType: string;
+      targetId: string;
+      action: "CREATE" | "UPDATE" | "DELETE";
+      performedBy: string;
+      performedAt: Timestamp;
+      changes: string | null;
+      previousValues: string | null;
+      newValues: string | null;
+      metadata: string | null;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }

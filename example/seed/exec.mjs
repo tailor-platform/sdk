@@ -80,6 +80,7 @@ const namespaceEntities = {
     "UserSetting",
   ],
   analyticsdb: [
+    "AuditLog",
     "Event",
   ]
 };

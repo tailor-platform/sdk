@@ -56,7 +56,8 @@ const CustomPluginSchema = z.object({
 });
 
 // Built-in plugin tuple schema (id, options)
-const BuiltinPluginConfigSchema = z.tuple([z.string(), z.record(z.string(), z.unknown())]);
+// Options can be any value - the plugin's configSchema handles validation
+const BuiltinPluginConfigSchema = z.tuple([z.string(), z.unknown()]);
 
 // Base plugin config schema (before transformation)
 const _BasePluginConfigSchema = z.union([BuiltinPluginConfigSchema, CustomPluginSchema]);

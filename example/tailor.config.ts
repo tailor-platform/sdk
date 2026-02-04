@@ -95,4 +95,7 @@ export const generators = defineGenerators(
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
 );
 
-export const plugins = definePlugins(["@tailor-platform/changeset", {}]);
+export const plugins = definePlugins(
+  ["@tailor-platform/changeset", {}],
+  ["@tailor-platform/audit-log", true], // Standalone plugin - generates AuditLog type
+);

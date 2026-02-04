@@ -14,5 +14,6 @@ entityDependencies:
   UserChangeReworkEvent: [UserChangeRequest]
   UserLog: [User]
   UserSetting: [User]
+  AuditLog: []
   Event: []
   _User: [User]

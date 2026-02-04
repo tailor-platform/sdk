@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/AuditLog.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/AuditLog.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}
