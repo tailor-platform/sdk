@@ -36,6 +36,11 @@
       "types": "./dist/utils/test/index.d.mts",
       "import": "./dist/utils/test/index.mjs",
       "default": "./dist/utils/test/index.mjs"
+    },
+    "./changeset-plugin": {
+      "types": "./dist/plugin/builtin/changeset/index.d.mts",
+      "import": "./dist/plugin/builtin/changeset/index.mjs",
+      "default": "./dist/plugin/builtin/changeset/index.mjs"
     }
   },
   "scripts": {

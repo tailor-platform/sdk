@@ -28,6 +28,7 @@ export default defineConfig({
     "src/cli/index.ts",
     "src/cli/lib.ts",
     "src/utils/test/index.ts",
+    "src/plugin/builtin/changeset/index.ts",
   ],
   format: ["esm"],
   target: "node18",
