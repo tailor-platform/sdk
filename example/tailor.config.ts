@@ -77,7 +77,7 @@ export default defineConfig({
     analyticsdb: { files: ["./analyticsdb/*.ts"] },
   },
   resolver: {
-    "my-resolver": { files: ["./resolvers/*.ts"] },
+    "my-resolver": { files: ["./resolvers/**/*.ts"] },
   },
   idp: [idp],
   auth,

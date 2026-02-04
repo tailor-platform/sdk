@@ -11,6 +11,8 @@ import type {
   ChangeStepStatus,
   ActivationStatus,
   ApprovalDecision,
+  QuorumType,
+  ResolvedByRuleType,
   ChangesetRecordFields,
   SubmitForApprovalOptions,
   ApproveOptions,
@@ -37,8 +39,8 @@ function now(): Date {
 /**
  * Build changeset fields for a new draft record
  * @param options - Options for creating the draft
- * @param options.requestedBy
- * @param options.effectiveFrom
+ * @param options.requestedBy - The user ID who requested the draft
+ * @param options.effectiveFrom - When the change should become effective
  * @returns Changeset fields to merge into the record
  */
 export function buildDraftFields(options: {
@@ -109,7 +111,7 @@ export function buildChangeSteps(
   iteration: number;
   stepNo: number;
   stepName: string;
-  quorumType: string;
+  quorumType: QuorumType;
   minApprovals: number | undefined;
   status: ChangeStepStatus;
   startedAt: Date;
@@ -144,7 +146,7 @@ export function buildChangeApprovals(
   stepNo: number;
   approver: string;
   decision: ApprovalDecision;
-  resolvedByRuleType: string;
+  resolvedByRuleType: ResolvedByRuleType;
   resolvedByRuleValue: string | undefined;
 }> {
   const approvals: Array<{
@@ -154,7 +156,7 @@ export function buildChangeApprovals(
     stepNo: number;
     approver: string;
     decision: ApprovalDecision;
-    resolvedByRuleType: string;
+    resolvedByRuleType: ResolvedByRuleType;
     resolvedByRuleValue: string | undefined;
   }> = [];
 
@@ -403,7 +405,7 @@ export function buildArchiveUpdate(archivedSeq: number): {
 /**
  * Check if a record is in draft state
  * @param record - The record to check
- * @param record.recordState
+ * @param record.recordState - The record's state
  * @returns Whether the record is a draft
  */
 export function isDraft(record: { recordState: RecordState }): boolean {
@@ -413,7 +415,7 @@ export function isDraft(record: { recordState: RecordState }): boolean {
 /**
  * Check if a record is active
  * @param record - The record to check
- * @param record.recordState
+ * @param record.recordState - The record's state
  * @returns Whether the record is active
  */
 export function isActive(record: { recordState: RecordState }): boolean {
@@ -423,7 +425,7 @@ export function isActive(record: { recordState: RecordState }): boolean {
 /**
  * Check if a record is archived
  * @param record - The record to check
- * @param record.recordState
+ * @param record.recordState - The record's state
  * @returns Whether the record is archived
  */
 export function isArchived(record: { recordState: RecordState }): boolean {
@@ -433,7 +435,7 @@ export function isArchived(record: { recordState: RecordState }): boolean {
 /**
  * Check if a change request is pending approval
  * @param request - The change request to check
- * @param request.status
+ * @param request.status - The request's status
  * @returns Whether the request is pending
  */
 export function isPendingApproval(request: { status: ChangeRequestStatus }): boolean {
@@ -443,7 +445,7 @@ export function isPendingApproval(request: { status: ChangeRequestStatus }): boo
 /**
  * Check if a change request is approved
  * @param request - The change request to check
- * @param request.status
+ * @param request.status - The request's status
  * @returns Whether the request is approved
  */
 export function isApproved(request: { status: ChangeRequestStatus }): boolean {
@@ -453,7 +455,7 @@ export function isApproved(request: { status: ChangeRequestStatus }): boolean {
 /**
  * Check if a change request is rejected
  * @param request - The change request to check
- * @param request.status
+ * @param request.status - The request's status
  * @returns Whether the request is rejected
  */
 export function isRejected(request: { status: ChangeRequestStatus }): boolean {
@@ -463,7 +465,7 @@ export function isRejected(request: { status: ChangeRequestStatus }): boolean {
 /**
  * Check if a change request is canceled
  * @param request - The change request to check
- * @param request.status
+ * @param request.status - The request's status
  * @returns Whether the request is canceled
  */
 export function isCanceled(request: { status: ChangeRequestStatus }): boolean {
@@ -473,7 +475,7 @@ export function isCanceled(request: { status: ChangeRequestStatus }): boolean {
 /**
  * Check if a change request is activated
  * @param request - The change request to check
- * @param request.activationStatus
+ * @param request.activationStatus - The request's activation status
  * @returns Whether the request is activated
  */
 export function isActivated(request: { activationStatus: ActivationStatus }): boolean {
