@@ -29,19 +29,21 @@ export function registerGeneratedType(
 }
 
 /**
- * Get a generated type from the registry by kind.
+ * Get a generated type from the registry.
+ * For standalone plugins, pass `null` as the first argument.
  * @example
  * ```typescript
  * import { getGeneratedType } from "@tailor-platform/sdk/audit-log-plugin";
  *
- * // Get the AuditLog type
- * const AuditLog = getGeneratedType("audit-log");
+ * // Get the AuditLog type (standalone plugin - first arg is null)
+ * const AuditLog = getGeneratedType(null, "audit-log");
  * ```
+ * @param _sourceType - Always null for standalone plugins (for API consistency with type-attached plugins)
  * @param kind - The kind of the generated type to retrieve
  * @returns The generated TailorDB type
  * @throws Error if the type is not found in the registry
  */
-export function getGeneratedType(kind: GeneratedTypeKind): TailorAnyDBType {
+export function getGeneratedType(_sourceType: null, kind: GeneratedTypeKind): TailorAnyDBType {
   const generatedType = registry.get(kind);
   if (!generatedType) {
     throw new Error(
@@ -64,5 +66,5 @@ export function getGeneratedType(kind: GeneratedTypeKind): TailorAnyDBType {
  * @throws Error if the AuditLog type is not found in the registry
  */
 export function getAuditLogType(): TailorAnyDBType {
-  return getGeneratedType("audit-log");
+  return getGeneratedType(null, "audit-log");
 }
