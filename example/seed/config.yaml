@@ -1,5 +1,6 @@
 entityDependencies:
   Customer: []
+  CustomerArchive: []
   Invoice: [SalesOrder]
   NestedProfile: []
   PurchaseOrder: [Supplier]

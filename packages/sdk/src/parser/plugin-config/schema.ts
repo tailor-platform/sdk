@@ -48,12 +48,18 @@ const _PluginOutputSchema = z.object({
 });
 
 // Custom plugin schema (object form)
-const CustomPluginSchema = z.object({
-  id: z.string(),
-  description: z.string(),
-  // Use any for the process function since we're not strictly validating function signatures
-  process: z.any(),
-});
+// Using passthrough() to preserve fields like importPath, configSchema, processStandalone
+const CustomPluginSchema = z
+  .object({
+    id: z.string(),
+    description: z.string(),
+    importPath: z.string(),
+    configSchema: z.any(),
+    // Use any for the process function since we're not strictly validating function signatures
+    process: z.any().optional(),
+    processStandalone: z.any().optional(),
+  })
+  .passthrough();
 
 // Built-in plugin tuple schema (id, options)
 // Options can be any value - the plugin's configSchema handles validation

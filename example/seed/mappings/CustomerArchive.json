@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/CustomerArchive.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/CustomerArchive.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

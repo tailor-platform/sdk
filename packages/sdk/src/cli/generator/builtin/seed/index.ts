@@ -398,9 +398,23 @@ export function createSeedGenerator(
                 : `./${relativePath.replace(/\.ts$/, "")}`;
             }
 
+            // Resolve plugin import path - if it's relative, resolve from project root
+            let pluginImportPath = linesDb.pluginSource.pluginImportPath;
+            if (pluginImportPath.startsWith("./") || pluginImportPath.startsWith("../")) {
+              const projectRoot = path.dirname(configPath);
+              const absolutePluginPath = path.resolve(projectRoot, pluginImportPath);
+              const relativePluginPath = path.relative(
+                path.dirname(schemaOutputPath),
+                absolutePluginPath,
+              );
+              pluginImportPath = relativePluginPath.startsWith(".")
+                ? relativePluginPath
+                : `./${relativePluginPath}`;
+            }
+
             const pluginImport: PluginTypeImport = {
               pluginId: linesDb.pluginSource.pluginId,
-              pluginImportPath: linesDb.pluginSource.pluginImportPath,
+              pluginImportPath,
               originalExportName: linesDb.pluginSource.originalExportName || undefined,
               originalImportPath,
               generatedTypeKind: linesDb.pluginSource.generatedTypeKind,

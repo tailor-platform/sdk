@@ -64,6 +64,7 @@ console.log(styleText("cyan", "Starting seed data generation..."));
 const namespaceEntities = {
   tailordb: [
     "Customer",
+    "CustomerArchive",
     "Invoice",
     "NestedProfile",
     "PurchaseOrder",

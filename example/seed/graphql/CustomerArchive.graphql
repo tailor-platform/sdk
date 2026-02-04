@@ -1,0 +1,5 @@
+mutation CreateCustomerArchive($input: CustomerArchiveCreateInput!) {
+  createCustomerArchive(input: $input) {
+    id
+  }
+}

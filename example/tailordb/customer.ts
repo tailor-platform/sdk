@@ -27,4 +27,7 @@ export const customer = db
     name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
   })
   .permission(defaultPermission)
-  .gqlPermission(defaultGqlPermission);
+  .gqlPermission(defaultGqlPermission)
+  .plugin({
+    "@example/soft-delete": { archiveReason: true },
+  });

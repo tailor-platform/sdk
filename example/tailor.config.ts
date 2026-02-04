@@ -6,6 +6,7 @@ import {
   definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { softDeletePlugin } from "./plugins/soft-delete";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -98,4 +99,5 @@ export const generators = defineGenerators(
 export const plugins = definePlugins(
   ["@tailor-platform/changeset", {}],
   ["@tailor-platform/audit-log", true], // Standalone plugin - generates AuditLog type
+  softDeletePlugin, // Custom plugin - adds soft delete functionality
 );
