@@ -71,20 +71,24 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
   }),
 );
 
+/**
+ * Schema for TailorDB type settings.
+ * Normalizes gqlOperations from alias ("query") to object format.
+ */
+export const TailorDBTypeSettingsSchema = z.object({
+  pluralForm: z.string().optional(),
+  aggregation: z.boolean().optional(),
+  bulkUpsert: z.boolean().optional(),
+  gqlOperations: GqlOperationsSchema.optional(),
+});
+
 export const TailorDBTypeSchema = z.object({
   name: z.string(),
   fields: z.record(z.string(), TailorDBFieldSchema),
   metadata: z.object({
     name: z.string(),
     description: z.string().optional(),
-    settings: z
-      .object({
-        pluralForm: z.string().optional(),
-        aggregation: z.boolean().optional(),
-        bulkUpsert: z.boolean().optional(),
-        gqlOperations: GqlOperationsSchema.optional(),
-      })
-      .optional(),
+    settings: TailorDBTypeSettingsSchema.optional(),
     permissions: z.unknown(),
     files: z.record(z.string(), z.string()),
     indexes: z

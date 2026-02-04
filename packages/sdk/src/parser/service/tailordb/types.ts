@@ -4,6 +4,7 @@ import type {
   RawRelationConfigSchema,
   TailorDBTypeSchema,
   TailorDBServiceConfig as TailorDBServiceConfigType,
+  TailorDBTypeSettingsSchema,
 } from "./schema";
 import type {
   GqlOperations,
@@ -31,6 +32,13 @@ export type {
   TailorDBExternalConfig,
   TailorDBServiceInput,
 } from "./schema";
+
+/**
+ * Parsed and normalized settings for TailorDB type.
+ * gqlOperations is normalized from alias to object format.
+ * @public
+ */
+export type TailorDBTypeParsedSettings = z.output<typeof TailorDBTypeSettingsSchema>;
 
 /**
  * Migration configuration for TailorDB
@@ -217,18 +225,6 @@ export interface ParsedRelationship {
   sourceField: string;
   isArray: boolean;
   description: string;
-}
-
-/**
- * Parsed and normalized settings for TailorDB type.
- * gqlOperations is normalized from alias to object format.
- */
-export interface TailorDBTypeParsedSettings {
-  pluralForm?: string;
-  aggregation?: boolean;
-  bulkUpsert?: boolean;
-  /** Normalized gqlOperations (always object format, never "query" alias) */
-  gqlOperations?: GqlOperations;
 }
 
 /**
