@@ -1435,6 +1435,9 @@ describe("TailorDBField runtime validation tests", () => {
       throw new Error("Unexpected issues");
     }
     expect(ok.value).toBe(42);
+
+    const bad = field.parse({ value: "not-a-number", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected an integer: received not-a-number");
   });
 
   it("validates float values", () => {
@@ -1445,6 +1448,9 @@ describe("TailorDBField runtime validation tests", () => {
       throw new Error("Unexpected issues");
     }
     expect(ok.value).toBe(3.14);
+
+    const bad = field.parse({ value: "not-a-number", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected a number: received not-a-number");
   });
 
   it("validates boolean values", () => {
@@ -1455,6 +1461,9 @@ describe("TailorDBField runtime validation tests", () => {
       throw new Error("Unexpected issues");
     }
     expect(ok.value).toBe(true);
+
+    const bad = field.parse({ value: "true", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected a boolean: received true");
   });
 
   it("validates nested object values", () => {
