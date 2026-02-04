@@ -34,9 +34,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll, afterAll } from "vitest";
+import { describe, test, expect, beforeAll } from "vitest";
 import { initOperatorClient, type OperatorClient } from "../src/cli/client";
 import { loadAccessToken } from "../src/cli/context";
+import { trackWorkspace, trackTempDir } from "./globalSetup";
 import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
@@ -232,6 +233,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
+    trackWorkspace(workspaceId);
     console.log(`Workspace created: ${workspaceId}`);
 
     // Set workspace ID for apply operations
@@ -240,6 +242,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     // Create temp directory
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-e2e-"));
+    trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
 
     // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
@@ -275,27 +278,6 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       path.join(monorepoNodeModules, "@tailor-platform", "function-kysely-tailordb"),
       path.join(tailorPlatformDir, "function-kysely-tailordb"),
     );
-  }, 120000);
-
-  afterAll(async () => {
-    // Cleanup: remove temp directory and workspace
-    try {
-      // Remove temp directory
-      fs.rmSync(tempDir, { recursive: true, force: true });
-      console.log("✅ Cleaned up temp directory:", tempDir);
-    } catch (error) {
-      console.warn("⚠️  Failed to cleanup temp directory:", error);
-    }
-
-    try {
-      // Remove workspace
-      const accessToken = await loadAccessToken({ useProfile: false });
-      const client = await initOperatorClient(accessToken);
-      await client.deleteWorkspace({ workspaceId });
-      console.log("✅ Cleaned up workspace:", workspaceId);
-    } catch (error) {
-      console.warn("⚠️  Failed to cleanup workspace:", error);
-    }
   }, 120000);
 
   /**
