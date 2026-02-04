@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
+import { toSchemaOutput } from "@/utils/test/internal";
 import { createKyselyGenerator } from "./index";
 import type { TailorDBType, TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 
@@ -52,7 +53,7 @@ describe("KyselyGenerator integration tests", () => {
   describe("basic functionality tests", () => {
     it("processType method correctly processes basic TailorDBType", async () => {
       const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(mockBasicType),
+        type: parseTailorDBType(toSchemaOutput(mockBasicType)),
         namespace: "test-namespace",
       });
 
@@ -79,7 +80,7 @@ describe("KyselyGenerator integration tests", () => {
   describe("type mapping tests", () => {
     it("correctly maps enum type to Kysely type", async () => {
       const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(mockEnumType),
+        type: parseTailorDBType(toSchemaOutput(mockEnumType)),
         namespace: "test-namespace",
       });
 
@@ -89,7 +90,7 @@ describe("KyselyGenerator integration tests", () => {
 
     it("correctly processes nested object type", async () => {
       const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(mockNestedType),
+        type: parseTailorDBType(toSchemaOutput(mockNestedType)),
         namespace: "test-namespace",
       });
 
@@ -112,7 +113,7 @@ describe("KyselyGenerator integration tests", () => {
       });
 
       const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(testType),
+        type: parseTailorDBType(toSchemaOutput(testType)),
         namespace: "test-namespace",
       });
 
@@ -128,7 +129,7 @@ describe("KyselyGenerator integration tests", () => {
       });
 
       const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(arrayType),
+        type: parseTailorDBType(toSchemaOutput(arrayType)),
         namespace: "test-namespace",
       });
 
@@ -259,11 +260,11 @@ describe("KyselyGenerator integration tests", () => {
     it("complete integration test with multiple types", async () => {
       const types = {
         User: await kyselyGenerator.processType({
-          type: parseTailorDBType(mockBasicType),
+          type: parseTailorDBType(toSchemaOutput(mockBasicType)),
           namespace: "test-namespace",
         }),
         Status: await kyselyGenerator.processType({
-          type: parseTailorDBType(mockEnumType),
+          type: parseTailorDBType(toSchemaOutput(mockEnumType)),
           namespace: "test-namespace",
         }),
       };
@@ -299,7 +300,7 @@ describe("KyselyGenerator integration tests", () => {
 
   describe("error handling tests", () => {
     it("handles errors appropriately with invalid type definitions", async () => {
-      const validType = parseTailorDBType(mockBasicType);
+      const validType = parseTailorDBType(toSchemaOutput(mockBasicType));
       const invalidType: TailorDBType = {
         ...validType,
         name: "Invalid",
@@ -321,7 +322,7 @@ describe("KyselyGenerator integration tests", () => {
       });
 
       const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(unknownType),
+        type: parseTailorDBType(toSchemaOutput(unknownType)),
         namespace: "test-namespace",
       });
 

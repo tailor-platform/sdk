@@ -4,7 +4,6 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { normalizeGqlOperations } from "@/parser/service/tailordb";
 import {
   type MigrationDiff,
   type DiffChange,
@@ -258,7 +257,8 @@ function createSnapshotType(type: TailorDBType): SnapshotType {
       snapshotType.settings.bulkUpsert = type.settings.bulkUpsert;
     }
     if (type.settings.gqlOperations) {
-      const ops = normalizeGqlOperations(type.settings.gqlOperations);
+      // gqlOperations is already normalized by schema transform
+      const ops = type.settings.gqlOperations;
       snapshotType.settings.gqlOperations = {
         ...(ops.create !== undefined && {
           create: ops.create,

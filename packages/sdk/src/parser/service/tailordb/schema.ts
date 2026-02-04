@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
+import { GqlOperationsSchema } from "./gql-operations";
 import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "./types";
 
@@ -81,17 +82,7 @@ export const TailorDBTypeSchema = z.object({
         pluralForm: z.string().optional(),
         aggregation: z.boolean().optional(),
         bulkUpsert: z.boolean().optional(),
-        gqlOperations: z
-          .union([
-            z.literal("query"),
-            z.object({
-              create: z.boolean().optional(),
-              update: z.boolean().optional(),
-              delete: z.boolean().optional(),
-              read: z.boolean().optional(),
-            }),
-          ])
-          .optional(),
+        gqlOperations: GqlOperationsSchema.optional(),
       })
       .optional(),
     permissions: z.unknown(),
@@ -106,4 +97,21 @@ export const TailorDBTypeSchema = z.object({
       )
       .optional(),
   }),
+});
+
+const TailorDBMigrationConfigSchema = z.object({
+  directory: z.string(),
+  machineUser: z.string().optional(),
+});
+
+/**
+ * Schema for TailorDB service configuration.
+ * Normalizes gqlOperations from alias ("query") to object format.
+ */
+export const TailorDBServiceConfigSchema = z.object({
+  files: z.array(z.string()),
+  ignores: z.array(z.string()).optional(),
+  erdSite: z.string().optional(),
+  migration: TailorDBMigrationConfigSchema.optional(),
+  gqlOperations: GqlOperationsSchema.optional(),
 });
