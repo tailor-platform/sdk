@@ -1,5 +1,6 @@
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
+import { registerGeneratedType } from "./registry";
 import type { output } from "@/configure/types/helpers";
 import type { PluginBase, PluginProcessContext, PluginOutput } from "@/parser/plugin-config/types";
 
@@ -117,6 +118,12 @@ function processChangeset(
     reason: db.string({ optional: true }),
     ...db.fields.timestamps(),
   });
+
+  // Register generated types in the registry for later retrieval
+  registerGeneratedType(type, "request", changeRequest);
+  registerGeneratedType(type, "step", changeStep);
+  registerGeneratedType(type, "approval", changeApproval);
+  registerGeneratedType(type, "rework", changeReworkEvent);
 
   return {
     types: [changeRequest, changeStep, changeApproval, changeReworkEvent],

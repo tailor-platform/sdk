@@ -9,6 +9,7 @@
  */
 
 import { db, t } from "@/configure";
+import { registerGeneratedType } from "./registry";
 import type { PluginBase, StandalonePluginProcessContext } from "@/parser/plugin-config/types";
 
 /**
@@ -56,6 +57,9 @@ export const auditLogPlugin: PluginBase = {
         name: "idx_audit_target",
         fields: ["targetType", "targetId"],
       });
+
+    // Register generated type in the registry for later retrieval
+    registerGeneratedType(auditLogType);
 
     return {
       types: [auditLogType],

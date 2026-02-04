@@ -41,6 +41,11 @@
       "types": "./dist/plugin/builtin/changeset/index.d.mts",
       "import": "./dist/plugin/builtin/changeset/index.mjs",
       "default": "./dist/plugin/builtin/changeset/index.mjs"
+    },
+    "./audit-log-plugin": {
+      "types": "./dist/plugin/builtin/audit-log/index.d.mts",
+      "import": "./dist/plugin/builtin/audit-log/index.mjs",
+      "default": "./dist/plugin/builtin/audit-log/index.mjs"
     }
   },
   "scripts": {
