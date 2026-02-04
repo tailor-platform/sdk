@@ -81,7 +81,7 @@ function processChangeset(
 
   // ChangeStep - execution step
   const changeStep = db.type(`${typeName}ChangeStep`, {
-    request: db.uuid().index(),
+    request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
     iteration: db.int(),
     stepNo: db.int(),
     stepName: db.string(),
@@ -95,7 +95,7 @@ function processChangeset(
 
   // ChangeApproval - approval log (audit)
   const changeApproval = db.type(`${typeName}ChangeApproval`, {
-    request: db.uuid().index(),
+    request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
     iteration: db.int(),
     stepNo: db.int(),
     approver: db.uuid().index(),
@@ -109,7 +109,7 @@ function processChangeset(
 
   // ChangeReworkEvent - rework log
   const changeReworkEvent = db.type(`${typeName}ChangeReworkEvent`, {
-    request: db.uuid().index(),
+    request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
     iteration: db.int(),
     fromStepNo: db.int(),
     requestedBy: db.uuid().index(),

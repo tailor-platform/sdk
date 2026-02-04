@@ -52,4 +52,6 @@ export interface SeedTypeMetadata {
   linesDb: LinesDbMetadata;
   /** Generated type definition code for plugin-generated types (to embed in schema file) */
   pluginTypeDefinition?: string;
+  /** Types that this type has relations to (for dependency resolution) */
+  relationTargets?: string[];
 }

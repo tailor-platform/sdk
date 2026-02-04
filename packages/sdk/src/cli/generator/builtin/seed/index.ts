@@ -12,7 +12,9 @@ import {
   processLinesDb,
   generateLinesDbSchemaFile,
   generateLinesDbSchemaFileWithEmbeddedType,
+  generateLinesDbSchemaFileWithMultipleTypes,
   generatePluginTypeDefinition,
+  type GroupedTypeMetadata,
 } from "./lines-db-processor";
 import type { SeedTypeMetadata } from "./types";
 
@@ -288,6 +290,91 @@ ${namespaceEntitiesEntries}
 }
 
 /**
+ * Type entry for topological sort
+ */
+interface TypeEntry {
+  typeName: string;
+  metadata: SeedTypeMetadata;
+  relationTargets: string[];
+}
+
+/**
+ * Topological sort of types based on relation dependencies.
+ * Types that are depended on (relation targets) come first.
+ * @param types - Array of type entries
+ * @param groupTypeNames - Set of type names in the group for filtering
+ * @returns Sorted array of type entries (dependencies first)
+ */
+function topologicalSort(types: TypeEntry[], groupTypeNames: Set<string>): TypeEntry[] {
+  const typeMap = new Map<string, TypeEntry>();
+  for (const t of types) {
+    typeMap.set(t.typeName, t);
+  }
+
+  const visited = new Set<string>();
+  const result: TypeEntry[] = [];
+
+  const visit = (typeName: string) => {
+    if (visited.has(typeName)) return;
+    visited.add(typeName);
+
+    const entry = typeMap.get(typeName);
+    if (!entry) return;
+
+    // Visit dependencies first (types that this type references)
+    for (const target of entry.relationTargets) {
+      if (groupTypeNames.has(target)) {
+        visit(target);
+      }
+    }
+
+    result.push(entry);
+  };
+
+  // Visit all types
+  for (const t of types) {
+    visit(t.typeName);
+  }
+
+  return result;
+}
+
+/**
+ * Find all types that a given type depends on (directly or transitively).
+ * @param typeName - The type to find dependencies for
+ * @param sortedTypes - All types in dependency order
+ * @param groupTypeNames - Set of type names in the group for filtering
+ * @returns Array of dependency type names (not including the type itself)
+ */
+function findDependencies(
+  typeName: string,
+  sortedTypes: TypeEntry[],
+  groupTypeNames: Set<string>,
+): string[] {
+  const typeMap = new Map<string, TypeEntry>();
+  for (const t of sortedTypes) {
+    typeMap.set(t.typeName, t);
+  }
+
+  const dependencies = new Set<string>();
+
+  const collectDeps = (name: string) => {
+    const entry = typeMap.get(name);
+    if (!entry) return;
+
+    for (const target of entry.relationTargets) {
+      if (groupTypeNames.has(target) && target !== typeName && !dependencies.has(target)) {
+        dependencies.add(target);
+        collectDeps(target);
+      }
+    }
+  };
+
+  collectDeps(typeName);
+  return Array.from(dependencies);
+}
+
+/**
  * Factory function to create a Seed generator.
  * Combines GraphQL Ingest and lines-db schema generation.
  * @param options - Seed generator options
@@ -306,7 +393,16 @@ export function createSeedGenerator(
       const linesDb = processLinesDb(type, source);
       // Generate type definition for plugin-generated types (to embed in schema file)
       const pluginTypeDefinition = source.pluginId ? generatePluginTypeDefinition(type) : undefined;
-      return { gqlIngest, linesDb, pluginTypeDefinition };
+      // Collect relation targets for dependency resolution
+      const relationTargets = Object.values(type.forwardRelationships)
+        .map((rel) => rel.targetType)
+        .filter((target) => target !== type.name); // Exclude self-references
+      return {
+        gqlIngest,
+        linesDb,
+        pluginTypeDefinition,
+        relationTargets: relationTargets.length > 0 ? relationTargets : undefined,
+      };
     },
 
     processTailorDBNamespace: ({ types }) => types,
@@ -322,6 +418,20 @@ export function createSeedGenerator(
 
       const files: GeneratorResult["files"] = [];
 
+      // Group plugin-generated types by their source for combined schema generation
+      // Key: pluginId + originalFilePath, Value: array of types from that source
+      const pluginTypeGroups = new Map<
+        string,
+        {
+          typeName: string;
+          metadata: SeedTypeMetadata;
+          relationTargets: string[];
+        }[]
+      >();
+
+      // All plugin-generated type names for reference
+      const allPluginTypeNames = new Set<string>();
+
       for (const nsResult of input.tailordb) {
         if (!nsResult.types) continue;
 
@@ -331,7 +441,7 @@ export function createSeedGenerator(
         }
 
         for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
-          const { gqlIngest, linesDb, pluginTypeDefinition } = metadata;
+          const { gqlIngest, linesDb, pluginTypeDefinition, relationTargets } = metadata;
 
           entityDependencies[outputBaseDir][gqlIngest.name] = {
             namespace: gqlIngest.namespace,
@@ -355,33 +465,109 @@ export function createSeedGenerator(
             },
           );
 
-          // Generate lines-db schema file
-          const schemaOutputPath = path.join(
-            outputBaseDir,
-            "data",
-            `${linesDb.typeName}.schema.ts`,
-          );
-
-          let schemaContent: string;
-          if (pluginTypeDefinition) {
-            // Plugin-generated type: embed type definition directly in schema file
-            schemaContent = generateLinesDbSchemaFileWithEmbeddedType(
-              linesDb,
-              pluginTypeDefinition,
-            );
+          // Collect plugin-generated types for grouping
+          if (pluginTypeDefinition && linesDb.pluginSource) {
+            const groupKey = `${linesDb.pluginSource.pluginId}:${linesDb.pluginSource.originalFilePath}`;
+            if (!pluginTypeGroups.has(groupKey)) {
+              pluginTypeGroups.set(groupKey, []);
+            }
+            pluginTypeGroups.get(groupKey)!.push({
+              typeName: linesDb.typeName,
+              metadata,
+              relationTargets: relationTargets || [],
+            });
+            allPluginTypeNames.add(linesDb.typeName);
           } else {
-            // User-defined type: import from source file
+            // User-defined type: generate individual schema file
+            const schemaOutputPath = path.join(
+              outputBaseDir,
+              "data",
+              `${linesDb.typeName}.schema.ts`,
+            );
             const relativePath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
             const typeImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
               ? relativePath.replace(/\.ts$/, "")
               : `./${relativePath.replace(/\.ts$/, "")}`;
-            schemaContent = generateLinesDbSchemaFile(linesDb, typeImportPath);
-          }
+            const schemaContent = generateLinesDbSchemaFile(linesDb, typeImportPath);
 
-          files.push({
-            path: schemaOutputPath,
-            content: schemaContent,
-          });
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          }
+        }
+      }
+
+      // Generate schema files for plugin-generated types
+      // Types with inter-type relations are grouped into a single file
+      const outputBaseDir = options.distPath;
+      for (const [_groupKey, groupTypes] of pluginTypeGroups) {
+        // Filter relation targets to only include types within the same plugin group
+        const groupTypeNames = new Set(groupTypes.map((t) => t.typeName));
+
+        // Check if any type in the group has relations to other types in the same group
+        const hasInternalRelations = groupTypes.some((t) =>
+          t.relationTargets.some((target) => groupTypeNames.has(target)),
+        );
+
+        if (hasInternalRelations && groupTypes.length > 1) {
+          // Sort types by dependency order (types that are relation targets come first)
+          const sortedTypes = topologicalSort(groupTypes, groupTypeNames);
+
+          // Generate a combined schema file for each type (each type gets its own file,
+          // but includes all dependency type definitions)
+          for (const typeEntry of sortedTypes) {
+            const { typeName, metadata } = typeEntry;
+
+            // Find all types that this type depends on (directly or indirectly)
+            const dependencyTypes = findDependencies(typeName, sortedTypes, groupTypeNames);
+
+            // Include the type itself and its dependencies
+            const typesToInclude: GroupedTypeMetadata[] = [];
+            for (const depType of dependencyTypes) {
+              const depEntry = sortedTypes.find((t) => t.typeName === depType);
+              if (depEntry && depEntry.metadata.pluginTypeDefinition) {
+                typesToInclude.push({
+                  metadata: depEntry.metadata.linesDb,
+                  typeDefinition: depEntry.metadata.pluginTypeDefinition,
+                });
+              }
+            }
+            // Add the main type itself
+            if (metadata.pluginTypeDefinition) {
+              typesToInclude.push({
+                metadata: metadata.linesDb,
+                typeDefinition: metadata.pluginTypeDefinition,
+              });
+            }
+
+            const schemaOutputPath = path.join(outputBaseDir, "data", `${typeName}.schema.ts`);
+            const schemaContent = generateLinesDbSchemaFileWithMultipleTypes(
+              typesToInclude,
+              typeName,
+            );
+
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          }
+        } else {
+          // No internal relations or single type: generate individual schema files
+          for (const { typeName, metadata } of groupTypes) {
+            if (metadata.pluginTypeDefinition) {
+              const schemaOutputPath = path.join(outputBaseDir, "data", `${typeName}.schema.ts`);
+              const schemaContent = generateLinesDbSchemaFileWithEmbeddedType(
+                metadata.linesDb,
+                metadata.pluginTypeDefinition,
+              );
+
+              files.push({
+                path: schemaOutputPath,
+                content: schemaContent,
+              });
+            }
+          }
         }
       }
 
