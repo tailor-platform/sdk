@@ -16,10 +16,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll, afterAll } from "vitest";
+import { describe, test, expect, beforeAll } from "vitest";
 import { initOperatorClient, type OperatorClient } from "../src/cli/client";
 import { loadAccessToken } from "../src/cli/context";
 import { apply } from "../src/cli/apply";
+import { trackWorkspace, trackTempDir } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +66,7 @@ describe("E2E: Service deletion order", () => {
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
+    trackWorkspace(workspaceId);
     console.log(`Workspace created: ${workspaceId}`);
 
     // Set workspace ID for apply operations
@@ -73,6 +75,7 @@ describe("E2E: Service deletion order", () => {
     // Create temp directory and symlink @tailor-platform/sdk for module resolution
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-test-"));
+    trackTempDir(tempDir);
 
     // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
     process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
@@ -80,24 +83,6 @@ describe("E2E: Service deletion order", () => {
     fs.mkdirSync(nodeModulesDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
   }, 120000); // 2 minute timeout for workspace creation
-
-  afterAll(async () => {
-    // Cleanup temp directory
-    if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-
-    // Delete workspace
-    if (client && workspaceId) {
-      console.log(`Deleting workspace "${workspaceId}"...`);
-      try {
-        await client.deleteWorkspace({ workspaceId });
-        console.log("Workspace deleted successfully.");
-      } catch (error) {
-        console.error("Failed to delete workspace:", error);
-      }
-    }
-  }, 120000); // 2 minute timeout for workspace deletion
 
   /**
    * Helper to create a test config file with unique name to avoid Node.js module caching
