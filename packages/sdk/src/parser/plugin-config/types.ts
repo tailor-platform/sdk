@@ -1,4 +1,4 @@
-import type { TailorAnyDBType as TailorDBType } from "@/configure/services/tailordb";
+import type { TailorAnyDBType } from "@/configure/services/tailordb";
 import type { TailorAnyField } from "@/configure/types";
 
 /**
@@ -21,7 +21,7 @@ import type { TailorAnyField } from "@/configure/types";
 export interface PluginConfigs {}
 
 /**
- * Plugin attachment stored on TailorDBType instances.
+ * Plugin attachment stored on TailorAnyDBType instances.
  * This is the configuration passed via `.plugin()` method.
  */
 export interface PluginAttachment {
@@ -34,7 +34,7 @@ export interface PluginAttachment {
  */
 export interface PluginProcessContext<Config = unknown> {
   /** The raw TailorDB type being processed */
-  type: TailorDBType;
+  type: TailorAnyDBType;
   /** Plugin-specific configuration passed via .plugin() method */
   config: Config;
   /** Namespace of the TailorDB type */

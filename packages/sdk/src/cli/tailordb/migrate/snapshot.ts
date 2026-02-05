@@ -207,7 +207,7 @@ export function getMigrationFilePath(
  * @returns {SnapshotFieldConfig} Snapshot field configuration
  */
 function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
-  // Note: Use `!== false` to match generateTailorDBTypeManifest behavior
+  // Note: Use `!== false` to match generateParsedTailorDBTypeManifest behavior
   // where undefined defaults to true (required by default in SDK)
   const config: SnapshotFieldConfig = {
     type: field.config.type,
@@ -1196,7 +1196,7 @@ export function filterTypeToSnapshot(type: TailorDBType, snapshotType: SnapshotT
 // ============================================================================
 
 /**
- * Convert remote TailorDBType to SnapshotFieldConfig for comparison
+ * Convert remote ParsedTailorDBType to SnapshotFieldConfig for comparison
  * @param {ProtoTailorDBType} remoteType - Remote TailorDB type from API
  * @returns {Record<string, SnapshotFieldConfig>} Converted field configs
  */
@@ -1327,7 +1327,7 @@ const SYSTEM_FIELDS = new Set(["id"]);
 
 /**
  * Compare remote TailorDB types with a local snapshot
- * @param {ProtoTailorDBType[]} remoteTypes - Remote types from listTailorDBTypes API
+ * @param {ProtoTailorDBType[]} remoteTypes - Remote types from listParsedTailorDBTypes API
  * @param {SchemaSnapshot} snapshot - Local schema snapshot
  * @returns {SchemaDrift[]} List of drifts detected
  */

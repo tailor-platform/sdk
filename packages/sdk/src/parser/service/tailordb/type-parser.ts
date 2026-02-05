@@ -38,6 +38,8 @@ export type TypeSourceInfo = Record<
     originalExportName?: string;
     /** Generated type kind for getGeneratedType() API (e.g., "request", "step", "approval", "rework") */
     generatedTypeKind?: string;
+    /** Plugin config used to generate this type (for plugin-generated types) */
+    pluginConfig?: unknown;
   }
 >;
 

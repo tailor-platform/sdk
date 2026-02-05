@@ -1,7 +1,10 @@
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { IdProviderConfig, OAuth2ClientInput } from "@/parser/service/auth/types";
 import type { TailorDBType } from "@/parser/service/tailordb/types";
+
+export type { PluginAttachment } from "@/parser/plugin-config/types";
 
 // ========================================
 // Basic types
@@ -90,6 +93,8 @@ export interface TypeSourceInfoEntry {
   originalExportName?: string;
   /** Generated type kind for getGeneratedType() API (e.g., "request", "step", "approval", "rework") */
   generatedTypeKind?: string;
+  /** Plugin config used to generate this type (for plugin-generated types) */
+  pluginConfig?: unknown;
 }
 
 // ========================================
@@ -101,6 +106,8 @@ export interface TailorDBProcessMethods<T, Ts> {
     type: TailorDBType;
     namespace: string;
     source: TypeSourceInfoEntry;
+    /** Plugin attachments configured on this type via .plugin() method */
+    plugins: readonly PluginAttachment[];
   }): T | Promise<T>;
 
   processTailorDBNamespace?(args: {
@@ -308,6 +315,7 @@ export interface AnyCodeGenerator {
     type: TailorDBType;
     namespace: string;
     source: TypeSourceInfoEntry;
+    plugins: readonly PluginAttachment[];
   }): unknown | Promise<unknown>;
 
   processTailorDBNamespace?(args: {

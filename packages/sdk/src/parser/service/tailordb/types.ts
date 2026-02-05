@@ -19,8 +19,8 @@ export type { RelationType } from "./relation";
 export type { TypeSourceInfo } from "./type-parser";
 export type {
   TailorAnyDBField,
+  TailorAnyDBType,
   TailorDBField,
-  TailorDBType as TailorDBTypeConfig,
   DBFieldMetadata,
   Hook,
   TailorTypePermission,

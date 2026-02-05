@@ -1,19 +1,18 @@
 import { db } from "@/configure/services/tailordb";
 import { unauthenticatedTailorUser } from "@/configure/types";
-import type { TailorAnyDBType } from "@/configure/services/tailordb";
 import type { TailorAnyField } from "@/configure/types";
 import type {
   PluginBase,
   PluginOutput,
   StandalonePluginProcessContext,
 } from "@/parser/plugin-config/types";
-import type { TailorDBTypeConfig as TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Context for processing a single plugin attachment on a raw TailorDBType
  */
 export interface ProcessAttachmentContext {
-  type: TailorDBType;
+  type: TailorAnyDBType;
   config: unknown;
   namespace: string;
   pluginId: string;
@@ -120,12 +119,13 @@ export class PluginManager {
    * Process standalone plugins that don't require a source type.
    * This method is called once per namespace for plugins with processStandalone method.
    * @param namespace - The target namespace for generated types
-   * @returns Array of results with plugin outputs
+   * @returns Array of results with plugin outputs and configs
    */
   async processStandalonePlugins(
     namespace: string,
-  ): Promise<Array<{ pluginId: string; result: ProcessAttachmentResult }>> {
-    const results: Array<{ pluginId: string; result: ProcessAttachmentResult }> = [];
+  ): Promise<Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }>> {
+    const results: Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }> =
+      [];
 
     for (const [pluginId, plugin] of this.plugins) {
       // Skip plugins without processStandalone method
@@ -144,6 +144,7 @@ export class PluginManager {
             .join("; ");
           results.push({
             pluginId,
+            config,
             result: {
               success: false,
               error: `Invalid config for standalone plugin "${plugin.id}": ${errorDetails}`,
@@ -162,6 +163,7 @@ export class PluginManager {
       const output = await plugin.processStandalone(context);
       results.push({
         pluginId,
+        config,
         result: { success: true, output },
       });
     }

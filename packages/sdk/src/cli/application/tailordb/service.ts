@@ -9,7 +9,7 @@ import {
   type TailorDBServiceConfig,
   type TailorDBTypeSchemaOutput,
   type TailorDBType,
-  type TailorDBTypeConfig,
+  type TailorAnyDBType,
 } from "@/parser/service/tailordb";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
@@ -60,13 +60,13 @@ export function createTailorDBService(
    * @param sourceFilePath - The file path where the type was loaded from
    */
   const processPluginsForType = async (
-    rawType: TailorDBTypeConfig,
+    rawType: TailorAnyDBType,
     attachments: PluginAttachment[],
     sourceFilePath: string,
   ): Promise<void> => {
     if (!pluginManager) return;
 
-    let currentType: TailorDBTypeConfig = rawType;
+    let currentType: TailorAnyDBType = rawType;
 
     for (const attachment of attachments) {
       const result = await pluginManager.processAttachment({
@@ -111,6 +111,7 @@ export function createTailorDBService(
           originalFilePath: sourceFilePath,
           originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
           generatedTypeKind: kind,
+          pluginConfig: attachment.config,
         };
 
         logger.log(
@@ -208,7 +209,7 @@ export function createTailorDBService(
         rawTypes[standaloneKey] = {};
       }
 
-      for (const { pluginId, result } of results) {
+      for (const { pluginId, config, result } of results) {
         if (!result.success) {
           logger.error(result.error);
           throw new Error(result.error);
@@ -225,6 +226,7 @@ export function createTailorDBService(
             pluginId,
             pluginImportPath: pluginManager.getPluginImportPath(pluginId),
             generatedTypeKind: kind,
+            pluginConfig: config,
           };
 
           logger.log(

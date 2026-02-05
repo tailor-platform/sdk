@@ -25,7 +25,7 @@ import { commonArgs, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { Plugin } from "@/parser/plugin-config";
-import type { PluginBase } from "@/parser/plugin-config/types";
+import type { PluginAttachment, PluginBase } from "@/parser/plugin-config/types";
 import type { TailorDBType, TypeSourceInfo } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
@@ -33,6 +33,7 @@ export type { CodeGenerator } from "@/cli/generator/types";
 type TypeInfo = {
   types: Record<string, TailorDBType>;
   sourceInfo: TypeSourceInfo;
+  pluginAttachments: ReadonlyMap<string, readonly PluginAttachment[]>;
 };
 
 /**
@@ -169,6 +170,7 @@ export function createGenerationManager(
             type,
             namespace,
             source: typeInfo.sourceInfo[typeName],
+            plugins: typeInfo.pluginAttachments.get(typeName) ?? [],
           });
         } catch (error) {
           logger.error(
@@ -486,6 +488,7 @@ export function createGenerationManager(
           services.tailordb[namespace] = {
             types: db.getTypes(),
             sourceInfo: db.getTypeSourceInfo(),
+            pluginAttachments: db.getPluginAttachments(),
           };
         } catch (error) {
           logger.error(`Error loading types for TailorDB service ${styles.bold(namespace)}`);
