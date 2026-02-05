@@ -122,7 +122,7 @@ function generateExecutors(
   return [
     {
       name: `${sourceType.name.toLowerCase()}-archive-on-delete`,
-      executorFile: "on-delete",
+      executorExport: "onDelete",
       context: ctx,
     },
   ];

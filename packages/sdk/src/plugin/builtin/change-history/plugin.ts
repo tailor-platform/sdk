@@ -79,17 +79,17 @@ function generateTypes(type: TailorAnyDBType): Record<GeneratedTypeKind, TailorA
 
 /**
  * Generate executors for tracking changes to the source type.
- * Uses the new file-based executor format with withPluginContext.
+ * Uses the dynamic import executor format with withPluginContext.
  * @param sourceType - The source TailorDB type
  * @param namespace - The namespace for the TailorDB types
  * @param generatedTypes - Generated types from generateTypes
- * @returns Array of executor definitions with file references
+ * @returns Array of executor definitions with dynamic import references
  */
 function generateExecutors(
   sourceType: TailorAnyDBType,
   namespace: string,
   generatedTypes: Record<GeneratedTypeKind, TailorAnyDBType>,
-): Array<{ name: string; executorFile: string; context: PluginExecutorContext }> {
+): Array<{ name: string; executorExport: string; context: PluginExecutorContext }> {
   const ctx: ChangeHistoryContext = {
     sourceType,
     historyType: generatedTypes.history,
@@ -99,17 +99,17 @@ function generateExecutors(
   return [
     {
       name: `${sourceType.name.toLowerCase()}-history-on-create`,
-      executorFile: "on-create",
+      executorExport: "onCreate",
       context: ctx,
     },
     {
       name: `${sourceType.name.toLowerCase()}-history-on-update`,
-      executorFile: "on-update",
+      executorExport: "onUpdate",
       context: ctx,
     },
     {
       name: `${sourceType.name.toLowerCase()}-history-on-delete`,
-      executorFile: "on-delete",
+      executorExport: "onDelete",
       context: ctx,
     },
   ];

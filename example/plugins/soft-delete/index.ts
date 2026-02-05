@@ -27,3 +27,12 @@
 
 export { softDeletePlugin, getGeneratedType } from "./plugin";
 export type { GeneratedTypeKind } from "./plugin";
+
+/**
+ * Executor factories for soft-delete plugin.
+ * Uses dynamic imports to enable tree-shaking when bundled with inlineDynamicImports.
+ */
+export const executors = {
+  /** @returns Dynamic import of on-delete executor */
+  onDelete: () => import("./executors/on-delete"),
+};

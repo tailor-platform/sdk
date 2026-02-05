@@ -245,20 +245,18 @@ export type PluginExecutorContext = PluginExecutorContextBase & {
 };
 
 /**
- * Executor definition with file reference (new format).
+ * Executor definition with dynamic import reference (new format).
  * Used with withPluginContext for type-safe executor definitions in separate files.
  */
 export interface PluginGeneratedExecutorWithFile<Ctx = PluginExecutorContext> {
   /** Executor name (used for generated file name) */
   name: string;
   /**
-   * Executor file path (without extension).
-   * If no "/" is included, resolved as: {plugin.importPath}/executors/{executorFile}
-   * If "/" is included, resolved as: {plugin.importPath}/{executorFile}
-   * @example "on-create" → "{importPath}/executors/on-create"
-   * @example "handlers/on-create" → "{importPath}/handlers/on-create"
+   * Key in the plugin's `executors` object that returns a dynamic import.
+   * The generator will call `executors.{executorExport}()` to get the factory.
+   * @example "onCreate" → `const { default: factory } = await executors.onCreate();`
    */
-  executorFile: string;
+  executorExport: string;
   /**
    * Context to pass to the executor factory.
    * Can include TailorAnyDBType objects - these will be handled specially
@@ -287,14 +285,14 @@ export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorLegacy;
 
 /**
- * Type guard to check if executor uses the new file-based format.
+ * Type guard to check if executor uses the new dynamic import format.
  * @param executor - Executor definition to check
- * @returns True if executor uses file-based format
+ * @returns True if executor uses dynamic import format
  */
 export function isPluginExecutorWithFile(
   executor: PluginGeneratedExecutor,
 ): executor is PluginGeneratedExecutorWithFile {
-  return "executorFile" in executor && "context" in executor;
+  return "executorExport" in executor && "context" in executor;
 }
 
 /**

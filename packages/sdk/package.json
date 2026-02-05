@@ -52,10 +52,6 @@
       "import": "./dist/plugin/builtin/change-history/index.mjs",
       "default": "./dist/plugin/builtin/change-history/index.mjs"
     },
-    "./change-history-plugin/executors/*": {
-      "types": "./dist/plugin/builtin/change-history/executors/*.d.mts",
-      "import": "./dist/plugin/builtin/change-history/executors/*.mjs"
-    },
     "./plugin": {
       "types": "./dist/plugin/index.d.mts",
       "import": "./dist/plugin/index.mjs",
