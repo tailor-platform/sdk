@@ -1,4 +1,7 @@
 export interface TypeWithFiles {
+  NestedProfile: {
+    fields: "avatar";
+  };
   SalesOrder: {
     fields: "receipt" | "form";
   };
@@ -11,6 +14,7 @@ export interface TypeWithFiles {
 }
 
 const namespaces: Record<keyof TypeWithFiles, string> = {
+  NestedProfile: "tailordb",
   SalesOrder: "tailordb",
   User: "tailordb",
   Event: "analyticsdb",

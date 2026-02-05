@@ -1,20 +1,20 @@
 import { t } from "@tailor-platform/sdk";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 import { defineSchema } from "@toiroakr/lines-db";
-import { nestedProfile } from "../../tailordb/nested";
+import { profileComment } from "../../tailordb/profileReference";
 
 const schemaType = t.object({
-  ...nestedProfile.pickFields(["id","createdAt"], { optional: true }),
-  ...nestedProfile.omitFields(["id","createdAt"]),
+  ...profileComment.pickFields(["id","createdAt"], { optional: true }),
+  ...profileComment.omitFields(["id","createdAt"]),
 });
 
-const hook = createTailorDBHook(nestedProfile);
+const hook = createTailorDBHook(profileComment);
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),
   {
     foreignKeys: [
-      {"column":"ownerID","references":{"table":"User","column":"id"}},
+      {"column":"profileID","references":{"table":"NestedProfile","column":"id"}},
     ],
   }
 );

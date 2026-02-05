@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/ProfileComment.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/ProfileComment.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

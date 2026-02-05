@@ -1,4 +1,4 @@
-import { createResolver, t } from "@tailor-platform/sdk";
+import { createResolver, t, toResolverOutput } from "@tailor-platform/sdk";
 import { nestedProfile } from "../tailordb/nested";
 
 const inputFields = {
@@ -11,12 +11,12 @@ export default createResolver({
   description: "Pass Through - Nested Profile Type(Create)",
   input: {
     id: t.uuid({ optional: true }),
-    input: t.object(inputFields),
+    input: t.object(inputFields).typeName("PassThroughInput"),
   },
   body: ({ input }) => ({
     ...input.input,
     id: input.id ?? crypto.randomUUID(),
     createdAt: new Date(),
   }),
-  output: nestedProfile.fields,
+  output: toResolverOutput(nestedProfile),
 });

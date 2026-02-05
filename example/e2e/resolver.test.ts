@@ -151,6 +151,7 @@ describe("controlplane", async () => {
     // Verify field descriptions from TailorDBField
     const inputType = passThrough?.inputs?.find((i) => i.name === "input");
     expect(inputType?.type?.kind).toBe("UserDefined");
+    expect(inputType?.type?.name).toBe("PassThroughInput");
 
     // Verify response field descriptions
     const userInfoResponse = passThrough?.response?.type?.fields?.find(
@@ -384,6 +385,144 @@ describe("dataplane", () => {
       `;
       const result = await graphQLClient.rawRequest(query);
       expect(result.errors).toBeDefined();
+    });
+
+    test("verifies output typeName via GraphQL introspection", async () => {
+      const introspectionQuery = gql`
+        query {
+          __type(name: "Query") {
+            fields {
+              name
+              type {
+                name
+                kind
+                ofType {
+                  name
+                }
+              }
+            }
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(introspectionQuery);
+      expect(result.errors).toBeUndefined();
+
+      const queryType = result.data as {
+        __type: {
+          fields: {
+            name: string;
+            type: { name: string | null; kind: string; ofType: { name: string } | null };
+          }[];
+        };
+      };
+      const passThroughField = queryType.__type.fields.find((f) => f.name === "passThrough");
+      expect(passThroughField).toBeDefined();
+
+      // Verify the output type name
+      const outputTypeName = passThroughField?.type.name ?? passThroughField?.type.ofType?.name;
+      expect(outputTypeName).toBe("NestedProfile");
+    });
+
+    test("toResolverOutput produces types matching TailorDB introspection", async () => {
+      // Helper to get field type name
+      const getTypeName = (
+        field: { type: { name: string | null; ofType: { name: string } | null } } | undefined,
+      ) => field?.type?.name ?? field?.type?.ofType?.name;
+
+      // Get the passThrough resolver's output type name
+      const schemaQuery = gql`
+        query {
+          __schema {
+            queryType {
+              fields {
+                name
+                type {
+                  name
+                  ofType {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      const schemaResult = await graphQLClient.rawRequest(schemaQuery);
+      const queryFields = (
+        schemaResult.data as {
+          __schema: {
+            queryType: {
+              fields: {
+                name: string;
+                type: { name: string | null; ofType: { name: string } | null };
+              }[];
+            };
+          };
+        }
+      ).__schema.queryType.fields;
+      const passThroughField = queryFields.find((f) => f.name === "passThrough");
+      const passThroughTypeName = getTypeName(passThroughField);
+
+      // Get nested field types for passThrough output
+      const typeQuery = gql`
+        query GetType($name: String!) {
+          __type(name: $name) {
+            fields {
+              name
+              type {
+                name
+                ofType {
+                  name
+                }
+              }
+            }
+          }
+        }
+      `;
+      const passThroughTypeResult = await graphQLClient.rawRequest(typeQuery, {
+        name: passThroughTypeName,
+      });
+      const passThroughFields = (
+        passThroughTypeResult.data as {
+          __type: {
+            fields: {
+              name: string;
+              type: { name: string | null; ofType: { name: string } | null };
+            }[];
+          };
+        }
+      ).__type.fields;
+
+      // Get TailorDB NestedProfile type for comparison
+      const tailorDbResult = await graphQLClient.rawRequest(typeQuery, { name: "NestedProfile" });
+      const tailorDbFields = (
+        tailorDbResult.data as {
+          __type: {
+            fields: {
+              name: string;
+              type: { name: string | null; ofType: { name: string } | null };
+            }[];
+          };
+        }
+      ).__type.fields;
+
+      // Verify field types match (including backward relations from new types)
+      const fieldsToCheck = [
+        "userInfo", // nested object
+        "metadata", // nested object
+        "avatar", // file field
+        "ownerID", // n-1 relation (foreign key)
+        "owner", // n-1 relation (navigation property)
+        "detail", // 1-1 backward relation (from ProfileDetail)
+        "comments", // n-1 backward relation (from ProfileComment)
+      ];
+      for (const fieldName of fieldsToCheck) {
+        const passThroughFieldType = getTypeName(
+          passThroughFields.find((f) => f.name === fieldName),
+        );
+        const tailorDbFieldType = getTypeName(tailorDbFields.find((f) => f.name === fieldName));
+        expect(passThroughFieldType).toBe(tailorDbFieldType);
+      }
     });
   });
 
