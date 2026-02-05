@@ -22,6 +22,7 @@ import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { PluginManager } from "@/plugin/manager";
 import { commonArgs, withCommonArgs } from "../args";
+import { generatePluginExecutorFiles } from "./plugin-executor-generator";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { Plugin } from "@/parser/plugin-config";
@@ -494,13 +495,22 @@ export function createGenerationManager(
         }
       }
 
+      // Phase 1.5: Generate plugin executor TypeScript files
+      // This must happen after TailorDB types are loaded since plugins process during type loading
+      const pluginExecutors = pluginManager?.getPluginGeneratedExecutors() ?? [];
+      const pluginExecutorOutputDir = path.join(getDistDir(), "plugin-executors");
+      const generatedExecutorFiles = generatePluginExecutorFiles(
+        pluginExecutors,
+        pluginExecutorOutputDir,
+      );
+
       // Phase 2: Auth resolveNamespaces (depends on TailorDB)
       if (app.authService) {
         await app.authService.resolveNamespaces();
       }
 
       // Add blank line after TailorDB types loaded
-      if (app.tailorDBServices.length > 0) {
+      if (app.tailorDBServices.length > 0 || generatedExecutorFiles.length > 0) {
         logger.newline();
       }
 
@@ -540,8 +550,10 @@ export function createGenerationManager(
 
       // Phase 6: Load Executors (can now import generated files)
       await application.executorService?.loadExecutors();
-      // Load plugin-generated executors (adds to internal executors record)
-      application.executorService?.loadPluginExecutors();
+      // Load plugin-generated executors from generated TypeScript files
+      if (generatedExecutorFiles.length > 0) {
+        await application.executorService?.loadPluginExecutorFiles(generatedExecutorFiles);
+      }
       // Get all executors (file-based and plugin-generated)
       const allExecutors = application.executorService?.getExecutors() ?? {};
       Object.entries(allExecutors).forEach(([key, executor]) => {

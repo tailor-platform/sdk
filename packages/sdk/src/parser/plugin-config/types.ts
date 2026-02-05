@@ -139,12 +139,31 @@ export type PluginTriggerConfig =
   | PluginIncomingWebhookTriggerConfig;
 
 /**
+ * Inject value types supported for plugin executor injection.
+ * These values are serialized as const declarations in the generated file.
+ */
+export type PluginInjectValue = string | number | boolean | null;
+
+/**
+ * Inject map for plugin executor.
+ * Keys become const variable names in the generated file.
+ */
+export type PluginInjectMap = Record<string, PluginInjectValue>;
+
+/**
  * Function operation configuration for plugin-generated executors
  */
 export interface PluginFunctionOperationConfig {
   kind: "function";
   /** Function body code as string */
   body: string;
+  /**
+   * Variables to inject into the generated file scope.
+   * These become const declarations at the top of the generated file,
+   * allowing the function body to reference them.
+   * @example { namespace: "tailordb", historyTypeName: "CustomerHistory" }
+   */
+  inject?: PluginInjectMap;
 }
 
 /**
@@ -384,11 +403,19 @@ export interface PluginGraphQLOperation<Args> {
 /**
  * Function operation for plugin executors
  */
-export interface PluginFunctionOperation<Args> {
+export interface PluginFunctionOperation<Args, Inject extends PluginInjectMap = PluginInjectMap> {
   kind: "function";
+  /**
+   * Variables to inject into the generated file scope.
+   * These become const declarations at the top of the generated file,
+   * allowing the function body to reference them by name.
+   * @example { namespace: "tailordb", historyTypeName: "CustomerHistory" }
+   */
+  inject?: Inject;
   /**
    * Function body that receives trigger args.
    * The function will be serialized to a string.
+   * Can reference variables defined in `inject` by their names.
    */
   body: (args: Args) => unknown;
 }
@@ -396,7 +423,9 @@ export interface PluginFunctionOperation<Args> {
 /**
  * Operation types for plugin executors
  */
-export type PluginOperation<Args> = PluginGraphQLOperation<Args> | PluginFunctionOperation<Args>;
+export type PluginOperation<Args, Inject extends PluginInjectMap = PluginInjectMap> =
+  | PluginGraphQLOperation<Args>
+  | PluginFunctionOperation<Args, Inject>;
 
 /**
  * Configuration for creating a plugin executor

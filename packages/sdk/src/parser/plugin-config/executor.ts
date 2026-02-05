@@ -10,6 +10,7 @@ import type {
   PluginOperation,
   PluginExecutorConfig,
   PluginDBTypeShape,
+  PluginInjectMap,
 } from "./types";
 
 /**
@@ -87,23 +88,22 @@ function serializeFunction(fn: SerializableFunction): string {
  *   description: "Records creation history for User",
  *   trigger: pluginRecordCreatedTrigger({ type: userType }),
  *   operation: {
- *     kind: "graphql",
- *     query: `mutation CreateUserHistory($input: UserHistoryCreateInput!) {
- *       createUserHistory(input: $input) { id }
- *     }`,
- *     variables: (args) => ({
- *       input: {
- *         recordId: args.newRecord.id,
- *         action: "CREATE",
- *       }
- *     }),
+ *     kind: "function",
+ *     inject: { namespace: "tailordb", historyTypeName: "UserHistory" },
+ *     body: async (args) => {
+ *       // namespace and historyTypeName are available from inject
+ *       const client = new tailordb.Client({ namespace });
+ *       await client.queryObject(`INSERT INTO "${historyTypeName}" ...`, [...]);
+ *     },
  *   },
  * });
  * ```
  */
-export function createPluginExecutor<Args, O extends PluginOperation<Args>>(
-  config: PluginExecutorConfig<Args, O>,
-): PluginGeneratedExecutor {
+export function createPluginExecutor<
+  Args,
+  Inject extends PluginInjectMap,
+  O extends PluginOperation<Args, Inject>,
+>(config: PluginExecutorConfig<Args, O>): PluginGeneratedExecutor {
   const { name, description, trigger, operation } = config;
 
   // Convert trigger (remove __args marker)
@@ -125,6 +125,7 @@ export function createPluginExecutor<Args, O extends PluginOperation<Args>>(
     pluginOperation = {
       kind: "function",
       body: serializeFunction(operation.body),
+      inject: operation.inject,
     };
   }
 

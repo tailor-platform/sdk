@@ -11,7 +11,8 @@ describe("controlplane", async () => {
 
   test("executor applied", async () => {
     const { executors } = await client.listExecutorExecutors({ workspaceId });
-    expect(executors.length).toBe(5);
+    // 5 user executors + 3 plugin executors (customer-history-on-create/update/delete)
+    expect(executors.length).toBe(8);
 
     const salesOrderCreated = executors.find((e) => e.name === "sales-order-created");
     expect(salesOrderCreated).toMatchObject({

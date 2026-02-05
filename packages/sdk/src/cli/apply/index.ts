@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { defineApplication } from "@/cli/application";
@@ -16,6 +18,7 @@ import {
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { PluginManager } from "@/plugin/manager";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
@@ -104,8 +107,21 @@ export async function apply(options?: ApplyOptions) {
       await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
     }
   }
+  // Discover plugin executor files before bundling
+  let pluginExecutorFiles: string[] = [];
+  const pluginExecutorDir = path.join(getDistDir(), "plugin-executors");
+  if (fs.existsSync(pluginExecutorDir)) {
+    pluginExecutorFiles = fs
+      .readdirSync(pluginExecutorDir)
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => path.join(pluginExecutorDir, f));
+  }
+
   if (application.executorService) {
-    await buildExecutor(application.executorService.config, triggerContext);
+    await buildExecutor(application.executorService.config, triggerContext, pluginExecutorFiles);
+  } else if (pluginExecutorFiles.length > 0) {
+    // Plugin executors exist but no user executor config - bundle plugin executors only
+    await buildExecutor({ files: [] }, triggerContext, pluginExecutorFiles);
   }
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
@@ -143,8 +159,10 @@ export async function apply(options?: ApplyOptions) {
   }
   if (application.executorService) {
     await application.executorService.loadExecutors();
-    // Load plugin-generated executors
-    application.executorService.loadPluginExecutors();
+    // Load plugin-generated executors from generated TypeScript files
+    if (pluginExecutorFiles.length > 0) {
+      await application.executorService.loadPluginExecutorFiles(pluginExecutorFiles);
+    }
   }
   // Print workflow loading logs last (workflows were already loaded for bundling)
   if (workflowResult) {
@@ -297,8 +315,12 @@ async function buildPipeline(
   await bundleResolvers(namespace, config, triggerContext);
 }
 
-async function buildExecutor(config: FileLoadConfig, triggerContext?: TriggerContext) {
-  await bundleExecutors(config, triggerContext);
+async function buildExecutor(
+  config: FileLoadConfig,
+  triggerContext?: TriggerContext,
+  additionalFiles?: string[],
+) {
+  await bundleExecutors({ config, triggerContext, additionalFiles });
 }
 
 async function buildWorkflow(

@@ -85,11 +85,21 @@ function generateTypes(type: TailorAnyDBType): Record<GeneratedTypeKind, TailorA
 /**
  * Generate executors for tracking changes to the source type.
  * @param type - The source TailorDB type
+ * @param _namespace - The namespace for the TailorDB types
  * @returns Array of executor definitions
  */
-function generateExecutors(type: TailorAnyDBType) {
+function generateExecutors(type: TailorAnyDBType, _namespace: string) {
   const typeName = type.name;
   const historyTypeName = `${typeName}History`;
+
+  // GraphQL mutation template for inserting history records
+  const createMutation = `
+    mutation Create${historyTypeName}($input: ${historyTypeName}CreateInput!) {
+      create${historyTypeName}(input: $input) {
+        id
+      }
+    }
+  `;
 
   return [
     // CREATE executor
@@ -99,9 +109,7 @@ function generateExecutors(type: TailorAnyDBType) {
       trigger: pluginRecordCreatedTrigger({ type }),
       operation: {
         kind: "graphql",
-        query: `mutation Create${historyTypeName}($input: ${historyTypeName}CreateInput!) {
-  create${historyTypeName}(input: $input) { id }
-}`,
+        query: createMutation,
         variables: (args) => ({
           input: {
             recordId: args.newRecord.id,
@@ -122,9 +130,7 @@ function generateExecutors(type: TailorAnyDBType) {
       trigger: pluginRecordUpdatedTrigger({ type }),
       operation: {
         kind: "graphql",
-        query: `mutation Create${historyTypeName}($input: ${historyTypeName}CreateInput!) {
-  create${historyTypeName}(input: $input) { id }
-}`,
+        query: createMutation,
         variables: (args) => {
           const changedFields: string[] = [];
           for (const key of Object.keys(args.newRecord)) {
@@ -153,9 +159,7 @@ function generateExecutors(type: TailorAnyDBType) {
       trigger: pluginRecordDeletedTrigger({ type }),
       operation: {
         kind: "graphql",
-        query: `mutation Create${historyTypeName}($input: ${historyTypeName}CreateInput!) {
-  create${historyTypeName}(input: $input) { id }
-}`,
+        query: createMutation,
         variables: (args) => ({
           input: {
             recordId: args.oldRecord.id,
@@ -191,14 +195,14 @@ export function getGeneratedType(
  * @returns Plugin output with generated history type and executors
  */
 function processChangeHistory(context: PluginProcessContext<boolean>): PluginOutput {
-  const { type, config } = context;
+  const { type, config, namespace } = context;
   if (!config) {
     return { types: {} };
   }
 
   return {
     types: generateTypes(type),
-    executors: generateExecutors(type),
+    executors: generateExecutors(type, namespace),
   };
 }
 
