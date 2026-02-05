@@ -40,11 +40,13 @@ export interface PluginAttachment {
 /**
  * Context passed to plugin's process method
  */
-export interface PluginProcessContext<Config = unknown> {
+export interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
   /** The raw TailorDB type being processed */
   type: TailorAnyDBType;
   /** Plugin-specific configuration passed via .plugin() method */
   config: Config;
+  /** Plugin-level configuration passed via definePlugins() */
+  pluginConfig: PluginConfig;
   /** Namespace of the TailorDB type */
   namespace: string;
 }
@@ -328,7 +330,7 @@ export interface PluginOutput {
 /**
  * Base plugin interface that all plugins must implement
  */
-export interface PluginBase {
+export interface PluginBase<PluginConfig = unknown> {
   /** Unique identifier for the plugin */
   readonly id: string;
   /** Human-readable description of the plugin */
@@ -355,6 +357,14 @@ export interface PluginBase {
   readonly configSchema: TailorAnyField;
 
   /**
+   * Plugin-level configuration passed via definePlugins().
+   * This config is stored when the plugin is registered and made available
+   * to both process() and processStandalone() methods.
+   * @internal
+   */
+  readonly _pluginConfig?: PluginConfig;
+
+  /**
    * TypeScript type template for generating type-safe plugin configuration.
    * Use `Fields` to reference the field names of the type being configured.
    * If not provided, the type is generated from configSchema.
@@ -369,7 +379,7 @@ export interface PluginBase {
   /**
    * Process a single TailorDB type and generate outputs.
    * This method is called for each type that has this plugin attached via .plugin().
-   * @param context - Context containing the type, config, and namespace
+   * @param context - Context containing the type, config, pluginConfig, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
   process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
@@ -388,8 +398,13 @@ export interface PluginBase {
  * Plugin configuration input type for definePlugins()
  * Can be:
  * - A string plugin ID (for plugins with no configuration, e.g., "@tailor-platform/changeset")
- * - A tuple [pluginId, options] for plugins with configuration
- * - A PluginBase object for custom plugins
+ * - A tuple [pluginId, options] for builtin plugins with configuration
+ * - A PluginBase object for custom plugins without configuration
+ * - A tuple [PluginBase, options] for custom plugins with configuration
  * Options can be any value - the plugin's configSchema handles validation.
  */
-export type PluginConfig = string | readonly [string, unknown] | PluginBase;
+export type PluginConfig =
+  | string
+  | readonly [string, unknown]
+  | PluginBase
+  | readonly [PluginBase, unknown];

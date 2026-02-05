@@ -38,7 +38,8 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
 
 export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
 
-// Register built-in plugins with their constructor functions
+// Register built-in plugins with their constructor functions.
+// Built-in plugins that don't use pluginConfig don't need to store options.
 const builtinPlugins = new Map<string, (options: unknown) => PluginBase>([
   [changesetPlugin.id, () => changesetPlugin],
   [auditLogPlugin.id, () => auditLogPlugin],

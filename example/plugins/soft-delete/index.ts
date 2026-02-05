@@ -26,7 +26,7 @@
  */
 
 export { softDeletePlugin, getGeneratedType } from "./plugin";
-export type { GeneratedTypeKind } from "./plugin";
+export type { GeneratedTypeKind, SoftDeletePluginConfig, SoftDeleteConfig } from "./plugin";
 
 /**
  * Executor factories for soft-delete plugin.

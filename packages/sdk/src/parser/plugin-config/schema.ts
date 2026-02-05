@@ -69,12 +69,32 @@ const BuiltinPluginStringSchema = z.string();
 // Options can be any value - the plugin's configSchema handles validation
 const BuiltinPluginTupleSchema = z.tuple([z.string(), z.unknown()]);
 
+// Custom plugin tuple schema (PluginBase, options)
+// Allows custom plugins to receive pluginConfig via definePlugins()
+const CustomPluginTupleSchema = z.tuple([CustomPluginSchema, z.unknown()]);
+
 // Base plugin config schema (before transformation)
 const _BasePluginConfigSchema = z.union([
   BuiltinPluginStringSchema,
   BuiltinPluginTupleSchema,
   CustomPluginSchema,
+  CustomPluginTupleSchema,
 ]);
+
+/**
+ * Type guard to check if a value is a PluginBase object
+ * @param value - Value to check
+ * @returns True if value is a PluginBase object
+ */
+function isPluginBase(value: unknown): value is PluginBase {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    "description" in value &&
+    "importPath" in value
+  );
+}
 
 /**
  * Creates a PluginConfigSchema with built-in plugin support
@@ -85,7 +105,12 @@ export function createPluginConfigSchema(
   builtinPlugins: Map<string, (options: unknown) => PluginBase>,
 ) {
   return z
-    .union([BuiltinPluginStringSchema, BuiltinPluginTupleSchema, CustomPluginSchema])
+    .union([
+      BuiltinPluginStringSchema,
+      BuiltinPluginTupleSchema,
+      CustomPluginSchema,
+      CustomPluginTupleSchema,
+    ])
     .transform((plugin) => {
       // String form: plugin ID only (use true as default config)
       if (typeof plugin === "string") {
@@ -95,16 +120,22 @@ export function createPluginConfigSchema(
         }
         throw new Error(`Unknown plugin ID: ${plugin}`);
       }
-      // Tuple form: [id, options]
+      // Tuple form: check if it's [string, options] or [PluginBase, options]
       if (Array.isArray(plugin)) {
-        const [id, options] = plugin;
-        const constructor = builtinPlugins.get(id);
+        const [first, options] = plugin;
+        // [PluginBase, options] form: custom plugin with pluginConfig
+        if (isPluginBase(first)) {
+          const pluginBase = first as PluginBase;
+          return { ...pluginBase, _pluginConfig: options } as PluginBase;
+        }
+        // [string, options] form: builtin plugin with options
+        const constructor = builtinPlugins.get(first as string);
         if (constructor) {
           return constructor(options);
         }
-        throw new Error(`Unknown plugin ID: ${id}`);
+        throw new Error(`Unknown plugin ID: ${first}`);
       }
-      // Object form: custom plugin
+      // Object form: custom plugin without pluginConfig
       return plugin as PluginBase;
     })
     .brand("Plugin");

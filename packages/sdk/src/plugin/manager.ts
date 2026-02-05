@@ -151,6 +151,7 @@ export class PluginManager {
     const output = await plugin.process({
       type: context.type,
       config: context.config,
+      pluginConfig: plugin._pluginConfig,
       namespace: context.namespace,
     });
 
@@ -201,9 +202,10 @@ export class PluginManager {
         continue;
       }
 
+      // Use stored plugin config (from definePlugins) or default to true
+      const config = plugin._pluginConfig ?? true;
+
       // Validate config against schema if provided
-      // For standalone plugins, we use the plugin's own configSchema as default config
-      const config = true; // Default config for standalone processing
       if (plugin.configSchema) {
         const validationErrors = validatePluginConfig(config, plugin.configSchema);
         if (validationErrors.length > 0) {

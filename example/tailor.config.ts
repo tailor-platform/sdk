@@ -102,6 +102,13 @@ export const plugins = definePlugins(
   "@tailor-platform/changeset",
   "@tailor-platform/audit-log", // Standalone plugin - generates AuditLog type
   "@tailor-platform/change-history", // Tracks change history for types
-  softDeletePlugin, // Custom plugin - adds soft delete functionality
+  // Custom plugin with pluginConfig - global settings for all types using this plugin
+  [
+    softDeletePlugin,
+    {
+      archiveTablePrefix: "Deleted_", // Custom prefix for archive tables
+      defaultRetentionDays: 90, // Default retention period in days
+    },
+  ],
   i18nPlugin, // Custom plugin - stores i18n labels for generators
 );
