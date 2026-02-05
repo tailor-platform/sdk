@@ -293,11 +293,16 @@ ${namespaceDepsEntries}
             namespace: values.namespace,
           });
         } else if (hasTypes) {
-          await truncate({
-            configPath,
-            profile: values.profile,
-            types: entitiesToProcess.filter((t) => t !== "_User"),
-          });
+          const typesToTruncate = entitiesToProcess.filter((t) => t !== "_User");
+          if (typesToTruncate.length > 0) {
+            await truncate({
+              configPath,
+              profile: values.profile,
+              types: typesToTruncate,
+            });
+          } else {
+            console.log(styleText("dim", "No TailorDB types to truncate (only _User was specified)."));
+          }
         } else {
           await truncate({
             configPath,
@@ -315,6 +320,7 @@ ${namespaceDepsEntries}
     // Get application info
     const appInfo = await show({ configPath, profile: values.profile });
     const endpoint = \`\${appInfo.url}/query\`;
+    const authNamespace = appInfo.auth;
 
     // Get machine user token
     const tokenInfo = await getMachineUserToken({
@@ -400,7 +406,7 @@ ${namespaceDepsEntries}
         code: bundled.bundledCode,
         arg: JSON.stringify({ data, order: sortedTypes }),
         invoker: {
-          namespace,
+          namespace: authNamespace,
           machineUserName: "${machineUserName}",
         },
       });
