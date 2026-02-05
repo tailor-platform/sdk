@@ -30,6 +30,7 @@ export default defineConfig({
     "src/utils/test/index.ts",
     "src/plugin/builtin/changeset/index.ts",
     "src/plugin/builtin/audit-log/index.ts",
+    "src/plugin/builtin/change-history/index.ts",
   ],
   format: ["esm"],
   target: "node18",

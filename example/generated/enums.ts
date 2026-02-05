@@ -1,4 +1,14 @@
 /**
+ * The action performed on the record
+ */
+export const CustomerHistoryAction = {
+  "CREATE": "CREATE",
+  "UPDATE": "UPDATE",
+  "DELETE": "DELETE"
+} as const;
+export type CustomerHistoryAction = (typeof CustomerHistoryAction)[keyof typeof CustomerHistoryAction];
+
+/**
  * Invoice status
  *
  * @property draft - Draft invoice

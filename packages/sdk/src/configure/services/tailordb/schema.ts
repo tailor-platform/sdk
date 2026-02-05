@@ -992,8 +992,9 @@ function createTailorDBType<
     plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
       [K in P]: PluginConfigs<keyof Fields & string>[K];
     }): TailorDBType<Fields, User> {
-      const [pluginId, pluginConfig] = Object.entries(config)[0] as [string, unknown];
-      _plugins.push({ pluginId, config: pluginConfig });
+      for (const [pluginId, pluginConfig] of Object.entries(config)) {
+        _plugins.push({ pluginId, config: pluginConfig });
+      }
       return this;
     },
   };

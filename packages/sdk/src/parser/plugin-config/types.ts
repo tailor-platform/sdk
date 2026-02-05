@@ -25,6 +25,7 @@ export interface PluginConfigs<Fields extends string = string> {
   // Built-in plugins with simple configs (not field-aware)
   "@tailor-platform/changeset": true;
   "@tailor-platform/audit-log": true;
+  "@tailor-platform/change-history": true;
 }
 
 /**
@@ -155,6 +156,12 @@ export interface PluginGraphQLOperationConfig {
   query: string;
   /** App name for the GraphQL endpoint */
   appName?: string;
+  /**
+   * Variables expression as a string function.
+   * Receives the executor args object and returns the variables object.
+   * @example "(args) => ({ input: { recordId: args.newRecord.id } })"
+   */
+  variables?: string;
 }
 
 /**

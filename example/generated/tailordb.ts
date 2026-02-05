@@ -44,6 +44,19 @@ export interface Namespace {
       reason: string | null;
     }
 
+    CustomerHistory: {
+      id: Generated<string>;
+      recordId: string;
+      action: "CREATE" | "UPDATE" | "DELETE";
+      performedBy: string | null;
+      performedAt: Timestamp;
+      previousValues: string | null;
+      newValues: string | null;
+      changedFields: string | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
     Invoice: {
       id: Generated<string>;
       invoiceNumber: Serial<string>;

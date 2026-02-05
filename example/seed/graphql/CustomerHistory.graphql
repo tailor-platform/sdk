@@ -1,0 +1,5 @@
+mutation CreateCustomerHistory($input: CustomerHistoryCreateInput!) {
+  createCustomerHistory(input: $input) {
+    id
+  }
+}

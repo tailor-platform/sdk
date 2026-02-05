@@ -87,6 +87,9 @@ function convertPluginExecutor(info: PluginExecutorInfo): Executor | undefined {
         kind: "graphql",
         query: op.query,
         appName: op.appName,
+        variables: op.variables
+          ? (new Function(`return ${op.variables}`)() as (args: unknown) => Record<string, unknown>)
+          : undefined,
       };
       break;
     case "webhook":

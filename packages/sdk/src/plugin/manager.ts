@@ -331,17 +331,17 @@ function copyMetadataToExtendedType(
     }
   }
 
-  // Access private fields for permissions and indexes
+  // Copy permissions from metadata
+  if (metadata.permissions?.record) {
+    result = result.permission(metadata.permissions.record);
+  }
+  if (metadata.permissions?.gql) {
+    result = result.gqlPermission(metadata.permissions.gql);
+  }
+
+  // Access private fields for plugins
   // oxlint-disable-next-line no-explicit-any
   const originalAny = original as any;
-
-  // Copy permissions
-  if (originalAny._permissions?.record) {
-    result = result.permission(originalAny._permissions.record);
-  }
-  if (originalAny._permissions?.gql) {
-    result = result.gqlPermission(originalAny._permissions.gql);
-  }
 
   // Copy indexes from metadata (indexes are stored in metadata, not as a direct property)
   if (metadata.indexes && Object.keys(metadata.indexes).length > 0) {

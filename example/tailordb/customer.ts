@@ -30,4 +30,5 @@ export const customer = db
   .gqlPermission(defaultGqlPermission)
   .plugin({
     "@example/soft-delete": { archiveReason: true },
+    "@tailor-platform/change-history": true,
   });

@@ -65,6 +65,7 @@ const namespaceEntities = {
   tailordb: [
     "Customer",
     "CustomerArchive",
+    "CustomerHistory",
     "Invoice",
     "NestedProfile",
     "PurchaseOrder",
