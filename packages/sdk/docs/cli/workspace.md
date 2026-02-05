@@ -289,10 +289,11 @@ tailor-sdk workspace get [options]
 
 **Options**
 
-| Option                          | Alias | Description    | Default |
-| ------------------------------- | ----- | -------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID   | -       |
+| Option                          | Alias | Description       | Default |
+| ------------------------------- | ----- | ----------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
 
 <!-- politty:command:workspace get:end -->
 

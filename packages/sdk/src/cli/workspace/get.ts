@@ -1,14 +1,15 @@
-import { arg, defineCommand } from "politty";
+import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "../args";
+import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
-import { loadAccessToken } from "../context";
+import { loadAccessToken, loadWorkspaceId } from "../context";
 import { humanizeRelativeTime } from "../utils/format";
 import { logger } from "../utils/logger";
 import { workspaceDetails, type WorkspaceDetails } from "./transform";
 
 const getWorkspaceOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
+  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
+  profile: z.string().optional(),
 });
 
 export type GetWorkspaceOptions = z.input<typeof getWorkspaceOptionsSchema>;
@@ -21,10 +22,14 @@ async function loadOptions(options: GetWorkspaceOptions) {
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: result.data.workspaceId,
+    profile: result.data.profile,
+  });
 
   return {
     client,
-    workspaceId: result.data.workspaceId,
+    workspaceId,
   };
 }
 
@@ -53,14 +58,12 @@ export const getCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
-    "workspace-id": arg(z.string(), {
-      alias: "w",
-      description: "Workspace ID",
-    }),
+    ...workspaceArgs,
   }),
   run: withCommonArgs(async (args) => {
     const workspace = await getWorkspace({
       workspaceId: args["workspace-id"],
+      profile: args.profile,
     });
 
     const formattedWorkspace = args.json
