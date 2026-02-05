@@ -7,14 +7,14 @@ import { humanizeRelativeTime } from "../utils/format";
 import { logger } from "../utils/logger";
 import { workspaceDetails, type WorkspaceDetails } from "./transform";
 
-const describeWorkspaceOptionsSchema = z.object({
+const getWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
 });
 
-export type DescribeWorkspaceOptions = z.input<typeof describeWorkspaceOptionsSchema>;
+export type GetWorkspaceOptions = z.input<typeof getWorkspaceOptionsSchema>;
 
-async function loadOptions(options: DescribeWorkspaceOptions) {
-  const result = describeWorkspaceOptionsSchema.safeParse(options);
+async function loadOptions(options: GetWorkspaceOptions) {
+  const result = getWorkspaceOptionsSchema.safeParse(options);
   if (!result.success) {
     throw new Error(result.error.issues[0].message);
   }
@@ -30,12 +30,10 @@ async function loadOptions(options: DescribeWorkspaceOptions) {
 
 /**
  * Get detailed information about a workspace.
- * @param options - Workspace describe options
+ * @param options - Workspace get options
  * @returns Workspace details
  */
-export async function describeWorkspace(
-  options: DescribeWorkspaceOptions,
-): Promise<WorkspaceDetails> {
+export async function getWorkspace(options: GetWorkspaceOptions): Promise<WorkspaceDetails> {
   const { client, workspaceId } = await loadOptions(options);
 
   const response = await client.getWorkspace({
@@ -49,8 +47,8 @@ export async function describeWorkspace(
   return workspaceDetails(response.workspace);
 }
 
-export const describeCommand = defineCommand({
-  name: "describe",
+export const getCommand = defineCommand({
+  name: "get",
   description: "Show detailed information about a workspace",
   args: z.object({
     ...commonArgs,
@@ -61,7 +59,7 @@ export const describeCommand = defineCommand({
     }),
   }),
   run: withCommonArgs(async (args) => {
-    const workspace = await describeWorkspace({
+    const workspace = await getWorkspace({
       workspaceId: args["workspace-id"],
     });
 

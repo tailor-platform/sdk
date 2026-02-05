@@ -34,7 +34,7 @@ export { remove, type RemoveOptions } from "./remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./workspace/create";
 export { listWorkspaces, type ListWorkspacesOptions } from "./workspace/list";
 export { deleteWorkspace, type DeleteWorkspaceOptions } from "./workspace/delete";
-export { describeWorkspace, type DescribeWorkspaceOptions } from "./workspace/describe";
+export { getWorkspace, type GetWorkspaceOptions } from "./workspace/get";
 export { restoreWorkspace, type RestoreWorkspaceOptions } from "./workspace/restore";
 export type { WorkspaceInfo, WorkspaceDetails } from "./workspace/transform";
 export { listUsers, type ListUsersOptions } from "./workspace/user/list";

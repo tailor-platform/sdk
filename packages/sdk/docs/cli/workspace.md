@@ -16,15 +16,15 @@ tailor-sdk workspace [command]
 
 **Commands**
 
-| Command                                     | Description                                 |
-| ------------------------------------------- | ------------------------------------------- |
-| [`workspace app`](#workspace-app)           | Manage workspace applications               |
-| [`workspace create`](#workspace-create)     | Create a new Tailor Platform workspace.     |
-| [`workspace delete`](#workspace-delete)     | Delete a Tailor Platform workspace.         |
-| [`workspace describe`](#workspace-describe) | Show detailed information about a workspace |
-| [`workspace list`](#workspace-list)         | List all Tailor Platform workspaces.        |
-| [`workspace restore`](#workspace-restore)   | Restore a deleted workspace                 |
-| [`workspace user`](#workspace-user)         | Manage workspace users                      |
+| Command                                   | Description                                 |
+| ----------------------------------------- | ------------------------------------------- |
+| [`workspace app`](#workspace-app)         | Manage workspace applications               |
+| [`workspace create`](#workspace-create)   | Create a new Tailor Platform workspace.     |
+| [`workspace delete`](#workspace-delete)   | Delete a Tailor Platform workspace.         |
+| [`workspace get`](#workspace-get)         | Show detailed information about a workspace |
+| [`workspace list`](#workspace-list)       | List all Tailor Platform workspaces.        |
+| [`workspace restore`](#workspace-restore) | Restore a deleted workspace                 |
+| [`workspace user`](#workspace-user)       | Manage workspace users                      |
 
 <!-- politty:command:workspace:end -->
 <!-- politty:command:workspace create:start -->
@@ -275,16 +275,16 @@ tailor-sdk workspace app list [options]
 
 <!-- politty:command:workspace app list:end -->
 
-<!-- politty:command:workspace describe:start -->
+<!-- politty:command:workspace get:start -->
 
-### workspace describe
+### workspace get
 
 Show detailed information about a workspace
 
 **Usage**
 
 ```
-tailor-sdk workspace describe [options]
+tailor-sdk workspace get [options]
 ```
 
 **Options**
@@ -294,7 +294,7 @@ tailor-sdk workspace describe [options]
 | `--json`                        | `-j`  | Output as JSON | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID   | -       |
 
-<!-- politty:command:workspace describe:end -->
+<!-- politty:command:workspace get:end -->
 
 <!-- politty:command:workspace restore:start -->
 
