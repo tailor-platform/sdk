@@ -292,7 +292,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   const bundled = await bundleSeedScript(namespace, typesWithData);
 
   // Initialize operator client
-  const accessToken = await loadAccessToken({ profile: values.profile });
+  const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
   const workspaceId = await loadWorkspaceId({ configPath, profile: values.profile });
   const client = await initOperatorClient(accessToken);
 
