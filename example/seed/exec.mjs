@@ -1,8 +1,18 @@
 import { GQLIngest } from "@jackchuka/gql-ingest";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
-import { show, getMachineUserToken, truncate } from "@tailor-platform/sdk/cli";
+import {
+  show,
+  getMachineUserToken,
+  truncate,
+  bundleSeedScript,
+  executeScript,
+  initOperatorClient,
+  loadAccessToken,
+  loadWorkspaceId,
+} from "@tailor-platform/sdk/cli";
 
 // Parse command-line arguments
 const { values, positionals } = parseArgs({
@@ -11,6 +21,7 @@ const { values, positionals } = parseArgs({
     "skip-idp": { type: "boolean", default: false },
     truncate: { type: "boolean", default: false },
     yes: { type: "boolean", default: false },
+    profile: { type: "string", short: "p" },
     help: { type: "boolean", short: "h", default: false },
   },
   allowPositionals: true,
@@ -25,6 +36,7 @@ Options:
   --skip-idp           Skip IdP user (_User) entity
   --truncate           Truncate tables before seeding
   --yes                Skip confirmation prompts (for truncate)
+  -p, --profile <name> Workspace profile name
   -h, --help           Show help
 
 Examples:
@@ -63,23 +75,42 @@ console.log(styleText("cyan", "Starting seed data generation..."));
 // Entity configuration
 const namespaceEntities = {
   tailordb: [
-    "Customer",
-    "Invoice",
-    "NestedProfile",
-    "PurchaseOrder",
-    "SalesOrder",
-    "SalesOrderCreated",
-    "Selfie",
-    "Supplier",
-    "User",
-    "UserLog",
-    "UserSetting",
-  ],
-  analyticsdb: [
-    "Event",
-  ]
+        "Customer",
+        "Invoice",
+        "NestedProfile",
+        "PurchaseOrder",
+        "SalesOrder",
+        "SalesOrderCreated",
+        "Selfie",
+        "Supplier",
+        "User",
+        "UserLog",
+        "UserSetting",
+      ],
+      analyticsdb: [
+        "Event",
+      ]
+};
+const namespaceDeps = {
+  "tailordb": {
+        "Customer": [],
+        "Invoice": ["SalesOrder"],
+        "NestedProfile": [],
+        "PurchaseOrder": ["Supplier"],
+        "SalesOrder": ["Customer"],
+        "SalesOrderCreated": [],
+        "Selfie": [],
+        "Supplier": [],
+        "User": [],
+        "UserLog": ["User"],
+        "UserSetting": ["User"]
+      },
+      "analyticsdb": {
+        "Event": []
+      }
 };
 const entities = Object.values(namespaceEntities).flat();
+const hasIdpUser = true;
 
 // Determine which entities to process
 let entitiesToProcess = null;
@@ -119,9 +150,10 @@ if (hasNamespace) {
 if (hasTypes) {
   const requestedTypes = positionals;
   const notFoundTypes = [];
+  const allTypes = hasIdpUser ? [...entities, "_User"] : entities;
 
   entitiesToProcess = requestedTypes.filter((type) => {
-    if (!entities.includes(type)) {
+    if (!allTypes.includes(type)) {
       notFoundTypes.push(type);
       return false;
     }
@@ -130,7 +162,7 @@ if (hasTypes) {
 
   if (notFoundTypes.length > 0) {
     console.error(styleText("red", `Error: The following types were not found: ${notFoundTypes.join(", ")}`));
-    console.error(styleText("yellow", `Available types: ${entities.join(", ")}`));
+    console.error(styleText("yellow", `Available types: ${allTypes.join(", ")}`));
     process.exit(1);
   }
 
@@ -140,19 +172,15 @@ if (hasTypes) {
 // Apply --skip-idp filter
 if (skipIdp) {
   if (entitiesToProcess) {
-    // Filter out _User from already filtered list
     entitiesToProcess = entitiesToProcess.filter((entity) => entity !== "_User");
   } else {
-    // Get all entities except _User
     entitiesToProcess = entities.filter((entity) => entity !== "_User");
   }
   console.log(styleText("dim", `Skipping IdP user (_User)`));
 }
 
 // Truncate tables if requested
-// Note: --skip-idp only affects seeding, not truncation
 if (values.truncate) {
-  // Prompt user for confirmation
   const answer = values.yes ? "y" : await promptConfirmation("Are you sure you want to truncate? (y/n): ");
   if (answer !== "y") {
     console.log(styleText("yellow", "Truncate cancelled."));
@@ -163,21 +191,21 @@ if (values.truncate) {
 
   try {
     if (hasNamespace) {
-      // Truncate specific namespace
       await truncate({
         configPath,
+        profile: values.profile,
         namespace: values.namespace,
       });
     } else if (hasTypes) {
-      // Truncate specific types
       await truncate({
         configPath,
-        types: entitiesToProcess,
+        profile: values.profile,
+        types: entitiesToProcess.filter((t) => t !== "_User"),
       });
     } else {
-      // Truncate all (--skip-idp does not affect truncation)
       await truncate({
         configPath,
+        profile: values.profile,
         all: true,
       });
     }
@@ -188,57 +216,196 @@ if (values.truncate) {
   }
 }
 
-// Get application info and endpoint
-const appInfo = await show({ configPath });
+// Get application info
+const appInfo = await show({ configPath, profile: values.profile });
 const endpoint = `${appInfo.url}/query`;
 
 // Get machine user token
-const tokenInfo = await getMachineUserToken({ name: "manager-machine-user", configPath });
-
-// Initialize GQLIngest client
-const client = new GQLIngest({
-  endpoint,
-  headers: {
-    Authorization: `Bearer ${tokenInfo.accessToken}`,
-  },
+const tokenInfo = await getMachineUserToken({
+  name: "manager-machine-user",
+  configPath,
+  profile: values.profile,
 });
 
-// Progress monitoring event handlers
-client.on("started", (payload) => {
-  console.log(styleText("cyan", `Processing ${payload.totalEntities} entities...`));
-});
+// Load seed data from JSONL files
+const loadSeedData = (dataDir, typeNames) => {
+  const data = {};
+  for (const typeName of typeNames) {
+    const jsonlPath = join(dataDir, `${typeName}.jsonl`);
+    try {
+      const content = readFileSync(jsonlPath, "utf-8").trim();
+      if (content) {
+        data[typeName] = content.split("\n").map((line) => JSON.parse(line));
+      } else {
+        data[typeName] = [];
+      }
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        data[typeName] = [];
+      } else {
+        throw error;
+      }
+    }
+  }
+  return data;
+};
 
-client.on("entityStart", (payload) => {
-  console.log(styleText("dim", `  Processing ${payload.entityName}...`));
-});
+// Topological sort for dependency order
+const topologicalSort = (types, deps) => {
+  const visited = new Set();
+  const result = [];
 
-client.on("entityComplete", (payload) => {
-  const { entityName, metrics: { rowsProcessed } } = payload;
-  console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));
-});
+  const visit = (type) => {
+    if (visited.has(type)) return;
+    visited.add(type);
+    const typeDeps = deps[type] || [];
+    for (const dep of typeDeps) {
+      if (types.includes(dep)) {
+        visit(dep);
+      }
+    }
+    result.push(type);
+  };
 
-client.on("rowFailure", (payload) => {
-  console.error(styleText("red", `  ✗ Row ${payload.rowIndex} in ${payload.entityName} failed: ${payload.error.message}`));
-});
+  for (const type of types) {
+    visit(type);
+  }
+  return result;
+};
 
-// Run ingestion
-try {
-  let result;
-  if (entitiesToProcess && entitiesToProcess.length > 0) {
-    result = await client.ingestEntities(configDir, entitiesToProcess);
-  } else {
-    result = await client.ingest(configDir);
+// Seed TailorDB types via testExecScript
+const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
+  const dataDir = join(configDir, "data");
+  const sortedTypes = topologicalSort(typesToSeed, deps);
+  const data = loadSeedData(dataDir, sortedTypes);
+
+  // Skip if no data
+  const typesWithData = sortedTypes.filter((t) => data[t] && data[t].length > 0);
+  if (typesWithData.length === 0) {
+    console.log(styleText("dim", `  [${namespace}] No data to seed`));
+    return { success: true, processed: {} };
+  }
+
+  console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`));
+
+  // Bundle seed script
+  const bundled = await bundleSeedScript(namespace, typesWithData);
+
+  // Initialize operator client
+  const accessToken = await loadAccessToken({ profile: values.profile });
+  const workspaceId = await loadWorkspaceId({ configPath, profile: values.profile });
+  const client = await initOperatorClient(accessToken);
+
+  // Execute seed script
+  const result = await executeScript({
+    client,
+    workspaceId,
+    name: `seed-${namespace}`,
+    code: bundled.bundledCode,
+    arg: JSON.stringify({ data, order: sortedTypes }),
+    invoker: {
+      namespace,
+      machineUserName: "manager-machine-user",
+    },
+  });
+
+  // Parse result and display logs
+  if (result.logs) {
+    for (const line of result.logs.split("\n").filter(Boolean)) {
+      console.log(styleText("dim", `    ${line}`));
+    }
   }
 
   if (result.success) {
-    console.log(styleText("green", "\n✓ Seed data generation completed successfully"));
-    console.log(client.getMetricsSummary());
+    const parsed = JSON.parse(result.result || "{}");
+    for (const [type, count] of Object.entries(parsed.processed || {})) {
+      console.log(styleText("green", `  ✓ ${type}: ${count} rows inserted`));
+    }
+    return { success: true, processed: parsed.processed || {} };
   } else {
-    console.error(styleText("red", "\n✗ Seed data generation failed"));
-    console.error(client.getMetricsSummary());
+    console.error(styleText("red", `  ✗ Seed failed: ${result.error}`));
+    return { success: false, error: result.error };
+  }
+};
+
+
+    // Seed _User via gql-ingest (IdP managed)
+    const seedIdpUserViaGqlIngest = async () => {
+      console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
+
+      const gqlClient = new GQLIngest({
+        endpoint,
+        headers: {
+          Authorization: `Bearer ${tokenInfo.accessToken}`,
+        },
+      });
+
+      gqlClient.on("entityStart", (payload) => {
+        console.log(styleText("dim", `    Processing ${payload.entityName}...`));
+      });
+
+      gqlClient.on("entityComplete", (payload) => {
+        const { entityName, metrics: { rowsProcessed } } = payload;
+        console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));
+      });
+
+      gqlClient.on("rowFailure", (payload) => {
+        console.error(styleText("red", `  ✗ Row ${payload.rowIndex} in ${payload.entityName} failed: ${payload.error.message}`));
+      });
+
+      try {
+        const result = await gqlClient.ingestEntities(configDir, ["_User"]);
+        return { success: result.success };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    };
+    
+
+// Main execution
+try {
+  let allSuccess = true;
+
+  // Determine which namespaces and types to process
+  const namespacesToProcess = hasNamespace
+    ? [values.namespace]
+    : Object.keys(namespaceEntities);
+
+  for (const namespace of namespacesToProcess) {
+    const nsTypes = namespaceEntities[namespace] || [];
+    const nsDeps = namespaceDeps[namespace] || {};
+
+    // Filter types if specific types requested
+    let typesToSeed = entitiesToProcess
+      ? nsTypes.filter((t) => entitiesToProcess.includes(t))
+      : nsTypes;
+
+    if (typesToSeed.length === 0) continue;
+
+    const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps);
+    if (!result.success) {
+      allSuccess = false;
+    }
+  }
+
+  
+        // Seed _User if included and not skipped
+        const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
+        if (hasIdpUser && shouldSeedUser) {
+          const result = await seedIdpUserViaGqlIngest();
+          if (!result.success) {
+            allSuccess = false;
+          }
+        }
+        
+
+  if (allSuccess) {
+    console.log(styleText("green", "\n✓ Seed data generation completed successfully"));
+  } else {
+    console.error(styleText("red", "\n✗ Seed data generation completed with errors"));
     process.exit(1);
   }
 } catch (error) {
-  console.error(styleText("red", `\n✗ Seed data generation failed with error: ${error.message}`));
+  console.error(styleText("red", `\n✗ Seed data generation failed: ${error.message}`));
   process.exit(1);
 }
