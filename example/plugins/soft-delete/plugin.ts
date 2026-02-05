@@ -26,10 +26,12 @@ import {
   db,
   t,
   type PluginBase,
+  type PluginGeneratedExecutorWithFile,
   type PluginProcessContext,
   type TailorAnyDBType,
   type TailorAnyDBField,
 } from "@tailor-platform/sdk";
+import type { SoftDeleteContext } from "./types";
 
 /**
  * Configuration options for the soft-delete plugin
@@ -100,6 +102,33 @@ function generateExtendFields() {
 }
 
 /**
+ * Generate executors for soft-delete plugin.
+ * @param sourceType - The source TailorDB type
+ * @param namespace - The TailorDB namespace
+ * @param generatedTypes - Generated types from generateTypes
+ * @returns Array of executor definitions
+ */
+function generateExecutors(
+  sourceType: TailorAnyDBType,
+  namespace: string,
+  generatedTypes: Record<GeneratedTypeKind, TailorAnyDBType>,
+): PluginGeneratedExecutorWithFile<SoftDeleteContext>[] {
+  const ctx: SoftDeleteContext = {
+    sourceType,
+    archiveType: generatedTypes.archive,
+    namespace,
+  };
+
+  return [
+    {
+      name: `${sourceType.name.toLowerCase()}-archive-on-delete`,
+      executorFile: "on-delete",
+      context: ctx,
+    },
+  ];
+}
+
+/**
  * Get a generated type for a source type.
  * @param sourceType - The original type that the plugin is applied to
  * @param kind - The kind of generated type to retrieve
@@ -118,16 +147,18 @@ export function getGeneratedType(
 /**
  * Process a type to add soft delete functionality.
  * @param context - Plugin process context
- * @returns Plugin output with extended fields and generated archive type
+ * @returns Plugin output with extended fields, generated archive type, and executors
  */
 function processSoftDelete(
   context: PluginProcessContext<SoftDeleteConfig>,
 ): ReturnType<NonNullable<PluginBase["process"]>> {
-  const { type, config } = context;
+  const { type, config, namespace } = context;
+  const generatedTypes = generateTypes(type, config);
 
   return {
-    types: generateTypes(type, config),
+    types: generatedTypes,
     extends: { fields: generateExtendFields() },
+    executors: generateExecutors(type, namespace, generatedTypes),
   };
 }
 

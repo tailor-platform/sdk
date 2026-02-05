@@ -42,7 +42,7 @@ export function generatePluginTypeFiles(
 
   for (const info of types) {
     const pluginDir = sanitizePluginId(info.pluginId);
-    const typeOutputDir = path.join(outputDir, "plugin", pluginDir, "types");
+    const typeOutputDir = path.join(outputDir, pluginDir, "types");
     fs.mkdirSync(typeOutputDir, { recursive: true });
 
     const fileName = `${toKebabCase(info.type.name)}.ts`;

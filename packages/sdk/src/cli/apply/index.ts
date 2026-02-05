@@ -108,13 +108,29 @@ export async function apply(options?: ApplyOptions) {
     }
   }
   // Discover plugin executor files before bundling
-  let pluginExecutorFiles: string[] = [];
-  const pluginExecutorDir = path.join(getDistDir(), "plugin-executors");
-  if (fs.existsSync(pluginExecutorDir)) {
-    pluginExecutorFiles = fs
-      .readdirSync(pluginExecutorDir)
+  // Look for executors in new path pattern: .tailor-sdk/plugin/{pluginId}/executors/*.ts
+  const pluginExecutorFiles: string[] = [];
+  const pluginBaseDir = path.join(getDistDir(), "plugin");
+  if (fs.existsSync(pluginBaseDir)) {
+    for (const pluginDir of fs.readdirSync(pluginBaseDir)) {
+      const executorDir = path.join(pluginBaseDir, pluginDir, "executors");
+      if (fs.existsSync(executorDir)) {
+        const files = fs
+          .readdirSync(executorDir)
+          .filter((f) => f.endsWith(".ts"))
+          .map((f) => path.join(executorDir, f));
+        pluginExecutorFiles.push(...files);
+      }
+    }
+  }
+  // Also check legacy path for backwards compatibility
+  const legacyPluginExecutorDir = path.join(getDistDir(), "plugin-executors");
+  if (fs.existsSync(legacyPluginExecutorDir)) {
+    const legacyFiles = fs
+      .readdirSync(legacyPluginExecutorDir)
       .filter((f) => f.endsWith(".ts"))
-      .map((f) => path.join(pluginExecutorDir, f));
+      .map((f) => path.join(legacyPluginExecutorDir, f));
+    pluginExecutorFiles.push(...legacyFiles);
   }
 
   if (application.executorService) {

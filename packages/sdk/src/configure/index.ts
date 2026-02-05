@@ -38,5 +38,9 @@ export type {
   PluginGeneratedType,
   PluginGeneratedResolver,
   PluginGeneratedExecutor,
+  PluginGeneratedExecutorWithFile,
   TailorDBTypeForPlugin,
 } from "@/parser/plugin-config/types";
+
+// Plugin utilities
+export { withPluginContext, type PluginExecutorFactory } from "@/plugin/with-context";

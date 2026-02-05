@@ -87,7 +87,7 @@ function generateSingleExecutorFile(
   sourceTypeFilePaths?: Map<string, string>,
 ): string {
   const pluginDir = sanitizePluginId(info.pluginId);
-  const executorOutputDir = path.join(outputDir, "plugin", pluginDir, "executors");
+  const executorOutputDir = path.join(outputDir, pluginDir, "executors");
   fs.mkdirSync(executorOutputDir, { recursive: true });
 
   const filePath = path.join(executorOutputDir, `${info.executor.name}.ts`);
@@ -126,7 +126,15 @@ function generateExecutorFileContentNew(
   sourceTypeFilePaths?: Map<string, string>,
 ): string {
   const { executorFile, context } = executor;
-  const modulePath = `${info.pluginImportPath}/backend/executors/${executorFile}`;
+  const pluginDir = sanitizePluginId(info.pluginId);
+  const executorOutputDir = path.join(outputDir, pluginDir, "executors");
+
+  // Calculate module path for executor factory import
+  const modulePath = calculateExecutorModulePath(
+    info.pluginImportPath,
+    executorFile,
+    executorOutputDir,
+  );
 
   // Collect type imports from context
   const typeImports = collectTypeImports(
@@ -176,7 +184,7 @@ function collectTypeImports(
 ): Map<string, TypeImportInfo> {
   const typeImports = new Map<string, TypeImportInfo>();
   const pluginDir = sanitizePluginId(pluginId);
-  const executorDir = path.join(outputDir, "plugin", pluginDir, "executors");
+  const executorDir = path.join(outputDir, pluginDir, "executors");
 
   for (const [key, value] of Object.entries(context)) {
     if (isTypeObject(value)) {
@@ -400,6 +408,40 @@ function escapeTemplateLiteral(str: string): string {
 // ============================================================================
 // Utility functions
 // ============================================================================
+
+/**
+ * Calculate the module path for importing executor factory.
+ * For npm packages (e.g., "@tailor-platform/sdk"), use the path as-is.
+ * For relative paths (e.g., "./plugins/soft-delete"), calculate relative path from output location.
+ * @param pluginImportPath - Plugin's import path
+ * @param executorFile - Executor file name (without extension)
+ * @param executorOutputDir - Directory where the generated executor will be written
+ * @returns Module path string for import statement
+ */
+function calculateExecutorModulePath(
+  pluginImportPath: string,
+  executorFile: string,
+  executorOutputDir: string,
+): string {
+  // Standard path pattern for plugin executor templates
+  const executorSubPath = `backend/executors/${executorFile}`;
+
+  // Check if it's a relative path (local plugin)
+  if (pluginImportPath.startsWith(".")) {
+    // Local plugin: calculate relative path from output location to plugin's executor
+    // Plugin executor is at: {pluginImportPath}/backend/executors/{executorFile}
+    // Output file is at: {executorOutputDir}/{name}.ts
+    const pluginExecutorPath = path.join(process.cwd(), pluginImportPath, executorSubPath);
+    let relativePath = path.relative(executorOutputDir, pluginExecutorPath);
+    if (!relativePath.startsWith(".")) {
+      relativePath = `./${relativePath}`;
+    }
+    return relativePath;
+  }
+
+  // npm package: use as-is with backend/executors subpath
+  return `${pluginImportPath}/${executorSubPath}`;
+}
 
 /**
  * Convert plugin ID to safe directory name.
