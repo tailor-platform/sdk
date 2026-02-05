@@ -3,6 +3,7 @@
  */
 
 import * as fs from "node:fs";
+import * as inflection from "inflection";
 import * as path from "pathe";
 import {
   type MigrationDiff,
@@ -11,7 +12,11 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import type { SchemaDrift } from "./types";
-import type { ParsedField, TailorDBType } from "@/parser/service/tailordb/types";
+import type {
+  ParsedField,
+  ParsedRelationship,
+  TailorDBType,
+} from "@/parser/service/tailordb/types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // ============================================================================
@@ -1183,12 +1188,67 @@ export function filterTypeToSnapshot(type: TailorDBType, snapshotType: SnapshotT
     }
   }
 
+  // Filter forward relationships to only include those whose source field exists in filtered fields
+  const filteredForwardRelationships: Record<string, ParsedRelationship> = {};
+  for (const [relName, rel] of Object.entries(type.forwardRelationships)) {
+    // targetField is the foreign key field on this type (e.g., customerId)
+    if (filteredFields[rel.targetField]) {
+      filteredForwardRelationships[relName] = rel;
+    }
+  }
+
   return {
     ...type,
     fields: filteredFields,
+    forwardRelationships: filteredForwardRelationships,
+    backwardRelationships: {}, // Will be rebuilt after all types are filtered
     indexes: Object.keys(filteredIndexes).length > 0 ? filteredIndexes : undefined,
     files: Object.keys(filteredFiles).length > 0 ? filteredFiles : undefined,
   };
+}
+
+/**
+ * Rebuild backward relationships for filtered types.
+ * This must be called after all types have been filtered via filterTypeToSnapshot
+ * to ensure backward relationships only reference fields that exist in the filtered state.
+ * @param {Record<string, TailorDBType>} filteredTypes - Filtered types by name
+ */
+export function rebuildBackwardRelationshipsForFilteredTypes(
+  filteredTypes: Record<string, TailorDBType>,
+): void {
+  // Clear all backward relationships first (they were set to {} in filterTypeToSnapshot)
+  for (const type of Object.values(filteredTypes)) {
+    type.backwardRelationships = {};
+  }
+
+  // Rebuild backward relationships based on filtered forward relationships
+  for (const [typeName, type] of Object.entries(filteredTypes)) {
+    for (const rel of Object.values(type.forwardRelationships)) {
+      const targetType = filteredTypes[rel.targetType];
+      if (!targetType) continue; // Target type doesn't exist in filtered types
+
+      const field = type.fields[rel.targetField];
+      if (!field?.relation) continue;
+
+      // Derive backward name (same logic as type-parser.ts)
+      let backwardName = field.relation.backwardName;
+      if (!backwardName) {
+        const lowerName = inflection.camelize(typeName, true);
+        backwardName = field.relation.unique
+          ? inflection.singularize(lowerName)
+          : inflection.pluralize(lowerName);
+      }
+
+      targetType.backwardRelationships[backwardName] = {
+        name: backwardName,
+        targetType: typeName,
+        targetField: rel.targetField,
+        sourceField: rel.sourceField,
+        isArray: !field.relation.unique,
+        description: type.description || "",
+      };
+    }
+  }
 }
 
 // ============================================================================

@@ -20,6 +20,7 @@ import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
   filterTypeToSnapshot,
+  rebuildBackwardRelationshipsForFilteredTypes,
   getMigrationFilePath,
   formatMigrationNumber,
 } from "../../../tailordb/migrate/snapshot";
@@ -428,6 +429,12 @@ export async function buildFilteredTypesForVersion(
     }
 
     filteredTypesByNamespace.set(namespace, filteredTypes);
+  }
+
+  // Rebuild backward relationships after all types are filtered
+  // This ensures backward relationships only reference fields that exist in the filtered state
+  for (const filteredTypes of filteredTypesByNamespace.values()) {
+    rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
   }
 
   return filteredTypesByNamespace;

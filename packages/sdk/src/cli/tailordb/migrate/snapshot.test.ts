@@ -17,15 +17,22 @@ import {
   writeDiff,
   validateMigrationFiles,
   assertValidMigrationFiles,
+  filterTypeToSnapshot,
+  rebuildBackwardRelationshipsForFilteredTypes,
   SCHEMA_SNAPSHOT_VERSION,
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   INITIAL_SCHEMA_NUMBER,
   formatMigrationNumber,
   type SchemaSnapshot,
+  type SnapshotType,
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
-import type { ParsedField, TailorDBType } from "@/parser/service/tailordb/types";
+import type {
+  ParsedField,
+  ParsedRelationship,
+  TailorDBType,
+} from "@/parser/service/tailordb/types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
@@ -46,15 +53,30 @@ function writeDiffToDir(baseDir: string, num: number, content: MigrationDiff | o
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations__");
 
+interface MockFieldConfig {
+  name: string;
+  config: Partial<ParsedField["config"]>;
+  relation?: ParsedField["relation"];
+}
+
 /**
  * Create a minimal TailorDBType for testing
  * @param {string} name - Type name
- * @param {Record<string, { name: string; config: Partial<ParsedField["config"]> }>} fields - Field definitions
+ * @param {Record<string, MockFieldConfig>} fields - Field definitions
+ * @param {object} options - Optional settings
+ * @param options.forwardRelationships
+ * @param options.backwardRelationships
+ * @param options.description
  * @returns {TailorDBType} Mock type with required properties filled
  */
 function createMockType(
   name: string,
-  fields: Record<string, { name: string; config: Partial<ParsedField["config"]> }>,
+  fields: Record<string, MockFieldConfig>,
+  options?: {
+    forwardRelationships?: Record<string, ParsedRelationship>;
+    backwardRelationships?: Record<string, ParsedRelationship>;
+    description?: string;
+  },
 ): TailorDBType {
   const parsedFields: Record<string, ParsedField> = {};
   for (const [key, field] of Object.entries(fields)) {
@@ -65,15 +87,17 @@ function createMockType(
         required: false,
         ...field.config,
       },
+      relation: field.relation,
     } as ParsedField;
   }
 
   return {
     name,
     pluralForm: `${name}s`,
+    description: options?.description,
     fields: parsedFields,
-    forwardRelationships: {},
-    backwardRelationships: {},
+    forwardRelationships: options?.forwardRelationships ?? {},
+    backwardRelationships: options?.backwardRelationships ?? {},
     settings: {},
     permissions: {},
   };
@@ -1667,6 +1691,388 @@ describe("snapshot", () => {
       expect(result).toContain("Field 'email'");
       expect(result).toContain("Field 'name'");
       expect(result).toContain("Type 'Post':");
+    });
+  });
+
+  // ==========================================================================
+  // filterTypeToSnapshot - Relationship Filtering
+  // ==========================================================================
+  describe("filterTypeToSnapshot", () => {
+    it("filters out forward relationships when source field is not in snapshot", () => {
+      const localType = createMockType(
+        "Order",
+        {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          customerId: {
+            name: "customerId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "Customer",
+              forwardName: "customer",
+              backwardName: "orders",
+              key: "id",
+              unique: false,
+            },
+          },
+          productId: {
+            name: "productId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "Product",
+              forwardName: "product",
+              backwardName: "orders",
+              key: "id",
+              unique: false,
+            },
+          },
+        },
+        {
+          forwardRelationships: {
+            customer: {
+              name: "customer",
+              targetType: "Customer",
+              targetField: "customerId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+            product: {
+              name: "product",
+              targetType: "Product",
+              targetField: "productId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+          },
+        },
+      );
+
+      // Snapshot only has id field, no customerId or productId
+      const snapshotType: SnapshotType = {
+        name: "Order",
+        fields: {
+          id: { type: "uuid", required: true },
+        },
+      };
+
+      const filtered = filterTypeToSnapshot(localType, snapshotType);
+
+      expect(filtered.fields.id).toBeDefined();
+      expect(filtered.fields.customerId).toBeUndefined();
+      expect(filtered.fields.productId).toBeUndefined();
+      // Forward relationships should be empty since source fields don't exist
+      expect(Object.keys(filtered.forwardRelationships)).toHaveLength(0);
+      // Backward relationships should be empty (will be rebuilt later)
+      expect(Object.keys(filtered.backwardRelationships)).toHaveLength(0);
+    });
+
+    it("keeps forward relationships when source field exists in snapshot", () => {
+      const localType = createMockType(
+        "Order",
+        {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          customerId: {
+            name: "customerId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "Customer",
+              forwardName: "customer",
+              backwardName: "orders",
+              key: "id",
+              unique: false,
+            },
+          },
+        },
+        {
+          forwardRelationships: {
+            customer: {
+              name: "customer",
+              targetType: "Customer",
+              targetField: "customerId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+          },
+        },
+      );
+
+      // Snapshot has both id and customerId
+      const snapshotType: SnapshotType = {
+        name: "Order",
+        fields: {
+          id: { type: "uuid", required: true },
+          customerId: { type: "uuid", required: false },
+        },
+      };
+
+      const filtered = filterTypeToSnapshot(localType, snapshotType);
+
+      expect(filtered.fields.id).toBeDefined();
+      expect(filtered.fields.customerId).toBeDefined();
+      // Forward relationship should be kept since customerId exists
+      expect(filtered.forwardRelationships.customer).toBeDefined();
+    });
+
+    it("filters some forward relationships while keeping others", () => {
+      const localType = createMockType(
+        "Order",
+        {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          customerId: {
+            name: "customerId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "Customer",
+              forwardName: "customer",
+              backwardName: "orders",
+              key: "id",
+              unique: false,
+            },
+          },
+          productId: {
+            name: "productId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "Product",
+              forwardName: "product",
+              backwardName: "orders",
+              key: "id",
+              unique: false,
+            },
+          },
+        },
+        {
+          forwardRelationships: {
+            customer: {
+              name: "customer",
+              targetType: "Customer",
+              targetField: "customerId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+            product: {
+              name: "product",
+              targetType: "Product",
+              targetField: "productId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+          },
+        },
+      );
+
+      // Snapshot has id and customerId but not productId
+      const snapshotType: SnapshotType = {
+        name: "Order",
+        fields: {
+          id: { type: "uuid", required: true },
+          customerId: { type: "uuid", required: false },
+        },
+      };
+
+      const filtered = filterTypeToSnapshot(localType, snapshotType);
+
+      expect(filtered.fields.customerId).toBeDefined();
+      expect(filtered.fields.productId).toBeUndefined();
+      // Only customer relationship should be kept
+      expect(filtered.forwardRelationships.customer).toBeDefined();
+      expect(filtered.forwardRelationships.product).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // rebuildBackwardRelationshipsForFilteredTypes
+  // ==========================================================================
+  describe("rebuildBackwardRelationshipsForFilteredTypes", () => {
+    it("rebuilds backward relationships based on filtered forward relationships", () => {
+      const customer = createMockType("Customer", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+        name: { name: "name", config: { type: "string", required: true } },
+      });
+
+      const order = createMockType(
+        "Order",
+        {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          customerId: {
+            name: "customerId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "Customer",
+              forwardName: "customer",
+              backwardName: "orders",
+              key: "id",
+              unique: false,
+            },
+          },
+        },
+        {
+          forwardRelationships: {
+            customer: {
+              name: "customer",
+              targetType: "Customer",
+              targetField: "customerId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+          },
+        },
+      );
+
+      const filteredTypes = { Customer: customer, Order: order };
+      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+
+      // Customer should now have backward relationship to Order
+      expect(filteredTypes.Customer.backwardRelationships.orders).toBeDefined();
+      expect(filteredTypes.Customer.backwardRelationships.orders.targetType).toBe("Order");
+      expect(filteredTypes.Customer.backwardRelationships.orders.targetField).toBe("customerId");
+    });
+
+    it("does not create backward relationships when forward relationship is filtered out", () => {
+      const customer = createMockType("Customer", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+      });
+
+      // Order has no forward relationships (they were filtered out)
+      const order = createMockType("Order", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+      });
+
+      const filteredTypes = { Customer: customer, Order: order };
+      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+
+      // Customer should have no backward relationships
+      expect(Object.keys(filteredTypes.Customer.backwardRelationships)).toHaveLength(0);
+    });
+
+    it("does not create backward relationships when target type does not exist", () => {
+      const order = createMockType(
+        "Order",
+        {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          customerId: {
+            name: "customerId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "Customer",
+              forwardName: "customer",
+              backwardName: "orders",
+              key: "id",
+              unique: false,
+            },
+          },
+        },
+        {
+          forwardRelationships: {
+            customer: {
+              name: "customer",
+              targetType: "Customer",
+              targetField: "customerId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+          },
+        },
+      );
+
+      // Only Order exists, Customer is not in filtered types
+      const filteredTypes = { Order: order };
+      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+
+      // Order should still have its forward relationship but no backward should be created
+      expect(Object.keys(filteredTypes.Order.backwardRelationships)).toHaveLength(0);
+    });
+
+    it("generates default backward name using inflection when not specified", () => {
+      const user = createMockType("User", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+      });
+
+      const profile = createMockType(
+        "Profile",
+        {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          userId: {
+            name: "userId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "User",
+              forwardName: "user",
+              backwardName: "", // Empty - should be auto-generated
+              key: "id",
+              unique: false,
+            },
+          },
+        },
+        {
+          forwardRelationships: {
+            user: {
+              name: "user",
+              targetType: "User",
+              targetField: "userId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+          },
+        },
+      );
+
+      const filteredTypes = { User: user, Profile: profile };
+      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+
+      // Should generate "profiles" (plural of "profile")
+      expect(filteredTypes.User.backwardRelationships.profiles).toBeDefined();
+      expect(filteredTypes.User.backwardRelationships.profiles.isArray).toBe(true);
+    });
+
+    it("uses singular form for unique (1-1) relationships", () => {
+      const user = createMockType("User", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+      });
+
+      const profile = createMockType(
+        "Profile",
+        {
+          id: { name: "id", config: { type: "uuid", required: true } },
+          userId: {
+            name: "userId",
+            config: { type: "uuid", required: false },
+            relation: {
+              targetType: "User",
+              forwardName: "user",
+              backwardName: "", // Empty - should be auto-generated
+              key: "id",
+              unique: true, // 1-1 relationship
+            },
+          },
+        },
+        {
+          forwardRelationships: {
+            user: {
+              name: "user",
+              targetType: "User",
+              targetField: "userId",
+              sourceField: "id",
+              isArray: false,
+              description: "",
+            },
+          },
+        },
+      );
+
+      const filteredTypes = { User: user, Profile: profile };
+      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+
+      // Should generate "profile" (singular) for 1-1 relationship
+      expect(filteredTypes.User.backwardRelationships.profile).toBeDefined();
+      expect(filteredTypes.User.backwardRelationships.profile.isArray).toBe(false);
     });
   });
 });
