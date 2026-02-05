@@ -1,5 +1,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { create } from "@bufbuild/protobuf";
+import {
+  TailorDBTypeSchema,
+  TailorDBType_FieldConfigSchema,
+} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { writeTblsSchemaToFile, buildTblsSchema, toTblsColumn } from "./schema";
@@ -22,7 +27,7 @@ type TestFieldConfig = Partial<{
 
 // Helper to create a mock TailorDBType_FieldConfig for testing
 function createFieldConfig(config: TestFieldConfig = {}): TailorDBType_FieldConfig {
-  return {
+  return create(TailorDBType_FieldConfigSchema, {
     type: config.type ?? "string",
     description: config.description ?? "",
     required: config.required ?? false,
@@ -36,7 +41,7 @@ function createFieldConfig(config: TestFieldConfig = {}): TailorDBType_FieldConf
     index: false,
     unique: false,
     vector: false,
-  } as unknown as TailorDBType_FieldConfig;
+  });
 }
 
 describe("writeTblsSchemaToFile", () => {
@@ -114,13 +119,13 @@ function createType(
     fieldConfigs[fieldName] = createFieldConfig(config);
   }
 
-  return {
+  return create(TailorDBTypeSchema, {
     name,
     schema: {
       description,
       fields: fieldConfigs,
     },
-  } as unknown as TailorDBProtoType;
+  });
 }
 
 describe("toTblsColumn", () => {
