@@ -7,14 +7,12 @@
  * import { getGeneratedType } from "@tailor-platform/sdk/audit-log-plugin";
  *
  * // Get the AuditLog type
- * const AuditLog = getGeneratedType("AuditLog");
+ * const AuditLog = getGeneratedType(null, "audit-log");
  *
  * // Use the type
  * const schema = AuditLog.pickFields(["id", "action"], { optional: true });
  * ```
  */
 
-export { auditLogPlugin } from "./plugin";
-
-// Re-export type retrieval API
-export { getGeneratedType, getAuditLogType } from "./registry";
+export { auditLogPlugin, getGeneratedType } from "./plugin";
+export type { GeneratedTypeKind } from "./plugin";

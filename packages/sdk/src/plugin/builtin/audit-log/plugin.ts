@@ -9,25 +9,62 @@
  */
 
 import { db, t } from "@/configure";
-import { registerGeneratedType, type GeneratedTypeKind } from "./registry";
-import type {
-  PluginBase,
-  PluginGeneratedType,
-  StandalonePluginProcessContext,
-  TailorDBTypeForPlugin,
-} from "@/parser/plugin-config/types";
+import type { TailorAnyDBType } from "@/configure/services/tailordb/schema";
+import type { PluginBase, StandalonePluginProcessContext } from "@/parser/plugin-config/types";
 
 /**
- * Helper to attach kind metadata to a generated type.
- * @param type - The TailorDB type to add kind to
- * @param kind - The kind identifier for this generated type
- * @returns The type with kind metadata attached
+ * Generated type kinds for audit-log plugin.
  */
-function withKind<T extends TailorDBTypeForPlugin>(
-  type: T,
-  kind: GeneratedTypeKind,
-): T & PluginGeneratedType {
-  return Object.assign(type, { kind });
+export type GeneratedTypeKind = "audit-log";
+
+/**
+ * Generate audit-log types.
+ * @returns Map of kind to generated type
+ */
+function generateTypes(): Record<GeneratedTypeKind, TailorAnyDBType> {
+  const auditLogType = db
+    .type("AuditLog", {
+      // Reference to the type that was modified
+      targetType: db.string().index(),
+      // Reference to the record that was modified
+      targetId: db.uuid().index(),
+      // The action that was performed
+      action: db.enum(["CREATE", "UPDATE", "DELETE"]).index(),
+      // The user who performed the action
+      performedBy: db.uuid().index(),
+      // When the action was performed
+      performedAt: db.datetime().index(),
+      // JSON representation of the changes
+      changes: db.string({ optional: true }),
+      // Previous values (for UPDATE/DELETE)
+      previousValues: db.string({ optional: true }),
+      // New values (for CREATE/UPDATE)
+      newValues: db.string({ optional: true }),
+      // Additional metadata
+      metadata: db.string({ optional: true }),
+      ...db.fields.timestamps(),
+    })
+    .description("Audit log for tracking changes across the application")
+    .indexes({
+      name: "idx_audit_target",
+      fields: ["targetType", "targetId"],
+    });
+
+  return {
+    "audit-log": auditLogType,
+  };
+}
+
+/**
+ * Get a generated type from the audit-log plugin.
+ * For standalone plugins, pass `null` as the first argument.
+ * @param _sourceType - Always null for standalone plugins
+ * @param kind - The kind of generated type to retrieve
+ * @returns The generated TailorDB type
+ */
+export function getGeneratedType(_sourceType: null, kind: GeneratedTypeKind): TailorAnyDBType {
+  const types = generateTypes();
+  return types[kind];
 }
 
 /**
@@ -48,41 +85,8 @@ export const auditLogPlugin: PluginBase = {
   processStandalone(
     _context: StandalonePluginProcessContext,
   ): ReturnType<NonNullable<PluginBase["processStandalone"]>> {
-    // Generate AuditLog type
-    const auditLogType = db
-      .type("AuditLog", {
-        // Reference to the type that was modified
-        targetType: db.string().index(),
-        // Reference to the record that was modified
-        targetId: db.uuid().index(),
-        // The action that was performed
-        action: db.enum(["CREATE", "UPDATE", "DELETE"]).index(),
-        // The user who performed the action
-        performedBy: db.uuid().index(),
-        // When the action was performed
-        performedAt: db.datetime().index(),
-        // JSON representation of the changes
-        changes: db.string({ optional: true }),
-        // Previous values (for UPDATE/DELETE)
-        previousValues: db.string({ optional: true }),
-        // New values (for CREATE/UPDATE)
-        newValues: db.string({ optional: true }),
-        // Additional metadata
-        metadata: db.string({ optional: true }),
-        ...db.fields.timestamps(),
-      })
-      .description("Audit log for tracking changes across the application")
-      .indexes({
-        name: "idx_audit_target",
-        fields: ["targetType", "targetId"],
-      });
-
-    // Add kind metadata and register for later retrieval
-    const auditLogWithKind = withKind(auditLogType, "audit-log");
-    registerGeneratedType("audit-log", auditLogType);
-
     return {
-      types: [auditLogWithKind],
+      types: generateTypes(),
     };
   },
 };

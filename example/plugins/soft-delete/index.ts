@@ -21,9 +21,9 @@
  *
  * // Access the generated archive type
  * import { getGeneratedType } from "./plugins/soft-delete";
- * const UserArchive = getGeneratedType(user, "archive");
+ * const CustomerArchive = getGeneratedType(customer, "archive");
  * ```
  */
 
-export { softDeletePlugin } from "./plugin";
-export { getGeneratedType, type GeneratedTypeKind } from "./registry";
+export { softDeletePlugin, getGeneratedType } from "./plugin";
+export type { GeneratedTypeKind } from "./plugin";

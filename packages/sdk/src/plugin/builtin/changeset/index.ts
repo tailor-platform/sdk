@@ -17,11 +17,8 @@
  */
 
 // Re-export plugin
-export { changesetPlugin } from "./plugin";
-
-// Re-export type retrieval API
-export { getGeneratedType } from "./registry";
-export type { GeneratedTypeKind } from "./registry";
+export { changesetPlugin, getGeneratedType } from "./plugin";
+export type { GeneratedTypeKind } from "./plugin";
 
 // Re-export types
 export type {

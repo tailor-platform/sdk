@@ -1,27 +1,13 @@
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
-import { registerGeneratedType, type GeneratedTypeKind } from "./registry";
+import type { TailorAnyDBType } from "@/configure/services/tailordb/schema";
 import type { output } from "@/configure/types/helpers";
-import type {
-  PluginBase,
-  PluginProcessContext,
-  PluginOutput,
-  PluginGeneratedType,
-  TailorDBTypeForPlugin,
-} from "@/parser/plugin-config/types";
+import type { PluginBase, PluginProcessContext, PluginOutput } from "@/parser/plugin-config/types";
 
 /**
- * Attach a kind identifier to a generated type for getGeneratedType() API.
- * @param type - The TailorDB type to attach kind to
- * @param kind - The kind identifier (e.g., "request", "step")
- * @returns The type with kind attached
+ * Generated type kinds for changeset plugin.
  */
-function withKind<T extends TailorDBTypeForPlugin>(
-  type: T,
-  kind: GeneratedTypeKind,
-): T & PluginGeneratedType {
-  return Object.assign(type, { kind });
-}
+export type GeneratedTypeKind = "request" | "step" | "approval" | "rework";
 
 /**
  * Changeset plugin configuration schema
@@ -29,38 +15,12 @@ function withKind<T extends TailorDBTypeForPlugin>(
 const configSchema = t.bool().validate(({ value }) => value === true);
 
 /**
- * Process a type and generate changeset-related types
- * @param context - Plugin processing context containing the type to process
- * @returns Plugin output with generated changeset types and extended fields
+ * Generate changeset-related types for a source type.
+ * @param type - The source TailorDB type
+ * @returns Map of kind to generated type
  */
-function processChangeset(
-  context: PluginProcessContext<output<typeof configSchema>>,
-): PluginOutput {
-  const { type, config } = context;
-  if (!config) {
-    return { types: [] };
-  }
-
+function generateTypes(type: TailorAnyDBType): Record<GeneratedTypeKind, TailorAnyDBType> {
   const typeName = type.name;
-
-  // Fields to add to the original type for version control
-  const extendFields = {
-    recordId: db.uuid().index().description("Unique identifier for the record across versions"),
-    recordState: db
-      .enum(["DRAFT", "ACTIVE", "ARCHIVED"])
-      .index()
-      .description("Current state of the record"),
-    archivedSeq: db.int().description("Sequence number for archived versions"),
-    effectiveFrom: db.datetime().description("When this version becomes effective"),
-    effectiveTo: db.datetime({ optional: true }).description("When this version expires"),
-    requestedBy: db.uuid().index().description("User who requested the change"),
-    requestedAt: db.datetime().description("When the change was requested"),
-    currentApprover: db
-      .uuid({ optional: true })
-      .index()
-      .description("Current approver in the workflow"),
-    approvers: db.uuid({ array: true }).description("List of approvers for this change"),
-  };
 
   // ChangeRequest - approval process
   const changeRequest = db
@@ -138,20 +98,68 @@ function processChangeset(
     ...db.fields.timestamps(),
   });
 
-  // Register generated types in the registry for later retrieval
-  registerGeneratedType(type, "request", changeRequest);
-  registerGeneratedType(type, "step", changeStep);
-  registerGeneratedType(type, "approval", changeApproval);
-  registerGeneratedType(type, "rework", changeReworkEvent);
+  return {
+    request: changeRequest,
+    step: changeStep,
+    approval: changeApproval,
+    rework: changeReworkEvent,
+  };
+}
+
+/**
+ * Generate extend fields for the source type.
+ * @returns Fields to add to the source type for version control
+ */
+function generateExtendFields() {
+  return {
+    recordId: db.uuid().index().description("Unique identifier for the record across versions"),
+    recordState: db
+      .enum(["DRAFT", "ACTIVE", "ARCHIVED"])
+      .index()
+      .description("Current state of the record"),
+    archivedSeq: db.int().description("Sequence number for archived versions"),
+    effectiveFrom: db.datetime().description("When this version becomes effective"),
+    effectiveTo: db.datetime({ optional: true }).description("When this version expires"),
+    requestedBy: db.uuid().index().description("User who requested the change"),
+    requestedAt: db.datetime().description("When the change was requested"),
+    currentApprover: db
+      .uuid({ optional: true })
+      .index()
+      .description("Current approver in the workflow"),
+    approvers: db.uuid({ array: true }).description("List of approvers for this change"),
+  };
+}
+
+/**
+ * Get a generated type for a source type.
+ * @param sourceType - The original type that the plugin is applied to
+ * @param kind - The kind of generated type to retrieve
+ * @returns The generated TailorDB type
+ */
+export function getGeneratedType(
+  sourceType: TailorAnyDBType,
+  kind: GeneratedTypeKind,
+): TailorAnyDBType {
+  const types = generateTypes(sourceType);
+  return types[kind];
+}
+
+/**
+ * Process a type and generate changeset-related types
+ * @param context - Plugin processing context containing the type to process
+ * @returns Plugin output with generated changeset types and extended fields
+ */
+function processChangeset(
+  context: PluginProcessContext<output<typeof configSchema>>,
+): PluginOutput {
+  const { type, config } = context;
+  if (!config) {
+    return { types: {} };
+  }
 
   return {
-    types: [
-      withKind(changeRequest, "request"),
-      withKind(changeStep, "step"),
-      withKind(changeApproval, "approval"),
-      withKind(changeReworkEvent, "rework"),
-    ],
-    extends: { fields: extendFields },
+    types: generateTypes(type),
+    extends: { fields: generateExtendFields() },
   };
 }
 

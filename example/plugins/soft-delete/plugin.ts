@@ -26,12 +26,10 @@ import {
   db,
   t,
   type PluginBase,
-  type PluginGeneratedType,
   type PluginProcessContext,
-  type TailorDBTypeForPlugin,
+  type TailorAnyDBType,
   type TailorAnyDBField,
 } from "@tailor-platform/sdk";
-import { registerGeneratedType, type GeneratedTypeKind } from "./registry";
 
 /**
  * Configuration options for the soft-delete plugin
@@ -42,27 +40,20 @@ interface SoftDeleteConfig {
 }
 
 /**
- * Helper to attach kind metadata to a generated type.
- * @param type - The TailorDB type to add kind to
- * @param kind - The kind identifier for this generated type
- * @returns The type with kind metadata attached
+ * Generated type kinds for soft-delete plugin.
  */
-function withKind<T extends TailorDBTypeForPlugin>(
-  type: T,
-  kind: GeneratedTypeKind,
-): T & PluginGeneratedType {
-  return Object.assign(type, { kind });
-}
+export type GeneratedTypeKind = "archive";
 
 /**
- * Process a type to add soft delete functionality.
- * @param context - Plugin process context
- * @returns Plugin output with extended fields and generated archive type
+ * Generate soft-delete types for a source type.
+ * @param type - The source TailorDB type
+ * @param config - Plugin configuration
+ * @returns Map of kind to generated type
  */
-function processSoftDelete(
-  context: PluginProcessContext<SoftDeleteConfig>,
-): ReturnType<NonNullable<PluginBase["process"]>> {
-  const { type, config } = context;
+function generateTypes(
+  type: TailorAnyDBType,
+  config: SoftDeleteConfig = {},
+): Record<GeneratedTypeKind, TailorAnyDBType> {
   const archiveName = `${type.name}Archive`;
 
   // Build archive type fields
@@ -92,17 +83,48 @@ function processSoftDelete(
       fields: ["deletedAt", "originalId"],
     });
 
-  // Register for getGeneratedType() API
-  registerGeneratedType(type, "archive", archiveType);
+  return { archive: archiveType };
+}
 
-  // Extend original type with deletedAt field
-  const extendFields = {
+/**
+ * Generate extend fields for the source type.
+ * @returns Fields to add to the source type
+ */
+function generateExtendFields() {
+  return {
     deletedAt: db.datetime({ optional: true }).index(),
   };
+}
+
+/**
+ * Get a generated type for a source type.
+ * @param sourceType - The original type that the plugin is applied to
+ * @param kind - The kind of generated type to retrieve
+ * @param config - Optional plugin configuration
+ * @returns The generated TailorDB type
+ */
+export function getGeneratedType(
+  sourceType: TailorAnyDBType,
+  kind: GeneratedTypeKind,
+  config?: SoftDeleteConfig,
+): TailorAnyDBType {
+  const types = generateTypes(sourceType, config);
+  return types[kind];
+}
+
+/**
+ * Process a type to add soft delete functionality.
+ * @param context - Plugin process context
+ * @returns Plugin output with extended fields and generated archive type
+ */
+function processSoftDelete(
+  context: PluginProcessContext<SoftDeleteConfig>,
+): ReturnType<NonNullable<PluginBase["process"]>> {
+  const { type, config } = context;
 
   return {
-    types: [withKind(archiveType, "archive")],
-    extends: { fields: extendFields },
+    types: generateTypes(type, config),
+    extends: { fields: generateExtendFields() },
   };
 }
 

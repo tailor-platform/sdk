@@ -29,7 +29,7 @@ export interface PluginSourceInfo {
   pluginImportPath?: string;
   originalFilePath: string;
   originalExportName: string;
-  /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */
+  /** Generated type kind identifier (e.g., "request", "step") */
   generatedTypeKind?: string;
 }
 
