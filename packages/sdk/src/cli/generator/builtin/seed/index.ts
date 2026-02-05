@@ -32,40 +32,42 @@ type NamespaceConfig = {
 function generateIdpUserSeedFunction(hasIdpUser: boolean): string {
   if (!hasIdpUser) return "";
 
-  // Using regular strings with proper escaping to avoid template literal issues
-  return `
-    // Seed _User via gql-ingest (IdP managed)
-    const seedIdpUserViaGqlIngest = async () => {
-      console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
-
-      const gqlClient = new GQLIngest({
-        endpoint,
-        headers: {
-          Authorization: \`Bearer \${tokenInfo.accessToken}\`,
-        },
-      });
-
-      gqlClient.on("entityStart", (payload) => {
-        console.log(styleText("dim", \`    Processing \${payload.entityName}...\`));
-      });
-
-      gqlClient.on("entityComplete", (payload) => {
-        const { entityName, metrics: { rowsProcessed } } = payload;
-        console.log(styleText("green", \`  ✓ \${entityName}: \${rowsProcessed} rows processed\`));
-      });
-
-      gqlClient.on("rowFailure", (payload) => {
-        console.error(styleText("red", \`  ✗ Row \${payload.rowIndex} in \${payload.entityName} failed: \${payload.error.message}\`));
-      });
-
-      try {
-        const result = await gqlClient.ingestEntities(configDir, ["_User"]);
-        return { success: result.success };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    };
-    `;
+  // `ml` only strips indent from template text (strings[]), not interpolated values.
+  // `ml` adds the template line's indent to each continuation line in the value,
+  // so return 0-indent lines (with relative indent for inner blocks).
+  return [
+    "// Seed _User via gql-ingest (IdP managed)",
+    "const seedIdpUserViaGqlIngest = async () => {",
+    '  console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));',
+    "",
+    "  const gqlClient = new GQLIngest({",
+    "    endpoint,",
+    "    headers: {",
+    "      Authorization: `Bearer ${tokenInfo.accessToken}`,",
+    "    },",
+    "  });",
+    "",
+    '  gqlClient.on("entityStart", (payload) => {',
+    '    console.log(styleText("dim", `    Processing ${payload.entityName}...`));',
+    "  });",
+    "",
+    '  gqlClient.on("entityComplete", (payload) => {',
+    "    const { entityName, metrics: { rowsProcessed } } = payload;",
+    '    console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));',
+    "  });",
+    "",
+    '  gqlClient.on("rowFailure", (payload) => {',
+    '    console.error(styleText("red", `  ✗ Row ${payload.rowIndex} in ${payload.entityName} failed: ${payload.error.message}`));',
+    "  });",
+    "",
+    "  try {",
+    '    const result = await gqlClient.ingestEntities(configDir, ["_User"]);',
+    "    return { success: result.success };",
+    "  } catch (error) {",
+    "    return { success: false, error: error.message };",
+    "  }",
+    "};",
+  ].join("\n");
 }
 
 /**
@@ -76,16 +78,18 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean): string {
 function generateIdpUserSeedCall(hasIdpUser: boolean): string {
   if (!hasIdpUser) return "";
 
-  return `
-      // Seed _User if included and not skipped
-      const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
-      if (hasIdpUser && shouldSeedUser) {
-        const result = await seedIdpUserViaGqlIngest();
-        if (!result.success) {
-          allSuccess = false;
-        }
-      }
-      `;
+  // `ml` adds the template line's indent to each continuation line in the value,
+  // so return 0-indent lines (with relative indent for inner blocks).
+  return [
+    "// Seed _User if included and not skipped",
+    'const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));',
+    "if (hasIdpUser && shouldSeedUser) {",
+    "  const result = await seedIdpUserViaGqlIngest();",
+    "  if (!result.success) {",
+    "    allSuccess = false;",
+    "  }",
+    "}",
+  ].join("\n");
 }
 
 /**
@@ -126,7 +130,7 @@ function generateExecScript(
 
   return ml /* js */ `
     ${gqlIngestImport}
-    import { readFileSync, readdirSync, statSync } from "node:fs";
+    import { readFileSync } from "node:fs";
     import { join } from "node:path";
     import { parseArgs, styleText } from "node:util";
     import { createInterface } from "node:readline";
@@ -370,6 +374,11 @@ ${namespaceDepsEntries}
       return result;
     };
 
+    // Initialize operator client (once for all namespaces)
+    const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+    const workspaceId = await loadWorkspaceId({ profile: values.profile });
+    const operatorClient = await initOperatorClient(accessToken);
+
     // Seed TailorDB types via testExecScript
     const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
       const dataDir = join(configDir, "data");
@@ -388,14 +397,9 @@ ${namespaceDepsEntries}
       // Bundle seed script
       const bundled = await bundleSeedScript(namespace, typesWithData);
 
-      // Initialize operator client
-      const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
-      const workspaceId = await loadWorkspaceId({ configPath, profile: values.profile });
-      const client = await initOperatorClient(accessToken);
-
       // Execute seed script
       const result = await executeScript({
-        client,
+        client: operatorClient,
         workspaceId,
         name: \`seed-\${namespace}\`,
         code: bundled.bundledCode,
@@ -545,41 +549,39 @@ export function createSeedGenerator(
       }
 
       // Process IdP user if configured
-      let hasIdpUser = false;
-      if (input.auth) {
-        const idpUser = processIdpUser(input.auth);
-        if (idpUser) {
-          hasIdpUser = true;
-          const outputBaseDir = options.distPath;
+      const idpUser = input.auth ? processIdpUser(input.auth) : null;
+      const hasIdpUser = idpUser !== null;
 
-          // Generate GraphQL mutation file (for gql-ingest)
-          files.push({
-            path: path.join(outputBaseDir, idpUser.mapping.graphqlFile),
-            content: idpUser.graphql,
-          });
+      if (idpUser) {
+        const outputBaseDir = options.distPath;
 
-          // Generate mapping file (for gql-ingest)
-          files.push({
-            path: path.join(outputBaseDir, "mappings", `${idpUser.name}.json`),
-            content: JSON.stringify(idpUser.mapping, null, 2) + "\n",
-          });
+        // Generate GraphQL mutation file (for gql-ingest)
+        files.push({
+          path: path.join(outputBaseDir, idpUser.mapping.graphqlFile),
+          content: idpUser.graphql,
+        });
 
-          // Generate empty JSONL data file
-          files.push({
-            path: path.join(outputBaseDir, idpUser.mapping.dataFile),
-            content: "",
-            skipIfExists: true,
-          });
+        // Generate mapping file (for gql-ingest)
+        files.push({
+          path: path.join(outputBaseDir, "mappings", `${idpUser.name}.json`),
+          content: JSON.stringify(idpUser.mapping, null, 2) + "\n",
+        });
 
-          // Generate schema file with foreign key
-          files.push({
-            path: path.join(outputBaseDir, "data", `${idpUser.name}.schema.ts`),
-            content: generateIdpUserSchemaFile(
-              idpUser.schema.usernameField,
-              idpUser.schema.userTypeName,
-            ),
-          });
-        }
+        // Generate empty JSONL data file
+        files.push({
+          path: path.join(outputBaseDir, idpUser.mapping.dataFile),
+          content: "",
+          skipIfExists: true,
+        });
+
+        // Generate schema file with foreign key
+        files.push({
+          path: path.join(outputBaseDir, "data", `${idpUser.name}.schema.ts`),
+          content: generateIdpUserSchemaFile(
+            idpUser.schema.usernameField,
+            idpUser.schema.userTypeName,
+          ),
+        });
       }
 
       // Generate config.yaml with all dependencies
@@ -591,11 +593,8 @@ export function createSeedGenerator(
       }
 
       // Add _User dependencies if exists
-      if (input.auth) {
-        const idpUser = processIdpUser(input.auth);
-        if (idpUser) {
-          allDependencies[idpUser.name] = idpUser.dependencies;
-        }
+      if (idpUser) {
+        allDependencies[idpUser.name] = idpUser.dependencies;
       }
 
       files.push({

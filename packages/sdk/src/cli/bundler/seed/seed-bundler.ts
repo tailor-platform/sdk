@@ -55,10 +55,9 @@ const BATCH_SIZE = 100;
 /**
  * Generate seed script content for server-side execution
  * @param namespace - TailorDB namespace
- * @param _typeNames - List of type names included in the seed (reserved for future use)
  * @returns Generated seed script content
  */
-function generateSeedScriptContent(namespace: string, _typeNames: string[]): string {
+function generateSeedScriptContent(namespace: string): string {
   return ml /* ts */ `
     import { Kysely } from "kysely";
     import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
@@ -147,7 +146,7 @@ export async function bundleSeedScript(
   const outputPath = path.join(outputDir, `seed_${namespace}.js`);
 
   // Generate seed script content
-  const entryContent = generateSeedScriptContent(namespace, typeNames);
+  const entryContent = generateSeedScriptContent(namespace);
   fs.writeFileSync(entryPath, entryContent);
 
   let tsconfig: string | undefined;

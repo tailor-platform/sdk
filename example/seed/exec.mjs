@@ -1,5 +1,5 @@
 import { GQLIngest } from "@jackchuka/gql-ingest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
@@ -273,6 +273,11 @@ const topologicalSort = (types, deps) => {
   return result;
 };
 
+// Initialize operator client (once for all namespaces)
+const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+const workspaceId = await loadWorkspaceId({ profile: values.profile });
+const operatorClient = await initOperatorClient(accessToken);
+
 // Seed TailorDB types via testExecScript
 const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   const dataDir = join(configDir, "data");
@@ -291,14 +296,9 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   // Bundle seed script
   const bundled = await bundleSeedScript(namespace, typesWithData);
 
-  // Initialize operator client
-  const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
-  const workspaceId = await loadWorkspaceId({ configPath, profile: values.profile });
-  const client = await initOperatorClient(accessToken);
-
   // Execute seed script
   const result = await executeScript({
-    client,
+    client: operatorClient,
     workspaceId,
     name: `seed-${namespace}`,
     code: bundled.bundledCode,
@@ -328,39 +328,37 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   }
 };
 
+// Seed _User via gql-ingest (IdP managed)
+const seedIdpUserViaGqlIngest = async () => {
+  console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
 
-    // Seed _User via gql-ingest (IdP managed)
-    const seedIdpUserViaGqlIngest = async () => {
-      console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
+  const gqlClient = new GQLIngest({
+    endpoint,
+    headers: {
+      Authorization: `Bearer ${tokenInfo.accessToken}`,
+    },
+  });
 
-      const gqlClient = new GQLIngest({
-        endpoint,
-        headers: {
-          Authorization: `Bearer ${tokenInfo.accessToken}`,
-        },
-      });
+  gqlClient.on("entityStart", (payload) => {
+    console.log(styleText("dim", `    Processing ${payload.entityName}...`));
+  });
 
-      gqlClient.on("entityStart", (payload) => {
-        console.log(styleText("dim", `    Processing ${payload.entityName}...`));
-      });
+  gqlClient.on("entityComplete", (payload) => {
+    const { entityName, metrics: { rowsProcessed } } = payload;
+    console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));
+  });
 
-      gqlClient.on("entityComplete", (payload) => {
-        const { entityName, metrics: { rowsProcessed } } = payload;
-        console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));
-      });
+  gqlClient.on("rowFailure", (payload) => {
+    console.error(styleText("red", `  ✗ Row ${payload.rowIndex} in ${payload.entityName} failed: ${payload.error.message}`));
+  });
 
-      gqlClient.on("rowFailure", (payload) => {
-        console.error(styleText("red", `  ✗ Row ${payload.rowIndex} in ${payload.entityName} failed: ${payload.error.message}`));
-      });
-
-      try {
-        const result = await gqlClient.ingestEntities(configDir, ["_User"]);
-        return { success: result.success };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    };
-    
+  try {
+    const result = await gqlClient.ingestEntities(configDir, ["_User"]);
+    return { success: result.success };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
 
 // Main execution
 try {
@@ -388,16 +386,14 @@ try {
     }
   }
 
-  
-        // Seed _User if included and not skipped
-        const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
-        if (hasIdpUser && shouldSeedUser) {
-          const result = await seedIdpUserViaGqlIngest();
-          if (!result.success) {
-            allSuccess = false;
-          }
-        }
-        
+  // Seed _User if included and not skipped
+  const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
+  if (hasIdpUser && shouldSeedUser) {
+    const result = await seedIdpUserViaGqlIngest();
+    if (!result.success) {
+      allSuccess = false;
+    }
+  }
 
   if (allSuccess) {
     console.log(styleText("green", "\n✓ Seed data generation completed successfully"));
