@@ -4,6 +4,7 @@ import type { TailorAnyField } from "@/configure/types";
 import type {
   PluginBase,
   PluginGeneratedExecutor,
+  PluginGeneratedType,
   PluginOutput,
   StandalonePluginProcessContext,
 } from "@/parser/plugin-config/types";
@@ -17,6 +18,30 @@ export interface ProcessAttachmentContext {
   config: unknown;
   namespace: string;
   pluginId: string;
+}
+
+/**
+ * Information about a plugin-generated type (for type file generation)
+ */
+export interface PluginGeneratedTypeInfo {
+  /** Plugin ID that generated this type */
+  pluginId: string;
+  /** Plugin import path for resolving executor files */
+  pluginImportPath: string;
+  /** Source type name that triggered the plugin */
+  sourceTypeName: string;
+  /** Kind identifier for this generated type */
+  kind: string;
+  /** The generated TailorDB type object */
+  type: PluginGeneratedType;
+}
+
+/**
+ * Extended executor info with plugin import path
+ */
+export interface PluginExecutorInfoExtended extends PluginExecutorInfo {
+  /** Plugin's import path for resolving executor files */
+  pluginImportPath: string;
 }
 
 /**
@@ -77,6 +102,7 @@ function validatePluginConfig(config: unknown, schema: TailorAnyField): ConfigVa
 export class PluginManager {
   private plugins: Map<string, PluginBase> = new Map();
   private generatedExecutors: PluginExecutorInfo[] = [];
+  private generatedTypes: PluginGeneratedTypeInfo[] = [];
 
   constructor(plugins: PluginBase[] = []) {
     for (const plugin of plugins) {
@@ -127,6 +153,20 @@ export class PluginManager {
       config: context.config,
       namespace: context.namespace,
     });
+
+    // Collect generated types
+    if (output.types && Object.keys(output.types).length > 0) {
+      const importPath = plugin.importPath;
+      for (const [kind, type] of Object.entries(output.types)) {
+        this.generatedTypes.push({
+          pluginId: context.pluginId,
+          pluginImportPath: importPath,
+          sourceTypeName: context.type.name,
+          kind,
+          type,
+        });
+      }
+    }
 
     // Collect generated executors
     if (output.executors && output.executors.length > 0) {
@@ -244,6 +284,25 @@ export class PluginManager {
    */
   getPluginGeneratedExecutors(): ReadonlyArray<PluginExecutorInfo> {
     return this.generatedExecutors;
+  }
+
+  /**
+   * Get all plugin-generated executors with import paths
+   * @returns Array of plugin-generated executor info with import paths
+   */
+  getPluginGeneratedExecutorsWithImportPath(): ReadonlyArray<PluginExecutorInfoExtended> {
+    return this.generatedExecutors.map((info) => ({
+      ...info,
+      pluginImportPath: this.getPluginImportPath(info.pluginId) ?? "",
+    }));
+  }
+
+  /**
+   * Get all plugin-generated types
+   * @returns Array of plugin-generated type info
+   */
+  getPluginGeneratedTypes(): ReadonlyArray<PluginGeneratedTypeInfo> {
+    return this.generatedTypes;
   }
 
   /**

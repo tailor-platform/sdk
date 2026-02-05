@@ -1,38 +1,66 @@
+/**
+ * Plugin Executor Generator
+ *
+ * Generates TypeScript files for plugin-generated executors.
+ * Supports both legacy format (inline trigger/operation) and new format (executorFile/context).
+ */
+
 import * as fs from "node:fs";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/utils/logger";
-import type {
-  PluginGeneratedExecutor,
-  PluginTriggerConfig,
-  PluginOperationConfig,
-  PluginInjectMap,
+import {
+  isPluginExecutorWithFile,
+  type PluginGeneratedExecutorLegacy,
+  type PluginGeneratedExecutorWithFile,
+  type PluginTriggerConfig,
+  type PluginOperationConfig,
+  type PluginInjectMap,
+  type PluginExecutorContext,
 } from "@/parser/plugin-config/types";
-import type { PluginExecutorInfo } from "@/plugin/manager";
+import type { PluginTypeGenerationResult } from "./plugin-type-generator";
+import type { PluginExecutorInfoExtended } from "@/plugin/manager";
+
+/**
+ * Information needed for type import resolution.
+ */
+interface TypeImportInfo {
+  /** Variable name to use in generated code */
+  variableName: string;
+  /** Import path for the type */
+  importPath: string;
+  /** Whether this is a generated type (vs user-defined) */
+  isGeneratedType: boolean;
+}
 
 /**
  * Generate TypeScript files for plugin-generated executors.
  * These files will be processed by the standard executor bundler.
  * @param executors - Array of plugin executor information
- * @param outputDir - Directory to output the generated files
+ * @param outputDir - Base output directory (e.g., .tailor-sdk)
+ * @param typeGenerationResult - Result from plugin type generation (for import resolution)
+ * @param sourceTypeFilePaths - Map of source type names to their file paths
  * @returns Array of generated file paths
  */
 export function generatePluginExecutorFiles(
-  executors: ReadonlyArray<PluginExecutorInfo>,
+  executors: ReadonlyArray<PluginExecutorInfoExtended>,
   outputDir: string,
+  typeGenerationResult?: PluginTypeGenerationResult,
+  sourceTypeFilePaths?: Map<string, string>,
 ): string[] {
   if (executors.length === 0) {
     return [];
   }
 
-  fs.mkdirSync(outputDir, { recursive: true });
-
   const generatedFiles: string[] = [];
 
   for (const info of executors) {
-    const content = generateExecutorFileContent(info.executor);
-    const filePath = path.join(outputDir, `${info.executor.name}.ts`);
-    fs.writeFileSync(filePath, content);
+    const filePath = generateSingleExecutorFile(
+      info,
+      outputDir,
+      typeGenerationResult,
+      sourceTypeFilePaths,
+    );
     generatedFiles.push(filePath);
 
     const relativePath = path.relative(process.cwd(), filePath);
@@ -45,28 +73,204 @@ export function generatePluginExecutorFiles(
 }
 
 /**
- * Generate const declarations for injected variables.
- * @param inject - Map of variable names to values
- * @returns TypeScript const declarations
+ * Generate a single executor file.
+ * @param info
+ * @param outputDir
+ * @param typeGenerationResult
+ * @param sourceTypeFilePaths
+ * @returns Absolute path to the generated file
  */
-function generateInjectDeclarations(inject: PluginInjectMap | undefined): string {
-  if (!inject || Object.keys(inject).length === 0) {
-    return "";
+function generateSingleExecutorFile(
+  info: PluginExecutorInfoExtended,
+  outputDir: string,
+  typeGenerationResult?: PluginTypeGenerationResult,
+  sourceTypeFilePaths?: Map<string, string>,
+): string {
+  const pluginDir = sanitizePluginId(info.pluginId);
+  const executorOutputDir = path.join(outputDir, "plugin", pluginDir, "executors");
+  fs.mkdirSync(executorOutputDir, { recursive: true });
+
+  const filePath = path.join(executorOutputDir, `${info.executor.name}.ts`);
+
+  let content: string;
+  if (isPluginExecutorWithFile(info.executor)) {
+    content = generateExecutorFileContentNew(
+      info,
+      info.executor,
+      outputDir,
+      typeGenerationResult,
+      sourceTypeFilePaths,
+    );
+  } else {
+    content = generateExecutorFileContentLegacy(info.executor);
   }
 
-  const declarations = Object.entries(inject)
-    .map(([name, value]) => `const ${name} = ${JSON.stringify(value)};`)
-    .join("\n");
-
-  return `\n// Injected variables from plugin\n${declarations}\n`;
+  fs.writeFileSync(filePath, content);
+  return filePath;
 }
 
 /**
- * Generate TypeScript file content for a single executor.
- * @param executor - The plugin-generated executor definition
- * @returns TypeScript source code
+ * Generate TypeScript file content for new format executor (executorFile/context).
+ * @param info
+ * @param executor
+ * @param outputDir
+ * @param typeGenerationResult
+ * @param sourceTypeFilePaths
+ * @returns TypeScript source code for executor file
  */
-function generateExecutorFileContent(executor: PluginGeneratedExecutor): string {
+function generateExecutorFileContentNew(
+  info: PluginExecutorInfoExtended,
+  executor: PluginGeneratedExecutorWithFile,
+  outputDir: string,
+  typeGenerationResult?: PluginTypeGenerationResult,
+  sourceTypeFilePaths?: Map<string, string>,
+): string {
+  const { executorFile, context } = executor;
+  const modulePath = `${info.pluginImportPath}/backend/executors/${executorFile}`;
+
+  // Collect type imports from context
+  const typeImports = collectTypeImports(
+    context,
+    outputDir,
+    info.pluginId,
+    typeGenerationResult,
+    sourceTypeFilePaths,
+  );
+
+  // Generate import statements
+  const imports: string[] = [`import executorFactory from "${modulePath}";`];
+
+  for (const [, importInfo] of typeImports) {
+    imports.push(`import { ${importInfo.variableName} } from "${importInfo.importPath}";`);
+  }
+
+  // Generate context object code
+  const contextCode = generateContextCode(context, typeImports);
+
+  return ml /* ts */ `
+    /**
+     * Auto-generated executor by plugin: ${info.pluginId}
+     * DO NOT EDIT - This file is generated by @tailor-platform/sdk
+     */
+    ${imports.join("\n")}
+
+    export default executorFactory(${contextCode});
+  `;
+}
+
+/**
+ * Collect type imports needed for context.
+ * @param context
+ * @param outputDir
+ * @param pluginId
+ * @param typeGenerationResult
+ * @param sourceTypeFilePaths
+ * @returns Map of context keys to their import information
+ */
+function collectTypeImports(
+  context: PluginExecutorContext,
+  outputDir: string,
+  pluginId: string,
+  typeGenerationResult?: PluginTypeGenerationResult,
+  sourceTypeFilePaths?: Map<string, string>,
+): Map<string, TypeImportInfo> {
+  const typeImports = new Map<string, TypeImportInfo>();
+  const pluginDir = sanitizePluginId(pluginId);
+  const executorDir = path.join(outputDir, "plugin", pluginDir, "executors");
+
+  for (const [key, value] of Object.entries(context)) {
+    if (isTypeObject(value)) {
+      const typeName = value.name;
+      const variableName = toCamelCase(typeName);
+
+      // Check if it's a generated type
+      let importPath: string;
+      let isGeneratedType = false;
+
+      if (typeGenerationResult?.typeFilePaths.has(typeName)) {
+        // It's a generated type - import from plugin types directory
+        const typeFilePath = typeGenerationResult.typeFilePaths.get(typeName)!;
+        const absoluteTypePath = path.join(outputDir, typeFilePath);
+        importPath = path.relative(executorDir, absoluteTypePath).replace(/\.ts$/, "");
+        if (!importPath.startsWith(".")) {
+          importPath = `./${importPath}`;
+        }
+        isGeneratedType = true;
+      } else if (sourceTypeFilePaths?.has(typeName)) {
+        // It's a user-defined type
+        const sourceFilePath = sourceTypeFilePaths.get(typeName)!;
+        importPath = path.relative(executorDir, sourceFilePath).replace(/\.ts$/, "");
+        if (!importPath.startsWith(".")) {
+          importPath = `./${importPath}`;
+        }
+      } else {
+        // Fallback: generate relative path assumption
+        // This might need adjustment based on actual project structure
+        importPath = `../../../../tailordb/${toKebabCase(typeName)}`;
+      }
+
+      typeImports.set(key, {
+        variableName,
+        importPath,
+        isGeneratedType,
+      });
+    }
+  }
+
+  return typeImports;
+}
+
+/**
+ * Generate TypeScript code for context object.
+ * @param context
+ * @param typeImports
+ * @returns TypeScript object literal code
+ */
+function generateContextCode(
+  context: PluginExecutorContext,
+  typeImports: Map<string, TypeImportInfo>,
+): string {
+  const entries: string[] = [];
+
+  for (const [key, value] of Object.entries(context)) {
+    if (isTypeObject(value)) {
+      const importInfo = typeImports.get(key);
+      if (importInfo) {
+        entries.push(`  ${key}: ${importInfo.variableName}`);
+      }
+    } else if (value !== undefined) {
+      entries.push(`  ${key}: ${JSON.stringify(value)}`);
+    }
+  }
+
+  return `{\n${entries.join(",\n")},\n}`;
+}
+
+/**
+ * Check if a value is a TailorDB type object.
+ * @param value
+ * @returns True if value is a type object with name and fields
+ */
+function isTypeObject(value: unknown): value is { name: string; fields: Record<string, unknown> } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    "fields" in value &&
+    typeof (value as { name: unknown }).name === "string"
+  );
+}
+
+// ============================================================================
+// Legacy format support
+// ============================================================================
+
+/**
+ * Generate TypeScript file content for legacy format executor (trigger/operation).
+ * @param executor
+ * @returns TypeScript source code for executor file
+ */
+function generateExecutorFileContentLegacy(executor: PluginGeneratedExecutorLegacy): string {
   const triggerCode = generateTriggerCode(executor.trigger);
   const operationCode = generateOperationCode(executor.operation);
 
@@ -94,9 +298,26 @@ function generateExecutorFileContent(executor: PluginGeneratedExecutor): string 
 }
 
 /**
+ * Generate const declarations for injected variables.
+ * @param inject
+ * @returns TypeScript const declarations or empty string
+ */
+function generateInjectDeclarations(inject: PluginInjectMap | undefined): string {
+  if (!inject || Object.keys(inject).length === 0) {
+    return "";
+  }
+
+  const declarations = Object.entries(inject)
+    .map(([name, value]) => `const ${name} = ${JSON.stringify(value)};`)
+    .join("\n");
+
+  return `\n// Injected variables from plugin\n${declarations}\n`;
+}
+
+/**
  * Generate TypeScript code for trigger configuration.
- * @param trigger - Trigger configuration
- * @returns TypeScript code string
+ * @param trigger
+ * @returns TypeScript code for trigger object
  */
 function generateTriggerCode(trigger: PluginTriggerConfig): string {
   switch (trigger.kind) {
@@ -127,8 +348,8 @@ function generateTriggerCode(trigger: PluginTriggerConfig): string {
 
 /**
  * Generate TypeScript code for operation configuration.
- * @param operation - Operation configuration
- * @returns TypeScript code string
+ * @param operation
+ * @returns TypeScript code for operation object
  */
 function generateOperationCode(operation: PluginOperationConfig): string {
   switch (operation.kind) {
@@ -169,9 +390,44 @@ function generateOperationCode(operation: PluginOperationConfig): string {
 
 /**
  * Escape special characters in template literal content.
- * @param str - String to escape
- * @returns Escaped string safe for use in template literals
+ * @param str
+ * @returns Escaped string safe for template literals
  */
 function escapeTemplateLiteral(str: string): string {
   return str.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+}
+
+// ============================================================================
+// Utility functions
+// ============================================================================
+
+/**
+ * Convert plugin ID to safe directory name.
+ * @param pluginId
+ * @returns Safe directory name
+ */
+function sanitizePluginId(pluginId: string): string {
+  return pluginId.replace(/^@/, "").replace(/\//g, "-");
+}
+
+/**
+ * Convert string to camelCase.
+ * @param str
+ * @returns camelCase string
+ */
+function toCamelCase(str: string): string {
+  const result = str.replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ""));
+  return result.charAt(0).toLowerCase() + result.slice(1);
+}
+
+/**
+ * Convert string to kebab-case.
+ * @param str
+ * @returns kebab-case string
+ */
+function toKebabCase(str: string): string {
+  return str
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
+    .replace(/[\s_]+/g, "-")
+    .toLowerCase();
 }

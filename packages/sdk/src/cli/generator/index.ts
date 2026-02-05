@@ -23,6 +23,7 @@ import { type Resolver } from "@/parser/service/resolver";
 import { PluginManager } from "@/plugin/manager";
 import { commonArgs, withCommonArgs } from "../args";
 import { generatePluginExecutorFiles } from "./plugin-executor-generator";
+import { generatePluginTypeFiles } from "./plugin-type-generator";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { Plugin } from "@/parser/plugin-config";
@@ -495,13 +496,32 @@ export function createGenerationManager(
         }
       }
 
-      // Phase 1.5: Generate plugin executor TypeScript files
+      // Phase 1.5: Generate plugin type and executor TypeScript files
       // This must happen after TailorDB types are loaded since plugins process during type loading
-      const pluginExecutors = pluginManager?.getPluginGeneratedExecutors() ?? [];
-      const pluginExecutorOutputDir = path.join(getDistDir(), "plugin-executors");
+      const pluginOutputDir = path.join(getDistDir(), "plugin");
+
+      // First, generate plugin type files
+      const pluginTypes = pluginManager?.getPluginGeneratedTypes() ?? [];
+      const typeGenerationResult = generatePluginTypeFiles(pluginTypes, pluginOutputDir);
+
+      // Collect source type file paths from TailorDB services
+      const sourceTypeFilePaths = new Map<string, string>();
+      for (const db of app.tailorDBServices) {
+        const typeSourceInfo = db.getTypeSourceInfo();
+        for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
+          if (sourceInfo.filePath) {
+            sourceTypeFilePaths.set(typeName, sourceInfo.filePath);
+          }
+        }
+      }
+
+      // Then, generate plugin executor files with type information
+      const pluginExecutors = pluginManager?.getPluginGeneratedExecutorsWithImportPath() ?? [];
       const generatedExecutorFiles = generatePluginExecutorFiles(
         pluginExecutors,
-        pluginExecutorOutputDir,
+        pluginOutputDir,
+        typeGenerationResult,
+        sourceTypeFilePaths,
       );
 
       // Phase 2: Auth resolveNamespaces (depends on TailorDB)

@@ -2,6 +2,28 @@
  * Type definitions for change-history plugin.
  */
 
+import type { TailorAnyDBType } from "@/configure/services/tailordb";
+
+/**
+ * Context passed to change-history plugin executors.
+ * Contains type references and namespace for data operations.
+ */
+export interface ChangeHistoryContext {
+  /** The source TailorDB type that the plugin is attached to */
+  sourceType: TailorAnyDBType;
+  /** The generated History type for storing change records */
+  historyType: TailorAnyDBType;
+  /** TailorDB namespace for database operations */
+  namespace: string;
+  /** Index signature for compatibility with PluginExecutorContext */
+  [key: string]: TailorAnyDBType | string;
+}
+
+/**
+ * Generated type kinds for change-history plugin.
+ */
+export type GeneratedTypeKind = "history";
+
 /**
  * Action type for change history
  */
