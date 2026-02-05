@@ -1,4 +1,4 @@
-export { createResolver } from "./resolver";
+export { createResolver, toResolverOutput } from "./resolver";
 
 export type {
   QueryType,

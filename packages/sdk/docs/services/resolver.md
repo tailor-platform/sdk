@@ -120,6 +120,62 @@ createResolver({
 });
 ```
 
+## Custom Type Names
+
+### Using `typeName()` for nested objects
+
+When defining nested objects in input or output schemas, you can specify a custom GraphQL type name using the `typeName()` method. This is useful when you want to control the exact type name that appears in the GraphQL schema.
+
+```typescript
+createResolver({
+  name: "createProfile",
+  operation: "mutation",
+  input: {
+    profile: t
+      .object({
+        name: t.string(),
+        email: t.string(),
+      })
+      .typeName("ProfileInput"), // GraphQL type will be "ProfileInput"
+  },
+  body: (context) => context.input.profile,
+  output: t
+    .object({
+      name: t.string(),
+      email: t.string(),
+    })
+    .typeName("ProfileOutput"), // GraphQL type will be "ProfileOutput"
+});
+```
+
+Without `typeName()`, the SDK generates type names automatically (e.g., `CreateProfileProfile` for input).
+
+### Using `toResolverOutput()` for TailorDB types
+
+`toResolverOutput()` makes the resolver's output type match the TailorDB auto-generated query's return type. For example, if you have a `User` type in TailorDB, `toResolverOutput(user)` produces the same GraphQL type as the auto-generated `user` and `users` queries.
+
+```typescript
+import { createResolver, t, toResolverOutput } from "@tailor-platform/sdk";
+import { user } from "../tailordb/user";
+
+export default createResolver({
+  name: "getUser",
+  operation: "query",
+  input: {
+    id: t.uuid(),
+  },
+  body: async (context) => {
+    const db = getDB("tailordb");
+    return await db
+      .selectFrom("User")
+      .selectAll()
+      .where("id", "=", context.input.id)
+      .executeTakeFirstOrThrow();
+  },
+  output: toResolverOutput(user), // Same type as TailorDB's `user` query returns
+});
+```
+
 ## Input Validation
 
 Add validation rules to input fields using the `validate` method:
