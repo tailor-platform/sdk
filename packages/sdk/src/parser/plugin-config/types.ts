@@ -299,3 +299,115 @@ export interface PluginBase {
  * Options can be any value - the plugin's configSchema handles validation.
  */
 export type PluginConfig = string | readonly [string, unknown] | PluginBase;
+
+// ============================================================================
+// createPluginExecutor types
+// ============================================================================
+
+/**
+ * Minimal type shape for plugin executor type constraints.
+ * This allows executor.ts to work without importing TailorAnyDBType directly.
+ */
+export interface PluginDBTypeShape {
+  readonly name: string;
+  readonly fields: Record<string, unknown>;
+}
+
+/**
+ * Args for record created trigger in plugin executors
+ */
+export interface PluginRecordCreatedArgs<T extends PluginDBTypeShape> {
+  workspaceId: string;
+  appNamespace: string;
+  typeName: string;
+  actor: { userId?: string } | null;
+  newRecord: T extends { fields: infer F } ? { [K in keyof F]: unknown } & { id: string } : never;
+}
+
+/**
+ * Args for record updated trigger in plugin executors
+ */
+export interface PluginRecordUpdatedArgs<T extends PluginDBTypeShape> {
+  workspaceId: string;
+  appNamespace: string;
+  typeName: string;
+  actor: { userId?: string } | null;
+  newRecord: T extends { fields: infer F } ? { [K in keyof F]: unknown } & { id: string } : never;
+  oldRecord: T extends { fields: infer F } ? { [K in keyof F]: unknown } & { id: string } : never;
+}
+
+/**
+ * Args for record deleted trigger in plugin executors
+ */
+export interface PluginRecordDeletedArgs<T extends PluginDBTypeShape> {
+  workspaceId: string;
+  appNamespace: string;
+  typeName: string;
+  actor: { userId?: string } | null;
+  oldRecord: T extends { fields: infer F } ? { [K in keyof F]: unknown } & { id: string } : never;
+}
+
+/**
+ * Plugin record trigger with type information
+ */
+export interface PluginRecordTrigger<Args> {
+  kind: "recordCreated" | "recordUpdated" | "recordDeleted";
+  typeName: string;
+  /** Type marker for args inference */
+  __args?: Args;
+}
+
+/**
+ * Options for creating a plugin record trigger
+ */
+export interface PluginRecordTriggerOptions<T extends PluginDBTypeShape> {
+  /** The TailorDB type to trigger on */
+  type: T;
+}
+
+/**
+ * GraphQL operation for plugin executors
+ */
+export interface PluginGraphQLOperation<Args> {
+  kind: "graphql";
+  /** GraphQL query string */
+  query: string;
+  /** App name for the GraphQL endpoint */
+  appName?: string;
+  /**
+   * Variables function that receives trigger args and returns GraphQL variables.
+   * The function will be serialized to a string.
+   */
+  variables?: (args: Args) => Record<string, unknown>;
+}
+
+/**
+ * Function operation for plugin executors
+ */
+export interface PluginFunctionOperation<Args> {
+  kind: "function";
+  /**
+   * Function body that receives trigger args.
+   * The function will be serialized to a string.
+   */
+  body: (args: Args) => unknown;
+}
+
+/**
+ * Operation types for plugin executors
+ */
+export type PluginOperation<Args> = PluginGraphQLOperation<Args> | PluginFunctionOperation<Args>;
+
+/**
+ * Configuration for creating a plugin executor
+ */
+export interface PluginExecutorConfig<Args, O extends PluginOperation<Args>> {
+  /** Executor name */
+  name: string;
+  /** Executor description */
+  description?: string;
+  /** Trigger configuration */
+  trigger: PluginRecordTrigger<Args>;
+  /** Operation configuration */
+  operation: O;
+}

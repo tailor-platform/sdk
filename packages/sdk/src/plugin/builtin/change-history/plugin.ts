@@ -9,13 +9,14 @@
 
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
+import {
+  createPluginExecutor,
+  pluginRecordCreatedTrigger,
+  pluginRecordUpdatedTrigger,
+  pluginRecordDeletedTrigger,
+} from "@/parser/plugin-config";
 import type { TailorAnyDBType } from "@/configure/services/tailordb/schema";
-import type {
-  PluginBase,
-  PluginProcessContext,
-  PluginOutput,
-  PluginGeneratedExecutor,
-} from "@/parser/plugin-config/types";
+import type { PluginBase, PluginProcessContext, PluginOutput } from "@/parser/plugin-config/types";
 
 /**
  * Generated type kinds for change-history plugin.
@@ -86,97 +87,88 @@ function generateTypes(type: TailorAnyDBType): Record<GeneratedTypeKind, TailorA
  * @param type - The source TailorDB type
  * @returns Array of executor definitions
  */
-function generateExecutors(type: TailorAnyDBType): PluginGeneratedExecutor[] {
+function generateExecutors(type: TailorAnyDBType) {
   const typeName = type.name;
   const historyTypeName = `${typeName}History`;
 
   return [
     // CREATE executor
-    {
+    createPluginExecutor({
       name: `${typeName.toLowerCase()}-history-on-create`,
       description: `Records creation history for ${typeName}`,
-      trigger: {
-        kind: "recordCreated",
-        typeName: type.name,
-      },
+      trigger: pluginRecordCreatedTrigger({ type }),
       operation: {
         kind: "graphql",
         query: `mutation Create${historyTypeName}($input: ${historyTypeName}CreateInput!) {
   create${historyTypeName}(input: $input) { id }
 }`,
-        variables: `(args) => ({
-  input: {
-    recordId: args.newRecord.id,
-    action: "CREATE",
-    performedBy: args.actor?.userId ?? null,
-    performedAt: new Date().toISOString(),
-    previousValues: null,
-    newValues: JSON.stringify(args.newRecord),
-    changedFields: JSON.stringify(Object.keys(args.newRecord)),
-  }
-})`,
+        variables: (args) => ({
+          input: {
+            recordId: args.newRecord.id,
+            action: "CREATE",
+            performedBy: args.actor?.userId ?? null,
+            performedAt: new Date().toISOString(),
+            previousValues: null,
+            newValues: JSON.stringify(args.newRecord),
+            changedFields: JSON.stringify(Object.keys(args.newRecord)),
+          },
+        }),
       },
-    },
+    }),
     // UPDATE executor
-    {
+    createPluginExecutor({
       name: `${typeName.toLowerCase()}-history-on-update`,
       description: `Records update history for ${typeName}`,
-      trigger: {
-        kind: "recordUpdated",
-        typeName: type.name,
-      },
+      trigger: pluginRecordUpdatedTrigger({ type }),
       operation: {
         kind: "graphql",
         query: `mutation Create${historyTypeName}($input: ${historyTypeName}CreateInput!) {
   create${historyTypeName}(input: $input) { id }
 }`,
-        variables: `(args) => {
-  const changedFields = [];
-  for (const key of Object.keys(args.newRecord)) {
-    if (JSON.stringify(args.newRecord[key]) !== JSON.stringify(args.oldRecord[key])) {
-      changedFields.push(key);
-    }
-  }
-  return {
-    input: {
-      recordId: args.newRecord.id,
-      action: "UPDATE",
-      performedBy: args.actor?.userId ?? null,
-      performedAt: new Date().toISOString(),
-      previousValues: JSON.stringify(args.oldRecord),
-      newValues: JSON.stringify(args.newRecord),
-      changedFields: JSON.stringify(changedFields),
-    }
-  };
-}`,
+        variables: (args) => {
+          const changedFields: string[] = [];
+          for (const key of Object.keys(args.newRecord)) {
+            if (JSON.stringify(args.newRecord[key]) !== JSON.stringify(args.oldRecord[key])) {
+              changedFields.push(key);
+            }
+          }
+          return {
+            input: {
+              recordId: args.newRecord.id,
+              action: "UPDATE",
+              performedBy: args.actor?.userId ?? null,
+              performedAt: new Date().toISOString(),
+              previousValues: JSON.stringify(args.oldRecord),
+              newValues: JSON.stringify(args.newRecord),
+              changedFields: JSON.stringify(changedFields),
+            },
+          };
+        },
       },
-    },
+    }),
     // DELETE executor
-    {
+    createPluginExecutor({
       name: `${typeName.toLowerCase()}-history-on-delete`,
       description: `Records deletion history for ${typeName}`,
-      trigger: {
-        kind: "recordDeleted",
-        typeName: type.name,
-      },
+      trigger: pluginRecordDeletedTrigger({ type }),
       operation: {
         kind: "graphql",
         query: `mutation Create${historyTypeName}($input: ${historyTypeName}CreateInput!) {
   create${historyTypeName}(input: $input) { id }
 }`,
-        variables: `(args) => ({
-  input: {
-    recordId: args.oldRecord.id,
-    action: "DELETE",
-    performedBy: args.actor?.userId ?? null,
-    performedAt: new Date().toISOString(),
-    previousValues: JSON.stringify(args.oldRecord),
-    newValues: null,
-    changedFields: null,
-  }
-})`,
+        variables: (args) => ({
+          input: {
+            recordId: args.oldRecord.id,
+            action: "DELETE",
+            performedBy: args.actor?.userId ?? null,
+            performedAt: new Date().toISOString(),
+            previousValues: JSON.stringify(args.oldRecord),
+            newValues: null,
+            changedFields: null,
+          },
+        }),
       },
-    },
+    }),
   ];
 }
 
