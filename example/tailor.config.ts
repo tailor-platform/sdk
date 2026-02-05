@@ -99,8 +99,8 @@ export const generators = defineGenerators(
 );
 
 export const plugins = definePlugins(
-  ["@tailor-platform/changeset", {}],
-  ["@tailor-platform/audit-log", true], // Standalone plugin - generates AuditLog type
+  "@tailor-platform/changeset",
+  "@tailor-platform/audit-log", // Standalone plugin - generates AuditLog type
   softDeletePlugin, // Custom plugin - adds soft delete functionality
   i18nPlugin, // Custom plugin - stores i18n labels for generators
 );

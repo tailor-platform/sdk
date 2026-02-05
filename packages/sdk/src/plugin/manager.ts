@@ -300,7 +300,10 @@ function copyMetadataToExtendedType(
   // Copy plugins (but don't re-process them)
   if (originalAny._plugins && originalAny._plugins.length > 0) {
     for (const plugin of originalAny._plugins) {
-      result = result.plugin({ [plugin.pluginId]: plugin.config });
+      // Use type assertion as plugin ID is dynamic at runtime
+      result = result.plugin({
+        [plugin.pluginId]: plugin.config,
+      } as Parameters<typeof result.plugin>[0]);
     }
   }
 

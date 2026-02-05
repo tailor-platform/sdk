@@ -805,10 +805,9 @@ export interface TailorDBType<
    * @param config - Plugin configuration in the format { pluginId: config }
    * @returns The type with the plugin attached
    */
-  plugin<P extends keyof PluginConfigs>(config: { [K in P]: PluginConfigs[K] }): TailorDBType<
-    Fields,
-    User
-  >;
+  plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+    [K in P]: PluginConfigs<keyof Fields & string>[K];
+  }): TailorDBType<Fields, User>;
 }
 
 /**
@@ -990,10 +989,9 @@ function createTailorDBType<
       return _plugins;
     },
 
-    plugin<P extends keyof PluginConfigs>(config: { [K in P]: PluginConfigs[K] }): TailorDBType<
-      Fields,
-      User
-    > {
+    plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+      [K in P]: PluginConfigs<keyof Fields & string>[K];
+    }): TailorDBType<Fields, User> {
       const [pluginId, pluginConfig] = Object.entries(config)[0] as [string, unknown];
       _plugins.push({ pluginId, config: pluginConfig });
       return this;

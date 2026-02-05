@@ -32,5 +32,5 @@
  * ```
  */
 
-export { i18nPlugin, type I18nConfig, type FieldLabel } from "./plugin";
+export { i18nPlugin, i18nConfig, type I18nConfig, type FieldLabel } from "./plugin";
 export { createI18nGenerator } from "./generator";

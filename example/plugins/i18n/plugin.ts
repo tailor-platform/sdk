@@ -31,13 +31,32 @@ import { t, type PluginBase, type PluginProcessContext } from "@tailor-platform/
 export type FieldLabel = Record<string, string>;
 
 /**
- * Configuration options for the i18n plugin
+ * Configuration options for the i18n plugin (generic version for type safety)
  */
-export interface I18nConfig {
+export interface I18nConfig<Fields extends string = string> {
   /** Labels for each field, keyed by field name */
-  labels: Record<string, FieldLabel>;
+  labels: Partial<Record<Fields, FieldLabel>>;
   /** Optional type-level label */
   typeLabel?: FieldLabel;
+}
+
+// Note: PluginConfigs extension is auto-generated in user-defined.d.ts
+// based on the configTypeTemplate defined below
+
+/**
+ * Helper function to create type-safe i18n config.
+ * Use this when you want strict field name checking.
+ * @example
+ * ```typescript
+ * .plugin({
+ *   "@example/i18n": i18nConfig<typeof myType.fields>()({
+ *     labels: { name: { ja: "名前" } },
+ *   }),
+ * })
+ * ```
+ */
+export function i18nConfig<Fields extends Record<string, unknown>>() {
+  return <C extends I18nConfig<keyof Fields & string>>(config: C): C => config;
 }
 
 /**
@@ -62,9 +81,15 @@ export const i18nPlugin: PluginBase = {
   id: "@example/i18n",
   description: "Stores field labels for internationalization",
   importPath: "./plugins/i18n",
+  // configSchema is for runtime validation; use simple object for dynamic structures
+  // TypeScript type checking is handled by configTypeTemplate
   configSchema: t.object({
-    labels: t.object({}), // Dynamic object - validated at runtime
+    labels: t.object({}),
     typeLabel: t.object({}, { optional: true }),
   }),
+  // TypeScript type template for strict field name checking
+  // Uses Fields type parameter to constrain label keys to valid field names
+  configTypeTemplate:
+    "{ labels: Partial<Record<Fields, Record<string, string>>>; typeLabel?: Record<string, string> }",
   process: processI18n,
 };

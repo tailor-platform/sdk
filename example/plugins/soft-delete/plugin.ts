@@ -34,10 +34,13 @@ import {
 /**
  * Configuration options for the soft-delete plugin
  */
-interface SoftDeleteConfig {
+export interface SoftDeleteConfig {
   /** Whether to include a reason field in the archive type */
   archiveReason?: boolean;
 }
+
+// Note: PluginConfigs extension is auto-generated in user-defined.d.ts
+// based on the configSchema defined below
 
 /**
  * Generated type kinds for soft-delete plugin.

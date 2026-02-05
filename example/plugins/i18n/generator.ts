@@ -31,7 +31,7 @@ const I18N_PLUGIN_ID = "@example/i18n";
 interface I18nTypeMetadata {
   typeName: string;
   namespace: string;
-  labels: Record<string, FieldLabel>;
+  labels: Partial<Record<string, FieldLabel>>;
   typeLabel?: FieldLabel;
 }
 
@@ -123,6 +123,7 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
 
           // Collect field labels
           for (const [fieldName, fieldLabel] of Object.entries(typeMetadata.labels)) {
+            if (!fieldLabel) continue;
             for (const [lang, label] of Object.entries(fieldLabel)) {
               allLanguages.add(lang);
 

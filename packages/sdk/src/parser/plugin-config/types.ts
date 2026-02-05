@@ -4,21 +4,28 @@ import type { TailorAnyField } from "@/configure/types";
 /**
  * Interface for plugin configuration mapping.
  * Extend this interface via declaration merging to add typed plugin configs.
+ *
+ * The `Fields` type parameter provides field names from the type being configured,
+ * enabling type-safe field references in plugin configs.
  * @example
  * ```typescript
  * // In your plugin package or types file:
  * declare module "@tailor-platform/sdk" {
- *   interface PluginConfigs {
- *     "@my-company/audit-log": {
- *       trackedFields: string[];
- *       retentionDays?: number;
+ *   interface PluginConfigs<Fields extends string> {
+ *     "@my-company/i18n": {
+ *       labels: Partial<Record<Fields, { ja: string; en: string }>>;
  *     };
  *   }
  * }
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface PluginConfigs {}
+// Fields parameter is used by declaration merging in user-defined.d.ts
+// oxlint-disable-next-line no-unused-vars
+export interface PluginConfigs<Fields extends string = string> {
+  // Built-in plugins with simple configs (not field-aware)
+  "@tailor-platform/changeset": true;
+  "@tailor-platform/audit-log": true;
+}
 
 /**
  * Plugin attachment stored on TailorAnyDBType instances.
@@ -177,18 +184,28 @@ export interface PluginBase {
   /**
    * Schema defining the expected configuration for this plugin.
    * Uses the same field types as createResolver's input (t.string(), t.number(), etc.).
-   * This schema is used to:
-   * 1. Validate configuration at runtime
-   * 2. Generate TypeScript type definitions in plugin-defined.d.ts
+   * This schema is used for runtime validation of plugin configuration.
    * @example
    * ```typescript
-   * configSchema: {
+   * configSchema: t.object({
    *   trackedFields: t.array(t.string()),
-   *   retentionDays: t.number().optional(),
-   * }
+   *   retentionDays: t.number({ optional: true }),
+   * })
    * ```
    */
   readonly configSchema: TailorAnyField;
+
+  /**
+   * TypeScript type template for generating type-safe plugin configuration.
+   * Use `Fields` to reference the field names of the type being configured.
+   * If not provided, the type is generated from configSchema.
+   * @example
+   * ```typescript
+   * // For field-aware configs:
+   * configTypeTemplate: "{ labels: Partial<Record<Fields, FieldLabel>>; typeLabel?: FieldLabel }"
+   * ```
+   */
+  readonly configTypeTemplate?: string;
 
   /**
    * Process a single TailorDB type and generate outputs.
@@ -210,8 +227,10 @@ export interface PluginBase {
 
 /**
  * Plugin configuration input type for definePlugins()
- * Can be either a tuple [pluginId, options] for built-in plugins
- * or a PluginBase object for custom plugins.
+ * Can be:
+ * - A string plugin ID (for plugins with no configuration, e.g., "@tailor-platform/changeset")
+ * - A tuple [pluginId, options] for plugins with configuration
+ * - A PluginBase object for custom plugins
  * Options can be any value - the plugin's configSchema handles validation.
  */
-export type PluginConfig = readonly [string, unknown] | PluginBase;
+export type PluginConfig = string | readonly [string, unknown] | PluginBase;

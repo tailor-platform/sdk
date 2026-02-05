@@ -61,12 +61,20 @@ const CustomPluginSchema = z
   })
   .passthrough();
 
+// Built-in plugin string schema (id only, no options)
+// For plugins that require no configuration (e.g., "@tailor-platform/changeset")
+const BuiltinPluginStringSchema = z.string();
+
 // Built-in plugin tuple schema (id, options)
 // Options can be any value - the plugin's configSchema handles validation
-const BuiltinPluginConfigSchema = z.tuple([z.string(), z.unknown()]);
+const BuiltinPluginTupleSchema = z.tuple([z.string(), z.unknown()]);
 
 // Base plugin config schema (before transformation)
-const _BasePluginConfigSchema = z.union([BuiltinPluginConfigSchema, CustomPluginSchema]);
+const _BasePluginConfigSchema = z.union([
+  BuiltinPluginStringSchema,
+  BuiltinPluginTupleSchema,
+  CustomPluginSchema,
+]);
 
 /**
  * Creates a PluginConfigSchema with built-in plugin support
@@ -77,8 +85,17 @@ export function createPluginConfigSchema(
   builtinPlugins: Map<string, (options: unknown) => PluginBase>,
 ) {
   return z
-    .union([BuiltinPluginConfigSchema, CustomPluginSchema])
+    .union([BuiltinPluginStringSchema, BuiltinPluginTupleSchema, CustomPluginSchema])
     .transform((plugin) => {
+      // String form: plugin ID only (use true as default config)
+      if (typeof plugin === "string") {
+        const constructor = builtinPlugins.get(plugin);
+        if (constructor) {
+          return constructor(true);
+        }
+        throw new Error(`Unknown plugin ID: ${plugin}`);
+      }
+      // Tuple form: [id, options]
       if (Array.isArray(plugin)) {
         const [id, options] = plugin;
         const constructor = builtinPlugins.get(id);
@@ -87,6 +104,7 @@ export function createPluginConfigSchema(
         }
         throw new Error(`Unknown plugin ID: ${id}`);
       }
+      // Object form: custom plugin
       return plugin as PluginBase;
     })
     .brand("Plugin");

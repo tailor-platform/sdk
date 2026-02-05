@@ -71,13 +71,13 @@ export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "dele
  */
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
-  const { config } = await loadConfig(options?.configPath);
+  const { config, plugins } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
   // Generate user types from loaded config
-  await generateUserTypes(config, config.path);
+  await generateUserTypes({ config, configPath: config.path, plugins });
   const application = defineApplication(config);
 
   // Load files first (before building)
