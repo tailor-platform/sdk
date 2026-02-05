@@ -1,11 +1,13 @@
+import { db } from "@/configure/services/tailordb";
 import { unauthenticatedTailorUser } from "@/configure/types";
+import type { TailorAnyDBType } from "@/configure/services/tailordb";
 import type { TailorAnyField } from "@/configure/types";
 import type {
   PluginBase,
   PluginOutput,
   StandalonePluginProcessContext,
 } from "@/parser/plugin-config/types";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBTypeConfig as TailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Context for processing a single plugin attachment on a raw TailorDBType
@@ -193,4 +195,112 @@ export class PluginManager {
   getPluginImportPath(pluginId: string): string | undefined {
     return this.plugins.get(pluginId)?.importPath;
   }
+
+  /**
+   * Extend a TailorDB type with new fields.
+   * This method handles the `db.type()` call and metadata copying internally.
+   * @param params - Parameters for type extension
+   * @returns The extended TailorDB type
+   */
+  extendType(params: ExtendTypeParams): TailorAnyDBType {
+    const { originalType, extendFields, pluginId } = params;
+    const existingFieldNames = Object.keys(originalType.fields);
+    const newFieldNames = Object.keys(extendFields);
+    const duplicateFields = newFieldNames.filter((name) => existingFieldNames.includes(name));
+
+    if (duplicateFields.length > 0) {
+      throw new Error(
+        `Plugin "${pluginId}" attempted to add fields that already exist in type "${originalType.name}": ${duplicateFields.join(", ")}. ` +
+          `extendFields cannot overwrite existing fields.`,
+      );
+    }
+
+    const mergedFields = {
+      ...originalType.fields,
+      ...extendFields,
+    };
+
+    const { id: _id, ...fieldsWithoutId } = mergedFields;
+    const extendedType = db.type(originalType.name, fieldsWithoutId);
+    return copyMetadataToExtendedType(originalType, extendedType);
+  }
+}
+
+/**
+ * Parameters for extending a TailorDB type
+ */
+export interface ExtendTypeParams {
+  /** The original TailorDB type to extend */
+  originalType: TailorAnyDBType;
+  /** New fields to add to the type */
+  extendFields: Record<string, unknown>;
+  /** The ID of the plugin extending the type */
+  pluginId: string;
+}
+
+/**
+ * Copy metadata from original type to extended type.
+ * Preserves files, settings, permissions, indexes, and plugins.
+ * @param original - The original TailorDB type with metadata
+ * @param extended - The newly created extended type
+ * @returns The extended type with copied metadata
+ */
+function copyMetadataToExtendedType(
+  original: TailorAnyDBType,
+  extended: TailorAnyDBType,
+): TailorAnyDBType {
+  let result = extended;
+
+  // Copy description
+  if (original._description) {
+    result = result.description(original._description);
+  }
+
+  // Copy files metadata
+  const metadata = original.metadata;
+  if (metadata.files && Object.keys(metadata.files).length > 0) {
+    result = result.files(metadata.files);
+  }
+
+  // Copy settings/features (excluding pluralForm which is set during construction)
+  if (metadata.settings) {
+    const { pluralForm: _pluralForm, ...features } = metadata.settings;
+    if (Object.keys(features).length > 0) {
+      result = result.features(
+        features as typeof features & { aggregation?: true; bulkUpsert?: true },
+      );
+    }
+  }
+
+  // Access private fields for permissions and indexes
+  // oxlint-disable-next-line no-explicit-any
+  const originalAny = original as any;
+
+  // Copy permissions
+  if (originalAny._permissions?.record) {
+    result = result.permission(originalAny._permissions.record);
+  }
+  if (originalAny._permissions?.gql) {
+    result = result.gqlPermission(originalAny._permissions.gql);
+  }
+
+  // Copy indexes from metadata (indexes are stored in metadata, not as a direct property)
+  if (metadata.indexes && Object.keys(metadata.indexes).length > 0) {
+    const indexDefs = Object.entries(metadata.indexes).map(([name, def]) => ({
+      name,
+      // Cast fields array to tuple type (IndexDef expects [T, T, ...T[]])
+      fields: def.fields as [string, string, ...string[]],
+      unique: def.unique,
+    }));
+    result = result.indexes(...indexDefs);
+  }
+
+  // Copy plugins (but don't re-process them)
+  if (originalAny._plugins && originalAny._plugins.length > 0) {
+    for (const plugin of originalAny._plugins) {
+      result = result.plugin({ [plugin.pluginId]: plugin.config });
+    }
+  }
+
+  return result;
 }

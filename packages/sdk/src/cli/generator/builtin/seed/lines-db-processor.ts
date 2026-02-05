@@ -1,7 +1,7 @@
 import ml from "multiline-ts";
 import type { LinesDbMetadata, PluginSourceInfo } from "./types";
 import type { TypeSourceInfoEntry } from "@/cli/generator/types";
-import type { ParsedTailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /**
@@ -10,10 +10,7 @@ import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
  * @param source - Source file info
  * @returns Generated lines-db metadata
  */
-export function processLinesDb(
-  type: ParsedTailorDBType,
-  source: TypeSourceInfoEntry,
-): LinesDbMetadata {
+export function processLinesDb(type: TailorDBType, source: TypeSourceInfoEntry): LinesDbMetadata {
   // Plugin-generated types don't have a source file path
   const isPluginGenerated = !!source.pluginId;
   if (!isPluginGenerated && !source.filePath) {

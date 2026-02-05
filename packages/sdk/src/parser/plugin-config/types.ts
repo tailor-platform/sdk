@@ -1,5 +1,5 @@
+import type { TailorAnyDBType as TailorDBType } from "@/configure/services/tailordb";
 import type { TailorAnyField } from "@/configure/types";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Interface for plugin configuration mapping.

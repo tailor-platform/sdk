@@ -20,6 +20,7 @@ export type { TypeSourceInfo } from "./type-parser";
 export type {
   TailorAnyDBField,
   TailorDBField,
+  TailorDBType as TailorDBTypeConfig,
   DBFieldMetadata,
   Hook,
   TailorTypePermission,
