@@ -3,6 +3,7 @@ import { unauthenticatedTailorUser } from "@/configure/types";
 import type { TailorAnyField } from "@/configure/types";
 import type {
   PluginBase,
+  PluginGeneratedExecutor,
   PluginOutput,
   StandalonePluginProcessContext,
 } from "@/parser/plugin-config/types";
@@ -24,6 +25,20 @@ export interface ProcessAttachmentContext {
 export type ProcessAttachmentResult =
   | { success: true; output: PluginOutput }
   | { success: false; error: string };
+
+/**
+ * Information about a plugin-generated executor
+ */
+export interface PluginExecutorInfo {
+  /** The executor definition */
+  executor: PluginGeneratedExecutor;
+  /** Plugin ID that generated this executor */
+  pluginId: string;
+  /** Namespace where the executor was generated */
+  namespace: string;
+  /** Source type name (for type-attached executors, undefined for standalone) */
+  sourceTypeName?: string;
+}
 
 /**
  * Validation error for plugin config
@@ -61,6 +76,7 @@ function validatePluginConfig(config: unknown, schema: TailorAnyField): ConfigVa
  */
 export class PluginManager {
   private plugins: Map<string, PluginBase> = new Map();
+  private generatedExecutors: PluginExecutorInfo[] = [];
 
   constructor(plugins: PluginBase[] = []) {
     for (const plugin of plugins) {
@@ -112,6 +128,18 @@ export class PluginManager {
       namespace: context.namespace,
     });
 
+    // Collect generated executors
+    if (output.executors && output.executors.length > 0) {
+      for (const executor of output.executors) {
+        this.generatedExecutors.push({
+          executor,
+          pluginId: context.pluginId,
+          namespace: context.namespace,
+          sourceTypeName: context.type.name,
+        });
+      }
+    }
+
     return { success: true, output };
   }
 
@@ -161,6 +189,18 @@ export class PluginManager {
       };
 
       const output = await plugin.processStandalone(context);
+
+      // Collect generated executors (standalone - no source type)
+      if (output.executors && output.executors.length > 0) {
+        for (const executor of output.executors) {
+          this.generatedExecutors.push({
+            executor,
+            pluginId,
+            namespace,
+          });
+        }
+      }
+
       results.push({
         pluginId,
         config,
@@ -196,6 +236,23 @@ export class PluginManager {
    */
   getPluginImportPath(pluginId: string): string | undefined {
     return this.plugins.get(pluginId)?.importPath;
+  }
+
+  /**
+   * Get all plugin-generated executors
+   * @returns Array of plugin-generated executor info
+   */
+  getPluginGeneratedExecutors(): ReadonlyArray<PluginExecutorInfo> {
+    return this.generatedExecutors;
+  }
+
+  /**
+   * Get plugin-generated executors for a specific namespace
+   * @param namespace - The namespace to filter by
+   * @returns Array of plugin-generated executor info for the namespace
+   */
+  getPluginGeneratedExecutorsForNamespace(namespace: string): ReadonlyArray<PluginExecutorInfo> {
+    return this.generatedExecutors.filter((info) => info.namespace === namespace);
   }
 
   /**

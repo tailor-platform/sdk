@@ -16,6 +16,7 @@ import {
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
+import { PluginManager } from "@/plugin/manager";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -40,6 +41,7 @@ import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
+import type { PluginBase } from "@/parser/plugin-config/types";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -76,9 +78,15 @@ export async function apply(options?: ApplyOptions) {
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
+  // Initialize plugin manager if plugins are provided
+  let pluginManager: PluginManager | undefined;
+  if (plugins.length > 0) {
+    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+  }
+
   // Generate user types from loaded config
   await generateUserTypes({ config, configPath: config.path, plugins });
-  const application = defineApplication(config);
+  const application = defineApplication({ config, pluginManager });
 
   // Load files first (before building)
   // Load workflows first and collect jobs for bundling
@@ -126,6 +134,8 @@ export async function apply(options?: ApplyOptions) {
   // Order: TailorDB → Resolver → Executor → Workflow
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
+    // Process standalone plugins (generates types without requiring a source type)
+    await tailordb.processStandalonePlugins();
   }
 
   for (const pipeline of application.resolverServices) {
@@ -133,6 +143,8 @@ export async function apply(options?: ApplyOptions) {
   }
   if (application.executorService) {
     await application.executorService.loadExecutors();
+    // Load plugin-generated executors
+    application.executorService.loadPluginExecutors();
   }
   // Print workflow loading logs last (workflows were already loaded for bundling)
   if (workflowResult) {

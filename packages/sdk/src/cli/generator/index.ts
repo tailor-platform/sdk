@@ -91,7 +91,13 @@ export function createGenerationManager(
   plugins: Plugin[] = [],
   configPath?: string,
 ): GenerationManager {
-  const application = defineApplication(config);
+  // Initialize plugin manager if plugins are provided
+  let pluginManager: PluginManager | undefined;
+  if (plugins.length > 0) {
+    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+  }
+
+  const application = defineApplication({ config, pluginManager });
   const baseDir = path.join(getDistDir(), "generated");
   fs.mkdirSync(baseDir, { recursive: true });
 
@@ -103,12 +109,6 @@ export function createGenerationManager(
 
   let watcher: DependencyWatcher | null = null;
   const generatorResults: GeneratorResults = {};
-
-  // Initialize plugin manager if plugins are provided
-  let pluginManager: PluginManager | undefined;
-  if (plugins.length > 0) {
-    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
-  }
 
   // Helper functions for dependency checking
   function getDeps(gen: AnyCodeGenerator): Set<DependencyKind> {
@@ -469,14 +469,9 @@ export function createGenerationManager(
 
       const app = application;
 
-      // Phase 1: Load TailorDB (inject PluginManager before loading)
+      // Phase 1: Load TailorDB
       for (const db of app.tailorDBServices) {
         const namespace = db.namespace;
-
-        // Inject PluginManager before loading types so plugins can generate types
-        if (pluginManager) {
-          db.setPluginManager(pluginManager);
-        }
 
         try {
           await db.loadTypes();
@@ -544,9 +539,13 @@ export function createGenerationManager(
       }
 
       // Phase 6: Load Executors (can now import generated files)
-      const executors = await application.executorService?.loadExecutors();
-      Object.entries(executors ?? {}).forEach(([filePath, executor]) => {
-        services.executor[filePath] = executor as Executor;
+      await application.executorService?.loadExecutors();
+      // Load plugin-generated executors (adds to internal executors record)
+      application.executorService?.loadPluginExecutors();
+      // Get all executors (file-based and plugin-generated)
+      const allExecutors = application.executorService?.getExecutors() ?? {};
+      Object.entries(allExecutors).forEach(([key, executor]) => {
+        services.executor[key] = executor as Executor;
       });
 
       // Phase 7: Run executor-dependent generators

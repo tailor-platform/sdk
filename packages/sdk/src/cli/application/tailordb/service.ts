@@ -20,27 +20,34 @@ export type TailorDBService = {
   getTypes: () => Readonly<Record<string, TailorDBType>>;
   getTypeSourceInfo: () => Readonly<TypeSourceInfo>;
   getPluginAttachments: () => ReadonlyMap<string, readonly PluginAttachment[]>;
-  setPluginManager: (manager: PluginManager) => void;
   loadTypes: () => Promise<Record<string, TailorDBType> | undefined>;
   processStandalonePlugins: () => Promise<void>;
 };
 
 /**
+ * Parameters for creating a TailorDBService
+ */
+export interface CreateTailorDBServiceParams {
+  /** The namespace for this TailorDB service */
+  namespace: string;
+  /** The TailorDB service configuration */
+  config: TailorDBServiceConfig;
+  /** Plugin manager for processing plugins */
+  pluginManager?: PluginManager;
+}
+
+/**
  * Creates a new TailorDBService instance.
- * @param namespace - The namespace for this TailorDB service
- * @param config - The TailorDB service configuration
+ * @param params - Parameters for creating the service
  * @returns A new TailorDBService instance
  */
-export function createTailorDBService(
-  namespace: string,
-  config: TailorDBServiceConfig,
-): TailorDBService {
+export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
+  const { namespace, config, pluginManager } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
   const rawTypes: Record<string, TailorDBTypesByName> = {};
   let types: Record<string, TailorDBType> = {};
   const typeSourceInfo: TypeSourceInfo = {};
   const pluginAttachments: Map<string, PluginAttachment[]> = new Map();
-  let pluginManager: PluginManager | undefined;
 
   const doParseTypes = (): void => {
     const allTypes: TailorDBTypesByName = {};
@@ -176,9 +183,6 @@ export function createTailorDBService(
     getTypes: () => types,
     getTypeSourceInfo: () => typeSourceInfo,
     getPluginAttachments: () => pluginAttachments,
-    setPluginManager: (manager: PluginManager) => {
-      pluginManager = manager;
-    },
     loadTypes: async () => {
       if (Object.keys(rawTypes).length > 0) {
         return types;
