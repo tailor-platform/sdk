@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-02-05T02:04:29.299Z",
+  "changes": [
+    {
+      "kind": "type_added",
+      "typeName": "ProfileComment",
+      "after": {
+        "name": "ProfileComment",
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "content": {
+            "type": "string",
+            "required": true
+          },
+          "profileID": {
+            "type": "uuid",
+            "required": true,
+            "index": true,
+            "foreignKey": true,
+            "foreignKeyType": "NestedProfile",
+            "foreignKeyField": "id"
+          },
+          "createdAt": {
+            "type": "datetime",
+            "required": true
+          },
+          "updatedAt": {
+            "type": "datetime",
+            "required": false
+          }
+        },
+        "pluralForm": "ProfileComments",
+        "description": "Comment on a profile",
+        "settings": {}
+      }
+    },
+    {
+      "kind": "type_added",
+      "typeName": "ProfileDetail",
+      "after": {
+        "name": "ProfileDetail",
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "bio": {
+            "type": "string",
+            "required": false
+          },
+          "profileID": {
+            "type": "uuid",
+            "required": true,
+            "index": true,
+            "unique": true,
+            "foreignKey": true,
+            "foreignKeyType": "NestedProfile",
+            "foreignKeyField": "id"
+          },
+          "createdAt": {
+            "type": "datetime",
+            "required": true
+          },
+          "updatedAt": {
+            "type": "datetime",
+            "required": false
+          }
+        },
+        "pluralForm": "ProfileDetails",
+        "description": "Additional detail for a profile",
+        "settings": {}
+      }
+    },
+    {
+      "kind": "field_added",
+      "typeName": "NestedProfile",
+      "fieldName": "ownerID",
+      "after": {
+        "type": "uuid",
+        "required": false,
+        "index": true,
+        "foreignKey": true,
+        "foreignKeyType": "User",
+        "foreignKeyField": "id"
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "NestedProfile",
+      "reason": "File field \"avatar\" added",
+      "before": {},
+      "after": {
+        "files": {
+          "avatar": "profile avatar image"
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
