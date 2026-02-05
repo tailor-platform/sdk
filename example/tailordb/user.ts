@@ -24,6 +24,7 @@ export const user = db
       labels: {
         name: { ja: "名前", en: "Name" },
         email: { ja: "メールアドレス", en: "Email" },
+        role: { ja: "役割", en: "Role" },
       },
     },
   });

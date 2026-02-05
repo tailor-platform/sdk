@@ -7,8 +7,6 @@ export interface UserLabels {
   _type: string;
   name: string;
   email: string;
-  status: string;
-  department: string;
   role: string;
 }
 
