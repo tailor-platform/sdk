@@ -252,9 +252,11 @@ export interface PluginGeneratedExecutorWithFile<Ctx = PluginExecutorContext> {
   /** Executor name (used for generated file name) */
   name: string;
   /**
-   * Executor file name (without extension).
-   * Resolved as: {plugin.importPath}/backend/executors/{executorFile}
-   * @example "on-create" → "@tailor-platform/sdk/change-history-plugin/backend/executors/on-create"
+   * Executor file path (without extension).
+   * If no "/" is included, resolved as: {plugin.importPath}/executors/{executorFile}
+   * If "/" is included, resolved as: {plugin.importPath}/{executorFile}
+   * @example "on-create" → "{importPath}/executors/on-create"
+   * @example "handlers/on-create" → "{importPath}/handlers/on-create"
    */
   executorFile: string;
   /**

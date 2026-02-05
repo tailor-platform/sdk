@@ -424,12 +424,13 @@ function calculateExecutorModulePath(
   executorOutputDir: string,
 ): string {
   // Standard path pattern for plugin executor templates
-  const executorSubPath = `backend/executors/${executorFile}`;
+  // Supports: executors/{name} or {name}.executor format
+  const executorSubPath = executorFile.includes("/") ? executorFile : `executors/${executorFile}`;
 
   // Check if it's a relative path (local plugin)
   if (pluginImportPath.startsWith(".")) {
     // Local plugin: calculate relative path from output location to plugin's executor
-    // Plugin executor is at: {pluginImportPath}/backend/executors/{executorFile}
+    // Plugin executor is at: {pluginImportPath}/{executorSubPath}
     // Output file is at: {executorOutputDir}/{name}.ts
     const pluginExecutorPath = path.join(process.cwd(), pluginImportPath, executorSubPath);
     let relativePath = path.relative(executorOutputDir, pluginExecutorPath);
@@ -439,7 +440,7 @@ function calculateExecutorModulePath(
     return relativePath;
   }
 
-  // npm package: use as-is with backend/executors subpath
+  // npm package: use as-is with executorSubPath
   return `${pluginImportPath}/${executorSubPath}`;
 }
 

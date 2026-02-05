@@ -7,7 +7,7 @@
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 import { createExecutor, recordDeletedTrigger, withPluginContext } from "@tailor-platform/sdk";
 import { Kysely } from "kysely";
-import type { SoftDeleteContext } from "../../types";
+import type { SoftDeleteContext } from "../types";
 
 export default withPluginContext<SoftDeleteContext>((ctx) =>
   createExecutor({
