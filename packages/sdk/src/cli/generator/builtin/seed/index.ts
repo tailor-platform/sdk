@@ -32,42 +32,39 @@ type NamespaceConfig = {
 function generateIdpUserSeedFunction(hasIdpUser: boolean): string {
   if (!hasIdpUser) return "";
 
-  // `ml` only strips indent from template text (strings[]), not interpolated values.
-  // `ml` adds the template line's indent to each continuation line in the value,
-  // so return 0-indent lines (with relative indent for inner blocks).
-  return [
-    "// Seed _User via gql-ingest (IdP managed)",
-    "const seedIdpUserViaGqlIngest = async () => {",
-    '  console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));',
-    "",
-    "  const gqlClient = new GQLIngest({",
-    "    endpoint,",
-    "    headers: {",
-    "      Authorization: `Bearer ${tokenInfo.accessToken}`,",
-    "    },",
-    "  });",
-    "",
-    '  gqlClient.on("entityStart", (payload) => {',
-    '    console.log(styleText("dim", `    Processing ${payload.entityName}...`));',
-    "  });",
-    "",
-    '  gqlClient.on("entityComplete", (payload) => {',
-    "    const { entityName, metrics: { rowsProcessed } } = payload;",
-    '    console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));',
-    "  });",
-    "",
-    '  gqlClient.on("rowFailure", (payload) => {',
-    '    console.error(styleText("red", `  ✗ Row ${payload.rowIndex} in ${payload.entityName} failed: ${payload.error.message}`));',
-    "  });",
-    "",
-    "  try {",
-    '    const result = await gqlClient.ingestEntities(configDir, ["_User"]);',
-    "    return { success: result.success };",
-    "  } catch (error) {",
-    "    return { success: false, error: error.message };",
-    "  }",
-    "};",
-  ].join("\n");
+  return ml`
+    // Seed _User via gql-ingest (IdP managed)
+    const seedIdpUserViaGqlIngest = async () => {
+      console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
+
+      const gqlClient = new GQLIngest({
+        endpoint,
+        headers: {
+          Authorization: \`Bearer \${tokenInfo.accessToken}\`,
+        },
+      });
+
+      gqlClient.on("entityStart", (payload) => {
+        console.log(styleText("dim", \`    Processing \${payload.entityName}...\`));
+      });
+
+      gqlClient.on("entityComplete", (payload) => {
+        const { entityName, metrics: { rowsProcessed } } = payload;
+        console.log(styleText("green", \`  ✓ \${entityName}: \${rowsProcessed} rows processed\`));
+      });
+
+      gqlClient.on("rowFailure", (payload) => {
+        console.error(styleText("red", \`  ✗ Row \${payload.rowIndex} in \${payload.entityName} failed: \${payload.error.message}\`));
+      });
+
+      try {
+        const result = await gqlClient.ingestEntities(configDir, ["_User"]);
+        return { success: result.success };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    };
+  `;
 }
 
 /**
@@ -78,18 +75,16 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean): string {
 function generateIdpUserSeedCall(hasIdpUser: boolean): string {
   if (!hasIdpUser) return "";
 
-  // `ml` adds the template line's indent to each continuation line in the value,
-  // so return 0-indent lines (with relative indent for inner blocks).
-  return [
-    "// Seed _User if included and not skipped",
-    'const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));',
-    "if (hasIdpUser && shouldSeedUser) {",
-    "  const result = await seedIdpUserViaGqlIngest();",
-    "  if (!result.success) {",
-    "    allSuccess = false;",
-    "  }",
-    "}",
-  ].join("\n");
+  return ml`
+    // Seed _User if included and not skipped
+    const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
+    if (hasIdpUser && shouldSeedUser) {
+      const result = await seedIdpUserViaGqlIngest();
+      if (!result.success) {
+        allSuccess = false;
+      }
+    }
+  `;
 }
 
 /**
