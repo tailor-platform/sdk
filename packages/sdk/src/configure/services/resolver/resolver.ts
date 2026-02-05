@@ -1,4 +1,5 @@
 import { t } from "@/configure/types/type";
+import type { TailorDBType, TailorAnyDBField } from "@/configure/services/tailordb/schema";
 import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
@@ -78,3 +79,18 @@ export function createResolver<
 // A loose config alias for userland use-cases
 // oxlint-disable-next-line no-explicit-any
 export type ResolverConfig = ReturnType<typeof createResolver<any, any>>;
+
+/**
+ * Convert a TailorDBType to a TailorField for use as resolver output.
+ * Equivalent to: t.object(type.fields).typeName(type.name)
+ * @param type - The TailorDBType to convert
+ * @returns A TailorField with the type's fields and name as typeName
+ */
+export function toResolverOutput<Fields extends Record<string, TailorAnyDBField>>(
+  type: TailorDBType<Fields>,
+): TailorField<{ type: "nested"; array: false; typeName: true }, InferFieldsOutput<Fields>> {
+  return t.object(type.fields).typeName(type.name) as TailorField<
+    { type: "nested"; array: false; typeName: true },
+    InferFieldsOutput<Fields>
+  >;
+}
