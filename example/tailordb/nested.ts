@@ -1,5 +1,6 @@
 import { db } from "@tailor-platform/sdk";
 import { defaultGqlPermission, defaultPermission } from "./permissions";
+import { user } from "./user";
 
 export const nestedProfile = db
   .type("NestedProfile", "Nested Profile Type", {
@@ -20,7 +21,12 @@ export const nestedProfile = db
       })
       .description("Profile metadata"),
     archived: db.bool({ optional: true }).description("Archive status"),
+    ownerID: db.uuid({ optional: true }).relation({
+      type: "n-1",
+      toward: { type: user, as: "owner" },
+    }),
     ...db.fields.timestamps(),
   })
+  .files({ avatar: "profile avatar image" })
   .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

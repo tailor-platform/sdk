@@ -55,6 +55,23 @@ export interface Namespace {
         version: number;
       };
       archived: boolean | null;
+      ownerID: string | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    ProfileComment: {
+      id: Generated<string>;
+      content: string;
+      profileID: string;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    ProfileDetail: {
+      id: Generated<string>;
+      bio: string | null;
+      profileID: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }

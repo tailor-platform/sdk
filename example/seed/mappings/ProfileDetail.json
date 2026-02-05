@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/ProfileDetail.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/ProfileDetail.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

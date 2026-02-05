@@ -1,0 +1,5 @@
+mutation CreateProfileComment($input: ProfileCommentCreateInput!) {
+  createProfileComment(input: $input) {
+    id
+  }
+}
