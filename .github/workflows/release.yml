@@ -23,11 +23,6 @@ jobs:
       - name: Install Deps
         uses: ./.github/actions/install-deps
 
-      - name: Setup npm registry for publishing
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-        with:
-          registry-url: "https://registry.npmjs.org"
-
       - name: Get github access token to create release PR
         id: get_access_token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
@@ -42,14 +37,39 @@ jobs:
         uses: changesets/action@c48e67d110a68bc90ccf1098e9646092baacaa87 # v1.6.0
         with:
           commitMode: "github-api"
-          createGithubReleases: true
-          publish: "pnpm publish -r --provenance --no-git-checks --access=public"
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Setup npm registry for publishing
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish
+        id: publish
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          set +e
+          OUTPUT=$(pnpm publish -r --provenance --no-git-checks --access=public 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          echo "${OUTPUT}"
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "::error::pnpm publish failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+
+          if echo "${OUTPUT}" | grep -q "There are no new packages"; then
+            echo "published=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "published=true" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Create Tags
-        if: steps.changesets.outputs.published == 'true'
+        if: steps.publish.outputs.published == 'true'
+        id: create_tags
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -59,3 +79,26 @@ jobs:
 
           git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git "${TAG_NAME}"
+          echo "tag_name=${TAG_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub Release
+        if: steps.publish.outputs.published == 'true'
+        run: |
+          set -euo pipefail
+
+          TAG_NAME="${{ steps.create_tags.outputs.tag_name }}"
+          NOTES=$(node -e "
+            const fs = require('fs');
+            const text = fs.readFileSync('packages/sdk/CHANGELOG.md', 'utf8');
+            const lines = text.split('\\n');
+            const start = lines.findIndex((l) => l.startsWith('## '));
+            if (start === -1) process.exit(1);
+            const next = lines.slice(start + 1).findIndex((l) => l.startsWith('## '));
+            const end = next === -1 ? lines.length : start + 1 + next;
+            const body = lines.slice(start + 1, end).join('\\n').trim();
+            process.stdout.write(body);
+          ")
+
+          gh release create "${TAG_NAME}" --title "${TAG_NAME}" --notes "${NOTES}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
