@@ -6,6 +6,7 @@ import {
   definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { i18nPlugin, createI18nGenerator } from "./plugins/i18n";
 import { softDeletePlugin } from "./plugins/soft-delete";
 import { user } from "./tailordb/user";
 
@@ -94,10 +95,12 @@ export const generators = defineGenerators(
   ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
   ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
+  createI18nGenerator({ distPath: "./generated/i18n" }),
 );
 
 export const plugins = definePlugins(
   ["@tailor-platform/changeset", {}],
   ["@tailor-platform/audit-log", true], // Standalone plugin - generates AuditLog type
   softDeletePlugin, // Custom plugin - adds soft delete functionality
+  i18nPlugin, // Custom plugin - stores i18n labels for generators
 );

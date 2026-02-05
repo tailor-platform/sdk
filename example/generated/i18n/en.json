@@ -1,0 +1,10 @@
+{
+  "User": {
+    "_type": "User",
+    "name": "Name",
+    "email": "Email",
+    "status": "Status",
+    "department": "Department",
+    "role": "Role"
+  }
+}

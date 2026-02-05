@@ -17,4 +17,16 @@ export const user = db
   )
   .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission)
-  .plugin({ "@tailor-platform/changeset": true });
+  .plugin({
+    "@tailor-platform/changeset": true,
+    "@example/i18n": {
+      typeLabel: { ja: "ユーザー", en: "User" },
+      labels: {
+        name: { ja: "名前", en: "Name" },
+        email: { ja: "メールアドレス", en: "Email" },
+        status: { ja: "ステータス", en: "Status" },
+        department: { ja: "部署", en: "Department" },
+        role: { ja: "役割", en: "Role" },
+      },
+    },
+  });
