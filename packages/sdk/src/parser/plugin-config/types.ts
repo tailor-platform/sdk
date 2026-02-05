@@ -230,8 +230,8 @@ export type PluginExecutorContextValue =
  * Plugin authors should extend this interface for their specific context needs.
  */
 export interface PluginExecutorContextBase {
-  /** Source type that the plugin is attached to */
-  sourceType: TailorAnyDBType;
+  /** Source type that the plugin is attached to. Null for standalone executors. */
+  sourceType: TailorAnyDBType | null;
   /** TailorDB namespace for data operations */
   namespace: string;
 }

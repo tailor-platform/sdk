@@ -4,12 +4,76 @@
  * context (like type references and namespace) at runtime.
  */
 
+import type { TailorActor } from "@/configure/types/actor";
+import type { TailorEnv } from "@/configure/types/env";
+
 /**
  * Plugin executor factory function type.
  * Takes context and returns an executor configuration.
+ * Returns unknown since the exact return type depends on createExecutor's generic params.
  */
-// oxlint-disable-next-line no-explicit-any
-export type PluginExecutorFactory<Ctx> = (ctx: Ctx) => any;
+export type PluginExecutorFactory<Ctx> = (ctx: Ctx) => unknown;
+
+// ============================================================================
+// Plugin Executor Args Types
+// ============================================================================
+
+/**
+ * Base args for plugin executor function operations.
+ * Provides typed access to runtime context without requiring specific record types.
+ */
+export interface PluginFunctionArgs {
+  /** Workspace ID where the executor runs */
+  workspaceId: string;
+  /** Application namespace */
+  appNamespace: string;
+  /** Environment variables */
+  env: TailorEnv;
+  /** Actor (user) who triggered the event, null for system events */
+  actor: TailorActor | null;
+  /** Name of the TailorDB type */
+  typeName: string;
+  /** TailorDB connections by namespace */
+  tailordb: Record<string, unknown>;
+}
+
+/**
+ * Args for plugin executors triggered on record creation.
+ */
+export interface PluginRecordCreatedArgs extends PluginFunctionArgs {
+  /** The newly created record */
+  newRecord: Record<string, unknown>;
+}
+
+/**
+ * Args for plugin executors triggered on record update.
+ */
+export interface PluginRecordUpdatedArgs extends PluginFunctionArgs {
+  /** The record after update */
+  newRecord: Record<string, unknown>;
+  /** The record before update */
+  oldRecord: Record<string, unknown>;
+}
+
+/**
+ * Args for plugin executors triggered on record deletion.
+ */
+export interface PluginRecordDeletedArgs extends PluginFunctionArgs {
+  /** The deleted record */
+  oldRecord: Record<string, unknown>;
+}
+
+/**
+ * Database schema type for plugins.
+ * Since plugins work with dynamic types, the schema uses Record types.
+ */
+export type PluginDBSchema = Record<string, Record<string, unknown>>;
+
+/**
+ * Base record type for TailorDB records.
+ * All records have an id field.
+ */
+export type PluginRecord = { id: string } & Record<string, unknown>;
 
 /**
  * Define a plugin executor that receives context at runtime.

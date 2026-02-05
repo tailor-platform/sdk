@@ -5,7 +5,13 @@
  */
 
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
-import { createExecutor, recordDeletedTrigger, withPluginContext } from "@tailor-platform/sdk";
+import {
+  createExecutor,
+  recordDeletedTrigger,
+  withPluginContext,
+  type PluginDBSchema,
+  type PluginRecord,
+} from "@tailor-platform/sdk";
 import { Kysely } from "kysely";
 import type { SoftDeleteContext } from "../types";
 
@@ -13,18 +19,17 @@ export default withPluginContext<SoftDeleteContext>((ctx) =>
   createExecutor({
     name: `${ctx.sourceType.name.toLowerCase()}-archive-on-delete`,
     description: `Archives ${ctx.sourceType.name} when deleted`,
-    // oxlint-disable-next-line @typescript-eslint/no-explicit-any
-    trigger: recordDeletedTrigger({ type: ctx.sourceType as any }),
+    // Type assertion needed: TailorAnyDBType is compatible but TypeScript can't infer it
+    trigger: recordDeletedTrigger({
+      type: ctx.sourceType as Parameters<typeof recordDeletedTrigger>[0]["type"],
+    }),
     operation: {
       kind: "function",
-      // oxlint-disable-next-line @typescript-eslint/no-explicit-any
-      body: async (args: any) => {
-        // oxlint-disable-next-line @typescript-eslint/no-explicit-any
-        const db = new Kysely<any>({
-          // oxlint-disable-next-line @typescript-eslint/no-explicit-any
-          dialect: new TailordbDialect(args.tailordb[ctx.namespace]) as any,
+      body: async (args) => {
+        const db = new Kysely<PluginDBSchema>({
+          dialect: new TailordbDialect(new tailordb.Client({ namespace: ctx.namespace })),
         });
-        const oldRecord = args.oldRecord;
+        const oldRecord = args.oldRecord as PluginRecord;
         await db
           .insertInto(ctx.archiveType.name)
           .values({

@@ -34,13 +34,25 @@ export type {
   PluginConfigs,
   PluginOutput,
   PluginProcessContext,
+  StandalonePluginProcessContext,
   PluginAttachment,
   PluginGeneratedType,
   PluginGeneratedResolver,
   PluginGeneratedExecutor,
   PluginGeneratedExecutorWithFile,
+  PluginExecutorContext,
+  PluginExecutorContextBase,
   TailorDBTypeForPlugin,
 } from "@/parser/plugin-config/types";
 
 // Plugin utilities
-export { withPluginContext, type PluginExecutorFactory } from "@/plugin/with-context";
+export {
+  withPluginContext,
+  type PluginExecutorFactory,
+  type PluginFunctionArgs,
+  type PluginRecordCreatedArgs,
+  type PluginRecordUpdatedArgs,
+  type PluginRecordDeletedArgs,
+  type PluginDBSchema,
+  type PluginRecord,
+} from "@/plugin/with-context";
