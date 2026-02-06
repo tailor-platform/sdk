@@ -402,7 +402,7 @@ ${namespaceDepsEntries}
       const result = await executeScript({
         client: operatorClient,
         workspaceId,
-        name: \`seed-\${namespace}\`,
+        name: \`seed-\${namespace}.ts\`,
         code: bundled.bundledCode,
         arg: JSON.stringify({ data, order: sortedTypes }),
         invoker: {

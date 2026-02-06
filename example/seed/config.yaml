@@ -3,7 +3,7 @@ entityDependencies:
   Invoice: [SalesOrder]
   NestedProfile: []
   PurchaseOrder: [Supplier]
-  SalesOrder: [Customer]
+  SalesOrder: [Customer, User]
   SalesOrderCreated: []
   Selfie: []
   Supplier: []

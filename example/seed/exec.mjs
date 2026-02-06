@@ -97,7 +97,7 @@ const namespaceDeps = {
         "Invoice": ["SalesOrder"],
         "NestedProfile": [],
         "PurchaseOrder": ["Supplier"],
-        "SalesOrder": ["Customer"],
+        "SalesOrder": ["Customer", "User"],
         "SalesOrderCreated": [],
         "Selfie": [],
         "Supplier": [],
@@ -306,7 +306,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   const result = await executeScript({
     client: operatorClient,
     workspaceId,
-    name: `seed-${namespace}`,
+    name: `seed-${namespace}.ts`,
     code: bundled.bundledCode,
     arg: JSON.stringify({ data, order: sortedTypes }),
     invoker: {
