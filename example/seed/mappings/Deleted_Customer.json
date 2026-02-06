@@ -1,0 +1,8 @@
+{
+  "dataFile": "data/Deleted_Customer.jsonl",
+  "dataFormat": "jsonl",
+  "graphqlFile": "graphql/Deleted_Customer.graphql",
+  "mapping": {
+    "input": "$"
+  }
+}

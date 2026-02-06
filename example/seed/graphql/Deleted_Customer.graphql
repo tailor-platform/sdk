@@ -1,0 +1,5 @@
+mutation CreateDeleted_Customer($input: Deleted_CustomerCreateInput!) {
+  createDeleted_Customer(input: $input) {
+    id
+  }
+}

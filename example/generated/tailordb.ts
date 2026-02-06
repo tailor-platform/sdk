@@ -33,7 +33,7 @@ export interface Namespace {
       deletedAt: Timestamp | null;
     }
 
-    CustomerArchive: {
+    Deleted_Customer: {
       id: Generated<string>;
       originalId: string;
       originalData: string;
