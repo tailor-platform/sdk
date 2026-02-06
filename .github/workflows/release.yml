@@ -42,8 +42,8 @@ jobs:
         uses: changesets/action@c48e67d110a68bc90ccf1098e9646092baacaa87 # v1.6.0
         with:
           commitMode: "github-api"
-          publish: "pnpm publish -r --provenance --no-git-checks --access=public --tag beta"
+          publish: "pnpm changeset publish --tag beta"
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
