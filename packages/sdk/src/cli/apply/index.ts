@@ -198,37 +198,16 @@ export async function apply(options?: ApplyOptions) {
     return;
   }
 
-  // Migration only mode: Apply IdP → Auth → TailorDB (different order for migration scripts)
-  // Migration scripts require machine users, so IdP/Auth must be created first
-  if (migrationOnlyMode) {
-    // Phase 1: Create IdP/Auth first (machine users needed for migration scripts)
-    await applyIdP(client, idp, "create-update");
-    await applyAuth(client, auth, "create-update");
-
-    // Phase 2: TailorDB migration (machine users are now available)
-    await applyTailorDB(client, tailorDB, "create-update");
-
-    // Phase 3: Delete services
-    await applyAuth(client, auth, "delete-services");
-    await applyIdP(client, idp, "delete-services");
-    await applyTailorDB(client, tailorDB, "delete-services");
-
-    logger.success("Successfully applied TailorDB + Auth + IdP changes.");
-    return;
-  }
-
-  // Normal mode: Apply in standard order
   // Phase 2: Create/Update services that Application depends on
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
-
-  // TailorDB: Automatically validates migrations and handles migration flow internally
-  await applyTailorDB(client, tailorDB, "create-update");
-
-  // Other services: Apply after TailorDB migrations complete
+  // Order: StaticWebsite → IdP → Auth → TailorDB → Pipeline
+  // - StaticWebsite first: Auth OAuth2 redirectURIs may reference static website URLs
+  // - IdP/Auth before TailorDB: migration scripts require machine users
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
+  await applyTailorDB(client, tailorDB, "create-update");
   await applyPipeline(client, pipeline, "create-update");
 
   // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
@@ -372,6 +351,7 @@ async function planServices(
   const tailorDB = await planTailorDB(ctx);
   const idp = await planIdP(ctx);
   const auth = await planAuth(ctx);
+  const staticWebsite = await planStaticWebsite(ctx);
 
   if (migrationOnly) {
     // Other services use empty plans (type assertions since they won't be used)
@@ -379,12 +359,7 @@ async function planServices(
       tailorDB,
       idp,
       auth,
-      staticWebsite: {
-        changeSet: createChangeSet("StaticWebsites"),
-        conflicts: [],
-        unmanaged: [],
-        resourceOwners: new Set<string>(),
-      } as Awaited<ReturnType<typeof planStaticWebsite>>,
+      staticWebsite,
       pipeline: {
         changeSet: {
           service: createChangeSet("Pipeline services"),
@@ -415,7 +390,7 @@ async function planServices(
     tailorDB,
     idp,
     auth,
-    staticWebsite: await planStaticWebsite(ctx),
+    staticWebsite,
     pipeline: await planPipeline(ctx),
     app: await planApplication(ctx),
     executor: await planExecutor(ctx),

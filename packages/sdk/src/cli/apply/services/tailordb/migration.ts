@@ -428,13 +428,11 @@ export async function buildFilteredTypesForVersion(
       }
     }
 
-    filteredTypesByNamespace.set(namespace, filteredTypes);
-  }
-
-  // Rebuild backward relationships after all types are filtered
-  // This ensures backward relationships only reference fields that exist in the filtered state
-  for (const filteredTypes of filteredTypesByNamespace.values()) {
-    rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+    // Rebuild backward relationships to only reference fields that exist in the filtered state
+    filteredTypesByNamespace.set(
+      namespace,
+      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes),
+    );
   }
 
   return filteredTypesByNamespace;

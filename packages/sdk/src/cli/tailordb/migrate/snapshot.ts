@@ -1212,19 +1212,21 @@ export function filterTypeToSnapshot(type: TailorDBType, snapshotType: SnapshotT
  * This must be called after all types have been filtered via filterTypeToSnapshot
  * to ensure backward relationships only reference fields that exist in the filtered state.
  * @param {Record<string, TailorDBType>} filteredTypes - Filtered types by name
+ * @returns {Record<string, TailorDBType>} New types with rebuilt backward relationships
  */
 export function rebuildBackwardRelationshipsForFilteredTypes(
   filteredTypes: Record<string, TailorDBType>,
-): void {
-  // Clear all backward relationships first (they were set to {} in filterTypeToSnapshot)
-  for (const type of Object.values(filteredTypes)) {
-    type.backwardRelationships = {};
+): Record<string, TailorDBType> {
+  // Create new types with empty backward relationships
+  const result: Record<string, TailorDBType> = {};
+  for (const [name, type] of Object.entries(filteredTypes)) {
+    result[name] = { ...type, backwardRelationships: {} };
   }
 
   // Rebuild backward relationships based on filtered forward relationships
-  for (const [typeName, type] of Object.entries(filteredTypes)) {
+  for (const [typeName, type] of Object.entries(result)) {
     for (const rel of Object.values(type.forwardRelationships)) {
-      const targetType = filteredTypes[rel.targetType];
+      const targetType = result[rel.targetType];
       if (!targetType) continue; // Target type doesn't exist in filtered types
 
       const field = type.fields[rel.targetField];
@@ -1249,6 +1251,8 @@ export function rebuildBackwardRelationshipsForFilteredTypes(
       };
     }
   }
+
+  return result;
 }
 
 // ============================================================================

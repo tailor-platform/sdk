@@ -1924,13 +1924,13 @@ describe("snapshot", () => {
         },
       );
 
-      const filteredTypes = { Customer: customer, Order: order };
-      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+      const input = { Customer: customer, Order: order };
+      const result = rebuildBackwardRelationshipsForFilteredTypes(input);
 
       // Customer should now have backward relationship to Order
-      expect(filteredTypes.Customer.backwardRelationships.orders).toBeDefined();
-      expect(filteredTypes.Customer.backwardRelationships.orders.targetType).toBe("Order");
-      expect(filteredTypes.Customer.backwardRelationships.orders.targetField).toBe("customerId");
+      expect(result.Customer.backwardRelationships.orders).toBeDefined();
+      expect(result.Customer.backwardRelationships.orders.targetType).toBe("Order");
+      expect(result.Customer.backwardRelationships.orders.targetField).toBe("customerId");
     });
 
     it("does not create backward relationships when forward relationship is filtered out", () => {
@@ -1943,11 +1943,11 @@ describe("snapshot", () => {
         id: { name: "id", config: { type: "uuid", required: true } },
       });
 
-      const filteredTypes = { Customer: customer, Order: order };
-      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+      const input = { Customer: customer, Order: order };
+      const result = rebuildBackwardRelationshipsForFilteredTypes(input);
 
       // Customer should have no backward relationships
-      expect(Object.keys(filteredTypes.Customer.backwardRelationships)).toHaveLength(0);
+      expect(Object.keys(result.Customer.backwardRelationships)).toHaveLength(0);
     });
 
     it("does not create backward relationships when target type does not exist", () => {
@@ -1982,11 +1982,11 @@ describe("snapshot", () => {
       );
 
       // Only Order exists, Customer is not in filtered types
-      const filteredTypes = { Order: order };
-      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+      const input = { Order: order };
+      const result = rebuildBackwardRelationshipsForFilteredTypes(input);
 
       // Order should still have its forward relationship but no backward should be created
-      expect(Object.keys(filteredTypes.Order.backwardRelationships)).toHaveLength(0);
+      expect(Object.keys(result.Order.backwardRelationships)).toHaveLength(0);
     });
 
     it("generates default backward name using inflection when not specified", () => {
@@ -2024,12 +2024,12 @@ describe("snapshot", () => {
         },
       );
 
-      const filteredTypes = { User: user, Profile: profile };
-      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+      const input = { User: user, Profile: profile };
+      const result = rebuildBackwardRelationshipsForFilteredTypes(input);
 
       // Should generate "profiles" (plural of "profile")
-      expect(filteredTypes.User.backwardRelationships.profiles).toBeDefined();
-      expect(filteredTypes.User.backwardRelationships.profiles.isArray).toBe(true);
+      expect(result.User.backwardRelationships.profiles).toBeDefined();
+      expect(result.User.backwardRelationships.profiles.isArray).toBe(true);
     });
 
     it("uses singular form for unique (1-1) relationships", () => {
@@ -2067,12 +2067,12 @@ describe("snapshot", () => {
         },
       );
 
-      const filteredTypes = { User: user, Profile: profile };
-      rebuildBackwardRelationshipsForFilteredTypes(filteredTypes);
+      const input = { User: user, Profile: profile };
+      const result = rebuildBackwardRelationshipsForFilteredTypes(input);
 
       // Should generate "profile" (singular) for 1-1 relationship
-      expect(filteredTypes.User.backwardRelationships.profile).toBeDefined();
-      expect(filteredTypes.User.backwardRelationships.profile.isArray).toBe(false);
+      expect(result.User.backwardRelationships.profile).toBeDefined();
+      expect(result.User.backwardRelationships.profile.isArray).toBe(false);
     });
   });
 });
