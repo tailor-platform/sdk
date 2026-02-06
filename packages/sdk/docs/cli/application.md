@@ -83,7 +83,7 @@ When migrations are configured (`db.tailordb.migration` in config), the `apply` 
 3. Executes migration scripts via TestExecScript API
 4. Updates migration state labels in TailorDB metadata
 
-See [TailorDB Commands](./tailordb.md#automatic-migration-execution) for details on automatic migration execution.
+See [TailorDB Commands](./tailordb#automatic-migration-execution) for details on automatic migration execution.
 
 **Schema Check:**
 
