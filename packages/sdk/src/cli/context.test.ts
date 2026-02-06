@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
-import { loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
+import { logger } from "./utils/logger";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
 
@@ -233,6 +234,204 @@ describe("loadWorkspaceId", () => {
   describe("error case: no workspace ID source", () => {
     it("throws error when no workspaceId source is available", () => {
       expect(() => loadWorkspaceId()).toThrow("Workspace ID not found");
+    });
+  });
+});
+
+describe("loadAccessToken", () => {
+  const originalEnv = process.env;
+  const validToken = "valid-access-token";
+  const otherToken = "other-access-token";
+  const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.resetModules();
+    process.env = { ...originalEnv };
+    delete process.env.TAILOR_PLATFORM_TOKEN;
+    delete process.env.TAILOR_TOKEN;
+    delete process.env.TAILOR_PLATFORM_PROFILE;
+    writePlatformConfig({
+      version: 1,
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.restoreAllMocks();
+  });
+
+  describe("env.TAILOR_PLATFORM_TOKEN", () => {
+    it("returns token from TAILOR_PLATFORM_TOKEN when set", async () => {
+      process.env.TAILOR_PLATFORM_TOKEN = validToken;
+      const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+    });
+
+    it("TAILOR_PLATFORM_TOKEN takes precedence over TAILOR_TOKEN", async () => {
+      process.env.TAILOR_PLATFORM_TOKEN = validToken;
+      process.env.TAILOR_TOKEN = otherToken;
+      const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+    });
+
+    it("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
+      process.env.TAILOR_PLATFORM_TOKEN = validToken;
+      writePlatformConfig({
+        version: 1,
+        users: {
+          testuser: {
+            access_token: otherToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+          },
+        },
+        profiles: {
+          myprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        },
+        current_user: null,
+      });
+      const result = await loadAccessToken({ useProfile: true, profile: "myprofile" });
+      expect(result).toBe(validToken);
+    });
+  });
+
+  describe("env.TAILOR_TOKEN (deprecated)", () => {
+    it("returns token from TAILOR_TOKEN when TAILOR_PLATFORM_TOKEN not set", async () => {
+      process.env.TAILOR_TOKEN = validToken;
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+      expect(warnSpy).toHaveBeenCalledWith(
+        "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
+      );
+    });
+  });
+
+  describe("opts.profile", () => {
+    it("returns token from profile when useProfile is true and profile provided", async () => {
+      writePlatformConfig({
+        version: 1,
+        users: {
+          testuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+          },
+        },
+        profiles: {
+          myprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        },
+        current_user: null,
+      });
+      const result = await loadAccessToken({ useProfile: true, profile: "myprofile" });
+      expect(result).toBe(validToken);
+    });
+
+    it("throws error when profile not found", async () => {
+      writePlatformConfig({
+        version: 1,
+        users: {},
+        profiles: {},
+        current_user: null,
+      });
+      await expect(loadAccessToken({ useProfile: true, profile: "nonexistent" })).rejects.toThrow(
+        'Profile "nonexistent" not found',
+      );
+    });
+
+    it("does not use profile when useProfile is false", async () => {
+      writePlatformConfig({
+        version: 1,
+        users: {
+          currentuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+          },
+        },
+        profiles: {
+          myprofile: { user: "profileuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        },
+        current_user: "currentuser",
+      });
+      const result = await loadAccessToken({ useProfile: false, profile: "myprofile" });
+      expect(result).toBe(validToken);
+    });
+  });
+
+  describe("env.TAILOR_PLATFORM_PROFILE", () => {
+    it("returns token from env profile when useProfile is true", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      writePlatformConfig({
+        version: 1,
+        users: {
+          testuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+          },
+        },
+        profiles: {
+          envprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        },
+        current_user: null,
+      });
+      const result = await loadAccessToken({ useProfile: true });
+      expect(result).toBe(validToken);
+    });
+
+    it("opts.profile takes precedence over env profile", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      writePlatformConfig({
+        version: 1,
+        users: {
+          envuser: {
+            access_token: otherToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+          },
+          optsuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+          },
+        },
+        profiles: {
+          envprofile: { user: "envuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+          optsprofile: { user: "optsuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        },
+        current_user: null,
+      });
+      const result = await loadAccessToken({ useProfile: true, profile: "optsprofile" });
+      expect(result).toBe(validToken);
+    });
+  });
+
+  describe("config.current_user", () => {
+    it("returns token from current_user when no env or profile", async () => {
+      writePlatformConfig({
+        version: 1,
+        users: {
+          currentuser: {
+            access_token: validToken,
+            refresh_token: "refresh",
+            token_expires_at: futureDate,
+          },
+        },
+        profiles: {},
+        current_user: "currentuser",
+      });
+      const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+    });
+  });
+
+  describe("error case: no token source", () => {
+    it("throws error when no token source is available", async () => {
+      await expect(loadAccessToken()).rejects.toThrow("Tailor Platform token not found");
     });
   });
 });
