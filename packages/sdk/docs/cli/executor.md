@@ -142,6 +142,23 @@ tailor-sdk executor trigger [options] <executorName>
 | `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                     | `"3s"`  |
 | `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                 | `false` |
 
+**Notes**
+
+Only executors with `incomingWebhook` or `schedule` trigger types can be triggered manually.
+Executors with `event` trigger types (such as `recordCreated`, `recordUpdated`, `recordDeleted`) cannot be triggered manually.
+
+The `--data` and `--header` options are only available for `incomingWebhook` trigger type.
+
+## Downstream Execution Tracking
+
+When using `--wait`, the CLI tracks not only the executor job but also any downstream executions:
+
+- **Workflow targets**: Waits for the workflow execution to complete (SUCCESS, FAILED, or PENDING_RESUME). Shows real-time status changes and currently running job names during execution.
+- **Function targets**: Waits for the function execution to complete
+- **Webhook/GraphQL targets**: Only waits for the executor job itself
+
+The `--logs` option displays logs from the downstream execution when available.
+
 <!-- politty:command:executor trigger:end -->
 
 <!-- politty:command:executor webhook:start -->
