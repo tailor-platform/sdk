@@ -16,13 +16,13 @@ tailor-sdk executor [command]
 
 **Commands**
 
-| Command                                 | Description                  |
-| --------------------------------------- | ---------------------------- |
-| [`executor list`](#executor-list)       | List all executors           |
-| [`executor get`](#executor-get)         | Get executor details         |
-| [`executor jobs`](#executor-jobs)       | List or get executor jobs    |
-| [`executor trigger`](#executor-trigger) | Trigger an executor manually |
-| [`executor webhook`](#executor-webhook) | Manage executor webhooks     |
+| Command                                 | Description                   |
+| --------------------------------------- | ----------------------------- |
+| [`executor list`](#executor-list)       | List all executors            |
+| [`executor get`](#executor-get)         | Get executor details          |
+| [`executor jobs`](#executor-jobs)       | List or get executor jobs.    |
+| [`executor trigger`](#executor-trigger) | Trigger an executor manually. |
+| [`executor webhook`](#executor-webhook) | Manage executor webhooks      |
 
 <!-- politty:command:executor:end -->
 
@@ -80,7 +80,7 @@ tailor-sdk executor get [options] <name>
 
 ### executor jobs
 
-List or get executor jobs
+List or get executor jobs.
 
 **Usage**
 
@@ -97,15 +97,17 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 
 **Options**
 
-| Option                          | Alias | Description                                                                        | Default |
-| ------------------------------- | ----- | ---------------------------------------------------------------------------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                                                                     | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                  | -       |
-| `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED)                     | -       |
-| `--attempts`                    | -     | Show job attempts (only with job ID)                                               | `false` |
-| `--watch`                       | -     | Wait for job completion and downstream execution (workflow/function) if applicable | `false` |
-| `--interval <INTERVAL>`         | -     | Polling interval (e.g., '3s', '500ms', '1m')                                       | `"3s"`  |
+| Option                          | Alias | Description                                                                                           | Default |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | ------- |
+| `--json`                        | `-j`  | Output as JSON                                                                                        | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                          | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                     | -       |
+| `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)                       | -       |
+| `--attempts`                    | -     | Show job attempts (only with job ID) (detail mode only)                                               | `false` |
+| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only) | `false` |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | `"3s"`  |
+| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                    | `false` |
+| `--limit <LIMIT>`               | -     | Maximum number of jobs to list (default: 50, max: 1000) (list mode only)                              | -       |
 
 <!-- politty:command:executor jobs:end -->
 
@@ -113,7 +115,7 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 
 ### executor trigger
 
-Trigger an executor manually
+Trigger an executor manually.
 
 **Usage**
 
@@ -134,9 +136,11 @@ tailor-sdk executor trigger [options] <executorName>
 | `--json`                        | `-j`  | Output as JSON                                                                     | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                  | -       |
-| `--payload <PAYLOAD>`           | `-d`  | Payload data (JSON string)                                                         | -       |
-| `--watch`                       | -     | Wait for job completion and downstream execution (workflow/function) if applicable | `false` |
-| `--interval <INTERVAL>`         | -     | Polling interval for --watch (e.g., '3s', '500ms', '1m')                           | `"3s"`  |
+| `--data <DATA>`                 | `-d`  | Request body (JSON string)                                                         | -       |
+| `--header <HEADER>`             | `-H`  | Request header (format: 'Key: Value', can be specified multiple times)             | -       |
+| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable | `false` |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                     | `"3s"`  |
+| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                 | `false` |
 
 <!-- politty:command:executor trigger:end -->
 
