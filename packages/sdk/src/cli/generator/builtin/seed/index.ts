@@ -6,9 +6,9 @@ import {
   type AggregateArgs,
   type GeneratorResult,
 } from "@/cli/generator/types";
-import { processGqlIngest } from "./gql-ingest-processor";
 import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
 import { processLinesDb, generateLinesDbSchemaFile } from "./lines-db-processor";
+import { processSeedTypeInfo } from "./seed-type-processor";
 import type { SeedTypeMetadata } from "./types";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
@@ -33,36 +33,44 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean): string {
   if (!hasIdpUser) return "";
 
   return ml`
-    // Seed _User via gql-ingest (IdP managed)
-    const seedIdpUserViaGqlIngest = async () => {
+    // Seed _User via GraphQL mutation
+    const seedIdpUser = async () => {
       console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
-
-      const gqlClient = new GQLIngest({
-        endpoint,
-        headers: {
-          Authorization: \`Bearer \${tokenInfo.accessToken}\`,
-        },
-      });
-
-      gqlClient.on("entityStart", (payload) => {
-        console.log(styleText("dim", \`    Processing \${payload.entityName}...\`));
-      });
-
-      gqlClient.on("entityComplete", (payload) => {
-        const { entityName, metrics: { rowsProcessed } } = payload;
-        console.log(styleText("green", \`  ✓ \${entityName}: \${rowsProcessed} rows processed\`));
-      });
-
-      gqlClient.on("rowFailure", (payload) => {
-        console.error(styleText("red", \`  ✗ Row \${payload.rowIndex} in \${payload.entityName} failed: \${payload.error.message}\`));
-      });
-
-      try {
-        const result = await gqlClient.ingestEntities(configDir, ["_User"]);
-        return { success: result.success };
-      } catch (error) {
-        return { success: false, error: error.message };
+      const dataDir = join(configDir, "data");
+      const data = loadSeedData(dataDir, ["_User"]);
+      const rows = data["_User"] || [];
+      if (rows.length === 0) {
+        console.log(styleText("dim", "    No _User data to seed"));
+        return { success: true };
       }
+      console.log(styleText("dim", \`    Processing _User...\`));
+      const mutation = \`mutation CreateUser($input: _CreateUserInput!) { _createUser(input: $input) { id } }\`;
+      let successCount = 0;
+      let failCount = 0;
+      for (let i = 0; i < rows.length; i++) {
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: \`Bearer \${tokenInfo.accessToken}\` },
+            body: JSON.stringify({ query: mutation, variables: { input: rows[i] } }),
+          });
+          const result = await response.json();
+          if (result.errors) {
+            failCount++;
+            console.error(styleText("red", \`  ✗ Row \${i} in _User failed: \${result.errors[0].message}\`));
+          } else {
+            successCount++;
+          }
+        } catch (error) {
+          failCount++;
+          console.error(styleText("red", \`  ✗ Row \${i} in _User failed: \${error.message}\`));
+        }
+      }
+      console.log(styleText("green", \`  ✓ _User: \${successCount} rows processed\`));
+      if (failCount > 0) {
+        console.error(styleText("red", \`  ✗ _User: \${failCount} rows failed\`));
+      }
+      return { success: failCount === 0 };
     };
   `;
 }
@@ -79,7 +87,7 @@ function generateIdpUserSeedCall(hasIdpUser: boolean): string {
     // Seed _User if included and not skipped
     const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
     if (hasIdpUser && shouldSeedUser) {
-      const result = await seedIdpUserViaGqlIngest();
+      const result = await seedIdpUser();
       if (!result.success) {
         allSuccess = false;
       }
@@ -89,7 +97,7 @@ function generateIdpUserSeedCall(hasIdpUser: boolean): string {
 
 /**
  * Generates the exec.mjs script content using testExecScript API for TailorDB types
- * and gql-ingest for _User (IdP managed)
+ * and GraphQL mutation for _User (IdP managed)
  * @param machineUserName - Machine user name for token retrieval
  * @param relativeConfigPath - Config path relative to exec script
  * @param namespaceConfigs - Namespace configurations with types and dependencies
@@ -120,11 +128,7 @@ function generateExecScript(
     })
     .join(",\n");
 
-  // Import statement for gql-ingest (only if _User is included)
-  const gqlIngestImport = hasIdpUser ? 'import { GQLIngest } from "@jackchuka/gql-ingest";' : "";
-
   return ml /* js */ `
-    ${gqlIngestImport}
     import { readFileSync } from "node:fs";
     import { join } from "node:path";
     import { parseArgs, styleText } from "node:util";
@@ -476,7 +480,7 @@ ${namespaceDepsEntries}
 
 /**
  * Factory function to create a Seed generator.
- * Combines GraphQL Ingest and lines-db schema generation.
+ * Combines Kysely batch insert and lines-db schema generation.
  * @param options - Seed generator options
  * @returns Seed generator
  */
@@ -485,13 +489,13 @@ export function createSeedGenerator(
 ): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
   return {
     id: SeedGeneratorID,
-    description: "Generates seed data files (Kysely batch insert + gql-ingest for _User)",
+    description: "Generates seed data files (Kysely batch insert + GraphQL mutation for _User)",
     dependencies: ["tailordb"] as const,
 
     processType: ({ type, source, namespace }) => {
-      const gqlIngest = processGqlIngest(type, namespace);
+      const typeInfo = processSeedTypeInfo(type, namespace);
       const linesDb = processLinesDb(type, source);
-      return { gqlIngest, linesDb };
+      return { typeInfo, linesDb };
     },
 
     processTailorDBNamespace: ({ types }) => types,
@@ -513,14 +517,14 @@ export function createSeedGenerator(
         const dependencies: Record<string, string[]> = {};
 
         for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
-          const { gqlIngest, linesDb } = metadata;
+          const { typeInfo, linesDb } = metadata;
 
-          types.push(gqlIngest.name);
-          dependencies[gqlIngest.name] = gqlIngest.dependencies;
+          types.push(typeInfo.name);
+          dependencies[typeInfo.name] = typeInfo.dependencies;
 
           // Generate empty JSONL data file
           files.push({
-            path: path.join(outputBaseDir, gqlIngest.mapping.dataFile),
+            path: path.join(outputBaseDir, typeInfo.dataFile),
             content: "",
             skipIfExists: true,
           });
@@ -556,21 +560,9 @@ export function createSeedGenerator(
       if (idpUser) {
         const outputBaseDir = options.distPath;
 
-        // Generate GraphQL mutation file (for gql-ingest)
-        files.push({
-          path: path.join(outputBaseDir, idpUser.mapping.graphqlFile),
-          content: idpUser.graphql,
-        });
-
-        // Generate mapping file (for gql-ingest)
-        files.push({
-          path: path.join(outputBaseDir, "mappings", `${idpUser.name}.json`),
-          content: JSON.stringify(idpUser.mapping, null, 2) + "\n",
-        });
-
         // Generate empty JSONL data file
         files.push({
-          path: path.join(outputBaseDir, idpUser.mapping.dataFile),
+          path: path.join(outputBaseDir, idpUser.dataFile),
           content: "",
           skipIfExists: true,
         });
@@ -584,28 +576,6 @@ export function createSeedGenerator(
           ),
         });
       }
-
-      // Generate config.yaml with all dependencies
-      const allDependencies: Record<string, string[]> = {};
-      for (const nsConfig of namespaceConfigs) {
-        for (const [type, deps] of Object.entries(nsConfig.dependencies)) {
-          allDependencies[type] = deps;
-        }
-      }
-
-      // Add _User dependencies if exists
-      if (idpUser) {
-        allDependencies[idpUser.name] = idpUser.dependencies;
-      }
-
-      files.push({
-        path: path.join(options.distPath, "config.yaml"),
-        content: /* yaml */ `entityDependencies:
-  ${Object.entries(allDependencies)
-    .map(([type, deps]) => `${type}: [${deps.join(", ")}]`)
-    .join("\n  ")}
-`,
-      });
 
       // Generate exec.mjs if machineUserName is provided
       if (options.machineUserName) {

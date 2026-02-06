@@ -1,5 +1,0 @@
-mutation CreateUserLog($input: UserLogCreateInput!) {
-  createUserLog(input: $input) {
-    id
-  }
-}

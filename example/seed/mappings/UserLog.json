@@ -1,8 +1,0 @@
-{
-  "dataFile": "data/UserLog.jsonl",
-  "dataFormat": "jsonl",
-  "graphqlFile": "graphql/UserLog.graphql",
-  "mapping": {
-    "input": "$"
-  }
-}

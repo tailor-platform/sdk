@@ -1,4 +1,3 @@
-import { GQLIngest } from "@jackchuka/gql-ingest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs, styleText } from "node:util";
@@ -75,39 +74,39 @@ console.log(styleText("cyan", "Starting seed data generation..."));
 // Entity configuration
 const namespaceEntities = {
   tailordb: [
-        "Customer",
-        "Invoice",
-        "NestedProfile",
-        "PurchaseOrder",
-        "SalesOrder",
-        "SalesOrderCreated",
-        "Selfie",
-        "Supplier",
-        "User",
-        "UserLog",
-        "UserSetting",
-      ],
-      analyticsdb: [
-        "Event",
-      ]
+    "Customer",
+    "Invoice",
+    "NestedProfile",
+    "PurchaseOrder",
+    "SalesOrder",
+    "SalesOrderCreated",
+    "Selfie",
+    "Supplier",
+    "User",
+    "UserLog",
+    "UserSetting",
+  ],
+  analyticsdb: [
+    "Event",
+  ]
 };
 const namespaceDeps = {
   "tailordb": {
-        "Customer": [],
-        "Invoice": ["SalesOrder"],
-        "NestedProfile": [],
-        "PurchaseOrder": ["Supplier"],
-        "SalesOrder": ["Customer", "User"],
-        "SalesOrderCreated": [],
-        "Selfie": [],
-        "Supplier": [],
-        "User": [],
-        "UserLog": ["User"],
-        "UserSetting": ["User"]
-      },
-      "analyticsdb": {
-        "Event": []
-      }
+    "Customer": [],
+    "Invoice": ["SalesOrder"],
+    "NestedProfile": [],
+    "PurchaseOrder": ["Supplier"],
+    "SalesOrder": ["Customer", "User"],
+    "SalesOrderCreated": [],
+    "Selfie": [],
+    "Supplier": [],
+    "User": [],
+    "UserLog": ["User"],
+    "UserSetting": ["User"]
+  },
+  "analyticsdb": {
+    "Event": []
+  }
 };
 const entities = Object.values(namespaceEntities).flat();
 const hasIdpUser = true;
@@ -334,36 +333,44 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   }
 };
 
-// Seed _User via gql-ingest (IdP managed)
-const seedIdpUserViaGqlIngest = async () => {
+// Seed _User via GraphQL mutation
+const seedIdpUser = async () => {
   console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
-
-  const gqlClient = new GQLIngest({
-    endpoint,
-    headers: {
-      Authorization: `Bearer ${tokenInfo.accessToken}`,
-    },
-  });
-
-  gqlClient.on("entityStart", (payload) => {
-    console.log(styleText("dim", `    Processing ${payload.entityName}...`));
-  });
-
-  gqlClient.on("entityComplete", (payload) => {
-    const { entityName, metrics: { rowsProcessed } } = payload;
-    console.log(styleText("green", `  ✓ ${entityName}: ${rowsProcessed} rows processed`));
-  });
-
-  gqlClient.on("rowFailure", (payload) => {
-    console.error(styleText("red", `  ✗ Row ${payload.rowIndex} in ${payload.entityName} failed: ${payload.error.message}`));
-  });
-
-  try {
-    const result = await gqlClient.ingestEntities(configDir, ["_User"]);
-    return { success: result.success };
-  } catch (error) {
-    return { success: false, error: error.message };
+  const dataDir = join(configDir, "data");
+  const data = loadSeedData(dataDir, ["_User"]);
+  const rows = data["_User"] || [];
+  if (rows.length === 0) {
+    console.log(styleText("dim", "    No _User data to seed"));
+    return { success: true };
   }
+  console.log(styleText("dim", `    Processing _User...`));
+  const mutation = `mutation CreateUser($input: _CreateUserInput!) { _createUser(input: $input) { id } }`;
+  let successCount = 0;
+  let failCount = 0;
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenInfo.accessToken}` },
+        body: JSON.stringify({ query: mutation, variables: { input: rows[i] } }),
+      });
+      const result = await response.json();
+      if (result.errors) {
+        failCount++;
+        console.error(styleText("red", `  ✗ Row ${i} in _User failed: ${result.errors[0].message}`));
+      } else {
+        successCount++;
+      }
+    } catch (error) {
+      failCount++;
+      console.error(styleText("red", `  ✗ Row ${i} in _User failed: ${error.message}`));
+    }
+  }
+  console.log(styleText("green", `  ✓ _User: ${successCount} rows processed`));
+  if (failCount > 0) {
+    console.error(styleText("red", `  ✗ _User: ${failCount} rows failed`));
+  }
+  return { success: failCount === 0 };
 };
 
 // Main execution
@@ -395,7 +402,7 @@ try {
   // Seed _User if included and not skipped
   const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
   if (hasIdpUser && shouldSeedUser) {
-    const result = await seedIdpUserViaGqlIngest();
+    const result = await seedIdpUser();
     if (!result.success) {
       allSuccess = false;
     }
