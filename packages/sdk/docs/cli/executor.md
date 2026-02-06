@@ -220,10 +220,10 @@ $ tailor-sdk executor trigger my-executor -W -l
 
 **Notes**
 
-Only executors with `incomingWebhook` or `schedule` trigger types can be triggered manually.
-Executors with `event` trigger types (such as `recordCreated`, `recordUpdated`, `recordDeleted`) cannot be triggered manually.
+Only executors with `INCOMING_WEBHOOK` or `SCHEDULE` trigger types can be triggered manually.
+Executors with `EVENT` trigger types (such as `recordCreated`, `recordUpdated`, `recordDeleted`) cannot be triggered manually.
 
-The `--data` and `--header` options are only available for `incomingWebhook` trigger type.
+The `--data` and `--header` options are only available for `INCOMING_WEBHOOK` trigger type.
 
 **Downstream Execution Tracking**
 

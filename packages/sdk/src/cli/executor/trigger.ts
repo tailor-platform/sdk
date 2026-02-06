@@ -110,10 +110,10 @@ export async function triggerExecutor(
 export const triggerCommand = defineCommand({
   name: "trigger",
   description: "Trigger an executor manually.",
-  notes: `Only executors with \`incomingWebhook\` or \`schedule\` trigger types can be triggered manually.
-Executors with \`event\` trigger types (such as \`recordCreated\`, \`recordUpdated\`, \`recordDeleted\`) cannot be triggered manually.
+  notes: `Only executors with \`INCOMING_WEBHOOK\` or \`SCHEDULE\` trigger types can be triggered manually.
+Executors with \`EVENT\` trigger types (such as \`recordCreated\`, \`recordUpdated\`, \`recordDeleted\`) cannot be triggered manually.
 
-The \`--data\` and \`--header\` options are only available for \`incomingWebhook\` trigger type.
+The \`--data\` and \`--header\` options are only available for \`INCOMING_WEBHOOK\` trigger type.
 
 **Downstream Execution Tracking**
 
@@ -193,15 +193,15 @@ The \`--logs\` option displays logs from the downstream execution when available
     if (executor.triggerType === ExecutorTriggerType.EVENT) {
       throw new Error(
         `Executor '${args.executorName}' has '${executorTriggerTypeToString(executor.triggerType)}' trigger type and cannot be triggered manually. ` +
-          `Only executors with 'incomingWebhook' or 'schedule' triggers can be triggered manually.`,
+          `Only executors with 'INCOMING_WEBHOOK' or 'SCHEDULE' triggers can be triggered manually.`,
       );
     }
 
     // SCHEDULE trigger type does not accept --data or --header options
     if (executor.triggerType === ExecutorTriggerType.SCHEDULE && (args.data || args.header)) {
       throw new Error(
-        `Executor '${args.executorName}' has 'schedule' trigger type. ` +
-          `The --data and --header options are only available for 'incomingWebhook' trigger type.`,
+        `Executor '${args.executorName}' has 'SCHEDULE' trigger type. ` +
+          `The --data and --header options are only available for 'INCOMING_WEBHOOK' trigger type.`,
       );
     }
 
