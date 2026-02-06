@@ -1,0 +1,45 @@
+name: Changeset Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  changeset-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # Renovate PRは自動でchangesetが追加されるのでスキップ
+    # skip-changesetラベルがある場合もスキップ
+    if: >-
+      github.event.pull_request.user.login != 'renovate[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check for changeset
+        id: filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        with:
+          filters: |
+            changeset:
+              - '.changeset/*.md'
+              - '!.changeset/README.md'
+
+      - name: Fail if no changeset
+        if: steps.filter.outputs.changeset != 'true'
+        run: |
+          echo "::error::No changeset file found in this PR."
+          echo ""
+          echo "Please add a changeset file using: pnpm changeset"
+          echo ""
+          echo "If this PR does not require a changeset (e.g., docs-only changes),"
+          echo "add 'skip-changeset' label to this PR."
+          exit 1
