@@ -69,8 +69,6 @@ const promptConfirmation = (question) => {
 const configDir = import.meta.dirname;
 const configPath = join(configDir, "../tailor.config.ts");
 
-console.log(styleText("cyan", "Starting seed data generation..."));
-
 // Entity configuration
 const namespaceEntities = {
   "tailordb": [
@@ -175,7 +173,6 @@ if (skipIdp) {
   } else {
     entitiesToProcess = entities.filter((entity) => entity !== "_User");
   }
-  console.log(styleText("dim", `Skipping IdP user (_User)`));
 }
 
 // Truncate tables if requested
@@ -186,7 +183,7 @@ if (values.truncate) {
     process.exit(0);
   }
 
-  console.log(styleText("cyan", "\nTruncating tables..."));
+  console.log(styleText("cyan", "Truncating tables..."));
 
   try {
     if (hasNamespace) {
@@ -213,11 +210,16 @@ if (values.truncate) {
         all: true,
       });
     }
-    console.log(styleText("green", "Truncate completed.\n"));
+    console.log(styleText("green", "Truncate completed."));
   } catch (error) {
     console.error(styleText("red", `Truncate failed: ${error.message}`));
     process.exit(1);
   }
+}
+
+console.log(styleText("cyan", "\nStarting seed data generation..."));
+if (skipIdp) {
+  console.log(styleText("dim", `  Skipping IdP user (_User)`));
 }
 
 // Get application info
@@ -328,26 +330,26 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
       parsed = parsedResult && typeof parsedResult === "object" ? parsedResult : {};
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(styleText("red", `  ✗ Failed to parse seed result: ${message}`));
+      console.error(styleText("red", `    ✗ Failed to parse seed result: ${message}`));
       return { success: false, error: message };
     }
 
     const processed = parsed.processed || {};
     for (const [type, count] of Object.entries(processed)) {
-      console.log(styleText("green", `  ✓ ${type}: ${count} rows inserted`));
+      console.log(styleText("green", `    ✓ ${type}: ${count} rows inserted`));
     }
 
     if (!parsed.success) {
       const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
       const errorMessage =
         errors.length > 0 ? errors.join("\n") : "Seed script reported failure";
-      console.error(styleText("red", `  ✗ Seed failed: ${errorMessage}`));
+      console.error(styleText("red", `    ✗ Seed failed: ${errorMessage}`));
       return { success: false, error: errorMessage };
     }
 
     return { success: true, processed };
   } else {
-    console.error(styleText("red", `  ✗ Seed failed: ${result.error}`));
+    console.error(styleText("red", `    ✗ Seed failed: ${result.error}`));
     return { success: false, error: result.error };
   }
 };
@@ -376,18 +378,18 @@ const seedIdpUser = async () => {
       const result = await response.json();
       if (result.errors) {
         failCount++;
-        console.error(styleText("red", `  ✗ Row ${i} in _User failed: ${result.errors[0].message}`));
+        console.error(styleText("red", `    ✗ Row ${i} in _User failed: ${result.errors[0].message}`));
       } else {
         successCount++;
       }
     } catch (error) {
       failCount++;
-      console.error(styleText("red", `  ✗ Row ${i} in _User failed: ${error.message}`));
+      console.error(styleText("red", `    ✗ Row ${i} in _User failed: ${error.message}`));
     }
   }
-  console.log(styleText("green", `  ✓ _User: ${successCount} rows processed`));
+  console.log(styleText("green", `    ✓ _User: ${successCount} rows processed`));
   if (failCount > 0) {
-    console.error(styleText("red", `  ✗ _User: ${failCount} rows failed`));
+    console.error(styleText("red", `    ✗ _User: ${failCount} rows failed`));
   }
   return { success: failCount === 0 };
 };
