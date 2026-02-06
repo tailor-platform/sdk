@@ -76,7 +76,7 @@ export default defineConfig({
     analyticsdb: { files: ["./analyticsdb/*.ts"] },
   },
   resolver: {
-    "my-resolver": { files: ["./resolvers/*.ts"] },
+    "my-resolver": { files: ["./resolvers/**/*.ts"] },
   },
   idp: [idp],
   auth,
@@ -92,4 +92,8 @@ export const generators = defineGenerators(
   ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
   ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
+);
+
+export const plugins = definePlugins(
+  "@tailor-platform/changeset", // Builtin plugin for managing change requests
 );
