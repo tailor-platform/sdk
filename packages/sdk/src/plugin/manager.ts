@@ -202,12 +202,12 @@ export class PluginManager {
         continue;
       }
 
-      // Use stored plugin config (from definePlugins) or default to true
-      const config = plugin._pluginConfig ?? true;
+      // Use stored plugin config (from definePlugins)
+      const config = plugin._pluginConfig;
 
-      // Validate config against schema if provided
-      if (plugin.configSchema) {
-        const validationErrors = validatePluginConfig(config, plugin.configSchema);
+      // Validate pluginConfig against pluginConfigSchema if provided
+      if (plugin.pluginConfigSchema && config !== undefined) {
+        const validationErrors = validatePluginConfig(config, plugin.pluginConfigSchema);
         if (validationErrors.length > 0) {
           const errorDetails = validationErrors
             .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
@@ -217,7 +217,7 @@ export class PluginManager {
             config,
             result: {
               success: false,
-              error: `Invalid config for standalone plugin "${plugin.id}": ${errorDetails}`,
+              error: `Invalid pluginConfig for plugin "${plugin.id}": ${errorDetails}`,
             },
           });
           continue;

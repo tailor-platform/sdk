@@ -55,6 +55,7 @@ const CustomPluginSchema = z
     description: z.string(),
     importPath: z.string(),
     configSchema: z.any(),
+    pluginConfigSchema: z.any().optional(),
     // Use any for the process function since we're not strictly validating function signatures
     process: z.any().optional(),
     processStandalone: z.any().optional(),

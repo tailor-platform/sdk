@@ -343,18 +343,31 @@ export interface PluginBase<PluginConfig = unknown> {
    */
   readonly importPath: string;
   /**
-   * Schema defining the expected configuration for this plugin.
+   * Schema defining the expected per-type configuration for this plugin.
+   * Used to validate config passed via `.plugin({ pluginId: config })`.
    * Uses the same field types as createResolver's input (t.string(), t.number(), etc.).
-   * This schema is used for runtime validation of plugin configuration.
    * @example
    * ```typescript
    * configSchema: t.object({
-   *   trackedFields: t.array(t.string()),
-   *   retentionDays: t.number({ optional: true }),
+   *   archiveReason: t.bool({ optional: true }),
    * })
    * ```
    */
   readonly configSchema: TailorAnyField;
+
+  /**
+   * Schema defining the expected global plugin configuration.
+   * Used to validate config passed via `definePlugins([plugin, config])`.
+   * If not provided, pluginConfig validation is skipped.
+   * @example
+   * ```typescript
+   * pluginConfigSchema: t.object({
+   *   archiveTablePrefix: t.string({ optional: true }),
+   *   defaultRetentionDays: t.int({ optional: true }),
+   * })
+   * ```
+   */
+  readonly pluginConfigSchema?: TailorAnyField;
 
   /**
    * Plugin-level configuration passed via definePlugins().

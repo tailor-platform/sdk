@@ -215,9 +215,15 @@ export const softDeletePlugin: PluginBase<SoftDeletePluginConfig> = {
   id: "@example/soft-delete",
   description: "Adds soft delete functionality with archive tracking",
   importPath: "./plugins/soft-delete",
+  // Schema for per-type config (from .plugin())
   configSchema: t.object({
     archiveReason: t.bool({ optional: true }),
     retentionDays: t.int({ optional: true }),
+  }),
+  // Schema for global plugin config (from definePlugins())
+  pluginConfigSchema: t.object({
+    archiveTablePrefix: t.string({ optional: true }),
+    defaultRetentionDays: t.int({ optional: true }),
   }),
   process: processSoftDelete,
 };
