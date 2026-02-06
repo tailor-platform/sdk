@@ -77,17 +77,17 @@ export async function apply(options?: ApplyOptions) {
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
-  // TailorDB only mode: skip other services when migration version is specified
-  const tailorDBOnlyMode = !!process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
+  // Migration only mode: skip other services when migration version is specified
+  const migrationOnlyMode = !!process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
 
   // Generate user types from loaded config
   await generateUserTypes(config, config.path);
   const application = defineApplication(config);
 
-  // Build services (skipped in TailorDB only mode)
+  // Build services (skipped in migration only mode)
   const { workflowResult, workflowBuildResult } = await buildServices(
     application,
-    tailorDBOnlyMode,
+    migrationOnlyMode,
   );
   if (buildOnly) return;
 
@@ -102,13 +102,13 @@ export async function apply(options?: ApplyOptions) {
     profile: options?.profile,
   });
 
-  // Load services (non-TailorDB services skipped in TailorDB only mode)
-  await loadServices(application, workflowResult, tailorDBOnlyMode);
+  // Load services (non-TailorDB services skipped in migration only mode)
+  await loadServices(application, workflowResult, migrationOnlyMode);
   logger.newline();
 
-  // Log TailorDB only mode
-  if (tailorDBOnlyMode) {
-    logger.info("TailorDB only mode: other services will be skipped");
+  // Log migration mode
+  if (migrationOnlyMode) {
+    logger.info("Migration mode: only TailorDB, IdP, and Auth will be applied");
     logger.newline();
   }
 
@@ -129,7 +129,7 @@ export async function apply(options?: ApplyOptions) {
       application.name,
       workflowResult,
       workflowBuildResult,
-      tailorDBOnlyMode,
+      migrationOnlyMode,
     );
 
   // Confirm conflicts
@@ -198,6 +198,26 @@ export async function apply(options?: ApplyOptions) {
     return;
   }
 
+  // Migration only mode: Apply IdP → Auth → TailorDB (different order for migration scripts)
+  // Migration scripts require machine users, so IdP/Auth must be created first
+  if (migrationOnlyMode) {
+    // Phase 1: Create IdP/Auth first (machine users needed for migration scripts)
+    await applyIdP(client, idp, "create-update");
+    await applyAuth(client, auth, "create-update");
+
+    // Phase 2: TailorDB migration (machine users are now available)
+    await applyTailorDB(client, tailorDB, "create-update");
+
+    // Phase 3: Delete services
+    await applyAuth(client, auth, "delete-services");
+    await applyIdP(client, idp, "delete-services");
+    await applyTailorDB(client, tailorDB, "delete-services");
+
+    logger.success("Successfully applied TailorDB + Auth + IdP changes.");
+    return;
+  }
+
+  // Normal mode: Apply in standard order
   // Phase 2: Create/Update services that Application depends on
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
@@ -206,7 +226,6 @@ export async function apply(options?: ApplyOptions) {
   await applyTailorDB(client, tailorDB, "create-update");
 
   // Other services: Apply after TailorDB migrations complete
-  // (empty plans in TailorDB only mode - apply functions do nothing)
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
@@ -279,9 +298,9 @@ interface BuildServicesResult {
 
 async function buildServices(
   application: Readonly<Application>,
-  tailorDBOnly: boolean,
+  migrationOnly: boolean,
 ): Promise<BuildServicesResult> {
-  if (tailorDBOnly) {
+  if (migrationOnly) {
     return { workflowResult: undefined, workflowBuildResult: undefined };
   }
 
@@ -318,14 +337,14 @@ async function buildServices(
 async function loadServices(
   application: Readonly<Application>,
   workflowResult: WorkflowLoadResult | undefined,
-  tailorDBOnly: boolean,
+  migrationOnly: boolean,
 ) {
   // Always load TailorDB types
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
   }
 
-  if (tailorDBOnly) {
+  if (migrationOnly) {
     return;
   }
 
@@ -341,89 +360,6 @@ async function loadServices(
   }
 }
 
-// Empty plan helpers - using type assertions since the plans are empty and won't be used
-type StaticWebsitePlanResult = Awaited<ReturnType<typeof planStaticWebsite>>;
-type IdPPlanResult = Awaited<ReturnType<typeof planIdP>>;
-type AuthPlanResult = Awaited<ReturnType<typeof planAuth>>;
-type PipelinePlanResult = Awaited<ReturnType<typeof planPipeline>>;
-type ApplicationPlanResult = Awaited<ReturnType<typeof planApplication>>;
-type ExecutorPlanResult = Awaited<ReturnType<typeof planExecutor>>;
-type WorkflowPlanResult = Awaited<ReturnType<typeof planWorkflow>>;
-
-function emptyStaticWebsitePlan(): StaticWebsitePlanResult {
-  return {
-    changeSet: createChangeSet("StaticWebsites"),
-    conflicts: [],
-    unmanaged: [],
-    resourceOwners: new Set<string>(),
-  } as unknown as StaticWebsitePlanResult;
-}
-
-function emptyIdPPlan(): IdPPlanResult {
-  return {
-    changeSet: {
-      service: createChangeSet("IdP services"),
-      client: createChangeSet("IdP clients"),
-    },
-    conflicts: [],
-    unmanaged: [],
-    resourceOwners: new Set<string>(),
-  } as unknown as IdPPlanResult;
-}
-
-function emptyAuthPlan(): AuthPlanResult {
-  return {
-    changeSet: {
-      service: createChangeSet("Auth services"),
-      idpConfig: createChangeSet("IdP configs"),
-      oauth2Client: createChangeSet("OAuth2 clients"),
-      machineUser: createChangeSet("Machine users"),
-      userProfileConfig: createChangeSet("User profile configs"),
-      tenantConfig: createChangeSet("Tenant configs"),
-      scim: createChangeSet("SCIM configs"),
-      scimResource: createChangeSet("SCIM resources"),
-    },
-    conflicts: [],
-    unmanaged: [],
-    resourceOwners: new Set<string>(),
-  } as unknown as AuthPlanResult;
-}
-
-function emptyPipelinePlan(): PipelinePlanResult {
-  return {
-    changeSet: {
-      service: createChangeSet("Pipeline services"),
-      resolver: createChangeSet("Resolvers"),
-    },
-    conflicts: [],
-    unmanaged: [],
-    resourceOwners: new Set<string>(),
-  } as unknown as PipelinePlanResult;
-}
-
-function emptyApplicationPlan(): ApplicationPlanResult {
-  return createChangeSet("Applications") as unknown as ApplicationPlanResult;
-}
-
-function emptyExecutorPlan(): ExecutorPlanResult {
-  return {
-    changeSet: createChangeSet("Executors"),
-    conflicts: [],
-    unmanaged: [],
-    resourceOwners: new Set<string>(),
-  } as unknown as ExecutorPlanResult;
-}
-
-function emptyWorkflowPlan(): WorkflowPlanResult {
-  return {
-    changeSet: createChangeSet("Workflows"),
-    conflicts: [],
-    unmanaged: [],
-    resourceOwners: new Set<string>(),
-    appName: "",
-  } as unknown as WorkflowPlanResult;
-}
-
 async function planServices(
   ctx: PlanContext,
   client: OperatorClient,
@@ -431,28 +367,55 @@ async function planServices(
   appName: string,
   workflowResult: WorkflowLoadResult | undefined,
   workflowBuildResult: BundleWorkflowJobsResult | undefined,
-  tailorDBOnly: boolean,
+  migrationOnly: boolean,
 ) {
   const tailorDB = await planTailorDB(ctx);
+  const idp = await planIdP(ctx);
+  const auth = await planAuth(ctx);
 
-  if (tailorDBOnly) {
+  if (migrationOnly) {
+    // Other services use empty plans (type assertions since they won't be used)
     return {
       tailorDB,
-      staticWebsite: emptyStaticWebsitePlan(),
-      idp: emptyIdPPlan(),
-      auth: emptyAuthPlan(),
-      pipeline: emptyPipelinePlan(),
-      app: emptyApplicationPlan(),
-      executor: emptyExecutorPlan(),
-      workflow: emptyWorkflowPlan(),
+      idp,
+      auth,
+      staticWebsite: {
+        changeSet: createChangeSet("StaticWebsites"),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      } as Awaited<ReturnType<typeof planStaticWebsite>>,
+      pipeline: {
+        changeSet: {
+          service: createChangeSet("Pipeline services"),
+          resolver: createChangeSet("Resolvers"),
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      } as Awaited<ReturnType<typeof planPipeline>>,
+      app: createChangeSet("Applications") as Awaited<ReturnType<typeof planApplication>>,
+      executor: {
+        changeSet: createChangeSet("Executors"),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      } as Awaited<ReturnType<typeof planExecutor>>,
+      workflow: {
+        changeSet: createChangeSet("Workflows"),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+        appName: "",
+      } as Awaited<ReturnType<typeof planWorkflow>>,
     };
   }
 
   return {
     tailorDB,
+    idp,
+    auth,
     staticWebsite: await planStaticWebsite(ctx),
-    idp: await planIdP(ctx),
-    auth: await planAuth(ctx),
     pipeline: await planPipeline(ctx),
     app: await planApplication(ctx),
     executor: await planExecutor(ctx),
