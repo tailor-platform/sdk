@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.9.3
+
+### Patch Changes
+
+- [#550](https://github.com/tailor-platform/sdk/pull/550) [`6c532f5`](https://github.com/tailor-platform/sdk/commit/6c532f58a5113b8e944eb3d6f4f8d1627f937d1e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add validation error when `.unique()` is combined with `n-1` (manyToOne) relation. Use `1-1` (oneToOne) relation instead for unique foreign keys.
+
+- [#551](https://github.com/tailor-platform/sdk/pull/551) [`67b9ce0`](https://github.com/tailor-platform/sdk/commit/67b9ce038315252c44622b2ddcfadac890d2d6f1) Thanks [@riku99](https://github.com/riku99)! - Use changeset publish for git tag and GitHub release creation
+
 ## 1.9.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 1.9.3
+
+### Patch Changes
+
+- [#551](https://github.com/tailor-platform/sdk/pull/551) [`67b9ce0`](https://github.com/tailor-platform/sdk/commit/67b9ce038315252c44622b2ddcfadac890d2d6f1) Thanks [@riku99](https://github.com/riku99)! - Use changeset publish for git tag and GitHub release creation
+
 ## 1.9.2
 
 ## 1.9.1
