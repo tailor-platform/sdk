@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.9.2
+
+### Patch Changes
+
+- [#537](https://github.com/tailor-platform/sdk/pull/537) [`3c71c49`](https://github.com/tailor-platform/sdk/commit/3c71c49799c77053659e2e798edaf736fad0f2b5) Thanks [@riku99](https://github.com/riku99)! - Update release workflow to use changesets action for publishing and GitHub releases
+
 ## 1.9.1
 
 ### Patch Changes
