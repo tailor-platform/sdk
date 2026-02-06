@@ -73,7 +73,7 @@ console.log(styleText("cyan", "Starting seed data generation..."));
 
 // Entity configuration
 const namespaceEntities = {
-  tailordb: [
+  "tailordb": [
     "Customer",
     "Invoice",
     "NestedProfile",
@@ -86,7 +86,7 @@ const namespaceEntities = {
     "UserLog",
     "UserSetting",
   ],
-  analyticsdb: [
+  "analyticsdb": [
     "Event",
   ]
 };

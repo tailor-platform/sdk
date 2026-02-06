@@ -114,7 +114,7 @@ function generateExecScript(
   const namespaceEntitiesEntries = namespaceConfigs
     .map(({ namespace, types }) => {
       const entitiesFormatted = types.map((e) => `        "${e}",`).join("\n");
-      return `      ${namespace}: [\n${entitiesFormatted}\n      ]`;
+      return `      "${namespace}": [\n${entitiesFormatted}\n      ]`;
     })
     .join(",\n");
 
