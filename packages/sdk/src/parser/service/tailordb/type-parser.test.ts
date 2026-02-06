@@ -384,7 +384,7 @@ describe("parseTypes", () => {
       expect(authorIdConfig.index).toBe(true);
     });
 
-    it("should set unique=true for oneToOne relations", () => {
+    it("should set unique=true for oneToOne relations (relation only)", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -402,6 +402,99 @@ describe("parseTypes", () => {
       );
 
       expect(result.Profile.fields.userId.config.unique).toBe(true);
+    });
+
+    it("should set unique=true for oneToOne relations (unique before relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const profile = db.type("Profile", {
+        userId: db
+          .uuid()
+          .unique()
+          .relation({
+            type: "1-1",
+            toward: { type: user },
+          }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
+
+      expect(result.Profile.fields.userId.config.unique).toBe(true);
+    });
+
+    it("should set unique=true for oneToOne relations (unique after relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const profile = db.type("Profile", {
+        // @ts-expect-error - Testing runtime behavior: 1-1 already implies unique, but we test the call order
+        userId: db
+          .uuid()
+          .relation({
+            type: "1-1",
+            toward: { type: user },
+          })
+          .unique(),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
+
+      expect(result.Profile.fields.userId.config.unique).toBe(true);
+    });
+
+    it("should throw error when unique is set on n-1 relation (unique before relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const employee = db.type("Employee", {
+        userID: db
+          .uuid()
+          .unique()
+          .relation({
+            type: "n-1",
+            toward: { type: user },
+          }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
+      ).toThrow(
+        'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
+          "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
+      );
+    });
+
+    it("should throw error when unique is set on n-1 relation (unique after relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const employee = db.type("Employee", {
+        userID: db
+          .uuid()
+          .relation({
+            type: "n-1",
+            toward: { type: user },
+          })
+          .unique(),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
+      ).toThrow(
+        'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
+          "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
+      );
     });
 
     it("should handle self-referencing relations", () => {
