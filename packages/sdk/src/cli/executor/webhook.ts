@@ -95,7 +95,7 @@ const listWebhookCommand = defineCommand({
       ]);
       logger.out(formatTableWithHeaders(headers, rows));
       logger.info(
-        'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\' -H "Header: Value"',
+        'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\'',
       );
     }
   }),

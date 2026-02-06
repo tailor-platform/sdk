@@ -2,8 +2,8 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { formatDistanceToNowStrict } from "date-fns";
 // eslint-disable-next-line no-restricted-imports
 import { getBorderCharacters, table } from "table";
-import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { logger } from "./logger";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import type { TableUserConfig } from "table";
 
 /**

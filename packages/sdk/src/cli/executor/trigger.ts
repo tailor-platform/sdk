@@ -1,7 +1,14 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, parseDuration, withCommonArgs, workspaceArgs } from "../args";
+import {
+  commonArgs,
+  durationArg,
+  jsonArgs,
+  parseDuration,
+  withCommonArgs,
+  workspaceArgs,
+} from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { printData } from "../utils/format";
@@ -79,7 +86,7 @@ export const triggerCommand = defineCommand({
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
     }),
-    interval: arg(z.string().default("3s"), {
+    interval: arg(durationArg.default("3s"), {
       description: "Polling interval for --watch (e.g., '3s', '500ms', '1m')",
     }),
   }),
@@ -87,11 +94,18 @@ export const triggerCommand = defineCommand({
     let payload: JsonObject | undefined;
     if (args.payload) {
       try {
-        payload = JSON.parse(args.payload);
-      } catch {
-        throw new Error(
-          `Invalid JSON payload: ${args.payload}. Please provide a valid JSON string.`,
-        );
+        const parsed = JSON.parse(args.payload);
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          throw new Error("JSON payload must be an object, not an array or primitive value");
+        }
+        payload = parsed;
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          throw new Error(
+            `Invalid JSON payload: ${args.payload}. Please provide a valid JSON string.`,
+          );
+        }
+        throw e;
       }
     }
 
