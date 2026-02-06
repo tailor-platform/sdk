@@ -74,6 +74,16 @@ function parseTailorDBType(
     // Process relation if rawRelation is present
     if (rawRelation) {
       validateRelationConfig(rawRelation, context);
+
+      // Validate that n-1/manyToOne relations cannot have explicit unique
+      const isNToOne = ["n-1", "manyToOne", "N-1"].includes(rawRelation.type);
+      if (isNToOne && fieldConfig.unique) {
+        throw new Error(
+          `Field "${fieldName}" on type "${type.name}": cannot set unique on n-1 (manyToOne) relation. ` +
+            `Use 1-1 (oneToOne) relation instead, or remove the unique constraint.`,
+        );
+      }
+
       const relationMetadata = processRelationMetadata(rawRelation, context, fieldConfig.array);
       fieldConfig = applyRelationMetadataToFieldConfig(fieldConfig, relationMetadata);
     }
