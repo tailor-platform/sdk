@@ -29,7 +29,7 @@ export interface TailorDBSchemaOptions {
  * @param fieldConfig - TailorDB field configuration
  * @returns tbls column definition
  */
-function toTblsColumn(fieldName: string, fieldConfig: TailorDBType_FieldConfig): TblsColumn {
+export function toTblsColumn(fieldName: string, fieldConfig: TailorDBType_FieldConfig): TblsColumn {
   const baseType = fieldConfig.type || "string";
   const type = fieldConfig.array ? `${baseType}[]` : baseType;
 
@@ -47,7 +47,7 @@ function toTblsColumn(fieldName: string, fieldConfig: TailorDBType_FieldConfig):
  * @param namespace - TailorDB namespace
  * @returns tbls-compatible schema representation
  */
-function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSchema {
+export function buildTblsSchema(types: TailorDBProtoType[], namespace: string): TblsSchema {
   const tables: TblsTable[] = [];
   const relations: TblsRelation[] = [];
   const referencedByTable: Record<string, Set<string>> = {};

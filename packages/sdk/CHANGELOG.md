@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.9.3
+
+### Patch Changes
+
+- [#550](https://github.com/tailor-platform/sdk/pull/550) [`6c532f5`](https://github.com/tailor-platform/sdk/commit/6c532f58a5113b8e944eb3d6f4f8d1627f937d1e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add validation error when `.unique()` is combined with `n-1` (manyToOne) relation. Use `1-1` (oneToOne) relation instead for unique foreign keys.
+
+- [#551](https://github.com/tailor-platform/sdk/pull/551) [`67b9ce0`](https://github.com/tailor-platform/sdk/commit/67b9ce038315252c44622b2ddcfadac890d2d6f1) Thanks [@riku99](https://github.com/riku99)! - Use changeset publish for git tag and GitHub release creation
+
+## 1.9.2
+
+### Patch Changes
+
+- [#537](https://github.com/tailor-platform/sdk/pull/537) [`3c71c49`](https://github.com/tailor-platform/sdk/commit/3c71c49799c77053659e2e798edaf736fad0f2b5) Thanks [@riku99](https://github.com/riku99)! - Update release workflow to use changesets action for publishing and GitHub releases
+
+## 1.9.1
+
+### Patch Changes
+
+- [#534](https://github.com/tailor-platform/sdk/pull/534) [`67b1935`](https://github.com/tailor-platform/sdk/commit/67b1935800d2ac6b6436bc66cdf41911572594ee) Thanks [@riku99](https://github.com/riku99)! - Add unit tests for TailorDB ERD schema generation (columns and schema building)
+
+- [#533](https://github.com/tailor-platform/sdk/pull/533) [`9dbfc53`](https://github.com/tailor-platform/sdk/commit/9dbfc5375e04faf94eb2747875ebbe3eb990b8a1) Thanks [@riku99](https://github.com/riku99)! - Added tests for TailorDB parse runtime validation cases
+
+- [#527](https://github.com/tailor-platform/sdk/pull/527) [`78b07f8`](https://github.com/tailor-platform/sdk/commit/78b07f8be371850b5c2d28d12459e07b5d17eaaf) Thanks [@riku99](https://github.com/riku99)! - Add tests for loadWorkspaceId in context
+
 ## 1.9.0
 
 ### Minor Changes
