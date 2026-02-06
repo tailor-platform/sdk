@@ -225,7 +225,7 @@ Executors with `event` trigger types (such as `recordCreated`, `recordUpdated`, 
 
 The `--data` and `--header` options are only available for `incomingWebhook` trigger type.
 
-## Downstream Execution Tracking
+**Downstream Execution Tracking**
 
 When using `--wait`, the CLI tracks not only the executor job but also any downstream executions:
 
