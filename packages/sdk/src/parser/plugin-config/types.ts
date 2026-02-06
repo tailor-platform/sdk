@@ -408,16 +408,24 @@ export interface PluginBase<PluginConfig = unknown> {
 }
 
 /**
+ * Built-in plugin IDs that support autocomplete in definePlugins()
+ */
+export type BuiltinPluginId =
+  | "@tailor-platform/changeset"
+  | "@tailor-platform/audit-log"
+  | "@tailor-platform/change-history";
+
+/**
  * Plugin configuration input type for definePlugins()
  * Can be:
- * - A string plugin ID (for plugins with no configuration, e.g., "@tailor-platform/changeset")
- * - A tuple [pluginId, options] for builtin plugins with configuration
+ * - A builtin plugin ID (e.g., "@tailor-platform/changeset")
+ * - A tuple [builtinPluginId, options] for builtin plugins with configuration
  * - A PluginBase object for custom plugins without configuration
  * - A tuple [PluginBase, options] for custom plugins with configuration
  * Options can be any value - the plugin's configSchema handles validation.
  */
 export type PluginConfig =
-  | string
-  | readonly [string, unknown]
+  | BuiltinPluginId
+  | readonly [BuiltinPluginId, unknown]
   | PluginBase
   | readonly [PluginBase, unknown];

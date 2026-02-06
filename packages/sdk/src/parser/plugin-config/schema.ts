@@ -47,6 +47,18 @@ const _PluginOutputSchema = z.object({
   executors: z.array(PluginGeneratedExecutorSchema).optional(),
 });
 
+// Literal-based schemas for built-in plugins (enables autocomplete)
+const ChangesetPluginSchema = z.literal("@tailor-platform/changeset");
+const AuditLogPluginSchema = z.literal("@tailor-platform/audit-log");
+const ChangeHistoryPluginSchema = z.literal("@tailor-platform/change-history");
+
+// Union of all built-in plugin IDs (for autocomplete)
+const BuiltinPluginIdSchema = z.union([
+  ChangesetPluginSchema,
+  AuditLogPluginSchema,
+  ChangeHistoryPluginSchema,
+]);
+
 // Custom plugin schema (object form)
 // Using passthrough() to preserve fields like importPath, configSchema, processStandalone
 const CustomPluginSchema = z
@@ -62,21 +74,17 @@ const CustomPluginSchema = z
   })
   .passthrough();
 
-// Built-in plugin string schema (id only, no options)
-// For plugins that require no configuration (e.g., "@tailor-platform/changeset")
-const BuiltinPluginStringSchema = z.string();
-
-// Built-in plugin tuple schema (id, options)
-// Options can be any value - the plugin's configSchema handles validation
-const BuiltinPluginTupleSchema = z.tuple([z.string(), z.unknown()]);
+// Built-in plugin tuple schema (id, options) for future use
+// Currently built-in plugins don't use pluginConfig, but this allows it
+const BuiltinPluginTupleSchema = z.tuple([BuiltinPluginIdSchema, z.unknown()]);
 
 // Custom plugin tuple schema (PluginBase, options)
 // Allows custom plugins to receive pluginConfig via definePlugins()
 const CustomPluginTupleSchema = z.tuple([CustomPluginSchema, z.unknown()]);
 
-// Base plugin config schema (before transformation)
+// Base schema for plugin config input (kept for documentation)
 const _BasePluginConfigSchema = z.union([
-  BuiltinPluginStringSchema,
+  BuiltinPluginIdSchema,
   BuiltinPluginTupleSchema,
   CustomPluginSchema,
   CustomPluginTupleSchema,
@@ -107,7 +115,7 @@ export function createPluginConfigSchema(
 ) {
   return z
     .union([
-      BuiltinPluginStringSchema,
+      BuiltinPluginIdSchema,
       BuiltinPluginTupleSchema,
       CustomPluginSchema,
       CustomPluginTupleSchema,
