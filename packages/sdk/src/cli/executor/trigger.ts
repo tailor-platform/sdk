@@ -119,11 +119,21 @@ The \`--data\` and \`--header\` options are only available for \`incomingWebhook
 
 When using \`--wait\`, the CLI tracks not only the executor job but also any downstream executions:
 
-- **Workflow targets**: Waits for the workflow execution to complete (SUCCESS, FAILED, or PENDING_RESUME). Shows real-time status changes and currently running job names during execution.
+- **Workflow targets**: Waits for the workflow execution to complete (SUCCESS, FAILED, or PENDING_RESUME). Shows real-time status changes and currently running job names during execution (same output as \`workflow start --wait\`).
 - **Function targets**: Waits for the function execution to complete
 - **Webhook/GraphQL targets**: Only waits for the executor job itself
 
 The \`--logs\` option displays logs from the downstream execution when available.`,
+  examples: [
+    { cmd: "my-executor", desc: "Trigger an executor" },
+    { cmd: 'my-executor -d \'{"message": "hello"}\'', desc: "Trigger with data" },
+    {
+      cmd: 'my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "X-Another: value2"',
+      desc: "Trigger with data and headers",
+    },
+    { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
+    { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
+  ],
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
