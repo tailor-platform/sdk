@@ -32,6 +32,11 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      - name: Setup npm registry for publishing
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          registry-url: "https://registry.npmjs.org"
+
       - name: Create Release PR
         id: changesets
         uses: changesets/action@c48e67d110a68bc90ccf1098e9646092baacaa87 # v1.6.0
@@ -42,11 +47,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Setup npm registry for publishing
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-        with:
-          registry-url: "https://registry.npmjs.org"
 
       # - name: Publish
       #   id: publish
