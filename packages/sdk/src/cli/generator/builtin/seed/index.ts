@@ -438,7 +438,7 @@ ${namespaceDepsEntries}
           console.log(styleText("green", \`  ✓ \${type}: \${count} rows inserted\`));
         }
 
-        if (parsed.success === false) {
+        if (!parsed.success) {
           const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
           const errorMessage =
             errors.length > 0 ? errors.join("\\n") : "Seed script reported failure";
