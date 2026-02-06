@@ -423,11 +423,30 @@ ${namespaceDepsEntries}
       }
 
       if (result.success) {
-        const parsed = JSON.parse(result.result || "{}");
-        for (const [type, count] of Object.entries(parsed.processed || {})) {
+        let parsed;
+        try {
+          const parsedResult = JSON.parse(result.result || "{}");
+          parsed = parsedResult && typeof parsedResult === "object" ? parsedResult : {};
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(styleText("red", \`  ✗ Failed to parse seed result: \${message}\`));
+          return { success: false, error: message };
+        }
+
+        const processed = parsed.processed || {};
+        for (const [type, count] of Object.entries(processed)) {
           console.log(styleText("green", \`  ✓ \${type}: \${count} rows inserted\`));
         }
-        return { success: true, processed: parsed.processed || {} };
+
+        if (parsed.success === false) {
+          const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+          const errorMessage =
+            errors.length > 0 ? errors.join("\\n") : "Seed script reported failure";
+          console.error(styleText("red", \`  ✗ Seed failed: \${errorMessage}\`));
+          return { success: false, error: errorMessage };
+        }
+
+        return { success: true, processed };
       } else {
         console.error(styleText("red", \`  ✗ Seed failed: \${result.error}\`));
         return { success: false, error: result.error };
