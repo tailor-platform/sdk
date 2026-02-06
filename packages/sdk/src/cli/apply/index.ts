@@ -108,7 +108,7 @@ export async function apply(options?: ApplyOptions) {
 
   // Log migration mode
   if (migrationOnlyMode) {
-    logger.info("Migration mode: only TailorDB, IdP, and Auth will be applied");
+    logger.info("Migration mode: only TailorDB, IdP, Auth, and StaticWebsite will be applied");
     logger.newline();
   }
 
