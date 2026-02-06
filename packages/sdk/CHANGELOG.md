@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.9.1
+
+### Patch Changes
+
+- [#534](https://github.com/tailor-platform/sdk/pull/534) [`67b1935`](https://github.com/tailor-platform/sdk/commit/67b1935800d2ac6b6436bc66cdf41911572594ee) Thanks [@riku99](https://github.com/riku99)! - Add unit tests for TailorDB ERD schema generation (columns and schema building)
+
+- [#533](https://github.com/tailor-platform/sdk/pull/533) [`9dbfc53`](https://github.com/tailor-platform/sdk/commit/9dbfc5375e04faf94eb2747875ebbe3eb990b8a1) Thanks [@riku99](https://github.com/riku99)! - Added tests for TailorDB parse runtime validation cases
+
+- [#527](https://github.com/tailor-platform/sdk/pull/527) [`78b07f8`](https://github.com/tailor-platform/sdk/commit/78b07f8be371850b5c2d28d12459e07b5d17eaaf) Thanks [@riku99](https://github.com/riku99)! - Add tests for loadWorkspaceId in context
+
 ## 1.9.0
 
 ### Minor Changes
