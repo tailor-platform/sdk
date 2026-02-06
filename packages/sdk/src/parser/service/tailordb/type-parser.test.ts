@@ -404,6 +404,32 @@ describe("parseTypes", () => {
       expect(result.Profile.fields.userId.config.unique).toBe(true);
     });
 
+    it("should preserve explicit unique=true for manyToOne relations", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const employee = db.type("Employee", {
+        userID: db
+          .uuid()
+          .unique()
+          .relation({
+            type: "n-1",
+            toward: { type: user },
+          }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Employee: employee }),
+        "test-namespace",
+      );
+
+      // Explicit .unique() should be preserved even for n-1 relations
+      expect(result.Employee.fields.userID.config.unique).toBe(true);
+      expect(result.Employee.fields.userID.config.foreignKey).toBe(true);
+      expect(result.Employee.fields.userID.config.foreignKeyType).toBe("User");
+    });
+
     it("should handle self-referencing relations", () => {
       const node = db.type("Node", {
         name: db.string(),

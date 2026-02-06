@@ -162,7 +162,7 @@ export function applyRelationMetadataToFieldConfig(
     ...fieldConfig,
     index: metadata.index,
     foreignKey: metadata.foreignKey,
-    unique: metadata.unique,
+    unique: fieldConfig.unique || metadata.unique,
     foreignKeyType: metadata.foreignKeyType,
     foreignKeyField: metadata.foreignKeyField,
   };
