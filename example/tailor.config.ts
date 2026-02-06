@@ -5,6 +5,7 @@ import {
   defineIdp,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { createI18nGenerator, i18nPlugin } from "./plugins/i18n";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -92,4 +93,9 @@ export const generators = defineGenerators(
   ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
   ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
+  createI18nGenerator({ distPath: "./generated/i18n" }),
+);
+
+export const plugins = definePlugins(
+  i18nPlugin, // Custom plugin - stores i18n labels for generators
 );

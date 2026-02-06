@@ -16,4 +16,14 @@ export const user = db
     { fields: ["status", "createdAt"], unique: false, name: "user_status_created_idx" },
   )
   .permission(defaultPermission)
-  .gqlPermission(defaultGqlPermission);
+  .gqlPermission(defaultGqlPermission)
+  .plugin({
+    "@example/i18n": {
+      typeLabel: { ja: "ユーザー", en: "User" },
+      labels: {
+        name: { ja: "名前", en: "Name" },
+        email: { ja: "メールアドレス", en: "Email" },
+        role: { ja: "役割", en: "Role" },
+      },
+    },
+  });
