@@ -9,7 +9,9 @@
  * import { softDeletePlugin } from "./plugins/soft-delete";
  *
  * export const plugins = definePlugins(
- *   softDeletePlugin,
+ *   softDeletePlugin({
+ *     archiveTablePrefix: "Deleted_",  // Optional global config
+ *   }),
  * );
  *
  * // In your type definition

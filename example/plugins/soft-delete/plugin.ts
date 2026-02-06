@@ -6,7 +6,7 @@
  * Features:
  * - Adds `deletedAt` field to track when a record was soft-deleted
  * - Generates an Archive type to store deletion metadata (who, when, reason)
- * - Supports global plugin configuration via definePlugins()
+ * - Supports global plugin configuration via function argument
  * - Supports per-type configuration via .plugin()
  *
  * Usage:
@@ -16,10 +16,10 @@
  *
  * // Global plugin configuration (applied to all types using this plugin)
  * export const plugins = definePlugins(
- *   [softDeletePlugin, {
+ *   softDeletePlugin({
  *     archiveTablePrefix: "Archive_",  // Custom prefix for archive tables
  *     defaultRetentionDays: 90,        // Default retention period
- *   }],
+ *   }),
  * );
  *
  * // Per-type configuration
@@ -209,21 +209,32 @@ function processSoftDelete(
 }
 
 /**
- * Soft delete plugin that adds soft delete functionality to TailorDB types.
+ * Create a soft delete plugin with optional global configuration.
+ * @param pluginConfig - Optional global plugin configuration
+ * @returns Configured soft delete plugin
+ * @example
+ * ```typescript
+ * export const plugins = definePlugins(
+ *   softDeletePlugin({ archiveTablePrefix: "Deleted_" }),
+ * );
+ * ```
  */
-export const softDeletePlugin: PluginBase<SoftDeletePluginConfig> = {
-  id: "@example/soft-delete",
-  description: "Adds soft delete functionality with archive tracking",
-  importPath: "./plugins/soft-delete",
-  // Schema for per-type config (from .plugin())
-  configSchema: t.object({
-    archiveReason: t.bool({ optional: true }),
-    retentionDays: t.int({ optional: true }),
-  }),
-  // Schema for global plugin config (from definePlugins())
-  pluginConfigSchema: t.object({
-    archiveTablePrefix: t.string({ optional: true }),
-    defaultRetentionDays: t.int({ optional: true }),
-  }),
-  process: processSoftDelete,
-};
+export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginBase {
+  return {
+    id: "@example/soft-delete",
+    description: "Adds soft delete functionality with archive tracking",
+    importPath: "./plugins/soft-delete",
+    // Schema for per-type config (from .plugin())
+    configSchema: t.object({
+      archiveReason: t.bool({ optional: true }),
+      retentionDays: t.int({ optional: true }),
+    }),
+    // Schema for global plugin config (from definePlugins())
+    pluginConfigSchema: t.object({
+      archiveTablePrefix: t.string({ optional: true }),
+      defaultRetentionDays: t.int({ optional: true }),
+    }),
+    _pluginConfig: pluginConfig,
+    process: processSoftDelete,
+  };
+}
