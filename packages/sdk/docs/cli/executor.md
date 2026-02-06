@@ -114,43 +114,43 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 **List jobs for an executor (default: 50 jobs)**
 
 ```bash
-$ my-executor
+$ tailor-sdk executor jobs my-executor
 ```
 
 **Limit the number of jobs**
 
 ```bash
-$ my-executor --limit 10
+$ tailor-sdk executor jobs my-executor --limit 10
 ```
 
 **Filter by status**
 
 ```bash
-$ my-executor -s RUNNING
+$ tailor-sdk executor jobs my-executor -s RUNNING
 ```
 
 **Get job details**
 
 ```bash
-$ my-executor <job-id>
+$ tailor-sdk executor jobs my-executor <job-id>
 ```
 
 **Get job details with attempts**
 
 ```bash
-$ my-executor <job-id> --attempts
+$ tailor-sdk executor jobs my-executor <job-id> --attempts
 ```
 
 **Wait for job to complete**
 
 ```bash
-$ my-executor <job-id> -W
+$ tailor-sdk executor jobs my-executor <job-id> -W
 ```
 
 **Wait for job with logs**
 
 ```bash
-$ my-executor <job-id> -W -l
+$ tailor-sdk executor jobs my-executor <job-id> -W -l
 ```
 
 <!-- politty:command:executor jobs:end -->
@@ -191,31 +191,31 @@ tailor-sdk executor trigger [options] <executorName>
 **Trigger an executor**
 
 ```bash
-$ my-executor
+$ tailor-sdk executor trigger my-executor
 ```
 
 **Trigger with data**
 
 ```bash
-$ my-executor -d '{"message": "hello"}'
+$ tailor-sdk executor trigger my-executor -d '{"message": "hello"}'
 ```
 
 **Trigger with data and headers**
 
 ```bash
-$ my-executor -d '{"message": "hello"}' -H "X-Custom: value" -H "X-Another: value2"
+$ tailor-sdk executor trigger my-executor -d '{"message": "hello"}' -H "X-Custom: value" -H "X-Another: value2"
 ```
 
 **Trigger and wait for completion**
 
 ```bash
-$ my-executor -W
+$ tailor-sdk executor trigger my-executor -W
 ```
 
 **Trigger, wait, and show logs**
 
 ```bash
-$ my-executor -W -l
+$ tailor-sdk executor trigger my-executor -W -l
 ```
 
 **Notes**
