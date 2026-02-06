@@ -1646,3 +1646,133 @@ describe("TailorDBType gqlOperations alias tests", () => {
     expect(auditType.metadata.settings?.gqlOperations).toBe("query");
   });
 });
+
+describe("TailorDBField clone tests", () => {
+  it("clones field with same metadata", () => {
+    const original = db.string().description("test description").index();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.description).toBe("test description");
+    expect(cloned.metadata.index).toBe(true);
+    expect(cloned.metadata.required).toBe(true);
+  });
+
+  it("cloned field is independent from original", () => {
+    const original = db.string().description("original");
+    const cloned = original.clone();
+
+    // Modifying cloned should not affect original
+    expect(cloned.metadata.description).toBe("original");
+    expect(original.metadata.description).toBe("original");
+  });
+
+  it("clone with optional override changes required to false", () => {
+    const required = db.string();
+    expect(required.metadata.required).toBe(true);
+
+    const optional = required.clone({ optional: true });
+    expect(optional.metadata.required).toBe(false);
+
+    // Original remains unchanged
+    expect(required.metadata.required).toBe(true);
+  });
+
+  it("clone with array override", () => {
+    const single = db.int();
+    const array = single.clone({ array: true });
+
+    expect(array.metadata.array).toBe(true);
+    expectTypeOf<output<typeof array>>().toEqualTypeOf<number[]>();
+  });
+
+  it("clone with both optional and array overrides", () => {
+    const original = db.string();
+    const cloned = original.clone({ optional: true, array: true });
+
+    expect(cloned.metadata.required).toBe(false);
+    expect(cloned.metadata.array).toBe(true);
+    expectTypeOf<output<typeof cloned>>().toEqualTypeOf<string[] | null>();
+  });
+
+  it("clones unique modifier correctly", () => {
+    const original = db.string().unique();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.unique).toBe(true);
+    expect(cloned.metadata.index).toBe(true);
+  });
+
+  it("clones relation config correctly", () => {
+    const User = db.type("User", { name: db.string() });
+    const original = db.uuid().relation({
+      type: "n-1",
+      toward: { type: User, as: "author" },
+      backward: "posts",
+    });
+    const cloned = original.clone();
+
+    expect(cloned.rawRelation).toBeDefined();
+    expect(cloned.rawRelation?.type).toBe("n-1");
+    expect(cloned.rawRelation?.toward.type).toBe("User");
+    expect(cloned.rawRelation?.toward.as).toBe("author");
+    expect(cloned.rawRelation?.backward).toBe("posts");
+
+    // Verify deep copy (different reference)
+    expect(cloned.rawRelation).not.toBe(original.rawRelation);
+    expect(cloned.rawRelation?.toward).not.toBe(original.rawRelation?.toward);
+  });
+
+  it("clones hooks correctly", () => {
+    const createHook = () => "created";
+    const original = db.string().hooks({ create: createHook });
+    const cloned = original.clone();
+
+    expect(cloned.metadata.hooks).toBeDefined();
+    expect(cloned.metadata.hooks?.create).toBe(createHook);
+  });
+
+  it("clones validate correctly", () => {
+    const validator = ({ value }: { value: string }) => value.length > 0;
+    const original = db.string().validate(validator);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.validate).toBeDefined();
+    expect(cloned.metadata.validate).toHaveLength(1);
+  });
+
+  it("clones serial config correctly", () => {
+    const original = db.int().serial({ start: 100 });
+    const cloned = original.clone();
+
+    expect(cloned.metadata.serial).toEqual({ start: 100 });
+  });
+
+  it("clones vector config correctly", () => {
+    const original = db.string().vector();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.vector).toBe(true);
+  });
+
+  it("clones enum field correctly", () => {
+    const original = db.enum(["active", "inactive", "pending"]);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+  });
+
+  it("clones nested object field correctly", () => {
+    const original = db.object({
+      name: db.string(),
+      age: db.int({ optional: true }),
+    });
+    const cloned = original.clone();
+
+    expect(cloned.fields.name).toBeDefined();
+    expect(cloned.fields.age).toBeDefined();
+  });
+});
