@@ -5,19 +5,13 @@ import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
  */
 
 /**
- * Metadata for GraphQL Ingest generation
+ * Basic type information for seed generation
  */
-export interface GqlIngestMetadata {
+export interface SeedTypeInfo {
   name: string;
   namespace: string;
   dependencies: string[];
-  mapping: {
-    dataFile: string;
-    dataFormat: string;
-    graphqlFile: string;
-    mapping: { input: "$" };
-  };
-  graphql: string;
+  dataFile: string;
 }
 
 /**
@@ -37,6 +31,6 @@ export interface LinesDbMetadata {
  * Combined metadata for seed generation
  */
 export interface SeedTypeMetadata {
-  gqlIngest: GqlIngestMetadata;
+  typeInfo: SeedTypeInfo;
   linesDb: LinesDbMetadata;
 }

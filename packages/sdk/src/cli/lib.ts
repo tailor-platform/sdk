@@ -147,3 +147,15 @@ export {
   type MigrationInfo,
 } from "./tailordb/migrate/snapshot";
 export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";
+
+// Seed exports
+export { bundleSeedScript, type SeedBundleResult } from "./bundler/seed/seed-bundler";
+export {
+  executeScript,
+  waitForExecution,
+  type ScriptExecutionOptions,
+  type ScriptExecutionResult,
+  type ExecutionWaitResult,
+} from "./utils/script-executor";
+export { initOperatorClient, type OperatorClient } from "./client";
+export type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
