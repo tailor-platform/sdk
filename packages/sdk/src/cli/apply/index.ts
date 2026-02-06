@@ -32,6 +32,7 @@ import {
 } from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
+import { createChangeSet } from "./services/index";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
@@ -76,39 +77,18 @@ export async function apply(options?: ApplyOptions) {
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
+  // TailorDB only mode: skip other services when migration version is specified
+  const tailorDBOnlyMode = !!process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
+
   // Generate user types from loaded config
   await generateUserTypes(config, config.path);
   const application = defineApplication(config);
 
-  // Load files first (before building)
-  // Load workflows first and collect jobs for bundling
-  let workflowResult: WorkflowLoadResult | undefined;
-  if (application.workflowConfig) {
-    workflowResult = await loadAndCollectJobs(application.workflowConfig);
-  }
-
-  // Build trigger context for workflow/job trigger transformation
-  const triggerContext = await buildTriggerContext(application.workflowConfig);
-
-  // Build functions (using already loaded data)
-  for (const app of application.applications) {
-    for (const pipeline of app.resolverServices) {
-      await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
-    }
-  }
-  if (application.executorService) {
-    await buildExecutor(application.executorService.config, triggerContext);
-  }
-  let workflowBuildResult: BundleWorkflowJobsResult | undefined;
-  if (workflowResult && workflowResult.jobs.length > 0) {
-    const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await buildWorkflow(
-      workflowResult.jobs,
-      mainJobNames,
-      application.env,
-      triggerContext,
-    );
-  }
+  // Build services (skipped in TailorDB only mode)
+  const { workflowResult, workflowBuildResult } = await buildServices(
+    application,
+    tailorDBOnlyMode,
+  );
   if (buildOnly) return;
 
   // Initialize client
@@ -122,23 +102,15 @@ export async function apply(options?: ApplyOptions) {
     profile: options?.profile,
   });
 
-  // Load remaining files and print logs
-  // Order: TailorDB → Resolver → Executor → Workflow
-  for (const tailordb of application.tailorDBServices) {
-    await tailordb.loadTypes();
-  }
-
-  for (const pipeline of application.resolverServices) {
-    await pipeline.loadResolvers();
-  }
-  if (application.executorService) {
-    await application.executorService.loadExecutors();
-  }
-  // Print workflow loading logs last (workflows were already loaded for bundling)
-  if (workflowResult) {
-    printLoadedWorkflows(workflowResult);
-  }
+  // Load services (non-TailorDB services skipped in TailorDB only mode)
+  await loadServices(application, workflowResult, tailorDBOnlyMode);
   logger.newline();
+
+  // Log TailorDB only mode
+  if (tailorDBOnlyMode) {
+    logger.info("TailorDB only mode: other services will be skipped");
+    logger.newline();
+  }
 
   // Phase 1: Plan
   const ctx: PlanContext = {
@@ -149,20 +121,16 @@ export async function apply(options?: ApplyOptions) {
     config,
     noSchemaCheck: options?.noSchemaCheck,
   };
-  const tailorDB = await planTailorDB(ctx);
-  const staticWebsite = await planStaticWebsite(ctx);
-  const idp = await planIdP(ctx);
-  const auth = await planAuth(ctx);
-  const pipeline = await planPipeline(ctx);
-  const app = await planApplication(ctx);
-  const executor = await planExecutor(ctx);
-  const workflow = await planWorkflow(
-    client,
-    workspaceId,
-    application.name,
-    workflowResult?.workflows ?? {},
-    workflowBuildResult?.mainJobDeps ?? {},
-  );
+  const { tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow } =
+    await planServices(
+      ctx,
+      client,
+      workspaceId,
+      application.name,
+      workflowResult,
+      workflowBuildResult,
+      tailorDBOnlyMode,
+    );
 
   // Confirm conflicts
   const allConflicts: OwnerConflict[] = [
@@ -238,6 +206,7 @@ export async function apply(options?: ApplyOptions) {
   await applyTailorDB(client, tailorDB, "create-update");
 
   // Other services: Apply after TailorDB migrations complete
+  // (empty plans in TailorDB only mode - apply functions do nothing)
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
@@ -297,6 +266,204 @@ async function buildWorkflow(
 ): Promise<BundleWorkflowJobsResult> {
   // Use the workflow bundler with already collected jobs
   return bundleWorkflowJobs(collectedJobs, mainJobNames, env, triggerContext);
+}
+
+// ============================================================================
+// Service orchestration functions
+// ============================================================================
+
+interface BuildServicesResult {
+  workflowResult: WorkflowLoadResult | undefined;
+  workflowBuildResult: BundleWorkflowJobsResult | undefined;
+}
+
+async function buildServices(
+  application: Readonly<Application>,
+  tailorDBOnly: boolean,
+): Promise<BuildServicesResult> {
+  if (tailorDBOnly) {
+    return { workflowResult: undefined, workflowBuildResult: undefined };
+  }
+
+  let workflowResult: WorkflowLoadResult | undefined;
+  if (application.workflowConfig) {
+    workflowResult = await loadAndCollectJobs(application.workflowConfig);
+  }
+
+  const triggerContext = await buildTriggerContext(application.workflowConfig);
+
+  for (const app of application.applications) {
+    for (const pipeline of app.resolverServices) {
+      await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
+    }
+  }
+  if (application.executorService) {
+    await buildExecutor(application.executorService.config, triggerContext);
+  }
+
+  let workflowBuildResult: BundleWorkflowJobsResult | undefined;
+  if (workflowResult && workflowResult.jobs.length > 0) {
+    const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
+    workflowBuildResult = await buildWorkflow(
+      workflowResult.jobs,
+      mainJobNames,
+      application.env,
+      triggerContext,
+    );
+  }
+
+  return { workflowResult, workflowBuildResult };
+}
+
+async function loadServices(
+  application: Readonly<Application>,
+  workflowResult: WorkflowLoadResult | undefined,
+  tailorDBOnly: boolean,
+) {
+  // Always load TailorDB types
+  for (const tailordb of application.tailorDBServices) {
+    await tailordb.loadTypes();
+  }
+
+  if (tailorDBOnly) {
+    return;
+  }
+
+  // Load other services
+  for (const pipeline of application.resolverServices) {
+    await pipeline.loadResolvers();
+  }
+  if (application.executorService) {
+    await application.executorService.loadExecutors();
+  }
+  if (workflowResult) {
+    printLoadedWorkflows(workflowResult);
+  }
+}
+
+// Empty plan helpers - using type assertions since the plans are empty and won't be used
+type StaticWebsitePlanResult = Awaited<ReturnType<typeof planStaticWebsite>>;
+type IdPPlanResult = Awaited<ReturnType<typeof planIdP>>;
+type AuthPlanResult = Awaited<ReturnType<typeof planAuth>>;
+type PipelinePlanResult = Awaited<ReturnType<typeof planPipeline>>;
+type ApplicationPlanResult = Awaited<ReturnType<typeof planApplication>>;
+type ExecutorPlanResult = Awaited<ReturnType<typeof planExecutor>>;
+type WorkflowPlanResult = Awaited<ReturnType<typeof planWorkflow>>;
+
+function emptyStaticWebsitePlan(): StaticWebsitePlanResult {
+  return {
+    changeSet: createChangeSet("StaticWebsites"),
+    conflicts: [],
+    unmanaged: [],
+    resourceOwners: new Set<string>(),
+  } as unknown as StaticWebsitePlanResult;
+}
+
+function emptyIdPPlan(): IdPPlanResult {
+  return {
+    changeSet: {
+      service: createChangeSet("IdP services"),
+      client: createChangeSet("IdP clients"),
+    },
+    conflicts: [],
+    unmanaged: [],
+    resourceOwners: new Set<string>(),
+  } as unknown as IdPPlanResult;
+}
+
+function emptyAuthPlan(): AuthPlanResult {
+  return {
+    changeSet: {
+      service: createChangeSet("Auth services"),
+      idpConfig: createChangeSet("IdP configs"),
+      oauth2Client: createChangeSet("OAuth2 clients"),
+      machineUser: createChangeSet("Machine users"),
+      userProfileConfig: createChangeSet("User profile configs"),
+      tenantConfig: createChangeSet("Tenant configs"),
+      scim: createChangeSet("SCIM configs"),
+      scimResource: createChangeSet("SCIM resources"),
+    },
+    conflicts: [],
+    unmanaged: [],
+    resourceOwners: new Set<string>(),
+  } as unknown as AuthPlanResult;
+}
+
+function emptyPipelinePlan(): PipelinePlanResult {
+  return {
+    changeSet: {
+      service: createChangeSet("Pipeline services"),
+      resolver: createChangeSet("Resolvers"),
+    },
+    conflicts: [],
+    unmanaged: [],
+    resourceOwners: new Set<string>(),
+  } as unknown as PipelinePlanResult;
+}
+
+function emptyApplicationPlan(): ApplicationPlanResult {
+  return createChangeSet("Applications") as unknown as ApplicationPlanResult;
+}
+
+function emptyExecutorPlan(): ExecutorPlanResult {
+  return {
+    changeSet: createChangeSet("Executors"),
+    conflicts: [],
+    unmanaged: [],
+    resourceOwners: new Set<string>(),
+  } as unknown as ExecutorPlanResult;
+}
+
+function emptyWorkflowPlan(): WorkflowPlanResult {
+  return {
+    changeSet: createChangeSet("Workflows"),
+    conflicts: [],
+    unmanaged: [],
+    resourceOwners: new Set<string>(),
+    appName: "",
+  } as unknown as WorkflowPlanResult;
+}
+
+async function planServices(
+  ctx: PlanContext,
+  client: OperatorClient,
+  workspaceId: string,
+  appName: string,
+  workflowResult: WorkflowLoadResult | undefined,
+  workflowBuildResult: BundleWorkflowJobsResult | undefined,
+  tailorDBOnly: boolean,
+) {
+  const tailorDB = await planTailorDB(ctx);
+
+  if (tailorDBOnly) {
+    return {
+      tailorDB,
+      staticWebsite: emptyStaticWebsitePlan(),
+      idp: emptyIdPPlan(),
+      auth: emptyAuthPlan(),
+      pipeline: emptyPipelinePlan(),
+      app: emptyApplicationPlan(),
+      executor: emptyExecutorPlan(),
+      workflow: emptyWorkflowPlan(),
+    };
+  }
+
+  return {
+    tailorDB,
+    staticWebsite: await planStaticWebsite(ctx),
+    idp: await planIdP(ctx),
+    auth: await planAuth(ctx),
+    pipeline: await planPipeline(ctx),
+    app: await planApplication(ctx),
+    executor: await planExecutor(ctx),
+    workflow: await planWorkflow(
+      client,
+      workspaceId,
+      appName,
+      workflowResult?.workflows ?? {},
+      workflowBuildResult?.mainJobDeps ?? {},
+    ),
+  };
 }
 
 export const applyCommand = defineCommand({
