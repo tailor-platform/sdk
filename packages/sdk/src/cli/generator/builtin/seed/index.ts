@@ -7,7 +7,12 @@ import {
   type GeneratorResult,
 } from "@/cli/generator/types";
 import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
-import { processLinesDb, generateLinesDbSchemaFile } from "./lines-db-processor";
+import {
+  processLinesDb,
+  generateLinesDbSchemaFile,
+  generateLinesDbSchemaFileWithPluginAPI,
+  type PluginTypeImport,
+} from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
 import type { SeedTypeMetadata } from "./types";
 
@@ -529,7 +534,6 @@ export function createSeedGenerator(
 
       // Collect namespace configurations
       const namespaceConfigs: NamespaceConfig[] = [];
-
       for (const nsResult of input.tailordb) {
         if (!nsResult.types) continue;
 
@@ -550,21 +554,67 @@ export function createSeedGenerator(
             skipIfExists: true,
           });
 
-          // Generate lines-db schema file
           const schemaOutputPath = path.join(
             outputBaseDir,
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
-          const importPath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
-          const normalizedImportPath = importPath.replace(/\.ts$/, "").startsWith(".")
-            ? importPath.replace(/\.ts$/, "")
-            : `./${importPath.replace(/\.ts$/, "")}`;
 
-          files.push({
-            path: schemaOutputPath,
-            content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
-          });
+          // Plugin-generated type: use getGeneratedType API
+          if (linesDb.pluginSource && linesDb.pluginSource.pluginImportPath) {
+            // Build original type import path
+            let originalImportPath: string | undefined;
+            if (linesDb.pluginSource.originalFilePath && linesDb.pluginSource.originalExportName) {
+              const relativePath = path.relative(
+                path.dirname(schemaOutputPath),
+                linesDb.pluginSource.originalFilePath,
+              );
+              originalImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+                ? relativePath.replace(/\.ts$/, "")
+                : `./${relativePath.replace(/\.ts$/, "")}`;
+            }
+
+            // Resolve plugin import path - if it's relative, resolve from project root
+            let pluginImportPath = linesDb.pluginSource.pluginImportPath;
+            if (pluginImportPath.startsWith("./") || pluginImportPath.startsWith("../")) {
+              const projectRoot = path.dirname(configPath);
+              const absolutePluginPath = path.resolve(projectRoot, pluginImportPath);
+              const relativePluginPath = path.relative(
+                path.dirname(schemaOutputPath),
+                absolutePluginPath,
+              );
+              pluginImportPath = relativePluginPath.startsWith(".")
+                ? relativePluginPath
+                : `./${relativePluginPath}`;
+            }
+
+            const pluginImport: PluginTypeImport = {
+              pluginId: linesDb.pluginSource.pluginId,
+              pluginImportPath,
+              originalExportName: linesDb.pluginSource.originalExportName || undefined,
+              originalImportPath,
+              generatedTypeKind: linesDb.pluginSource.generatedTypeKind,
+            };
+
+            const schemaContent = generateLinesDbSchemaFileWithPluginAPI(linesDb, pluginImport);
+
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          } else {
+            // User-defined type: import from source file
+            const relativePath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
+            const typeImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+              ? relativePath.replace(/\.ts$/, "")
+              : `./${relativePath.replace(/\.ts$/, "")}`;
+            const schemaContent = generateLinesDbSchemaFile(linesDb, typeImportPath);
+
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          }
         }
 
         namespaceConfigs.push({

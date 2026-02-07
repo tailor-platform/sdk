@@ -16,6 +16,7 @@ import {
 import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
+import type { PluginManager } from "@/plugin/manager";
 
 export type Application = {
   readonly name: string;
@@ -39,7 +40,10 @@ type DefineTailorDBResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineTailorDB(config: TailorDBServiceInput | undefined): DefineTailorDBResult {
+function defineTailorDB(
+  config: TailorDBServiceInput | undefined,
+  pluginManager?: PluginManager,
+): DefineTailorDBResult {
   const tailorDBServices: TailorDBService[] = [];
   const externalTailorDBNamespaces: string[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
@@ -54,7 +58,7 @@ function defineTailorDB(config: TailorDBServiceInput | undefined): DefineTailorD
     } else {
       // Parse config through schema to normalize gqlOperations
       const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
-      const tailorDB = createTailorDBService(namespace, parsedConfig);
+      const tailorDB = createTailorDBService({ namespace, config: parsedConfig, pluginManager });
       tailorDBServices.push(tailorDB);
     }
     subgraphs.push({ Type: "tailordb", Name: namespace });
@@ -146,11 +150,14 @@ type DefineExecutorResult = {
   executorService: ExecutorService | undefined;
 };
 
-function defineExecutor(config: ExecutorServiceInput | undefined): DefineExecutorResult {
+function defineExecutor(
+  config: ExecutorServiceInput | undefined,
+  pluginManager?: PluginManager,
+): DefineExecutorResult {
   if (!config) {
     return { executorService: undefined };
   }
-  return { executorService: createExecutorService(config) };
+  return { executorService: createExecutorService({ config, pluginManager }) };
 }
 
 type DefineWorkflowResult = {
@@ -184,12 +191,23 @@ function defineStaticWebsites(
 }
 
 /**
+ * Parameters for defining an application
+ */
+export interface DefineApplicationParams {
+  /** Application configuration object */
+  config: AppConfig;
+  /** Plugin manager for processing plugins */
+  pluginManager?: PluginManager;
+}
+
+/**
  * Define a Tailor application from the given configuration.
- * @param config - Application configuration object
+ * @param params - Parameters for defining the application
  * @returns Configured application instance
  */
-export function defineApplication(config: AppConfig): Application {
-  const tailordbResult = defineTailorDB(config.db);
+export function defineApplication(params: DefineApplicationParams): Application {
+  const { config, pluginManager } = params;
+  const tailordbResult = defineTailorDB(config.db, pluginManager);
   const resolverResult = defineResolver(config.resolver);
   const idpResult = defineIdp(config.idp);
   const authResult = defineAuth(
@@ -197,7 +215,7 @@ export function defineApplication(config: AppConfig): Application {
     tailordbResult.tailorDBServices,
     tailordbResult.externalTailorDBNamespaces,
   );
-  const executorResult = defineExecutor(config.executor);
+  const executorResult = defineExecutor(config.executor, pluginManager);
   const workflowResult = defineWorkflow(config.workflow);
   const staticWebsiteResult = defineStaticWebsites(config.staticWebsites);
 
