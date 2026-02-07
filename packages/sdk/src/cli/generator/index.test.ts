@@ -251,6 +251,7 @@ describe("GenerationManager", () => {
       manager.services.tailordb["test-namespace"] = {
         types: parsedTypes,
         sourceInfo: {},
+        pluginAttachments: new Map(),
       };
       manager.services.resolver["test-namespace"] = {
         testResolver: createResolver({
@@ -337,6 +338,7 @@ describe("GenerationManager", () => {
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
         types: parsedTypes,
         sourceInfo: {},
+        pluginAttachments: new Map(),
       });
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
@@ -362,6 +364,7 @@ describe("GenerationManager", () => {
         manager.processTailorDBNamespace(testGenerator, "test-namespace", {
           types: {},
           sourceInfo: {},
+          pluginAttachments: new Map(),
         }),
       ).resolves.not.toThrow();
     });
@@ -396,6 +399,7 @@ describe("GenerationManager", () => {
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
         types: parsedTypes,
         sourceInfo,
+        pluginAttachments: new Map(),
       });
 
       expect(processTypeSpy).toHaveBeenCalledWith(
@@ -406,6 +410,7 @@ describe("GenerationManager", () => {
             filePath: "test.ts",
             exportName: "TestType",
           }),
+          plugins: [],
         }),
       );
     });

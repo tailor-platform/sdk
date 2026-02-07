@@ -34,7 +34,7 @@ async function loadOptions(options?: RemoveOptions) {
     profile: options?.profile,
   });
   const { config } = await loadConfig(options?.configPath);
-  const application = defineApplication(config);
+  const application = defineApplication({ config });
   return {
     client,
     workspaceId,

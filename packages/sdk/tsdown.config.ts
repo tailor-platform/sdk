@@ -28,6 +28,16 @@ export default defineConfig({
     "src/cli/index.ts",
     "src/cli/lib.ts",
     "src/utils/test/index.ts",
+    "src/plugin/index.ts",
+    "src/plugin/builtin/changeset/index.ts",
+    "src/plugin/builtin/audit-log/index.ts",
+    "src/plugin/builtin/change-history/index.ts",
+    // Executor files are loaded via dynamic import() from the plugin's executors object.
+    // They must be separate entries so rolldown outputs individual .mjs files that
+    // can be resolved at runtime when inlineDynamicImports is enabled.
+    "src/plugin/builtin/change-history/executors/on-create.ts",
+    "src/plugin/builtin/change-history/executors/on-update.ts",
+    "src/plugin/builtin/change-history/executors/on-delete.ts",
   ],
   format: ["esm"],
   target: "node18",

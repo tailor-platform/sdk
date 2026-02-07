@@ -4,8 +4,13 @@ import type { GeneratorAuthInput } from "@/cli/generator/types";
 export interface IdpUserMetadata {
   name: "_User";
   dependencies: string[];
-  dataFile: string;
-  mutation: string;
+  mapping: {
+    dataFile: string;
+    dataFormat: string;
+    graphqlFile: string;
+    mapping: { input: "$" };
+  };
+  graphql: string;
   schema: {
     usernameField: string;
     userTypeName: string;
@@ -25,7 +30,7 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
 
   const { typeName, usernameField } = auth.userProfile;
 
-  const mutation = /* gql */ `mutation CreateUser($input: _CreateUserInput!) {
+  const graphql = /* gql */ `mutation CreateUser($input: _CreateUserInput!) {
   _createUser(input: $input) {
     id
   }
@@ -35,8 +40,13 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
   return {
     name: "_User",
     dependencies: [typeName],
-    dataFile: "data/_User.jsonl",
-    mutation,
+    mapping: {
+      dataFile: "data/_User.jsonl",
+      dataFormat: "jsonl",
+      graphqlFile: "graphql/_User.graphql",
+      mapping: { input: "$" },
+    },
+    graphql,
     schema: {
       usernameField,
       userTypeName: typeName,

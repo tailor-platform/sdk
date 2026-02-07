@@ -243,7 +243,7 @@ export const erdExportCommand = defineCommand({
     output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
       alias: "o",
       description:
-        "Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`)",
+        "Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json)",
     }),
   }),
   run: withCommonArgs(async (args) => {

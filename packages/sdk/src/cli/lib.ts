@@ -24,6 +24,8 @@ export type {
   AggregateArgs,
   GeneratorResult,
   DependencyKind,
+  PluginAttachment,
+  TypeSourceInfoEntry,
 } from "./generator/types";
 export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
@@ -34,17 +36,7 @@ export { remove, type RemoveOptions } from "./remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./workspace/create";
 export { listWorkspaces, type ListWorkspacesOptions } from "./workspace/list";
 export { deleteWorkspace, type DeleteWorkspaceOptions } from "./workspace/delete";
-export { getWorkspace, type GetWorkspaceOptions } from "./workspace/get";
-export { restoreWorkspace, type RestoreWorkspaceOptions } from "./workspace/restore";
-export type { WorkspaceInfo, WorkspaceDetails } from "./workspace/transform";
-export { listUsers, type ListUsersOptions } from "./workspace/user/list";
-export { inviteUser, type InviteUserOptions } from "./workspace/user/invite";
-export { updateUser, type UpdateUserOptions } from "./workspace/user/update";
-export { removeUser, type RemoveUserOptions } from "./workspace/user/remove";
-export type { UserInfo } from "./workspace/user/transform";
-export { listApps, type ListAppsOptions } from "./workspace/app/list";
-export { getAppHealth, type HealthOptions as GetAppHealthOptions } from "./workspace/app/health";
-export type { AppInfo, AppHealthInfo } from "./workspace/app/transform";
+export type { WorkspaceInfo } from "./workspace/transform";
 export {
   listMachineUsers,
   type ListMachineUsersOptions,
@@ -147,15 +139,3 @@ export {
   type MigrationInfo,
 } from "./tailordb/migrate/snapshot";
 export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";
-
-// Seed exports
-export { bundleSeedScript, type SeedBundleResult } from "./bundler/seed/seed-bundler";
-export {
-  executeScript,
-  waitForExecution,
-  type ScriptExecutionOptions,
-  type ScriptExecutionResult,
-  type ExecutionWaitResult,
-} from "./utils/script-executor";
-export { initOperatorClient, type OperatorClient } from "./client";
-export type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";

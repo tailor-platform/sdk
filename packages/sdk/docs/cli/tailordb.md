@@ -182,14 +182,14 @@ tailor-sdk tailordb erd export [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                                          | Default              |
-| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                         | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                    | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                              | `"tailor.config.ts"` |
-| `--json`                        | `-j`  | Output as JSON                                                                                       | `false`              |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                        | -                    |
-| `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) | `".tailor-sdk/erd"`  |
+| Option                          | Alias | Description                                                                                        | Default              |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                  | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                            | `"tailor.config.ts"` |
+| `--json`                        | `-j`  | Output as JSON                                                                                     | `false`              |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                      | -                    |
+| `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to <outputDir>/<namespace>/schema.json) | `".tailor-sdk/erd"`  |
 
 <!-- politty:command:tailordb erd export:end -->
 <!-- politty:command:tailordb erd serve:start -->

@@ -16,8 +16,10 @@ import type { ValueOperand } from "@/parser/service/auth/types";
 import type { z } from "zod";
 
 export type { RelationType } from "./relation";
+export type { TypeSourceInfo } from "./type-parser";
 export type {
   TailorAnyDBField,
+  TailorAnyDBType,
   TailorDBField,
   DBFieldMetadata,
   Hook,

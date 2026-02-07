@@ -25,4 +25,34 @@ export {
 
 export * from "@/configure/services";
 
-export { defineConfig, defineGenerators } from "@/configure/config";
+export { defineConfig, defineGenerators, definePlugins } from "@/configure/config";
+
+// Plugin types for custom plugin development
+export type {
+  PluginBase,
+  PluginConfig,
+  PluginConfigs,
+  PluginOutput,
+  PluginProcessContext,
+  StandalonePluginProcessContext,
+  PluginAttachment,
+  PluginGeneratedType,
+  PluginGeneratedResolver,
+  PluginGeneratedExecutor,
+  PluginGeneratedExecutorWithFile,
+  PluginExecutorContext,
+  PluginExecutorContextBase,
+  TailorDBTypeForPlugin,
+} from "@/parser/plugin-config/types";
+
+// Plugin utilities
+export {
+  withPluginContext,
+  type PluginExecutorFactory,
+  type PluginFunctionArgs,
+  type PluginRecordCreatedArgs,
+  type PluginRecordUpdatedArgs,
+  type PluginRecordDeletedArgs,
+  type PluginDBSchema,
+  type PluginRecord,
+} from "@/plugin/with-context";

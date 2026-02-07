@@ -17,7 +17,9 @@ describe("bundleExecutors", () => {
 
       await expect(
         bundleExecutors({
-          files: ["./src/backend/provisioning/executor/*.ts"],
+          config: {
+            files: ["./src/backend/provisioning/executor/*.ts"],
+          },
         }),
       ).resolves.toBeUndefined();
     } finally {
