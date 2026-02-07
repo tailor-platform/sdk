@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { defineApplication } from "@/cli/application";
@@ -16,6 +18,8 @@ import {
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
+import { getDistDir } from "@/cli/utils/dist-dir";
+import { PluginManager } from "@/plugin/manager";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -40,6 +44,7 @@ import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
+import type { PluginBase } from "@/parser/plugin-config/types";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -71,14 +76,20 @@ export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "dele
  */
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
-  const { config } = await loadConfig(options?.configPath);
+  const { config, plugins } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
+  // Initialize plugin manager if plugins are provided
+  let pluginManager: PluginManager | undefined;
+  if (plugins.length > 0) {
+    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+  }
+
   // Generate user types from loaded config
-  await generateUserTypes(config, config.path);
-  const application = defineApplication(config);
+  await generateUserTypes({ config, configPath: config.path, plugins });
+  const application = defineApplication({ config, pluginManager });
 
   // Load files first (before building)
   // Load workflows first and collect jobs for bundling
@@ -96,8 +107,37 @@ export async function apply(options?: ApplyOptions) {
       await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
     }
   }
+  // Discover plugin executor files before bundling
+  // Look for executors in new path pattern: .tailor-sdk/plugin/{pluginId}/executors/*.ts
+  const pluginExecutorFiles: string[] = [];
+  const pluginBaseDir = path.join(getDistDir(), "plugin");
+  if (fs.existsSync(pluginBaseDir)) {
+    for (const pluginDir of fs.readdirSync(pluginBaseDir)) {
+      const executorDir = path.join(pluginBaseDir, pluginDir, "executors");
+      if (fs.existsSync(executorDir)) {
+        const files = fs
+          .readdirSync(executorDir)
+          .filter((f) => f.endsWith(".ts"))
+          .map((f) => path.join(executorDir, f));
+        pluginExecutorFiles.push(...files);
+      }
+    }
+  }
+  // Also check legacy path for backwards compatibility
+  const legacyPluginExecutorDir = path.join(getDistDir(), "plugin-executors");
+  if (fs.existsSync(legacyPluginExecutorDir)) {
+    const legacyFiles = fs
+      .readdirSync(legacyPluginExecutorDir)
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => path.join(legacyPluginExecutorDir, f));
+    pluginExecutorFiles.push(...legacyFiles);
+  }
+
   if (application.executorService) {
-    await buildExecutor(application.executorService.config, triggerContext);
+    await buildExecutor(application.executorService.config, triggerContext, pluginExecutorFiles);
+  } else if (pluginExecutorFiles.length > 0) {
+    // Plugin executors exist but no user executor config - bundle plugin executors only
+    await buildExecutor({ files: [] }, triggerContext, pluginExecutorFiles);
   }
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
@@ -126,6 +166,8 @@ export async function apply(options?: ApplyOptions) {
   // Order: TailorDB → Resolver → Executor → Workflow
   for (const tailordb of application.tailorDBServices) {
     await tailordb.loadTypes();
+    // Process standalone plugins (generates types without requiring a source type)
+    await tailordb.processStandalonePlugins();
   }
 
   for (const pipeline of application.resolverServices) {
@@ -133,6 +175,10 @@ export async function apply(options?: ApplyOptions) {
   }
   if (application.executorService) {
     await application.executorService.loadExecutors();
+    // Load plugin-generated executors from generated TypeScript files
+    if (pluginExecutorFiles.length > 0) {
+      await application.executorService.loadPluginExecutorFiles(pluginExecutorFiles);
+    }
   }
   // Print workflow loading logs last (workflows were already loaded for bundling)
   if (workflowResult) {
@@ -285,8 +331,12 @@ async function buildPipeline(
   await bundleResolvers(namespace, config, triggerContext);
 }
 
-async function buildExecutor(config: FileLoadConfig, triggerContext?: TriggerContext) {
-  await bundleExecutors(config, triggerContext);
+async function buildExecutor(
+  config: FileLoadConfig,
+  triggerContext?: TriggerContext,
+  additionalFiles?: string[],
+) {
+  await bundleExecutors({ config, triggerContext, additionalFiles });
 }
 
 async function buildWorkflow(

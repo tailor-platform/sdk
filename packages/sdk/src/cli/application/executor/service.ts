@@ -7,20 +7,47 @@ import {
   type Executor,
   type ExecutorServiceConfig,
 } from "@/parser/service/executor";
+import type { PluginManager } from "@/plugin/manager";
+
+/**
+ * Information about a plugin-generated executor converted to Executor format
+ */
+export interface PluginExecutor {
+  /** The executor in standard Executor format */
+  executor: Executor;
+  /** Plugin ID that generated this executor */
+  pluginId: string;
+  /** Source type name (for type-attached executors) */
+  sourceTypeName?: string;
+}
 
 export type ExecutorService = {
   readonly config: ExecutorServiceConfig;
   getExecutors: () => Record<string, Executor>;
+  getPluginExecutors: () => ReadonlyArray<PluginExecutor>;
   loadExecutors: () => Promise<Record<string, Executor> | undefined>;
+  loadPluginExecutorFiles: (filePaths: string[]) => Promise<void>;
 };
 
 /**
+ * Parameters for creating an ExecutorService
+ */
+export interface CreateExecutorServiceParams {
+  /** The executor service configuration */
+  config: ExecutorServiceConfig;
+  /** Plugin manager for processing plugin-generated executors */
+  pluginManager?: PluginManager;
+}
+
+/**
  * Creates a new ExecutorService instance.
- * @param config - The executor service configuration
+ * @param params - Parameters for creating the service
  * @returns A new ExecutorService instance
  */
-export function createExecutorService(config: ExecutorServiceConfig): ExecutorService {
+export function createExecutorService(params: CreateExecutorServiceParams): ExecutorService {
+  const { config } = params;
   const executors: Record<string, Executor> = {};
+  const pluginExecutors: PluginExecutor[] = [];
 
   const loadExecutorForFile = async (executorFile: string): Promise<Executor | undefined> => {
     try {
@@ -46,6 +73,7 @@ export function createExecutorService(config: ExecutorServiceConfig): ExecutorSe
   return {
     config,
     getExecutors: () => executors,
+    getPluginExecutors: () => pluginExecutors,
     loadExecutors: async () => {
       if (Object.keys(executors).length > 0) {
         return executors;
@@ -61,6 +89,27 @@ export function createExecutorService(config: ExecutorServiceConfig): ExecutorSe
 
       await Promise.all(executorFiles.map((executorFile) => loadExecutorForFile(executorFile)));
       return executors;
+    },
+    loadPluginExecutorFiles: async (filePaths: string[]) => {
+      if (filePaths.length === 0) return;
+
+      logger.newline();
+      logger.log(
+        `Loading ${styles.highlight(filePaths.length.toString())} plugin-generated executor files`,
+      );
+
+      for (const filePath of filePaths) {
+        const executor = await loadExecutorForFile(filePath);
+        if (executor) {
+          // Track as plugin executor (plugin ID is extracted from file path)
+          // File path format: .tailor-sdk/plugin-executors/{executor-name}.ts
+          pluginExecutors.push({
+            executor,
+            pluginId: "plugin-generated",
+            sourceTypeName: undefined,
+          });
+        }
+      }
     },
   };
 }

@@ -15,6 +15,19 @@ export interface SeedTypeInfo {
 }
 
 /**
+ * Plugin source information for type generation
+ */
+export interface PluginSourceInfo {
+  pluginId: string;
+  /** Plugin import path for code generators (e.g., "@tailor-platform/sdk/changeset-plugin") */
+  pluginImportPath?: string;
+  originalFilePath: string;
+  originalExportName: string;
+  /** Generated type kind identifier (e.g., "request", "step") */
+  generatedTypeKind?: string;
+}
+
+/**
  * Metadata for lines-db schema generation
  */
 export interface LinesDbMetadata {
@@ -25,6 +38,8 @@ export interface LinesDbMetadata {
   omitFields: string[];
   foreignKeys: ForeignKeyDefinition[];
   indexes: IndexDefinition[];
+  /** Plugin source info if this is a plugin-generated type */
+  pluginSource?: PluginSourceInfo;
 }
 
 /**
@@ -33,4 +48,6 @@ export interface LinesDbMetadata {
 export interface SeedTypeMetadata {
   typeInfo: SeedTypeInfo;
   linesDb: LinesDbMetadata;
+  /** Types that this type has relations to (for dependency resolution) */
+  relationTargets?: string[];
 }

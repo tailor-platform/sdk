@@ -133,7 +133,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
   // Load application and all types
   const { defineApplication } = await import("../../application");
-  const application = defineApplication(config);
+  const application = defineApplication({ config });
 
   // Process each namespace
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
