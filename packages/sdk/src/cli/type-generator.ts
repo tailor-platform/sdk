@@ -449,13 +449,7 @@ function generatePluginMethodOverload(plugins: PluginConfigForTypeGen[]): string
     return `      "${plugin.id}"?: ${typeString};`;
   });
 
-  // Add built-in plugins
-  const builtinEntries = [
-    '      "@tailor-platform/changeset"?: true;',
-    '      "@tailor-platform/audit-log"?: true;',
-  ];
-
-  const allEntries = [...builtinEntries, ...pluginEntries];
+  const allEntries = pluginEntries;
 
   return `  // Overload for .plugin() method to enable IDE completion for field names
   interface TailorDBType<Fields, User> {
