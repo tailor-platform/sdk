@@ -43,5 +43,15 @@
   "engines": {
     "node": ">= 22.14.0"
   },
-  "packageManager": "pnpm@10.28.0"
+  "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "overrides": {
+      "kysely": "0.28.2"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@tailor-platform/function-kysely-tailordb>kysely": "0.28.2"
+      }
+    }
+  }
 }

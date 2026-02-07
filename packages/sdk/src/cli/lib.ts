@@ -24,6 +24,8 @@ export type {
   AggregateArgs,
   GeneratorResult,
   DependencyKind,
+  PluginAttachment,
+  TypeSourceInfoEntry,
 } from "./generator/types";
 export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";

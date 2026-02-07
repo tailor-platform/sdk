@@ -1,0 +1,122 @@
+# Plugins (Beta)
+
+> **Beta Feature**: The plugin system is currently in beta. APIs may change in future releases.
+
+Plugins extend TailorDB types by automatically generating additional types, resolvers, and executors based on your type definitions.
+
+## Overview
+
+When you run `tailor-sdk generate`, the SDK:
+
+1. Loads all TailorDB types with plugin attachments
+2. Passes each type to the attached plugins
+3. Generates additional types, resolvers, and executors based on plugin output
+4. Writes all generated files to the appropriate locations
+
+This enables plugins to create derived functionality based on your application's schema. For example, the `@tailor-platform/change-history` plugin generates a history type and tracking executors for any type it's attached to.
+
+## Configuration
+
+### Registering Plugins
+
+Define plugins in `tailor.config.ts` using `definePlugins()`:
+
+```typescript
+import { defineConfig, definePlugins } from "@tailor-platform/sdk";
+
+export const plugins = definePlugins(
+  "@tailor-platform/changeset",
+  "@tailor-platform/audit-log",
+  "@tailor-platform/change-history",
+);
+
+export default defineConfig({
+  name: "my-app",
+  // ...
+});
+```
+
+**Important**: The `plugins` export must be a named export (not default).
+
+### Attaching Plugins to Types
+
+Use the `.plugin()` method to attach plugins to specific types:
+
+```typescript
+import { db } from "@tailor-platform/sdk";
+
+export const user = db
+  .type("User", {
+    name: db.string(),
+    email: db.string(),
+  })
+  .plugin({
+    "@tailor-platform/changeset": true,
+    "@tailor-platform/change-history": true,
+  });
+```
+
+### Plugin Configuration
+
+Some plugins accept per-type configuration:
+
+```typescript
+export const customer = db
+  .type("Customer", {
+    name: db.string(),
+    // ...
+  })
+  .plugin({
+    "@example/soft-delete": {
+      archiveReason: true,
+      retentionDays: 90,
+    },
+  });
+```
+
+### Global Plugin Configuration
+
+Plugins can also accept global configuration via `definePlugins()`:
+
+```typescript
+import { definePlugins } from "@tailor-platform/sdk";
+import { softDeletePlugin } from "./plugins/soft-delete";
+
+export const plugins = definePlugins(
+  // Builtin plugins (no config)
+  "@tailor-platform/changeset",
+
+  // Custom plugin with global config (factory function)
+  softDeletePlugin({
+    archiveTablePrefix: "Deleted_",
+    defaultRetentionDays: 90,
+  }),
+);
+```
+
+## Generated Output
+
+Plugins can generate:
+
+- **Types**: Additional TailorDB types (e.g., `CustomerHistory`, `Deleted_Customer`)
+- **Resolvers**: GraphQL resolvers for plugin-specific operations
+- **Executors**: Event handlers triggered by record changes
+- **Field Extensions**: Additional fields added to the source type
+
+Generated files are placed in the `.tailor-sdk/plugin/` directory.
+
+## Plugin Types
+
+- [Builtin Plugins](./builtin.md) - Ready-to-use plugins included with the SDK
+- [Custom Plugins](./custom.md) - Create your own plugins (Beta)
+
+## Limitations (Beta)
+
+The following limitations apply during the beta period:
+
+- Plugin API may change between minor versions
+- Some edge cases in type generation may not be fully supported
+- Error messages may be improved in future releases
+- Documentation and examples are being expanded
+
+Please report any issues or feedback to help improve the plugin system.
