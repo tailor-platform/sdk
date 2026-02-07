@@ -28,9 +28,10 @@ import type { AnyCommand } from "politty";
 register("tsx", import.meta.url, { data: {} });
 
 const packageJson = await readPackageJson();
+const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
 
 export const mainCommand: AnyCommand = defineCommand({
-  name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
+  name: cliName,
   description:
     packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
   subCommands: {
@@ -53,8 +54,7 @@ export const mainCommand: AnyCommand = defineCommand({
     user: userCommand,
     workflow: workflowCommand,
     workspace: workspaceCommand,
-    completion: async () =>
-      createCompletionCommand(mainCommand, Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk"),
+    completion: async () => createCompletionCommand(mainCommand, cliName),
   },
 });
 
