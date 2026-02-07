@@ -2,6 +2,7 @@
 
 import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
+import { createCompletionCommand } from "politty/completion";
 import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
 import { executorCommand } from "./executor";
@@ -22,12 +23,13 @@ import { userCommand } from "./user";
 import { readPackageJson } from "./utils/package-json";
 import { workflowCommand } from "./workflow";
 import { workspaceCommand } from "./workspace";
+import type { AnyCommand } from "politty";
 
 register("tsx", import.meta.url, { data: {} });
 
 const packageJson = await readPackageJson();
 
-export const mainCommand = defineCommand({
+export const mainCommand: AnyCommand = defineCommand({
   name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
   description:
     packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
@@ -51,6 +53,8 @@ export const mainCommand = defineCommand({
     user: userCommand,
     workflow: workflowCommand,
     workspace: workspaceCommand,
+    completion: async () =>
+      createCompletionCommand(mainCommand, Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk"),
   },
 });
 
