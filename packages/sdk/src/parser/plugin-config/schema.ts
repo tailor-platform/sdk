@@ -47,18 +47,6 @@ const _PluginOutputSchema = z.object({
   executors: z.array(PluginGeneratedExecutorSchema).optional(),
 });
 
-// Literal-based schemas for built-in plugins (enables autocomplete)
-const ChangesetPluginSchema = z.literal("@tailor-platform/changeset");
-const AuditLogPluginSchema = z.literal("@tailor-platform/audit-log");
-const ChangeHistoryPluginSchema = z.literal("@tailor-platform/change-history");
-
-// Union of all built-in plugin IDs (for autocomplete)
-const BuiltinPluginIdSchema = z.union([
-  ChangesetPluginSchema,
-  AuditLogPluginSchema,
-  ChangeHistoryPluginSchema,
-]);
-
 // Custom plugin schema (object form)
 // Using passthrough() to preserve fields like importPath, configSchema, processStandalone
 const CustomPluginSchema = z
@@ -74,21 +62,9 @@ const CustomPluginSchema = z
   })
   .passthrough();
 
-// Built-in plugin tuple schema (id, options) for future use
-// Currently built-in plugins don't use pluginConfig, but this allows it
-const BuiltinPluginTupleSchema = z.tuple([BuiltinPluginIdSchema, z.unknown()]);
-
 // Custom plugin tuple schema (PluginBase, options)
 // Allows custom plugins to receive pluginConfig via definePlugins()
 const CustomPluginTupleSchema = z.tuple([CustomPluginSchema, z.unknown()]);
-
-// Base schema for plugin config input (kept for documentation)
-const _BasePluginConfigSchema = z.union([
-  BuiltinPluginIdSchema,
-  BuiltinPluginTupleSchema,
-  CustomPluginSchema,
-  CustomPluginTupleSchema,
-]);
 
 /**
  * Type guard to check if a value is a PluginBase object
@@ -106,43 +82,21 @@ function isPluginBase(value: unknown): value is PluginBase {
 }
 
 /**
- * Creates a PluginConfigSchema with built-in plugin support
- * @param builtinPlugins - Map of plugin IDs to their constructor functions
- * @returns Plugin config schema that transforms to PluginBase instances
+ * Creates a PluginConfigSchema for custom plugins
+ * @returns Plugin config schema that validates and transforms PluginBase instances
  */
-export function createPluginConfigSchema(
-  builtinPlugins: Map<string, (options: unknown) => PluginBase>,
-) {
+export function createPluginConfigSchema() {
   return z
-    .union([
-      BuiltinPluginIdSchema,
-      BuiltinPluginTupleSchema,
-      CustomPluginSchema,
-      CustomPluginTupleSchema,
-    ])
+    .union([CustomPluginSchema, CustomPluginTupleSchema])
     .transform((plugin) => {
-      // String form: plugin ID only (use true as default config)
-      if (typeof plugin === "string") {
-        const constructor = builtinPlugins.get(plugin);
-        if (constructor) {
-          return constructor(true);
-        }
-        throw new Error(`Unknown plugin ID: ${plugin}`);
-      }
-      // Tuple form: check if it's [string, options] or [PluginBase, options]
+      // Tuple form: [PluginBase, options]
       if (Array.isArray(plugin)) {
         const [first, options] = plugin;
-        // [PluginBase, options] form: custom plugin with pluginConfig
         if (isPluginBase(first)) {
           const pluginBase = first as PluginBase;
           return { ...pluginBase, _pluginConfig: options } as PluginBase;
         }
-        // [string, options] form: builtin plugin with options
-        const constructor = builtinPlugins.get(first as string);
-        if (constructor) {
-          return constructor(options);
-        }
-        throw new Error(`Unknown plugin ID: ${first}`);
+        throw new Error(`Invalid plugin configuration: expected PluginBase object`);
       }
       // Object form: custom plugin without pluginConfig
       return plugin as PluginBase;
