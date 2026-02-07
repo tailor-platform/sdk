@@ -13,7 +13,7 @@ When you run `tailor-sdk generate`, the SDK:
 3. Generates additional types, resolvers, and executors based on plugin output
 4. Writes all generated files to the appropriate locations
 
-This enables plugins to create derived functionality based on your application's schema. For example, the `@tailor-platform/change-history` plugin generates a history type and tracking executors for any type it's attached to.
+This enables plugins to create derived functionality based on your application's schema.
 
 ## Configuration
 
@@ -23,12 +23,9 @@ Define plugins in `tailor.config.ts` using `definePlugins()`:
 
 ```typescript
 import { defineConfig, definePlugins } from "@tailor-platform/sdk";
+import { myPlugin } from "./plugins/my-plugin";
 
-export const plugins = definePlugins(
-  "@tailor-platform/changeset",
-  "@tailor-platform/audit-log",
-  "@tailor-platform/change-history",
-);
+export const plugins = definePlugins(myPlugin());
 
 export default defineConfig({
   name: "my-app",
@@ -51,8 +48,7 @@ export const user = db
     email: db.string(),
   })
   .plugin({
-    "@tailor-platform/changeset": true,
-    "@tailor-platform/change-history": true,
+    "@example/my-plugin": true,
   });
 ```
 
@@ -83,9 +79,6 @@ import { definePlugins } from "@tailor-platform/sdk";
 import { softDeletePlugin } from "./plugins/soft-delete";
 
 export const plugins = definePlugins(
-  // Builtin plugins (no config)
-  "@tailor-platform/changeset",
-
   // Custom plugin with global config (factory function)
   softDeletePlugin({
     archiveTablePrefix: "Deleted_",
@@ -105,10 +98,9 @@ Plugins can generate:
 
 Generated files are placed in the `.tailor-sdk/plugin/` directory.
 
-## Plugin Types
+## Creating Custom Plugins
 
-- [Builtin Plugins](./builtin.md) - Ready-to-use plugins included with the SDK
-- [Custom Plugins](./custom.md) - Create your own plugins (Beta)
+See [Custom Plugins](./custom.md) for how to create your own plugins.
 
 ## Limitations (Beta)
 
