@@ -335,8 +335,6 @@ export interface PluginBase<PluginConfig = unknown> {
   /**
    * Import path for this plugin's public API.
    * Used by code generators to create correct import statements.
-   * @example "@tailor-platform/sdk/changeset-plugin"
-   * @example "@my-company/audit-log-plugin"
    */
   readonly importPath: string;
   /**
