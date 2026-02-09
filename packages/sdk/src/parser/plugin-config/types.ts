@@ -410,37 +410,3 @@ export interface PluginBase<PluginConfig = unknown> {
  * Options can be any value - the plugin's configSchema handles validation.
  */
 export type PluginConfig = PluginBase | readonly [PluginBase, unknown];
-
-/**
- * Plugin import information for generated types.
- * Used by code generators to create correct import statements for plugin-generated types.
- */
-export interface PluginTypeImport {
-  /** Plugin ID */
-  pluginId: string;
-  /** Plugin import path */
-  pluginImportPath: string;
-  /** Original type's export name (for type-attached plugins) */
-  originalExportName?: string;
-  /** Original type's import path (for type-attached plugins) */
-  originalImportPath?: string;
-  /** Generated type kind (e.g., "request", "step") */
-  generatedTypeKind?: string;
-}
-
-/**
- * Plugin source information for type generation.
- * Used to track the origin of plugin-generated types.
- */
-export interface PluginSourceInfo {
-  /** Plugin ID */
-  pluginId: string;
-  /** Plugin import path */
-  pluginImportPath?: string;
-  /** Original type's file path */
-  originalFilePath: string;
-  /** Original type's export name */
-  originalExportName: string;
-  /** Generated type kind identifier (e.g., "request", "step") */
-  generatedTypeKind?: string;
-}
