@@ -12,6 +12,7 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
+import { PluginManager } from "@/plugin/manager";
 import { commonArgs, confirmationArgs, withCommonArgs } from "../../args";
 import { loadConfig } from "../../config-loader";
 import { logBetaWarning } from "../../utils/beta";
@@ -33,6 +34,7 @@ import {
   type SchemaSnapshot,
 } from "./snapshot";
 import { generateSchemaFile, generateDiffFiles } from "./template-generator";
+import type { PluginBase } from "@/parser/plugin-config";
 
 export interface GenerateOptions {
   configPath?: string;
@@ -109,7 +111,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
   // Load configuration
-  const { config } = await loadConfig(options.configPath);
+  const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
 
   // Get namespaces with migrations config
@@ -131,9 +133,15 @@ export async function generate(options: GenerateOptions): Promise<void> {
     await handleInitOption(namespacesWithMigrations, options.yes);
   }
 
+  // Initialize plugin manager if plugins are provided
+  let pluginManager: PluginManager | undefined;
+  if (plugins.length > 0) {
+    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+  }
+
   // Load application and all types
   const { defineApplication } = await import("../../application");
-  const application = defineApplication({ config });
+  const application = defineApplication({ config, pluginManager });
 
   // Process each namespace
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
@@ -151,6 +159,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
     // Load types for this service
     await tailordbService.loadTypes();
+    await tailordbService.processStandalonePlugins();
 
     const localTypesObj = tailordbService.getTypes();
 
