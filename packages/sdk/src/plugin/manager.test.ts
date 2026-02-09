@@ -70,7 +70,8 @@ describe("PluginManager", () => {
         name: db.string(),
       })
       // PluginConfigs is open; use cast to attach plugin config in tests.
-      .plugin({ "test-plugin": { enabled: true } } as Record<string, unknown>);
+      // biome-ignore lint/suspicious/noExplicitAny: test-only plugin config that isn't in PluginConfigs
+      .plugin({ "test-plugin": { enabled: true } } as any);
 
     const extended = manager.extendType({
       originalType: original,
