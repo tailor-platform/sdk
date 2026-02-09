@@ -1,8 +1,11 @@
 import ml from "multiline-ts";
 import type { LinesDbMetadata, PluginSourceInfo } from "./types";
 import type { TypeSourceInfoEntry } from "@/cli/generator/types";
+import type { PluginTypeImport } from "@/parser/plugin-config";
 import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
+
+export type { PluginTypeImport };
 
 /**
  * Processes TailorDB types to generate lines-db metadata
@@ -157,22 +160,6 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
     );
 
     `;
-}
-
-/**
- * Plugin import information for getGeneratedType API
- */
-export interface PluginTypeImport {
-  /** Plugin ID (e.g., "@tailor-platform/changeset") */
-  pluginId: string;
-  /** Plugin import path (e.g., "@tailor-platform/sdk/changeset-plugin") */
-  pluginImportPath: string;
-  /** Original type's export name (for type-attached plugins) */
-  originalExportName?: string;
-  /** Original type's import path (for type-attached plugins) */
-  originalImportPath?: string;
-  /** Generated type kind (e.g., "request", "step") */
-  generatedTypeKind?: string;
 }
 
 /**
