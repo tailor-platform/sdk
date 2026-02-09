@@ -331,18 +331,61 @@ async function validateAndDetectMigrations(
   return pendingMigrations;
 }
 
+export type ApplyTailorDBOptions = {
+  deferMigrationScripts?: boolean;
+};
+
+/**
+ * Build migration execution context for script-based migrations.
+ * @param client - Operator client instance
+ * @param migrationContext - Planned TailorDB context
+ * @param migrationsRequiringScripts - Migrations that require scripts
+ * @returns Migration context for script execution
+ */
+function buildMigrationContextForScripts(
+  client: OperatorClient,
+  migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
+  migrationsRequiringScripts: PendingMigration[],
+): MigrationContext {
+  const authService = migrationContext.application.authService;
+  if (!authService) {
+    throw new Error("Auth configuration is required to execute migration scripts.");
+  }
+
+  const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
+  for (const migration of migrationsRequiringScripts) {
+    if (!(migration.namespace in dbConfigMap)) {
+      dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
+        | TailorDBServiceConfig
+        | undefined;
+    }
+  }
+
+  return {
+    client,
+    workspaceId: migrationContext.workspaceId,
+    authNamespace: authService.config.name,
+    machineUsers: authService.config.machineUsers
+      ? Object.keys(authService.config.machineUsers)
+      : undefined,
+    dbConfig: dbConfigMap,
+  };
+}
+
 /**
  * Apply TailorDB-related changes for the given phase.
  * @param client - Operator client instance
  * @param result - Planned TailorDB changes
  * @param phase - Apply phase (defaults to "create-update")
- * @returns Promise that resolves when TailorDB changes are applied
+ * @param options - Apply options
+ * @returns Deferred migrations that require script execution after Auth is applied
  */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
   phase: Exclude<ApplyPhase, "delete"> = "create-update",
-) {
+  options?: ApplyTailorDBOptions,
+): Promise<PendingMigration[]> {
   const { changeSet, context: migrationContext } = result;
 
   if (phase === "create-update") {
@@ -377,36 +420,38 @@ export async function applyTailorDB(
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
-      // Step 2: Build migration context for script execution (if any migrations require scripts)
-      let migrationCtx: MigrationContext | undefined;
       const migrationsRequiringScripts = pendingMigrations.filter(
         (m) => m.diff.requiresMigrationScript,
       );
-      if (migrationsRequiringScripts.length > 0) {
-        const authService = migrationContext.application.authService;
-        if (!authService) {
-          throw new Error("Auth configuration is required to execute migration scripts.");
-        }
+      const shouldDeferScripts =
+        options?.deferMigrationScripts === true && migrationsRequiringScripts.length > 0;
 
-        const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
-        for (const migration of migrationsRequiringScripts) {
-          if (!(migration.namespace in dbConfigMap)) {
-            dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
-              | TailorDBServiceConfig
-              | undefined;
+      if (shouldDeferScripts) {
+        const deferredMigrations: PendingMigration[] = [];
+        for (const [index, migration] of pendingMigrations.entries()) {
+          if (migration.diff.requiresMigrationScript) {
+            deferredMigrations.push(...pendingMigrations.slice(index));
+            break;
           }
+
+          await executeSingleMigrationPrePhase(client, changeSet, migration);
+          await executeSingleMigrationPostPhase(client, changeSet, migration);
+          await updateMigrationLabel(
+            client,
+            migrationContext.workspaceId,
+            migration.namespace,
+            migration.number,
+          );
         }
 
-        migrationCtx = {
-          client,
-          workspaceId: migrationContext.workspaceId,
-          authNamespace: authService.config.name,
-          machineUsers: authService.config.machineUsers
-            ? Object.keys(authService.config.machineUsers)
-            : undefined,
-          dbConfig: dbConfigMap,
-        };
+        return deferredMigrations;
       }
+
+      // Step 2: Build migration context for script execution (if any migrations require scripts)
+      const migrationCtx =
+        migrationsRequiringScripts.length > 0
+          ? buildMigrationContextForScripts(client, migrationContext, migrationsRequiringScripts)
+          : undefined;
 
       // Step 3: Execute each migration sequentially: pre -> script -> post
       if (migrationsRequiringScripts.length > 0) {
@@ -507,6 +552,74 @@ export async function applyTailorDB(
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
+    );
+  }
+
+  return [];
+}
+
+/**
+ * Complete deferred TailorDB migrations (pre -> script -> post).
+ * @param client - Operator client instance
+ * @param result - Planned TailorDB changes
+ * @param pendingMigrations - Migrations deferred for script execution
+ */
+export async function completeTailorDBMigrations(
+  client: OperatorClient,
+  result: Awaited<ReturnType<typeof planTailorDB>>,
+  pendingMigrations: PendingMigration[],
+): Promise<void> {
+  if (pendingMigrations.length === 0) {
+    return;
+  }
+
+  const { changeSet, context: migrationContext } = result;
+  const migrationsRequiringScripts = pendingMigrations.filter(
+    (migration) => migration.diff.requiresMigrationScript,
+  );
+
+  const migrationCtx =
+    migrationsRequiringScripts.length > 0
+      ? buildMigrationContextForScripts(client, migrationContext, migrationsRequiringScripts)
+      : undefined;
+
+  if (migrationsRequiringScripts.length > 0) {
+    logger.info(`Executing ${migrationsRequiringScripts.length} data migration(s)...`);
+    logger.newline();
+  }
+
+  for (const migration of pendingMigrations) {
+    await executeSingleMigrationPrePhase(client, changeSet, migration);
+
+    if (migration.diff.requiresMigrationScript) {
+      if (!migrationCtx) {
+        throw new Error("Auth configuration is required to execute migration scripts.");
+      }
+      await executeMigrations(migrationCtx, [migration]);
+    }
+
+    await executeSingleMigrationPostPhase(client, changeSet, migration);
+
+    await updateMigrationLabel(
+      client,
+      migrationContext.workspaceId,
+      migration.namespace,
+      migration.number,
+    );
+  }
+
+  if (migrationsRequiringScripts.length > 0) {
+    logger.newline();
+    logger.success(`All data migrations completed successfully.`);
+  }
+
+  const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter((del) => {
+    const permKey = `${del.request.namespaceName}/${del.name}`;
+    return !deletedResources.gqlPermissions.has(permKey);
+  });
+  if (remainingGqlPermissionDeletes.length > 0) {
+    await Promise.all(
+      remainingGqlPermissionDeletes.map((del) => client.deleteTailorDBGQLPermission(del.request)),
     );
   }
 }

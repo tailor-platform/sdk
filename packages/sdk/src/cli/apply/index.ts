@@ -34,7 +34,7 @@ import { applyExecutor, planExecutor } from "./services/executor";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
-import { applyTailorDB, planTailorDB } from "./services/tailordb";
+import { applyTailorDB, completeTailorDBMigrations, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
@@ -234,20 +234,28 @@ export async function apply(options?: ApplyOptions) {
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
 
-  // TailorDB: Automatically validates migrations and handles migration flow internally
-  await applyTailorDB(client, tailorDB, "create-update");
+  // TailorDB: Apply schema updates. Migration scripts (if any) are executed after Auth is applied.
+  const deferredMigrations = await applyTailorDB(client, tailorDB, "create-update", {
+    deferMigrationScripts: true,
+  });
 
-  // Other services: Apply after TailorDB migrations complete
+  // Other services: Apply after TailorDB schema updates
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
+
+  // Execute TailorDB migration scripts after Auth is ready (required for script execution)
+  if (deferredMigrations.length > 0) {
+    await completeTailorDBMigrations(client, tailorDB, deferredMigrations);
+  }
+
   await applyPipeline(client, pipeline, "create-update");
 
   // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
   // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
   // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
-  // NOTE: TailorDB resource deletions are handled within create-update phase (above)
-  //       because migration flow requires: pre-migration → script execution → post-migration (with deletions)
+  // NOTE: TailorDB resource deletions are handled during the create-update phase and
+  //       (when migrations are deferred) after migration scripts execute.
   await applyPipeline(client, pipeline, "delete-resources");
   await applyAuth(client, auth, "delete-resources");
   await applyIdP(client, idp, "delete-resources");

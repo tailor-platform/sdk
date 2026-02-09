@@ -255,7 +255,7 @@ const runAssertionScript = async (relativePath: string, label: string) => {
   const result = await executeScript({
     client,
     workspaceId,
-    name: label,
+    name: `${label}.js`,
     code: bundled.bundledCode,
     invoker,
   });
@@ -273,7 +273,7 @@ const seedData = async (
   const result = await executeScript({
     client,
     workspaceId,
-    name: label,
+    name: `${label}.js`,
     code: bundled.bundledCode,
     arg: JSON.stringify({ data, order }),
     invoker,
