@@ -1,4 +1,7 @@
+import type { PluginSourceInfo } from "@/parser/plugin-config";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
+
+export type { PluginSourceInfo };
 
 /**
  * Type definitions for seed generation.
@@ -12,19 +15,6 @@ export interface SeedTypeInfo {
   namespace: string;
   dependencies: string[];
   dataFile: string;
-}
-
-/**
- * Plugin source information for type generation
- */
-export interface PluginSourceInfo {
-  pluginId: string;
-  /** Plugin import path for code generators (e.g., "@tailor-platform/sdk/changeset-plugin") */
-  pluginImportPath?: string;
-  originalFilePath: string;
-  originalExportName: string;
-  /** Generated type kind identifier (e.g., "request", "step") */
-  generatedTypeKind?: string;
 }
 
 /**
