@@ -28,9 +28,16 @@ const templateMigrationsDir = path.resolve(exampleDir, "migrations");
 const namespace = "migrationdb";
 const machineUserName = "manager-machine-user";
 
-const runPnpm = (args: string[]) => {
-  execFileSync("pnpm", args, {
-    cwd: exampleDir,
+const tailorSdkBin = path.resolve(
+  exampleDir,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "tailor-sdk.cmd" : "tailor-sdk",
+);
+
+const runTailorSdk = (args: string[]) => {
+  execFileSync(tailorSdkBin, args, {
+    cwd: appDir,
     env: {
       ...process.env,
     },
@@ -39,20 +46,11 @@ const runPnpm = (args: string[]) => {
 };
 
 const runApply = () => {
-  runPnpm(["--silent", "tailor-sdk", "apply", "-c", configPath, "--yes"]);
+  runTailorSdk(["apply", "-c", configPath, "--yes"]);
 };
 
 const runMigrateGenerate = () => {
-  runPnpm([
-    "--silent",
-    "tailor-sdk",
-    "tailordb",
-    "migration",
-    "generate",
-    "-c",
-    configPath,
-    "--yes",
-  ]);
+  runTailorSdk(["tailordb", "migration", "generate", "-c", configPath, "--yes"]);
 };
 
 const resetMigrations = () => {

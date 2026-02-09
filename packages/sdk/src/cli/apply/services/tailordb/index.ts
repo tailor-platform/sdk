@@ -698,42 +698,53 @@ interface FieldConfig {
 }
 
 /**
- * Check if a field change requires pre/post-migration handling
- * - Adding a required field (pre: add as optional, post: make required)
- * - Changing optional to required (post: make required)
- * - Adding unique constraint (post: add unique)
- * - Removing enum values (pre: add new values only, post: remove old values)
- * @param {DiffChange} change - Diff change to check
- * @returns {boolean} True if the change requires pre/post-migration handling
+ * Apply pre-migration schema adjustments to avoid breaking changes before scripts run.
+ * @param fields - Field configs to adjust
+ * @param typeChanges - Breaking changes for a type
  */
-function isBreakingChange(change: DiffChange): boolean {
-  const before = change.before as FieldConfig | undefined;
-  const after = change.after as FieldConfig | undefined;
+function applyPreMigrationFieldAdjustments(
+  fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
+  typeChanges: Map<string, DiffChange>,
+): void {
+  for (const [fieldName, change] of typeChanges) {
+    const field = fields[fieldName];
+    if (!field) continue;
 
-  if (change.kind === "field_added") {
-    return after?.required === true;
+    const before = change.before as FieldConfig | undefined;
+    const after = change.after as FieldConfig | undefined;
+
+    if (change.kind === "field_added" && after?.required) {
+      field.required = false;
+    }
+
+    if (change.kind !== "field_modified") {
+      continue;
+    }
+
+    // Optional to required
+    if (!before?.required && after?.required) {
+      field.required = false;
+    }
+
+    // Unique constraint added
+    if (!(before?.unique ?? false) && (after?.unique ?? false)) {
+      field.unique = false;
+    }
+
+    // Enum values removed: keep old values + add new values (union)
+    if (before?.allowedValues && after?.allowedValues) {
+      const removedValues = before.allowedValues.filter(
+        (value) => !after.allowedValues!.includes(value),
+      );
+      if (removedValues.length > 0) {
+        const unionValues = [...new Set([...before.allowedValues, ...after.allowedValues])];
+        field.allowedValues = unionValues.map((value) => ({
+          value,
+          description: "",
+        }));
+      }
+    }
   }
-
-  if (change.kind !== "field_modified") {
-    return false;
-  }
-
-  // Optional to required
-  if (!before?.required && after?.required) {
-    return true;
-  }
-
-  // Unique constraint added
-  if (!(before?.unique ?? false) && (after?.unique ?? false)) {
-    return true;
-  }
-
-  // Enum values removed
-  if (before?.allowedValues && after?.allowedValues) {
-    return before.allowedValues.some((v) => !after.allowedValues!.includes(v));
-  }
-
-  return false;
 }
 
 // ============================================================================
@@ -840,18 +851,41 @@ async function executeSingleMigrationPrePhase(
         // Clone request to avoid modifying the original changeSet
         const clonedRequest = structuredClone(create.request);
         if (clonedRequest.tailordbType?.schema?.fields) {
-          const fields = clonedRequest.tailordbType.schema.fields;
-          for (const [fieldName, change] of typeChanges) {
-            if (!isBreakingChange(change) || !fields[fieldName]) continue;
-
-            const after = change.after as FieldConfig | undefined;
-            if (change.kind === "field_added" && after?.required) {
-              fields[fieldName].required = false;
-            }
-          }
+          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
         return client.createTailorDBType(clonedRequest);
+      }),
+    // Update types already created in previous migrations (from create list)
+    ...changeSet.type.creates
+      .filter((create) => {
+        const typeName = create.request.tailordbType?.name;
+        return typeName && affectedTypes.has(typeName) && processedTypes.created.has(typeName);
+      })
+      .map((create) => {
+        const typeName = create.request.tailordbType?.name;
+        if (typeName) processedTypes.updated.add(typeName);
+
+        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+
+        if (!typeChanges || typeChanges.size === 0) {
+          return client.updateTailorDBType({
+            workspaceId: create.request.workspaceId,
+            namespaceName: create.request.namespaceName,
+            tailordbType: create.request.tailordbType,
+          });
+        }
+
+        const clonedRequest = structuredClone(create.request);
+        if (clonedRequest.tailordbType?.schema?.fields) {
+          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
+        }
+
+        return client.updateTailorDBType({
+          workspaceId: create.request.workspaceId,
+          namespaceName: create.request.namespaceName,
+          tailordbType: clonedRequest.tailordbType,
+        });
       }),
     // Update types that are affected by this migration
     ...changeSet.type.updates
@@ -872,42 +906,7 @@ async function executeSingleMigrationPrePhase(
         // Clone request to avoid modifying the original changeSet
         const clonedRequest = structuredClone(update.request);
         if (clonedRequest.tailordbType?.schema?.fields) {
-          const fields = clonedRequest.tailordbType.schema.fields;
-
-          for (const [fieldName, change] of typeChanges) {
-            if (!isBreakingChange(change) || !fields[fieldName]) continue;
-
-            const before = change.before as FieldConfig | undefined;
-            const after = change.after as FieldConfig | undefined;
-
-            // Required field added: make optional for pre-migration
-            if (change.kind === "field_added" && after?.required) {
-              fields[fieldName].required = false;
-            }
-
-            // Unique constraint added: keep unique=false for pre-migration
-            if (
-              change.kind === "field_modified" &&
-              !(before?.unique ?? false) &&
-              (after?.unique ?? false)
-            ) {
-              fields[fieldName].unique = false;
-            }
-
-            // Enum values removed: keep old values + add new values (union)
-            if (change.kind === "field_modified" && before?.allowedValues && after?.allowedValues) {
-              const removedValues = before.allowedValues.filter(
-                (v) => !after.allowedValues!.includes(v),
-              );
-              if (removedValues.length > 0) {
-                const unionValues = [...new Set([...before.allowedValues, ...after.allowedValues])];
-                fields[fieldName].allowedValues = unionValues.map((v) => ({
-                  value: v,
-                  description: "",
-                }));
-              }
-            }
-          }
+          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
         return client.updateTailorDBType(clonedRequest);
