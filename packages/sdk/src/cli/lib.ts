@@ -151,6 +151,10 @@ export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";
 // Seed exports
 export { bundleSeedScript, type SeedBundleResult } from "./bundler/seed/seed-bundler";
 export {
+  bundleMigrationScript,
+  type MigrationBundleResult,
+} from "./bundler/migration/migration-bundler";
+export {
   executeScript,
   waitForExecution,
   type ScriptExecutionOptions,

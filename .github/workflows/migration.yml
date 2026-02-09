@@ -1,4 +1,4 @@
-name: "Workspace Apply Test"
+name: "TailorDB Migration Test"
 
 on:
   pull_request:
@@ -24,39 +24,20 @@ jobs:
         with:
           filters: |
             changes:
-              - .github/workflows/apply.yml
+              - .github/workflows/migration.yml
               - example/**
               - packages/**
               - package.json
               - pnpm-lock.yaml
 
-  apply:
+  migration:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            shell: bash
-            name: Linux
-            slug: linux
-          - os: windows-latest
-            shell: pwsh
-            name: Windows (PowerShell)
-            slug: win-pwsh
-          - os: windows-latest
-            shell: cmd
-            name: Windows (CMD)
-            slug: win-cmd
-    runs-on: ${{ matrix.os }}
-    name: Apply (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    name: Migration (Linux)
     permissions:
       contents: read
-    timeout-minutes: 15
-    defaults:
-      run:
-        shell: ${{ matrix.shell }}
+    timeout-minutes: 20
     steps:
       - name: checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -71,7 +52,7 @@ jobs:
 
       - name: Create workspace
         working-directory: example
-        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${{ github.run_id }}-${{ matrix.slug }}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-migration-${{ github.run_id }}" --region asia-northeast --json > workspace.json
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
@@ -84,47 +65,9 @@ jobs:
           WORKSPACE_ID=$(jq -r '.id' workspace.json)
           echo "TAILOR_PLATFORM_WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
 
-      - name: Generate
+      - name: Run migration e2e
         working-directory: example
-        run: pnpm run generate
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-
-      - name: Apply workspace
-        working-directory: example
-        run: pnpm run apply
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-
-      - name: Verify all migrations applied
-        working-directory: example
-        shell: bash
-        run: |
-          STATUS=$(pnpm --silent tailor-sdk tailordb migration status --namespace tailordb)
-          echo "$STATUS"
-
-          # Check for pending migrations
-          if echo "$STATUS" | grep -q "Pending migrations:"; then
-            echo "❌ ERROR: Pending migrations found after apply"
-            exit 1
-          fi
-
-          echo "✅ All migrations applied successfully"
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-
-      - name: Seed data
-        working-directory: example
-        run: |
-          pnpm run seed:validate
-          pnpm run seed
-          pnpm run seed:truncate -y
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-
-      - name: Run e2e tests
-        working-directory: example
-        run: pnpm test:e2e
+        run: pnpm run migration:e2e
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
@@ -135,8 +78,8 @@ jobs:
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
-  apply-result:
-    needs: [changes, apply]
+  migration-result:
+    needs: [changes, migration]
     if: always()
     runs-on: ubuntu-latest
     permissions: {}
@@ -148,8 +91,8 @@ jobs:
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.apply.result }}" != "success" ]]; then
-            echo "Apply jobs failed"
+          if [[ "${{ needs.migration.result }}" != "success" ]]; then
+            echo "Migration job failed"
             exit 1
           fi
-          echo "All apply jobs succeeded"
+          echo "Migration job succeeded"
