@@ -610,13 +610,11 @@ function createTailorDBField<
       // Deep clone nested object fields if present
       let clonedFields = fields;
       if (fields) {
-        clonedFields = {} as typeof fields;
-        for (const key in fields) {
-          if (Object.hasOwn(fields, key)) {
-            // oxlint-disable-next-line no-explicit-any
-            (clonedFields as any)[key] = (fields as any)[key].clone();
-          }
+        const cloned: Record<string, TailorAnyDBField> = {};
+        for (const [key, field] of Object.entries(fields)) {
+          cloned[key] = field.clone();
         }
+        clonedFields = cloned;
       }
 
       // Create a new field with cloned configuration
