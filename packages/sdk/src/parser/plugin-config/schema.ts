@@ -66,6 +66,12 @@ const _PluginOutputSchema = z.object({
   executors: z.array(PluginGeneratedExecutorSchema).optional(),
 });
 
+// Literal-based schema for built-in changeset plugin (enables autocomplete)
+const ChangesetPluginSchema = z.literal("@tailor-platform/changeset");
+
+// Built-in plugin tuple schema (id, options)
+const BuiltinPluginTupleSchema = z.tuple([ChangesetPluginSchema, z.unknown()]);
+
 // Custom plugin schema (object form)
 // Using passthrough() to preserve fields like importPath, configSchema, processNamespace
 const CustomPluginSchema = z
@@ -189,21 +195,46 @@ function validatePluginConfig(
 }
 
 /**
- * Creates a PluginConfigSchema for custom plugins
- * @returns Plugin config schema that validates and transforms PluginBase instances
+ * Creates a PluginConfigSchema with built-in plugin support
+ * @param builtinPlugins - Map of plugin IDs to their constructor functions
+ * @returns Plugin config schema that transforms to PluginBase instances
  */
-export function createPluginConfigSchema() {
+export function createPluginConfigSchema(
+  builtinPlugins: Map<string, (options: unknown) => PluginBase>,
+) {
   return z
-    .union([CustomPluginSchema, CustomPluginTupleSchema])
+    .union([
+      ChangesetPluginSchema,
+      BuiltinPluginTupleSchema,
+      CustomPluginSchema,
+      CustomPluginTupleSchema,
+    ])
     .transform((plugin) => {
-      // Tuple form: [PluginBase, options]
+      // String form: builtin plugin ID only (use true as default config)
+      if (typeof plugin === "string") {
+        const constructor = builtinPlugins.get(plugin);
+        if (constructor) {
+          return constructor(true);
+        }
+        throw new Error(`Unknown plugin ID: ${plugin}`);
+      }
+      // Tuple form: check if it's [string, options] or [PluginBase, options]
       if (Array.isArray(plugin)) {
         const [first, options] = plugin;
+        // Builtin plugin tuple: ["@tailor-platform/changeset", options]
+        if (typeof first === "string") {
+          const constructor = builtinPlugins.get(first);
+          if (constructor) {
+            return constructor(options);
+          }
+          throw new Error(`Unknown plugin ID: ${first}`);
+        }
+        // Custom plugin tuple: [PluginBase, options]
         if (isPluginBase(first)) {
           const pluginBase = first as PluginBase;
           return normalizePluginBase({ ...pluginBase, pluginConfig: options } as PluginBase);
         }
-        throw new Error(`Invalid plugin configuration: expected PluginBase object`);
+        throw new Error(`Invalid plugin configuration: expected PluginBase object or builtin ID`);
       }
       // Object form: custom plugin without plugin config
       return normalizePluginBase(plugin as PluginBase);
