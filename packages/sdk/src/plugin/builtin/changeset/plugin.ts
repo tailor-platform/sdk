@@ -50,14 +50,11 @@ function generateTypes(type: TailorAnyDBType): Record<GeneratedTypeKind, TailorA
       read: [[{ user: "_loggedIn" }, "=", true]],
       update: [[{ user: "_loggedIn" }, "=", true]],
       delete: [[{ user: "_loggedIn" }, "=", true]],
-    })
-    .gqlPermission([
-      {
-        actions: ["read"],
-        permit: true,
-        conditions: [[{ user: "_loggedIn" }, "=", true]],
-      },
-    ]);
+    });
+  // TODO: gqlPermission is temporarily removed due to Apply workflow issue.
+  // When TAILOR_INTERNAL_APPLY_MIGRATION_VERSION is set, types are filtered
+  // but gqlPermissions are not, causing "record not found" errors.
+  // See: docs/fix-migration-gql-permission.md
 
   // ChangeStep - execution step
   const changeStep = db.type(`${typeName}ChangeStep`, {
