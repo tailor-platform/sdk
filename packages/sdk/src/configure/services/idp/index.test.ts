@@ -130,6 +130,36 @@ describe("defineIdp", () => {
     expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireLowercase).toBeUndefined();
   });
 
+  it("should preserve userAuthPolicy allowedEmailDomains", () => {
+    const idpWithAllowedEmailDomains = defineIdp("idp-with-allowed-email-domains", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowedEmailDomains: ["example.com", "corp.example.com"],
+      },
+    });
+    expect(idpWithAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toEqual([
+      "example.com",
+      "corp.example.com",
+    ]);
+
+    const idpWithEmptyAllowedEmailDomains = defineIdp("idp-with-empty-allowed-email-domains", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowedEmailDomains: [],
+      },
+    });
+    expect(idpWithEmptyAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toEqual([]);
+
+    const idpNoAllowedEmailDomains = defineIdp("idp-no-allowed-email-domains", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toBeUndefined();
+  });
+
   it("should validate password length ranges", () => {
     // Valid ranges
     expect(() =>

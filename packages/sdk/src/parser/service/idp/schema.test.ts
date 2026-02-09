@@ -104,6 +104,64 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.passwordRequireNumeric).toBeUndefined();
     expect(result.passwordMinLength).toBeUndefined();
     expect(result.passwordMaxLength).toBeUndefined();
+    expect(result.allowedEmailDomains).toBeUndefined();
+  });
+
+  it("accepts allowedEmailDomains with empty array", () => {
+    const policy = {
+      allowedEmailDomains: [],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedEmailDomains).toEqual([]);
+  });
+
+  it("accepts allowedEmailDomains with single domain", () => {
+    const policy = {
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedEmailDomains).toEqual(["example.com"]);
+  });
+
+  it("accepts allowedEmailDomains with multiple domains", () => {
+    const policy = {
+      allowedEmailDomains: ["example.com", "corp.example.com", "test.org"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedEmailDomains).toEqual(["example.com", "corp.example.com", "test.org"]);
+  });
+
+  it("rejects allowedEmailDomains when useNonEmailIdentifier is true", () => {
+    const policy = {
+      useNonEmailIdentifier: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowedEmailDomains cannot be set when useNonEmailIdentifier is true",
+    );
+  });
+
+  it("accepts empty allowedEmailDomains when useNonEmailIdentifier is true", () => {
+    const policy = {
+      useNonEmailIdentifier: true,
+      allowedEmailDomains: [],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+  });
+
+  it("accepts allowedEmailDomains when useNonEmailIdentifier is false", () => {
+    const policy = {
+      useNonEmailIdentifier: false,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedEmailDomains).toEqual(["example.com"]);
   });
 
   it("accepts partial password policy configuration", () => {
