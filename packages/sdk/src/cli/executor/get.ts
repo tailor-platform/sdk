@@ -1,19 +1,23 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "politty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
-import { nameArgs } from "./args";
 import { type ExecutorInfo, toExecutorInfo } from "./transform";
+
+const nameArgs = {
+  name: arg(z.string(), {
+    positional: true,
+    description: "Executor name",
+  }),
+};
 
 export interface GetExecutorOptions {
   name: string;
   workspaceId?: string;
   profile?: string;
-  /** If true, format for JSON output */
-  jsonMode?: boolean;
 }
 
 /**
@@ -56,7 +60,7 @@ export async function getExecutor(options: GetExecutorOptions): Promise<Executor
 
   try {
     const executor = await resolveExecutor(client, workspaceId, options.name);
-    return toExecutorInfo(executor, { jsonMode: options.jsonMode });
+    return toExecutorInfo(executor);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       throw new Error(`Executor '${options.name}' not found.`);
@@ -79,7 +83,6 @@ export const getCommand = defineCommand({
       name: args.name,
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      jsonMode: args.json,
     });
 
     logger.out(executor, {

@@ -3,30 +3,20 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { formatTableWithHeaders } from "../utils/format";
 import { logger, styles } from "../utils/logger";
-import {
-  type ExecutorInfo,
-  type ExecutorListInfo,
-  toExecutorInfo,
-  toExecutorListInfo,
-} from "./transform";
+import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
 
 export interface ListExecutorsOptions {
   workspaceId?: string;
   profile?: string;
-  /** If true, format for JSON output (includes triggerConfig and targetConfig) */
-  jsonMode?: boolean;
 }
 
 /**
  * List executors in the workspace and return CLI-friendly info.
  * @param options - Executor listing options
- * @returns List of executors (ExecutorInfo[] for JSON mode, ExecutorListInfo[] for table mode)
+ * @returns List of executors
  */
-export async function listExecutors(
-  options?: ListExecutorsOptions,
-): Promise<ExecutorListInfo[] | ExecutorInfo[]> {
+export async function listExecutors(options?: ListExecutorsOptions): Promise<ExecutorListInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options?.profile,
@@ -45,11 +35,6 @@ export async function listExecutors(
     return [executors, nextPageToken];
   });
 
-  // JSON mode: return full info including configs
-  if (options?.jsonMode) {
-    return executors.map((e) => toExecutorInfo(e, { jsonMode: true }));
-  }
-
   return executors.map((e) => toExecutorListInfo(e));
 }
 
@@ -65,29 +50,22 @@ export const listCommand = defineCommand({
     const executors = await listExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
-      jsonMode: args.json,
     });
 
-    if (args.json) {
-      logger.out(executors);
-    } else {
-      if (executors.length === 0) {
-        logger.info("No executors found.");
-        return;
-      }
-      const headers = ["name", "triggerType", "targetType", "disabled"];
-      const rows = executors.map((e) => [
-        e.name,
-        e.triggerType,
-        e.targetType,
-        e.disabled ? styles.warning("true") : styles.dim("false"),
-      ]);
-      logger.out(formatTableWithHeaders(headers, rows));
+    if (executors.length === 0) {
+      logger.info("No executors found.");
+      return;
+    }
 
-      // Show hint if there are webhook executors
-      const hasWebhook = executors.some(
-        (e) => e.triggerType === "webhook" || e.triggerType === "INCOMING_WEBHOOK",
-      );
+    logger.out(executors, {
+      display: {
+        disabled: (v) => (v ? styles.warning("true") : styles.dim("false")),
+      },
+    });
+
+    // Show hint if there are webhook executors (non-JSON mode only)
+    if (!args.json) {
+      const hasWebhook = executors.some((e) => e.triggerType === "webhook");
       if (hasWebhook) {
         logger.info("To see webhook URLs, run: tailor-sdk executor webhook list");
       }

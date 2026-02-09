@@ -4,7 +4,6 @@ import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient, platformBaseUrl } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { formatTableWithHeaders } from "../utils/format";
 import { logger, styles } from "../utils/logger";
 
 export interface WebhookExecutorInfo {
@@ -80,20 +79,18 @@ const listWebhookCommand = defineCommand({
       profile: args.profile,
     });
 
-    if (args.json) {
-      logger.out(executors);
-    } else {
-      if (executors.length === 0) {
-        logger.info("No webhook executors found.");
-        return;
-      }
-      const headers = ["name", "webhookUrl", "disabled"];
-      const rows = executors.map((e) => [
-        e.name,
-        e.webhookUrl,
-        e.disabled ? styles.warning("true") : styles.dim("false"),
-      ]);
-      logger.out(formatTableWithHeaders(headers, rows));
+    if (executors.length === 0) {
+      logger.info("No webhook executors found.");
+      return;
+    }
+
+    logger.out(executors, {
+      display: {
+        disabled: (v) => (v ? styles.warning("true") : styles.dim("false")),
+      },
+    });
+
+    if (!args.json) {
       logger.info(
         'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\'',
       );

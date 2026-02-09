@@ -245,26 +245,15 @@ function formatTargetConfig(executor: ExecutorExecutor): Record<string, unknown>
   }
 }
 
-export interface ExecutorTransformOptions {
-  /** If true, use raw format for JSON output */
-  jsonMode?: boolean;
-}
-
 /**
  * Transform ExecutorExecutor to ExecutorListInfo for list display.
  * @param executor - Executor from proto
- * @param options - Transform options
  * @returns Executor list info
  */
-export function toExecutorListInfo(
-  executor: ExecutorExecutor,
-  options?: ExecutorTransformOptions,
-): ExecutorListInfo {
+export function toExecutorListInfo(executor: ExecutorExecutor): ExecutorListInfo {
   return {
     name: executor.name,
-    triggerType: options?.jsonMode
-      ? executorTriggerTypeToString(executor.triggerType)
-      : formatTriggerType(executor),
+    triggerType: formatTriggerType(executor),
     targetType: executorTargetTypeToString(executor.targetType),
     disabled: executor.disabled,
   };
@@ -273,19 +262,13 @@ export function toExecutorListInfo(
 /**
  * Transform ExecutorExecutor to ExecutorInfo for detail display.
  * @param executor - Executor from proto
- * @param options - Transform options
  * @returns Executor info
  */
-export function toExecutorInfo(
-  executor: ExecutorExecutor,
-  options?: ExecutorTransformOptions,
-): ExecutorInfo {
+export function toExecutorInfo(executor: ExecutorExecutor): ExecutorInfo {
   return {
     name: executor.name,
     description: executor.description,
-    triggerType: options?.jsonMode
-      ? executorTriggerTypeToString(executor.triggerType)
-      : formatTriggerType(executor),
+    triggerType: formatTriggerType(executor),
     targetType: executorTargetTypeToString(executor.targetType),
     disabled: executor.disabled,
     triggerConfig: JSON.stringify(formatTriggerConfig(executor), null, 2),
