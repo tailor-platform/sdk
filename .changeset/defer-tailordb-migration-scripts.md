@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Run TailorDB apply after Auth so migration scripts can execute immediately.
+chore: add TailorDB migration e2e workflow and adjust apply ordering for migrations.
