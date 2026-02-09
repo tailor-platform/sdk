@@ -239,8 +239,8 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
       type Insertable as KyselyInsertable,
       type Selectable as KyselySelectable,
       type Updateable as KyselyUpdateable,
-    } from "kysely";
-    import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+      TailordbDialect,
+    } from "@tailor-platform/sdk/kysely";
 
     ${utilityTypeDeclarations.join("\n")}
   `;

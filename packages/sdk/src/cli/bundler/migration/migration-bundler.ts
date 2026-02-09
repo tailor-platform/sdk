@@ -49,8 +49,7 @@ export async function bundleMigrationScript(
   // getDB function is defined inline to avoid dependency on generated types
   const entryContent = ml /* js */ `
     import { main as _migrationMain } from "${absoluteSourcePath}";
-    import { Kysely } from "kysely";
-    import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
 
     function getDB(namespace) {
       const client = new tailordb.Client({ namespace });

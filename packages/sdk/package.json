@@ -36,6 +36,11 @@
       "types": "./dist/utils/test/index.d.mts",
       "import": "./dist/utils/test/index.mjs",
       "default": "./dist/utils/test/index.mjs"
+    },
+    "./kysely": {
+      "types": "./dist/kysely/index.d.mts",
+      "import": "./dist/kysely/index.mjs",
+      "default": "./dist/kysely/index.mjs"
     }
   },
   "scripts": {
@@ -74,7 +79,7 @@
     "date-fns": "4.1.0",
     "find-up-simple": "1.0.1",
     "inflection": "3.0.2",
-    "kysely": "0.28.2",
+    "kysely": "0.28.10",
     "madge": "8.0.0",
     "mime-types": "3.0.2",
     "multiline-ts": "4.0.1",
