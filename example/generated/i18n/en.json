@@ -1,0 +1,8 @@
+{
+  "User": {
+    "_type": "User",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role"
+  }
+}
