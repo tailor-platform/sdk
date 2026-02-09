@@ -31,7 +31,6 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
     let serveBinPath: string;
     try {
       serveBinPath = resolveCliBinPath({
-        cwd: primary.erdDir,
         packageName: "serve",
         binName: "serve",
         installHint: "npm i @tailor-platform/sdk",

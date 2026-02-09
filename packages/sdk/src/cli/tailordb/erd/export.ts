@@ -79,7 +79,6 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
     let liamBinPath: string;
     try {
       liamBinPath = resolveCliBinPath({
-        cwd,
         packageName: "@liam-hq/cli",
         binName: "liam",
         installHint: "npm i @tailor-platform/sdk",
