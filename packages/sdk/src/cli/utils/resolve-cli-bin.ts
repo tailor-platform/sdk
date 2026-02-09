@@ -32,7 +32,8 @@ export function resolveCliBinPath(options: ResolveCliBinOptions): string {
     pkgJsonPath = requireFromProject.resolve(`${packageName}/package.json`);
   } catch {
     throw new Error(
-      `Missing optional dependency \`${packageName}\`. Install it in your project (e.g. \`${installHint}\`).`,
+      `Failed to resolve \`${packageName}\`. This package is bundled with @tailor-platform/sdk. ` +
+        `Try reinstalling the SDK (e.g. \`${installHint}\`).`,
     );
   }
 

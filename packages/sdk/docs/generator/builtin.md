@@ -18,10 +18,10 @@ Generates Kysely type definitions and the `getDB()` function for type-safe datab
 
 ### Prerequisites
 
-Install the required runtime dependencies:
+Install the required dev dependency for type definitions:
 
 ```bash
-pnpm add -D @tailor-platform/function-kysely-tailordb @tailor-platform/function-types
+pnpm add -D @tailor-platform/function-types
 ```
 
 ### Output
