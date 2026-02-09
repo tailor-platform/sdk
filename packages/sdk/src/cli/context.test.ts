@@ -245,6 +245,12 @@ describe("loadAccessToken", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    // Explicitly stub env vars to undefined instead of using vi.unstubAllEnvs().
+    // unstubAllEnvs() restores to original values, not undefined, so if these
+    // vars are set in the real environment, they would leak into tests.
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
+    vi.stubEnv("TAILOR_TOKEN", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     writePlatformConfig({
       version: 1,
       users: {},
@@ -254,7 +260,6 @@ describe("loadAccessToken", () => {
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
