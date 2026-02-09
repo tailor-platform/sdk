@@ -43,12 +43,9 @@ export async function main(trx: Transaction): Promise<void> {
     throw new Error(`Supplier.country is null for ${countryNull.length} record(s)`);
   }
 
-  const unknownUsers = await trx
-    .selectFrom("User")
-    .select(["id"])
-    .where("role", "=", "UNKNOWN")
-    .execute();
-  if (unknownUsers.length > 0) {
-    throw new Error(`User.role UNKNOWN remains for ${unknownUsers.length} record(s)`);
+  const users = await trx.selectFrom("User").select(["id", "role"]).execute();
+  const invalidRoles = users.filter((user) => user.role !== "MANAGER" && user.role !== "STAFF");
+  if (invalidRoles.length > 0) {
+    throw new Error(`User.role invalid for ${invalidRoles.length} record(s)`);
   }
 }
