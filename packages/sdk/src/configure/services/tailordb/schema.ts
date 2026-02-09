@@ -607,11 +607,40 @@ function createTailorDBField<
     },
 
     clone(cloneOptions?: FieldOptions) {
-      // Create a new field with the same configuration
-      const clonedField = createTailorDBField(type, options, fields, values);
+      // Deep clone nested object fields if present
+      let clonedFields = fields;
+      if (fields) {
+        clonedFields = {} as typeof fields;
+        for (const key in fields) {
+          if (Object.hasOwn(fields, key)) {
+            // oxlint-disable-next-line no-explicit-any
+            (clonedFields as any)[key] = (fields as any)[key].clone();
+          }
+        }
+      }
 
-      // Copy metadata
+      // Create a new field with cloned configuration
+      const clonedField = createTailorDBField(type, options, clonedFields, values);
+
+      // Deep copy metadata to avoid shared references
       Object.assign(clonedField._metadata, this._metadata);
+
+      // Deep copy nested objects in metadata
+      if (this._metadata.allowedValues) {
+        clonedField._metadata.allowedValues = this._metadata.allowedValues.map((v) => ({ ...v }));
+      }
+      if (this._metadata.validate) {
+        // Handle both function and [fn, message] tuple formats
+        clonedField._metadata.validate = this._metadata.validate.map((v) =>
+          Array.isArray(v) ? [...v] : v,
+        );
+      }
+      if (this._metadata.hooks) {
+        clonedField._metadata.hooks = { ...this._metadata.hooks };
+      }
+      if (this._metadata.serial) {
+        clonedField._metadata.serial = { ...this._metadata.serial };
+      }
 
       // Apply new options if provided
       if (cloneOptions) {

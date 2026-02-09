@@ -1729,6 +1729,9 @@ describe("TailorDBField clone tests", () => {
 
     expect(cloned.metadata.hooks).toBeDefined();
     expect(cloned.metadata.hooks?.create).toBe(createHook);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.hooks).not.toBe(original.metadata.hooks);
   });
 
   it("clones validate correctly", () => {
@@ -1738,6 +1741,23 @@ describe("TailorDBField clone tests", () => {
 
     expect(cloned.metadata.validate).toBeDefined();
     expect(cloned.metadata.validate).toHaveLength(1);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+  });
+
+  it("clones validate with tuple format correctly", () => {
+    const validator = ({ value }: { value: string }) => value.length > 0;
+    const original = db.string().validate([validator, "Value must not be empty"]);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.validate).toBeDefined();
+    expect(cloned.metadata.validate).toHaveLength(1);
+    expect(cloned.metadata.validate?.[0]).toEqual([validator, "Value must not be empty"]);
+
+    // Verify deep copy (different reference for array and tuple)
+    expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+    expect(cloned.metadata.validate?.[0]).not.toBe(original.metadata.validate?.[0]);
   });
 
   it("clones serial config correctly", () => {
@@ -1745,6 +1765,9 @@ describe("TailorDBField clone tests", () => {
     const cloned = original.clone();
 
     expect(cloned.metadata.serial).toEqual({ start: 100 });
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.serial).not.toBe(original.metadata.serial);
   });
 
   it("clones vector config correctly", () => {
@@ -1763,6 +1786,10 @@ describe("TailorDBField clone tests", () => {
       { value: "inactive", description: "" },
       { value: "pending", description: "" },
     ]);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.allowedValues).not.toBe(original.metadata.allowedValues);
+    expect(cloned.metadata.allowedValues?.[0]).not.toBe(original.metadata.allowedValues?.[0]);
   });
 
   it("clones nested object field correctly", () => {
@@ -1774,5 +1801,10 @@ describe("TailorDBField clone tests", () => {
 
     expect(cloned.fields.name).toBeDefined();
     expect(cloned.fields.age).toBeDefined();
+
+    // Verify deep copy (different reference)
+    expect(cloned.fields).not.toBe(original.fields);
+    expect(cloned.fields.name).not.toBe(original.fields.name);
+    expect(cloned.fields.age).not.toBe(original.fields.age);
   });
 });
