@@ -1,11 +1,9 @@
 import ml from "multiline-ts";
-import type { LinesDbMetadata, PluginSourceInfo } from "./types";
+import type { LinesDbMetadata } from "./types";
 import type { TypeSourceInfoEntry } from "@/cli/generator/types";
-import type { PluginTypeImport } from "@/parser/plugin-config";
+import type { PluginSourceInfo, PluginTypeImport } from "@/parser/plugin-config";
 import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
-
-export type { PluginTypeImport };
 
 /**
  * Processes TailorDB types to generate lines-db metadata

@@ -1,8 +1,6 @@
 import type { PluginSourceInfo } from "@/parser/plugin-config";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
-export type { PluginSourceInfo };
-
 /**
  * Type definitions for seed generation.
  */
