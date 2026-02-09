@@ -104,6 +104,34 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.passwordRequireNumeric).toBeUndefined();
     expect(result.passwordMinLength).toBeUndefined();
     expect(result.passwordMaxLength).toBeUndefined();
+    expect(result.allowedEmailDomains).toBeUndefined();
+  });
+
+  it("accepts allowedEmailDomains with empty array", () => {
+    const policy = {
+      allowedEmailDomains: [],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedEmailDomains).toEqual([]);
+  });
+
+  it("accepts allowedEmailDomains with single domain", () => {
+    const policy = {
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedEmailDomains).toEqual(["example.com"]);
+  });
+
+  it("accepts allowedEmailDomains with multiple domains", () => {
+    const policy = {
+      allowedEmailDomains: ["example.com", "corp.example.com", "test.org"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowedEmailDomains).toEqual(["example.com", "corp.example.com", "test.org"]);
   });
 
   it("accepts partial password policy configuration", () => {

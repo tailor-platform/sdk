@@ -132,6 +132,15 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * @generated from field: int32 password_max_length = 8;
    */
   passwordMaxLength: number;
+
+  /**
+   * List of allowed email domains (e.g., ["example.com", "corp.example.com"])
+   * Empty list means all domains are allowed (backward compatible)
+   * Cannot be set when use_non_email_identifier is true
+   *
+   * @generated from field: repeated string allowed_email_domains = 9;
+   */
+  allowedEmailDomains: string[];
 };
 
 /**

@@ -24,6 +24,7 @@ export const IdPUserAuthPolicySchema = z
         message: "passwordMaxLength must be between 6 and 4096",
       })
       .optional(),
+    allowedEmailDomains: z.array(z.string()).optional(),
   })
   .refine(
     (data) =>
