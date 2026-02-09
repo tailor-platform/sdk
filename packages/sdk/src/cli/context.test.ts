@@ -239,17 +239,12 @@ describe("loadWorkspaceId", () => {
 });
 
 describe("loadAccessToken", () => {
-  const originalEnv = process.env;
   const validToken = "valid-access-token";
   const otherToken = "other-access-token";
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
 
   beforeEach(() => {
     vi.resetModules();
-    process.env = { ...originalEnv };
-    delete process.env.TAILOR_PLATFORM_TOKEN;
-    delete process.env.TAILOR_TOKEN;
-    delete process.env.TAILOR_PLATFORM_PROFILE;
     writePlatformConfig({
       version: 1,
       users: {},
@@ -259,26 +254,26 @@ describe("loadAccessToken", () => {
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
   describe("env.TAILOR_PLATFORM_TOKEN", () => {
     it("returns token from TAILOR_PLATFORM_TOKEN when set", async () => {
-      process.env.TAILOR_PLATFORM_TOKEN = validToken;
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
 
     it("TAILOR_PLATFORM_TOKEN takes precedence over TAILOR_TOKEN", async () => {
-      process.env.TAILOR_PLATFORM_TOKEN = validToken;
-      process.env.TAILOR_TOKEN = otherToken;
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
+      vi.stubEnv("TAILOR_TOKEN", otherToken);
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
 
     it("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
-      process.env.TAILOR_PLATFORM_TOKEN = validToken;
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       writePlatformConfig({
         version: 1,
         users: {
@@ -300,7 +295,7 @@ describe("loadAccessToken", () => {
 
   describe("env.TAILOR_TOKEN (deprecated)", () => {
     it("returns token from TAILOR_TOKEN when TAILOR_PLATFORM_TOKEN not set", async () => {
-      process.env.TAILOR_TOKEN = validToken;
+      vi.stubEnv("TAILOR_TOKEN", validToken);
       const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
@@ -364,7 +359,7 @@ describe("loadAccessToken", () => {
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
     it("returns token from env profile when useProfile is true", async () => {
-      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
         version: 1,
         users: {
@@ -384,7 +379,7 @@ describe("loadAccessToken", () => {
     });
 
     it("opts.profile takes precedence over env profile", async () => {
-      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
         version: 1,
         users: {
