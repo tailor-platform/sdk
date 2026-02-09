@@ -12,8 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
-    # Renovate PRは自動でchangesetが追加されるのでスキップ
-    # skip-changesetラベルがある場合もスキップ
     if: >-
       github.event.pull_request.user.login != 'renovate[bot]' &&
       !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
