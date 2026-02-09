@@ -11,10 +11,10 @@ import {
   processLinesDb,
   generateLinesDbSchemaFile,
   generateLinesDbSchemaFileWithPluginAPI,
-  type PluginTypeImport,
 } from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
 import type { SeedTypeMetadata } from "./types";
+import type { PluginTypeImport } from "@/parser/plugin-config";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
