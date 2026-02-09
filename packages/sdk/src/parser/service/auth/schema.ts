@@ -64,36 +64,43 @@ export const OAuth2ClientGrantTypeSchema = z.union([
   z.literal("refresh_token"),
 ]);
 
-export const OAuth2ClientSchema = z.object({
-  description: z.string().optional(),
-  grantTypes: z.array(OAuth2ClientGrantTypeSchema).default(["authorization_code", "refresh_token"]),
-  redirectURIs: z.array(
-    z.union([
-      z.templateLiteral(["https://", z.string()]),
-      z.templateLiteral(["http://", z.string()]),
-      z.templateLiteral([z.string(), ":url"]),
-      z.templateLiteral([z.string(), ":url/", z.string()]),
-    ]),
-  ),
-  clientType: z
-    .union([z.literal("confidential"), z.literal("public"), z.literal("browser")])
-    .optional(),
-  accessTokenLifetimeSeconds: z
-    .number()
-    .int()
-    .min(60, "Minimum access token lifetime is 60 seconds")
-    .max(86400, "Maximum access token lifetime is 1 day (86400 seconds)")
-    .optional()
-    .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
-  refreshTokenLifetimeSeconds: z
-    .number()
-    .int()
-    .min(60, "Minimum refresh token lifetime is 60 seconds")
-    .max(604800, "Maximum refresh token lifetime is 7 days (604800 seconds)")
-    .optional()
-    .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
-  requireDpop: z.boolean().optional(),
-});
+export const OAuth2ClientSchema = z
+  .object({
+    description: z.string().optional(),
+    grantTypes: z
+      .array(OAuth2ClientGrantTypeSchema)
+      .default(["authorization_code", "refresh_token"]),
+    redirectURIs: z.array(
+      z.union([
+        z.templateLiteral(["https://", z.string()]),
+        z.templateLiteral(["http://", z.string()]),
+        z.templateLiteral([z.string(), ":url"]),
+        z.templateLiteral([z.string(), ":url/", z.string()]),
+      ]),
+    ),
+    clientType: z
+      .union([z.literal("confidential"), z.literal("public"), z.literal("browser")])
+      .optional(),
+    accessTokenLifetimeSeconds: z
+      .number()
+      .int()
+      .min(60, "Minimum access token lifetime is 60 seconds")
+      .max(86400, "Maximum access token lifetime is 1 day (86400 seconds)")
+      .optional()
+      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+    refreshTokenLifetimeSeconds: z
+      .number()
+      .int()
+      .min(60, "Minimum refresh token lifetime is 60 seconds")
+      .max(604800, "Maximum refresh token lifetime is 7 days (604800 seconds)")
+      .optional()
+      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+    requireDpop: z.boolean().optional(),
+  })
+  .refine((data) => !(data.clientType === "browser" && data.requireDpop === true), {
+    message: "requireDpop cannot be set to true for browser clients as they don't support DPoP",
+    path: ["requireDpop"],
+  });
 
 export const SCIMAuthorizationSchema = z.object({
   type: z.union([z.literal("oauth2"), z.literal("bearer")]),
