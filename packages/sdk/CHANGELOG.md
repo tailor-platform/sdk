@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.10.1
+
+### Patch Changes
+
+- [#567](https://github.com/tailor-platform/sdk/pull/567) [`480309f`](https://github.com/tailor-platform/sdk/commit/480309f4d085bf05fbc00e7f215778a22ffd424a) Thanks [@k1LoW](https://github.com/k1LoW)! - Add schema validation to reject `requireDpop: true` for browser client type in OAuth2 client configuration. Browser clients don't support DPoP, and this validation provides early feedback at the SDK level before deployment.
+
 ## 1.10.0
 
 ### Minor Changes
