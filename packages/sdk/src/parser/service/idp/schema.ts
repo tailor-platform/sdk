@@ -24,6 +24,7 @@ export const IdPUserAuthPolicySchema = z
         message: "passwordMaxLength must be between 6 and 4096",
       })
       .optional(),
+    allowedEmailDomains: z.array(z.string()).optional(),
   })
   .refine(
     (data) =>
@@ -33,6 +34,16 @@ export const IdPUserAuthPolicySchema = z
     {
       message: "passwordMinLength must be less than or equal to passwordMaxLength",
       path: ["passwordMinLength"],
+    },
+  )
+  .refine(
+    (data) =>
+      !data.allowedEmailDomains ||
+      data.allowedEmailDomains.length === 0 ||
+      !data.useNonEmailIdentifier,
+    {
+      message: "allowedEmailDomains cannot be set when useNonEmailIdentifier is true",
+      path: ["allowedEmailDomains"],
     },
   );
 

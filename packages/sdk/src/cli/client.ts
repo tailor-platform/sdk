@@ -139,7 +139,8 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
   }
 
   switch (error.code) {
-    case Code.ResourceExhausted | Code.Unavailable:
+    case Code.ResourceExhausted:
+    case Code.Unavailable:
       return true;
     case Code.Internal:
       return (

@@ -1,5 +1,31 @@
 # @tailor-platform/sdk
 
+## 1.10.1
+
+### Patch Changes
+
+- [#567](https://github.com/tailor-platform/sdk/pull/567) [`480309f`](https://github.com/tailor-platform/sdk/commit/480309f4d085bf05fbc00e7f215778a22ffd424a) Thanks [@k1LoW](https://github.com/k1LoW)! - Add schema validation to reject `requireDpop: true` for browser client type in OAuth2 client configuration. Browser clients don't support DPoP, and this validation provides early feedback at the SDK level before deployment.
+
+## 1.10.0
+
+### Minor Changes
+
+- [#554](https://github.com/tailor-platform/sdk/pull/554) [`4e9f975`](https://github.com/tailor-platform/sdk/commit/4e9f975944981d2fce6f5a9b6c0785a2567cf44c) Thanks [@toiroakr](https://github.com/toiroakr)! - feat(seed): use testExecScript API with Kysely batch insert for seeding
+
+  - Replace gql-ingest with Kysely batch insert for TailorDB seeding (100 rows/batch)
+  - Use direct fetch() for \_User seeding instead of gql-ingest
+  - Add topological sort for type insertion order
+
+### Patch Changes
+
+- [#565](https://github.com/tailor-platform/sdk/pull/565) [`533227b`](https://github.com/tailor-platform/sdk/commit/533227b71a079f8d1b1b471980fa369dca2829fb) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support allowedEmailDomains field for IdP userAuthPolicy
+
+- [#562](https://github.com/tailor-platform/sdk/pull/562) [`ce1eed0`](https://github.com/tailor-platform/sdk/commit/ce1eed0348f93d86e0bf7210be60223bae223955) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(cli): use separate case statements for retry error codes
+
+  The `isRetirable` function was using bitwise OR in a switch case, which only matches the bitwise OR result rather than either code individually. This fix ensures retries work correctly for both `ResourceExhausted` and `Unavailable` error codes.
+
+- [#547](https://github.com/tailor-platform/sdk/pull/547) [`5891c27`](https://github.com/tailor-platform/sdk/commit/5891c2774db182d1be1ea648b96b84dce1be5e34) Thanks [@riku99](https://github.com/riku99)! - Add tests for loadAccessToken
+
 ## 1.9.3
 
 ### Patch Changes
