@@ -82,6 +82,11 @@ export const getCommand = defineCommand({
       jsonMode: args.json,
     });
 
-    logger.out(executor);
+    logger.out(executor, {
+      display: {
+        triggerConfig: null,
+        targetConfig: null,
+      },
+    });
   }),
 });

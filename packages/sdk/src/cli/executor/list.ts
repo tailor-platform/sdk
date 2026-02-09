@@ -85,7 +85,9 @@ export const listCommand = defineCommand({
       logger.out(formatTableWithHeaders(headers, rows));
 
       // Show hint if there are webhook executors
-      const hasWebhook = executors.some((e) => e.triggerType === "webhook");
+      const hasWebhook = executors.some(
+        (e) => e.triggerType === "webhook" || e.triggerType === "INCOMING_WEBHOOK",
+      );
       if (hasWebhook) {
         logger.info("To see webhook URLs, run: tailor-sdk executor webhook list");
       }
