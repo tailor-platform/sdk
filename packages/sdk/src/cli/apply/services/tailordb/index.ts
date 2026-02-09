@@ -682,11 +682,11 @@ async function executeServicesCreation(
 const processedTypes = {
   created: new Set<string>(),
   updated: new Set<string>(),
-  gqlPermissionsProcessed: false,
+  gqlPermissionsProcessed: new Set<string>(),
   reset() {
     this.created.clear();
     this.updated.clear();
-    this.gqlPermissionsProcessed = false;
+    this.gqlPermissionsProcessed.clear();
   },
 };
 
@@ -802,14 +802,24 @@ async function executeSingleMigrationPrePhase(
   ]);
 
   // GQLPermissions - process once (on the first migration)
-  if (!processedTypes.gqlPermissionsProcessed) {
+  if (!processedTypes.gqlPermissionsProcessed.has(migration.namespace)) {
+    const gqlPermissionCreatesForNamespace = changeSet.gqlPermission.creates.filter(
+      (create) => create.request.namespaceName === migration.namespace,
+    );
+    const gqlPermissionUpdatesForNamespace = changeSet.gqlPermission.updates.filter(
+      (update) => update.request.namespaceName === migration.namespace,
+    );
     const gqlPermissionTypeNames = new Set(
-      changeSet.gqlPermission.creates.map((create) => create.name),
+      gqlPermissionCreatesForNamespace.map((create) => create.name),
     );
     const missingTypeCreates = changeSet.type.creates.filter((create) => {
       const typeName = create.request.tailordbType?.name;
+      const namespaceName = create.request.namespaceName;
       return (
-        typeName && gqlPermissionTypeNames.has(typeName) && !processedTypes.created.has(typeName)
+        namespaceName === migration.namespace &&
+        typeName &&
+        gqlPermissionTypeNames.has(typeName) &&
+        !processedTypes.created.has(typeName)
       );
     });
     if (missingTypeCreates.length > 0) {
@@ -821,12 +831,12 @@ async function executeSingleMigrationPrePhase(
         }),
       );
     }
-    processedTypes.gqlPermissionsProcessed = true;
+    processedTypes.gqlPermissionsProcessed.add(migration.namespace);
     await Promise.all([
-      ...changeSet.gqlPermission.creates.map((create) =>
+      ...gqlPermissionCreatesForNamespace.map((create) =>
         client.createTailorDBGQLPermission(create.request),
       ),
-      ...changeSet.gqlPermission.updates.map((update) =>
+      ...gqlPermissionUpdatesForNamespace.map((update) =>
         client.updateTailorDBGQLPermission(update.request),
       ),
     ]);
