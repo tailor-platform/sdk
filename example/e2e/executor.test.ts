@@ -11,7 +11,7 @@ describe("controlplane", async () => {
 
   test("executor applied", async () => {
     const { executors } = await client.listExecutorExecutors({ workspaceId });
-    expect(executors.length).toBe(5);
+    expect(executors.length).toBe(6); // 5 base + 1 from soft-delete plugin
 
     const salesOrderCreated = executors.find((e) => e.name === "sales-order-created");
     expect(salesOrderCreated).toMatchObject({
