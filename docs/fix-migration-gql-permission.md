@@ -1,16 +1,26 @@
-# Migration Version と gqlPermission の不整合修正
+# Migration Version とプラグイン生成リソースの不整合修正
 
 ## 問題
 
-`TAILOR_INTERNAL_APPLY_MIGRATION_VERSION` 環境変数を使用して特定の migration version を適用する際、TailorDB types は指定された version に制限されるが、gqlPermissions は制限されない。
+`TAILOR_INTERNAL_APPLY_MIGRATION_VERSION` 環境変数を使用して特定の migration version を適用する際、TailorDB types は指定された version に制限されるが、以下のリソースは制限されない:
 
-これにより、まだ作成されていないタイプの gqlPermission を作成しようとして失敗する。
+1. **gqlPermissions** - 存在しないタイプの permissions を作成しようとして失敗
+2. **relation fields** - plugin が extends で追加した relation が、存在しないタイプを参照して失敗
 
 ## 再現手順
+
+### gqlPermission の問題
 
 1. プラグインが gqlPermission を持つタイプを生成する
 2. `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"` で apply を実行
 3. エラー: `Failed to create TailorDBGQLPermission: failed to create gqlPermission: record not found`
+
+### relation field の問題
+
+1. プラグインが extends で既存タイプに relation フィールドを追加する
+2. その relation がプラグイン生成タイプを参照する
+3. `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"` で apply を実行
+4. エラー: `RefType "UserChangeRequest" specified in "User"."userChangeRequests" is not found`
 
 ## 発生箇所
 
