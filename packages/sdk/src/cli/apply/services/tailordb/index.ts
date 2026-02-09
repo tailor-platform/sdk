@@ -57,13 +57,12 @@ import {
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
 } from "../../../tailordb/migrate/snapshot";
-import { logger, styles } from "../../../utils/logger";
+import { logger } from "../../../utils/logger";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
 import {
   executeMigrations,
   detectPendingMigrations,
   updateMigrationLabel,
-  buildFilteredTypesForVersion,
   type MigrationContext,
 } from "./migration";
 import type { ApplyPhase, PlanContext } from "../..";
@@ -510,25 +509,6 @@ export async function applyTailorDB(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
     );
   }
-
-  // Update migration labels if TAILOR_INTERNAL_APPLY_MIGRATION_VERSION is set
-  // This ensures the migration label matches the applied schema version
-  if (phase === "create-update") {
-    const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
-    if (maxVersionEnv) {
-      const maxVersion = parseInt(maxVersionEnv, 10);
-      if (Number.isInteger(maxVersion)) {
-        const configDir = path.dirname(migrationContext.config.path);
-        const namespacesWithMigrations = getNamespacesWithMigrations(
-          migrationContext.config,
-          configDir,
-        );
-        for (const { namespace } of namespacesWithMigrations) {
-          await updateMigrationLabel(client, migrationContext.workspaceId, namespace, maxVersion);
-        }
-      }
-    }
-  }
 }
 
 // ============================================================================
@@ -948,36 +928,6 @@ export async function planTailorDB(context: PlanContext) {
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
 
-  // Check for TAILOR_INTERNAL_APPLY_MIGRATION_VERSION and build filtered types if set (only for non-removal)
-  let filteredTypesByNamespace: Map<string, Record<string, TailorDBType>> | undefined;
-  let skipSchemaCheck = false;
-  if (!forRemoval) {
-    const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
-    if (maxVersionEnv) {
-      const maxVersion = parseInt(maxVersionEnv, 10);
-      if (!Number.isInteger(maxVersion)) {
-        throw new Error(
-          `Invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "${maxVersionEnv}". Must be a valid integer.`,
-        );
-      }
-
-      logger.info(
-        `Using schema reconstructed up to migration version ${styles.bold(formatMigrationNumber(maxVersion))}`,
-      );
-      logger.info("Schema check will be skipped (local types are ahead of target version)", {
-        mode: "plain",
-      });
-      logger.newline();
-
-      skipSchemaCheck = true;
-      filteredTypesByNamespace = await buildFilteredTypesForVersion(
-        maxVersion,
-        application,
-        config,
-      );
-    }
-  }
-
   const {
     changeSet: serviceChangeSet,
     conflicts,
@@ -985,14 +935,7 @@ export async function planTailorDB(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const typeChangeSet = await planTypes(
-    client,
-    workspaceId,
-    tailordbs,
-    executors,
-    deletedServices,
-    filteredTypesByNamespace,
-  );
+  const typeChangeSet = await planTypes(client, workspaceId, tailordbs, executors, deletedServices);
   const gqlPermissionChangeSet = await planGqlPermissions(
     client,
     workspaceId,
@@ -1017,7 +960,7 @@ export async function planTailorDB(context: PlanContext) {
       workspaceId,
       application,
       config,
-      noSchemaCheck: skipSchemaCheck || (noSchemaCheck ?? false),
+      noSchemaCheck: noSchemaCheck ?? false,
     },
   };
 }
