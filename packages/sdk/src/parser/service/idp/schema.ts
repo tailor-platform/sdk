@@ -35,6 +35,16 @@ export const IdPUserAuthPolicySchema = z
       message: "passwordMinLength must be less than or equal to passwordMaxLength",
       path: ["passwordMinLength"],
     },
+  )
+  .refine(
+    (data) =>
+      !data.allowedEmailDomains ||
+      data.allowedEmailDomains.length === 0 ||
+      !data.useNonEmailIdentifier,
+    {
+      message: "allowedEmailDomains cannot be set when useNonEmailIdentifier is true",
+      path: ["allowedEmailDomains"],
+    },
   );
 
 export const IdPSchema = z
