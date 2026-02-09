@@ -6,8 +6,8 @@ import {
   type Insertable as KyselyInsertable,
   type Selectable as KyselySelectable,
   type Updateable as KyselyUpdateable,
-} from "kysely";
-import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+  TailordbDialect,
+} from "@tailor-platform/sdk/kysely";
 
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
 type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
