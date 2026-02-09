@@ -43,7 +43,16 @@ const runApply = () => {
 };
 
 const runMigrateGenerate = () => {
-  runPnpm(["--silent", "tailor-sdk", "tailordb", "migrate", "generate", "-c", configPath, "--yes"]);
+  runPnpm([
+    "--silent",
+    "tailor-sdk",
+    "tailordb",
+    "migration",
+    "generate",
+    "-c",
+    configPath,
+    "--yes",
+  ]);
 };
 
 const resetMigrations = () => {

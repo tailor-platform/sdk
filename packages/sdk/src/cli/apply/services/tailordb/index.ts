@@ -803,6 +803,24 @@ async function executeSingleMigrationPrePhase(
 
   // GQLPermissions - process once (on the first migration)
   if (!processedTypes.gqlPermissionsProcessed) {
+    const gqlPermissionTypeNames = new Set(
+      changeSet.gqlPermission.creates.map((create) => create.name),
+    );
+    const missingTypeCreates = changeSet.type.creates.filter((create) => {
+      const typeName = create.request.tailordbType?.name;
+      return (
+        typeName && gqlPermissionTypeNames.has(typeName) && !processedTypes.created.has(typeName)
+      );
+    });
+    if (missingTypeCreates.length > 0) {
+      await Promise.all(
+        missingTypeCreates.map((create) => {
+          const typeName = create.request.tailordbType?.name;
+          if (typeName) processedTypes.created.add(typeName);
+          return client.createTailorDBType(create.request);
+        }),
+      );
+    }
     processedTypes.gqlPermissionsProcessed = true;
     await Promise.all([
       ...changeSet.gqlPermission.creates.map((create) =>
