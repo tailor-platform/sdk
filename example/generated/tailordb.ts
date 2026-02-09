@@ -30,6 +30,18 @@ export interface Namespace {
       state: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
+      deletedAt: Timestamp | null;
+    }
+
+    Deleted_Customer: {
+      id: Generated<string>;
+      originalId: string;
+      originalData: string;
+      deletedAt: Timestamp;
+      deletedBy: string;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+      reason: string | null;
     }
 
     Invoice: {

@@ -73,6 +73,7 @@ const configPath = join(configDir, "../tailor.config.ts");
 const namespaceEntities = {
   "tailordb": [
     "Customer",
+    "Deleted_Customer",
     "Invoice",
     "NestedProfile",
     "PurchaseOrder",
@@ -91,6 +92,7 @@ const namespaceEntities = {
 const namespaceDeps = {
   "tailordb": {
     "Customer": [],
+    "Deleted_Customer": [],
     "Invoice": ["SalesOrder"],
     "NestedProfile": [],
     "PurchaseOrder": ["Supplier"],
