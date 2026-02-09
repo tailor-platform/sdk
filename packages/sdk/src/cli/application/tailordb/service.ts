@@ -111,10 +111,9 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         // Plugin-generated types don't have a source file.
         // Generators that need to import these types should generate their own type files.
         typeSourceInfo[generatedType.name] = {
-          filePath: "",
           exportName: generatedType.name,
           pluginId: attachment.pluginId,
-          pluginImportPath: pluginManager.getPluginImportPath(attachment.pluginId),
+          pluginImportPath: pluginManager.getPluginImportPath(attachment.pluginId) ?? "",
           originalFilePath: sourceFilePath,
           originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
           generatedTypeKind: kind,
@@ -225,10 +224,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
           rawTypes[standaloneKey][generatedType.name] = generatedType as TailorDBTypeSchemaOutput;
           typeSourceInfo[generatedType.name] = {
-            filePath: "",
             exportName: generatedType.name,
             pluginId,
-            pluginImportPath: pluginManager.getPluginImportPath(pluginId),
+            pluginImportPath: pluginManager.getPluginImportPath(pluginId) ?? "",
+            originalFilePath: "",
+            originalExportName: "",
             generatedTypeKind: kind,
             pluginConfig: config,
           };

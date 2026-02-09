@@ -1,4 +1,4 @@
-import type { PluginSourceInfo } from "@/parser/plugin-config";
+import type { PluginGeneratedTypeSource } from "@/cli/generator/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /**
@@ -27,7 +27,7 @@ export interface LinesDbMetadata {
   foreignKeys: ForeignKeyDefinition[];
   indexes: IndexDefinition[];
   /** Plugin source info if this is a plugin-generated type */
-  pluginSource?: PluginSourceInfo;
+  pluginSource?: PluginGeneratedTypeSource;
 }
 
 /**

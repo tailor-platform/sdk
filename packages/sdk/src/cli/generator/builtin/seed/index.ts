@@ -11,10 +11,10 @@ import {
   processLinesDb,
   generateLinesDbSchemaFile,
   generateLinesDbSchemaFileWithPluginAPI,
+  type PluginSchemaParams,
 } from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
 import type { SeedTypeMetadata } from "./types";
-import type { PluginTypeImport } from "@/parser/plugin-config";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
@@ -588,15 +588,12 @@ export function createSeedGenerator(
                 : `./${relativePluginPath}`;
             }
 
-            const pluginImport: PluginTypeImport = {
-              pluginId: linesDb.pluginSource.pluginId,
+            const params: PluginSchemaParams = {
               pluginImportPath,
-              originalExportName: linesDb.pluginSource.originalExportName || undefined,
               originalImportPath,
-              generatedTypeKind: linesDb.pluginSource.generatedTypeKind,
             };
 
-            const schemaContent = generateLinesDbSchemaFileWithPluginAPI(linesDb, pluginImport);
+            const schemaContent = generateLinesDbSchemaFileWithPluginAPI(linesDb, params);
 
             files.push({
               path: schemaOutputPath,
