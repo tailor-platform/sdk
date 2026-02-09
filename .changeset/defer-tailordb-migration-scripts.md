@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Defer TailorDB migration script execution until after Auth is applied during `apply`.
+Run TailorDB apply after Auth so migration scripts can execute immediately.
