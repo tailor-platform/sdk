@@ -829,6 +829,7 @@ async function executeSingleMigrationPrePhase(
   // Build breaking changes map for this single migration
   const breakingChanges = buildBreakingChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
+  const createdBeforeMigration = new Set(processedTypes.created);
 
   // Types - create/update only types affected by this migration
   await Promise.all([
@@ -836,7 +837,7 @@ async function executeSingleMigrationPrePhase(
     ...changeSet.type.creates
       .filter((create) => {
         const typeName = create.request.tailordbType?.name;
-        return typeName && affectedTypes.has(typeName) && !processedTypes.created.has(typeName);
+        return typeName && affectedTypes.has(typeName) && !createdBeforeMigration.has(typeName);
       })
       .map((create) => {
         const typeName = create.request.tailordbType?.name;
@@ -860,7 +861,7 @@ async function executeSingleMigrationPrePhase(
     ...changeSet.type.creates
       .filter((create) => {
         const typeName = create.request.tailordbType?.name;
-        return typeName && affectedTypes.has(typeName) && processedTypes.created.has(typeName);
+        return typeName && affectedTypes.has(typeName) && createdBeforeMigration.has(typeName);
       })
       .map((create) => {
         const typeName = create.request.tailordbType?.name;
