@@ -123,4 +123,24 @@ describe("formatRequestParams", () => {
     };
     expect(formatRequestParams(badProto)).toBe("(unable to serialize request)");
   });
+
+  test("serializes objects containing BigInt values", () => {
+    const objWithBigInt = {
+      workspaceId: "test-id",
+      duration: { seconds: BigInt(3600), nanos: 0 },
+    };
+    const result = formatRequestParams(objWithBigInt);
+    expect(result).toContain('"seconds": "3600"');
+    expect(result).toContain('"nanos": 0');
+  });
+
+  test("serializes nested BigInt values in toJson result", () => {
+    const protoWithBigInt = {
+      toJson: () => ({
+        accessTokenLifetime: { seconds: BigInt(86400), nanos: 0 },
+      }),
+    };
+    const result = formatRequestParams(protoWithBigInt);
+    expect(result).toContain('"seconds": "86400"');
+  });
 });

@@ -196,6 +196,19 @@ export function parseMethodName(methodName: string): {
 }
 
 /**
+ * JSON.stringify replacer that converts BigInt values to strings.
+ * @param _key - Object key (unused)
+ * @param value - Value to serialize
+ * @returns Serializable value
+ */
+function bigIntReplacer(_key: string, value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  return value;
+}
+
+/**
  * @internal
  * @param message - Request message to format
  * @returns Pretty-printed JSON or error placeholder
@@ -203,9 +216,9 @@ export function parseMethodName(methodName: string): {
 export function formatRequestParams(message: unknown): string {
   try {
     if (message && typeof message === "object" && "toJson" in message) {
-      return JSON.stringify((message as { toJson: () => unknown }).toJson(), null, 2);
+      return JSON.stringify((message as { toJson: () => unknown }).toJson(), bigIntReplacer, 2);
     }
-    return JSON.stringify(message, null, 2);
+    return JSON.stringify(message, bigIntReplacer, 2);
   } catch {
     return "(unable to serialize request)";
   }
