@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": patch
+"@tailor-platform/sdk": minor
 ---
 
-fix: generate plugin types/executors before apply bundling and preserve plugin metadata.
+feat: add TailorDB plugin system (beta), including plugin config, code generation, and apply integration.
