@@ -6,8 +6,7 @@ import {
   type CodeGeneratorBase,
   type Generator,
 } from "@/parser/generator-config";
-import { createPluginConfigSchema, type PluginBase, type Plugin } from "@/parser/plugin-config";
-import { changesetPlugin } from "@/plugin/builtin";
+import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
 import { loadConfigPath } from "./context";
 import {
   createEnumConstantsGenerator,
@@ -38,12 +37,7 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
 
 export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
 
-// Register built-in plugins with their constructor functions.
-const builtinPlugins = new Map<string, (options: unknown) => PluginBase>([
-  [changesetPlugin.id, (options) => ({ ...changesetPlugin, _pluginConfig: options })],
-]);
-
-const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
+const PluginConfigSchema = createPluginConfigSchema();
 
 /**
  * Load Tailor configuration file and associated generators and plugins.

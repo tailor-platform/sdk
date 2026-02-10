@@ -5,6 +5,7 @@ import {
   defineIdp,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { changesetPlugin } from "@tailor-platform/sdk/changeset-plugin";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -95,5 +96,5 @@ export const generators = defineGenerators(
 );
 
 export const plugins = definePlugins(
-  "@tailor-platform/changeset", // Builtin plugin for managing change requests
+  changesetPlugin, // Builtin plugin for managing change requests
 );

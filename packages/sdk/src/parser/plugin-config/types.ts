@@ -24,10 +24,9 @@ export type TypeConfigRequired<PluginConfig = unknown> =
  * ```
  */
 // Fields parameter is used by declaration merging in user-defined.d.ts
-// oxlint-disable-next-line no-unused-vars
+// oxlint-disable-next-line no-unused-vars, no-empty-object-type
 export interface PluginConfigs<Fields extends string = string> {
-  // Built-in changeset plugin
-  "@tailor-platform/changeset": true;
+  // Extend this interface via declaration merging to add typed plugin configs
 }
 
 /**
@@ -469,21 +468,10 @@ export type PluginBase<PluginConfig = unknown> =
   | PluginBaseNamespace<PluginConfig>;
 
 /**
- * Built-in plugin ID for changeset
- */
-export type BuiltinPluginId = "@tailor-platform/changeset";
-
-/**
  * Plugin configuration input type for definePlugins()
  * Can be:
- * - A builtin plugin ID (e.g., "@tailor-platform/changeset")
- * - A tuple [builtinPluginId, options] for builtin plugins with configuration
  * - A PluginBase object for custom plugins without configuration
  * - A tuple [PluginBase, options] for custom plugins with configuration
  * Options can be any value - the plugin's pluginConfigSchema handles validation.
  */
-export type PluginConfig =
-  | BuiltinPluginId
-  | readonly [BuiltinPluginId, unknown]
-  | PluginBase
-  | readonly [PluginBase, unknown];
+export type PluginConfig = PluginBase | readonly [PluginBase, unknown];
