@@ -138,6 +138,7 @@ function generateExecScript(
       getMachineUserToken,
       truncate,
       bundleSeedScript,
+      chunkSeedData,
       executeScript,
       initOperatorClient,
       loadAccessToken,
@@ -404,55 +405,89 @@ ${namespaceDepsEntries}
       // Bundle seed script
       const bundled = await bundleSeedScript(namespace, typesWithData);
 
-      // Execute seed script
-      const result = await executeScript({
-        client: operatorClient,
-        workspaceId,
-        name: \`seed-\${namespace}.ts\`,
-        code: bundled.bundledCode,
-        arg: JSON.stringify({ data, order: sortedTypes }),
-        invoker: {
-          namespace: authNamespace,
-          machineUserName: "${machineUserName}",
-        },
+      // Chunk seed data to fit within gRPC message size limits
+      const chunks = chunkSeedData({
+        data,
+        order: sortedTypes,
+        codeByteSize: new TextEncoder().encode(bundled.bundledCode).length,
       });
 
-      // Parse result and display logs
-      if (result.logs) {
-        for (const line of result.logs.split("\\n").filter(Boolean)) {
-          console.log(styleText("dim", \`    \${line}\`));
+      if (chunks.length === 0) {
+        console.log(styleText("dim", \`  [\${namespace}] No data to seed\`));
+        return { success: true, processed: {} };
+      }
+
+      if (chunks.length > 1) {
+        console.log(styleText("dim", \`    Split into \${chunks.length} chunks\`));
+      }
+
+      const allProcessed = {};
+      let hasError = false;
+      const allErrors = [];
+
+      for (const chunk of chunks) {
+        if (chunks.length > 1) {
+          console.log(styleText("dim", \`    Chunk \${chunk.index + 1}/\${chunk.total}: \${chunk.order.join(", ")}\`));
+        }
+
+        // Execute seed script for this chunk
+        const result = await executeScript({
+          client: operatorClient,
+          workspaceId,
+          name: \`seed-\${namespace}.ts\`,
+          code: bundled.bundledCode,
+          arg: JSON.stringify({ data: chunk.data, order: chunk.order }),
+          invoker: {
+            namespace: authNamespace,
+            machineUserName: "${machineUserName}",
+          },
+        });
+
+        // Parse result and display logs
+        if (result.logs) {
+          for (const line of result.logs.split("\\n").filter(Boolean)) {
+            console.log(styleText("dim", \`    \${line}\`));
+          }
+        }
+
+        if (result.success) {
+          let parsed;
+          try {
+            const parsedResult = JSON.parse(result.result || "{}");
+            parsed = parsedResult && typeof parsedResult === "object" ? parsedResult : {};
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(styleText("red", \`    ✗ Failed to parse seed result: \${message}\`));
+            hasError = true;
+            allErrors.push(message);
+            continue;
+          }
+
+          const processed = parsed.processed || {};
+          for (const [type, count] of Object.entries(processed)) {
+            allProcessed[type] = (allProcessed[type] || 0) + count;
+            console.log(styleText("green", \`    ✓ \${type}: \${count} rows inserted\`));
+          }
+
+          if (!parsed.success) {
+            const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+            const errorMessage =
+              errors.length > 0 ? errors.join("\\n") : "Seed script reported failure";
+            console.error(styleText("red", \`    ✗ Seed failed: \${errorMessage}\`));
+            hasError = true;
+            allErrors.push(errorMessage);
+          }
+        } else {
+          console.error(styleText("red", \`    ✗ Seed failed: \${result.error}\`));
+          hasError = true;
+          allErrors.push(result.error);
         }
       }
 
-      if (result.success) {
-        let parsed;
-        try {
-          const parsedResult = JSON.parse(result.result || "{}");
-          parsed = parsedResult && typeof parsedResult === "object" ? parsedResult : {};
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(styleText("red", \`    ✗ Failed to parse seed result: \${message}\`));
-          return { success: false, error: message };
-        }
-
-        const processed = parsed.processed || {};
-        for (const [type, count] of Object.entries(processed)) {
-          console.log(styleText("green", \`    ✓ \${type}: \${count} rows inserted\`));
-        }
-
-        if (!parsed.success) {
-          const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
-          const errorMessage =
-            errors.length > 0 ? errors.join("\\n") : "Seed script reported failure";
-          console.error(styleText("red", \`    ✗ Seed failed: \${errorMessage}\`));
-          return { success: false, error: errorMessage };
-        }
-
-        return { success: true, processed };
-      } else {
-        console.error(styleText("red", \`    ✗ Seed failed: \${result.error}\`));
-        return { success: false, error: result.error };
+      if (hasError) {
+        return { success: false, error: allErrors.join("\\n") };
       }
+      return { success: true, processed: allProcessed };
     };
 
     ${generateIdpUserSeedFunction(hasIdpUser)}
