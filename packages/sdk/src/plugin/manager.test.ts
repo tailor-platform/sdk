@@ -35,6 +35,36 @@ describe("PluginManager", () => {
     });
   });
 
+  it("dedupes standalone plugin-generated outputs across namespaces", async () => {
+    const plugin: PluginBase = {
+      id: "standalone-plugin",
+      description: "standalone generator",
+      importPath: "@example/standalone",
+      configSchema: t.object({}),
+      processStandalone: () => ({
+        types: {
+          auditLog: db.type("AuditLog", {
+            message: db.string(),
+          }),
+        },
+        executors: [
+          {
+            name: "audit-log",
+            trigger: { kind: "incomingWebhook" },
+            operation: { kind: "function", body: "return {}" },
+          },
+        ],
+      }),
+    };
+
+    const manager = new PluginManager([plugin]);
+    await manager.processStandalonePlugins("main");
+    await manager.processStandalonePlugins("analytics");
+
+    expect(manager.getPluginGeneratedTypes()).toHaveLength(1);
+    expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);
+  });
+
   it("preserves pluralForm and plugin attachments when extending types", () => {
     const manager = new PluginManager();
     const original = db
