@@ -2,7 +2,7 @@ import { z } from "zod";
 import { functionSchema } from "../common";
 import { GqlOperationsSchema } from "./gql-operations";
 import { relationTypesKeys } from "./relation";
-import type { TailorDBFieldOutput } from "./types";
+import type { RawPermissions, TailorDBFieldOutput } from "./types";
 
 const TailorFieldTypeSchema = z.enum([
   "uuid",
@@ -40,7 +40,7 @@ export const DBFieldMetadataSchema = z.object({
       update: functionSchema.optional(),
     })
     .optional(),
-  validate: z.array(z.unknown()).optional(),
+  validate: z.array(z.union([functionSchema, z.tuple([functionSchema, z.string()])])).optional(),
   serial: z
     .object({
       start: z.number(),
@@ -82,6 +82,18 @@ export const TailorDBTypeSettingsSchema = z.object({
   gqlOperations: GqlOperationsSchema.optional(),
 });
 
+const RawPermissionsSchema: z.ZodType<RawPermissions> = z.object({
+  record: z
+    .object({
+      create: z.array(z.any()),
+      read: z.array(z.any()),
+      update: z.array(z.any()),
+      delete: z.array(z.any()),
+    })
+    .optional(),
+  gql: z.array(z.any()).optional(),
+});
+
 export const TailorDBTypeSchema = z.object({
   name: z.string(),
   fields: z.record(z.string(), TailorDBFieldSchema),
@@ -89,7 +101,7 @@ export const TailorDBTypeSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
     settings: TailorDBTypeSettingsSchema.optional(),
-    permissions: z.unknown(),
+    permissions: RawPermissionsSchema,
     files: z.record(z.string(), z.string()),
     indexes: z
       .record(
