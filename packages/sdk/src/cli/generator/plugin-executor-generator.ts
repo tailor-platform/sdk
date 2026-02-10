@@ -90,7 +90,8 @@ function generateSingleExecutorFile(
   const executorOutputDir = path.join(outputDir, pluginDir, "executors");
   fs.mkdirSync(executorOutputDir, { recursive: true });
 
-  const filePath = path.join(executorOutputDir, `${info.executor.name}.ts`);
+  const fileName = sanitizeExecutorFileName(info.executor.name);
+  const filePath = path.join(executorOutputDir, `${fileName}.ts`);
 
   let content: string;
   if (isPluginExecutorWithFile(info.executor)) {
@@ -438,6 +439,21 @@ function calculatePluginImportPath(pluginImportPath: string, executorOutputDir: 
  */
 function sanitizePluginId(pluginId: string): string {
   return pluginId.replace(/^@/, "").replace(/\//g, "-");
+}
+
+/**
+ * Convert executor name to safe filename.
+ * @param executorName - Executor name
+ * @returns Safe filename without extension
+ */
+function sanitizeExecutorFileName(executorName: string): string {
+  const baseName = path.basename(executorName);
+  const withoutExtension = baseName.replace(/\.[^/.]+$/, "");
+  const sanitized = withoutExtension.replace(/[^a-zA-Z0-9_-]/g, "-");
+  if (!sanitized) {
+    throw new Error(`Invalid executor name: "${executorName}"`);
+  }
+  return sanitized;
 }
 
 /**
