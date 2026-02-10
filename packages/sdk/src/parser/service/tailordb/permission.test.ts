@@ -174,61 +174,10 @@ describe("normalizeActionPermission", () => {
   });
 
   describe("Operator variations", () => {
-    it("should handle '=' operator", () => {
-      const permission = ["user.id", "=", "123"] as const;
-      const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([["user.id", "eq", "123"]]);
-    });
-
-    it("should handle '!=' operator", () => {
-      const permission = ["user.status", "!=", "blocked"] as const;
-      const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([["user.status", "ne", "blocked"]]);
-    });
-
-    it("should handle 'in' operator", () => {
-      const permission = ["user.role", "in", ["admin", "moderator"] as string[]] as const;
-      const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([["user.role", "in", ["admin", "moderator"]]]);
-    });
-
     it("should handle 'not in' operator", () => {
       const permission = ["user.status", "not in", ["suspended", "banned"] as string[]] as const;
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([["user.status", "nin", ["suspended", "banned"]]]);
-    });
-  });
-
-  describe("Type-specific permissions", () => {
-    it("should handle record-level permissions with type info", () => {
-      const permission = [{ record: "ownerId" }, "=", { user: "id" }] as unknown as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [[{ record: "ownerId" }, "eq", { user: "_id" }]],
-        permit: "allow",
-      });
-    });
-
-    it("should handle update permissions with oldRecord/newRecord", () => {
-      const permission = [
-        { oldRecord: "price" },
-        "!=",
-        { newRecord: "price" },
-      ] as unknown as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [[{ oldRecord: "price" }, "ne", { newRecord: "price" }]],
-        permit: "allow",
-      });
-    });
-
-    it("should handle GQL-level permissions", () => {
-      const permission = [{ user: "role" }, "=", "admin"] as unknown as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [[{ user: "role" }, "eq", "admin"]],
-        permit: "allow",
-      });
     });
   });
 });

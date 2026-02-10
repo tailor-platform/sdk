@@ -599,16 +599,6 @@ describe("generate function", () => {
     };
   });
 
-  it("creates and executes GenerationManager", async () => {
-    const manager = createGenerationManager(mockConfig, []);
-    await expect(manager.generate(false)).resolves.not.toThrow();
-  });
-
-  it("manager has watch method", () => {
-    const manager = createGenerationManager(mockConfig, []);
-    expect(typeof manager.watch).toBe("function");
-  });
-
   it("generate does not automatically call watch", async () => {
     const manager = createGenerationManager(mockConfig, []);
     await expect(manager.generate(false)).resolves.not.toThrow();

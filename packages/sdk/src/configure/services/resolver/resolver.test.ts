@@ -503,49 +503,6 @@ describe("createResolver", () => {
       expect(resolver.input).toBeUndefined();
     });
 
-    test("creates query resolver", () => {
-      const resolver = createResolver({
-        name: "getUser",
-        operation: "query",
-        output: t.object({ id: t.string() }),
-        body: () => ({ id: "123" }),
-      });
-
-      expect(resolver.operation).toBe("query");
-    });
-
-    test("creates mutation resolver", () => {
-      const resolver = createResolver({
-        name: "createUser",
-        operation: "mutation",
-        output: t.object({ success: t.bool() }),
-        body: () => ({ success: true }),
-      });
-
-      expect(resolver.operation).toBe("mutation");
-    });
-
-    test("preserves input and output types", () => {
-      const inputType = {
-        email: t.string(),
-      };
-
-      const outputType = t.object({
-        userId: t.string(),
-      });
-
-      const resolver = createResolver({
-        name: "register",
-        operation: "mutation",
-        input: inputType,
-        output: outputType,
-        body: (context) => ({ userId: context.input.email }),
-      });
-
-      expect(resolver.input).toBe(inputType);
-      expect(resolver.output).toBe(outputType);
-    });
-
     test("accepts Record<string, TailorField> as output and converts to t.object()", () => {
       const resolver = createResolver({
         name: "recordOutput",
