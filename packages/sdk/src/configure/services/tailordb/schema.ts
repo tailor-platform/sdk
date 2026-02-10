@@ -1,3 +1,4 @@
+import { cloneDeep } from "es-toolkit";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -607,11 +608,21 @@ function createTailorDBField<
     },
 
     clone(cloneOptions?: FieldOptions) {
-      // Create a new field with the same configuration
-      const clonedField = createTailorDBField(type, options, fields, values);
+      // Deep clone nested object fields if present
+      let clonedFields = fields;
+      if (fields) {
+        const cloned: Record<string, TailorAnyDBField> = {};
+        for (const [key, field] of Object.entries(fields)) {
+          cloned[key] = field.clone();
+        }
+        clonedFields = cloned;
+      }
 
-      // Copy metadata
-      Object.assign(clonedField._metadata, this._metadata);
+      // Create a new field with cloned configuration
+      const clonedField = createTailorDBField(type, options, clonedFields, values);
+
+      // Deep copy metadata using cloneDeep (preserves function references)
+      Object.assign(clonedField._metadata, cloneDeep(this._metadata));
 
       // Apply new options if provided
       if (cloneOptions) {
@@ -625,9 +636,7 @@ function createTailorDBField<
 
       // Copy raw relation if exists
       if (_rawRelation) {
-        // Access the internal _rawRelation of the cloned field
-        // We need to call relation method to set it
-        const clonedRawRelation = { ..._rawRelation, toward: { ..._rawRelation.toward } };
+        const clonedRawRelation = cloneDeep(_rawRelation);
         // @ts-expect-error - Accessing internal state for cloning
         clonedField._setRawRelation(clonedRawRelation);
       }
