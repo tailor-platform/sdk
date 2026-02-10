@@ -1,3 +1,4 @@
+import { cloneDeep } from "es-toolkit";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -620,25 +621,8 @@ function createTailorDBField<
       // Create a new field with cloned configuration
       const clonedField = createTailorDBField(type, options, clonedFields, values);
 
-      // Deep copy metadata to avoid shared references
-      Object.assign(clonedField._metadata, this._metadata);
-
-      // Deep copy nested objects in metadata
-      if (this._metadata.allowedValues) {
-        clonedField._metadata.allowedValues = this._metadata.allowedValues.map((v) => ({ ...v }));
-      }
-      if (this._metadata.validate) {
-        // Handle both function and [fn, message] tuple formats
-        clonedField._metadata.validate = this._metadata.validate.map((v) =>
-          Array.isArray(v) ? [...v] : v,
-        );
-      }
-      if (this._metadata.hooks) {
-        clonedField._metadata.hooks = { ...this._metadata.hooks };
-      }
-      if (this._metadata.serial) {
-        clonedField._metadata.serial = { ...this._metadata.serial };
-      }
+      // Deep copy metadata using cloneDeep (preserves function references)
+      Object.assign(clonedField._metadata, cloneDeep(this._metadata));
 
       // Apply new options if provided
       if (cloneOptions) {
@@ -652,9 +636,7 @@ function createTailorDBField<
 
       // Copy raw relation if exists
       if (_rawRelation) {
-        // Access the internal _rawRelation of the cloned field
-        // We need to call relation method to set it
-        const clonedRawRelation = { ..._rawRelation, toward: { ..._rawRelation.toward } };
+        const clonedRawRelation = cloneDeep(_rawRelation);
         // @ts-expect-error - Accessing internal state for cloning
         clonedField._setRawRelation(clonedRawRelation);
       }

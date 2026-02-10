@@ -370,6 +370,9 @@ importers:
       date-fns:
         specifier: 4.1.0
         version: 4.1.0
+      es-toolkit:
+        specifier: ^1.44.0
+        version: 1.44.0
       find-up-simple:
         specifier: 1.0.1
         version: 1.0.1
@@ -3029,6 +3032,9 @@ packages:
 
   es-toolkit@1.43.0:
     resolution: {integrity: sha512-SKCT8AsWvYzBBuUqMk4NPwFlSdqLpJwmy6AP322ERn8W2YLIB6JBXnwMI2Qsh2gfphT3q7EKAxKb23cvFHFwKA==}
+
+  es-toolkit@1.44.0:
+    resolution: {integrity: sha512-6penXeZalaV88MM3cGkFZZfOoLGWshWWfdy0tWw/RlVVyhvMaWSBTOvXNeiW3e5FwdS5ePW0LGEu17zT139ktg==}
 
   esbuild@0.25.10:
     resolution: {integrity: sha512-9RiGKvCwaqxO2owP61uQ4BgNborAQskMR6QusfWzQqv7AZOg5oGehdY2pRJMTKuwxd1IDBP4rSbI5lHzU7SMsQ==}
@@ -7537,6 +7543,8 @@ snapshots:
       is-symbol: 1.1.1
 
   es-toolkit@1.43.0: {}
+
+  es-toolkit@1.44.0: {}
 
   esbuild@0.25.10:
     optionalDependencies:
