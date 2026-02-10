@@ -2,7 +2,7 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 
 /**
  * Check if workflow execution status is terminal.
- * @param status - Workflow execution status enum
+ * @param status - Workflow execution status enum value
  * @returns True if status is terminal
  */
 export function isWorkflowExecutionTerminalStatus(status: WorkflowExecution_Status): boolean {

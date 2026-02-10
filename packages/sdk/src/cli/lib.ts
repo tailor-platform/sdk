@@ -99,10 +99,19 @@ export {
   type ExecutorJobDetailInfo,
   type WatchExecutorJobResult,
 } from "./executor/jobs";
+export { listExecutors, type ListExecutorsOptions } from "./executor/list";
+export { getExecutor, type GetExecutorOptions } from "./executor/get";
+export {
+  listWebhookExecutors,
+  type ListWebhookExecutorsOptions,
+  type WebhookExecutorInfo,
+} from "./executor/webhook";
 export type {
   ExecutorJobListInfo,
   ExecutorJobInfo,
   ExecutorJobAttemptInfo,
+  ExecutorListInfo,
+  ExecutorInfo,
 } from "./executor/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";

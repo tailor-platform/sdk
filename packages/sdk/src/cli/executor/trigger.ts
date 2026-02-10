@@ -110,6 +110,33 @@ export async function triggerExecutor(
 export const triggerCommand = defineCommand({
   name: "trigger",
   description: "Trigger an executor manually.",
+  notes: `Only executors with \`INCOMING_WEBHOOK\` or \`SCHEDULE\` trigger types can be triggered manually.
+Executors with \`EVENT\` trigger types (such as \`recordCreated\`, \`recordUpdated\`, \`recordDeleted\`) cannot be triggered manually.
+
+The \`--data\` and \`--header\` options are only available for \`INCOMING_WEBHOOK\` trigger type.
+
+**Downstream Execution Tracking**
+
+When using \`--wait\`, the CLI tracks not only the executor job but also any downstream executions:
+
+- **Workflow targets**: Waits for the workflow execution to complete (SUCCESS, FAILED, or PENDING_RESUME). Shows real-time status changes and currently running job names during execution (same output as \`workflow start --wait\`).
+- **Function targets**: Waits for the function execution to complete
+- **Webhook/GraphQL targets**: Only waits for the executor job itself
+
+The \`--logs\` option displays logs from the downstream execution when available.`,
+  examples: [
+    { cmd: "tailor-sdk executor trigger my-executor", desc: "Trigger an executor" },
+    {
+      cmd: 'tailor-sdk executor trigger my-executor -d \'{"message": "hello"}\'',
+      desc: "Trigger with data",
+    },
+    {
+      cmd: 'tailor-sdk executor trigger my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "X-Another: value2"',
+      desc: "Trigger with data and headers",
+    },
+    { cmd: "tailor-sdk executor trigger my-executor -W", desc: "Trigger and wait for completion" },
+    { cmd: "tailor-sdk executor trigger my-executor -W -l", desc: "Trigger, wait, and show logs" },
+  ],
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
@@ -166,15 +193,15 @@ export const triggerCommand = defineCommand({
     if (executor.triggerType === ExecutorTriggerType.EVENT) {
       throw new Error(
         `Executor '${args.executorName}' has '${executorTriggerTypeToString(executor.triggerType)}' trigger type and cannot be triggered manually. ` +
-          `Only executors with 'incomingWebhook' or 'schedule' triggers can be triggered manually.`,
+          `Only executors with 'INCOMING_WEBHOOK' or 'SCHEDULE' triggers can be triggered manually.`,
       );
     }
 
     // SCHEDULE trigger type does not accept --data or --header options
     if (executor.triggerType === ExecutorTriggerType.SCHEDULE && (args.data || args.header)) {
       throw new Error(
-        `Executor '${args.executorName}' has 'schedule' trigger type. ` +
-          `The --data and --header options are only available for 'incomingWebhook' trigger type.`,
+        `Executor '${args.executorName}' has 'SCHEDULE' trigger type. ` +
+          `The --data and --header options are only available for 'INCOMING_WEBHOOK' trigger type.`,
       );
     }
 
