@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.11.1
+
+### Patch Changes
+
+- [#548](https://github.com/tailor-platform/sdk/pull/548) [`58a8094`](https://github.com/tailor-platform/sdk/commit/58a8094ea66d992e59753f95d9d0457824d67f5c) Thanks [@riku99](https://github.com/riku99)! - Add clone method tests for TailorDBField
+
+- [#571](https://github.com/tailor-platform/sdk/pull/571) [`3d030a6`](https://github.com/tailor-platform/sdk/commit/3d030a6437e80fae3007a7ece7d79ac428a27942) Thanks [@remiposo](https://github.com/remiposo)! - Document workflow job input/output type constraints
+
 ## 1.11.0
 
 ### Minor Changes
