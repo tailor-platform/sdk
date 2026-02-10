@@ -82,27 +82,26 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
   const chunks: Omit<SeedChunk, "total">[] = [];
   let currentData: SeedData = {};
   let currentOrder: string[] = [];
-  let currentSize = estimateWrapperSize(0);
 
   for (const type of typesWithData) {
     const typeRecords = data[type];
-    const typeJson = JSON.stringify({ [type]: typeRecords });
-    const typeSize = byteSize(typeJson);
 
     // Check if the type fits in the current chunk
-    if (currentOrder.length > 0 && currentSize + typeSize > argBudget) {
-      // Finalize the current chunk
-      chunks.push({ data: currentData, order: currentOrder, index: chunks.length });
-      currentData = {};
-      currentOrder = [];
-      currentSize = estimateWrapperSize(0);
+    if (currentOrder.length > 0) {
+      const testData = { ...currentData, [type]: typeRecords };
+      const testOrder = [...currentOrder, type];
+      if (byteSize(JSON.stringify({ data: testData, order: testOrder })) > argBudget) {
+        // Finalize the current chunk
+        chunks.push({ data: currentData, order: currentOrder, index: chunks.length });
+        currentData = {};
+        currentOrder = [];
+      }
     }
 
     // Check if the entire type fits in an empty chunk
-    if (typeSize + estimateWrapperSize(1) <= argBudget) {
+    if (byteSize(JSON.stringify({ data: { [type]: typeRecords }, order: [type] })) <= argBudget) {
       currentData[type] = typeRecords;
       currentOrder.push(type);
-      currentSize = byteSize(JSON.stringify({ data: currentData, order: currentOrder }));
       continue;
     }
 
@@ -111,13 +110,12 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
       chunks.push({ data: currentData, order: currentOrder, index: chunks.length });
       currentData = {};
       currentOrder = [];
-      currentSize = estimateWrapperSize(0);
     }
 
     let recordBatch: Record<string, unknown>[] = [];
     for (const record of typeRecords) {
-      const singleRecordSize = byteSize(JSON.stringify(record));
-      if (singleRecordSize + estimateWrapperSize(1) + estimateTypeKeySize(type) > argBudget) {
+      if (byteSize(JSON.stringify({ data: { [type]: [record] }, order: [type] })) > argBudget) {
+        const singleRecordSize = byteSize(JSON.stringify(record));
         throw new Error(
           `A single record in type "${type}" (${singleRecordSize} bytes) exceeds the message size budget ` +
             `(${argBudget} bytes). Consider increasing maxMessageSize or reducing the record size.`,
@@ -150,7 +148,6 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
       if (!currentOrder.includes(type)) {
         currentOrder.push(type);
       }
-      currentSize = byteSize(JSON.stringify({ data: currentData, order: currentOrder }));
     }
   }
 
@@ -165,14 +162,4 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
 
 function byteSize(str: string): number {
   return new TextEncoder().encode(str).length;
-}
-
-function estimateWrapperSize(orderLength: number): number {
-  // Approximate size of {"data":{},"order":[]} wrapper
-  return byteSize(JSON.stringify({ data: {}, order: new Array(orderLength).fill("") }));
-}
-
-function estimateTypeKeySize(type: string): number {
-  // Approximate overhead of adding a type key: ,"typeName":[]
-  return byteSize(`,"${type}":[]`);
 }
