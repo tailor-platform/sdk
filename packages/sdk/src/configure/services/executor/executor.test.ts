@@ -139,6 +139,27 @@ describe("webhookTrigger", () => {
 });
 
 describe("recordCreatedTrigger", () => {
+  test("can omit condition", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordCreatedTrigger({
+      type: user,
+    });
+  });
+
+  test("can specify condition", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordCreatedTrigger({
+      type: user,
+      condition: (args) => args.newRecord.age >= 18,
+    });
+  });
+
   test("can not return invalid type from condition", () => {
     const user = db.type("User", {
       name: db.string(),
@@ -196,6 +217,27 @@ describe("recordCreatedTrigger", () => {
 });
 
 describe("recordUpdatedTrigger", () => {
+  test("can omit condition", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordUpdatedTrigger({
+      type: user,
+    });
+  });
+
+  test("can specify condition", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordUpdatedTrigger({
+      type: user,
+      condition: (args) => args.oldRecord.age < 18 && args.newRecord.age >= 18,
+    });
+  });
+
   test("can not return invalid type from condition", () => {
     const user = db.type("User", {
       name: db.string(),
@@ -263,6 +305,27 @@ describe("recordUpdatedTrigger", () => {
 });
 
 describe("recordDeletedTrigger", () => {
+  test("can omit condition", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordDeletedTrigger({
+      type: user,
+    });
+  });
+
+  test("can specify condition", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordDeletedTrigger({
+      type: user,
+      condition: (args) => args.oldRecord.age < 18,
+    });
+  });
+
   test("can not return invalid type from condition", () => {
     const user = db.type("User", {
       name: db.string(),
@@ -320,6 +383,31 @@ describe("recordDeletedTrigger", () => {
 });
 
 describe("resolverExecutedTrigger", () => {
+  test("can omit condition", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ result: true }),
+      output: t.object({ result: t.bool() }),
+    });
+    resolverExecutedTrigger({
+      resolver,
+    });
+  });
+
+  test("can specify condition", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ result: true }),
+      output: t.object({ result: t.bool() }),
+    });
+    resolverExecutedTrigger({
+      resolver,
+      condition: (args) => !args.error,
+    });
+  });
+
   test("can not return invalid type from condition", () => {
     const resolver = createResolver({
       name: "test",
@@ -622,6 +710,30 @@ describe("resolverExecutedTrigger", () => {
 });
 
 describe("functionTarget", () => {
+  test("can return void from fn", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: () => {
+          return;
+        },
+      },
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: async () => {
+          return;
+        },
+      },
+    });
+  });
+
   test("can not return invalid type from fn", () => {
     createExecutor({
       name: "test",
@@ -663,6 +775,41 @@ describe("functionTarget", () => {
 });
 
 describe("gqlTarget", () => {
+  test("can specify query as string", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: `
+          query TestQuery {
+            testField
+          }
+        `,
+      },
+    });
+  });
+
+  test("can specify variables", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: `
+          query TestQuery($id: ID!) {
+            testField(id: $id)
+          }
+        `,
+        variables: () => ({
+          id: "test-id",
+        }),
+      },
+    });
+  });
+
   test("variables receive args", () => {
     createExecutor({
       name: "test",
@@ -770,6 +917,21 @@ describe("webhookTarget", () => {
       },
     });
   });
+
+  test("can specify headers", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
+        url: () => "https://example.com/webhook",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: { vault: "my-vault", key: "my-secret" },
+        },
+      },
+    });
+  });
 });
 
 describe("workflowTarget", () => {
@@ -873,6 +1035,27 @@ describe("workflowTarget", () => {
         workflow: testWorkflow,
         args: { orderId: "test-id" },
         authInvoker: { namespace: "my-auth", machineUserName: "admin" },
+      },
+    });
+  });
+
+  test("can omit args for workflow with undefined input", () => {
+    const noInputJob = createWorkflowJob({
+      name: "no-input-job",
+      body: () => ({ result: "done" }),
+    });
+
+    const noInputWorkflow = createWorkflow({
+      name: "no-input-workflow",
+      mainJob: noInputJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: noInputWorkflow,
       },
     });
   });
