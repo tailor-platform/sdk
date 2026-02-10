@@ -159,7 +159,7 @@ function generateExecutorFileContentNew(
      */
     ${imports.join("\n")}
 
-    const { default: executorFactory } = await executors.${executorExport}();
+    const { default: executorFactory } = await executors[${JSON.stringify(executorExport)}]();
     export default executorFactory(${contextCode});
   `;
 }

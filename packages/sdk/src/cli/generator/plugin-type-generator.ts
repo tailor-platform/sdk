@@ -40,7 +40,20 @@ export function generatePluginTypeFiles(
     return { typeFilePaths, generatedFiles };
   }
 
+  const seenTypeNames = new Map<string, PluginGeneratedTypeInfo>();
+
   for (const info of types) {
+    const existing = seenTypeNames.get(info.type.name);
+    if (existing) {
+      throw new Error(
+        `Duplicate plugin-generated type name "${info.type.name}" detected. ` +
+          `First: plugin "${existing.pluginId}" (kind: "${existing.kind}", source type: "${existing.sourceTypeName}"), ` +
+          `Second: plugin "${info.pluginId}" (kind: "${info.kind}", source type: "${info.sourceTypeName}"). ` +
+          `Plugin-generated type names must be unique.`,
+      );
+    }
+    seenTypeNames.set(info.type.name, info);
+
     const pluginDir = sanitizePluginId(info.pluginId);
     const typeOutputDir = path.join(outputDir, pluginDir, "types");
     fs.mkdirSync(typeOutputDir, { recursive: true });
