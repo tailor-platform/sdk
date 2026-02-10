@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.11.0
+
+### Minor Changes
+
+- [#531](https://github.com/tailor-platform/sdk/pull/531) [`a3066a3`](https://github.com/tailor-platform/sdk/commit/a3066a399cb26ef91da1e871da0616311b104c26) Thanks [@toiroakr](https://github.com/toiroakr)! - Add executor list, get, and webhook commands to CLI
+
+### Patch Changes
+
+- [#569](https://github.com/tailor-platform/sdk/pull/569) [`cec1970`](https://github.com/tailor-platform/sdk/commit/cec1970581e39caedf84a1c89e0dbdbd5c53c0c0) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix BigInt serialization in error logging for API requests
+
 ## 1.10.1
 
 ### Patch Changes
