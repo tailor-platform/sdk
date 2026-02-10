@@ -156,7 +156,7 @@ function generateExecutors(
   return [
     {
       name: `${sourceType.name.toLowerCase()}-archive-on-delete`,
-      executorExport: "onDelete",
+      resolve: async () => await import("./executors/on-delete"),
       context: ctx,
     },
   ];
@@ -234,7 +234,7 @@ export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginB
       archiveTablePrefix: t.string({ optional: true }),
       defaultRetentionDays: t.int({ optional: true }),
     }),
-    _pluginConfig: pluginConfig,
+    pluginConfig,
     process: processSoftDelete,
   };
 }
