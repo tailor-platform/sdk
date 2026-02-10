@@ -140,23 +140,7 @@ export async function apply(options?: ApplyOptions) {
   );
 
   // Discover plugin executor files after generation
-  // Look for executors in new path pattern: .tailor-sdk/plugin/{pluginId}/executors/*.ts
   const pluginExecutorFileSet = new Set<string>(generatedExecutorFiles);
-  const pluginBaseDir = pluginOutputDir;
-  if (fs.existsSync(pluginBaseDir)) {
-    for (const pluginDir of fs.readdirSync(pluginBaseDir)) {
-      const executorDir = path.join(pluginBaseDir, pluginDir, "executors");
-      if (fs.existsSync(executorDir)) {
-        const files = fs
-          .readdirSync(executorDir)
-          .filter((f) => f.endsWith(".ts"))
-          .map((f) => path.join(executorDir, f));
-        for (const file of files) {
-          pluginExecutorFileSet.add(file);
-        }
-      }
-    }
-  }
   // Also check legacy path for backwards compatibility
   const legacyPluginExecutorDir = path.join(getDistDir(), "plugin-executors");
   if (fs.existsSync(legacyPluginExecutorDir)) {
