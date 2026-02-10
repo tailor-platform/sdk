@@ -74,10 +74,10 @@ export function generatePluginExecutorFiles(
 
 /**
  * Generate a single executor file.
- * @param info
- * @param outputDir
- * @param typeGenerationResult
- * @param sourceTypeFilePaths
+ * @param info - Plugin executor metadata and definition
+ * @param outputDir - Base output directory (e.g., .tailor-sdk)
+ * @param typeGenerationResult - Result from plugin type generation
+ * @param sourceTypeFilePaths - Map of source type names to their file paths
  * @returns Absolute path to the generated file
  */
 function generateSingleExecutorFile(
@@ -166,11 +166,11 @@ function generateExecutorFileContentNew(
 
 /**
  * Collect type imports needed for context.
- * @param context
- * @param outputDir
- * @param pluginId
- * @param typeGenerationResult
- * @param sourceTypeFilePaths
+ * @param context - Executor context values from plugin
+ * @param outputDir - Base output directory for generated files
+ * @param pluginId - Plugin identifier used for output paths
+ * @param typeGenerationResult - Result from plugin type generation
+ * @param sourceTypeFilePaths - Map of source type names to their file paths
  * @returns Map of context keys to their import information
  */
 function collectTypeImports(
@@ -228,8 +228,8 @@ function collectTypeImports(
 
 /**
  * Generate TypeScript code for context object.
- * @param context
- * @param typeImports
+ * @param context - Executor context values from plugin
+ * @param typeImports - Resolved type import information for context keys
  * @returns TypeScript object literal code
  */
 function generateContextCode(
@@ -254,7 +254,7 @@ function generateContextCode(
 
 /**
  * Check if a value is a TailorDB type object.
- * @param value
+ * @param value - Value to inspect
  * @returns True if value is a type object with name and fields
  */
 function isTypeObject(value: unknown): value is { name: string; fields: Record<string, unknown> } {
@@ -273,7 +273,7 @@ function isTypeObject(value: unknown): value is { name: string; fields: Record<s
 
 /**
  * Generate TypeScript file content for legacy format executor (trigger/operation).
- * @param executor
+ * @param executor - Legacy executor definition
  * @returns TypeScript source code for executor file
  */
 function generateExecutorFileContentLegacy(executor: PluginGeneratedExecutorLegacy): string {
@@ -305,7 +305,7 @@ function generateExecutorFileContentLegacy(executor: PluginGeneratedExecutorLega
 
 /**
  * Generate const declarations for injected variables.
- * @param inject
+ * @param inject - Map of injected values keyed by variable name
  * @returns TypeScript const declarations or empty string
  */
 function generateInjectDeclarations(inject: PluginInjectMap | undefined): string {
@@ -322,7 +322,7 @@ function generateInjectDeclarations(inject: PluginInjectMap | undefined): string
 
 /**
  * Generate TypeScript code for trigger configuration.
- * @param trigger
+ * @param trigger - Trigger configuration for executor
  * @returns TypeScript code for trigger object
  */
 function generateTriggerCode(trigger: PluginTriggerConfig): string {
@@ -354,7 +354,7 @@ function generateTriggerCode(trigger: PluginTriggerConfig): string {
 
 /**
  * Generate TypeScript code for operation configuration.
- * @param operation
+ * @param operation - Operation configuration for executor
  * @returns TypeScript code for operation object
  */
 function generateOperationCode(operation: PluginOperationConfig): string {
@@ -396,7 +396,7 @@ function generateOperationCode(operation: PluginOperationConfig): string {
 
 /**
  * Escape special characters in template literal content.
- * @param str
+ * @param str - Raw template literal content
  * @returns Escaped string safe for template literals
  */
 function escapeTemplateLiteral(str: string): string {
@@ -433,7 +433,7 @@ function calculatePluginImportPath(pluginImportPath: string, executorOutputDir: 
 
 /**
  * Convert plugin ID to safe directory name.
- * @param pluginId
+ * @param pluginId - Plugin identifier (e.g., "@scope/name")
  * @returns Safe directory name
  */
 function sanitizePluginId(pluginId: string): string {
@@ -442,7 +442,7 @@ function sanitizePluginId(pluginId: string): string {
 
 /**
  * Convert string to camelCase.
- * @param str
+ * @param str - Input string to convert
  * @returns camelCase string
  */
 function toCamelCase(str: string): string {
@@ -452,7 +452,7 @@ function toCamelCase(str: string): string {
 
 /**
  * Convert string to kebab-case.
- * @param str
+ * @param str - Input string to convert
  * @returns kebab-case string
  */
 function toKebabCase(str: string): string {
