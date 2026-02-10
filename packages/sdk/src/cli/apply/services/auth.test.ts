@@ -35,12 +35,19 @@ describe("applyAuth phase separation", () => {
     } as unknown as OperatorClient;
   }
 
+  type OAuth2ClientReplace = {
+    name: string;
+    deleteRequest: Record<string, string>;
+    createRequest: Record<string, unknown>;
+  };
+
   // Helper to create a mock plan result with deletes
-  function createMockPlanResult() {
+  function createMockPlanResult(opts?: { oauth2ClientReplaces?: OAuth2ClientReplace[] }) {
     const mockChangeSet = {
       creates: [],
       updates: [],
       deletes: [] as { name: string; request: Record<string, string> }[],
+      replaces: [] as OAuth2ClientReplace[],
       title: "",
       isEmpty: () => false,
       print: () => {},
@@ -130,6 +137,7 @@ describe("applyAuth phase separation", () => {
               },
             },
           ],
+          replaces: opts?.oauth2ClientReplaces ?? [],
         },
         scim: {
           ...mockChangeSet,
@@ -206,13 +214,13 @@ describe("applyAuth phase separation", () => {
     expect(client.deleteAuthService).toHaveBeenCalledTimes(1);
   });
 
-  test("create-update phase does not delete anything", async () => {
+  test("create-update phase does not delete anything (except replaces)", async () => {
     const client = createMockClientWithSpies();
     const planResult = createMockPlanResult();
 
     await applyAuth(client, planResult, "create-update");
 
-    // No deletes should happen in create-update phase
+    // No deletes should happen in create-update phase (except OAuth2 client replaces)
     expect(client.deleteAuthSCIMResource).not.toHaveBeenCalled();
     expect(client.deleteAuthSCIMConfig).not.toHaveBeenCalled();
     expect(client.deleteAuthOAuth2Client).not.toHaveBeenCalled();
@@ -221,5 +229,76 @@ describe("applyAuth phase separation", () => {
     expect(client.deleteUserProfileConfig).not.toHaveBeenCalled();
     expect(client.deleteAuthIDPConfig).not.toHaveBeenCalled();
     expect(client.deleteAuthService).not.toHaveBeenCalled();
+  });
+
+  test("create-update phase handles OAuth2 client replaces (delete then create)", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult({
+      oauth2ClientReplaces: [
+        {
+          name: "test-replace-client",
+          deleteRequest: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            name: "test-replace-client",
+          },
+          createRequest: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            oauth2Client: {
+              name: "test-replace-client",
+              redirectUris: [],
+            },
+          },
+        },
+      ],
+    });
+
+    await applyAuth(client, planResult, "create-update");
+
+    // Replace should delete then create
+    expect(client.deleteAuthOAuth2Client).toHaveBeenCalledTimes(1);
+    expect(client.deleteAuthOAuth2Client).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      namespaceName: "test-auth",
+      name: "test-replace-client",
+    });
+    expect(client.createAuthOAuth2Client).toHaveBeenCalledTimes(1);
+  });
+
+  test("delete-resources phase does not delete replaced OAuth2 clients", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult({
+      oauth2ClientReplaces: [
+        {
+          name: "test-replace-client",
+          deleteRequest: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            name: "test-replace-client",
+          },
+          createRequest: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            oauth2Client: {
+              name: "test-replace-client",
+              redirectUris: [],
+            },
+          },
+        },
+      ],
+    });
+
+    await applyAuth(client, planResult, "delete-resources");
+
+    // Only the regular delete should be called, not the replace delete
+    expect(client.deleteAuthOAuth2Client).toHaveBeenCalledTimes(1);
+    expect(client.deleteAuthOAuth2Client).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      namespaceName: "test-auth",
+      name: "test-oauth2-client",
+    });
+    // Create should not be called in delete-resources phase
+    expect(client.createAuthOAuth2Client).not.toHaveBeenCalled();
   });
 });

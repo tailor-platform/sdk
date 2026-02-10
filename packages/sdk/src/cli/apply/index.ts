@@ -200,6 +200,18 @@ export async function apply(options?: ApplyOptions) {
       resourceName: del.name,
     });
   }
+  for (const del of auth.changeSet.oauth2Client.deletes) {
+    importantDeletions.push({
+      resourceType: "OAuth2 client",
+      resourceName: del.name,
+    });
+  }
+  for (const replace of auth.changeSet.oauth2Client.replaces) {
+    importantDeletions.push({
+      resourceType: "OAuth2 client (client type change)",
+      resourceName: replace.name,
+    });
+  }
   await confirmImportantResourceDeletion(importantDeletions, yes);
 
   // Delete renamed applications

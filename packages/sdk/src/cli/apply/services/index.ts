@@ -4,11 +4,17 @@ export interface HasName {
   name: string;
 }
 
-export type ChangeSet<C extends HasName, U extends HasName, D extends HasName> = {
+export type ChangeSet<
+  C extends HasName,
+  U extends HasName,
+  D extends HasName,
+  R extends HasName = never,
+> = {
   readonly title: string;
   readonly creates: C[];
   readonly updates: U[];
   readonly deletes: D[];
+  readonly replaces: R[];
   isEmpty: () => boolean;
   print: () => void;
 };
@@ -18,21 +24,26 @@ export type ChangeSet<C extends HasName, U extends HasName, D extends HasName> =
  * @param title - Title for the change set
  * @returns Empty ChangeSet instance with isEmpty() and print() methods
  */
-export function createChangeSet<C extends HasName, U extends HasName, D extends HasName>(
-  title: string,
-): ChangeSet<C, U, D> {
+export function createChangeSet<
+  C extends HasName,
+  U extends HasName,
+  D extends HasName,
+  R extends HasName = never,
+>(title: string): ChangeSet<C, U, D, R> {
   const creates: C[] = [];
   const updates: U[] = [];
   const deletes: D[] = [];
+  const replaces: R[] = [];
 
   const isEmpty = (): boolean =>
-    creates.length === 0 && updates.length === 0 && deletes.length === 0;
+    creates.length === 0 && updates.length === 0 && deletes.length === 0 && replaces.length === 0;
 
   return {
     title,
     creates,
     updates,
     deletes,
+    replaces,
     isEmpty,
     print: () => {
       if (isEmpty()) {
@@ -42,6 +53,7 @@ export function createChangeSet<C extends HasName, U extends HasName, D extends 
       creates.forEach((item) => logger.log(`  ${symbols.create} ${item.name}`));
       deletes.forEach((item) => logger.log(`  ${symbols.delete} ${item.name}`));
       updates.forEach((item) => logger.log(`  ${symbols.update} ${item.name}`));
+      replaces.forEach((item) => logger.log(`  ${symbols.replace} ${item.name}`));
     },
   };
 }
