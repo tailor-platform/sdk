@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { defineApplication, type Application } from "@/cli/application";
+import { createExecutorService } from "@/cli/application/executor/service";
 import { loadConfig } from "@/cli/config-loader";
 import {
   type AnyCodeGenerator,
@@ -523,6 +524,11 @@ export function createGenerationManager(
         typeGenerationResult,
         sourceTypeFilePaths,
       );
+      const executorService =
+        application.executorService ??
+        (generatedExecutorFiles.length > 0
+          ? createExecutorService({ config: { files: [] }, pluginManager })
+          : undefined);
 
       // Phase 2: Auth resolveNamespaces (depends on TailorDB)
       if (app.authService) {
@@ -569,13 +575,13 @@ export function createGenerationManager(
       }
 
       // Phase 6: Load Executors (can now import generated files)
-      await application.executorService?.loadExecutors();
+      await executorService?.loadExecutors();
       // Load plugin-generated executors from generated TypeScript files
       if (generatedExecutorFiles.length > 0) {
-        await application.executorService?.loadPluginExecutorFiles(generatedExecutorFiles);
+        await executorService?.loadPluginExecutorFiles(generatedExecutorFiles);
       }
       // Get all executors (file-based and plugin-generated)
-      const allExecutors = application.executorService?.getExecutors() ?? {};
+      const allExecutors = executorService?.getExecutors() ?? {};
       Object.entries(allExecutors).forEach(([key, executor]) => {
         services.executor[key] = executor as Executor;
       });
