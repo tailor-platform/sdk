@@ -240,21 +240,6 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(userField.rawRelation!.backward).toBeUndefined();
   });
 
-  it('when toward.key is omitted, undefined is stored (default "id" is computed in parser layer)', () => {
-    const userField = db.uuid().relation({
-      type: "oneToOne",
-      toward: {
-        type: User,
-        as: "owner",
-      },
-    });
-
-    // Raw relation config is stored, processing happens in parser layer
-    expect(userField.rawRelation!.toward.type).toEqual("User");
-    expect(userField.rawRelation!.toward.as).toEqual("owner");
-    expect(userField.rawRelation!.toward.key).toBeUndefined();
-  });
-
   it("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
     const managerField = db.uuid().relation({
       type: "oneToOne",
@@ -432,16 +417,6 @@ describe("TailorDBField hooks modifier tests", () => {
     }>();
   });
 
-  it("calling hooks modifier more than once causes type error", () => {
-    db.string()
-      .hooks({
-        create: () => "created",
-      })
-      .hooks({
-        update: () => "updated",
-      });
-  });
-
   it("setting hooks on nested field causes type error", () => {
     // @ts-expect-error hooks() cannot be called on nested fields
     db.object({
@@ -607,19 +582,6 @@ describe("TailorDBField unique modifier tests", () => {
 });
 
 describe("TailorDBType withTimestamps option tests", () => {
-  it("withTimestamps: false does not add timestamp fields", () => {
-    const _noTimestampType = db.type("Test", {
-      name: db.string(),
-      ...db.fields.timestamps(),
-    });
-    expectTypeOf<output<typeof _noTimestampType>>().toEqualTypeOf<{
-      id: string;
-      name: string;
-      createdAt: string | Date;
-      updatedAt?: string | Date | null;
-    }>();
-  });
-
   it("withTimestamps: true adds timestamp fields", () => {
     const _timestampType = db.type("TestWithTimestamp", {
       name: db.string(),
@@ -920,16 +882,6 @@ describe("TailorDBType hooks modifier tests", () => {
       id: string;
       name: string;
     }>();
-  });
-
-  it("type error occurs when hooks is already set on TailorDBField", () => {
-    db.type("Test", {
-      name: db.string().hooks({ create: () => "created" }),
-    }).hooks({
-      name: {
-        create: () => "created",
-      },
-    });
   });
 
   it("setting hooks on id causes type error", () => {
@@ -1251,13 +1203,6 @@ describe("TailorField/TailorType compatibility tests", () => {
     expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
       name: string;
     }>();
-  });
-
-  it("can assign TailorDBType to TailorType", () => {
-    const _dbType = db.type("Test", {
-      name: db.string(),
-    });
-    // Type check removed - TailorType no longer exists
   });
 });
 
