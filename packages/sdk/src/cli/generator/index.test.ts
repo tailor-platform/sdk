@@ -24,6 +24,29 @@ vi.mock("node:fs", () => {
     mkdtempSync: vi.fn((prefix: string) => `${prefix}xxxxxx`),
     rmSync: vi.fn(() => {}),
     existsSync: vi.fn(() => true),
+    globSync: vi.fn(() => []),
+  };
+});
+
+vi.mock("@/cli/utils/logger", async (importOriginal) => {
+  const actual = (await importOriginal()) as {
+    logger?: Record<string, unknown>;
+    styles?: Record<string, unknown>;
+    symbols?: Record<string, unknown>;
+  };
+  return {
+    ...actual,
+    logger: {
+      ...(actual.logger ?? {}),
+      log: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      success: vi.fn(),
+      newline: vi.fn(),
+      out: vi.fn(),
+    },
   };
 });
 
