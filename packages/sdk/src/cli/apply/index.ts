@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { defineApplication } from "@/cli/application";
+import { createExecutorService } from "@/cli/application/executor/service";
 import {
   loadAndCollectJobs,
   printLoadedWorkflows,
@@ -153,6 +154,11 @@ export async function apply(options?: ApplyOptions) {
     }
   }
   pluginExecutorFiles = Array.from(pluginExecutorFileSet);
+  const executorService =
+    application.executorService ??
+    (pluginExecutorFiles.length > 0
+      ? createExecutorService({ config: { files: [] }, pluginManager })
+      : undefined);
 
   // Build functions (using already loaded data)
   for (const app of application.applications) {
@@ -161,11 +167,8 @@ export async function apply(options?: ApplyOptions) {
     }
   }
 
-  if (application.executorService) {
-    await buildExecutor(application.executorService.config, triggerContext, pluginExecutorFiles);
-  } else if (pluginExecutorFiles.length > 0) {
-    // Plugin executors exist but no user executor config - bundle plugin executors only
-    await buildExecutor({ files: [] }, triggerContext, pluginExecutorFiles);
+  if (executorService) {
+    await buildExecutor(executorService.config, triggerContext, pluginExecutorFiles);
   }
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
@@ -203,11 +206,11 @@ export async function apply(options?: ApplyOptions) {
   for (const pipeline of application.resolverServices) {
     await pipeline.loadResolvers();
   }
-  if (application.executorService) {
-    await application.executorService.loadExecutors();
+  if (executorService) {
+    await executorService.loadExecutors();
     // Load plugin-generated executors from generated TypeScript files
     if (pluginExecutorFiles.length > 0) {
-      await application.executorService.loadPluginExecutorFiles(pluginExecutorFiles);
+      await executorService.loadPluginExecutorFiles(pluginExecutorFiles);
     }
   }
   // Print workflow loading logs last (workflows were already loaded for bundling)
@@ -220,7 +223,7 @@ export async function apply(options?: ApplyOptions) {
   const ctx: PlanContext = {
     client,
     workspaceId,
-    application,
+    application: executorService ? { ...application, executorService } : application,
     forRemoval: false,
     config,
     noSchemaCheck: options?.noSchemaCheck,
