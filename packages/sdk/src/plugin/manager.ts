@@ -5,8 +5,9 @@ import type {
   PluginBase,
   PluginGeneratedExecutor,
   PluginGeneratedType,
+  PluginNamespaceGeneratedTypeEntry,
+  PluginNamespaceProcessContext,
   PluginOutput,
-  StandalonePluginProcessContext,
 } from "@/parser/plugin-config/types";
 import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
 
@@ -61,7 +62,7 @@ export interface PluginExecutorInfo {
   pluginId: string;
   /** Namespace where the executor was generated */
   namespace: string;
-  /** Source type name (for type-attached executors, undefined for standalone) */
+  /** Source type name (for type-attached executors, undefined for namespace) */
   sourceTypeName?: string;
 }
 
@@ -103,8 +104,8 @@ export class PluginManager {
   private plugins: Map<string, PluginBase> = new Map();
   private generatedExecutors: PluginExecutorInfo[] = [];
   private generatedTypes: PluginGeneratedTypeInfo[] = [];
-  private standaloneGeneratedTypeKeys: Set<string> = new Set();
-  private standaloneGeneratedExecutorKeys: Set<string> = new Set();
+  private namespaceGeneratedTypeKeys: Set<string> = new Set();
+  private namespaceGeneratedExecutorKeys: Set<string> = new Set();
 
   constructor(plugins: PluginBase[] = []) {
     for (const plugin of plugins) {
@@ -145,7 +146,7 @@ export class PluginManager {
     if (!plugin.process) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" does not support type-attached processing (missing process method). Use processStandalone via definePlugins() instead.`,
+        error: `Plugin "${plugin.id}" does not support type-attached processing (missing process method). Use processNamespace via definePlugins() instead.`,
       };
     }
 
@@ -153,7 +154,7 @@ export class PluginManager {
     const output = await plugin.process({
       type: context.type,
       config: context.config,
-      pluginConfig: plugin._pluginConfig,
+      pluginConfig: plugin.pluginConfig,
       namespace: context.namespace,
     });
 
@@ -187,27 +188,31 @@ export class PluginManager {
   }
 
   /**
-   * Process standalone plugins that don't require a source type.
-   * This method is called once per namespace for plugins with processStandalone method.
+   * Process namespace plugins that don't require a source type.
+   * This method is called once per namespace for plugins with processNamespace method.
    * @param namespace - The target namespace for generated types
+   * @param types - TailorDB types in the namespace (after type-attached processing)
+   * @param generatedTypes - Plugin-generated types in the namespace
    * @returns Array of results with plugin outputs and configs
    */
-  async processStandalonePlugins(
+  async processNamespacePlugins(
     namespace: string,
+    types: TailorAnyDBType[],
+    generatedTypes: PluginNamespaceGeneratedTypeEntry[],
   ): Promise<Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }>> {
     const results: Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }> =
       [];
 
     for (const [pluginId, plugin] of this.plugins) {
-      // Skip plugins without processStandalone method
-      if (!plugin.processStandalone) {
+      // Skip plugins without processNamespace method
+      if (!plugin.processNamespace) {
         continue;
       }
 
       // Use stored plugin config (from definePlugins)
-      const config = plugin._pluginConfig;
+      const config = plugin.pluginConfig;
 
-      // Validate pluginConfig against pluginConfigSchema if provided
+      // Validate plugin config against pluginConfigSchema if provided
       if (plugin.pluginConfigSchema && config !== undefined) {
         const validationErrors = validatePluginConfig(config, plugin.pluginConfigSchema);
         if (validationErrors.length > 0) {
@@ -226,22 +231,24 @@ export class PluginManager {
         }
       }
 
-      // Execute plugin processStandalone
-      const context: StandalonePluginProcessContext = {
-        config,
+      // Execute plugin processNamespace
+      const context: PluginNamespaceProcessContext = {
+        pluginConfig: config,
         namespace,
+        types,
+        generatedTypes,
       };
 
-      const output = await plugin.processStandalone(context);
+      const output = await plugin.processNamespace(context);
 
-      // Collect generated executors (standalone - no source type)
+      // Collect generated executors (namespace - no source type)
       if (output.executors && output.executors.length > 0) {
         for (const executor of output.executors) {
           const executorKey = `${pluginId}:${executor.name}`;
-          if (this.standaloneGeneratedExecutorKeys.has(executorKey)) {
+          if (this.namespaceGeneratedExecutorKeys.has(executorKey)) {
             continue;
           }
-          this.standaloneGeneratedExecutorKeys.add(executorKey);
+          this.namespaceGeneratedExecutorKeys.add(executorKey);
           this.generatedExecutors.push({
             executor,
             pluginId,
@@ -250,19 +257,19 @@ export class PluginManager {
         }
       }
 
-      // Collect generated types (standalone - no source type)
+      // Collect generated types (namespace - no source type)
       if (output.types && Object.keys(output.types).length > 0) {
         const importPath = plugin.importPath;
         for (const [kind, type] of Object.entries(output.types)) {
           const typeKey = `${pluginId}:${kind}:${type.name}`;
-          if (this.standaloneGeneratedTypeKeys.has(typeKey)) {
+          if (this.namespaceGeneratedTypeKeys.has(typeKey)) {
             continue;
           }
-          this.standaloneGeneratedTypeKeys.add(typeKey);
+          this.namespaceGeneratedTypeKeys.add(typeKey);
           this.generatedTypes.push({
             pluginId,
             pluginImportPath: importPath,
-            sourceTypeName: "(standalone)",
+            sourceTypeName: "(namespace)",
             kind,
             type,
           });
@@ -280,12 +287,12 @@ export class PluginManager {
   }
 
   /**
-   * Get plugins that have processStandalone method
-   * @returns Array of plugin IDs that support standalone processing
+   * Get plugins that have processNamespace method
+   * @returns Array of plugin IDs that support namespace processing
    */
-  getStandalonePluginIds(): string[] {
+  getNamespacePluginIds(): string[] {
     return Array.from(this.plugins.entries())
-      .filter(([, plugin]) => plugin.processStandalone !== undefined)
+      .filter(([, plugin]) => plugin.processNamespace !== undefined)
       .map(([id]) => id);
   }
 

@@ -49,14 +49,31 @@ export interface PluginProcessContext<Config = unknown, PluginConfig = unknown> 
 }
 
 /**
- * Context passed to plugin's processStandalone method.
- * Used for plugins that generate types without requiring a source type.
+ * Plugin-generated type entry passed to processNamespace.
  */
-export interface StandalonePluginProcessContext<Config = unknown> {
-  /** Plugin-specific configuration passed via definePlugins() */
-  config: Config;
+export interface PluginNamespaceGeneratedTypeEntry {
+  type: TailorAnyDBType;
+  /** Plugin ID that generated this type */
+  pluginId: string;
+  /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */
+  generatedTypeKind?: string;
+  /** Source type that triggered generation */
+  originalType: TailorAnyDBType;
+}
+
+/**
+ * Context passed to plugin's processNamespace method.
+ * Used for plugins that operate on a namespace without requiring a source type.
+ */
+export interface PluginNamespaceProcessContext<Config = unknown> {
+  /** Plugin-level configuration passed via definePlugins() */
+  pluginConfig: Config;
   /** Target namespace for generated types */
   namespace: string;
+  /** TailorDB types in the namespace (after type-attached processing) */
+  types: TailorAnyDBType[];
+  /** Plugin-generated types for type-attached plugins in the namespace */
+  generatedTypes: PluginNamespaceGeneratedTypeEntry[];
 }
 
 /**
@@ -229,7 +246,7 @@ export type PluginExecutorContextValue =
  * Plugin authors should extend this interface for their specific context needs.
  */
 export interface PluginExecutorContextBase {
-  /** Source type that the plugin is attached to. Null for standalone executors. */
+  /** Source type that the plugin is attached to. Null for namespace executors. */
   sourceType: TailorAnyDBType | null;
   /** TailorDB namespace for data operations */
   namespace: string;
@@ -251,11 +268,12 @@ export interface PluginGeneratedExecutorWithFile<Ctx = PluginExecutorContext> {
   /** Executor name (used for generated file name) */
   name: string;
   /**
-   * Key in the plugin's `executors` object that returns a dynamic import.
-   * The generator will call `executors.{executorExport}()` to get the factory.
-   * @example "onCreate" → `const { default: factory } = await executors.onCreate();`
+   * Resolver function for the executor module.
+   * Should return a dynamic import to the executor file.
+   * Relative import specifiers are resolved from the plugin's importPath base.
+   * @example `async () => await import("./executors/on-create")`
    */
-  executorExport: string;
+  resolve: () => Promise<{ default: (ctx: Ctx) => unknown }>;
   /**
    * Context to pass to the executor factory.
    * Can include TailorAnyDBType objects - these will be handled specially
@@ -291,7 +309,7 @@ export type PluginGeneratedExecutor =
 export function isPluginExecutorWithFile(
   executor: PluginGeneratedExecutor,
 ): executor is PluginGeneratedExecutorWithFile {
-  return "executorExport" in executor && "context" in executor;
+  return "resolve" in executor && "context" in executor;
 }
 
 /**
@@ -325,33 +343,27 @@ export interface PluginOutput {
 }
 
 /**
+ * Output returned by a plugin's processNamespace method.
+ * Namespace plugins cannot extend a source type.
+ */
+export type NamespacePluginOutput = Omit<PluginOutput, "extends"> & { extends?: never };
+
+/**
  * Base plugin interface that all plugins must implement
  */
-export interface PluginBase<PluginConfig = unknown> {
+interface PluginBaseCommon<PluginConfig = unknown> {
   /** Unique identifier for the plugin */
   readonly id: string;
   /** Human-readable description of the plugin */
   readonly description: string;
   /**
    * Import path for this plugin's public API.
-   * Used by code generators to create correct import statements.
+   * Used by code generators to create correct import statements
+   * (e.g., plugin executors and seed schema generation).
    */
   readonly importPath: string;
   /**
-   * Schema defining the expected per-type configuration for this plugin.
-   * Used to validate config passed via `.plugin({ pluginId: config })`.
-   * Uses the same field types as createResolver's input (t.string(), t.number(), etc.).
-   * @example
-   * ```typescript
-   * configSchema: t.object({
-   *   archiveReason: t.bool({ optional: true }),
-   * })
-   * ```
-   */
-  readonly configSchema: TailorAnyField;
-
-  /**
-   * Schema defining the expected global plugin configuration.
+   * Schema defining the expected plugin-level configuration.
    * Used to validate config passed via `definePlugins([plugin, config])`.
    * If not provided, pluginConfig validation is skipped.
    * @example
@@ -367,10 +379,9 @@ export interface PluginBase<PluginConfig = unknown> {
   /**
    * Plugin-level configuration passed via definePlugins().
    * This config is stored when the plugin is registered and made available
-   * to both process() and processStandalone() methods.
-   * @internal
+   * to both process() and processNamespace() methods.
    */
-  readonly _pluginConfig?: PluginConfig;
+  readonly pluginConfig?: PluginConfig;
 
   /**
    * TypeScript type template for generating type-safe plugin configuration.
@@ -393,20 +404,55 @@ export interface PluginBase<PluginConfig = unknown> {
   process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
 
   /**
-   * Process standalone plugin without requiring a source type.
+   * Process plugin for a namespace without requiring a source type.
    * This method is called once per namespace for plugins configured via definePlugins().
    * Use this for plugins that generate types independently of user-defined types.
-   * @param context - Context containing the config and target namespace
+   * @param context - Context containing the plugin config, namespace, and types
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  processStandalone?(context: StandalonePluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  processNamespace?(
+    context: PluginNamespaceProcessContext,
+  ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
 }
+
+export interface PluginBaseWithConfig<
+  PluginConfig = unknown,
+> extends PluginBaseCommon<PluginConfig> {
+  /**
+   * Schema defining the expected per-type configuration for this plugin.
+   * Used to validate config passed via `.plugin({ pluginId: config })`.
+   * Uses the same field types as createResolver's input (t.string(), t.number(), etc.).
+   * @example
+   * ```typescript
+   * configSchema: t.object({
+   *   archiveReason: t.bool({ optional: true }),
+   * })
+   * ```
+   */
+  readonly configSchema: TailorAnyField;
+}
+
+export interface PluginBaseNamespace<
+  PluginConfig = unknown,
+> extends PluginBaseCommon<PluginConfig> {
+  /** Namespace-only plugins do not accept per-type config. */
+  readonly configSchema?: undefined;
+  /** Namespace-only plugins cannot define process(). */
+  process?: never;
+}
+
+/**
+ * Base plugin interface that all plugins must implement
+ */
+export type PluginBase<PluginConfig = unknown> =
+  | PluginBaseWithConfig<PluginConfig>
+  | PluginBaseNamespace<PluginConfig>;
 
 /**
  * Plugin configuration input type for definePlugins()
  * Can be:
  * - A PluginBase object for custom plugins without configuration
  * - A tuple [PluginBase, options] for custom plugins with configuration
- * Options can be any value - the plugin's configSchema handles validation.
+ * Options can be any value - the plugin's pluginConfigSchema handles validation.
  */
 export type PluginConfig = PluginBase | readonly [PluginBase, unknown];

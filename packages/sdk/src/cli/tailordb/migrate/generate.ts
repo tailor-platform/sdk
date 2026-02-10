@@ -159,7 +159,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
     // Load types for this service
     await tailordbService.loadTypes();
-    await tailordbService.processStandalonePlugins();
+    await tailordbService.processNamespacePlugins();
 
     const localTypesObj = tailordbService.getTypes();
 

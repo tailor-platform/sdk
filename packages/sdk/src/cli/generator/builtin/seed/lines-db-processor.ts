@@ -255,11 +255,11 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     `;
   }
 
-  // Standalone plugin (e.g., audit-log): use getGeneratedType(null, kind)
-  // For standalone plugins, generatedTypeKind is required
+  // Namespace plugin (e.g., audit-log): use getGeneratedType(null, kind)
+  // For namespace plugins, generatedTypeKind is required
   if (!pluginSource.generatedTypeKind) {
     throw new Error(
-      `Standalone plugin "${pluginSource.pluginId}" must provide generatedTypeKind for type "${typeName}"`,
+      `Namespace plugin "${pluginSource.pluginId}" must provide generatedTypeKind for type "${typeName}"`,
     );
   }
 

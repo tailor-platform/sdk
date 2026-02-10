@@ -11,7 +11,11 @@ import {
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
-import type { PluginAttachment } from "@/parser/plugin-config/types";
+import { isPluginGeneratedType } from "@/parser/service/tailordb/types";
+import type {
+  PluginAttachment,
+  PluginNamespaceGeneratedTypeEntry,
+} from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 
 export type TailorDBService = {
@@ -21,7 +25,7 @@ export type TailorDBService = {
   getTypeSourceInfo: () => Readonly<TypeSourceInfo>;
   getPluginAttachments: () => ReadonlyMap<string, readonly PluginAttachment[]>;
   loadTypes: () => Promise<Record<string, TailorDBType> | undefined>;
-  processStandalonePlugins: () => Promise<void>;
+  processNamespacePlugins: () => Promise<void>;
 };
 
 /**
@@ -202,14 +206,73 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       doParseTypes();
       return types;
     },
-    processStandalonePlugins: async () => {
+    processNamespacePlugins: async () => {
       if (!pluginManager) return;
 
-      const results = await pluginManager.processStandalonePlugins(namespace);
-      const standaloneKey = "__standalone__";
+      const typeByName = new Map<string, TailorAnyDBType>();
+      for (const typeMap of Object.values(rawTypes)) {
+        for (const [typeName, typeValue] of Object.entries(typeMap)) {
+          if (!typeByName.has(typeName)) {
+            typeByName.set(typeName, typeValue as TailorAnyDBType);
+          }
+        }
+      }
 
-      if (!rawTypes[standaloneKey]) {
-        rawTypes[standaloneKey] = {};
+      const originalTypeBySourceKey = new Map<string, TailorAnyDBType>();
+      for (const [typeName, source] of Object.entries(typeSourceInfo)) {
+        if ("filePath" in source && source.filePath && source.exportName) {
+          const typeValue = typeByName.get(typeName);
+          if (!typeValue) {
+            continue;
+          }
+          const key = `${source.filePath}:${source.exportName}`;
+          originalTypeBySourceKey.set(key, typeValue);
+        }
+      }
+
+      const namespaceTypes: TailorAnyDBType[] = [];
+      const namespaceGeneratedTypes: PluginNamespaceGeneratedTypeEntry[] = [];
+
+      for (const [typeName, typeValue] of typeByName.entries()) {
+        const source = typeSourceInfo[typeName];
+        if (!source) {
+          continue;
+        }
+
+        if (isPluginGeneratedType(source)) {
+          const hasOriginalSource = Boolean(source.originalFilePath && source.originalExportName);
+          if (!hasOriginalSource) {
+            continue;
+          }
+          const originalType =
+            originalTypeBySourceKey.get(
+              `${source.originalFilePath}:${source.originalExportName}`,
+            ) ?? null;
+          if (!originalType) {
+            continue;
+          }
+
+          namespaceGeneratedTypes.push({
+            type: typeValue,
+            pluginId: source.pluginId,
+            generatedTypeKind: source.generatedTypeKind,
+            originalType,
+          });
+          continue;
+        }
+
+        namespaceTypes.push(typeValue);
+      }
+
+      const results = await pluginManager.processNamespacePlugins(
+        namespace,
+        namespaceTypes,
+        namespaceGeneratedTypes,
+      );
+      const pluginGeneratedKey = "__plugin_generated__";
+
+      if (!rawTypes[pluginGeneratedKey]) {
+        rawTypes[pluginGeneratedKey] = {};
       }
 
       for (const { pluginId, config, result } of results) {
@@ -222,7 +285,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         // Add generated types to rawTypes
         for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
-          rawTypes[standaloneKey][generatedType.name] = generatedType as TailorDBTypeSchemaOutput;
+          rawTypes[pluginGeneratedKey][generatedType.name] =
+            generatedType as TailorDBTypeSchemaOutput;
           typeSourceInfo[generatedType.name] = {
             exportName: generatedType.name,
             pluginId,
@@ -234,12 +298,12 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           };
 
           logger.log(
-            `  Generated: ${styles.success(generatedType.name)} by standalone plugin ${styles.info(pluginId)}`,
+            `  Generated: ${styles.success(generatedType.name)} by namespace plugin ${styles.info(pluginId)}`,
           );
         }
       }
 
-      // Re-parse types to include standalone plugin types
+      // Re-parse types to include namespace plugin types
       if (results.length > 0) {
         doParseTypes();
       }

@@ -9,7 +9,7 @@ import type { PluginBase } from "@/parser/plugin-config";
 /**
  * Type alias for plugin config schema field type
  */
-type ConfigSchemaField = PluginBase["configSchema"];
+type ConfigSchemaField = Exclude<PluginBase["configSchema"], undefined>;
 
 export interface AttributeMapConfig {
   [key: string]: string;
@@ -282,7 +282,10 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
     // Convert plugins to PluginConfigForTypeGen format
     // Exclude built-in plugins (@tailor-platform/*) as they are defined in the SDK
     const pluginConfigs: PluginConfigForTypeGen[] | undefined = plugins
-      ?.filter((p) => !p.id.startsWith("@tailor-platform/"))
+      ?.filter(
+        (p): p is PluginBase & { configSchema: ConfigSchemaField } =>
+          !p.id.startsWith("@tailor-platform/") && p.configSchema !== undefined,
+      )
       .map((p) => ({
         id: p.id,
         configSchema: p.configSchema,

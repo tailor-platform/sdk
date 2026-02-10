@@ -17,19 +17,36 @@ interface PluginBase<PluginConfig = unknown> {
   /** Import path for generated code to reference */
   readonly importPath: string;
 
-  /** Schema for per-type configuration via .plugin() */
-  readonly configSchema: TailorAnyField;
+  /** Schema for per-type configuration via .plugin() (required when using process) */
+  readonly configSchema?: TailorAnyField;
 
-  /** Schema for global configuration via definePlugins() (optional) */
+  /** Schema for plugin-level configuration via definePlugins() (optional) */
   readonly pluginConfigSchema?: TailorAnyField;
+
+  /** Plugin-level config passed via definePlugins() */
+  readonly pluginConfig?: PluginConfig;
+
+  /** Optional template for generating PluginConfigs typing */
+  readonly configTypeTemplate?: string;
 
   /** Process a type with this plugin attached */
   process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
 
-  /** Process without a source type (standalone plugins) */
-  processStandalone?(context: StandalonePluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  /** Process a namespace (plugins without a source type) */
+  processNamespace?(
+    context: PluginNamespaceProcessContext,
+  ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
 }
 ```
+
+Notes:
+
+- `importPath` should be resolvable from your project root; code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
+- If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `process`.
+- Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
+- `pluginConfig` stores the plugin-level config so it can be read later during processing. If you prefer not to set it manually, you can pass config as a tuple to `definePlugins([plugin, config])`.
+- For custom plugins, `pluginConfig` is the expected pattern. The tuple form is intended for SDK-provided built-in plugins.
+- `resolve` should return a dynamic import; relative specifiers are resolved from the plugin module.
 
 ## PluginProcessContext
 
@@ -43,7 +60,7 @@ interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
   /** Per-type configuration from .plugin({ pluginId: config }) */
   config: Config;
 
-  /** Global configuration from definePlugins() */
+  /** Plugin-level configuration from definePlugins() */
   pluginConfig: PluginConfig;
 
   /** Namespace of the TailorDB type */
@@ -51,9 +68,43 @@ interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
 }
 ```
 
+## PluginNamespaceProcessContext
+
+Context passed to the `processNamespace` method:
+
+```typescript
+interface PluginNamespaceProcessContext<Config = unknown> {
+  /** Plugin-level configuration from definePlugins() */
+  pluginConfig: Config;
+
+  /** Namespace of the TailorDB types */
+  namespace: string;
+
+  /** TailorDB types in the namespace (after type-attached processing) */
+  types: TailorAnyDBType[];
+
+  /** Plugin-generated types for type-attached plugins in the namespace */
+  generatedTypes: Array<{
+    type: TailorAnyDBType;
+    pluginId: string;
+    generatedTypeKind?: string;
+    originalType: TailorAnyDBType;
+  }>;
+}
+```
+
+`generatedTypes` includes only type-attached plugin-generated types (so `originalType` is always present), and `types` contains only user-defined types.
+For example:
+
+```typescript
+const changeRequestTypes = context.generatedTypes.filter(
+  (entry) => entry.pluginId === "@example/change-request",
+);
+```
+
 ## PluginOutput
 
-Return value from `process` and `processStandalone`:
+Return value from `process`:
 
 ```typescript
 interface PluginOutput {
@@ -72,6 +123,12 @@ interface PluginOutput {
     fields?: Record<string, TailorAnyField>;
   };
 }
+```
+
+`processNamespace` returns `NamespacePluginOutput` (same shape as `PluginOutput` but without `extends`):
+
+```typescript
+type NamespacePluginOutput = Omit<PluginOutput, "extends">;
 ```
 
 ## Example: Soft Delete Plugin
@@ -136,7 +193,7 @@ function processSoftDelete(
     executors: [
       {
         name: `${type.name.toLowerCase()}-on-delete`,
-        executorExport: "onDelete",
+        resolve: async () => await import("./executors/on-delete"),
         context: {
           sourceType: type,
           archiveType,
@@ -147,7 +204,7 @@ function processSoftDelete(
   };
 }
 
-// Factory function for plugins with global config
+// Factory function for plugins with namespace config
 export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginBase {
   return {
     id: "@example/soft-delete",
@@ -155,7 +212,7 @@ export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginB
     importPath: "./plugins/soft-delete",
     configSchema,
     pluginConfigSchema,
-    _pluginConfig: pluginConfig,
+    pluginConfig,
     process: processSoftDelete,
   };
 }
@@ -277,16 +334,16 @@ const plugin: PluginBase = {
 };
 ```
 
-### Standalone Plugins
+### Namespace Plugins
 
-Implement `processStandalone` for plugins that generate types independently:
+Implement `processNamespace` for plugins that generate types independently:
 
 ```typescript
 const plugin: PluginBase = {
   id: "@example/audit-log",
   // ...
-  processStandalone(context) {
-    // Called once per namespace
+  processNamespace(context) {
+    // Called once per namespace, with namespace-level types available
     return { types: { auditLog: /* generated type */ } };
   },
 };
@@ -303,8 +360,8 @@ const plugin: PluginBase = {
   process(context) {
     // Handle type attachments
   },
-  processStandalone(context) {
-    // Handle standalone generation
+  processNamespace(context) {
+    // Handle namespace generation
   },
 };
 ```
