@@ -243,6 +243,20 @@ export class PluginManager {
         }
       }
 
+      // Collect generated types (standalone - no source type)
+      if (output.types && Object.keys(output.types).length > 0) {
+        const importPath = plugin.importPath;
+        for (const [kind, type] of Object.entries(output.types)) {
+          this.generatedTypes.push({
+            pluginId,
+            pluginImportPath: importPath,
+            sourceTypeName: "(standalone)",
+            kind,
+            type,
+          });
+        }
+      }
+
       results.push({
         pluginId,
         config,
@@ -341,7 +355,11 @@ export class PluginManager {
     };
 
     const { id: _id, ...fieldsWithoutId } = mergedFields;
-    const extendedType = db.type(originalType.name, fieldsWithoutId);
+    const pluralForm = originalType.metadata.settings?.pluralForm;
+    const typeName = pluralForm
+      ? ([originalType.name, pluralForm] as [string, string])
+      : originalType.name;
+    const extendedType = db.type(typeName, fieldsWithoutId);
     return copyMetadataToExtendedType(originalType, extendedType);
   }
 }
@@ -400,10 +418,6 @@ function copyMetadataToExtendedType(
     result = result.gqlPermission(metadata.permissions.gql);
   }
 
-  // Access private fields for plugins
-  // oxlint-disable-next-line no-explicit-any
-  const originalAny = original as any;
-
   // Copy indexes from metadata (indexes are stored in metadata, not as a direct property)
   if (metadata.indexes && Object.keys(metadata.indexes).length > 0) {
     const indexDefs = Object.entries(metadata.indexes).map(([name, def]) => ({
@@ -416,8 +430,8 @@ function copyMetadataToExtendedType(
   }
 
   // Copy plugins (but don't re-process them)
-  if (originalAny._plugins && originalAny._plugins.length > 0) {
-    for (const plugin of originalAny._plugins) {
+  if (original.plugins && original.plugins.length > 0) {
+    for (const plugin of original.plugins) {
       // Use type assertion as plugin ID is dynamic at runtime
       result = result.plugin({
         [plugin.pluginId]: plugin.config,

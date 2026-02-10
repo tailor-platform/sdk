@@ -17,6 +17,8 @@ import {
   type BundleWorkflowJobsResult,
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
+import { generatePluginExecutorFiles } from "@/cli/generator/plugin-executor-generator";
+import { generatePluginTypeFiles } from "@/cli/generator/plugin-type-generator";
 import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { PluginManager } from "@/plugin/manager";
@@ -101,16 +103,46 @@ export async function apply(options?: ApplyOptions) {
   // Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(application.workflowConfig);
 
-  // Build functions (using already loaded data)
-  for (const app of application.applications) {
-    for (const pipeline of app.resolverServices) {
-      await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
+  let tailordbTypesLoaded = false;
+  let pluginExecutorFiles: string[] = [];
+
+  // Load TailorDB types early to generate plugin type/executor files before bundling
+  if (application.tailorDBServices.length > 0) {
+    for (const tailordb of application.tailorDBServices) {
+      await tailordb.loadTypes();
+      // Process standalone plugins (generates types without requiring a source type)
+      await tailordb.processStandalonePlugins();
+    }
+    tailordbTypesLoaded = true;
+  }
+
+  // Generate plugin type/executor files (matches `generate` flow ordering)
+  const pluginOutputDir = path.join(getDistDir(), "plugin");
+  const pluginTypes = pluginManager?.getPluginGeneratedTypes() ?? [];
+  const typeGenerationResult = generatePluginTypeFiles(pluginTypes, pluginOutputDir);
+
+  const sourceTypeFilePaths = new Map<string, string>();
+  for (const db of application.tailorDBServices) {
+    const typeSourceInfo = db.getTypeSourceInfo();
+    for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
+      if (sourceInfo.filePath) {
+        sourceTypeFilePaths.set(typeName, sourceInfo.filePath);
+      }
     }
   }
-  // Discover plugin executor files before bundling
+
+  const pluginExecutors = pluginManager?.getPluginGeneratedExecutorsWithImportPath() ?? [];
+  const generatedExecutorFiles = generatePluginExecutorFiles(
+    pluginExecutors,
+    pluginOutputDir,
+    typeGenerationResult,
+    sourceTypeFilePaths,
+  );
+
+  // Discover plugin executor files after generation
   // Look for executors in new path pattern: .tailor-sdk/plugin/{pluginId}/executors/*.ts
-  const pluginExecutorFiles: string[] = [];
-  const pluginBaseDir = path.join(getDistDir(), "plugin");
+  const pluginExecutorFileSet = new Set<string>(generatedExecutorFiles);
+  const pluginBaseDir = pluginOutputDir;
   if (fs.existsSync(pluginBaseDir)) {
     for (const pluginDir of fs.readdirSync(pluginBaseDir)) {
       const executorDir = path.join(pluginBaseDir, pluginDir, "executors");
@@ -119,7 +151,9 @@ export async function apply(options?: ApplyOptions) {
           .readdirSync(executorDir)
           .filter((f) => f.endsWith(".ts"))
           .map((f) => path.join(executorDir, f));
-        pluginExecutorFiles.push(...files);
+        for (const file of files) {
+          pluginExecutorFileSet.add(file);
+        }
       }
     }
   }
@@ -130,7 +164,17 @@ export async function apply(options?: ApplyOptions) {
       .readdirSync(legacyPluginExecutorDir)
       .filter((f) => f.endsWith(".ts"))
       .map((f) => path.join(legacyPluginExecutorDir, f));
-    pluginExecutorFiles.push(...legacyFiles);
+    for (const file of legacyFiles) {
+      pluginExecutorFileSet.add(file);
+    }
+  }
+  pluginExecutorFiles = Array.from(pluginExecutorFileSet);
+
+  // Build functions (using already loaded data)
+  for (const app of application.applications) {
+    for (const pipeline of app.resolverServices) {
+      await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
+    }
   }
 
   if (application.executorService) {
@@ -164,10 +208,12 @@ export async function apply(options?: ApplyOptions) {
 
   // Load remaining files and print logs
   // Order: TailorDB → Resolver → Executor → Workflow
-  for (const tailordb of application.tailorDBServices) {
-    await tailordb.loadTypes();
-    // Process standalone plugins (generates types without requiring a source type)
-    await tailordb.processStandalonePlugins();
+  if (!tailordbTypesLoaded) {
+    for (const tailordb of application.tailorDBServices) {
+      await tailordb.loadTypes();
+      // Process standalone plugins (generates types without requiring a source type)
+      await tailordb.processStandalonePlugins();
+    }
   }
 
   for (const pipeline of application.resolverServices) {
