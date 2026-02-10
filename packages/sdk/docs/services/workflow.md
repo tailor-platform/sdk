@@ -56,6 +56,34 @@ export const fetchCustomer = createWorkflowJob({
 });
 ```
 
+## Input and Output Type Constraints
+
+Workflow job inputs and outputs are serialized as JSON when passed between jobs. This imposes type constraints:
+
+**Input types** must be JSON-compatible — only primitives (`string`, `number`, `boolean`, `null`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used.
+
+```typescript
+// OK
+export const myJob = createWorkflowJob({
+  name: "my-job",
+  body: async (input: { id: string; count: number; tags: string[] }) => {
+    // ...
+  },
+});
+
+// Compile error — Date is not allowed in input
+export const badJob = createWorkflowJob({
+  name: "bad-job",
+  body: async (input: { createdAt: Date }) => {
+    // ...
+  },
+});
+```
+
+**Output types** are more permissive — `Date` and objects with `toJSON()` are allowed because they are serialized via `JSON.stringify` at runtime (e.g., `Date` becomes a string).
+
+These constraints are enforced at compile time — you will get a type error if you use an unsupported type.
+
 ## Triggering Jobs
 
 Use `.trigger()` to start other jobs from within a job.
