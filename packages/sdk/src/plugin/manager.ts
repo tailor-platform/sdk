@@ -103,6 +103,8 @@ export class PluginManager {
   private plugins: Map<string, PluginBase> = new Map();
   private generatedExecutors: PluginExecutorInfo[] = [];
   private generatedTypes: PluginGeneratedTypeInfo[] = [];
+  private standaloneGeneratedTypeKeys: Set<string> = new Set();
+  private standaloneGeneratedExecutorKeys: Set<string> = new Set();
 
   constructor(plugins: PluginBase[] = []) {
     for (const plugin of plugins) {
@@ -235,6 +237,11 @@ export class PluginManager {
       // Collect generated executors (standalone - no source type)
       if (output.executors && output.executors.length > 0) {
         for (const executor of output.executors) {
+          const executorKey = `${pluginId}:${executor.name}`;
+          if (this.standaloneGeneratedExecutorKeys.has(executorKey)) {
+            continue;
+          }
+          this.standaloneGeneratedExecutorKeys.add(executorKey);
           this.generatedExecutors.push({
             executor,
             pluginId,
@@ -247,6 +254,11 @@ export class PluginManager {
       if (output.types && Object.keys(output.types).length > 0) {
         const importPath = plugin.importPath;
         for (const [kind, type] of Object.entries(output.types)) {
+          const typeKey = `${pluginId}:${kind}:${type.name}`;
+          if (this.standaloneGeneratedTypeKeys.has(typeKey)) {
+            continue;
+          }
+          this.standaloneGeneratedTypeKeys.add(typeKey);
           this.generatedTypes.push({
             pluginId,
             pluginImportPath: importPath,
