@@ -6,7 +6,6 @@ import {
   bundleMigrationScript,
   bundleSeedScript,
   executeScript,
-  getMachineUserToken,
   initOperatorClient,
   loadAccessToken,
   loadWorkspaceId,
@@ -237,8 +236,6 @@ const workspaceId = await loadWorkspaceId();
 const client = await initOperatorClient(accessToken);
 const appInfo = await show({ configPath });
 const authNamespace = appInfo.auth;
-
-await getMachineUserToken({ name: machineUserName, configPath });
 
 const invoker = create(AuthInvokerSchema, {
   namespace: authNamespace,
