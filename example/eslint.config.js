@@ -9,6 +9,7 @@ export default defineConfig([
     ".tailor-sdk/",
     "generated/",
     "tests/fixtures/",
+    "tests/migration-fixtures/",
     "generated-perf",
     "scripts/perf",
     "seed",

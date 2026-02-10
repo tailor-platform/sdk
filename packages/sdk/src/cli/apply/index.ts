@@ -234,20 +234,19 @@ export async function apply(options?: ApplyOptions) {
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
 
-  // TailorDB: Automatically validates migrations and handles migration flow internally
-  await applyTailorDB(client, tailorDB, "create-update");
-
-  // Other services: Apply after TailorDB migrations complete
+  // Other services: Apply before TailorDB (migration scripts may require Auth)
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
+  await applyTailorDB(client, tailorDB, "create-update");
+
   await applyPipeline(client, pipeline, "create-update");
 
   // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
   // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
   // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
-  // NOTE: TailorDB resource deletions are handled within create-update phase (above)
-  //       because migration flow requires: pre-migration → script execution → post-migration (with deletions)
+  // NOTE: TailorDB resource deletions are handled during the create-update phase
+  //       after migration scripts execute.
   await applyPipeline(client, pipeline, "delete-resources");
   await applyAuth(client, auth, "delete-resources");
   await applyIdP(client, idp, "delete-resources");

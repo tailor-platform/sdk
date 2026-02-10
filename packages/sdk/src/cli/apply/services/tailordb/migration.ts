@@ -8,18 +8,12 @@ import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import ora from "ora";
-import * as path from "pathe";
 import { bundleMigrationScript } from "../../../bundler/migration/migration-bundler";
 import { type OperatorClient } from "../../../client";
-import {
-  getNamespacesWithMigrations,
-  type NamespaceWithMigrations,
-} from "../../../tailordb/migrate/config";
+import { type NamespaceWithMigrations } from "../../../tailordb/migrate/config";
 import {
   loadDiff,
   getMigrationFiles,
-  reconstructSnapshotFromMigrations,
-  filterTypeToSnapshot,
   getMigrationFilePath,
   formatMigrationNumber,
 } from "../../../tailordb/migrate/snapshot";
@@ -31,9 +25,7 @@ import {
 import { logger, styles } from "../../../utils/logger";
 import { executeScript } from "../../../utils/script-executor";
 import { trnPrefix } from "../label";
-import type { Application } from "@/cli/application";
-import type { LoadedConfig } from "@/cli/config-loader";
-import type { TailorDBServiceConfig, TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
 
 // ============================================================================
 // Types
@@ -111,23 +103,6 @@ export async function detectPendingMigrations(
 ): Promise<PendingMigration[]> {
   const pendingMigrations: PendingMigration[] = [];
 
-  // Check for max version from environment variable
-  const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
-  const maxVersion = maxVersionEnv ? parseInt(maxVersionEnv, 10) : undefined;
-
-  if (maxVersion !== undefined && !Number.isInteger(maxVersion)) {
-    throw new Error(
-      `Invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "${maxVersionEnv}". Must be a valid integer.`,
-    );
-  }
-
-  if (maxVersion !== undefined) {
-    logger.newline();
-    logger.info(
-      `Limiting migrations to version ${styles.bold(formatMigrationNumber(maxVersion))} or earlier`,
-    );
-  }
-
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     // Get current applied migration number
     const currentMigration = await getCurrentMigrationNumber(client, workspaceId, namespace);
@@ -138,11 +113,6 @@ export async function detectPendingMigrations(
     // Find migrations that haven't been applied yet
     for (const file of migrationFiles) {
       if (file.number <= currentMigration) {
-        continue;
-      }
-
-      // Skip migrations beyond max version if specified
-      if (maxVersion !== undefined && file.number > maxVersion) {
         continue;
       }
 
@@ -378,57 +348,4 @@ export function groupMigrationsByNamespace(
     grouped.set(migration.namespace, existing);
   }
   return grouped;
-}
-
-// ============================================================================
-// Migration Version Control
-// ============================================================================
-
-/**
- * Build filtered types map for a specific migration version
- * @param {number} maxVersion - Maximum migration version to reconstruct
- * @param {Application} application - Application instance
- * @param {LoadedConfig} config - Loaded application config (includes path)
- * @returns {Promise<Map<string, Record<string, TailorDBType>>>} Filtered types by namespace
- */
-export async function buildFilteredTypesForVersion(
-  maxVersion: number,
-  application: Readonly<Application>,
-  config: LoadedConfig,
-): Promise<Map<string, Record<string, TailorDBType>>> {
-  const configDir = path.dirname(config.path);
-  const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
-
-  const filteredTypesByNamespace = new Map<string, Record<string, TailorDBType>>();
-
-  for (const { namespace, migrationsDir } of namespacesWithMigrations) {
-    // Reconstruct snapshot up to maxVersion
-    const snapshot = reconstructSnapshotFromMigrations(migrationsDir, maxVersion);
-    if (!snapshot) {
-      throw new Error(`No migrations found in ${migrationsDir}`);
-    }
-
-    // Get local types for this namespace
-    const tailordb = application.tailorDBServices.find((tdb) => tdb.namespace === namespace);
-    if (!tailordb) {
-      throw new Error(`TailorDB service not found for namespace: ${namespace}`);
-    }
-
-    await tailordb.loadTypes();
-    const localTypes = tailordb.getTypes();
-
-    // Filter local types to match snapshot state
-    const filteredTypes: Record<string, TailorDBType> = {};
-    for (const typeName of Object.keys(snapshot.types)) {
-      const localType = localTypes[typeName];
-      if (localType) {
-        const snapshotType = snapshot.types[typeName];
-        filteredTypes[typeName] = filterTypeToSnapshot(localType, snapshotType);
-      }
-    }
-
-    filteredTypesByNamespace.set(namespace, filteredTypes);
-  }
-
-  return filteredTypesByNamespace;
 }
