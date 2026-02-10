@@ -6,6 +6,7 @@
  */
 
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/utils/logger";
@@ -112,9 +113,9 @@ function generateSingleExecutorFile(
 
 /**
  * Generate TypeScript file content for new format executor (dynamic import).
- * Uses the plugin's `executors` object with dynamic imports for tree-shaking.
+ * Uses the executor's resolve function to dynamically import the module.
  * @param info - Plugin executor information
- * @param executor - Executor definition with executorExport
+ * @param executor - Executor definition with resolve
  * @param outputDir - Base output directory
  * @param typeGenerationResult - Result from plugin type generation
  * @param sourceTypeFilePaths - Map of source type names to their file paths
@@ -127,12 +128,15 @@ function generateExecutorFileContentNew(
   typeGenerationResult?: PluginTypeGenerationResult,
   sourceTypeFilePaths?: Map<string, string>,
 ): string {
-  const { executorExport, context } = executor;
+  const { resolve, context } = executor;
   const pluginDir = sanitizePluginId(info.pluginId);
   const executorOutputDir = path.join(outputDir, pluginDir, "executors");
 
-  // Calculate import path for plugin (handle local plugins)
-  const pluginImportPath = calculatePluginImportPath(info.pluginImportPath, executorOutputDir);
+  const executorImportPath = resolveExecutorImportPath(
+    resolve,
+    info.pluginImportPath,
+    executorOutputDir,
+  );
 
   // Collect type imports from context
   const typeImports = collectTypeImports(
@@ -144,7 +148,7 @@ function generateExecutorFileContentNew(
   );
 
   // Generate import statements
-  const imports: string[] = [`import { executors } from "${pluginImportPath}";`];
+  const imports: string[] = [];
 
   for (const [, importInfo] of typeImports) {
     imports.push(`import { ${importInfo.variableName} } from "${importInfo.importPath}";`);
@@ -160,7 +164,7 @@ function generateExecutorFileContentNew(
      */
     ${imports.join("\n")}
 
-    const { default: executorFactory } = await executors[${JSON.stringify(executorExport)}]();
+    const { default: executorFactory } = await import(${JSON.stringify(executorImportPath)});
     export default executorFactory(${contextCode});
   `;
 }
@@ -408,28 +412,88 @@ function escapeTemplateLiteral(str: string): string {
 // Utility functions
 // ============================================================================
 
+const require = createRequire(import.meta.url);
+
 /**
- * Calculate the import path for plugin's executors object.
- * For npm packages (e.g., "@tailor-platform/sdk/change-history-plugin"), use as-is.
- * For relative paths (e.g., "./plugins/soft-delete"), calculate relative path from output location.
+ * Resolve the import path for a plugin executor module.
+ * @param resolve - Executor resolve function
  * @param pluginImportPath - Plugin's import path
  * @param executorOutputDir - Directory where the generated executor will be written
- * @returns Import path string for the plugin module
+ * @returns Import path string for the executor module
  */
-function calculatePluginImportPath(pluginImportPath: string, executorOutputDir: string): string {
-  // Check if it's a relative path (local plugin)
-  if (pluginImportPath.startsWith(".")) {
-    // Local plugin: calculate relative path from output location to plugin's index
-    const pluginPath = path.join(process.cwd(), pluginImportPath);
-    let relativePath = path.relative(executorOutputDir, pluginPath);
-    if (!relativePath.startsWith(".")) {
-      relativePath = `./${relativePath}`;
-    }
-    return relativePath;
+function resolveExecutorImportPath(
+  resolve: () => Promise<{ default: unknown }>,
+  pluginImportPath: string,
+  executorOutputDir: string,
+): string {
+  const specifier = extractDynamicImportSpecifier(resolve);
+  if (!specifier.startsWith(".")) {
+    return specifier;
   }
 
-  // npm package: use as-is
-  return pluginImportPath;
+  const pluginBaseDir = resolvePluginBaseDir(pluginImportPath);
+  if (!pluginBaseDir) {
+    throw new Error(
+      `Unable to resolve plugin import base for "${pluginImportPath}". ` +
+        `Use an absolute import specifier in resolve(), or ensure the plugin path is resolvable.`,
+    );
+  }
+
+  const absolutePath = path.resolve(pluginBaseDir, specifier);
+  let relativePath = path.relative(executorOutputDir, absolutePath).replace(/\\/g, "/");
+  relativePath = stripSourceExtension(relativePath);
+  if (!relativePath.startsWith(".")) {
+    relativePath = `./${relativePath}`;
+  }
+  return relativePath;
+}
+
+/**
+ * Extract the dynamic import specifier from a resolve function.
+ * @param resolve - Executor resolve function
+ * @returns The module specifier string
+ */
+function extractDynamicImportSpecifier(resolve: () => Promise<{ default: unknown }>): string {
+  const source = resolve.toString();
+  const match = source.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
+  if (!match) {
+    throw new Error(
+      `resolve() must return a dynamic import, e.g. \`async () => await import("./executors/on-create")\`.`,
+    );
+  }
+  return match[1];
+}
+
+/**
+ * Resolve plugin base directory for relative imports.
+ * @param pluginImportPath - Plugin import path
+ * @returns Directory path or null if not resolvable
+ */
+function resolvePluginBaseDir(pluginImportPath: string): string | null {
+  if (pluginImportPath.startsWith(".")) {
+    const pluginPath = path.resolve(process.cwd(), pluginImportPath);
+    if (fs.existsSync(pluginPath)) {
+      const stats = fs.statSync(pluginPath);
+      return stats.isDirectory() ? pluginPath : path.dirname(pluginPath);
+    }
+    return path.extname(pluginPath) ? path.dirname(pluginPath) : pluginPath;
+  }
+
+  try {
+    const resolved = require.resolve(pluginImportPath, { paths: [process.cwd()] });
+    return path.dirname(resolved);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Strip TypeScript source extensions from import paths.
+ * @param importPath - Path to normalize
+ * @returns Path without .ts/.tsx extension
+ */
+function stripSourceExtension(importPath: string): string {
+  return importPath.replace(/\.(ts|tsx)$/, "");
 }
 
 /**

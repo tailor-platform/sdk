@@ -111,8 +111,8 @@ export async function apply(options?: ApplyOptions) {
   if (application.tailorDBServices.length > 0) {
     for (const tailordb of application.tailorDBServices) {
       await tailordb.loadTypes();
-      // Process standalone plugins (generates types without requiring a source type)
-      await tailordb.processStandalonePlugins();
+      // Process namespace plugins (generates types without requiring a source type)
+      await tailordb.processNamespacePlugins();
     }
     tailordbTypesLoaded = true;
   }
@@ -198,8 +198,8 @@ export async function apply(options?: ApplyOptions) {
   if (!tailordbTypesLoaded) {
     for (const tailordb of application.tailorDBServices) {
       await tailordb.loadTypes();
-      // Process standalone plugins (generates types without requiring a source type)
-      await tailordb.processStandalonePlugins();
+      // Process namespace plugins (generates types without requiring a source type)
+      await tailordb.processNamespacePlugins();
     }
   }
 

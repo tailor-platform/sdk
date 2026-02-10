@@ -48,22 +48,32 @@ const _PluginOutputSchema = z.object({
 });
 
 // Custom plugin schema (object form)
-// Using passthrough() to preserve fields like importPath, configSchema, processStandalone
+// Using passthrough() to preserve fields like importPath, configSchema, processNamespace
 const CustomPluginSchema = z
   .object({
     id: z.string(),
     description: z.string(),
     importPath: z.string(),
-    configSchema: z.any(),
+    configSchema: z.any().optional(),
     pluginConfigSchema: z.any().optional(),
+    pluginConfig: z.any().optional(),
     // Use any for the process function since we're not strictly validating function signatures
     process: z.any().optional(),
-    processStandalone: z.any().optional(),
+    processNamespace: z.any().optional(),
+  })
+  .superRefine((plugin, ctx) => {
+    if (plugin.process && !plugin.configSchema) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "process requires configSchema to be defined.",
+        path: ["configSchema"],
+      });
+    }
   })
   .passthrough();
 
 // Custom plugin tuple schema (PluginBase, options)
-// Allows custom plugins to receive pluginConfig via definePlugins()
+// Allows custom plugins to receive plugin config via definePlugins()
 const CustomPluginTupleSchema = z.tuple([CustomPluginSchema, z.unknown()]);
 
 /**
@@ -94,11 +104,11 @@ export function createPluginConfigSchema() {
         const [first, options] = plugin;
         if (isPluginBase(first)) {
           const pluginBase = first as PluginBase;
-          return { ...pluginBase, _pluginConfig: options } as PluginBase;
+          return { ...pluginBase, pluginConfig: options } as PluginBase;
         }
         throw new Error(`Invalid plugin configuration: expected PluginBase object`);
       }
-      // Object form: custom plugin without pluginConfig
+      // Object form: custom plugin without plugin config
       return plugin as PluginBase;
     })
     .brand("Plugin");

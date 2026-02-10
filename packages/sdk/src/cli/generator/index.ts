@@ -479,9 +479,9 @@ export function createGenerationManager(
         try {
           await db.loadTypes();
 
-          // Process standalone plugins after loading types
+          // Process namespace plugins after loading types
           // These plugins generate types without requiring a source type
-          await db.processStandalonePlugins();
+          await db.processNamespacePlugins();
 
           services.tailordb[namespace] = {
             types: db.getTypes(),
