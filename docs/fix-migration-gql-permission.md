@@ -1,30 +1,30 @@
-# Migration Version とプラグイン生成リソースの不整合修正
+# Fix mismatch between migration version and plugin-generated resources
 
-## 問題
+## Problem
 
-`TAILOR_INTERNAL_APPLY_MIGRATION_VERSION` 環境変数を使用して特定の migration version を適用する際、TailorDB types は指定された version に制限されるが、以下のリソースは制限されない:
+When applying a specific migration version using `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION`, TailorDB types are filtered to that version, but the following resources are not filtered:
 
-1. **gqlPermissions** - 存在しないタイプの permissions を作成しようとして失敗
-2. **relation fields** - plugin が extends で追加した relation が、存在しないタイプを参照して失敗
+1. **gqlPermissions** - attempts to create permissions for types that do not exist
+2. **relation fields** - plugin-added relations (via `extends`) reference types that do not exist
 
-## 再現手順
+## Reproduction
 
-### gqlPermission の問題
+### gqlPermission issue
 
-1. プラグインが gqlPermission を持つタイプを生成する
-2. `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"` で apply を実行
-3. エラー: `Failed to create TailorDBGQLPermission: failed to create gqlPermission: record not found`
+1. A plugin generates types with `gqlPermission`.
+2. Run apply with `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"`.
+3. Error: `Failed to create TailorDBGQLPermission: failed to create gqlPermission: record not found`
 
-### relation field の問題
+### relation field issue
 
-1. プラグインが extends で既存タイプに relation フィールドを追加する
-2. その relation がプラグイン生成タイプを参照する
-3. `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"` で apply を実行
-4. エラー: `RefType "UserChangeRequest" specified in "User"."userChangeRequests" is not found`
+1. A plugin adds relation fields to an existing type via `extends`.
+2. The relation references a plugin-generated type.
+3. Run apply with `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"`.
+4. Error: `RefType "UserChangeRequest" specified in "User"."userChangeRequests" is not found`
 
-## 発生箇所
+## Where it happens
 
-Apply workflow の "Apply initial migration (0000)" ステップ:
+Apply workflow step "Apply initial migration (0000)":
 
 ```yaml
 - name: Apply initial migration (0000)
@@ -33,61 +33,61 @@ Apply workflow の "Apply initial migration (0000)" ステップ:
     TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"
 ```
 
-## 原因
+## Root cause
 
-`packages/sdk/src/cli/apply/services/tailordb/` の apply ロジックで:
+In the apply logic under `packages/sdk/src/cli/apply/services/tailordb/`:
 
-- TailorDB types は migration version に基づいてフィルタリングされる
-- gqlPermissions はフィルタリングされず、全てのタイプの permissions を作成しようとする
+- TailorDB types are filtered by migration version.
+- gqlPermissions are not filtered and attempt to create permissions for all types.
 
-## 期待される動作
+## Expected behavior
 
-`TAILOR_INTERNAL_APPLY_MIGRATION_VERSION` が設定されている場合、gqlPermissions も同じ migration version に基づいてフィルタリングされるべき。
+When `TAILOR_INTERNAL_APPLY_MIGRATION_VERSION` is set, gqlPermissions should be filtered by the same migration version.
 
-migration version 0000 に存在しないタイプ（例: プラグイン生成タイプ）の gqlPermissions は作成されないべき。
+Types that do not exist in migration version 0000 (e.g., plugin-generated types) should not have gqlPermissions created.
 
-## 調査対象ファイル
+## Files to investigate
 
 - `packages/sdk/src/cli/apply/services/tailordb/index.ts`
-- `packages/sdk/src/cli/apply/services/tailordb/gql-permission.ts` (存在する場合)
-- migration version フィルタリングを行っている箇所
+- `packages/sdk/src/cli/apply/services/tailordb/gql-permission.ts` (if it exists)
+- Any location that applies migration-version filtering
 
-## 参考: 成功/失敗の比較
+## Reference: success vs failure
 
-### 成功例 (soft-delete plugin)
+### Success (soft-delete plugin)
 
-`Deleted_Customer` タイプは生成されるが、gqlPermission は定義されていない:
+`Deleted_Customer` is generated, but no gqlPermission is defined:
 
 ```
 TailorDB types:
   + Customer
-  + Deleted_Customer  (plugin生成)
+  + Deleted_Customer  (plugin-generated)
   ...
 
 TailorDB gqlPermissions:
   + Customer
   ...
-  (Deleted_Customer は含まれない)
+  (Deleted_Customer is not included)
 ```
 
-### 失敗例 (changeset plugin)
+### Failure (changeset plugin)
 
-`UserChangeRequest` タイプは migration 0000 で作成されないが、gqlPermission は作成しようとする:
+`UserChangeRequest` is not created in migration 0000, but gqlPermission still attempts to create it:
 
 ```
 TailorDB types:
   + Customer
   + User
   ...
-  (UserChangeRequest は migration 0000 では作成されない)
+  (UserChangeRequest is not created in migration 0000)
 
 TailorDB gqlPermissions:
   + Customer
   + User
-  + UserChangeRequest  ← 存在しないタイプの permission を作成しようとして失敗
+  + UserChangeRequest  ← fails because the type does not exist
   ...
 ```
 
-## 関連 PR
+## Related PR
 
-- #560 (feat/plugin-changeset-example) - この問題により Apply が失敗
+- #560 (feat/plugin-changeset-example) - Apply fails due to this issue
