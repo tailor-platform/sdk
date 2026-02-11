@@ -1,61 +1,17 @@
 import {
-  defineAuth,
   defineConfig,
   defineGenerators,
-  defineIdp,
   definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { auth, idp, website } from "./configure/auth";
 import { softDeletePlugin } from "./plugins/soft-delete";
-import { user } from "./tailordb/user";
-
-const website = defineStaticWebSite("my-frontend", {
-  description: "my frontend application",
-});
 
 const erdSite = defineStaticWebSite("my-erd-site", {
   description: "ERD site for TailorDB",
 });
 
-const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
-  clients: ["default-idp-client"],
-  userAuthPolicy: {
-    useNonEmailIdentifier: false,
-    allowSelfPasswordReset: true,
-    passwordRequireUppercase: true,
-    passwordRequireLowercase: true,
-    passwordRequireNonAlphanumeric: true,
-    passwordRequireNumeric: true,
-    passwordMinLength: 8,
-    passwordMaxLength: 128,
-  },
-});
-
-export const auth = defineAuth("my-auth", {
-  userProfile: {
-    type: user,
-    usernameField: "email",
-    attributes: {
-      role: true,
-    },
-  },
-  machineUsers: {
-    "manager-machine-user": {
-      attributes: {
-        role: "MANAGER",
-      },
-    },
-  },
-  oauth2Clients: {
-    sample: {
-      redirectURIs: ["https://example.com/callback", `${website.url}/callback`],
-      description: "Sample OAuth2 client",
-      grantTypes: ["authorization_code", "refresh_token"],
-    },
-  },
-  idProvider: idp.provider("sample", "default-idp-client"),
-});
+export { auth };
 
 export default defineConfig({
   name: "my-app",
