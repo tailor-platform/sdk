@@ -8,10 +8,10 @@ import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 import {
   createExecutor,
   recordDeletedTrigger,
-  withPluginContext,
   type PluginDBSchema,
   type PluginRecord,
 } from "@tailor-platform/sdk";
+import { withPluginContext } from "@tailor-platform/sdk/plugin";
 import { Kysely } from "kysely";
 import type { SoftDeleteContext } from "../types";
 
