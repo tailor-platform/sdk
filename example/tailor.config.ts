@@ -3,6 +3,7 @@ import {
   defineConfig,
   defineGenerators,
   defineIdp,
+  definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
 import { changesetPlugin } from "@tailor-platform/sdk/changeset-plugin";
@@ -88,13 +89,13 @@ export default defineConfig({
   staticWebsites: [website, erdSite],
 });
 
+export const plugins = definePlugins(
+  changesetPlugin, // Builtin plugin for managing change requests
+);
+
 export const generators = defineGenerators(
   ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
   ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
   ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
-);
-
-export const plugins = definePlugins(
-  changesetPlugin, // Builtin plugin for managing change requests
 );
