@@ -128,6 +128,18 @@ export class PluginManager {
       };
     }
 
+    const typeConfigRequired = plugin.typeConfigRequired;
+    const resolvedRequired =
+      typeof typeConfigRequired === "function"
+        ? typeConfigRequired(plugin.pluginConfig)
+        : typeConfigRequired === true;
+    if (resolvedRequired && (context.config === undefined || context.config === null)) {
+      return {
+        success: false,
+        error: `Plugin "${plugin.id}" requires config, but none was provided for type "${context.type.name}".`,
+      };
+    }
+
     // Validate config against schema if provided
     if (plugin.configSchema) {
       const validationErrors = validatePluginConfig(context.config, plugin.configSchema);

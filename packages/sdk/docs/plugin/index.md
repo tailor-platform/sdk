@@ -70,6 +70,12 @@ export const customer = db
   });
 ```
 
+### Per-type Config Requirement
+
+Per-type config is optional by default. Plugin authors can change this with
+`typeConfigRequired` (boolean or function). When a function is used, it receives
+the plugin-level config from `definePlugins()`.
+
 ### Global Plugin Configuration
 
 Plugins can also accept global configuration via `definePlugins()`:

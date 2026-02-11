@@ -288,6 +288,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
         id: p.id,
         configSchema: p.configSchema,
         configTypeTemplate: p.configTypeTemplate,
+        typeConfigRequired: isTypeConfigRequired(p),
       }));
 
     if (pluginConfigs && pluginConfigs.length > 0) {
@@ -350,6 +351,8 @@ export interface PluginConfigForTypeGen {
   configSchema: ConfigSchemaField;
   /** Optional TypeScript type template (uses Fields for field names) */
   configTypeTemplate?: string;
+  /** Whether per-type config is required when attaching via .plugin() */
+  typeConfigRequired?: boolean;
 }
 
 /**
@@ -413,6 +416,14 @@ function fieldToTypeString(field: ConfigSchemaField, indent = 0): string {
   return baseType;
 }
 
+function isTypeConfigRequired(plugin: PluginBase): boolean {
+  const required = plugin.typeConfigRequired;
+  if (typeof required === "function") {
+    return required(plugin.pluginConfig);
+  }
+  return required === true;
+}
+
 /**
  * Generate PluginConfigs interface extension for user-defined.d.ts
  * @param plugins - Array of plugin configurations
@@ -426,7 +437,8 @@ function generatePluginConfigsDefinition(plugins: PluginConfigForTypeGen[]): str
   const pluginEntries = plugins.map((plugin) => {
     // Use configTypeTemplate if provided, otherwise generate from configSchema
     const typeString = plugin.configTypeTemplate ?? fieldToTypeString(plugin.configSchema, 2);
-    return `    "${plugin.id}": ${typeString};`;
+    const optionalMarker = plugin.typeConfigRequired ? "" : "?";
+    return `    "${plugin.id}"${optionalMarker}: ${typeString};`;
   });
 
   return `  interface PluginConfigs<Fields extends string> {
@@ -447,7 +459,8 @@ function generatePluginMethodOverload(plugins: PluginConfigForTypeGen[]): string
     // Use configTypeTemplate, replacing "Fields" with "keyof Fields & string"
     const typeTemplate = plugin.configTypeTemplate ?? fieldToTypeString(plugin.configSchema, 3);
     const typeString = typeTemplate.replace(/\bFields\b/g, "keyof Fields & string");
-    return `      "${plugin.id}"?: ${typeString};`;
+    const optionalMarker = plugin.typeConfigRequired ? "" : "?";
+    return `      "${plugin.id}"${optionalMarker}: ${typeString};`;
   });
 
   const allEntries = pluginEntries;

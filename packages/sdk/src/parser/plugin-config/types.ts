@@ -1,6 +1,10 @@
 import type { TailorAnyDBType } from "@/configure/services/tailordb";
 import type { TailorAnyField } from "@/configure/types";
 
+export type TypeConfigRequired<PluginConfig = unknown> =
+  | boolean
+  | ((pluginConfig: PluginConfig | undefined) => boolean);
+
 /**
  * Interface for plugin configuration mapping.
  * Extend this interface via declaration merging to add typed plugin configs.
@@ -375,6 +379,13 @@ interface PluginBaseCommon<PluginConfig = unknown> {
    * ```
    */
   readonly pluginConfigSchema?: TailorAnyField;
+
+  /**
+   * Controls whether per-type plugin config is required when attaching via .plugin().
+   * If a function is provided, it receives pluginConfig from definePlugins().
+   * Default is optional when not provided.
+   */
+  readonly typeConfigRequired?: TypeConfigRequired<PluginConfig>;
 
   /**
    * Plugin-level configuration passed via definePlugins().
