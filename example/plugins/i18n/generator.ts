@@ -83,7 +83,7 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
       return {
         typeName: args.type.name,
         namespace: args.namespace,
-        labels: config.labels,
+        labels: config.labels ?? {},
         typeLabel: config.typeLabel,
       };
     },
@@ -113,21 +113,23 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
       const labelsByLanguage: Record<string, Record<string, Record<string, string>>> = {};
       const typeNames = new Set<string>();
 
+      const ensureTypeEntry = (lang: string, typeName: string) => {
+        if (!labelsByLanguage[lang]) {
+          labelsByLanguage[lang] = {};
+        }
+        if (!labelsByLanguage[lang][typeName]) {
+          labelsByLanguage[lang][typeName] = {};
+        }
+      };
+
       for (const { types } of args.input.tailordb) {
         for (const typeMetadata of types.types) {
-          // Collect type labels
-          if (typeMetadata.typeLabel) {
-            for (const lang of Object.keys(typeMetadata.typeLabel)) {
-              allLanguages.add(lang);
-              if (!labelsByLanguage[lang]) {
-                labelsByLanguage[lang] = {};
-              }
-              if (!labelsByLanguage[lang][typeMetadata.typeName]) {
-                labelsByLanguage[lang][typeMetadata.typeName] = {};
-              }
-              labelsByLanguage[lang][typeMetadata.typeName]._type = typeMetadata.typeLabel[lang];
-              typeNames.add(typeMetadata.typeName);
-            }
+          // Collect type labels (ensure entry even without field labels)
+          for (const [lang, label] of Object.entries(typeMetadata.typeLabel ?? {})) {
+            allLanguages.add(lang);
+            ensureTypeEntry(lang, typeMetadata.typeName);
+            labelsByLanguage[lang][typeMetadata.typeName]._type = label;
+            typeNames.add(typeMetadata.typeName);
           }
 
           // Collect field labels
@@ -135,13 +137,7 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
             if (!fieldLabel) continue;
             for (const [lang, label] of Object.entries(fieldLabel)) {
               allLanguages.add(lang);
-
-              if (!labelsByLanguage[lang]) {
-                labelsByLanguage[lang] = {};
-              }
-              if (!labelsByLanguage[lang][typeMetadata.typeName]) {
-                labelsByLanguage[lang][typeMetadata.typeName] = {};
-              }
+              ensureTypeEntry(lang, typeMetadata.typeName);
               labelsByLanguage[lang][typeMetadata.typeName][fieldName] = label;
               typeNames.add(typeMetadata.typeName);
             }
