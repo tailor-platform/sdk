@@ -108,16 +108,25 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
     ): Promise<GeneratorResult> {
       const files: GeneratorResult["files"] = [];
 
-      // Collect all languages from all types
+      // Collect all languages and type names from all types
       const allLanguages = new Set<string>();
+      const allTypeNames = new Set<string>();
       const labelsByLanguage: Record<string, Record<string, Record<string, string>>> = {};
 
       for (const { types } of args.input.tailordb) {
         for (const typeMetadata of types.types) {
+          allTypeNames.add(typeMetadata.typeName);
           // Collect type labels
           if (typeMetadata.typeLabel) {
             for (const lang of Object.keys(typeMetadata.typeLabel)) {
               allLanguages.add(lang);
+              if (!labelsByLanguage[lang]) {
+                labelsByLanguage[lang] = {};
+              }
+              if (!labelsByLanguage[lang][typeMetadata.typeName]) {
+                labelsByLanguage[lang][typeMetadata.typeName] = {};
+              }
+              labelsByLanguage[lang][typeMetadata.typeName]._type = typeMetadata.typeLabel[lang];
             }
           }
 
@@ -132,12 +141,6 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
               }
               if (!labelsByLanguage[lang][typeMetadata.typeName]) {
                 labelsByLanguage[lang][typeMetadata.typeName] = {};
-
-                // Add type label if exists
-                if (typeMetadata.typeLabel?.[lang]) {
-                  labelsByLanguage[lang][typeMetadata.typeName]._type =
-                    typeMetadata.typeLabel[lang];
-                }
               }
               labelsByLanguage[lang][typeMetadata.typeName][fieldName] = label;
             }
@@ -159,7 +162,7 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
 
       // Generate TypeScript type definitions for labels
       if (targetLanguages.length > 0) {
-        const typeNames = Object.keys(labelsByLanguage[targetLanguages[0]] ?? {});
+        const typeNames = Array.from(allTypeNames);
         const typeContent = generateTypeDefinitions(typeNames, labelsByLanguage);
         files.push({
           path: `${distPath}/types.ts`,
@@ -196,13 +199,17 @@ function generateTypeDefinitions(
 
   // Generate field label interfaces for each type
   for (const typeName of typeNames) {
-    const firstLang = Object.keys(labelsByLanguage)[0];
-    const fields = Object.keys(labelsByLanguage[firstLang]?.[typeName] ?? {}).filter(
-      (f) => f !== "_type",
+    const languages = Object.keys(labelsByLanguage);
+    const langWithType = languages.find((lang) => labelsByLanguage[lang]?.[typeName]);
+    const fields = langWithType
+      ? Object.keys(labelsByLanguage[langWithType]?.[typeName] ?? {}).filter((f) => f !== "_type")
+      : [];
+    const hasTypeLabel = languages.some(
+      (lang) => labelsByLanguage[lang]?.[typeName]?._type !== undefined,
     );
 
     lines.push(`export interface ${typeName}Labels {`);
-    if (labelsByLanguage[firstLang]?.[typeName]?._type) {
+    if (hasTypeLabel) {
       lines.push(`  _type: string;`);
     }
     for (const field of fields) {
