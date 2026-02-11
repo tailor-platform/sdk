@@ -1,5 +1,5 @@
 import { createResolver, t } from "@tailor-platform/sdk";
-import { auth } from "../configure/auth";
+import { auth } from "../auth";
 import orderProcessingWorkflow from "../workflows/order-processing";
 
 export default createResolver({

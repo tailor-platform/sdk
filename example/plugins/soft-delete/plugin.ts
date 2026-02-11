@@ -219,6 +219,7 @@ function processSoftDelete(
  * );
  * ```
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginBase {
   return {
     id: "@example/soft-delete",
