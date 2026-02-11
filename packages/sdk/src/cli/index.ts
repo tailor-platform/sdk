@@ -13,6 +13,7 @@ import { machineuserCommand } from "./machineuser";
 import { oauth2clientCommand } from "./oauth2client";
 import { openCommand } from "./open";
 import { profileCommand } from "./profile";
+import { queryCommand } from "./query";
 import { removeCommand } from "./remove";
 import { secretCommand } from "./secret";
 import { showCommand } from "./show";
@@ -43,6 +44,7 @@ export const mainCommand = defineCommand({
     oauth2client: oauth2clientCommand,
     open: openCommand,
     profile: profileCommand,
+    query: queryCommand,
     remove: removeCommand,
     secret: secretCommand,
     show: showCommand,

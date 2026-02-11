@@ -115,6 +115,7 @@ export type {
 } from "./executor/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
+export { query, type QueryDispatchResult, type QueryEngine, type QueryOptions } from "./query";
 export { truncate, type TruncateOptions } from "./tailordb/truncate";
 
 // Migration exports
