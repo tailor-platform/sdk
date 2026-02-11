@@ -15,6 +15,23 @@ export type GeneratedTypeKind = "request" | "step" | "approval" | "rework";
 const configSchema = t.bool().validate(({ value }) => value === true);
 
 /**
+ * Apply source type GraphQL permissions to a generated type when available.
+ * @param generatedType - Generated TailorDB type
+ * @param sourceType - Source TailorDB type
+ * @returns Generated type with GraphQL permissions applied
+ */
+function applySourceGqlPermission(
+  generatedType: TailorAnyDBType,
+  sourceType: TailorAnyDBType,
+): TailorAnyDBType {
+  const gqlPermission = sourceType.metadata.permissions.gql;
+  if (!gqlPermission) {
+    return generatedType;
+  }
+  return generatedType.gqlPermission(gqlPermission);
+}
+
+/**
  * Generate changeset-related types for a source type.
  * @param type - The source TailorDB type
  * @returns Map of kind to generated type
@@ -23,77 +40,85 @@ function generateTypes(type: TailorAnyDBType): Record<GeneratedTypeKind, TailorA
   const typeName = type.name;
 
   // ChangeRequest - approval process
-  const changeRequest = db
-    .type(`${typeName}ChangeRequest`, {
-      recordId: db.uuid().index(),
-      draft: db.uuid().index().relation({ type: "n-1", toward: { type } }),
-      status: db.enum(["RUNNING", "REWORK", "APPROVED", "REJECTED", "CANCELED"]).index(),
-      reworkIteration: db.int(),
-      currentStepNo: db
-        .int()
-        .hooks({ create: () => 1 })
-        .validate([({ value }) => value >= 1, "currentStepNo must be >= 1"]),
-      templateKey: db.string(),
-      templateVersion: db.int(),
-      requestedBy: db.uuid().index(),
-      requestedAt: db.datetime(),
-      finalizedAt: db.datetime({ optional: true }),
-      effectiveFrom: db.datetime(),
-      activationStatus: db.enum(["PENDING", "ACTIVATED"]).index(),
-      activatedAt: db.datetime({ optional: true }),
-      ...db.fields.timestamps(),
-    })
-    .description("Approval request for change management")
-    .indexes({ fields: ["recordId", "status"], unique: false, name: "request_record_status_idx" })
-    .permission({
-      create: [[{ user: "_loggedIn" }, "=", true]],
-      read: [[{ user: "_loggedIn" }, "=", true]],
-      update: [[{ user: "_loggedIn" }, "=", true]],
-      delete: [[{ user: "_loggedIn" }, "=", true]],
-    });
-  // TODO: gqlPermission is temporarily removed due to Apply workflow issue.
-  // When TAILOR_INTERNAL_APPLY_MIGRATION_VERSION is set, types are filtered
-  // but gqlPermissions are not, causing "record not found" errors.
-  // See: docs/fix-migration-gql-permission.md
+  const changeRequest = applySourceGqlPermission(
+    db
+      .type(`${typeName}ChangeRequest`, {
+        recordId: db.uuid().index(),
+        draft: db.uuid().index().relation({ type: "n-1", toward: { type } }),
+        status: db.enum(["RUNNING", "REWORK", "APPROVED", "REJECTED", "CANCELED"]).index(),
+        reworkIteration: db.int(),
+        currentStepNo: db
+          .int()
+          .hooks({ create: () => 1 })
+          .validate([({ value }) => value >= 1, "currentStepNo must be >= 1"]),
+        templateKey: db.string(),
+        templateVersion: db.int(),
+        requestedBy: db.uuid().index(),
+        requestedAt: db.datetime(),
+        finalizedAt: db.datetime({ optional: true }),
+        effectiveFrom: db.datetime(),
+        activationStatus: db.enum(["PENDING", "ACTIVATED"]).index(),
+        activatedAt: db.datetime({ optional: true }),
+        ...db.fields.timestamps(),
+      })
+      .description("Approval request for change management")
+      .indexes({ fields: ["recordId", "status"], unique: false, name: "request_record_status_idx" })
+      .permission({
+        create: [[{ user: "_loggedIn" }, "=", true]],
+        read: [[{ user: "_loggedIn" }, "=", true]],
+        update: [[{ user: "_loggedIn" }, "=", true]],
+        delete: [[{ user: "_loggedIn" }, "=", true]],
+      }),
+    type,
+  );
 
   // ChangeStep - execution step
-  const changeStep = db.type(`${typeName}ChangeStep`, {
-    request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
-    iteration: db.int(),
-    stepNo: db.int(),
-    stepName: db.string(),
-    quorumType: db.enum(["ALL", "ANY"]),
-    minApprovals: db.int({ optional: true }),
-    status: db.enum(["PENDING", "APPROVED", "REWORK", "REJECTED", "SKIPPED"]).index(),
-    startedAt: db.datetime(),
-    finishedAt: db.datetime({ optional: true }),
-    ...db.fields.timestamps(),
-  });
+  const changeStep = applySourceGqlPermission(
+    db.type(`${typeName}ChangeStep`, {
+      request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
+      iteration: db.int(),
+      stepNo: db.int(),
+      stepName: db.string(),
+      quorumType: db.enum(["ALL", "ANY"]),
+      minApprovals: db.int({ optional: true }),
+      status: db.enum(["PENDING", "APPROVED", "REWORK", "REJECTED", "SKIPPED"]).index(),
+      startedAt: db.datetime(),
+      finishedAt: db.datetime({ optional: true }),
+      ...db.fields.timestamps(),
+    }),
+    type,
+  );
 
   // ChangeApproval - approval log (audit)
-  const changeApproval = db.type(`${typeName}ChangeApproval`, {
-    request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
-    iteration: db.int(),
-    stepNo: db.int(),
-    approver: db.uuid().index(),
-    decision: db.enum(["PENDING", "APPROVED", "REWORK", "REJECTED"]).index(),
-    decidedAt: db.datetime({ optional: true }),
-    comment: db.string({ optional: true }),
-    resolvedByRuleType: db.enum(["USER", "GROUP", "ROLE", "ORG_MANAGER"]),
-    resolvedByRuleValue: db.string({ optional: true }),
-    ...db.fields.timestamps(),
-  });
+  const changeApproval = applySourceGqlPermission(
+    db.type(`${typeName}ChangeApproval`, {
+      request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
+      iteration: db.int(),
+      stepNo: db.int(),
+      approver: db.uuid().index(),
+      decision: db.enum(["PENDING", "APPROVED", "REWORK", "REJECTED"]).index(),
+      decidedAt: db.datetime({ optional: true }),
+      comment: db.string({ optional: true }),
+      resolvedByRuleType: db.enum(["USER", "GROUP", "ROLE", "ORG_MANAGER"]),
+      resolvedByRuleValue: db.string({ optional: true }),
+      ...db.fields.timestamps(),
+    }),
+    type,
+  );
 
   // ChangeReworkEvent - rework log
-  const changeReworkEvent = db.type(`${typeName}ChangeReworkEvent`, {
-    request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
-    iteration: db.int(),
-    fromStepNo: db.int(),
-    requestedBy: db.uuid().index(),
-    requestedAt: db.datetime(),
-    reason: db.string({ optional: true }),
-    ...db.fields.timestamps(),
-  });
+  const changeReworkEvent = applySourceGqlPermission(
+    db.type(`${typeName}ChangeReworkEvent`, {
+      request: db.uuid().relation({ type: "n-1", toward: { type: changeRequest } }),
+      iteration: db.int(),
+      fromStepNo: db.int(),
+      requestedBy: db.uuid().index(),
+      requestedAt: db.datetime(),
+      reason: db.string({ optional: true }),
+      ...db.fields.timestamps(),
+    }),
+    type,
+  );
 
   return {
     request: changeRequest,
