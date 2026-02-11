@@ -26,7 +26,8 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(6);
+    // Base resolvers (6) + changeset resolvers (7)
+    expect(pipelineResolvers.length).toBe(13);
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({

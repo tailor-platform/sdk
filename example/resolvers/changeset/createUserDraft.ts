@@ -37,10 +37,13 @@ export default createResolver({
       .returning(["id", "recordId", "recordState"])
       .executeTakeFirstOrThrow();
 
+    const recordId = result.recordId ?? changesetFields.recordId;
+    const recordState = result.recordState ?? changesetFields.recordState;
+
     return {
       id: result.id,
-      recordId: result.recordId,
-      recordState: result.recordState,
+      recordId,
+      recordState,
     };
   },
   output: t.object({

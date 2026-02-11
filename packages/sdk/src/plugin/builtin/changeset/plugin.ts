@@ -134,21 +134,28 @@ function generateTypes(type: TailorAnyDBType): Record<GeneratedTypeKind, TailorA
  */
 function generateExtendFields() {
   return {
-    recordId: db.uuid().index().description("Unique identifier for the record across versions"),
+    recordId: db
+      .uuid({ optional: true })
+      .index()
+      .description("Unique identifier for the record across versions"),
     recordState: db
-      .enum(["DRAFT", "ACTIVE", "ARCHIVED"])
+      .enum(["DRAFT", "ACTIVE", "ARCHIVED"], { optional: true })
       .index()
       .description("Current state of the record"),
-    archivedSeq: db.int().description("Sequence number for archived versions"),
-    effectiveFrom: db.datetime().description("When this version becomes effective"),
+    archivedSeq: db.int({ optional: true }).description("Sequence number for archived versions"),
+    effectiveFrom: db
+      .datetime({ optional: true })
+      .description("When this version becomes effective"),
     effectiveTo: db.datetime({ optional: true }).description("When this version expires"),
-    requestedBy: db.uuid().index().description("User who requested the change"),
-    requestedAt: db.datetime().description("When the change was requested"),
+    requestedBy: db.uuid({ optional: true }).index().description("User who requested the change"),
+    requestedAt: db.datetime({ optional: true }).description("When the change was requested"),
     currentApprover: db
       .uuid({ optional: true })
       .index()
       .description("Current approver in the workflow"),
-    approvers: db.uuid({ array: true }).description("List of approvers for this change"),
+    approvers: db
+      .uuid({ array: true, optional: true })
+      .description("List of approvers for this change"),
   };
 }
 

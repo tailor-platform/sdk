@@ -129,15 +129,15 @@ export interface Namespace {
       role: "MANAGER" | "STAFF";
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-      recordId: string;
-      recordState: "DRAFT" | "ACTIVE" | "ARCHIVED";
-      archivedSeq: number;
-      effectiveFrom: Timestamp;
+      recordId: string | null;
+      recordState: "DRAFT" | "ACTIVE" | "ARCHIVED" | null;
+      archivedSeq: number | null;
+      effectiveFrom: Timestamp | null;
       effectiveTo: Timestamp | null;
-      requestedBy: string;
-      requestedAt: Timestamp;
+      requestedBy: string | null;
+      requestedAt: Timestamp | null;
       currentApprover: string | null;
-      approvers: string[];
+      approvers: string[] | null;
     }
 
     UserChangeRequest: {

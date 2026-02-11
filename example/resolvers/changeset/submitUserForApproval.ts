@@ -49,8 +49,15 @@ export default createResolver({
       .where("id", "=", draftId)
       .executeTakeFirstOrThrow();
 
+    if (!draft.recordState) {
+      throw new Error("Record state is missing");
+    }
+    if (!draft.recordId) {
+      throw new Error("Record ID is missing");
+    }
+
     // Verify it's a draft
-    if (!isDraft(draft)) {
+    if (!isDraft({ recordState: draft.recordState })) {
       throw new Error("Record is not in DRAFT state");
     }
 

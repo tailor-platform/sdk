@@ -39,6 +39,10 @@ export default createResolver({
       .where("id", "=", request.draft)
       .executeTakeFirstOrThrow();
 
+    if (!draft.recordState) {
+      throw new Error("Draft record state is missing");
+    }
+
     // Get current step
     const currentStep = await db
       .selectFrom("UserChangeStep")
@@ -73,9 +77,9 @@ export default createResolver({
       isRejected: isRejected(request),
       isCanceled: isCanceled(request),
       isActivated: isActivated(request),
-      draftIsDraft: isDraft(draft),
-      draftIsActive: isActive(draft),
-      draftIsArchived: isArchived(draft),
+      draftIsDraft: isDraft({ recordState: draft.recordState }),
+      draftIsActive: isActive({ recordState: draft.recordState }),
+      draftIsArchived: isArchived({ recordState: draft.recordState }),
     };
 
     return {
