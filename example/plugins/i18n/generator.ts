@@ -108,14 +108,13 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
     ): Promise<GeneratorResult> {
       const files: GeneratorResult["files"] = [];
 
-      // Collect all languages and type names from all types
+      // Collect all languages and labels from all types
       const allLanguages = new Set<string>();
-      const allTypeNames = new Set<string>();
       const labelsByLanguage: Record<string, Record<string, Record<string, string>>> = {};
+      const typeNames = new Set<string>();
 
       for (const { types } of args.input.tailordb) {
         for (const typeMetadata of types.types) {
-          allTypeNames.add(typeMetadata.typeName);
           // Collect type labels
           if (typeMetadata.typeLabel) {
             for (const lang of Object.keys(typeMetadata.typeLabel)) {
@@ -127,6 +126,7 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
                 labelsByLanguage[lang][typeMetadata.typeName] = {};
               }
               labelsByLanguage[lang][typeMetadata.typeName]._type = typeMetadata.typeLabel[lang];
+              typeNames.add(typeMetadata.typeName);
             }
           }
 
@@ -143,6 +143,7 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
                 labelsByLanguage[lang][typeMetadata.typeName] = {};
               }
               labelsByLanguage[lang][typeMetadata.typeName][fieldName] = label;
+              typeNames.add(typeMetadata.typeName);
             }
           }
         }
@@ -162,8 +163,7 @@ export function createI18nGenerator(options: I18nGeneratorOptions = {}) {
 
       // Generate TypeScript type definitions for labels
       if (targetLanguages.length > 0) {
-        const typeNames = Array.from(allTypeNames);
-        const typeContent = generateTypeDefinitions(typeNames, labelsByLanguage);
+        const typeContent = generateTypeDefinitions(Array.from(typeNames), labelsByLanguage);
         files.push({
           path: `${distPath}/types.ts`,
           content: typeContent,

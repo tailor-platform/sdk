@@ -81,10 +81,11 @@ export const i18nPlugin: PluginBase = {
   id: "@example/i18n",
   description: "Stores field labels for internationalization",
   importPath: "./plugins/i18n",
+  typeConfigRequired: true,
   // configSchema is for runtime validation; use simple object for dynamic structures
   // TypeScript type checking is handled by configTypeTemplate
   configSchema: t.object({
-    labels: t.object({}),
+    labels: t.object({}, { required: true }),
     typeLabel: t.object({}, { optional: true }),
   }),
   // TypeScript type template for strict field name checking
