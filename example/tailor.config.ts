@@ -3,8 +3,10 @@ import {
   defineConfig,
   defineGenerators,
   defineIdp,
+  definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { softDeletePlugin } from "./plugins/soft-delete";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -94,4 +96,10 @@ export const generators = defineGenerators(
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
 );
 
-export { plugins } from "./configure/plugins";
+export const plugins = /*#__PURE__*/ definePlugins(
+  // Custom plugin with pluginConfig - global settings for all types using this plugin
+  softDeletePlugin({
+    archiveTablePrefix: "Deleted_", // Custom prefix for archive tables
+    defaultRetentionDays: 90, // Default retention period in days
+  }),
+);

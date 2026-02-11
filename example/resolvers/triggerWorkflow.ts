@@ -1,5 +1,4 @@
 import { createResolver, t } from "@tailor-platform/sdk";
-import { auth } from "../tailor.config";
 import orderProcessingWorkflow from "../workflows/order-processing";
 
 export default createResolver({
@@ -12,13 +11,10 @@ export default createResolver({
   },
   body: async ({ input }) => {
     // Trigger the workflow with authInvoker
-    const workflowRunId = await orderProcessingWorkflow.trigger(
-      {
-        orderId: input.orderId,
-        customerId: input.customerId,
-      },
-      { authInvoker: auth.invoker("manager-machine-user") },
-    );
+    const workflowRunId = await orderProcessingWorkflow.trigger({
+      orderId: input.orderId,
+      customerId: input.customerId,
+    });
 
     return {
       workflowRunId,

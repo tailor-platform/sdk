@@ -202,7 +202,7 @@ describe("pnpm apply command integration tests", () => {
       "resolvers/add.js": 4504 + sizeBuffer,
       "resolvers/showUserInfo.js": 4588 + sizeBuffer,
       "resolvers/stepChain.js": 176907 + sizeBuffer,
-      // triggerOrderProcessing: imports auth from tailor.config (~14KB)
+      // triggerOrderProcessing: minimal imports (~14KB)
       "resolvers/triggerOrderProcessing.js": 14022 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~160KB), date-fns jobs (~28KB), simple jobs (~9KB)
       "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
