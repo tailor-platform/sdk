@@ -5,7 +5,6 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
-import { createDefinePluginsPurePlugin } from "@/cli/bundler/pure-define-plugins";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
@@ -320,7 +319,7 @@ async function bundleSingleJob(
         inlineDynamicImports: true,
       },
       tsconfig,
-      plugins: [createDefinePluginsPurePlugin(), transformPlugin],
+      plugins: [transformPlugin],
       treeshake: {
         moduleSideEffects: false,
         annotations: true,
