@@ -46,15 +46,3 @@ export type {
   PluginExecutorContextBase,
   TailorDBTypeForPlugin,
 } from "@/parser/plugin-config/types";
-
-// Plugin utilities
-export {
-  withPluginContext,
-  type PluginExecutorFactory,
-  type PluginFunctionArgs,
-  type PluginRecordCreatedArgs,
-  type PluginRecordUpdatedArgs,
-  type PluginRecordDeletedArgs,
-  type PluginDBSchema,
-  type PluginRecord,
-} from "@/plugin/with-context";

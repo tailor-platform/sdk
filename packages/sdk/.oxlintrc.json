@@ -169,6 +169,22 @@
       }
     },
     {
+      "files": ["src/configure/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/plugin/**", "@/plugin/**"],
+                "message": "Configure module should not import from plugin module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/cli/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
