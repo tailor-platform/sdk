@@ -87,6 +87,10 @@ export default defineConfig([
               message: "Configure module should not import from parser module.",
             },
             {
+              group: ["**/plugin/**", "@/plugin/**"],
+              message: "Configure module should not import from plugin module.",
+            },
+            {
               group: ["**/parser/**/types", "@/parser/**/types"],
               allowTypeImports: true,
               message: "Configure module should not import from parser module.",
