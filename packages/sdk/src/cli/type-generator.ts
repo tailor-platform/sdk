@@ -280,11 +280,9 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
     }
 
     // Convert plugins to PluginConfigForTypeGen format
-    // Exclude built-in plugins (@tailor-platform/*) as they are defined in the SDK
     const pluginConfigs: PluginConfigForTypeGen[] | undefined = plugins
       ?.filter(
-        (p): p is PluginBase & { configSchema: ConfigSchemaField } =>
-          !p.id.startsWith("@tailor-platform/") && p.configSchema !== undefined,
+        (p): p is PluginBase & { configSchema: ConfigSchemaField } => p.configSchema !== undefined,
       )
       .map((p) => ({
         id: p.id,
