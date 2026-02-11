@@ -5,7 +5,6 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
-import { createDefinePluginsPurePlugin } from "@/cli/bundler/pure-define-plugins";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
@@ -123,11 +122,7 @@ async function bundleSingleResolver(
   const outputPath = path.join(outputDir, `${resolver.name}.js`);
 
   const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-  const definePluginsPurePlugin = createDefinePluginsPurePlugin();
-  const plugins: rolldown.Plugin[] = [
-    definePluginsPurePlugin,
-    ...(triggerPlugin ? [triggerPlugin] : []),
-  ];
+  const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
 
   await rolldown.build(
     rolldown.defineConfig({
