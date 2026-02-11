@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "@/configure";
 import { db } from "@/configure/services/tailordb";
 import { PluginManager } from "@/plugin/manager";
 import type { PluginBase } from "@/parser/plugin-config/types";
@@ -81,5 +82,31 @@ describe("PluginManager", () => {
 
     expect(extended.metadata.settings?.pluralForm).toBe("People");
     expect(extended.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
+  });
+
+  it("requires per-type config when typeConfigRequired is true", async () => {
+    const plugin: PluginBase = {
+      id: "requires-config",
+      description: "requires per-type config",
+      importPath: "@example/require-config",
+      configSchema: t.object({}),
+      typeConfigRequired: true,
+      process: () => ({}),
+    };
+
+    const manager = new PluginManager([plugin]);
+    const result = await manager.processAttachment({
+      type: db.type("Order", {
+        name: db.string(),
+      }),
+      config: undefined,
+      namespace: "main",
+      pluginId: "requires-config",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("requires config");
+    }
   });
 });

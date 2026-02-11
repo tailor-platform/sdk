@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { TailorAnyField } from "@/configure/types";
 import type { PluginBase } from "./types";
+
+type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
 
 // Plugin-generated type schema - accepts TailorDBType instances (from db.type())
 // We only validate the minimal interface: name and fields properties
@@ -92,9 +93,9 @@ function isPluginBase(value: unknown): value is PluginBase {
   );
 }
 
-function normalizePluginConfigSchema(schema: TailorAnyField): TailorAnyField {
-  const seen = new Set<TailorAnyField>();
-  const stack: TailorAnyField[] = [schema];
+function normalizePluginConfigSchema(schema: PluginConfigSchemaField): PluginConfigSchemaField {
+  const seen = new Set<PluginConfigSchemaField>();
+  const stack: PluginConfigSchemaField[] = [schema];
 
   while (stack.length > 0) {
     const field = stack.pop();

@@ -23,6 +23,9 @@ interface PluginBase<PluginConfig = unknown> {
   /** Schema for plugin-level configuration via definePlugins() (optional) */
   readonly pluginConfigSchema?: TailorAnyField;
 
+  /** Controls whether per-type config is required when attaching via .plugin() */
+  readonly typeConfigRequired?: boolean | ((pluginConfig?: PluginConfig) => boolean);
+
   /** Plugin-level config passed via definePlugins() */
   readonly pluginConfig?: PluginConfig;
 
@@ -45,8 +48,10 @@ Notes:
 - If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `process`.
 - Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
 - `pluginConfig` stores the plugin-level config so it can be read later during processing. If you prefer not to set it manually, you can pass config as a tuple to `definePlugins([plugin, config])`.
-- For custom plugins, `pluginConfig` is the expected pattern. The tuple form is intended for SDK-provided built-in plugins.
+- For custom plugins, `pluginConfig` is the expected pattern. The tuple form can also be used to pass config.
 - `resolve` should return a dynamic import; relative specifiers are resolved from the plugin module.
+- Per-type config is optional by default. Use `typeConfigRequired: true` to make it mandatory.
+- To toggle optional/required based on plugin config, provide a function for `typeConfigRequired`.
 
 ## PluginProcessContext
 
@@ -150,6 +155,7 @@ interface SoftDeleteConfig {
 interface SoftDeletePluginConfig {
   archiveTablePrefix?: string;
   defaultRetentionDays?: number;
+  requireTypeConfig?: boolean;
 }
 
 const configSchema = t.object({
@@ -216,6 +222,7 @@ export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginB
     configSchema,
     pluginConfigSchema,
     pluginConfig,
+    typeConfigRequired: (config) => config?.requireTypeConfig === true,
     process: processSoftDelete,
   };
 }
@@ -286,6 +293,18 @@ export const customer = db
       archiveReason: true,
     },
   });
+```
+
+If your plugin uses `typeConfigRequired` as a function, you can toggle whether per-type config
+is required via `pluginConfig`:
+
+```typescript
+export const plugins = definePlugins(
+  softDeletePlugin({
+    archiveTablePrefix: "Deleted_",
+    requireTypeConfig: true,
+  }),
+);
 ```
 
 ## Adding Type Safety
