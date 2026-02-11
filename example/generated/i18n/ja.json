@@ -1,8 +1,8 @@
 {
   "User": {
-    "_type": "ユーザー",
-    "name": "名前",
-    "email": "メールアドレス",
-    "role": "役割"
+    "_type": "User (JA)",
+    "name": "Name (JA)",
+    "email": "Email (JA)",
+    "role": "Role (JA)"
   }
 }

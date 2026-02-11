@@ -15,8 +15,8 @@
  * }).plugin({
  *   "@example/i18n": {
  *     labels: {
- *       name: { ja: "名前", en: "Name" },
- *       email: { ja: "メールアドレス", en: "Email" },
+ *       name: { ja: "Name (JA)", en: "Name" },
+ *       email: { ja: "Email (JA)", en: "Email" },
  *     },
  *   },
  * });
@@ -50,7 +50,7 @@ export interface I18nConfig<Fields extends string = string> {
  * ```typescript
  * .plugin({
  *   "@example/i18n": i18nConfig<typeof myType.fields>()({
- *     labels: { name: { ja: "名前" } },
+ *     labels: { name: { ja: "Name (JA)" } },
  *   }),
  * })
  * ```

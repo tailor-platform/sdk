@@ -14,8 +14,8 @@
  * }).plugin({
  *   "@example/i18n": {
  *     labels: {
- *       name: { ja: "名前", en: "Name" },
- *       email: { ja: "メールアドレス", en: "Email" },
+ *       name: { ja: "Name (JA)", en: "Name" },
+ *       email: { ja: "Email (JA)", en: "Email" },
  *     },
  *   },
  * });

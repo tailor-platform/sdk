@@ -19,11 +19,11 @@ export const user = db
   .gqlPermission(defaultGqlPermission)
   .plugin({
     "@example/i18n": {
-      typeLabel: { ja: "ユーザー", en: "User" },
+      typeLabel: { ja: "User (JA)", en: "User" },
       labels: {
-        name: { ja: "名前", en: "Name" },
-        email: { ja: "メールアドレス", en: "Email" },
-        role: { ja: "役割", en: "Role" },
+        name: { ja: "Name (JA)", en: "Name" },
+        email: { ja: "Email (JA)", en: "Email" },
+        role: { ja: "Role (JA)", en: "Role" },
       },
     },
   });
