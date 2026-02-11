@@ -53,6 +53,7 @@ export interface DefinedFieldMetadata {
 
 export type FieldOptions = {
   optional?: boolean;
+  required?: boolean;
   array?: boolean;
 };
 
