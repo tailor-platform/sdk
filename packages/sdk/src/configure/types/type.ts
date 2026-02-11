@@ -477,6 +477,16 @@ function object<const F extends Record<string, TailorAnyField>, const Opt extend
   return objectField;
 }
 
+/**
+ * Mark a field as explicitly required.
+ * Useful for plugin config schemas where fields are optional by default.
+ */
+function required<const F extends TailorAnyField>(field: F): F {
+  field._metadata.required = true;
+  field._metadata.requiredExplicit = true;
+  return field;
+}
+
 export const t = {
   uuid,
   string,
@@ -488,4 +498,5 @@ export const t = {
   time,
   enum: _enum,
   object,
+  required,
 };

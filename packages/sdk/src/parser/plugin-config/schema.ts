@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TailorAnyField } from "@/configure/types";
 import type { PluginBase } from "./types";
 
 // Plugin-generated type schema - accepts TailorDBType instances (from db.type())
@@ -91,6 +92,38 @@ function isPluginBase(value: unknown): value is PluginBase {
   );
 }
 
+function normalizePluginConfigSchema(schema: TailorAnyField): TailorAnyField {
+  const seen = new Set<TailorAnyField>();
+  const stack: TailorAnyField[] = [schema];
+
+  while (stack.length > 0) {
+    const field = stack.pop();
+    if (!field || seen.has(field)) {
+      continue;
+    }
+    seen.add(field);
+
+    const requiredExplicit = field._metadata.requiredExplicit === true;
+    field._metadata.required = requiredExplicit;
+
+    for (const nestedField of Object.values(field.fields)) {
+      stack.push(nestedField);
+    }
+  }
+
+  return schema;
+}
+
+function normalizePluginBase(plugin: PluginBase): PluginBase {
+  if (plugin.configSchema) {
+    normalizePluginConfigSchema(plugin.configSchema);
+  }
+  if (plugin.pluginConfigSchema) {
+    normalizePluginConfigSchema(plugin.pluginConfigSchema);
+  }
+  return plugin;
+}
+
 /**
  * Creates a PluginConfigSchema for custom plugins
  * @returns Plugin config schema that validates and transforms PluginBase instances
@@ -104,12 +137,12 @@ export function createPluginConfigSchema() {
         const [first, options] = plugin;
         if (isPluginBase(first)) {
           const pluginBase = first as PluginBase;
-          return { ...pluginBase, pluginConfig: options } as PluginBase;
+          return normalizePluginBase({ ...pluginBase, pluginConfig: options } as PluginBase);
         }
         throw new Error(`Invalid plugin configuration: expected PluginBase object`);
       }
       // Object form: custom plugin without plugin config
-      return plugin as PluginBase;
+      return normalizePluginBase(plugin as PluginBase);
     })
     .brand("Plugin");
 }
