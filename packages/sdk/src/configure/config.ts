@@ -8,6 +8,8 @@ import type { PluginConfig } from "@/parser/plugin-config/types";
  * @param config - Application configuration
  * @returns The same configuration object
  */
+/* @__NO_SIDE_EFFECTS__ */
+// eslint-disable-next-line jsdoc/require-jsdoc
 export function defineConfig<
   const Config extends AppConfig &
     // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
@@ -21,6 +23,8 @@ export function defineConfig<
  * @param configs - Generator configurations
  * @returns Generator configurations as given
  */
+/* @__NO_SIDE_EFFECTS__ */
+// eslint-disable-next-line jsdoc/require-jsdoc
 export function defineGenerators(...configs: GeneratorConfig[]) {
   return configs;
 }
@@ -32,6 +36,8 @@ export function defineGenerators(...configs: GeneratorConfig[]) {
  * @param configs - Plugin configurations
  * @returns Plugin configurations as given
  */
+/* @__NO_SIDE_EFFECTS__ */
+// eslint-disable-next-line jsdoc/require-jsdoc
 export function definePlugins(...configs: PluginConfig[]) {
   return configs;
 }
