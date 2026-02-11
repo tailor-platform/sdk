@@ -148,8 +148,21 @@ function createTailorField<
   const _metadata: FieldMetadata = { required: true };
 
   if (options) {
-    if (options.optional === true) {
-      _metadata.required = false;
+    const hasRequired = Object.prototype.hasOwnProperty.call(options, "required");
+    const hasOptional = Object.prototype.hasOwnProperty.call(options, "optional");
+
+    if (hasRequired) {
+      const isRequired = options.required === true;
+      _metadata.required = isRequired;
+      if (isRequired) {
+        _metadata.requiredExplicit = true;
+      }
+    } else if (hasOptional) {
+      const isOptional = options.optional === true;
+      _metadata.required = !isOptional;
+      if (options.optional === false) {
+        _metadata.requiredExplicit = true;
+      }
     }
     if (options.array === true) {
       _metadata.array = true;
@@ -477,16 +490,6 @@ function object<const F extends Record<string, TailorAnyField>, const Opt extend
   return objectField;
 }
 
-/**
- * Mark a field as explicitly required.
- * Useful for plugin config schemas where fields are optional by default.
- */
-function required<const F extends TailorAnyField>(field: F): F {
-  field._metadata.required = true;
-  field._metadata.requiredExplicit = true;
-  return field;
-}
-
 export const t = {
   uuid,
   string,
@@ -498,5 +501,4 @@ export const t = {
   time,
   enum: _enum,
   object,
-  required,
 };

@@ -155,9 +155,9 @@ interface SoftDeletePluginConfig {
 const configSchema = t.object({
   archiveReason: t.bool({ optional: true }),
   retentionDays: t.int({ optional: true }),
-  // Use t.required(...) to mark fields as required in plugin configs.
+  // Use { required: true } to mark fields as required in plugin configs.
   // By default, plugin config fields are optional.
-  // token: t.required(t.string()),
+  // token: t.string({ required: true }),
 });
 
 const pluginConfigSchema = t.object({
