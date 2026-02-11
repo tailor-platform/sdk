@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { t } from "@/configure";
 import { db } from "@/configure/services/tailordb";
 import { PluginManager } from "@/plugin/manager";
-import type { PluginBase } from "@/parser/plugin-config/types";
+import type { PluginBase, PluginConfigs } from "@/parser/plugin-config/types";
 
 describe("PluginManager", () => {
   it("collects namespace plugin-generated types", async () => {
@@ -69,9 +69,8 @@ describe("PluginManager", () => {
       .type(["Person", "People"], {
         name: db.string(),
       })
-      // PluginConfigs is open; use cast to attach plugin config in tests.
-      // biome-ignore lint/suspicious/noExplicitAny: test-only plugin config that isn't in PluginConfigs
-      .plugin({ "test-plugin": { enabled: true } } as any);
+      // PluginConfigs is open; use a cast to attach plugin config in tests.
+      .plugin({ "test-plugin": { enabled: true } } as PluginConfigs);
 
     const extended = manager.extendType({
       originalType: original,

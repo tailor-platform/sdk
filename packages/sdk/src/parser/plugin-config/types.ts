@@ -24,10 +24,9 @@ export type TypeConfigRequired<PluginConfig = unknown> =
  * ```
  */
 // Fields parameter is used by declaration merging in user-defined.d.ts
-// oxlint-disable-next-line no-unused-vars
+// oxlint-disable-next-line no-unused-vars, no-empty-object-type
 export interface PluginConfigs<Fields extends string = string> {
-  // Built-in changeset plugin
-  "@tailor-platform/changeset": true;
+  // Extend this interface via declaration merging to add typed plugin configs
 }
 
 /**
