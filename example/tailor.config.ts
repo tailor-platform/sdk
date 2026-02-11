@@ -3,6 +3,7 @@ import {
   defineConfig,
   defineGenerators,
   defineIdp,
+  definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
@@ -55,6 +56,12 @@ export const auth = defineAuth("my-auth", {
   idProvider: idp.provider("sample", "default-idp-client"),
 });
 
+const noopPlugin = {
+  id: "@example/noop",
+  description: "No-op plugin for bundling tests",
+  importPath: "@example/noop",
+};
+
 export default defineConfig({
   name: "my-app",
   env: {
@@ -86,6 +93,8 @@ export default defineConfig({
   },
   staticWebsites: [website, erdSite],
 });
+
+export const plugins = definePlugins(noopPlugin);
 
 export const generators = defineGenerators(
   ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
