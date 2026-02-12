@@ -1,8 +1,9 @@
 /**
- * Re-exports from kysely and function-kysely-tailordb packages.
+ * Kysely integration module for generated TailorDB code.
  *
- * This module provides a single import path for kysely-related types and classes
- * used in generated code, avoiding phantom dependency issues with pnpm.
+ * Re-exports kysely and function-kysely-tailordb types through a single import path
+ * to avoid phantom dependency issues with pnpm, and provides namespace-aware
+ * utility types and factory functions used by the code generator.
  */
 
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
@@ -11,6 +12,7 @@ import {
   type Insertable,
   type KyselyConfig,
   type Selectable,
+  type Transaction as KyselyTransaction,
   type Updateable,
 } from "kysely";
 
@@ -58,6 +60,13 @@ export function createGetDB<NS>() {
     return createTailordbKysely<NS[N]>(namespace as string, config);
   };
 }
+
+export type NamespaceTransaction<NS, K extends keyof NS | TailordbKysely<NS[keyof NS]> = keyof NS> =
+  K extends TailordbKysely<infer DB>
+    ? KyselyTransaction<DB>
+    : K extends keyof NS
+      ? KyselyTransaction<NS[K]>
+      : never;
 
 export type NamespaceTableName<NS> = {
   [N in keyof NS]: keyof NS[N];

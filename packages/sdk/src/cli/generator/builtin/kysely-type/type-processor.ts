@@ -233,13 +233,13 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   const importsSection = multiline /* ts */ `
     import {
       type ColumnType,
-      type Transaction as KyselyTransaction,
       createGetDB,
       type NamespaceDB,
       type NamespaceInsertable,
       type NamespaceSelectable,
       type NamespaceTable,
       type NamespaceTableName,
+      type NamespaceTransaction,
       type NamespaceUpdateable,
     } from "@tailor-platform/sdk/kysely";
 
@@ -272,11 +272,7 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
 
   const utilityTypeExports = multiline /* ts */ `
     export type Transaction<K extends keyof Namespace | DB = keyof Namespace> =
-      K extends DB<infer N>
-        ? KyselyTransaction<Namespace[N]>
-        : K extends keyof Namespace
-          ? KyselyTransaction<Namespace[K]>
-          : never;
+      NamespaceTransaction<Namespace, K>;
 
     type TableName = NamespaceTableName<Namespace>;
     export type Table<T extends TableName> = NamespaceTable<Namespace, T>;

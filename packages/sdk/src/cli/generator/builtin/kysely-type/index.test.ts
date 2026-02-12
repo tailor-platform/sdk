@@ -236,7 +236,7 @@ describe("KyselyGenerator integration tests", () => {
 
       const content = result.files[0].content;
       expect(content).toContain("type ColumnType");
-      expect(content).toContain("type Transaction as KyselyTransaction");
+      expect(content).toContain("type NamespaceTransaction");
       expect(content).toContain("type NamespaceInsertable");
       expect(content).toContain("type NamespaceSelectable");
       expect(content).toContain("type NamespaceUpdateable");
@@ -245,15 +245,9 @@ describe("KyselyGenerator integration tests", () => {
       expect(content).toContain("User: {");
       expect(content).toContain("export const getDB");
       expect(content).toContain("export type Transaction<K extends keyof Namespace | DB");
-      expect(content).toContain(
-        "export type Insertable<T extends keyof Namespace[keyof Namespace]>",
-      );
-      expect(content).toContain(
-        "export type Selectable<T extends keyof Namespace[keyof Namespace]>",
-      );
-      expect(content).toContain(
-        "export type Updateable<T extends keyof Namespace[keyof Namespace]>",
-      );
+      expect(content).toContain("export type Insertable<T extends TableName>");
+      expect(content).toContain("export type Selectable<T extends TableName>");
+      expect(content).toContain("export type Updateable<T extends TableName>");
       expect(result.errors).toBeUndefined();
     });
 
