@@ -110,14 +110,3 @@ e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 ## Creating Custom Plugins
 
 See [Custom Plugins](./custom.md) for how to create your own plugins.
-
-## Limitations (Beta)
-
-The following limitations apply during the beta period:
-
-- Plugin API may change between minor versions
-- Some edge cases in type generation may not be fully supported
-- Error messages may be improved in future releases
-- Documentation and examples are being expanded
-
-Please report any issues or feedback to help improve the plugin system.
