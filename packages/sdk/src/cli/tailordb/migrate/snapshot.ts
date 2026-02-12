@@ -799,6 +799,113 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
           };
         }
         break;
+      case "index_added":
+      case "index_modified":
+        if (types[change.typeName] && change.indexName) {
+          types[change.typeName] = {
+            ...types[change.typeName],
+            indexes: {
+              ...types[change.typeName].indexes,
+              [change.indexName]: change.after as SnapshotIndexConfig,
+            },
+          };
+        }
+        break;
+      case "index_removed":
+        if (types[change.typeName] && change.indexName && types[change.typeName].indexes) {
+          const { [change.indexName]: _, ...remainingIndexes } = types[change.typeName].indexes!;
+          types[change.typeName] = {
+            ...types[change.typeName],
+            indexes: Object.keys(remainingIndexes).length > 0 ? remainingIndexes : undefined,
+          };
+        }
+        break;
+      case "file_added":
+      case "file_modified":
+        if (types[change.typeName] && change.fieldName) {
+          types[change.typeName] = {
+            ...types[change.typeName],
+            files: {
+              ...types[change.typeName].files,
+              [change.fieldName]: change.after as string,
+            },
+          };
+        }
+        break;
+      case "file_removed":
+        if (types[change.typeName] && change.fieldName && types[change.typeName].files) {
+          const { [change.fieldName]: _, ...remainingFiles } = types[change.typeName].files!;
+          types[change.typeName] = {
+            ...types[change.typeName],
+            files: Object.keys(remainingFiles).length > 0 ? remainingFiles : undefined,
+          };
+        }
+        break;
+      case "relationship_added":
+      case "relationship_modified":
+        if (types[change.typeName] && change.relationshipName) {
+          const rel = change.after as SnapshotRelationship;
+          // Determine if it's forward or backward relationship based on sourceField
+          // Forward: sourceField is on this type, targets another type's field
+          // For simplicity, we check if forwardRelationships already has this name
+          const existingForward =
+            types[change.typeName].forwardRelationships?.[change.relationshipName];
+          const existingBackward =
+            types[change.typeName].backwardRelationships?.[change.relationshipName];
+
+          if (existingForward || (!existingBackward && change.kind === "relationship_added")) {
+            // Default to forward relationship for new relationships
+            types[change.typeName] = {
+              ...types[change.typeName],
+              forwardRelationships: {
+                ...types[change.typeName].forwardRelationships,
+                [change.relationshipName]: rel,
+              },
+            };
+          } else {
+            types[change.typeName] = {
+              ...types[change.typeName],
+              backwardRelationships: {
+                ...types[change.typeName].backwardRelationships,
+                [change.relationshipName]: rel,
+              },
+            };
+          }
+        }
+        break;
+      case "relationship_removed":
+        if (types[change.typeName] && change.relationshipName) {
+          const type = types[change.typeName];
+          if (type.forwardRelationships?.[change.relationshipName]) {
+            const { [change.relationshipName]: _, ...remaining } = type.forwardRelationships;
+            types[change.typeName] = {
+              ...type,
+              forwardRelationships: Object.keys(remaining).length > 0 ? remaining : undefined,
+            };
+          } else if (type.backwardRelationships?.[change.relationshipName]) {
+            const { [change.relationshipName]: _, ...remaining } = type.backwardRelationships;
+            types[change.typeName] = {
+              ...type,
+              backwardRelationships: Object.keys(remaining).length > 0 ? remaining : undefined,
+            };
+          }
+        }
+        break;
+      case "permission_modified":
+        if (types[change.typeName] && change.after) {
+          const after = change.after as {
+            recordPermission?: SnapshotRecordPermission;
+            gqlPermission?: SnapshotGqlPermission;
+          };
+          types[change.typeName] = {
+            ...types[change.typeName],
+            permissions: {
+              record: after.recordPermission,
+              gql: after.gqlPermission,
+            },
+          };
+        }
+        break;
     }
   }
 
