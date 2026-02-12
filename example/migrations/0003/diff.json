@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-01-20T03:12:48.742Z",
+  "changes": [
+    {
+      "kind": "field_added",
+      "typeName": "User",
+      "fieldName": "role",
+      "after": {
+        "type": "enum",
+        "required": true,
+        "allowedValues": ["MANAGER"]
+      }
+    }
+  ],
+  "hasBreakingChanges": true,
+  "breakingChanges": [
+    {
+      "typeName": "User",
+      "fieldName": "role",
+      "reason": "Required field added"
+    }
+  ],
+  "requiresMigrationScript": true
+}
