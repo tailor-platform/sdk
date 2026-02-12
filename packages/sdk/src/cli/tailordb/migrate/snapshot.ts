@@ -632,55 +632,149 @@ export function createSnapshotFromLocalTypes(
 // ============================================================================
 
 /**
- * Error thrown when a v1 snapshot is detected
+ * Convert v1 allowedValues (string[]) to v2 format (SnapshotEnumValue[])
+ * @param {unknown} allowedValues - The allowedValues to convert
+ * @returns {SnapshotEnumValue[] | undefined} Converted allowedValues or undefined
  */
-class SnapshotVersionError extends Error {
-  constructor(
-    public readonly filePath: string,
-    public readonly version: number,
-  ) {
-    super(
-      `Snapshot file "${filePath}" is version ${version}, but version ${SCHEMA_SNAPSHOT_VERSION} is required.\n` +
-        `Run 'tailor-sdk tailordb migration generate' to regenerate migration files.`,
-    );
-    this.name = "SnapshotVersionError";
+function convertAllowedValuesToV2(allowedValues: unknown): SnapshotEnumValue[] | undefined {
+  if (!allowedValues || !Array.isArray(allowedValues)) {
+    return undefined;
   }
+
+  // Check if already in v2 format (array of objects with value property)
+  if (
+    allowedValues.length > 0 &&
+    typeof allowedValues[0] === "object" &&
+    "value" in allowedValues[0]
+  ) {
+    return allowedValues as SnapshotEnumValue[];
+  }
+
+  // Convert v1 format (string[]) to v2 format
+  return allowedValues.map((value) => ({ value: String(value) }));
+}
+
+/**
+ * Migrate a v1 field config to v2 format
+ * @param {SnapshotFieldConfig} field - The field config to migrate
+ * @returns {SnapshotFieldConfig} Migrated field config
+ */
+function migrateFieldConfigToV2(field: SnapshotFieldConfig): SnapshotFieldConfig {
+  if (!field.allowedValues) {
+    return field;
+  }
+
+  return {
+    ...field,
+    allowedValues: convertAllowedValuesToV2(field.allowedValues),
+  };
+}
+
+/**
+ * Migrate a v1 snapshot to v2 format
+ * @param {SchemaSnapshot} snapshot - The snapshot to migrate
+ * @returns {SchemaSnapshot} Migrated snapshot
+ */
+function migrateSnapshotToV2(snapshot: SchemaSnapshot): SchemaSnapshot {
+  const migratedTypes: Record<string, SnapshotType> = {};
+
+  for (const [typeName, type] of Object.entries(snapshot.types)) {
+    const migratedFields: Record<string, SnapshotFieldConfig> = {};
+
+    for (const [fieldName, field] of Object.entries(type.fields)) {
+      migratedFields[fieldName] = migrateFieldConfigToV2(field);
+    }
+
+    migratedTypes[typeName] = {
+      ...type,
+      fields: migratedFields,
+    };
+  }
+
+  return {
+    ...snapshot,
+    version: SCHEMA_SNAPSHOT_VERSION,
+    types: migratedTypes,
+  };
+}
+
+/**
+ * Migrate a v1 diff to v2 format
+ * @param {MigrationDiff} diff - The diff to migrate
+ * @returns {MigrationDiff} Migrated diff
+ */
+function migrateDiffToV2(diff: MigrationDiff): MigrationDiff {
+  const migratedChanges = diff.changes.map((change) => {
+    // Migrate field_added and field_modified changes
+    if ((change.kind === "field_added" || change.kind === "field_modified") && change.after) {
+      return {
+        ...change,
+        after: migrateFieldConfigToV2(change.after as SnapshotFieldConfig),
+      };
+    }
+
+    // Migrate type_added changes (entire type)
+    if (change.kind === "type_added" && change.after) {
+      const type = change.after as SnapshotType;
+      const migratedFields: Record<string, SnapshotFieldConfig> = {};
+
+      for (const [fieldName, field] of Object.entries(type.fields)) {
+        migratedFields[fieldName] = migrateFieldConfigToV2(field);
+      }
+
+      return {
+        ...change,
+        after: {
+          ...type,
+          fields: migratedFields,
+        },
+      };
+    }
+
+    return change;
+  });
+
+  return {
+    ...diff,
+    version: SCHEMA_SNAPSHOT_VERSION,
+    changes: migratedChanges,
+  };
 }
 
 /**
  * Load a schema snapshot from a file
+ * Automatically migrates v1 format to v2 for backward compatibility
  * @param {string} filePath - Path to the snapshot file
  * @returns {SchemaSnapshot} Loaded schema snapshot
- * @throws {SnapshotVersionError} If the snapshot is v1 (requires regeneration)
  */
 export function loadSnapshot(filePath: string): SchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
-  const snapshot = JSON.parse(content) as SchemaSnapshot;
+  const parsed = JSON.parse(content) as { version: number } & Record<string, unknown>;
 
-  // Check for v1 snapshot and require migration
-  if (snapshot.version !== SCHEMA_SNAPSHOT_VERSION) {
-    throw new SnapshotVersionError(filePath, snapshot.version);
+  // Auto-migrate v1 to v2 for backward compatibility
+  if (parsed.version === 1) {
+    return migrateSnapshotToV2(parsed as unknown as SchemaSnapshot);
   }
 
-  return snapshot;
+  return parsed as unknown as SchemaSnapshot;
 }
 
 /**
  * Load a migration diff from a file
+ * Automatically migrates v1 format to v2 for backward compatibility
  * @param {string} filePath - Path to the diff file
  * @returns {MigrationDiff} Loaded migration diff
- * @throws {SnapshotVersionError} If the diff is v1 (requires regeneration)
  */
 export function loadDiff(filePath: string): MigrationDiff {
   const content = fs.readFileSync(filePath, "utf-8");
-  const diff = JSON.parse(content) as MigrationDiff;
+  const parsed = JSON.parse(content) as { version: number } & Record<string, unknown>;
 
-  // Check for v1 diff and require migration
-  if (diff.version !== SCHEMA_SNAPSHOT_VERSION) {
-    throw new SnapshotVersionError(filePath, diff.version);
+  // Auto-migrate v1 to v2 for backward compatibility
+  if (parsed.version === 1) {
+    return migrateDiffToV2(parsed as unknown as MigrationDiff);
   }
 
-  return diff;
+  return parsed as unknown as MigrationDiff;
 }
 
 /**
