@@ -509,6 +509,12 @@ function createTailorDBField<
     return { value };
   }
 
+  function cloneWith(metadataUpdates: Partial<DBFieldMetadata>) {
+    const cloned = field.clone();
+    Object.assign(cloned._metadata, metadataUpdates);
+    return cloned;
+  }
+
   const field: FieldType = {
     type,
     fields: (fields ?? {}) as Record<string, TailorAnyField>,
@@ -528,24 +534,18 @@ function createTailorDBField<
     },
 
     description(description: string) {
-      this._metadata.description = description;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ description }) as any;
     },
 
     typeName(typeName: string) {
-      this._metadata.typeName = typeName;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ typeName }) as any;
     },
 
     validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
-      this._metadata.validate = validateInputs;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ validate: validateInputs }) as any;
     },
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
@@ -561,9 +561,10 @@ function createTailorDBField<
 
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
-      // Store raw relation config - all processing happens in parser layer
+      const cloned = field.clone();
       const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
-      _rawRelation = {
+      // oxlint-disable-next-line no-explicit-any
+      (cloned as any)._setRawRelation({
         type: config.type,
         toward: {
           type: targetType,
@@ -571,40 +572,34 @@ function createTailorDBField<
           key: config.toward.key,
         },
         backward: config.backward,
-      };
+      });
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloned as any;
     },
 
     index() {
-      this._metadata.index = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ index: true }) as any;
     },
 
     unique() {
-      this._metadata.unique = true;
-      this._metadata.index = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ unique: true, index: true }) as any;
     },
 
     vector() {
-      this._metadata.vector = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ vector: true }) as any;
     },
 
     hooks(hooks: Hook<unknown, FieldOutput<OutputBase, TOptions>>) {
-      this._metadata.hooks = hooks;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ hooks }) as any;
     },
 
     serial(config: SerialConfig) {
-      this._metadata.serial = config;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ serial: config }) as any;
     },
 
     clone(cloneOptions?: FieldOptions) {
@@ -637,8 +632,8 @@ function createTailorDBField<
       // Copy raw relation if exists
       if (_rawRelation) {
         const clonedRawRelation = cloneDeep(_rawRelation);
-        // @ts-expect-error - Accessing internal state for cloning
-        clonedField._setRawRelation(clonedRawRelation);
+        // oxlint-disable-next-line no-explicit-any
+        (clonedField as any)._setRawRelation(clonedRawRelation);
       }
 
       // oxlint-disable-next-line no-explicit-any
@@ -646,7 +641,7 @@ function createTailorDBField<
     },
 
     // Internal method for clone to set rawRelation
-    // @ts-expect-error - Internal method
+    // @ts-ignore - Internal method not in interface
     _setRawRelation(relation: RawRelationConfig) {
       _rawRelation = relation;
     },
@@ -869,7 +864,8 @@ function createTailorDBType<
       // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
       // oxlint-disable-next-line no-explicit-any
       Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        this.fields[fieldName].hooks(fieldHooks);
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
+          this.fields[fieldName].hooks(fieldHooks);
       });
       return this;
     },
@@ -886,15 +882,17 @@ function createTailorDBType<
           return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
         };
 
+        let updatedField: TailorAnyDBField;
         if (Array.isArray(validators)) {
           if (isValidateConfig(validators)) {
-            field.validate(validators);
+            updatedField = field.validate(validators);
           } else {
-            field.validate(...validators);
+            updatedField = field.validate(...validators);
           }
         } else {
-          field.validate(validators);
+          updatedField = field.validate(validators);
         }
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
       });
       return this;
     },

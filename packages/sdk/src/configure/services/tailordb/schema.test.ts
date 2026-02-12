@@ -1592,6 +1592,122 @@ describe("TailorDBType gqlOperations alias tests", () => {
   });
 });
 
+describe("TailorDBField immutability", () => {
+  it("field.hooks() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withHooks = original.hooks({ create: () => "created" });
+
+    // hooks() should return a NEW field
+    expect(withHooks).not.toBe(original);
+    // Original should NOT have hooks
+    expect(original.metadata.hooks).toBeUndefined();
+    // New field should have hooks
+    expect(withHooks.metadata.hooks?.create).toBeDefined();
+  });
+
+  it("field.validate() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withValidate = original.validate(({ value }) => value.length > 0);
+
+    expect(withValidate).not.toBe(original);
+    expect(original.metadata.validate).toBeUndefined();
+    expect(withValidate.metadata.validate).toHaveLength(1);
+  });
+
+  it("field.description() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withDesc = original.description("desc");
+
+    expect(withDesc).not.toBe(original);
+    expect(original.metadata.description).toBeUndefined();
+    expect(withDesc.metadata.description).toBe("desc");
+  });
+
+  it("field.index() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withIndex = original.index();
+
+    expect(withIndex).not.toBe(original);
+    expect(original.metadata.index).toBeUndefined();
+    expect(withIndex.metadata.index).toBe(true);
+  });
+
+  it("field.unique() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withUnique = original.unique();
+
+    expect(withUnique).not.toBe(original);
+    expect(original.metadata.unique).toBeUndefined();
+    expect(withUnique.metadata.unique).toBe(true);
+  });
+
+  it("field.serial() returns a new field without mutating the original", () => {
+    const original = db.int();
+    const withSerial = original.serial({ start: 1 });
+
+    expect(withSerial).not.toBe(original);
+    expect(original.metadata.serial).toBeUndefined();
+    expect(withSerial.metadata.serial).toEqual({ start: 1 });
+  });
+
+  it("field.vector() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withVector = original.vector();
+
+    expect(withVector).not.toBe(original);
+    expect(original.metadata.vector).toBeUndefined();
+    expect(withVector.metadata.vector).toBe(true);
+  });
+
+  it("field.relation() returns a new field without mutating the original", () => {
+    const User = db.type("User", { name: db.string() });
+    const original = db.uuid();
+    const withRelation = original.relation({ type: "n-1", toward: { type: User } });
+
+    expect(withRelation).not.toBe(original);
+    expect(original.rawRelation).toBeUndefined();
+    expect(withRelation.rawRelation).toBeDefined();
+  });
+
+  it("chained fluent calls produce correct result", () => {
+    const field = db
+      .string()
+      .description("name")
+      .index()
+      .hooks({ create: () => "x" });
+
+    expect(field.metadata.description).toBe("name");
+    expect(field.metadata.index).toBe(true);
+    expect(field.metadata.hooks?.create).toBeDefined();
+  });
+});
+
+describe("TailorDBType does not mutate shared fields", () => {
+  it("type.hooks() does not mutate the shared field", () => {
+    const sharedField = db.string();
+
+    const typeA = db.type("TypeA", { name: sharedField }).hooks({ name: { create: () => "A" } });
+    const typeB = db.type("TypeB", { name: sharedField });
+
+    expect(typeA.fields.name.metadata.hooks).toBeDefined();
+    expect(typeB.fields.name.metadata.hooks).toBeUndefined();
+    expect(sharedField.metadata.hooks).toBeUndefined();
+  });
+
+  it("type.validate() does not mutate the shared field", () => {
+    const sharedField = db.string();
+
+    const typeA = db
+      .type("TypeA", { email: sharedField })
+      .validate({ email: ({ value }) => value.includes("@") });
+    const typeB = db.type("TypeB", { email: sharedField });
+
+    expect(typeA.fields.email.metadata.validate).toBeDefined();
+    expect(typeB.fields.email.metadata.validate).toBeUndefined();
+    expect(sharedField.metadata.validate).toBeUndefined();
+  });
+});
+
 describe("TailorDBField clone tests", () => {
   it("clones field with same metadata", () => {
     const original = db.string().description("test description").index();
