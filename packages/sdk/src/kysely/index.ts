@@ -8,6 +8,7 @@
 
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 import {
+  type ColumnType,
   Kysely,
   type Insertable,
   type KyselyConfig,
@@ -27,6 +28,13 @@ export {
 } from "kysely";
 
 export { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+
+export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
+export type Serial<T = string | number> = ColumnType<T, never, never>;
 
 export type TailordbKysely<DB> = Kysely<DB>;
 export type NamespaceDB<NS, N extends keyof NS = keyof NS> = TailordbKysely<NS[N]>;

@@ -209,31 +209,18 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
     { Timestamp: false, Serial: false },
   );
 
-  const utilityTypeDeclarations: string[] = [];
+  const utilityTypeImports: string[] = ["type Generated"];
   if (globalUsedUtilityTypes.Timestamp) {
-    utilityTypeDeclarations.push(
-      /* ts */ `type Timestamp = ColumnType<Date, Date | string, Date | string>;`,
-    );
+    utilityTypeImports.push("type Timestamp");
   }
-
-  // Generated is always needed for the id field
-  utilityTypeDeclarations.push(
-    multiline /* ts */ `
-      type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-        ? ColumnType<S, I | undefined, U>
-        : ColumnType<T, T | undefined, T>;
-    `,
-  );
   if (globalUsedUtilityTypes.Serial) {
-    utilityTypeDeclarations.push(
-      /* ts */ `type Serial<T = string | number> = ColumnType<T, never, never>;`,
-    );
+    utilityTypeImports.push("type Serial");
   }
 
   const importsSection = multiline /* ts */ `
     import {
-      type ColumnType,
       createGetDB,
+      ${utilityTypeImports.join(",\n")},
       type NamespaceDB,
       type NamespaceInsertable,
       type NamespaceSelectable,
@@ -242,8 +229,6 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
       type NamespaceTransaction,
       type NamespaceUpdateable,
     } from "@tailor-platform/sdk/kysely";
-
-    ${utilityTypeDeclarations.join("\n")}
   `;
 
   // Generate Namespace interface with multiple namespaces

@@ -235,7 +235,7 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.files[0].path).toBe(testDistPath);
 
       const content = result.files[0].content;
-      expect(content).toContain("type ColumnType");
+      expect(content).toContain("type Generated,");
       expect(content).toContain("type NamespaceTransaction");
       expect(content).toContain("type NamespaceInsertable");
       expect(content).toContain("type NamespaceSelectable");
@@ -378,8 +378,8 @@ describe("KyselyGenerator integration tests", () => {
       expect(content).toContain("User: {");
       expect(content).toContain("Event: {");
 
-      // Check Timestamp utility type is included (used by analytics)
-      expect(content).toContain("type Timestamp = ColumnType");
+      // Check Timestamp utility type is imported (used by analytics)
+      expect(content).toContain("type Timestamp,");
       expect(content).toContain("interface Namespace {");
     });
 
@@ -411,12 +411,12 @@ describe("KyselyGenerator integration tests", () => {
 
       const content = result.files[0].content;
 
-      // Timestamp should not be included
-      expect(content).not.toContain("type Timestamp = ColumnType");
-      // Generated should always be included
-      expect(content).toContain("type Generated<T>");
-      // Serial should not be included
-      expect(content).not.toContain("type Serial<T");
+      // Timestamp should not be imported (not used)
+      expect(content).not.toContain("type Timestamp");
+      // Generated should always be imported
+      expect(content).toContain("type Generated,");
+      // Serial should not be imported (not used)
+      expect(content).not.toContain("type Serial");
     });
   });
 });

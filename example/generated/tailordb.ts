@@ -1,6 +1,8 @@
 import {
-  type ColumnType,
   createGetDB,
+  type Generated,
+  type Timestamp,
+  type Serial,
   type NamespaceDB,
   type NamespaceInsertable,
   type NamespaceSelectable,
@@ -9,12 +11,6 @@ import {
   type NamespaceTransaction,
   type NamespaceUpdateable,
 } from "@tailor-platform/sdk/kysely";
-
-type Timestamp = ColumnType<Date, Date | string, Date | string>;
-type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
-type Serial<T = string | number> = ColumnType<T, never, never>;
 
 export interface Namespace {
   "tailordb": {
