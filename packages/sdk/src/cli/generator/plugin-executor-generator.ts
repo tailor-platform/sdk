@@ -187,6 +187,11 @@ function generateExecutorFileContentNew(
     ${imports.join("\n")}
 
     const { default: executorFactory } = await import(${JSON.stringify(executorImportPath)});
+    if (typeof executorFactory !== "function") {
+      throw new Error(
+        "Plugin executor module must export a default function created by withPluginContext().",
+      );
+    }
     export default executorFactory(${contextCode});
   `;
 }

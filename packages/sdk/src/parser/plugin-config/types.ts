@@ -265,6 +265,14 @@ export type PluginExecutorContext = PluginExecutorContextBase & {
 };
 
 /**
+ * Module shape returned by plugin executor resolve().
+ * The concrete context type is intentionally erased at this boundary.
+ */
+export interface PluginExecutorModule {
+  default: unknown;
+}
+
+/**
  * Executor definition with dynamic import reference (new format).
  * Used with withPluginContext for type-safe executor definitions in separate files.
  */
@@ -277,7 +285,7 @@ export interface PluginGeneratedExecutorWithFile<Ctx = PluginExecutorContext> {
    * Relative import specifiers are resolved from the plugin's importPath base.
    * @example `async () => await import("./executors/on-create")`
    */
-  resolve: () => Promise<{ default: (ctx: Ctx) => unknown }>;
+  resolve: () => Promise<PluginExecutorModule>;
   /**
    * Context to pass to the executor factory.
    * Can include TailorAnyDBType objects - these will be handled specially
