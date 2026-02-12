@@ -158,6 +158,7 @@ export {
 export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";
 
 // Seed exports
+export { chunkSeedData, type SeedChunk, type ChunkSeedDataOptions } from "./utils/seed-chunker";
 export { bundleSeedScript, type SeedBundleResult } from "./bundler/seed/seed-bundler";
 export {
   bundleMigrationScript,
