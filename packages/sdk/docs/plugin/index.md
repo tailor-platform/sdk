@@ -102,7 +102,11 @@ Plugins can generate:
 - **Executors**: Event handlers triggered by record changes
 - **Field Extensions**: Additional fields added to the source type
 
-Generated files are placed in the `.tailor-sdk/plugin/` directory.
+Generated files are placed under `.tailor-sdk/<plugin-id>/` (the plugin ID is sanitized,
+e.g. `@example/soft-delete` → `example-soft-delete`), such as:
+
+- `.tailor-sdk/example-soft-delete/types`
+- `.tailor-sdk/example-soft-delete/executors`
 
 ## Creating Custom Plugins
 
