@@ -387,19 +387,3 @@ const plugin: PluginBase = {
   },
 };
 ```
-
-## Best Practices
-
-1. **Use factory functions** for plugins with global configuration
-2. **Validate configuration** using `configSchema` and `pluginConfigSchema`
-3. **Use `withPluginContext`** for type-safe executor definitions
-4. **Generate meaningful names** that include the source type name
-5. **Add TypeScript declarations** for configuration type safety
-6. **Document your plugin** with JSDoc comments and examples
-
-## Limitations (Beta)
-
-- Plugin execution order is not guaranteed
-- Circular dependencies between plugins are not detected
-- Error messages may not always indicate the source plugin
-- Hot reload in watch mode may require manual restart for plugin changes
