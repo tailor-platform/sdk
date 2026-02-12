@@ -1,6 +1,4 @@
-import { db } from "@/configure/services/tailordb";
-import { unauthenticatedTailorUser } from "@/configure/types";
-import type { TailorAnyField } from "@/configure/types";
+import { db } from "@/parser/service/tailordb/runtime";
 import type {
   PluginBase,
   PluginGeneratedExecutor,
@@ -10,6 +8,24 @@ import type {
   PluginOutput,
 } from "@/parser/plugin-config/types";
 import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
+
+type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
+
+type UnauthenticatedTailorUser = {
+  id: string;
+  type: "" | "machine_user" | "user";
+  workspaceId: string;
+  attributes: null | Record<string, string | string[] | boolean | boolean[] | undefined>;
+  attributeList: [];
+};
+
+const unauthenticatedTailorUser: UnauthenticatedTailorUser = {
+  id: "00000000-0000-0000-0000-000000000000",
+  type: "",
+  workspaceId: "00000000-0000-0000-0000-000000000000",
+  attributes: null,
+  attributeList: [],
+};
 
 /**
  * Context for processing a single plugin attachment on a raw TailorDBType
@@ -80,7 +96,10 @@ interface ConfigValidationError {
  * @param schema - The schema defining expected fields
  * @returns Array of validation errors (empty if valid)
  */
-function validatePluginConfig(config: unknown, schema: TailorAnyField): ConfigValidationError[] {
+function validatePluginConfig(
+  config: unknown,
+  schema: PluginConfigSchemaField,
+): ConfigValidationError[] {
   const result = schema.parse({
     value: config,
     data: config,
