@@ -3,6 +3,22 @@ import type { PluginBase } from "./types";
 
 type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
 
+type UnauthenticatedTailorUser = {
+  id: string;
+  type: "" | "machine_user" | "user";
+  workspaceId: string;
+  attributes: null | Record<string, string | string[] | boolean | boolean[] | undefined>;
+  attributeList: [];
+};
+
+const unauthenticatedTailorUser: UnauthenticatedTailorUser = {
+  id: "00000000-0000-0000-0000-000000000000",
+  type: "",
+  workspaceId: "00000000-0000-0000-0000-000000000000",
+  attributes: null,
+  attributeList: [],
+};
+
 // Plugin-generated type schema - accepts TailorDBType instances (from db.type())
 // We only validate the minimal interface: name and fields properties
 const PluginGeneratedTypeSchema = z.object({
@@ -121,8 +137,43 @@ function normalizePluginBase(plugin: PluginBase): PluginBase {
   }
   if (plugin.pluginConfigSchema) {
     normalizePluginConfigSchema(plugin.pluginConfigSchema);
+    if (plugin.pluginConfig !== undefined) {
+      const validationErrors = validatePluginConfig(plugin.pluginConfig, plugin.pluginConfigSchema);
+      if (validationErrors.length > 0) {
+        const errorDetails = validationErrors
+          .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
+          .join("; ");
+        throw new Error(`Invalid pluginConfig for plugin "${plugin.id}": ${errorDetails}`);
+      }
+    }
   }
   return plugin;
+}
+
+/**
+ * Validate plugin config against its schema
+ * @param config - The config object to validate
+ * @param schema - The schema defining expected fields
+ * @returns Array of validation errors (empty if valid)
+ */
+function validatePluginConfig(
+  config: unknown,
+  schema: PluginConfigSchemaField,
+): Array<{ field: string; message: string }> {
+  const result = schema.parse({
+    value: config,
+    data: config,
+    user: unauthenticatedTailorUser,
+  });
+
+  if ("issues" in result && result.issues) {
+    return result.issues.map((issue) => ({
+      field: Array.isArray(issue.path) ? issue.path.join(".") : "",
+      message: issue.message,
+    }));
+  }
+
+  return [];
 }
 
 /**
