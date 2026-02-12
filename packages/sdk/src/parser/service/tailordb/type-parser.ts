@@ -8,6 +8,7 @@ import {
   applyRelationMetadataToFieldConfig,
 } from "./relation";
 import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
+import { isPluginGeneratedType } from "./types";
 import type {
   TailorDBField,
   ParsedField,
@@ -208,7 +209,11 @@ function buildBackwardRelationships(
   for (const [targetTypeName, backwardNames] of Object.entries(backwardNameSources)) {
     const targetType = types[targetTypeName];
     const targetTypeSourceInfo = typeSourceInfo?.[targetTypeName];
-    const targetLocation = targetTypeSourceInfo ? ` (${targetTypeSourceInfo.filePath})` : "";
+    const targetLocation = targetTypeSourceInfo
+      ? isPluginGeneratedType(targetTypeSourceInfo)
+        ? ` (plugin: ${targetTypeSourceInfo.pluginId})`
+        : ` (${targetTypeSourceInfo.filePath})`
+      : "";
 
     for (const [backwardName, sources] of Object.entries(backwardNames)) {
       // Check for duplicate backward relation names
@@ -216,7 +221,11 @@ function buildBackwardRelationships(
         const sourceList = sources
           .map((s) => {
             const sourceInfo = typeSourceInfo?.[s.sourceType];
-            const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+            const location = sourceInfo
+              ? isPluginGeneratedType(sourceInfo)
+                ? ` (plugin: ${sourceInfo.pluginId})`
+                : ` (${sourceInfo.filePath})`
+              : "";
             return `${s.sourceType}.${s.fieldName}${location}`;
           })
           .join(", ");
@@ -230,7 +239,11 @@ function buildBackwardRelationships(
       if (backwardName in targetType.fields) {
         const source = sources[0];
         const sourceInfo = typeSourceInfo?.[source.sourceType];
-        const sourceLocation = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        const sourceLocation = sourceInfo
+          ? isPluginGeneratedType(sourceInfo)
+            ? ` (plugin: ${sourceInfo.pluginId})`
+            : ` (${sourceInfo.filePath})`
+          : "";
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
             `conflicts with existing field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
@@ -242,7 +255,11 @@ function buildBackwardRelationships(
       if (targetType.files && backwardName in targetType.files) {
         const source = sources[0];
         const sourceInfo = typeSourceInfo?.[source.sourceType];
-        const sourceLocation = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        const sourceLocation = sourceInfo
+          ? isPluginGeneratedType(sourceInfo)
+            ? ` (plugin: ${sourceInfo.pluginId})`
+            : ` (${sourceInfo.filePath})`
+          : "";
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
             `conflicts with files field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
@@ -283,7 +300,11 @@ function validatePluralFormUniqueness(
 
     if (singularQuery === pluralQuery) {
       const sourceInfo = typeSourceInfo?.[parsedType.name];
-      const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+      const location = sourceInfo
+        ? isPluginGeneratedType(sourceInfo)
+          ? ` (plugin: ${sourceInfo.pluginId})`
+          : ` (${sourceInfo.filePath})`
+        : "";
       errors.push(
         `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
           `Use db.type(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
@@ -323,7 +344,11 @@ function validatePluralFormUniqueness(
     const sourceList = sources
       .map((s) => {
         const sourceInfo = typeSourceInfo?.[s.typeName];
-        const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        const location = sourceInfo
+          ? isPluginGeneratedType(sourceInfo)
+            ? ` (plugin: ${sourceInfo.pluginId})`
+            : ` (${sourceInfo.filePath})`
+          : "";
         return `"${s.typeName}"${location} (${s.kind})`;
       })
       .join(", ");
