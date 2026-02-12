@@ -275,6 +275,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         rawTypes[pluginGeneratedKey] = {};
       }
 
+      let hasGeneratedTypes = false;
       for (const { pluginId, config, result } of results) {
         if (!result.success) {
           logger.error(result.error);
@@ -287,6 +288,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
           rawTypes[pluginGeneratedKey][generatedType.name] =
             generatedType as TailorDBTypeSchemaOutput;
+          hasGeneratedTypes = true;
           typeSourceInfo[generatedType.name] = {
             exportName: generatedType.name,
             pluginId,
@@ -304,7 +306,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
 
       // Re-parse types to include namespace plugin types
-      if (results.length > 0) {
+      if (hasGeneratedTypes) {
         doParseTypes();
       }
     },
