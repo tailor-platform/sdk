@@ -39,12 +39,20 @@ interface TypeImportInfo {
 }
 
 /**
+ * Source info for user-defined types.
+ */
+type SourceTypeInfo = {
+  filePath: string;
+  exportName: string;
+};
+
+/**
  * Generate TypeScript files for plugin-generated executors.
  * These files will be processed by the standard executor bundler.
  * @param executors - Array of plugin executor information
  * @param outputDir - Base output directory (e.g., .tailor-sdk)
  * @param typeGenerationResult - Result from plugin type generation (for import resolution)
- * @param sourceTypeFilePaths - Map of source type names to their file paths
+ * @param sourceTypeInfoMap - Map of source type names to their source info
  * @param configPath - Path to tailor.config.ts (used for resolving plugin import paths)
  * @returns Array of generated file paths
  */
@@ -52,7 +60,7 @@ export function generatePluginExecutorFiles(
   executors: ReadonlyArray<PluginExecutorInfoExtended>,
   outputDir: string,
   typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeFilePaths?: Map<string, string>,
+  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
   configPath?: string,
 ): string[] {
   if (executors.length === 0) {
@@ -67,7 +75,7 @@ export function generatePluginExecutorFiles(
       info,
       outputDir,
       typeGenerationResult,
-      sourceTypeFilePaths,
+      sourceTypeInfoMap,
       baseDirs,
     );
     generatedFiles.push(filePath);
@@ -86,7 +94,7 @@ export function generatePluginExecutorFiles(
  * @param info - Plugin executor metadata and definition
  * @param outputDir - Base output directory (e.g., .tailor-sdk)
  * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeFilePaths - Map of source type names to their file paths
+ * @param sourceTypeInfoMap - Map of source type names to their source info
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns Absolute path to the generated file
  */
@@ -94,7 +102,7 @@ function generateSingleExecutorFile(
   info: PluginExecutorInfoExtended,
   outputDir: string,
   typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeFilePaths?: Map<string, string>,
+  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
   baseDirs: string[] = [],
 ): string {
   const pluginDir = sanitizePluginId(info.pluginId);
@@ -111,7 +119,7 @@ function generateSingleExecutorFile(
       info.executor,
       outputDir,
       typeGenerationResult,
-      sourceTypeFilePaths,
+      sourceTypeInfoMap,
       baseDirs,
     );
   } else {
@@ -129,7 +137,7 @@ function generateSingleExecutorFile(
  * @param executor - Executor definition with resolve
  * @param outputDir - Base output directory
  * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeFilePaths - Map of source type names to their file paths
+ * @param sourceTypeInfoMap - Map of source type names to their source info
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns TypeScript source code for executor file
  */
@@ -138,7 +146,7 @@ function generateExecutorFileContentNew(
   executor: PluginGeneratedExecutorWithFile,
   outputDir: string,
   typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeFilePaths?: Map<string, string>,
+  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
   baseDirs: string[] = [],
 ): string {
   const { resolve, context } = executor;
@@ -158,7 +166,7 @@ function generateExecutorFileContentNew(
     outputDir,
     info.pluginId,
     typeGenerationResult,
-    sourceTypeFilePaths,
+    sourceTypeInfoMap,
   );
 
   // Generate import statements
@@ -189,7 +197,7 @@ function generateExecutorFileContentNew(
  * @param outputDir - Base output directory for generated files
  * @param pluginId - Plugin identifier used for output paths
  * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeFilePaths - Map of source type names to their file paths
+ * @param sourceTypeInfoMap - Map of source type names to their source info
  * @returns Map of context keys to their import information
  */
 function collectTypeImports(
@@ -197,7 +205,7 @@ function collectTypeImports(
   outputDir: string,
   pluginId: string,
   typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeFilePaths?: Map<string, string>,
+  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
 ): Map<string, TypeImportInfo> {
   const typeImports = new Map<string, TypeImportInfo>();
   const pluginDir = sanitizePluginId(pluginId);
@@ -206,7 +214,8 @@ function collectTypeImports(
   for (const [key, value] of Object.entries(context)) {
     if (isTypeObject(value)) {
       const typeName = value.name;
-      const variableName = toCamelCase(typeName);
+      const sourceInfo = sourceTypeInfoMap?.get(typeName);
+      const variableName = sourceInfo?.exportName ?? toCamelCase(typeName);
 
       // Check if it's a generated type
       let importPath: string;
@@ -221,9 +230,9 @@ function collectTypeImports(
           importPath = `./${importPath}`;
         }
         isGeneratedType = true;
-      } else if (sourceTypeFilePaths?.has(typeName)) {
+      } else if (sourceInfo) {
         // It's a user-defined type
-        const sourceFilePath = sourceTypeFilePaths.get(typeName)!;
+        const sourceFilePath = sourceInfo.filePath;
         importPath = path.relative(executorDir, sourceFilePath).replace(/\.ts$/, "");
         if (!importPath.startsWith(".")) {
           importPath = `./${importPath}`;
