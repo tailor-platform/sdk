@@ -506,12 +506,15 @@ export function createGenerationManager(
       const typeGenerationResult = generatePluginTypeFiles(pluginTypes, pluginOutputDir);
 
       // Collect source type file paths from TailorDB services
-      const sourceTypeFilePaths = new Map<string, string>();
+      const sourceTypeInfoMap = new Map<string, { filePath: string; exportName: string }>();
       for (const db of app.tailorDBServices) {
         const typeSourceInfo = db.getTypeSourceInfo();
         for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
           if (sourceInfo.filePath) {
-            sourceTypeFilePaths.set(typeName, sourceInfo.filePath);
+            sourceTypeInfoMap.set(typeName, {
+              filePath: sourceInfo.filePath,
+              exportName: sourceInfo.exportName,
+            });
           }
         }
       }
@@ -522,7 +525,7 @@ export function createGenerationManager(
         pluginExecutors,
         pluginOutputDir,
         typeGenerationResult,
-        sourceTypeFilePaths,
+        sourceTypeInfoMap,
         configPath,
       );
       const executorService =

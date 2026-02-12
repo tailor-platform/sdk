@@ -126,12 +126,15 @@ export async function apply(options?: ApplyOptions) {
   const pluginTypes = pluginManager?.getPluginGeneratedTypes() ?? [];
   const typeGenerationResult = generatePluginTypeFiles(pluginTypes, pluginOutputDir);
 
-  const sourceTypeFilePaths = new Map<string, string>();
+  const sourceTypeInfoMap = new Map<string, { filePath: string; exportName: string }>();
   for (const db of application.tailorDBServices) {
     const typeSourceInfo = db.getTypeSourceInfo();
     for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
       if (sourceInfo.filePath) {
-        sourceTypeFilePaths.set(typeName, sourceInfo.filePath);
+        sourceTypeInfoMap.set(typeName, {
+          filePath: sourceInfo.filePath,
+          exportName: sourceInfo.exportName,
+        });
       }
     }
   }
@@ -141,7 +144,7 @@ export async function apply(options?: ApplyOptions) {
     pluginExecutors,
     pluginOutputDir,
     typeGenerationResult,
-    sourceTypeFilePaths,
+    sourceTypeInfoMap,
     config.path,
   );
 
