@@ -2,16 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import {
-  composeApplication,
-  defineAuth,
-  defineExecutor,
-  defineIdp,
-  defineResolver,
-  defineStaticWebsites,
-  defineTailorDB,
-  defineWorkflow,
-} from "@/cli/application";
+import { defineApplication } from "@/cli/application";
 import { createExecutorService } from "@/cli/application/executor/service";
 import {
   loadAndCollectJobs,
@@ -101,25 +92,24 @@ export async function apply(options?: ApplyOptions) {
 
   // Generate user types from loaded config
   await generateUserTypes({ config, configPath: config.path, plugins });
-  const tailordbResult = defineTailorDB(config.db, pluginManager);
-  const workflowConfigResult = defineWorkflow(config.workflow);
+  const application = defineApplication({ config, pluginManager });
 
   // Load files first (before building)
   // Load workflows first and collect jobs for bundling
   let workflowResult: WorkflowLoadResult | undefined;
-  if (workflowConfigResult.workflowConfig) {
-    workflowResult = await loadAndCollectJobs(workflowConfigResult.workflowConfig);
+  if (application.workflowConfig) {
+    workflowResult = await loadAndCollectJobs(application.workflowConfig);
   }
 
   // Build trigger context for workflow/job trigger transformation
-  const triggerContext = await buildTriggerContext(workflowConfigResult.workflowConfig);
+  const triggerContext = await buildTriggerContext(application.workflowConfig);
 
   let tailordbTypesLoaded = false;
   let pluginExecutorFiles: string[] = [];
 
   // Load TailorDB types early to generate plugin type/executor files before bundling
-  if (tailordbResult.tailorDBServices.length > 0) {
-    for (const tailordb of tailordbResult.tailorDBServices) {
+  if (application.tailorDBServices.length > 0) {
+    for (const tailordb of application.tailorDBServices) {
       await tailordb.loadTypes();
       // Process namespace plugins (generates types without requiring a source type)
       await tailordb.processNamespacePlugins();
@@ -133,7 +123,7 @@ export async function apply(options?: ApplyOptions) {
   const typeGenerationResult = generatePluginTypeFiles(pluginTypes, pluginOutputDir);
 
   const sourceTypeFilePaths = new Map<string, string>();
-  for (const db of tailordbResult.tailorDBServices) {
+  for (const db of application.tailorDBServices) {
     const typeSourceInfo = db.getTypeSourceInfo();
     for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
       if (sourceInfo.filePath) {
@@ -165,30 +155,11 @@ export async function apply(options?: ApplyOptions) {
     }
   }
   pluginExecutorFiles = Array.from(pluginExecutorFileSet);
-  const executorResult = defineExecutor(config.executor, pluginManager);
   const executorService =
-    executorResult.executorService ??
+    application.executorService ??
     (pluginExecutorFiles.length > 0
       ? createExecutorService({ config: { files: [] }, pluginManager })
       : undefined);
-  const resolverResult = defineResolver(config.resolver);
-  const idpResult = defineIdp(config.idp);
-  const authResult = defineAuth(
-    config.auth,
-    tailordbResult.tailorDBServices,
-    tailordbResult.externalTailorDBNamespaces,
-  );
-  const staticWebsiteResult = defineStaticWebsites(config.staticWebsites);
-  const application = composeApplication({
-    config,
-    tailordbResult,
-    resolverResult,
-    idpResult,
-    authResult,
-    executorService,
-    workflowResult: workflowConfigResult,
-    staticWebsiteResult,
-  });
 
   // Build functions (using already loaded data)
   for (const app of application.applications) {
@@ -226,7 +197,7 @@ export async function apply(options?: ApplyOptions) {
   // Load remaining files and print logs
   // Order: TailorDB → Resolver → Executor → Workflow
   if (!tailordbTypesLoaded) {
-    for (const tailordb of tailordbResult.tailorDBServices) {
+    for (const tailordb of application.tailorDBServices) {
       await tailordb.loadTypes();
       // Process namespace plugins (generates types without requiring a source type)
       await tailordb.processNamespacePlugins();
@@ -253,7 +224,7 @@ export async function apply(options?: ApplyOptions) {
   const ctx: PlanContext = {
     client,
     workspaceId,
-    application,
+    application: executorService ? { ...application, executorService } : application,
     forRemoval: false,
     config,
     noSchemaCheck: options?.noSchemaCheck,
