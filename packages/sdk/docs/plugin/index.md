@@ -2,7 +2,7 @@
 
 > **Beta Feature**: The plugin system is currently in beta. APIs may change in future releases.
 
-Plugins extend TailorDB types by automatically generating additional types, resolvers, and executors based on your type definitions.
+Plugins extend TailorDB types by automatically generating additional types and executors based on your type definitions.
 
 ## Overview
 
@@ -10,7 +10,7 @@ When you run `tailor-sdk generate`, the SDK:
 
 1. Loads all TailorDB types with plugin attachments
 2. Passes each type to the attached plugins
-3. Generates additional types, resolvers, and executors based on plugin output
+3. Generates additional types and executors based on plugin output
 4. Writes all generated files to the appropriate locations
 
 This enables plugins to create derived functionality based on your application's schema.
@@ -48,7 +48,7 @@ export const user = db
     email: db.string(),
   })
   .plugin({
-    "@example/my-plugin": true,
+    "@example/my-plugin": {},
   });
 ```
 
@@ -98,7 +98,6 @@ export const plugins = definePlugins(
 Plugins can generate:
 
 - **Types**: Additional TailorDB types (e.g., `CustomerHistory`, `Deleted_Customer`)
-- **Resolvers**: GraphQL resolvers for plugin-specific operations
 - **Executors**: Event handlers triggered by record changes
 - **Field Extensions**: Additional fields added to the source type
 
