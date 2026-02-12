@@ -74,6 +74,7 @@ import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { Executor } from "@/parser/service/executor";
 import type {
+  EnumValue,
   GqlOperations,
   PermissionOperand,
   StandardActionPermission,
@@ -588,14 +589,6 @@ function buildBreakingChangesMap(pendingMigrations: PendingMigration[]): Breakin
   }
 
   return map;
-}
-
-/**
- * Enum value type for allowed values in field config
- */
-interface EnumValue {
-  value: string;
-  description?: string;
 }
 
 /**
