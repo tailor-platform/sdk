@@ -98,14 +98,14 @@ function generateIdpUserSeedCall(hasIdpUser: boolean): string {
 /**
  * Generates the exec.mjs script content using testExecScript API for TailorDB types
  * and GraphQL mutation for _User (IdP managed)
- * @param machineUserName - Machine user name for token retrieval
+ * @param defaultMachineUserName - Default machine user name from generator config (can be overridden at runtime)
  * @param relativeConfigPath - Config path relative to exec script
  * @param namespaceConfigs - Namespace configurations with types and dependencies
  * @param hasIdpUser - Whether _User is included
  * @returns exec.mjs file contents
  */
 function generateExecScript(
-  machineUserName: string,
+  defaultMachineUserName: string | undefined,
   relativeConfigPath: string,
   namespaceConfigs: NamespaceConfig[],
   hasIdpUser: boolean,
@@ -148,6 +148,7 @@ function generateExecScript(
     // Parse command-line arguments
     const { values, positionals } = parseArgs({
       options: {
+        "machine-user": { type: "string", short: "m" },
         namespace: { type: "string", short: "n" },
         "skip-idp": { type: "boolean", default: false },
         truncate: { type: "boolean", default: false },
@@ -163,15 +164,16 @@ function generateExecScript(
     Usage: node exec.mjs [options] [types...]
 
     Options:
-      -n, --namespace <ns> Process all types in specified namespace (excludes _User)
-      --skip-idp           Skip IdP user (_User) entity
-      --truncate           Truncate tables before seeding
-      --yes                Skip confirmation prompts (for truncate)
-      -p, --profile <name> Workspace profile name
-      -h, --help           Show help
+      -m, --machine-user <name> Machine user name for authentication (required if not configured)
+      -n, --namespace <ns>      Process all types in specified namespace (excludes _User)
+      --skip-idp                Skip IdP user (_User) entity
+      --truncate                Truncate tables before seeding
+      --yes                     Skip confirmation prompts (for truncate)
+      -p, --profile <name>      Workspace profile name
+      -h, --help                Show help
 
     Examples:
-      node exec.mjs                                     # Process all types (default)
+      node exec.mjs -m admin                            # Process all types with machine user
       node exec.mjs --namespace <namespace>             # Process tailordb namespace only (no _User)
       node exec.mjs User Order                          # Process specific types only
       node exec.mjs --skip-idp                          # Process all except _User
@@ -200,6 +202,16 @@ function generateExecScript(
 
     const configDir = import.meta.dirname;
     const configPath = join(configDir, "${relativeConfigPath}");
+
+    // Determine machine user name (CLI argument takes precedence over config default)
+    const defaultMachineUser = ${defaultMachineUserName ? `"${defaultMachineUserName}"` : "undefined"};
+    const machineUserName = values["machine-user"] || defaultMachineUser;
+
+    if (!machineUserName) {
+      console.error(styleText("red", "Error: Machine user name is required."));
+      console.error(styleText("yellow", "Specify --machine-user <name> or configure machineUserName in generator options."));
+      process.exit(1);
+    }
 
     // Entity configuration
     const namespaceEntities = {
@@ -331,7 +343,7 @@ ${namespaceDepsEntries}
 
     // Get machine user token
     const tokenInfo = await getMachineUserToken({
-      name: "${machineUserName}",
+      name: machineUserName,
       configPath,
       profile: values.profile,
     });
@@ -439,7 +451,7 @@ ${namespaceDepsEntries}
           arg: JSON.stringify({ data: chunk.data, order: chunk.order }),
           invoker: {
             namespace: authNamespace,
-            machineUserName: "${machineUserName}",
+            machineUserName,
           },
         });
 
@@ -633,19 +645,17 @@ export function createSeedGenerator(
         });
       }
 
-      // Generate exec.mjs if machineUserName is provided
-      if (options.machineUserName) {
-        const relativeConfigPath = path.relative(options.distPath, configPath);
-        files.push({
-          path: path.join(options.distPath, "exec.mjs"),
-          content: generateExecScript(
-            options.machineUserName,
-            relativeConfigPath,
-            namespaceConfigs,
-            hasIdpUser,
-          ),
-        });
-      }
+      // Generate exec.mjs (machineUserName can be provided at runtime if not configured)
+      const relativeConfigPath = path.relative(options.distPath, configPath);
+      files.push({
+        path: path.join(options.distPath, "exec.mjs"),
+        content: generateExecScript(
+          options.machineUserName,
+          relativeConfigPath,
+          namespaceConfigs,
+          hasIdpUser,
+        ),
+      });
 
       return { files };
     },
