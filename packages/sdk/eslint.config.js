@@ -127,6 +127,22 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/parser/service/tailordb/runtime.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Parser module should not import from cli module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["src/plugin/**/*.ts"],
     ignores: ["src/plugin/**/*.test.ts"],
     rules: {
@@ -137,6 +153,11 @@ export default defineConfig([
             {
               group: ["**/cli/**", "@/cli/**"],
               message: "Plugin module should not import from cli module.",
+            },
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message:
+                "Plugin module should not import from configure module. Please use parser module as an intermediary.",
             },
           ],
         },
