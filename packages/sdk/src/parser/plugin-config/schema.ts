@@ -1,3 +1,4 @@
+import { cloneDeep } from "es-toolkit";
 import { z } from "zod";
 import type { PluginBase } from "./types";
 
@@ -131,23 +132,34 @@ function normalizePluginConfigSchema(schema: PluginConfigSchemaField): PluginCon
   return schema;
 }
 
+function clonePluginConfigSchema(schema: PluginConfigSchemaField): PluginConfigSchemaField {
+  return cloneDeep(schema) as PluginConfigSchemaField;
+}
+
 function normalizePluginBase(plugin: PluginBase): PluginBase {
-  if (plugin.configSchema) {
-    normalizePluginConfigSchema(plugin.configSchema);
+  let normalized = plugin;
+
+  if (normalized.configSchema) {
+    const clonedConfigSchema = clonePluginConfigSchema(normalized.configSchema);
+    normalizePluginConfigSchema(clonedConfigSchema);
+    normalized = { ...normalized, configSchema: clonedConfigSchema };
   }
-  if (plugin.pluginConfigSchema) {
-    normalizePluginConfigSchema(plugin.pluginConfigSchema);
-    if (plugin.pluginConfig !== undefined) {
-      const validationErrors = validatePluginConfig(plugin.pluginConfig, plugin.pluginConfigSchema);
+
+  if (normalized.pluginConfigSchema) {
+    const pluginConfigSchema = clonePluginConfigSchema(normalized.pluginConfigSchema);
+    normalizePluginConfigSchema(pluginConfigSchema);
+    normalized = { ...normalized, pluginConfigSchema };
+    if (normalized.pluginConfig !== undefined) {
+      const validationErrors = validatePluginConfig(normalized.pluginConfig, pluginConfigSchema);
       if (validationErrors.length > 0) {
         const errorDetails = validationErrors
           .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
           .join("; ");
-        throw new Error(`Invalid pluginConfig for plugin "${plugin.id}": ${errorDetails}`);
+        throw new Error(`Invalid pluginConfig for plugin "${normalized.id}": ${errorDetails}`);
       }
     }
   }
-  return plugin;
+  return normalized;
 }
 
 /**
