@@ -81,7 +81,6 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
       liamBinPath = resolveCliBinPath({
         packageName: "@liam-hq/cli",
         binName: "liam",
-        installHint: "npm i @tailor-platform/sdk",
       });
     } catch (error) {
       logger.error(String(error));
@@ -104,7 +103,7 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
     });
 
     child.on("error", (error) => {
-      logger.error("Failed to run `@liam-hq/cli`. Try reinstalling @tailor-platform/sdk.");
+      logger.error("Failed to run `@liam-hq/cli`.");
       reject(error);
     });
 

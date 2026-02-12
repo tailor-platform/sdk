@@ -33,7 +33,6 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
       serveBinPath = resolveCliBinPath({
         packageName: "serve",
         binName: "serve",
-        installHint: "npm i @tailor-platform/sdk",
       });
     } catch (error) {
       logger.error(String(error));
@@ -47,7 +46,7 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
     });
 
     child.on("error", (error) => {
-      logger.error("Failed to run `serve dist`. Try reinstalling @tailor-platform/sdk.");
+      logger.error("Failed to run `serve dist`.");
       reject(error);
     });
 

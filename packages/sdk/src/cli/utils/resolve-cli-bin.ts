@@ -9,7 +9,6 @@ interface CliPackageJson {
 type ResolveCliBinOptions = {
   packageName: string;
   binName: string;
-  installHint: string;
 };
 
 /**
@@ -18,7 +17,7 @@ type ResolveCliBinOptions = {
  * @returns Absolute path to the CLI binary entry.
  */
 export function resolveCliBinPath(options: ResolveCliBinOptions): string {
-  const { packageName, binName, installHint } = options;
+  const { packageName, binName } = options;
 
   // Resolve from SDK's dependencies instead of user's project
   const requireFromSdk = createRequire(import.meta.url);
@@ -26,10 +25,7 @@ export function resolveCliBinPath(options: ResolveCliBinOptions): string {
   try {
     pkgJsonPath = requireFromSdk.resolve(`${packageName}/package.json`);
   } catch {
-    throw new Error(
-      `Failed to resolve \`${packageName}\`. This package is bundled with @tailor-platform/sdk. ` +
-        `Try reinstalling the SDK (e.g. \`${installHint}\`).`,
-    );
+    throw new Error(`Failed to resolve \`${packageName}\`.`);
   }
 
   const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as CliPackageJson;
