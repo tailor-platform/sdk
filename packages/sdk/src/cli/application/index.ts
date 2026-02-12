@@ -40,7 +40,13 @@ type DefineTailorDBResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineTailorDB(
+/**
+ * Define TailorDB services from config.
+ * @param config - TailorDB service config
+ * @param pluginManager - Plugin manager for TailorDB services
+ * @returns TailorDB services and related metadata
+ */
+export function defineTailorDB(
   config: TailorDBServiceInput | undefined,
   pluginManager?: PluginManager,
 ): DefineTailorDBResult {
@@ -72,7 +78,12 @@ type DefineResolverResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineResolver(config: ResolverServiceInput | undefined): DefineResolverResult {
+/**
+ * Define resolver services from config.
+ * @param config - Resolver service config
+ * @returns Resolver services and related metadata
+ */
+export function defineResolver(config: ResolverServiceInput | undefined): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -96,7 +107,12 @@ type DefineIdpResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
+/**
+ * Define IdP services from config.
+ * @param config - IdP config list
+ * @returns IdP services and related metadata
+ */
+export function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -126,7 +142,14 @@ type DefineAuthResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineAuth(
+/**
+ * Define Auth service from config.
+ * @param config - Auth config
+ * @param tailorDBServices - TailorDB services
+ * @param externalTailorDBNamespaces - External TailorDB namespaces
+ * @returns Auth service and related metadata
+ */
+export function defineAuth(
   config: AuthConfig | undefined,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
@@ -150,7 +173,13 @@ type DefineExecutorResult = {
   executorService: ExecutorService | undefined;
 };
 
-function defineExecutor(
+/**
+ * Define executor service from config.
+ * @param config - Executor service config
+ * @param pluginManager - Plugin manager for executor service
+ * @returns Executor service
+ */
+export function defineExecutor(
   config: ExecutorServiceInput | undefined,
   pluginManager?: PluginManager,
 ): DefineExecutorResult {
@@ -164,7 +193,12 @@ type DefineWorkflowResult = {
   workflowConfig: WorkflowServiceConfig | undefined;
 };
 
-function defineWorkflow(config: WorkflowServiceConfig | undefined): DefineWorkflowResult {
+/**
+ * Define workflow config.
+ * @param config - Workflow config
+ * @returns Workflow config container
+ */
+export function defineWorkflow(config: WorkflowServiceConfig | undefined): DefineWorkflowResult {
   return { workflowConfig: config };
 }
 
@@ -172,7 +206,12 @@ type DefineStaticWebsitesResult = {
   staticWebsiteServices: StaticWebsite[];
 };
 
-function defineStaticWebsites(
+/**
+ * Define static website services from config.
+ * @param websites - Static website config list
+ * @returns Static website services
+ */
+export function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
 ): DefineStaticWebsitesResult {
   const staticWebsiteServices: StaticWebsite[] = [];
@@ -200,6 +239,61 @@ export interface DefineApplicationParams {
   pluginManager?: PluginManager;
 }
 
+export type ComposeApplicationParams = {
+  config: AppConfig;
+  tailordbResult: DefineTailorDBResult;
+  resolverResult: DefineResolverResult;
+  idpResult: DefineIdpResult;
+  authResult: DefineAuthResult;
+  executorService: ExecutorService | undefined;
+  workflowResult: DefineWorkflowResult;
+  staticWebsiteResult: DefineStaticWebsitesResult;
+};
+
+/**
+ * Compose a Tailor application from pre-defined service results.
+ * @param params - Application parts
+ * @returns Configured application instance
+ */
+export function composeApplication(params: ComposeApplicationParams): Application {
+  const {
+    config,
+    tailordbResult,
+    resolverResult,
+    idpResult,
+    authResult,
+    executorService,
+    workflowResult,
+    staticWebsiteResult,
+  } = params;
+  const subgraphs = [
+    ...tailordbResult.subgraphs,
+    ...resolverResult.subgraphs,
+    ...idpResult.subgraphs,
+    ...authResult.subgraphs,
+  ];
+
+  const application: Application = {
+    name: config.name,
+    config,
+    subgraphs,
+    tailorDBServices: tailordbResult.tailorDBServices,
+    externalTailorDBNamespaces: tailordbResult.externalTailorDBNamespaces,
+    resolverServices: resolverResult.resolverServices,
+    idpServices: idpResult.idpServices,
+    authService: authResult.authService,
+    executorService,
+    workflowConfig: workflowResult.workflowConfig,
+    staticWebsiteServices: staticWebsiteResult.staticWebsiteServices,
+    env: config.env ?? {},
+    get applications() {
+      return [application];
+    },
+  };
+
+  return application;
+}
+
 /**
  * Define a Tailor application from the given configuration.
  * @param params - Parameters for defining the application
@@ -219,30 +313,14 @@ export function defineApplication(params: DefineApplicationParams): Application 
   const workflowResult = defineWorkflow(config.workflow);
   const staticWebsiteResult = defineStaticWebsites(config.staticWebsites);
 
-  const subgraphs = [
-    ...tailordbResult.subgraphs,
-    ...resolverResult.subgraphs,
-    ...idpResult.subgraphs,
-    ...authResult.subgraphs,
-  ];
-
-  const application: Application = {
-    name: config.name,
+  return composeApplication({
     config,
-    subgraphs,
-    tailorDBServices: tailordbResult.tailorDBServices,
-    externalTailorDBNamespaces: tailordbResult.externalTailorDBNamespaces,
-    resolverServices: resolverResult.resolverServices,
-    idpServices: idpResult.idpServices,
-    authService: authResult.authService,
+    tailordbResult,
+    resolverResult,
+    idpResult,
+    authResult,
     executorService: executorResult.executorService,
-    workflowConfig: workflowResult.workflowConfig,
-    staticWebsiteServices: staticWebsiteResult.staticWebsiteServices,
-    env: config.env ?? {},
-    get applications() {
-      return [application];
-    },
-  };
-
-  return application;
+    workflowResult,
+    staticWebsiteResult,
+  });
 }
