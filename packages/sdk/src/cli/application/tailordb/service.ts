@@ -202,7 +202,13 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         `Found ${styles.highlight(typeFiles.length.toString())} type files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
       );
 
-      await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile)));
+      if (pluginManager) {
+        for (const typeFile of typeFiles) {
+          await loadTypeFile(typeFile);
+        }
+      } else {
+        await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile)));
+      }
       doParseTypes();
       return types;
     },
