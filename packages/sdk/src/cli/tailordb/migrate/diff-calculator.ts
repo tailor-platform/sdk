@@ -14,7 +14,7 @@ import type { SnapshotFieldConfig } from "./snapshot";
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 2 as const;
 
 /**
  * Change kind in migration diff
@@ -25,7 +25,17 @@ export type DiffChangeKind =
   | "type_modified"
   | "field_added"
   | "field_removed"
-  | "field_modified";
+  | "field_modified"
+  | "index_added"
+  | "index_removed"
+  | "index_modified"
+  | "file_added"
+  | "file_removed"
+  | "file_modified"
+  | "relationship_added"
+  | "relationship_removed"
+  | "relationship_modified"
+  | "permission_modified";
 
 /**
  * Single change in migration diff
@@ -34,6 +44,10 @@ export interface DiffChange {
   kind: DiffChangeKind;
   typeName: string;
   fieldName?: string;
+  /** Index name for index_* changes */
+  indexName?: string;
+  /** Relationship name for relationship_* changes */
+  relationshipName?: string;
   before?: unknown;
   after?: unknown;
   reason?: string;
@@ -138,6 +152,26 @@ function formatDiffChange(change: DiffChange): string {
       const after = change.after as SnapshotFieldConfig;
       return `  ~ ${change.fieldName}: ${formatFieldModification(before, after)}`;
     }
+    case "index_added":
+      return `  + [Index] ${change.indexName}`;
+    case "index_removed":
+      return `  - [Index] ${change.indexName}`;
+    case "index_modified":
+      return `  ~ [Index] ${change.indexName}: ${change.reason ?? "modified"}`;
+    case "file_added":
+      return `  + [File] ${change.fieldName}`;
+    case "file_removed":
+      return `  - [File] ${change.fieldName}`;
+    case "file_modified":
+      return `  ~ [File] ${change.fieldName}: ${change.reason ?? "modified"}`;
+    case "relationship_added":
+      return `  + [Relationship] ${change.relationshipName}`;
+    case "relationship_removed":
+      return `  - [Relationship] ${change.relationshipName}`;
+    case "relationship_modified":
+      return `  ~ [Relationship] ${change.relationshipName}: ${change.reason ?? "modified"}`;
+    case "permission_modified":
+      return `  ~ [Permission] ${change.reason ?? "modified"}`;
     default:
       return `  ? ${change.typeName}.${change.fieldName ?? ""}`;
   }
@@ -180,15 +214,41 @@ function formatFieldModification(before: SnapshotFieldConfig, after: SnapshotFie
   if (Boolean(before.unique) !== Boolean(after.unique)) {
     changes.push(`unique: ${before.unique ?? false} → ${after.unique ?? false}`);
   }
+  if (Boolean(before.vector) !== Boolean(after.vector)) {
+    changes.push(`vector: ${before.vector ?? false} → ${after.vector ?? false}`);
+  }
 
-  // Check allowedValues changes (set-based comparison - order doesn't matter)
   const beforeAllowed = before.allowedValues ?? [];
   const afterAllowed = after.allowedValues ?? [];
-  const afterSet = new Set(afterAllowed);
+  const afterSet = new Set(afterAllowed.map((v) => v.value));
   const hasAllowedValuesChange =
-    beforeAllowed.length !== afterAllowed.length || beforeAllowed.some((v) => !afterSet.has(v));
+    beforeAllowed.length !== afterAllowed.length ||
+    beforeAllowed.some((v) => !afterSet.has(v.value));
   if (hasAllowedValuesChange) {
-    changes.push(`allowedValues: [${beforeAllowed.join(", ")}] → [${afterAllowed.join(", ")}]`);
+    const beforeValues = beforeAllowed.map((v) => v.value).join(", ");
+    const afterValues = afterAllowed.map((v) => v.value).join(", ");
+    changes.push(`allowedValues: [${beforeValues}] → [${afterValues}]`);
+  }
+
+  const beforeHooks = before.hooks;
+  const afterHooks = after.hooks;
+  if (
+    (beforeHooks?.create?.expr ?? "") !== (afterHooks?.create?.expr ?? "") ||
+    (beforeHooks?.update?.expr ?? "") !== (afterHooks?.update?.expr ?? "")
+  ) {
+    changes.push("hooks modified");
+  }
+
+  const beforeValidate = before.validate ?? [];
+  const afterValidate = after.validate ?? [];
+  if (beforeValidate.length !== afterValidate.length) {
+    changes.push(`validations: ${beforeValidate.length} → ${afterValidate.length}`);
+  }
+
+  if (Boolean(before.serial) !== Boolean(after.serial)) {
+    changes.push(
+      `serial: ${before.serial ? "enabled" : "disabled"} → ${after.serial ? "enabled" : "disabled"}`,
+    );
   }
 
   return changes.join(", ");
@@ -226,6 +286,16 @@ export function formatDiffSummary(diff: MigrationDiff): string {
     fieldsAdded: 0,
     fieldsRemoved: 0,
     fieldsModified: 0,
+    indexesAdded: 0,
+    indexesRemoved: 0,
+    indexesModified: 0,
+    filesAdded: 0,
+    filesRemoved: 0,
+    filesModified: 0,
+    relationshipsAdded: 0,
+    relationshipsRemoved: 0,
+    relationshipsModified: 0,
+    permissionsModified: 0,
   };
 
   for (const change of diff.changes) {
@@ -245,6 +315,36 @@ export function formatDiffSummary(diff: MigrationDiff): string {
       case "field_modified":
         stats.fieldsModified++;
         break;
+      case "index_added":
+        stats.indexesAdded++;
+        break;
+      case "index_removed":
+        stats.indexesRemoved++;
+        break;
+      case "index_modified":
+        stats.indexesModified++;
+        break;
+      case "file_added":
+        stats.filesAdded++;
+        break;
+      case "file_removed":
+        stats.filesRemoved++;
+        break;
+      case "file_modified":
+        stats.filesModified++;
+        break;
+      case "relationship_added":
+        stats.relationshipsAdded++;
+        break;
+      case "relationship_removed":
+        stats.relationshipsRemoved++;
+        break;
+      case "relationship_modified":
+        stats.relationshipsModified++;
+        break;
+      case "permission_modified":
+        stats.permissionsModified++;
+        break;
     }
   }
 
@@ -254,6 +354,19 @@ export function formatDiffSummary(diff: MigrationDiff): string {
   if (stats.fieldsAdded > 0) parts.push(`${stats.fieldsAdded} field(s) added`);
   if (stats.fieldsRemoved > 0) parts.push(`${stats.fieldsRemoved} field(s) removed`);
   if (stats.fieldsModified > 0) parts.push(`${stats.fieldsModified} field(s) modified`);
+  if (stats.indexesAdded > 0) parts.push(`${stats.indexesAdded} index(es) added`);
+  if (stats.indexesRemoved > 0) parts.push(`${stats.indexesRemoved} index(es) removed`);
+  if (stats.indexesModified > 0) parts.push(`${stats.indexesModified} index(es) modified`);
+  if (stats.filesAdded > 0) parts.push(`${stats.filesAdded} file field(s) added`);
+  if (stats.filesRemoved > 0) parts.push(`${stats.filesRemoved} file field(s) removed`);
+  if (stats.filesModified > 0) parts.push(`${stats.filesModified} file field(s) modified`);
+  if (stats.relationshipsAdded > 0) parts.push(`${stats.relationshipsAdded} relationship(s) added`);
+  if (stats.relationshipsRemoved > 0)
+    parts.push(`${stats.relationshipsRemoved} relationship(s) removed`);
+  if (stats.relationshipsModified > 0)
+    parts.push(`${stats.relationshipsModified} relationship(s) modified`);
+  if (stats.permissionsModified > 0)
+    parts.push(`${stats.permissionsModified} permission(s) modified`);
 
   if (parts.length === 0) {
     return "No changes";

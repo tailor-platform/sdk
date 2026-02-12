@@ -187,9 +187,9 @@ describe("snapshot", () => {
 
       expect(snapshot.types.Task.fields.status.type).toBe("enum");
       expect(snapshot.types.Task.fields.status.allowedValues).toEqual([
-        "PENDING",
-        "IN_PROGRESS",
-        "DONE",
+        { value: "PENDING" },
+        { value: "IN_PROGRESS" },
+        { value: "DONE" },
       ]);
     });
 
@@ -481,7 +481,12 @@ describe("snapshot", () => {
               status: {
                 type: "enum",
                 required: true,
-                allowedValues: ["PENDING", "IN_PROGRESS", "DONE", "CANCELLED"],
+                allowedValues: [
+                  { value: "PENDING" },
+                  { value: "IN_PROGRESS" },
+                  { value: "DONE" },
+                  { value: "CANCELLED" },
+                ],
               },
             },
           },
@@ -497,7 +502,7 @@ describe("snapshot", () => {
               status: {
                 type: "enum",
                 required: true,
-                allowedValues: ["PENDING", "IN_PROGRESS", "DONE"],
+                allowedValues: [{ value: "PENDING" }, { value: "IN_PROGRESS" }, { value: "DONE" }],
               },
             },
           },
@@ -522,7 +527,7 @@ describe("snapshot", () => {
               status: {
                 type: "enum",
                 required: true,
-                allowedValues: ["PENDING", "IN_PROGRESS", "DONE"],
+                allowedValues: [{ value: "PENDING" }, { value: "IN_PROGRESS" }, { value: "DONE" }],
               },
             },
           },
@@ -538,7 +543,8 @@ describe("snapshot", () => {
               status: {
                 type: "enum",
                 required: true,
-                allowedValues: ["DONE", "PENDING", "IN_PROGRESS"], // Same values, different order
+                // Same values, different order
+                allowedValues: [{ value: "DONE" }, { value: "PENDING" }, { value: "IN_PROGRESS" }],
               },
             },
           },
@@ -562,7 +568,7 @@ describe("snapshot", () => {
               status: {
                 type: "enum",
                 required: true,
-                allowedValues: ["PENDING", "DONE"],
+                allowedValues: [{ value: "PENDING" }, { value: "DONE" }],
               },
             },
           },
@@ -578,7 +584,8 @@ describe("snapshot", () => {
               status: {
                 type: "enum",
                 required: true,
-                allowedValues: ["DONE", "IN_PROGRESS", "PENDING"], // Added IN_PROGRESS, reordered
+                // Added IN_PROGRESS, reordered
+                allowedValues: [{ value: "DONE" }, { value: "IN_PROGRESS" }, { value: "PENDING" }],
               },
             },
           },
@@ -1570,7 +1577,7 @@ describe("snapshot", () => {
               status: {
                 type: "enum",
                 required: true,
-                allowedValues: ["PENDING", "DONE"],
+                allowedValues: [{ value: "PENDING" }, { value: "DONE" }],
               },
             },
           },

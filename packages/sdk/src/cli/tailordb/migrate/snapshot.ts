@@ -11,7 +11,12 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import type { SchemaDrift } from "./types";
-import type { ParsedField, TailorDBType } from "@/parser/service/tailordb/types";
+import type {
+  ParsedField,
+  TailorDBType,
+  OperatorFieldConfig,
+  StandardActionPermission,
+} from "@/parser/service/tailordb/types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // ============================================================================
@@ -45,6 +50,38 @@ export { SCHEMA_SNAPSHOT_VERSION };
 // ============================================================================
 
 /**
+ * Hook configuration in schema snapshot
+ */
+export interface SnapshotHook {
+  expr: string;
+}
+
+/**
+ * Validation configuration in schema snapshot
+ */
+export interface SnapshotValidation {
+  script: { expr: string };
+  errorMessage: string;
+}
+
+/**
+ * Serial configuration in schema snapshot
+ */
+export interface SnapshotSerial {
+  start: number;
+  maxValue?: number;
+  format?: string;
+}
+
+/**
+ * Enum value with optional description in schema snapshot
+ */
+export interface SnapshotEnumValue {
+  value: string;
+  description?: string;
+}
+
+/**
  * Field configuration in schema snapshot
  */
 export interface SnapshotFieldConfig {
@@ -53,10 +90,20 @@ export interface SnapshotFieldConfig {
   array?: boolean;
   index?: boolean;
   unique?: boolean;
-  allowedValues?: string[];
+  allowedValues?: SnapshotEnumValue[];
   foreignKey?: boolean;
   foreignKeyType?: string;
   foreignKeyField?: string;
+  description?: string;
+  vector?: boolean;
+  hooks?: {
+    create?: SnapshotHook;
+    update?: SnapshotHook;
+  };
+  validate?: SnapshotValidation[];
+  serial?: SnapshotSerial;
+  /** Nested fields (recursive) */
+  fields?: Record<string, SnapshotFieldConfig>;
 }
 
 /**
@@ -66,6 +113,91 @@ export interface SnapshotIndexConfig {
   fields: string[];
   unique?: boolean;
 }
+
+/**
+ * Relationship configuration in schema snapshot
+ */
+export interface SnapshotRelationship {
+  targetType: string;
+  targetField: string;
+  sourceField: string;
+  isArray: boolean;
+  description: string;
+}
+
+// ============================================================================
+// Permission Types
+// ============================================================================
+
+/**
+ * Permission operand types
+ */
+export type SnapshotPermissionOperand =
+  | { user: string }
+  | { record: string }
+  | { newRecord: string }
+  | { oldRecord: string }
+  | unknown; // ValueOperand (primitives, arrays)
+
+/**
+ * Permission operators
+ */
+export type SnapshotPermissionOperator = "eq" | "ne" | "in" | "nin";
+
+/**
+ * Permission condition tuple
+ */
+export type SnapshotPermissionCondition = readonly [
+  SnapshotPermissionOperand,
+  SnapshotPermissionOperator,
+  SnapshotPermissionOperand,
+];
+
+/**
+ * Action permission policy
+ */
+export interface SnapshotActionPermission {
+  conditions: readonly SnapshotPermissionCondition[];
+  description?: string;
+  permit: "allow" | "deny";
+}
+
+/**
+ * Record-level permission configuration
+ */
+export interface SnapshotRecordPermission {
+  create: readonly SnapshotActionPermission[];
+  read: readonly SnapshotActionPermission[];
+  update: readonly SnapshotActionPermission[];
+  delete: readonly SnapshotActionPermission[];
+}
+
+/**
+ * GQL permission actions
+ */
+export type SnapshotGqlAction =
+  | "read"
+  | "create"
+  | "update"
+  | "delete"
+  | "aggregate"
+  | "bulkUpsert"
+  | "all";
+
+/**
+ * GQL permission policy
+ */
+export interface SnapshotGqlPermissionPolicy {
+  conditions: readonly SnapshotPermissionCondition[];
+  actions: readonly SnapshotGqlAction[];
+  permit: "allow" | "deny";
+  description?: string;
+}
+
+/**
+ * GQL permission configuration
+ */
+export type SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[];
 
 /**
  * Type definition in schema snapshot
@@ -87,6 +219,12 @@ export interface SnapshotType {
   };
   indexes?: Record<string, SnapshotIndexConfig>;
   files?: Record<string, string>;
+  forwardRelationships?: Record<string, SnapshotRelationship>;
+  backwardRelationships?: Record<string, SnapshotRelationship>;
+  permissions?: {
+    record?: SnapshotRecordPermission;
+    gql?: SnapshotGqlPermission;
+  };
 }
 
 /**
@@ -217,13 +355,122 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
   if (field.config.array) config.array = true;
   if (field.config.index) config.index = true;
   if (field.config.unique) config.unique = true;
+
   if (field.config.allowedValues && field.config.allowedValues.length > 0) {
-    config.allowedValues = field.config.allowedValues.map((v) => v.value);
+    config.allowedValues = field.config.allowedValues.map((v) => ({
+      value: v.value,
+      ...(v.description && { description: v.description }),
+    }));
   }
+
   if (field.config.foreignKey) {
     config.foreignKey = true;
     if (field.config.foreignKeyType) config.foreignKeyType = field.config.foreignKeyType;
     if (field.config.foreignKeyField) config.foreignKeyField = field.config.foreignKeyField;
+  }
+
+  if (field.config.description) config.description = field.config.description;
+  if (field.config.vector) config.vector = true;
+
+  if (field.config.hooks) {
+    config.hooks = {};
+    if (field.config.hooks.create) {
+      config.hooks.create = { expr: field.config.hooks.create.expr };
+    }
+    if (field.config.hooks.update) {
+      config.hooks.update = { expr: field.config.hooks.update.expr };
+    }
+  }
+
+  if (field.config.validate && field.config.validate.length > 0) {
+    config.validate = field.config.validate.map((v) => ({
+      script: { expr: v.script.expr },
+      errorMessage: v.errorMessage,
+    }));
+  }
+
+  if (field.config.serial) {
+    config.serial = {
+      start: field.config.serial.start,
+      ...(field.config.serial.maxValue !== undefined && { maxValue: field.config.serial.maxValue }),
+      ...(field.config.serial.format && { format: field.config.serial.format }),
+    };
+  }
+
+  if (field.config.fields && Object.keys(field.config.fields).length > 0) {
+    config.fields = {};
+    for (const [nestedName, nestedConfig] of Object.entries(field.config.fields)) {
+      config.fields[nestedName] = createSnapshotFieldConfigFromOperatorConfig(nestedConfig);
+    }
+  }
+
+  return config;
+}
+
+/**
+ * Create a snapshot field config from an OperatorFieldConfig (for nested fields)
+ * @param {import("@/parser/service/tailordb/types").OperatorFieldConfig} fieldConfig - Field configuration
+ * @returns {SnapshotFieldConfig} Snapshot field configuration
+ */
+function createSnapshotFieldConfigFromOperatorConfig(
+  fieldConfig: OperatorFieldConfig,
+): SnapshotFieldConfig {
+  const config: SnapshotFieldConfig = {
+    type: fieldConfig.type,
+    required: fieldConfig.required !== false,
+  };
+
+  if (fieldConfig.array) config.array = true;
+  if (fieldConfig.index) config.index = true;
+  if (fieldConfig.unique) config.unique = true;
+
+  if (fieldConfig.allowedValues && fieldConfig.allowedValues.length > 0) {
+    config.allowedValues = fieldConfig.allowedValues.map((v) => ({
+      value: v.value,
+      ...(v.description && { description: v.description }),
+    }));
+  }
+
+  if (fieldConfig.foreignKey) {
+    config.foreignKey = true;
+    if (fieldConfig.foreignKeyType) config.foreignKeyType = fieldConfig.foreignKeyType;
+    if (fieldConfig.foreignKeyField) config.foreignKeyField = fieldConfig.foreignKeyField;
+  }
+
+  if (fieldConfig.description) config.description = fieldConfig.description;
+  if (fieldConfig.vector) config.vector = true;
+
+  if (fieldConfig.hooks) {
+    config.hooks = {};
+    if (fieldConfig.hooks.create) {
+      config.hooks.create = { expr: fieldConfig.hooks.create.expr };
+    }
+    if (fieldConfig.hooks.update) {
+      config.hooks.update = { expr: fieldConfig.hooks.update.expr };
+    }
+  }
+
+  if (fieldConfig.validate && fieldConfig.validate.length > 0) {
+    config.validate = fieldConfig.validate.map((v) => ({
+      script: { expr: v.script.expr },
+      errorMessage: v.errorMessage,
+    }));
+  }
+
+  if (fieldConfig.serial) {
+    config.serial = {
+      start: fieldConfig.serial.start,
+      ...(fieldConfig.serial.maxValue !== undefined && { maxValue: fieldConfig.serial.maxValue }),
+      ...(fieldConfig.serial.format && { format: fieldConfig.serial.format }),
+    };
+  }
+
+  // Recursive for nested fields
+  if (fieldConfig.fields && Object.keys(fieldConfig.fields).length > 0) {
+    config.fields = {};
+    for (const [nestedName, nestedConfig] of Object.entries(fieldConfig.fields)) {
+      config.fields[nestedName] = createSnapshotFieldConfigFromOperatorConfig(nestedConfig);
+    }
   }
 
   return config;
@@ -290,7 +537,70 @@ function createSnapshotType(type: TailorDBType): SnapshotType {
     snapshotType.files = { ...type.files };
   }
 
+  if (Object.keys(type.forwardRelationships).length > 0) {
+    snapshotType.forwardRelationships = {};
+    for (const [relName, rel] of Object.entries(type.forwardRelationships)) {
+      snapshotType.forwardRelationships[relName] = {
+        targetType: rel.targetType,
+        targetField: rel.targetField,
+        sourceField: rel.sourceField,
+        isArray: rel.isArray,
+        description: rel.description,
+      };
+    }
+  }
+
+  if (Object.keys(type.backwardRelationships).length > 0) {
+    snapshotType.backwardRelationships = {};
+    for (const [relName, rel] of Object.entries(type.backwardRelationships)) {
+      snapshotType.backwardRelationships[relName] = {
+        targetType: rel.targetType,
+        targetField: rel.targetField,
+        sourceField: rel.sourceField,
+        isArray: rel.isArray,
+        description: rel.description,
+      };
+    }
+  }
+
+  if (type.permissions.record || type.permissions.gql) {
+    snapshotType.permissions = {};
+
+    if (type.permissions.record) {
+      snapshotType.permissions.record = {
+        create: type.permissions.record.create.map(convertActionPermission),
+        read: type.permissions.record.read.map(convertActionPermission),
+        update: type.permissions.record.update.map(convertActionPermission),
+        delete: type.permissions.record.delete.map(convertActionPermission),
+      };
+    }
+
+    if (type.permissions.gql) {
+      snapshotType.permissions.gql = type.permissions.gql.map((policy) => ({
+        conditions: policy.conditions as SnapshotPermissionCondition[],
+        actions: policy.actions as SnapshotGqlAction[],
+        permit: policy.permit,
+        ...(policy.description && { description: policy.description }),
+      }));
+    }
+  }
+
   return snapshotType;
+}
+
+/**
+ * Convert an action permission to snapshot format
+ * @param {StandardActionPermission<"record">} permission - Action permission
+ * @returns {SnapshotActionPermission} Snapshot action permission
+ */
+function convertActionPermission(
+  permission: StandardActionPermission<"record">,
+): SnapshotActionPermission {
+  return {
+    conditions: permission.conditions as SnapshotPermissionCondition[],
+    permit: permission.permit,
+    ...(permission.description && { description: permission.description }),
+  };
 }
 
 /**
@@ -322,23 +632,55 @@ export function createSnapshotFromLocalTypes(
 // ============================================================================
 
 /**
+ * Error thrown when a v1 snapshot is detected
+ */
+class SnapshotVersionError extends Error {
+  constructor(
+    public readonly filePath: string,
+    public readonly version: number,
+  ) {
+    super(
+      `Snapshot file "${filePath}" is version ${version}, but version ${SCHEMA_SNAPSHOT_VERSION} is required.\n` +
+        `Run 'tailor-sdk tailordb migration generate' to regenerate migration files.`,
+    );
+    this.name = "SnapshotVersionError";
+  }
+}
+
+/**
  * Load a schema snapshot from a file
  * @param {string} filePath - Path to the snapshot file
  * @returns {SchemaSnapshot} Loaded schema snapshot
+ * @throws {SnapshotVersionError} If the snapshot is v1 (requires regeneration)
  */
 export function loadSnapshot(filePath: string): SchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
-  return JSON.parse(content) as SchemaSnapshot;
+  const snapshot = JSON.parse(content) as SchemaSnapshot;
+
+  // Check for v1 snapshot and require migration
+  if (snapshot.version !== SCHEMA_SNAPSHOT_VERSION) {
+    throw new SnapshotVersionError(filePath, snapshot.version);
+  }
+
+  return snapshot;
 }
 
 /**
  * Load a migration diff from a file
  * @param {string} filePath - Path to the diff file
  * @returns {MigrationDiff} Loaded migration diff
+ * @throws {SnapshotVersionError} If the diff is v1 (requires regeneration)
  */
 export function loadDiff(filePath: string): MigrationDiff {
   const content = fs.readFileSync(filePath, "utf-8");
-  return JSON.parse(content) as MigrationDiff;
+  const diff = JSON.parse(content) as MigrationDiff;
+
+  // Check for v1 diff and require migration
+  if (diff.version !== SCHEMA_SNAPSHOT_VERSION) {
+    throw new SnapshotVersionError(filePath, diff.version);
+  }
+
+  return diff;
 }
 
 /**
@@ -536,7 +878,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   if (oldField.required !== newField.required) return true;
 
   // Compare optional boolean properties (default to false)
-  const booleanProps = ["array", "index", "unique", "foreignKey"] as const;
+  const booleanProps = ["array", "index", "unique", "foreignKey", "vector"] as const;
   for (const prop of booleanProps) {
     if ((oldField[prop] ?? false) !== (newField[prop] ?? false)) return true;
   }
@@ -545,12 +887,51 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   if (oldField.foreignKeyType !== newField.foreignKeyType) return true;
   if (oldField.foreignKeyField !== newField.foreignKeyField) return true;
 
-  // Compare allowedValues (set-based comparison - order doesn't matter)
+  if ((oldField.description ?? "") !== (newField.description ?? "")) return true;
+
   const oldAllowed = oldField.allowedValues ?? [];
   const newAllowed = newField.allowedValues ?? [];
   if (oldAllowed.length !== newAllowed.length) return true;
-  const newAllowedSet = new Set(newAllowed);
-  if (oldAllowed.some((v) => !newAllowedSet.has(v))) return true;
+  const newAllowedMap = new Map(newAllowed.map((v) => [v.value, v.description]));
+  for (const v of oldAllowed) {
+    if (!newAllowedMap.has(v.value)) return true;
+    if ((v.description ?? "") !== (newAllowedMap.get(v.value) ?? "")) return true;
+  }
+
+  const oldHooks = oldField.hooks;
+  const newHooks = newField.hooks;
+  if (Boolean(oldHooks) !== Boolean(newHooks)) return true;
+  if (oldHooks && newHooks) {
+    if ((oldHooks.create?.expr ?? "") !== (newHooks.create?.expr ?? "")) return true;
+    if ((oldHooks.update?.expr ?? "") !== (newHooks.update?.expr ?? "")) return true;
+  }
+
+  const oldValidate = oldField.validate ?? [];
+  const newValidate = newField.validate ?? [];
+  if (oldValidate.length !== newValidate.length) return true;
+  for (let i = 0; i < oldValidate.length; i++) {
+    if (oldValidate[i].script.expr !== newValidate[i].script.expr) return true;
+    if (oldValidate[i].errorMessage !== newValidate[i].errorMessage) return true;
+  }
+
+  const oldSerial = oldField.serial;
+  const newSerial = newField.serial;
+  if (Boolean(oldSerial) !== Boolean(newSerial)) return true;
+  if (oldSerial && newSerial) {
+    if (oldSerial.start !== newSerial.start) return true;
+    if (oldSerial.maxValue !== newSerial.maxValue) return true;
+    if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
+  }
+
+  const oldFields = oldField.fields ?? {};
+  const newFields = newField.fields ?? {};
+  const oldFieldNames = Object.keys(oldFields);
+  const newFieldNames = Object.keys(newFields);
+  if (oldFieldNames.length !== newFieldNames.length) return true;
+  for (const fieldName of oldFieldNames) {
+    if (!newFields[fieldName]) return true;
+    if (areFieldsDifferent(oldFields[fieldName], newFields[fieldName])) return true;
+  }
 
   return false;
 }
@@ -638,7 +1019,9 @@ function isBreakingFieldChange(
   if (oldField && newField && oldField.type === "enum" && newField.type === "enum") {
     const oldAllowed = oldField.allowedValues ?? [];
     const newAllowed = newField.allowedValues ?? [];
-    const removedValues = oldAllowed.filter((v) => !newAllowed.includes(v));
+    const oldValues = oldAllowed.map((v) => v.value);
+    const newValuesSet = new Set(newAllowed.map((v) => v.value));
+    const removedValues = oldValues.filter((v) => !newValuesSet.has(v));
     if (removedValues.length > 0) {
       return {
         typeName,
@@ -763,11 +1146,10 @@ function compareIndexes(
   for (const indexName of newKeys) {
     if (!oldKeys.has(indexName)) {
       ctx.changes.push({
-        kind: "type_modified",
+        kind: "index_added",
         typeName,
-        reason: `Index "${indexName}" added`,
-        before: { indexes: oldIndexes },
-        after: { indexes: newIndexes },
+        indexName,
+        after: newIndexes![indexName],
       });
     }
   }
@@ -776,11 +1158,10 @@ function compareIndexes(
   for (const indexName of oldKeys) {
     if (!newKeys.has(indexName)) {
       ctx.changes.push({
-        kind: "type_modified",
+        kind: "index_removed",
         typeName,
-        reason: `Index "${indexName}" removed`,
-        before: { indexes: oldIndexes },
-        after: { indexes: newIndexes },
+        indexName,
+        before: oldIndexes![indexName],
       });
     }
   }
@@ -795,12 +1176,16 @@ function compareIndexes(
       const newFieldsStr = JSON.stringify(newIndex.fields.toSorted());
 
       if (oldFieldsStr !== newFieldsStr || oldIndex.unique !== newIndex.unique) {
+        const reasons: string[] = [];
+        if (oldFieldsStr !== newFieldsStr) reasons.push("fields changed");
+        if (oldIndex.unique !== newIndex.unique) reasons.push("unique constraint changed");
         ctx.changes.push({
-          kind: "type_modified",
+          kind: "index_modified",
           typeName,
-          reason: `Index "${indexName}" modified`,
-          before: { indexes: oldIndexes },
-          after: { indexes: newIndexes },
+          indexName,
+          reason: reasons.join(", "),
+          before: oldIndex,
+          after: newIndex,
         });
       }
     }
@@ -828,11 +1213,10 @@ function compareFiles(
   for (const fileName of newKeys) {
     if (!oldKeys.has(fileName)) {
       ctx.changes.push({
-        kind: "type_modified",
+        kind: "file_added",
         typeName,
-        reason: `File field "${fileName}" added`,
-        before: { files: oldFiles },
-        after: { files: newFiles },
+        fieldName: fileName,
+        after: newFiles![fileName],
       });
     }
   }
@@ -841,11 +1225,10 @@ function compareFiles(
   for (const fileName of oldKeys) {
     if (!newKeys.has(fileName)) {
       ctx.changes.push({
-        kind: "type_modified",
+        kind: "file_removed",
         typeName,
-        reason: `File field "${fileName}" removed`,
-        before: { files: oldFiles },
-        after: { files: newFiles },
+        fieldName: fileName,
+        before: oldFiles![fileName],
       });
     }
   }
@@ -855,14 +1238,125 @@ function compareFiles(
     if (oldKeys.has(fileName)) {
       if (oldFiles![fileName] !== newFiles![fileName]) {
         ctx.changes.push({
-          kind: "type_modified",
+          kind: "file_modified",
           typeName,
-          reason: `File field "${fileName}" description changed`,
-          before: { files: oldFiles },
-          after: { files: newFiles },
+          fieldName: fileName,
+          reason: "description changed",
+          before: oldFiles![fileName],
+          after: newFiles![fileName],
         });
       }
     }
+  }
+}
+
+/**
+ * Compare type-level relationships
+ * @param {DiffContext} ctx - Diff context
+ * @param {string} typeName - Type name
+ * @param {Record<string, SnapshotRelationship> | undefined} oldRelationships - Previous relationships
+ * @param {Record<string, SnapshotRelationship> | undefined} newRelationships - Current relationships
+ * @returns {void}
+ */
+function compareRelationships(
+  ctx: DiffContext,
+  typeName: string,
+  oldRelationships: Record<string, SnapshotRelationship> | undefined,
+  newRelationships: Record<string, SnapshotRelationship> | undefined,
+): void {
+  const oldKeys = new Set(Object.keys(oldRelationships || {}));
+  const newKeys = new Set(Object.keys(newRelationships || {}));
+
+  // Relationship added
+  for (const relName of newKeys) {
+    if (!oldKeys.has(relName)) {
+      ctx.changes.push({
+        kind: "relationship_added",
+        typeName,
+        relationshipName: relName,
+        after: newRelationships![relName],
+      });
+    }
+  }
+
+  // Relationship removed
+  for (const relName of oldKeys) {
+    if (!newKeys.has(relName)) {
+      ctx.changes.push({
+        kind: "relationship_removed",
+        typeName,
+        relationshipName: relName,
+        before: oldRelationships![relName],
+      });
+    }
+  }
+
+  // Relationship modified
+  for (const relName of newKeys) {
+    if (oldKeys.has(relName)) {
+      const oldRel = oldRelationships![relName];
+      const newRel = newRelationships![relName];
+
+      const reasons: string[] = [];
+      if (oldRel.targetType !== newRel.targetType) reasons.push("targetType changed");
+      if (oldRel.targetField !== newRel.targetField) reasons.push("targetField changed");
+      if (oldRel.sourceField !== newRel.sourceField) reasons.push("sourceField changed");
+      if (oldRel.isArray !== newRel.isArray) reasons.push("isArray changed");
+
+      if (reasons.length > 0) {
+        ctx.changes.push({
+          kind: "relationship_modified",
+          typeName,
+          relationshipName: relName,
+          reason: reasons.join(", "),
+          before: oldRel,
+          after: newRel,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Compare type-level permissions
+ * @param {DiffContext} ctx - Diff context
+ * @param {string} typeName - Type name
+ * @param {SnapshotRecordPermission | undefined} oldRecordPerm - Previous record permission
+ * @param {SnapshotRecordPermission | undefined} newRecordPerm - Current record permission
+ * @param {SnapshotGqlPermission | undefined} oldGqlPerm - Previous GQL permission
+ * @param {SnapshotGqlPermission | undefined} newGqlPerm - Current GQL permission
+ * @returns {void}
+ */
+function comparePermissions(
+  ctx: DiffContext,
+  typeName: string,
+  oldRecordPerm: SnapshotRecordPermission | undefined,
+  newRecordPerm: SnapshotRecordPermission | undefined,
+  oldGqlPerm: SnapshotGqlPermission | undefined,
+  newGqlPerm: SnapshotGqlPermission | undefined,
+): void {
+  // Compare record permissions
+  const oldRecordStr = JSON.stringify(oldRecordPerm ?? null);
+  const newRecordStr = JSON.stringify(newRecordPerm ?? null);
+  const recordPermChanged = oldRecordStr !== newRecordStr;
+
+  // Compare GQL permissions
+  const oldGqlStr = JSON.stringify(oldGqlPerm ?? null);
+  const newGqlStr = JSON.stringify(newGqlPerm ?? null);
+  const gqlPermChanged = oldGqlStr !== newGqlStr;
+
+  if (recordPermChanged || gqlPermChanged) {
+    const reasons: string[] = [];
+    if (recordPermChanged) reasons.push("record permission");
+    if (gqlPermChanged) reasons.push("GQL permission");
+
+    ctx.changes.push({
+      kind: "permission_modified",
+      typeName,
+      reason: `${reasons.join(" and ")} changed`,
+      before: { recordPermission: oldRecordPerm, gqlPermission: oldGqlPerm },
+      after: { recordPermission: newRecordPerm, gqlPermission: newGqlPerm },
+    });
   }
 }
 
@@ -915,6 +1409,30 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
 
     // Compare file fields
     compareFiles(ctx, typeName, prevType.files, currType.files);
+
+    // Compare relationships
+    compareRelationships(
+      ctx,
+      typeName,
+      prevType.forwardRelationships,
+      currType.forwardRelationships,
+    );
+    compareRelationships(
+      ctx,
+      typeName,
+      prevType.backwardRelationships,
+      currType.backwardRelationships,
+    );
+
+    // Compare permissions
+    comparePermissions(
+      ctx,
+      typeName,
+      prevType.permissions?.record,
+      currType.permissions?.record,
+      prevType.permissions?.gql,
+      currType.permissions?.gql,
+    );
   }
 
   return {
@@ -1147,8 +1665,41 @@ function convertRemoteFieldsToSnapshot(
       if (remoteField.foreignKeyField) config.foreignKeyField = remoteField.foreignKeyField;
     }
     if (remoteField.allowedValues && remoteField.allowedValues.length > 0) {
-      config.allowedValues = remoteField.allowedValues.map((v) => v.value);
+      config.allowedValues = remoteField.allowedValues.map((v) => ({
+        value: v.value,
+        ...(v.description && { description: v.description }),
+      }));
     }
+
+    if (remoteField.description) config.description = remoteField.description;
+    if (remoteField.vector) config.vector = true;
+
+    if (remoteField.hooks) {
+      config.hooks = {};
+      if (remoteField.hooks.create?.expr) {
+        config.hooks.create = { expr: remoteField.hooks.create.expr };
+      }
+      if (remoteField.hooks.update?.expr) {
+        config.hooks.update = { expr: remoteField.hooks.update.expr };
+      }
+    }
+
+    if (remoteField.validate && remoteField.validate.length > 0) {
+      config.validate = remoteField.validate.map((v) => ({
+        script: { expr: v.script?.expr ?? "" },
+        errorMessage: v.errorMessage ?? "",
+      }));
+    }
+
+    if (remoteField.serial) {
+      config.serial = {
+        start: Number(remoteField.serial.start),
+        ...(remoteField.serial.maxValue && { maxValue: Number(remoteField.serial.maxValue) }),
+        ...(remoteField.serial.format && { format: remoteField.serial.format }),
+      };
+    }
+
+    // TODO: Add nested field conversion when remote API supports it
 
     fields[fieldName] = config;
   }
@@ -1212,26 +1763,33 @@ function compareFields(
     );
   }
 
-  // Compare allowedValues (set-based)
-  const remoteAllowed = new Set(remoteField.allowedValues ?? []);
-  const snapshotAllowed = new Set(snapshotField.allowedValues ?? []);
-  if (remoteAllowed.size !== snapshotAllowed.size) {
+  const remoteAllowed = remoteField.allowedValues ?? [];
+  const snapshotAllowed = snapshotField.allowedValues ?? [];
+  const remoteAllowedValues = new Set(remoteAllowed.map((v) => v.value));
+  const snapshotAllowedValues = new Set(snapshotAllowed.map((v) => v.value));
+  if (remoteAllowedValues.size !== snapshotAllowedValues.size) {
     differences.push(
-      `allowedValues count: remote=${remoteAllowed.size}, expected=${snapshotAllowed.size}`,
+      `allowedValues count: remote=${remoteAllowedValues.size}, expected=${snapshotAllowedValues.size}`,
     );
   } else {
-    for (const v of remoteAllowed) {
-      if (!snapshotAllowed.has(v)) {
+    for (const v of remoteAllowedValues) {
+      if (!snapshotAllowedValues.has(v)) {
         differences.push(`allowedValues: remote has '${v}' not in snapshot`);
         break;
       }
     }
-    for (const v of snapshotAllowed) {
-      if (!remoteAllowed.has(v)) {
+    for (const v of snapshotAllowedValues) {
+      if (!remoteAllowedValues.has(v)) {
         differences.push(`allowedValues: snapshot has '${v}' not in remote`);
         break;
       }
     }
+  }
+
+  const remoteVector = remoteField.vector ?? false;
+  const snapshotVector = snapshotField.vector ?? false;
+  if (remoteVector !== snapshotVector) {
+    differences.push(`vector: remote=${remoteVector}, expected=${snapshotVector}`);
   }
 
   if (differences.length > 0) {
