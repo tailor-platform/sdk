@@ -44,7 +44,7 @@ interface PluginBase<PluginConfig = unknown> {
 
 Notes:
 
-- `importPath` should be resolvable from either the directory containing `tailor.config.ts` or the project root (the nearest `package.json`). Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
+- `importPath` should be resolvable from the directory containing `tailor.config.ts`. Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
 - If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `process`.
 - Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
 - `pluginConfig` stores the plugin-level config so it can be read later during processing. If you prefer not to set it manually, you can pass config as a tuple to `definePlugins([plugin, config])`.
