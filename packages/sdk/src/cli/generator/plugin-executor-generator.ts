@@ -11,6 +11,10 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/utils/logger";
 import {
+  getPluginImportBaseDirs,
+  resolveRelativePluginImportPath,
+} from "@/cli/utils/plugin-import";
+import {
   isPluginExecutorWithFile,
   type PluginGeneratedExecutorLegacy,
   type PluginGeneratedExecutorWithFile,
@@ -41,6 +45,7 @@ interface TypeImportInfo {
  * @param outputDir - Base output directory (e.g., .tailor-sdk)
  * @param typeGenerationResult - Result from plugin type generation (for import resolution)
  * @param sourceTypeFilePaths - Map of source type names to their file paths
+ * @param configPath - Path to tailor.config.ts (used for resolving plugin import paths)
  * @returns Array of generated file paths
  */
 export function generatePluginExecutorFiles(
@@ -48,12 +53,14 @@ export function generatePluginExecutorFiles(
   outputDir: string,
   typeGenerationResult?: PluginTypeGenerationResult,
   sourceTypeFilePaths?: Map<string, string>,
+  configPath?: string,
 ): string[] {
   if (executors.length === 0) {
     return [];
   }
 
   const generatedFiles: string[] = [];
+  const baseDirs = getPluginImportBaseDirs(configPath);
 
   for (const info of executors) {
     const filePath = generateSingleExecutorFile(
@@ -61,6 +68,7 @@ export function generatePluginExecutorFiles(
       outputDir,
       typeGenerationResult,
       sourceTypeFilePaths,
+      baseDirs,
     );
     generatedFiles.push(filePath);
 
@@ -79,6 +87,7 @@ export function generatePluginExecutorFiles(
  * @param outputDir - Base output directory (e.g., .tailor-sdk)
  * @param typeGenerationResult - Result from plugin type generation
  * @param sourceTypeFilePaths - Map of source type names to their file paths
+ * @param baseDirs - Base directories for resolving plugin import paths
  * @returns Absolute path to the generated file
  */
 function generateSingleExecutorFile(
@@ -86,6 +95,7 @@ function generateSingleExecutorFile(
   outputDir: string,
   typeGenerationResult?: PluginTypeGenerationResult,
   sourceTypeFilePaths?: Map<string, string>,
+  baseDirs: string[] = [],
 ): string {
   const pluginDir = sanitizePluginId(info.pluginId);
   const executorOutputDir = path.join(outputDir, pluginDir, "executors");
@@ -102,6 +112,7 @@ function generateSingleExecutorFile(
       outputDir,
       typeGenerationResult,
       sourceTypeFilePaths,
+      baseDirs,
     );
   } else {
     content = generateExecutorFileContentLegacy(info.executor);
@@ -119,6 +130,7 @@ function generateSingleExecutorFile(
  * @param outputDir - Base output directory
  * @param typeGenerationResult - Result from plugin type generation
  * @param sourceTypeFilePaths - Map of source type names to their file paths
+ * @param baseDirs - Base directories for resolving plugin import paths
  * @returns TypeScript source code for executor file
  */
 function generateExecutorFileContentNew(
@@ -127,6 +139,7 @@ function generateExecutorFileContentNew(
   outputDir: string,
   typeGenerationResult?: PluginTypeGenerationResult,
   sourceTypeFilePaths?: Map<string, string>,
+  baseDirs: string[] = [],
 ): string {
   const { resolve, context } = executor;
   const pluginDir = sanitizePluginId(info.pluginId);
@@ -136,6 +149,7 @@ function generateExecutorFileContentNew(
     resolve,
     info.pluginImportPath,
     executorOutputDir,
+    baseDirs,
   );
 
   // Collect type imports from context
@@ -419,22 +433,25 @@ const require = createRequire(import.meta.url);
  * @param resolve - Executor resolve function
  * @param pluginImportPath - Plugin's import path
  * @param executorOutputDir - Directory where the generated executor will be written
+ * @param baseDirs - Base directories for resolving plugin import paths
  * @returns Import path string for the executor module
  */
 function resolveExecutorImportPath(
   resolve: () => Promise<{ default: unknown }>,
   pluginImportPath: string,
   executorOutputDir: string,
+  baseDirs: string[],
 ): string {
   const specifier = extractDynamicImportSpecifier(resolve);
   if (!specifier.startsWith(".")) {
     return specifier;
   }
 
-  const pluginBaseDir = resolvePluginBaseDir(pluginImportPath);
+  const pluginBaseDir = resolvePluginBaseDir(pluginImportPath, baseDirs);
   if (!pluginBaseDir) {
     throw new Error(
       `Unable to resolve plugin import base for "${pluginImportPath}". ` +
+        `Tried base dirs: ${baseDirs.join(", ") || "(none)"}. ` +
         `Use an absolute import specifier in resolve(), or ensure the plugin path is resolvable.`,
     );
   }
@@ -467,24 +484,30 @@ function extractDynamicImportSpecifier(resolve: () => Promise<{ default: unknown
 /**
  * Resolve plugin base directory for relative imports.
  * @param pluginImportPath - Plugin import path
+ * @param baseDirs - Base directories for resolving plugin import paths
  * @returns Directory path or null if not resolvable
  */
-function resolvePluginBaseDir(pluginImportPath: string): string | null {
+function resolvePluginBaseDir(pluginImportPath: string, baseDirs: string[]): string | null {
   if (pluginImportPath.startsWith(".")) {
-    const pluginPath = path.resolve(process.cwd(), pluginImportPath);
-    if (fs.existsSync(pluginPath)) {
-      const stats = fs.statSync(pluginPath);
-      return stats.isDirectory() ? pluginPath : path.dirname(pluginPath);
+    const resolvedPath =
+      resolveRelativePluginImportPath(pluginImportPath, baseDirs) ??
+      path.resolve(baseDirs[0] ?? process.cwd(), pluginImportPath);
+    if (fs.existsSync(resolvedPath)) {
+      const stats = fs.statSync(resolvedPath);
+      return stats.isDirectory() ? resolvedPath : path.dirname(resolvedPath);
     }
-    return path.extname(pluginPath) ? path.dirname(pluginPath) : pluginPath;
+    return path.extname(resolvedPath) ? path.dirname(resolvedPath) : resolvedPath;
   }
 
-  try {
-    const resolved = require.resolve(pluginImportPath, { paths: [process.cwd()] });
-    return path.dirname(resolved);
-  } catch {
-    return null;
+  for (const baseDir of baseDirs) {
+    try {
+      const resolved = require.resolve(pluginImportPath, { paths: [baseDir] });
+      return path.dirname(resolved);
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 /**

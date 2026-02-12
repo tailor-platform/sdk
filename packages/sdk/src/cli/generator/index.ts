@@ -523,6 +523,7 @@ export function createGenerationManager(
         pluginOutputDir,
         typeGenerationResult,
         sourceTypeFilePaths,
+        configPath,
       );
       const executorService =
         application.executorService ??

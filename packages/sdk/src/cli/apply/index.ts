@@ -138,6 +138,7 @@ export async function apply(options?: ApplyOptions) {
     pluginOutputDir,
     typeGenerationResult,
     sourceTypeFilePaths,
+    config.path,
   );
 
   // Discover plugin executor files after generation

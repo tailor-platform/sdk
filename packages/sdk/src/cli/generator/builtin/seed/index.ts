@@ -6,6 +6,10 @@ import {
   type AggregateArgs,
   type GeneratorResult,
 } from "@/cli/generator/types";
+import {
+  getPluginImportBaseDirs,
+  resolveRelativePluginImportPath,
+} from "@/cli/utils/plugin-import";
 import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
 import {
   processLinesDb,
@@ -566,6 +570,7 @@ export function createSeedGenerator(
       configPath,
     }: AggregateArgs<TailorDBInput<Record<string, SeedTypeMetadata>>>) => {
       const files: GeneratorResult["files"] = [];
+      const pluginImportBaseDirs = getPluginImportBaseDirs(configPath);
 
       // Collect namespace configurations
       const namespaceConfigs: NamespaceConfig[] = [];
@@ -609,14 +614,15 @@ export function createSeedGenerator(
                 : `./${relativePath.replace(/\.ts$/, "")}`;
             }
 
-            // Resolve plugin import path - if it's relative, resolve from project root
+            // Resolve plugin import path - if it's relative, resolve from config or project root
             let pluginImportPath = linesDb.pluginSource.pluginImportPath;
             if (pluginImportPath.startsWith("./") || pluginImportPath.startsWith("../")) {
-              const projectRoot = path.dirname(configPath);
-              const absolutePluginPath = path.resolve(projectRoot, pluginImportPath);
+              const resolvedPluginPath =
+                resolveRelativePluginImportPath(pluginImportPath, pluginImportBaseDirs) ??
+                path.resolve(pluginImportBaseDirs[0] ?? process.cwd(), pluginImportPath);
               const relativePluginPath = path.relative(
                 path.dirname(schemaOutputPath),
-                absolutePluginPath,
+                resolvedPluginPath,
               );
               pluginImportPath = relativePluginPath.startsWith(".")
                 ? relativePluginPath
