@@ -163,12 +163,21 @@ export class PluginManager {
     }
 
     // Execute plugin process with raw TailorDBType
-    const output = await plugin.process({
-      type: context.type,
-      config: context.config,
-      pluginConfig: plugin.pluginConfig,
-      namespace: context.namespace,
-    });
+    let output: PluginOutput;
+    try {
+      output = await plugin.process({
+        type: context.type,
+        config: context.config,
+        pluginConfig: plugin.pluginConfig,
+        namespace: context.namespace,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        error: `Plugin "${plugin.id}" threw an error while processing type "${context.type.name}": ${message}`,
+      };
+    }
 
     // Collect generated types
     if (output.types && Object.keys(output.types).length > 0) {
@@ -251,7 +260,21 @@ export class PluginManager {
         generatedTypes,
       };
 
-      const output = await plugin.processNamespace(context);
+      let output: Awaited<ReturnType<NonNullable<PluginBase["processNamespace"]>>>;
+      try {
+        output = await plugin.processNamespace(context);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({
+          pluginId,
+          config,
+          result: {
+            success: false,
+            error: `Plugin "${plugin.id}" threw an error during namespace processing for "${namespace}": ${message}`,
+          },
+        });
+        continue;
+      }
 
       // Collect generated executors (namespace - no source type)
       if (output.executors && output.executors.length > 0) {
