@@ -72,6 +72,10 @@ export interface PlanContext {
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
+type MutableApplication = Omit<Application, "executorService"> & {
+  executorService: Application["executorService"];
+};
+
 /**
  * Apply the configured application to the Tailor platform.
  * @param options - Options for apply execution
@@ -160,6 +164,8 @@ export async function apply(options?: ApplyOptions) {
     (pluginExecutorFiles.length > 0
       ? createExecutorService({ config: { files: [] }, pluginManager })
       : undefined);
+  const mutableApplication = application as MutableApplication;
+  mutableApplication.executorService = executorService;
 
   // Build functions (using already loaded data)
   for (const app of application.applications) {
@@ -224,7 +230,7 @@ export async function apply(options?: ApplyOptions) {
   const ctx: PlanContext = {
     client,
     workspaceId,
-    application: executorService ? { ...application, executorService } : application,
+    application,
     forRemoval: false,
     config,
     noSchemaCheck: options?.noSchemaCheck,
