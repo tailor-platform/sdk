@@ -1706,6 +1706,26 @@ describe("TailorDBType does not mutate shared fields", () => {
     expect(typeB.fields.email.metadata.validate).toBeUndefined();
     expect(sharedField.metadata.validate).toBeUndefined();
   });
+
+  it("hooks() does not replace entries in the original fields record", () => {
+    const nameField = db.string();
+    const fields = { name: nameField };
+
+    db.type("TypeA", fields).hooks({ name: { create: () => "hooked" } });
+
+    // The fields record should still reference the original field instance
+    expect(fields.name).toBe(nameField);
+  });
+
+  it("validate() does not replace entries in the original fields record", () => {
+    const emailField = db.string();
+    const fields = { email: emailField };
+
+    db.type("TypeA", fields).validate({ email: ({ value }) => value.includes("@") });
+
+    // The fields record should still reference the original field instance
+    expect(fields.email).toBe(emailField);
+  });
 });
 
 describe("TailorDBField clone tests", () => {

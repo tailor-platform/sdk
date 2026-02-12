@@ -832,7 +832,7 @@ function createTailorDBType<
 
   const dbType: TailorDBType<Fields, User> = {
     name,
-    fields,
+    fields: { ...fields },
     _output: null as unknown as InferFieldsOutput<Fields>,
     _description,
 
