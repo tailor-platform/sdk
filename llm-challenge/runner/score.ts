@@ -9,6 +9,7 @@ export type FailureCategory =
   | "generate_error"
   | "logic_error"
   | "api_misuse"
+  | "infra_failure"
   | undefined;
 
 type DefinedFailureCategory = Exclude<FailureCategory, undefined>;
@@ -33,6 +34,7 @@ export type ProblemResult = {
   solveResult?: SolveResult;
   retryCount?: number;
   retrySolveResults?: SolveResult[];
+  totalDurationMs?: number;
 };
 
 type SuccessRate = { passed: number; total: number; rate: number };
@@ -72,6 +74,9 @@ export type ChallengeReport = {
   totalCostUsd: number;
   scorePerDollar?: number;
   avgCostPerPoint?: number;
+  infraFailureCount: number;
+  validPercentage: number;
+  totalDurationMs: number;
   analytics: Analytics;
 };
 
@@ -88,6 +93,7 @@ const failureDocSuggestions: Record<DefinedFailureCategory, string> = {
   generate_error: "Improve code generation error messages and docs",
   logic_error: "Add more resolver/executor logic examples",
   api_misuse: "Improve API validation messages and usage docs",
+  infra_failure: "Infrastructure failure (auth, network, rate limit) - not an SDK issue",
 };
 
 function classifyFailure(
@@ -273,19 +279,33 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   };
 }
 
+function isInfraFailure(result: ProblemResult): boolean {
+  return result.stages.every((s) => s.category === "infra_failure");
+}
+
 export function createReport(
   results: ProblemResult[],
   metadata?: { model?: string; sdkVersion?: string },
 ): ChallengeReport {
+  const infraFailureCount = results.filter(isInfraFailure).length;
+  const validResults = results.filter((r) => !isInfraFailure(r));
+
   const totalScore = results.reduce((sum, r) => sum + r.totalScore, 0);
   const maxScore = results.reduce((sum, r) => sum + r.maxScore, 0);
-  const totalCostUsd = results.reduce((sum, r) => {
+
+  // Exclude infra failures from cost calculation
+  const totalCostUsd = validResults.reduce((sum, r) => {
     let cost = r.solveResult?.costUsd ?? 0;
     if (r.retrySolveResults) {
       cost += r.retrySolveResults.reduce((s, rs) => s + rs.costUsd, 0);
     }
     return sum + cost;
   }, 0);
+
+  // Valid-only scoring (excluding infra failures)
+  const validScore = validResults.reduce((sum, r) => sum + r.totalScore, 0);
+  const validMaxScore = validResults.reduce((sum, r) => sum + r.maxScore, 0);
+  const validPercentage = validMaxScore > 0 ? Math.round((validScore / validMaxScore) * 100) : 0;
 
   // Weighted scoring
   let weightedScore = 0;
@@ -296,12 +316,15 @@ export function createReport(
     weightedMaxScore += r.maxScore * weight;
   }
 
-  // Cost efficiency
-  const scorePerDollar = totalCostUsd > 0 ? totalScore / totalCostUsd : undefined;
+  // Cost efficiency (based on valid results only)
+  const scorePerDollar = totalCostUsd > 0 ? validScore / totalCostUsd : undefined;
   const avgCostPerPoint =
-    totalCostUsd > 0 && totalScore > 0 ? totalCostUsd / totalScore : undefined;
+    totalCostUsd > 0 && validScore > 0 ? totalCostUsd / validScore : undefined;
 
-  const analytics = computeAnalytics(results);
+  // Total duration
+  const totalDurationMs = results.reduce((sum, r) => sum + (r.totalDurationMs ?? 0), 0);
+
+  const analytics = computeAnalytics(validResults);
 
   return {
     timestamp: new Date().toISOString(),
@@ -318,6 +341,9 @@ export function createReport(
     totalCostUsd,
     scorePerDollar,
     avgCostPerPoint,
+    infraFailureCount,
+    validPercentage,
+    totalDurationMs,
     analytics,
   };
 }
@@ -341,22 +367,27 @@ export function formatReportTable(report: ChallengeReport): string {
   lines.push("-".repeat(width));
 
   for (const r of report.results) {
+    const infraFailed = isInfraFailure(r);
     const name = `${r.problemId}-${r.problemName}`.padEnd(30);
     const diff = r.difficulty.padEnd(12);
-    const score = `${r.totalScore}/${r.maxScore}`.padEnd(15);
-    const status = (r.totalScore === r.maxScore ? "PASS" : "PARTIAL").padEnd(10);
+    const score = (infraFailed ? "-" : `${r.totalScore}/${r.maxScore}`).padEnd(15);
+    const status = (
+      infraFailed ? "INFRA" : r.totalScore === r.maxScore ? "PASS" : "PARTIAL"
+    ).padEnd(10);
     let line = `${name}${diff}${score}${status}`;
-    if (hasCost && r.solveResult) {
+    if (hasCost && r.solveResult && !infraFailed) {
       line += `$${r.solveResult.costUsd.toFixed(4)}`;
     }
     lines.push(line);
 
-    for (const s of r.stages) {
-      const stageName = `  ${s.stage}`.padEnd(30);
-      const stageScore = `${s.score}/${s.maxScore}`.padEnd(15);
-      const stageStatus = s.passed ? "ok" : s.score > 0 ? "PARTIAL" : "FAIL";
-      const categoryLabel = s.category ? ` [${s.category}]` : "";
-      lines.push(`${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}`);
+    if (!infraFailed) {
+      for (const s of r.stages) {
+        const stageName = `  ${s.stage}`.padEnd(30);
+        const stageScore = `${s.score}/${s.maxScore}`.padEnd(15);
+        const stageStatus = s.passed ? "ok" : s.score > 0 ? "PARTIAL" : "FAIL";
+        const categoryLabel = s.category ? ` [${s.category}]` : "";
+        lines.push(`${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}`);
+      }
     }
   }
 
@@ -372,11 +403,34 @@ export function formatReportTable(report: ChallengeReport): string {
     `${"Weighted".padEnd(30)}${"".padEnd(12)}${`${report.weightedScore}/${report.weightedMaxScore}`.padEnd(15)}${`${report.weightedPercentage}%`}`,
   );
 
+  // Valid score (excluding infra failures)
+  if (report.infraFailureCount > 0) {
+    lines.push(
+      `${"Valid (excl. infra)".padEnd(30)}${"".padEnd(12)}${`${report.results.length - report.infraFailureCount}/${report.results.length} problems`.padEnd(15)}${`${report.validPercentage}%`}`,
+    );
+  }
+
   // Cost efficiency
   if (report.scorePerDollar != null) {
     lines.push("");
     lines.push(
       `Cost efficiency: ${report.scorePerDollar.toFixed(1)} pts/$  |  $${report.avgCostPerPoint?.toFixed(4)}/pt`,
+    );
+  }
+
+  // Total duration
+  if (report.totalDurationMs > 0) {
+    const totalSecs = report.totalDurationMs / 1000;
+    const mins = Math.floor(totalSecs / 60);
+    const secs = Math.round(totalSecs % 60);
+    lines.push(`Total duration: ${mins}m ${secs}s`);
+  }
+
+  // Infra failure summary
+  if (report.infraFailureCount > 0) {
+    lines.push("");
+    lines.push(
+      `⚠ ${report.infraFailureCount} problem(s) skipped due to infrastructure failures (auth/network/rate-limit)`,
     );
   }
 

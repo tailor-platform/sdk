@@ -9,6 +9,7 @@ export type SolveResult = {
   durationMs: number;
   output: string;
   error?: string;
+  infraFailure?: boolean;
 };
 
 type ClaudeCodeOutput = {
@@ -17,6 +18,32 @@ type ClaudeCodeOutput = {
   total_cost_usd: number;
   duration_ms: number;
 };
+
+const infraFailurePatterns = [
+  /Not logged in/i,
+  /API key/i,
+  /rate limit/i,
+  /ETIMEDOUT/,
+  /ECONNREFUSED/,
+  /ECONNRESET/,
+  /socket hang up/i,
+  /authentication.*failed/i,
+  /unauthorized/i,
+  /403 Forbidden/i,
+];
+
+function detectInfraFailure(output: string, costUsd: number, durationMs: number): boolean {
+  for (const pattern of infraFailurePatterns) {
+    if (pattern.test(output)) {
+      return true;
+    }
+  }
+  // Heuristic: zero cost + very fast = likely auth/infra failure before any work
+  if (costUsd === 0 && durationMs < 5000) {
+    return true;
+  }
+  return false;
+}
 
 function listFilesRecursive(dir: string, base: string = dir): string[] {
   const files: string[] = [];
@@ -39,16 +66,30 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
   const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
   const existingFiles = listFilesRecursive(workDir);
 
-  const systemPrompt = [
-    "You are implementing a @tailor-platform/sdk project.",
-    "Create ONLY the files listed in the task. Do NOT modify existing files.",
-    'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
-    "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
-    "Do NOT read any files outside of the current working directory.",
-  ].join("\n");
+  // Detect fix-broken problems: implement files that overlap with scaffold files
+  const scaffoldSet = new Set(meta.files.scaffold);
+  const overlapping = meta.files.implement.filter((f) => scaffoldSet.has(f));
+  const isFixBroken = overlapping.length > 0;
+
+  const systemPrompt = isFixBroken
+    ? [
+        "You are fixing issues in a @tailor-platform/sdk project.",
+        "Fix the issues in the listed files. Read the existing files first, then modify them.",
+        'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
+        "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
+        "Do NOT read any files outside of the current working directory.",
+      ].join("\n")
+    : [
+        "You are implementing a @tailor-platform/sdk project.",
+        "Create ONLY the files listed in the task. Do NOT modify existing files.",
+        'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
+        "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
+        "Do NOT read any files outside of the current working directory.",
+      ].join("\n");
 
   const existingFilesList = existingFiles.map((f) => `- ${f}`).join("\n");
   const filesToCreate = meta.files.implement.map((f) => `- ${f}`).join("\n");
+  const filesLabel = isFixBroken ? "## Files to Fix" : "## Files to Create";
 
   const userPrompt = [
     "## Existing Files",
@@ -60,7 +101,7 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
     "",
     problemMd,
     "",
-    "## Files to Create",
+    filesLabel,
     "",
     filesToCreate,
   ].join("\n");
@@ -178,12 +219,14 @@ function runClaude(options: {
   const stderr = result.stderr ?? "";
 
   if (result.error) {
+    const errorOutput = stderr || result.error.message;
     return {
       success: false,
       costUsd: 0,
       durationMs,
-      output: stderr || result.error.message,
-      error: stderr || result.error.message,
+      output: errorOutput,
+      error: errorOutput,
+      infraFailure: detectInfraFailure(errorOutput, 0, durationMs),
     };
   }
 
@@ -192,12 +235,17 @@ function runClaude(options: {
   // Try to parse JSON output (Claude Code outputs JSON with --output-format json)
   try {
     const parsed = JSON.parse(output) as ClaudeCodeOutput;
+    const costUsd = parsed.total_cost_usd ?? 0;
+    const parsedDuration = parsed.duration_ms ?? durationMs;
+    const parsedOutput = parsed.result ?? output;
+    const success = result.status === 0 && !parsed.is_error;
     return {
-      success: result.status === 0 && !parsed.is_error,
-      costUsd: parsed.total_cost_usd ?? 0,
-      durationMs: parsed.duration_ms ?? durationMs,
-      output: parsed.result ?? output,
-      error: result.status !== 0 || parsed.is_error ? (parsed.result ?? output) : undefined,
+      success,
+      costUsd,
+      durationMs: parsedDuration,
+      output: parsedOutput,
+      error: !success ? parsedOutput : undefined,
+      infraFailure: !success ? detectInfraFailure(parsedOutput, costUsd, parsedDuration) : false,
     };
   } catch {
     return {
@@ -206,6 +254,7 @@ function runClaude(options: {
       durationMs,
       output,
       error: output || "Failed to parse Claude Code JSON output",
+      infraFailure: detectInfraFailure(output, 0, durationMs),
     };
   }
 }
@@ -220,4 +269,53 @@ export function solveProblem(options: {
   const { workDir, problemDir, meta, model, maxBudget } = options;
   const prompt = buildPrompt(problemDir, meta, workDir);
   return runClaude({ prompt, workDir, model, maxBudget });
+}
+
+/**
+ * Check if Claude Code can authenticate successfully.
+ * Runs a lightweight prompt to verify auth status before starting a full solve run.
+ */
+export function checkAuthStatus(): { ok: boolean; error?: string } {
+  const args = [
+    "claude",
+    "-p",
+    "Reply with exactly: ok",
+    "--output-format",
+    "json",
+    "--max-budget-usd",
+    "0.01",
+    "--no-session-persistence",
+  ];
+
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
+
+  const result = spawnSync(args[0]!, args.slice(1), {
+    encoding: "utf-8",
+    timeout: 30_000,
+    stdio: ["pipe", "pipe", "pipe"],
+    env,
+  });
+
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+
+  if (result.error) {
+    return { ok: false, error: stderr || result.error.message };
+  }
+
+  try {
+    const parsed = JSON.parse(stdout || stderr) as ClaudeCodeOutput;
+    if (parsed.is_error) {
+      return { ok: false, error: parsed.result };
+    }
+    return { ok: true };
+  } catch {
+    const output = stdout || stderr;
+    if (detectInfraFailure(output, 0, 0)) {
+      return { ok: false, error: output };
+    }
+    // If we got some output and no infra failure detected, assume ok
+    return { ok: result.status === 0 };
+  }
 }

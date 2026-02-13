@@ -2,9 +2,10 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { copyDir, listProblems, loadMeta } from "../shared/helpers";
+import type { ProblemMeta } from "../shared/helpers";
 import { calculateScore, createReport, formatReportTable } from "./score";
-import type { ProblemResult } from "./score";
-import { retrySolveProblem, solveProblem } from "./solve";
+import type { ChallengeReport, ProblemResult, StageResult } from "./score";
+import { checkAuthStatus, retrySolveProblem, solveProblem } from "./solve";
 import type { SolveResult } from "./solve";
 import { verifyProblem } from "./verify";
 
@@ -28,6 +29,8 @@ function parseArgs(): {
   maxBudget: number;
   clean: boolean;
   retry: number;
+  resume: boolean;
+  rerunInfra: boolean;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
@@ -39,6 +42,8 @@ function parseArgs(): {
   let maxBudget = 2.0;
   let clean = false;
   let retry = 0;
+  let resume = false;
+  let rerunInfra = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -78,10 +83,28 @@ function parseArgs(): {
         retry = Number(requireArg(args, i, "--retry"));
         i++;
         break;
+      case "--resume":
+        resume = true;
+        break;
+      case "--rerun-infra":
+        rerunInfra = true;
+        break;
     }
   }
 
-  return { problem, all, implDir, useSolution, solve, model, maxBudget, clean, retry };
+  return {
+    problem,
+    all,
+    implDir,
+    useSolution,
+    solve,
+    model,
+    maxBudget,
+    clean,
+    retry,
+    resume,
+    rerunInfra,
+  };
 }
 
 function setupWorkDir(problemDir: string, implDir?: string): string {
@@ -129,6 +152,17 @@ function installDependencies(workDir: string): void {
   });
 }
 
+function makeInfraFailureStages(meta: ProblemMeta): StageResult[] {
+  return (["generate", "typecheck", "tests"] as const).map((stage) => ({
+    stage,
+    passed: false,
+    output: "Skipped (infrastructure failure)",
+    score: 0,
+    maxScore: meta.scoring[stage],
+    category: "infra_failure" as const,
+  }));
+}
+
 function runProblem(
   problemName: string,
   options: {
@@ -137,6 +171,7 @@ function runProblem(
     clean: boolean;
   },
 ): ProblemResult {
+  const problemStartTime = Date.now();
   const problemDir = path.join(challengeRoot, "problems", problemName);
   const meta = loadMeta(problemDir);
 
@@ -156,13 +191,35 @@ function runProblem(
       model: options.solve.model,
       maxBudget: options.solve.maxBudget,
     });
-    const icon = solveResult.success ? "ok" : "FAIL";
+    const icon = solveResult.success ? "ok" : solveResult.infraFailure ? "INFRA" : "FAIL";
     console.log(
       `  Solve: ${icon} ($${solveResult.costUsd.toFixed(4)}, ${(solveResult.durationMs / 1000).toFixed(1)}s)`,
     );
     if (solveResult.error) {
       console.log(`  Error: ${solveResult.error.slice(0, 200)}`);
     }
+  }
+
+  // If infra failure detected, skip verification entirely
+  if (solveResult?.infraFailure) {
+    console.log("  Skipping verification (infrastructure failure)");
+    const stages = makeInfraFailureStages(meta);
+
+    if (options.clean) {
+      fs.rmSync(workDir, { recursive: true });
+    }
+
+    return {
+      problemId: meta.id,
+      problemName: meta.name,
+      difficulty: meta.difficulty,
+      category: meta.category,
+      stages,
+      totalScore: 0,
+      maxScore: stages.reduce((sum, s) => sum + s.maxScore, 0),
+      solveResult,
+      totalDurationMs: Date.now() - problemStartTime,
+    };
   }
 
   // Run verification stages
@@ -230,13 +287,75 @@ function runProblem(
     solveResult,
     retryCount: retrySolveResults.length > 0 ? retrySolveResults.length : undefined,
     retrySolveResults: retrySolveResults.length > 0 ? retrySolveResults : undefined,
+    totalDurationMs: Date.now() - problemStartTime,
   };
 }
 
-function main(): void {
-  const { problem, all, implDir, useSolution, solve, model, maxBudget, clean, retry } = parseArgs();
+function getPartialResultsPath(resultsDir: string): string {
+  return path.join(resultsDir, ".partial-results.json");
+}
 
-  if (!problem && !all) {
+function loadPartialResults(resultsDir: string): ProblemResult[] {
+  const partialPath = getPartialResultsPath(resultsDir);
+  if (!fs.existsSync(partialPath)) {
+    return [];
+  }
+  try {
+    return JSON.parse(fs.readFileSync(partialPath, "utf-8")) as ProblemResult[];
+  } catch {
+    return [];
+  }
+}
+
+function savePartialResults(resultsDir: string, results: ProblemResult[]): void {
+  fs.mkdirSync(resultsDir, { recursive: true });
+  fs.writeFileSync(getPartialResultsPath(resultsDir), JSON.stringify(results, null, 2));
+}
+
+function cleanPartialResults(resultsDir: string): void {
+  const partialPath = getPartialResultsPath(resultsDir);
+  if (fs.existsSync(partialPath)) {
+    fs.rmSync(partialPath);
+  }
+}
+
+function findLatestReport(resultsDir: string): ChallengeReport | undefined {
+  if (!fs.existsSync(resultsDir)) {
+    return undefined;
+  }
+  const files = fs
+    .readdirSync(resultsDir)
+    .filter((f) => f.startsWith("report-") && f.endsWith(".json"))
+    .sort()
+    .reverse();
+  if (files.length === 0) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.join(resultsDir, files[0]!), "utf-8"),
+    ) as ChallengeReport;
+  } catch {
+    return undefined;
+  }
+}
+
+function main(): void {
+  const {
+    problem,
+    all,
+    implDir,
+    useSolution,
+    solve,
+    model,
+    maxBudget,
+    clean,
+    retry,
+    resume,
+    rerunInfra,
+  } = parseArgs();
+
+  if (!problem && !all && !rerunInfra) {
     console.error("Usage:");
     console.error("  tsx runner/run.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx runner/run.ts --problem 001 --use-solution");
@@ -246,22 +365,115 @@ function main(): void {
       "  tsx runner/run.ts --all --solve [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean]",
     );
     console.error("  tsx runner/run.ts --all --impl-dir ./path/to/all-outputs");
+    console.error("  tsx runner/run.ts --all --solve --resume [--clean]");
+    console.error("  tsx runner/run.ts --rerun-infra --solve [--model sonnet] [--clean]");
     process.exit(1);
   }
 
-  const problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
-  const results: ProblemResult[] = [];
+  const resultsDir = path.join(challengeRoot, "results");
 
-  for (const p of problems) {
-    const problemDir = path.join(challengeRoot, "problems", p);
+  // Auth pre-check for solve mode
+  if (solve || rerunInfra) {
+    console.log("Checking authentication status...");
+    const authCheck = checkAuthStatus();
+    if (!authCheck.ok) {
+      console.error(`Authentication check failed: ${authCheck.error}`);
+      console.error("Please log in to Claude Code before running solve mode.");
+      process.exit(1);
+    }
+    console.log("Authentication: ok");
+  }
 
-    if (solve) {
-      results.push(
-        runProblem(p, {
+  // --rerun-infra mode: extract infra failure problems from latest report
+  if (rerunInfra) {
+    const latestReport = findLatestReport(resultsDir);
+    if (!latestReport) {
+      console.error("No existing report found. Run a full benchmark first.");
+      process.exit(1);
+    }
+
+    const infraProblems = latestReport.results.filter((r) =>
+      r.stages.every((s) => s.category === "infra_failure"),
+    );
+    if (infraProblems.length === 0) {
+      console.log("No infrastructure failures found in latest report. Nothing to rerun.");
+      process.exit(0);
+    }
+
+    console.log(`Rerunning ${infraProblems.length} infrastructure failure problem(s)...`);
+
+    const rerunResults: ProblemResult[] = [];
+    for (const infraResult of infraProblems) {
+      const problemId = `${infraResult.problemId}-${infraResult.problemName}`;
+      rerunResults.push(
+        runProblem(problemId, {
           solve: { model, maxBudget, retry },
           clean,
         }),
       );
+    }
+
+    // Merge with existing results
+    const mergedResults = latestReport.results.map((existing) => {
+      const rerun = rerunResults.find(
+        (r) => r.problemId === existing.problemId && r.problemName === existing.problemName,
+      );
+      return rerun ?? existing;
+    });
+
+    const sdkVersion = latestReport.sdkVersion;
+    const report = createReport(mergedResults, {
+      model: latestReport.model ?? model,
+      sdkVersion,
+    });
+
+    console.log("\n" + formatReportTable(report));
+
+    fs.mkdirSync(resultsDir, { recursive: true });
+    const modelLabel = latestReport.model ?? model;
+    const versionLabel = sdkVersion ?? "unknown";
+    const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
+    const jsonPath = path.join(
+      resultsDir,
+      `report-${modelLabel}-${versionLabel}-${dateLabel}.json`,
+    );
+    fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+    console.log(`\nResults written to: ${jsonPath}`);
+    return;
+  }
+
+  const problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
+
+  // Resume support: load partial results and skip already-completed problems
+  let results: ProblemResult[] = [];
+  let completedIds = new Set<string>();
+  if (resume) {
+    results = loadPartialResults(resultsDir);
+    completedIds = new Set(results.map((r) => `${r.problemId}-${r.problemName}`));
+    if (results.length > 0) {
+      console.log(`Resuming: ${results.length} problem(s) already completed, skipping.`);
+    }
+  }
+
+  for (const p of problems) {
+    // Skip already-completed problems in resume mode
+    if (resume && completedIds.has(p)) {
+      continue;
+    }
+
+    const problemDir = path.join(challengeRoot, "problems", p);
+
+    if (solve) {
+      const result = runProblem(p, {
+        solve: { model, maxBudget, retry },
+        clean,
+      });
+      results.push(result);
+
+      // Save partial results after each problem
+      if (all) {
+        savePartialResults(resultsDir, results);
+      }
     } else {
       let impl: string;
 
@@ -283,6 +495,9 @@ function main(): void {
     }
   }
 
+  // Clean up partial results
+  cleanPartialResults(resultsDir);
+
   // Read SDK version from package.json
   let sdkVersion: string | undefined;
   try {
@@ -302,7 +517,6 @@ function main(): void {
   console.log("\n" + formatReportTable(report));
 
   // Write JSON results
-  const resultsDir = path.join(challengeRoot, "results");
   fs.mkdirSync(resultsDir, { recursive: true });
   const modelLabel = solve ? model : "solution";
   const versionLabel = sdkVersion ?? "unknown";
