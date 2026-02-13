@@ -40,32 +40,19 @@ export type TailordbKysely<DB> = Kysely<DB>;
 export type NamespaceDB<NS, N extends keyof NS = keyof NS> = TailordbKysely<NS[N]>;
 
 /**
- * Create a Kysely instance configured with the TailorDB dialect.
- * @param namespace - The TailorDB namespace to connect to
- * @param config - Optional Kysely configuration (dialect is provided automatically)
- * @returns A Kysely instance for the given database type
- */
-export function createTailordbKysely<DB>(
-  namespace: string,
-  config?: Omit<KyselyConfig, "dialect">,
-): Kysely<DB> {
-  const client = new tailordb.Client({ namespace });
-  return new Kysely<DB>({
-    dialect: new TailordbDialect(client),
-    ...config,
-  });
-}
-
-/**
  * Create a namespace-aware getDB function for generated code.
  * @returns A getDB function that creates Kysely instances for specific namespaces
  */
 export function createGetDB<NS>() {
-  return function getDB<const N extends keyof NS>(
+  return function getDB<const N extends keyof NS & string>(
     namespace: N,
     config?: Omit<KyselyConfig, "dialect">,
   ): TailordbKysely<NS[N]> {
-    return createTailordbKysely<NS[N]>(namespace as string, config);
+    const client = new tailordb.Client({ namespace });
+    return new Kysely<NS[N]>({
+      dialect: new TailordbDialect(client),
+      ...config,
+    });
   };
 }
 
