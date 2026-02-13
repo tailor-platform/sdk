@@ -1,0 +1,11 @@
+{
+  "id": "012",
+  "name": "executor-update-trigger",
+  "difficulty": "medium",
+  "category": "executor",
+  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "files": {
+    "implement": ["executors/orderStatusChanged.ts"],
+    "scaffold": ["tailor.config.ts", "tailordb/order.ts"]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "014",
+  "name": "hooks-serial-model",
+  "difficulty": "medium",
+  "category": "tailordb",
+  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "files": {
+    "implement": ["tailordb/invoice.ts"],
+    "scaffold": ["tailor.config.ts"]
+  }
+}
