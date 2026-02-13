@@ -220,7 +220,7 @@ function main(): void {
         process.exit(1);
       }
 
-      results.push(runProblem(p, { implDir: impl, keepWork }));
+      results.push(runProblem(p, { implDir: impl, clean }));
     }
   }
 
