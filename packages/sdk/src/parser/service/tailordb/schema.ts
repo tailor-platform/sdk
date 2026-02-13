@@ -2,7 +2,7 @@ import { z } from "zod";
 import { functionSchema } from "../common";
 import { GqlOperationsSchema } from "./gql-operations";
 import { relationTypesKeys } from "./relation";
-import type { RawPermissions, TailorDBFieldOutput } from "./types";
+import type { TailorDBFieldOutput } from "./types";
 
 const TailorFieldTypeSchema = z.enum([
   "uuid",
@@ -82,17 +82,99 @@ export const TailorDBTypeSettingsSchema = z.object({
   gqlOperations: GqlOperationsSchema.optional(),
 });
 
-const RawPermissionsSchema: z.ZodType<RawPermissions> = z.object({
+const GqlPermissionOperandSchema = z.union([
+  z.object({ user: z.string() }),
+  z.string(),
+  z.boolean(),
+  z.array(z.string()),
+  z.array(z.boolean()),
+]);
+
+const RecordPermissionOperandSchema = z.union([
+  GqlPermissionOperandSchema,
+  z.object({ record: z.string() }),
+  z.object({ oldRecord: z.string() }),
+  z.object({ newRecord: z.string() }),
+]);
+
+const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
+
+const RecordPermissionConditionSchema = z.tuple([
+  RecordPermissionOperandSchema,
+  PermissionOperatorSchema,
+  RecordPermissionOperandSchema,
+]);
+
+const GqlPermissionConditionSchema = z.tuple([
+  GqlPermissionOperandSchema,
+  PermissionOperatorSchema,
+  GqlPermissionOperandSchema,
+]);
+
+const ActionPermissionSchema = z.union([
+  // Object format: { conditions, description?, permit? }
+  z.object({
+    conditions: z.union([
+      RecordPermissionConditionSchema,
+      z.array(RecordPermissionConditionSchema),
+    ]),
+    description: z.string().optional(),
+    permit: z.boolean().optional(),
+  }),
+  // Single condition tuple: [operand, operator, operand]
+  z.tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema]),
+  // Single condition tuple with permit: [operand, operator, operand, permit]
+  z.tuple([
+    RecordPermissionOperandSchema,
+    PermissionOperatorSchema,
+    RecordPermissionOperandSchema,
+    z.boolean(),
+  ]),
+  // Multiple conditions with optional trailing permit
+  z.array(z.union([RecordPermissionConditionSchema, z.boolean()])).refine(
+    (arr) => {
+      const boolIndex = arr.findIndex((item) => typeof item === "boolean");
+      return boolIndex === -1 || boolIndex === arr.length - 1;
+    },
+    { message: "Boolean permit flag must only appear at the end" },
+  ),
+]);
+
+const GqlPermissionActionSchema = z.enum([
+  "read",
+  "create",
+  "update",
+  "delete",
+  "aggregate",
+  "bulkUpsert",
+]);
+
+const GqlPermissionPolicySchema = z.object({
+  conditions: z.array(GqlPermissionConditionSchema),
+  actions: z.union([z.literal("all"), z.array(GqlPermissionActionSchema)]),
+  permit: z.boolean().optional(),
+  description: z.string().optional(),
+});
+
+const RawPermissionsSchema = z.object({
   record: z
     .object({
-      create: z.array(z.any()),
-      read: z.array(z.any()),
-      update: z.array(z.any()),
-      delete: z.array(z.any()),
+      create: z.array(ActionPermissionSchema),
+      read: z.array(ActionPermissionSchema),
+      update: z.array(ActionPermissionSchema),
+      delete: z.array(ActionPermissionSchema),
     })
     .optional(),
-  gql: z.array(z.any()).optional(),
+  gql: z.array(GqlPermissionPolicySchema).optional(),
 });
+
+type DeepReadonlyArray<T> = T extends readonly (infer U)[]
+  ? readonly DeepReadonlyArray<U>[]
+  : T extends object
+    ? { [K in keyof T]: DeepReadonlyArray<T[K]> }
+    : T;
+
+export type RawPermissions = DeepReadonlyArray<z.output<typeof RawPermissionsSchema>>;
 
 export const TailorDBTypeSchema = z.object({
   name: z.string(),
