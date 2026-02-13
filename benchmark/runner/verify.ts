@@ -64,8 +64,8 @@ export function verifyProblem(
   }
 
   // Stage 3: tests
-  const problemId = path.basename(workDir).replace(/^work-?/, "");
-  const testsDir = path.join(benchmarkRoot, "problems", problemId, "tests");
+  const problemDir = path.dirname(workDir);
+  const testsDir = path.join(problemDir, "tests");
   const testResult = runCommand(
     `npx vitest run --config ${path.join(benchmarkRoot, "vitest.config.ts")} --root ${benchmarkRoot} ${testsDir}`,
     workDir,
