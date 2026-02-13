@@ -70,6 +70,7 @@ export const symbols = {
   create: chalk.green("+"),
   update: chalk.yellow("~"),
   delete: chalk.red("-"),
+  replace: chalk.magenta("\u00b1"),
   bullet: chalk.gray("\u2022"),
   arrow: chalk.gray("\u2192"),
 };

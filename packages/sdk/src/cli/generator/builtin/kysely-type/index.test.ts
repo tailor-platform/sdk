@@ -235,25 +235,19 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.files[0].path).toBe(testDistPath);
 
       const content = result.files[0].content;
-      expect(content).toContain("type ColumnType");
-      expect(content).toContain("type Transaction as KyselyTransaction");
-      expect(content).toContain("type Insertable as KyselyInsertable");
-      expect(content).toContain("type Selectable as KyselySelectable");
-      expect(content).toContain("type Updateable as KyselyUpdateable");
+      expect(content).toContain("type Generated,");
+      expect(content).toContain("type NamespaceTransaction");
+      expect(content).toContain("type NamespaceInsertable");
+      expect(content).toContain("type NamespaceSelectable");
+      expect(content).toContain("type NamespaceUpdateable");
       expect(content).toContain("interface Namespace {");
       expect(content).toContain('"test-namespace": {');
       expect(content).toContain("User: {");
-      expect(content).toContain("export function getDB");
+      expect(content).toContain("export const getDB");
       expect(content).toContain("export type Transaction<K extends keyof Namespace | DB");
-      expect(content).toContain(
-        "export type Insertable<T extends keyof Namespace[keyof Namespace]>",
-      );
-      expect(content).toContain(
-        "export type Selectable<T extends keyof Namespace[keyof Namespace]>",
-      );
-      expect(content).toContain(
-        "export type Updateable<T extends keyof Namespace[keyof Namespace]>",
-      );
+      expect(content).toContain("export type Insertable<T extends TableName>");
+      expect(content).toContain("export type Selectable<T extends TableName>");
+      expect(content).toContain("export type Updateable<T extends TableName>");
       expect(result.errors).toBeUndefined();
     });
 
@@ -384,8 +378,8 @@ describe("KyselyGenerator integration tests", () => {
       expect(content).toContain("User: {");
       expect(content).toContain("Event: {");
 
-      // Check Timestamp utility type is included (used by analytics)
-      expect(content).toContain("type Timestamp = ColumnType");
+      // Check Timestamp utility type is imported (used by analytics)
+      expect(content).toContain("type Timestamp,");
       expect(content).toContain("interface Namespace {");
     });
 
@@ -417,12 +411,12 @@ describe("KyselyGenerator integration tests", () => {
 
       const content = result.files[0].content;
 
-      // Timestamp should not be included
-      expect(content).not.toContain("type Timestamp = ColumnType");
-      // Generated should always be included
-      expect(content).toContain("type Generated<T>");
-      // Serial should not be included
-      expect(content).not.toContain("type Serial<T");
+      // Timestamp should not be imported (not used)
+      expect(content).not.toContain("type Timestamp");
+      // Generated should always be imported
+      expect(content).toContain("type Generated,");
+      // Serial should not be imported (not used)
+      expect(content).not.toContain("type Serial");
     });
   });
 });

@@ -1288,10 +1288,10 @@ describe("snapshot", () => {
   // ==========================================================================
   describe("compareRemoteWithSnapshot", () => {
     /**
-     * Create a mock TailorDBType for testing
+     * Create a mock ParsedTailorDBType for testing
      * @param {string} name - Type name
      * @param {Record<string, object>} fields - Field configurations
-     * @returns {ProtoTailorDBType} Mock TailorDBType
+     * @returns {ProtoTailorDBType} Mock ParsedTailorDBType
      */
     function createMockRemoteType(
       name: string,

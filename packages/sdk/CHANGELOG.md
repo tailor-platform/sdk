@@ -1,5 +1,31 @@
 # @tailor-platform/sdk
 
+## 1.12.0
+
+### Minor Changes
+
+- [#579](https://github.com/tailor-platform/sdk/pull/579) [`1d37a95`](https://github.com/tailor-platform/sdk/commit/1d37a954208c1e6ae64bac7afda604311d95e2cc) Thanks [@dqn](https://github.com/dqn)! - Make TailorDBField fluent API immutable
+
+  Fluent methods (`description()`, `index()`, `unique()`, `hooks()`, `validate()`, `serial()`, `vector()`, `relation()`) now return new instances instead of mutating `this`, preventing shared field corruption when the same field is used across multiple types.
+
+- [#575](https://github.com/tailor-platform/sdk/pull/575) [`43d4795`](https://github.com/tailor-platform/sdk/commit/43d4795543b1427edf661dc495e89e60a1406305) Thanks [@k1LoW](https://github.com/k1LoW)! - Handle OAuth2 client type changes with delete-recreate
+
+  OAuth2 clients cannot update their clientType in-place on the server. This change detects clientType changes and handles them as replace operations (delete then create) during the create-update phase. Also adds deletion warnings for OAuth2 clients similar to TailorDB types and StaticWebsites.
+
+- [#556](https://github.com/tailor-platform/sdk/pull/556) [`b2183b3`](https://github.com/tailor-platform/sdk/commit/b2183b3975fa993d2a61035d90d6b6a4002a852a) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add TailorDB plugin system (beta), including plugin config, code generation, and apply integration.
+
+### Patch Changes
+
+- [#564](https://github.com/tailor-platform/sdk/pull/564) [`6be4cac`](https://github.com/tailor-platform/sdk/commit/6be4cacd3037f6230be1f3ddc24fdb75629e4f2a) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: add TailorDB migration e2e workflow and adjust apply ordering for migrations.
+
+- [#563](https://github.com/tailor-platform/sdk/pull/563) [`15fa518`](https://github.com/tailor-platform/sdk/commit/15fa518f6b0de2daf43eb1d41b3991ac867ed11a) Thanks [@riku99](https://github.com/riku99)! - Bundle optional peer dependencies with the SDK
+
+- [#574](https://github.com/tailor-platform/sdk/pull/574) [`6e5c4ee`](https://github.com/tailor-platform/sdk/commit/6e5c4eecedda91bd7544102b2c4e58bfe7eeff7d) Thanks [@riku99](https://github.com/riku99)! - Remove unnecessary tests
+
+- [#576](https://github.com/tailor-platform/sdk/pull/576) [`b909cdb`](https://github.com/tailor-platform/sdk/commit/b909cdb24e2d415af26a0f2237dfd012b5a78692) Thanks [@dqn](https://github.com/dqn)! - Add automatic chunking for seed data to avoid gRPC message size limits
+
+  Large seed data that exceeds the 4MB gRPC message size limit is now automatically split into smaller chunks and sent in multiple requests.
+
 ## 1.11.1
 
 ### Patch Changes

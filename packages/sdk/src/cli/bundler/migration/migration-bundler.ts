@@ -5,49 +5,16 @@
  */
 
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/utils/dist-dir";
-import { logger } from "@/cli/utils/logger";
 
 export interface MigrationBundleResult {
   namespace: string;
   migrationNumber: number;
   bundledCode: string;
-}
-
-const REQUIRED_PACKAGES = ["kysely", "@tailor-platform/function-kysely-tailordb"] as const;
-
-let dependencyCheckDone = false;
-
-/**
- * Check if required packages for migration bundling are installed.
- * Logs a warning if any are missing.
- */
-function checkMigrationDependencies(): void {
-  if (dependencyCheckDone) return;
-  dependencyCheckDone = true;
-
-  const require = createRequire(path.resolve(process.cwd(), "package.json"));
-  const missing: string[] = [];
-
-  for (const pkg of REQUIRED_PACKAGES) {
-    try {
-      require.resolve(pkg);
-    } catch {
-      missing.push(pkg);
-    }
-  }
-
-  if (missing.length > 0) {
-    logger.warn(
-      `Missing optional dependencies for migration bundling: ${missing.join(", ")}. ` +
-        `Install them in your project: pnpm add -D ${missing.join(" ")}`,
-    );
-  }
 }
 
 /**
@@ -68,9 +35,6 @@ export async function bundleMigrationScript(
   namespace: string,
   migrationNumber: number,
 ): Promise<MigrationBundleResult> {
-  // Check for required dependencies (only once per session)
-  checkMigrationDependencies();
-
   // Output directory in .tailor-sdk (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
   fs.mkdirSync(outputDir, { recursive: true });
@@ -85,8 +49,7 @@ export async function bundleMigrationScript(
   // getDB function is defined inline to avoid dependency on generated types
   const entryContent = ml /* js */ `
     import { main as _migrationMain } from "${absoluteSourcePath}";
-    import { Kysely } from "kysely";
-    import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
 
     function getDB(namespace) {
       const client = new tailordb.Client({ namespace });

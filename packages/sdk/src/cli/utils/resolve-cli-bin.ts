@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
-import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 
 interface CliPackageJson {
@@ -8,32 +7,25 @@ interface CliPackageJson {
 }
 
 type ResolveCliBinOptions = {
-  cwd: string;
   packageName: string;
   binName: string;
-  installHint: string;
 };
 
 /**
- * Resolve a CLI binary path from the caller's project dependencies.
+ * Resolve a CLI binary path from the SDK's dependencies.
  * @param options - Resolution options for locating the CLI binary.
  * @returns Absolute path to the CLI binary entry.
  */
 export function resolveCliBinPath(options: ResolveCliBinOptions): string {
-  const { cwd, packageName, binName, installHint } = options;
-  const projectPackageJsonPath = findUpSync("package.json", { cwd });
-  if (!projectPackageJsonPath) {
-    throw new Error(`Failed to locate package.json from ${cwd}.`);
-  }
+  const { packageName, binName } = options;
 
-  const requireFromProject = createRequire(projectPackageJsonPath);
+  // Resolve from SDK's dependencies instead of user's project
+  const requireFromSdk = createRequire(import.meta.url);
   let pkgJsonPath: string;
   try {
-    pkgJsonPath = requireFromProject.resolve(`${packageName}/package.json`);
+    pkgJsonPath = requireFromSdk.resolve(`${packageName}/package.json`);
   } catch {
-    throw new Error(
-      `Missing optional dependency \`${packageName}\`. Install it in your project (e.g. \`${installHint}\`).`,
-    );
+    throw new Error(`Failed to resolve \`${packageName}\`.`);
   }
 
   const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as CliPackageJson;
