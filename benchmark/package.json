@@ -5,9 +5,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "run": "tsx runner/run.ts",
-    "run:all": "tsx runner/run.ts --all --use-solution",
-    "run:solve": "tsx runner/run.ts --all --solve",
+    "bench": "tsx runner/run.ts",
+    "bench:verify-solution": "tsx runner/run.ts --all --use-solution",
+    "bench:solve": "tsx runner/run.ts --all --solve",
     "test": "vitest run"
   },
   "dependencies": {
