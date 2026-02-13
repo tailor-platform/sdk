@@ -156,7 +156,7 @@ const GqlPermissionPolicySchema = z.object({
   description: z.string().optional(),
 });
 
-const RawPermissionsSchema = z.object({
+export const RawPermissionsSchema = z.object({
   record: z
     .object({
       create: z.array(ActionPermissionSchema),
@@ -167,14 +167,6 @@ const RawPermissionsSchema = z.object({
     .optional(),
   gql: z.array(GqlPermissionPolicySchema).optional(),
 });
-
-type DeepReadonlyArray<T> = T extends readonly (infer U)[]
-  ? readonly DeepReadonlyArray<U>[]
-  : T extends object
-    ? { [K in keyof T]: DeepReadonlyArray<T[K]> }
-    : T;
-
-export type RawPermissions = DeepReadonlyArray<z.output<typeof RawPermissionsSchema>>;
 
 export const TailorDBTypeSchema = z.object({
   name: z.string(),

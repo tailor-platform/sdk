@@ -2,7 +2,7 @@ import type { RelationType } from "./relation";
 import type {
   DBFieldMetadataSchema,
   RawRelationConfigSchema,
-  RawPermissions,
+  RawPermissionsSchema,
   TailorDBTypeSchema,
   TailorDBServiceConfig as TailorDBServiceConfigType,
   TailorDBTypeSettingsSchema,
@@ -27,7 +27,6 @@ export type {
   TailorDBServiceConfig,
   TailorDBExternalConfig,
   TailorDBServiceInput,
-  RawPermissions,
 } from "./schema";
 
 /**
@@ -47,6 +46,14 @@ export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
 
 export type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;
 export type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
+
+type DeepReadonlyArray<T> = T extends readonly (infer U)[]
+  ? readonly DeepReadonlyArray<U>[]
+  : T extends object
+    ? { [K in keyof T]: DeepReadonlyArray<T[K]> }
+    : T;
+
+export type RawPermissions = DeepReadonlyArray<z.output<typeof RawPermissionsSchema>>;
 
 export type TailorDBFieldOutput = {
   type: string;
