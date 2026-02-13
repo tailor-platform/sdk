@@ -4,6 +4,8 @@ import path from "node:path";
 import { copyDir, listProblems, loadMeta } from "../shared/helpers";
 import { calculateScore, createReport, formatReportTable } from "./score";
 import type { ProblemResult } from "./score";
+import { solveProblem } from "./solve";
+import type { SolveResult } from "./solve";
 import { verifyProblem } from "./verify";
 
 const benchmarkRoot = path.resolve(import.meta.dirname, "..");
@@ -13,12 +15,20 @@ function parseArgs(): {
   all: boolean;
   implDir?: string;
   useSolution: boolean;
+  solve: boolean;
+  model: string;
+  maxBudget: number;
+  keepWork: boolean;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
   let all = false;
   let implDir: string | undefined;
   let useSolution = false;
+  let solve = false;
+  let model = "sonnet";
+  let maxBudget = 2.0;
+  let keepWork = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -37,13 +47,25 @@ function parseArgs(): {
       case "--use-solution":
         useSolution = true;
         break;
+      case "--solve":
+        solve = true;
+        break;
+      case "--model":
+        model = args[++i];
+        break;
+      case "--max-budget":
+        maxBudget = Number(args[++i]);
+        break;
+      case "--keep-work":
+        keepWork = true;
+        break;
     }
   }
 
-  return { problem, all, implDir, useSolution };
+  return { problem, all, implDir, useSolution, solve, model, maxBudget, keepWork };
 }
 
-function setupWorkDir(problemDir: string, implDir: string): string {
+function setupWorkDir(problemDir: string, implDir?: string): string {
   const workDir = path.join(problemDir, "work");
 
   // Clean previous work directory
@@ -61,21 +83,15 @@ function setupWorkDir(problemDir: string, implDir: string): string {
     copyDir(problemScaffold, workDir);
   }
 
-  // 3. Copy implementation files (overrides scaffold)
-  copyDir(implDir, workDir);
+  // 3. Copy implementation files (overrides scaffold) - skip for --solve mode
+  if (implDir) {
+    copyDir(implDir, workDir);
+  }
 
   return workDir;
 }
 
-function runProblem(problemName: string, implDir: string): ProblemResult {
-  const problemDir = path.join(benchmarkRoot, "problems", problemName);
-  const meta = loadMeta(problemDir);
-
-  console.log(`\n--- Running problem: ${problemName} (${meta.difficulty}) ---`);
-
-  const workDir = setupWorkDir(problemDir, implDir);
-
-  // Install dependencies
+function installDependencies(workDir: string): void {
   console.log("  Installing dependencies...");
   try {
     execSync("pnpm install --frozen-lockfile", {
@@ -93,6 +109,42 @@ function runProblem(problemName: string, implDir: string): ProblemResult {
       stdio: ["pipe", "pipe", "pipe"],
     });
   }
+}
+
+function runProblem(
+  problemName: string,
+  options: {
+    implDir?: string;
+    solve?: { model: string; maxBudget: number };
+    keepWork: boolean;
+  },
+): ProblemResult {
+  const problemDir = path.join(benchmarkRoot, "problems", problemName);
+  const meta = loadMeta(problemDir);
+
+  console.log(`\n--- Running problem: ${problemName} (${meta.difficulty}) ---`);
+
+  const workDir = setupWorkDir(problemDir, options.implDir);
+  installDependencies(workDir);
+
+  let solveResult: SolveResult | undefined;
+  if (options.solve) {
+    console.log(`  Solving with Claude Code (model: ${options.solve.model})...`);
+    solveResult = solveProblem({
+      workDir,
+      problemDir,
+      meta,
+      model: options.solve.model,
+      maxBudget: options.solve.maxBudget,
+    });
+    const icon = solveResult.success ? "ok" : "FAIL";
+    console.log(
+      `  Solve: ${icon} ($${solveResult.costUsd.toFixed(4)}, ${(solveResult.durationMs / 1000).toFixed(1)}s)`,
+    );
+    if (solveResult.error) {
+      console.log(`  Error: ${solveResult.error.slice(0, 200)}`);
+    }
+  }
 
   // Run verification stages
   const rawStages = verifyProblem(workDir, meta, benchmarkRoot);
@@ -105,6 +157,11 @@ function runProblem(problemName: string, implDir: string): ProblemResult {
     console.log(`  ${s.stage}: ${icon} (${s.score}/${s.maxScore})`);
   }
 
+  // Clean up work directory unless --keep-work is specified
+  if (!options.keepWork) {
+    fs.rmSync(workDir, { recursive: true });
+  }
+
   return {
     problemId: meta.id,
     problemName: meta.name,
@@ -113,17 +170,20 @@ function runProblem(problemName: string, implDir: string): ProblemResult {
     stages,
     totalScore,
     maxScore,
+    solveResult,
   };
 }
 
 function main(): void {
-  const { problem, all, implDir, useSolution } = parseArgs();
+  const { problem, all, implDir, useSolution, solve, model, maxBudget, keepWork } = parseArgs();
 
   if (!problem && !all) {
     console.error("Usage:");
     console.error("  tsx runner/run.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx runner/run.ts --problem 001 --use-solution");
+    console.error("  tsx runner/run.ts --problem 001 --solve [--model sonnet] [--max-budget 2.00]");
     console.error("  tsx runner/run.ts --all --use-solution");
+    console.error("  tsx runner/run.ts --all --solve [--model sonnet] [--max-budget 2.00]");
     console.error("  tsx runner/run.ts --all --impl-dir ./path/to/all-outputs");
     process.exit(1);
   }
@@ -133,23 +193,33 @@ function main(): void {
 
   for (const p of problems) {
     const problemDir = path.join(benchmarkRoot, "problems", p);
-    let impl: string;
 
-    if (useSolution) {
-      impl = path.join(problemDir, "solution");
-    } else if (implDir) {
-      impl = all ? path.join(implDir, p) : implDir;
+    if (solve) {
+      results.push(
+        runProblem(p, {
+          solve: { model, maxBudget },
+          keepWork,
+        }),
+      );
     } else {
-      console.error(`No implementation specified for problem ${p}`);
-      process.exit(1);
-    }
+      let impl: string;
 
-    if (!fs.existsSync(impl)) {
-      console.error(`Implementation directory not found: ${impl}`);
-      process.exit(1);
-    }
+      if (useSolution) {
+        impl = path.join(problemDir, "solution");
+      } else if (implDir) {
+        impl = all ? path.join(implDir, p) : implDir;
+      } else {
+        console.error(`No implementation specified for problem ${p}`);
+        process.exit(1);
+      }
 
-    results.push(runProblem(p, impl));
+      if (!fs.existsSync(impl)) {
+        console.error(`Implementation directory not found: ${impl}`);
+        process.exit(1);
+      }
+
+      results.push(runProblem(p, { implDir: impl, keepWork }));
+    }
   }
 
   const report = createReport(results);
