@@ -10,8 +10,6 @@ Create the file `workflows/order-fulfillment.ts` that defines 3 workflow jobs an
 
 ### Jobs
 
-Define the following jobs using `createWorkflowJob`:
-
 | Job            | Name            | Input                                 | Output                                                                              |
 | -------------- | --------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
 | checkInventory | check-inventory | `{ orderId: string }`                 | `{ available: true, orderId: <input orderId> }`                                     |
@@ -20,24 +18,20 @@ Define the following jobs using `createWorkflowJob`:
 
 The `fulfillOrder` job is the main job. Its body must:
 
-1. Call `checkInventory.trigger({ orderId: input.orderId })` and store the result
-2. Call `processPayment.trigger({ orderId: input.orderId, amount: input.amount })` and store the result
+1. Invoke the `checkInventory` job with `{ orderId: input.orderId }` and store the result
+2. Invoke the `processPayment` job with `{ orderId: input.orderId, amount: input.amount }` and store the result
 3. Return an object with `orderId`, `inventory` (checkInventory result), and `payment` (processPayment result)
 
 ### Workflow
-
-Define a workflow using `createWorkflow`:
 
 - name: `"order-fulfillment"`
 - mainJob: `fulfillOrder`
 
 ## Requirements
 
-- Import `createWorkflow` and `createWorkflowJob` from `@tailor-platform/sdk`
 - The workflow must be the **default export**
 - All 3 jobs (`checkInventory`, `processPayment`, `fulfillOrder`) must be **named exports**
-- `.trigger()` returns the result synchronously on the server side. You should assign the return value directly (do NOT use `await` — it's optional but not necessary)
 
-## Example
+## Reference
 
-Refer to the SDK documentation for workflow patterns using `createWorkflow` and `createWorkflowJob`.
+Refer to the installed SDK package for workflow and job definition patterns.

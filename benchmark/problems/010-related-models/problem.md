@@ -15,18 +15,14 @@ An `Author` model is already provided in `tailordb/author.ts`. Create the file `
 | price    | integer | no       | Optional field                   |
 | authorID | uuid    | yes      | n-1 relation to the Author model |
 
-The model must also include automatic timestamp fields (`createdAt`, `updatedAt`) using `db.fields.timestamps()`.
+The model must also include automatic timestamp fields (`createdAt`, `updatedAt`).
 
 ## Requirements
 
-- Use `db.type()` to define the model
-- Use `db.string()`, `db.int()`, `db.uuid()`, and `db.fields.timestamps()`
-- Use `.unique()` on the `isbn` field
-- Use `.relation({ type: "n-1", toward: { type: author } })` on the `authorID` field
-- Import the `author` type from `./author`
+- Import the `author` type from `./author` to use in the relation
 - The file must have a **named export** `book` (the value)
 - The file must also export the **type**: `export type book = typeof book;`
 
-## Example
+## Reference
 
-Refer to the SDK documentation for model definition patterns using `db.type()` and `.relation()`.
+Refer to the installed SDK package for model definition and relation patterns.

@@ -1,32 +1,26 @@
-# Problem 002: Simple Resolver
+# 002: Simple Resolver
 
-## Objective
+## Goal
 
 Create a simple query resolver that performs basic arithmetic operations.
 
-## Requirements
+## Instructions
 
-Create `resolvers/calculator.ts` with a **default export** using `createResolver` from `@tailor-platform/sdk`.
+Create the file `resolvers/calculator.ts` with a **default export** that defines a resolver.
 
 ### Resolver Specification
 
 - **Name**: `"calculator"`
 - **Operation**: `"query"`
 - **Input**:
-  - `a` — integer (`t.int()`)
-  - `b` — integer (`t.int()`)
+  - `a` — integer
+  - `b` — integer
 - **Body**: Takes the input and returns an object with:
-  - `sum` — the sum of `a` and `b` (`a + b`)
-  - `product` — the product of `a` and `b` (`a * b`)
+  - `sum` — the sum of `a` and `b`
+  - `product` — the product of `a` and `b`
 - **Output**: object with:
-  - `sum` — integer (`t.int()`)
-  - `product` — integer (`t.int()`)
-
-### Imports
-
-```typescript
-import { createResolver, t } from "@tailor-platform/sdk";
-```
+  - `sum` — integer
+  - `product` — integer
 
 ## Scaffold
 
@@ -35,3 +29,7 @@ A `tailor.config.ts` is provided that references `./resolvers/*.ts`.
 ## Example
 
 Given input `{ a: 3, b: 4 }`, the resolver should return `{ sum: 7, product: 12 }`.
+
+## Reference
+
+Refer to the installed SDK package for resolver definition patterns.

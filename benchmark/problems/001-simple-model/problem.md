@@ -15,15 +15,13 @@ Create the file `tailordb/post.ts` that defines a `Post` model with the followin
 | published | boolean | yes      |                                                      |
 | category  | enum    | yes      | Allowed values: `tech`, `lifestyle`, `news`, `other` |
 
-The model must also include automatic timestamp fields (`createdAt`, `updatedAt`) using `db.fields.timestamps()`.
+The model must also include automatic timestamp fields (`createdAt`, `updatedAt`).
 
 ## Requirements
 
-- Use `db.type()` to define the model
-- Use `db.string()`, `db.bool()`, `db.enum()`, and `db.fields.timestamps()`
 - The file must have a **named export** `post` (the value)
 - The file must also export the **type**: `export type post = typeof post;`
 
-## Example
+## Reference
 
-Refer to the SDK documentation for model definition patterns using `db.type()`.
+Refer to the installed SDK package for model definition patterns.

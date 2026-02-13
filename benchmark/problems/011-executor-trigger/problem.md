@@ -16,19 +16,18 @@ A `Product` model is already provided in `tailordb/product.ts` with the followin
 
 The model also includes automatic timestamp fields (`createdAt`, `updatedAt`).
 
-Create the file `executors/productCreated.ts` with a **default export** using `createExecutor`.
+Create the file `executors/productCreated.ts` with a **default export** that defines an executor.
 
 ## Requirements
 
 - **Name**: `"product-created"`
 - **Description**: `"Triggered when a new product is created"`
-- **Trigger**: Use `recordCreatedTrigger` targeting the `product` type
+- **Trigger**: Triggered when a new record of the `product` type is created
 - **Operation**:
   - Kind: `"function"`
   - Body: An async function that receives `{ newRecord }` and logs the product name and price using `console.log`
-- Import `createExecutor` and `recordCreatedTrigger` from `@tailor-platform/sdk`
-- Import `product` from `../tailordb/product`
+- Import the `product` type from `../tailordb/product`
 
-## Example
+## Reference
 
-Refer to the SDK documentation for executor definition patterns using `createExecutor()` and `recordCreatedTrigger()`.
+Refer to the installed SDK package for executor definition patterns.
