@@ -11,11 +11,7 @@ import {
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
-import { isPluginGeneratedType } from "@/parser/service/tailordb/types";
-import type {
-  PluginAttachment,
-  PluginNamespaceGeneratedTypeEntry,
-} from "@/parser/plugin-config/types";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 
 export type TailorDBService = {
@@ -215,66 +211,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     processNamespacePlugins: async () => {
       if (!pluginManager) return;
 
-      const typeByName = new Map<string, TailorAnyDBType>();
-      for (const typeMap of Object.values(rawTypes)) {
-        for (const [typeName, typeValue] of Object.entries(typeMap)) {
-          if (!typeByName.has(typeName)) {
-            typeByName.set(typeName, typeValue as TailorAnyDBType);
-          }
-        }
-      }
-
-      const originalTypeBySourceKey = new Map<string, TailorAnyDBType>();
-      for (const [typeName, source] of Object.entries(typeSourceInfo)) {
-        if ("filePath" in source && source.filePath && source.exportName) {
-          const typeValue = typeByName.get(typeName);
-          if (!typeValue) {
-            continue;
-          }
-          const key = `${source.filePath}:${source.exportName}`;
-          originalTypeBySourceKey.set(key, typeValue);
-        }
-      }
-
-      const namespaceTypes: TailorAnyDBType[] = [];
-      const namespaceGeneratedTypes: PluginNamespaceGeneratedTypeEntry[] = [];
-
-      for (const [typeName, typeValue] of typeByName.entries()) {
-        const source = typeSourceInfo[typeName];
-        if (!source) {
-          continue;
-        }
-
-        if (isPluginGeneratedType(source)) {
-          const hasOriginalSource = Boolean(source.originalFilePath && source.originalExportName);
-          if (!hasOriginalSource) {
-            continue;
-          }
-          const originalType =
-            originalTypeBySourceKey.get(
-              `${source.originalFilePath}:${source.originalExportName}`,
-            ) ?? null;
-          if (!originalType) {
-            continue;
-          }
-
-          namespaceGeneratedTypes.push({
-            type: typeValue,
-            pluginId: source.pluginId,
-            generatedTypeKind: source.generatedTypeKind,
-            originalType,
-          });
-          continue;
-        }
-
-        namespaceTypes.push(typeValue);
-      }
-
-      const results = await pluginManager.processNamespacePlugins(
-        namespace,
-        namespaceTypes,
-        namespaceGeneratedTypes,
-      );
+      const results = await pluginManager.processNamespacePlugins(namespace);
       const pluginGeneratedKey = "__plugin_generated__";
 
       if (!rawTypes[pluginGeneratedKey]) {

@@ -3,7 +3,6 @@ import type {
   PluginBase,
   PluginGeneratedExecutor,
   PluginGeneratedType,
-  PluginNamespaceGeneratedTypeEntry,
   PluginNamespaceProcessContext,
   PluginOutput,
 } from "@/parser/plugin-config/types";
@@ -236,14 +235,10 @@ export class PluginManager {
    * Process namespace plugins that don't require a source type.
    * This method is called once per namespace for plugins with processNamespace method.
    * @param namespace - The target namespace for generated types
-   * @param types - TailorDB types in the namespace (after type-attached processing)
-   * @param generatedTypes - Plugin-generated types in the namespace
    * @returns Array of results with plugin outputs and configs
    */
   async processNamespacePlugins(
     namespace: string,
-    types: TailorAnyDBType[],
-    generatedTypes: PluginNamespaceGeneratedTypeEntry[],
   ): Promise<Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }>> {
     const results: Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }> =
       [];
@@ -280,8 +275,6 @@ export class PluginManager {
       const context: PluginNamespaceProcessContext = {
         pluginConfig: config,
         namespace,
-        types,
-        generatedTypes,
       };
 
       let output: Awaited<ReturnType<NonNullable<PluginBase["processNamespace"]>>>;

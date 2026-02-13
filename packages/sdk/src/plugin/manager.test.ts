@@ -20,7 +20,7 @@ describe("PluginManager", () => {
     };
 
     const manager = new PluginManager([plugin]);
-    await manager.processNamespacePlugins("main", [], []);
+    await manager.processNamespacePlugins("main");
 
     const generatedTypes = manager.getPluginGeneratedTypes();
     expect(generatedTypes).toHaveLength(1);
@@ -56,8 +56,8 @@ describe("PluginManager", () => {
     };
 
     const manager = new PluginManager([plugin]);
-    await manager.processNamespacePlugins("main", [], []);
-    await manager.processNamespacePlugins("analytics", [], []);
+    await manager.processNamespacePlugins("main");
+    await manager.processNamespacePlugins("analytics");
 
     expect(manager.getPluginGeneratedTypes()).toHaveLength(1);
     expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);

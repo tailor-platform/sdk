@@ -55,19 +55,6 @@ export interface PluginProcessContext<Config = unknown, PluginConfig = unknown> 
 }
 
 /**
- * Plugin-generated type entry passed to processNamespace.
- */
-export interface PluginNamespaceGeneratedTypeEntry {
-  type: TailorAnyDBType;
-  /** Plugin ID that generated this type */
-  pluginId: string;
-  /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */
-  generatedTypeKind?: string;
-  /** Source type that triggered generation */
-  originalType: TailorAnyDBType;
-}
-
-/**
  * Context passed to plugin's processNamespace method.
  * Used for plugins that operate on a namespace without requiring a source type.
  */
@@ -76,10 +63,6 @@ export interface PluginNamespaceProcessContext<Config = unknown> {
   pluginConfig: Config;
   /** Target namespace for generated types */
   namespace: string;
-  /** TailorDB types in the namespace (after type-attached processing) */
-  types: TailorAnyDBType[];
-  /** Plugin-generated types for type-attached plugins in the namespace */
-  generatedTypes: PluginNamespaceGeneratedTypeEntry[];
 }
 
 /**
