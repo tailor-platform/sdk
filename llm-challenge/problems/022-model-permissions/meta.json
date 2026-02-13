@@ -1,0 +1,11 @@
+{
+  "id": "022",
+  "name": "model-permissions",
+  "difficulty": "hard",
+  "category": "tailordb",
+  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "files": {
+    "implement": ["tailordb/document.ts"],
+    "scaffold": ["tailor.config.ts"]
+  }
+}

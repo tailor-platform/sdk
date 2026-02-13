@@ -1,0 +1,11 @@
+{
+  "id": "023",
+  "name": "nested-input-resolver",
+  "difficulty": "hard",
+  "category": "resolver",
+  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "files": {
+    "implement": ["resolvers/processOrder.ts"],
+    "scaffold": ["tailor.config.ts"]
+  }
+}
