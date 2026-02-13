@@ -4,8 +4,6 @@
 
 import type { EnumValue } from "@/parser/service/tailordb/types";
 
-export type { EnumValue };
-
 export interface EnumDefinition {
   name: string;
   values: EnumValue[];
