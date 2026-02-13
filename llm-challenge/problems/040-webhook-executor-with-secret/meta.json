@@ -1,0 +1,15 @@
+{
+  "id": "040",
+  "name": "webhook-executor-with-secret",
+  "difficulty": "medium",
+  "category": "executor",
+  "scoring": {
+    "generate": 30,
+    "typecheck": 20,
+    "tests": 50
+  },
+  "files": {
+    "implement": ["executors/notifyExternal.ts"],
+    "scaffold": ["tailor.config.ts", "tailordb/order.ts"]
+  }
+}

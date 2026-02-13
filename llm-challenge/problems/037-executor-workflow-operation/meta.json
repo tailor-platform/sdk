@@ -1,0 +1,11 @@
+{
+  "id": "037",
+  "name": "executor-workflow-operation",
+  "difficulty": "medium",
+  "category": "executor",
+  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "files": {
+    "implement": ["executors/triggerWorkflow.ts"],
+    "scaffold": ["tailor.config.ts", "tailordb/order.ts", "workflows/processOrder.ts"]
+  }
+}

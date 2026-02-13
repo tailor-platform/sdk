@@ -1,0 +1,11 @@
+{
+  "id": "034",
+  "name": "auth-standalone",
+  "difficulty": "medium",
+  "category": "auth",
+  "scoring": { "generate": 50, "typecheck": 20, "tests": 30 },
+  "files": {
+    "implement": ["tailor.config.ts"],
+    "scaffold": ["tailordb/user.ts"]
+  }
+}

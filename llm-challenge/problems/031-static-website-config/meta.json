@@ -1,0 +1,15 @@
+{
+  "id": "031",
+  "name": "static-website-config",
+  "difficulty": "easy",
+  "category": "config",
+  "scoring": {
+    "generate": 50,
+    "typecheck": 20,
+    "tests": 30
+  },
+  "files": {
+    "implement": ["tailor.config.ts"],
+    "scaffold": ["tailordb/product.ts"]
+  }
+}
