@@ -8,7 +8,7 @@ import { solveProblem } from "./solve";
 import type { SolveResult } from "./solve";
 import { verifyProblem } from "./verify";
 
-const benchmarkRoot = path.resolve(import.meta.dirname, "..");
+const challengeRoot = path.resolve(import.meta.dirname, "..");
 
 function parseArgs(): {
   problem?: string;
@@ -74,7 +74,7 @@ function setupWorkDir(problemDir: string, implDir?: string): string {
   }
 
   // 1. Copy shared scaffold
-  const sharedScaffold = path.join(benchmarkRoot, "shared", "scaffold");
+  const sharedScaffold = path.join(challengeRoot, "shared", "scaffold");
   copyDir(sharedScaffold, workDir);
 
   // 2. Copy problem-specific scaffold (overrides shared)
@@ -119,7 +119,7 @@ function runProblem(
     clean: boolean;
   },
 ): ProblemResult {
-  const problemDir = path.join(benchmarkRoot, "problems", problemName);
+  const problemDir = path.join(challengeRoot, "problems", problemName);
   const meta = loadMeta(problemDir);
 
   console.log(`\n--- Running problem: ${problemName} (${meta.difficulty}) ---`);
@@ -147,7 +147,7 @@ function runProblem(
   }
 
   // Run verification stages
-  const rawStages = verifyProblem(workDir, meta, benchmarkRoot);
+  const rawStages = verifyProblem(workDir, meta, challengeRoot);
   const stages = calculateScore(meta, rawStages);
   const totalScore = stages.reduce((sum, s) => sum + s.score, 0);
   const maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
@@ -190,11 +190,11 @@ function main(): void {
     process.exit(1);
   }
 
-  const problems = all ? listProblems(benchmarkRoot) : [findProblem(problem!)];
+  const problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
   const results: ProblemResult[] = [];
 
   for (const p of problems) {
-    const problemDir = path.join(benchmarkRoot, "problems", p);
+    const problemDir = path.join(challengeRoot, "problems", p);
 
     if (solve) {
       results.push(
@@ -230,7 +230,7 @@ function main(): void {
   console.log("\n" + formatReportTable(report));
 
   // Write JSON results
-  const resultsDir = path.join(benchmarkRoot, "results");
+  const resultsDir = path.join(challengeRoot, "results");
   fs.mkdirSync(resultsDir, { recursive: true });
   const jsonPath = path.join(resultsDir, `report-${Date.now()}.json`);
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
@@ -238,7 +238,7 @@ function main(): void {
 }
 
 function findProblem(id: string): string {
-  const problems = listProblems(benchmarkRoot);
+  const problems = listProblems(challengeRoot);
   const match = problems.find((p) => p.startsWith(id));
   if (!match) {
     console.error(`Problem not found: ${id}`);

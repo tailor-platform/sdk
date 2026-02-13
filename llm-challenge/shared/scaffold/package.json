@@ -1,5 +1,5 @@
 {
-  "name": "benchmark-problem",
+  "name": "llm-challenge-problem",
   "private": true,
   "type": "module",
   "dependencies": {

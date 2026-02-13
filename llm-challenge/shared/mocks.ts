@@ -1,5 +1,5 @@
 /**
- * Mock utilities for benchmark tests.
+ * Mock utilities for challenge problem tests.
  * Based on example/tests/apply_command.test.ts patterns.
  */
 

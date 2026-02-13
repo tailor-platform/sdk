@@ -20,7 +20,7 @@ export type ProblemResult = {
   solveResult?: SolveResult;
 };
 
-export type BenchmarkReport = {
+export type ChallengeReport = {
   timestamp: string;
   results: ProblemResult[];
   totalScore: number;
@@ -40,7 +40,7 @@ export function calculateScore(
   }));
 }
 
-export function createReport(results: ProblemResult[]): BenchmarkReport {
+export function createReport(results: ProblemResult[]): ChallengeReport {
   const totalScore = results.reduce((sum, r) => sum + r.totalScore, 0);
   const maxScore = results.reduce((sum, r) => sum + r.maxScore, 0);
   const totalCostUsd = results.reduce((sum, r) => sum + (r.solveResult?.costUsd ?? 0), 0);
@@ -54,13 +54,13 @@ export function createReport(results: ProblemResult[]): BenchmarkReport {
   };
 }
 
-export function formatReportTable(report: BenchmarkReport): string {
+export function formatReportTable(report: ChallengeReport): string {
   const hasCost = report.results.some((r) => r.solveResult !== undefined);
   const width = hasCost ? 92 : 80;
 
   const lines: string[] = [];
   lines.push("=".repeat(width));
-  lines.push("Benchmark Results");
+  lines.push("Challenge Results");
   lines.push("=".repeat(width));
   lines.push("");
 

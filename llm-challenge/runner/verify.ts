@@ -33,12 +33,12 @@ function runCommand(command: string, cwd: string): { success: boolean; output: s
 export function verifyProblem(
   workDir: string,
   _meta: ProblemMeta,
-  benchmarkRoot: string,
+  challengeRoot: string,
 ): StageInput[] {
   const results: StageInput[] = [];
 
   // Stage 1: generate
-  const sdkBin = path.join(benchmarkRoot, "..", "packages", "sdk", "dist", "cli", "index.mjs");
+  const sdkBin = path.join(challengeRoot, "..", "packages", "sdk", "dist", "cli", "index.mjs");
   const generateResult = runCommand(`node ${sdkBin} generate -c tailor.config.ts`, workDir);
   results.push({
     stage: "generate",
@@ -67,7 +67,7 @@ export function verifyProblem(
   const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
   const testResult = runCommand(
-    `npx vitest run --config ${path.join(benchmarkRoot, "vitest.config.ts")} --root ${benchmarkRoot} ${testsDir}`,
+    `npx vitest run --config ${path.join(challengeRoot, "vitest.config.ts")} --root ${challengeRoot} ${testsDir}`,
     workDir,
   );
   results.push({

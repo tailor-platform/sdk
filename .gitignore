@@ -45,6 +45,6 @@ user-defined.d.ts
 !.claude/rules/**
 CLAUDE.local.md
 
-# Benchmark
-benchmark/results/
-benchmark/problems/*/work/
+# LLM Challenge
+llm-challenge/results/
+llm-challenge/problems/*/work/
