@@ -1,0 +1,11 @@
+{
+  "id": "030",
+  "name": "fix-broken-model",
+  "difficulty": "medium",
+  "category": "tailordb",
+  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "files": {
+    "implement": ["tailordb/employee.ts"],
+    "scaffold": ["tailor.config.ts", "tailordb/employee.ts"]
+  }
+}
