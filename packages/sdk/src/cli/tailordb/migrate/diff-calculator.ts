@@ -274,103 +274,39 @@ export function formatBreakingChanges(breakingChanges: BreakingChangeInfo[]): st
   return lines.join("\n");
 }
 
+const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
+  type_added: "type(s) added",
+  type_removed: "type(s) removed",
+  type_modified: "type(s) modified",
+  field_added: "field(s) added",
+  field_removed: "field(s) removed",
+  field_modified: "field(s) modified",
+  index_added: "index(es) added",
+  index_removed: "index(es) removed",
+  index_modified: "index(es) modified",
+  file_added: "file field(s) added",
+  file_removed: "file field(s) removed",
+  file_modified: "file field(s) modified",
+  relationship_added: "relationship(s) added",
+  relationship_removed: "relationship(s) removed",
+  relationship_modified: "relationship(s) modified",
+  permission_modified: "permission(s) modified",
+};
+
 /**
  * Format a summary of the migration diff
  * @param {MigrationDiff} diff - Migration diff to summarize
  * @returns {string} Formatted summary string
  */
 export function formatDiffSummary(diff: MigrationDiff): string {
-  const stats = {
-    typesAdded: 0,
-    typesRemoved: 0,
-    fieldsAdded: 0,
-    fieldsRemoved: 0,
-    fieldsModified: 0,
-    indexesAdded: 0,
-    indexesRemoved: 0,
-    indexesModified: 0,
-    filesAdded: 0,
-    filesRemoved: 0,
-    filesModified: 0,
-    relationshipsAdded: 0,
-    relationshipsRemoved: 0,
-    relationshipsModified: 0,
-    permissionsModified: 0,
-  };
-
+  const stats: Partial<Record<DiffChangeKind, number>> = {};
   for (const change of diff.changes) {
-    switch (change.kind) {
-      case "type_added":
-        stats.typesAdded++;
-        break;
-      case "type_removed":
-        stats.typesRemoved++;
-        break;
-      case "field_added":
-        stats.fieldsAdded++;
-        break;
-      case "field_removed":
-        stats.fieldsRemoved++;
-        break;
-      case "field_modified":
-        stats.fieldsModified++;
-        break;
-      case "index_added":
-        stats.indexesAdded++;
-        break;
-      case "index_removed":
-        stats.indexesRemoved++;
-        break;
-      case "index_modified":
-        stats.indexesModified++;
-        break;
-      case "file_added":
-        stats.filesAdded++;
-        break;
-      case "file_removed":
-        stats.filesRemoved++;
-        break;
-      case "file_modified":
-        stats.filesModified++;
-        break;
-      case "relationship_added":
-        stats.relationshipsAdded++;
-        break;
-      case "relationship_removed":
-        stats.relationshipsRemoved++;
-        break;
-      case "relationship_modified":
-        stats.relationshipsModified++;
-        break;
-      case "permission_modified":
-        stats.permissionsModified++;
-        break;
-    }
+    stats[change.kind] = (stats[change.kind] ?? 0) + 1;
   }
 
-  const parts: string[] = [];
-  if (stats.typesAdded > 0) parts.push(`${stats.typesAdded} type(s) added`);
-  if (stats.typesRemoved > 0) parts.push(`${stats.typesRemoved} type(s) removed`);
-  if (stats.fieldsAdded > 0) parts.push(`${stats.fieldsAdded} field(s) added`);
-  if (stats.fieldsRemoved > 0) parts.push(`${stats.fieldsRemoved} field(s) removed`);
-  if (stats.fieldsModified > 0) parts.push(`${stats.fieldsModified} field(s) modified`);
-  if (stats.indexesAdded > 0) parts.push(`${stats.indexesAdded} index(es) added`);
-  if (stats.indexesRemoved > 0) parts.push(`${stats.indexesRemoved} index(es) removed`);
-  if (stats.indexesModified > 0) parts.push(`${stats.indexesModified} index(es) modified`);
-  if (stats.filesAdded > 0) parts.push(`${stats.filesAdded} file field(s) added`);
-  if (stats.filesRemoved > 0) parts.push(`${stats.filesRemoved} file field(s) removed`);
-  if (stats.filesModified > 0) parts.push(`${stats.filesModified} file field(s) modified`);
-  if (stats.relationshipsAdded > 0) parts.push(`${stats.relationshipsAdded} relationship(s) added`);
-  if (stats.relationshipsRemoved > 0)
-    parts.push(`${stats.relationshipsRemoved} relationship(s) removed`);
-  if (stats.relationshipsModified > 0)
-    parts.push(`${stats.relationshipsModified} relationship(s) modified`);
-  if (stats.permissionsModified > 0)
-    parts.push(`${stats.permissionsModified} permission(s) modified`);
+  const parts = Object.keys(stats).map(
+    (kind) => `${stats[kind as DiffChangeKind]} ${DIFF_CHANGE_LABELS[kind as DiffChangeKind]}`,
+  );
 
-  if (parts.length === 0) {
-    return "No changes";
-  }
-
-  return parts.join(", ");
+  return parts.length > 0 ? parts.join(", ") : "No changes";
 }
