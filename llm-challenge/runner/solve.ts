@@ -200,9 +200,13 @@ function runClaude(options: {
     "--no-session-persistence",
   ];
 
-  // Remove CLAUDECODE env var to prevent nested Claude Code issues
+  // Remove all Claude Code env vars to prevent nested Claude Code issues
   const env = { ...process.env };
-  delete env.CLAUDECODE;
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("CLAUDE")) {
+      delete env[key];
+    }
+  }
 
   const startTime = Date.now();
   const timeout = 300_000; // 5 minutes
@@ -210,8 +214,9 @@ function runClaude(options: {
   return new Promise<SolveResult>((resolve) => {
     const proc = spawn("claude", args, {
       cwd: workDir,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       env,
+      detached: true,
     });
 
     const stdoutChunks: Buffer[] = [];
@@ -305,14 +310,19 @@ export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
   ];
 
   const env = { ...process.env };
-  delete env.CLAUDECODE;
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("CLAUDE")) {
+      delete env[key];
+    }
+  }
 
   const timeout = 30_000;
 
   return new Promise((resolve) => {
     const proc = spawn("claude", args, {
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       env,
+      detached: true,
     });
 
     const stdoutChunks: Buffer[] = [];
