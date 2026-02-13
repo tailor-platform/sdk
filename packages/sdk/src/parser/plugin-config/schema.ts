@@ -38,7 +38,7 @@ const PluginGeneratedResolverSchema = z.object({
 
 // Plugin trigger config schema
 const PluginTriggerConfigSchema = z.object({
-  kind: z.enum(["recordCreated", "recordUpdated", "recordDeleted", "schedule", "webhook"]),
+  kind: z.enum(["recordCreated", "recordUpdated", "recordDeleted", "schedule", "incomingWebhook"]),
   type: z.string().optional(),
   schedule: z.string().optional(),
 });
