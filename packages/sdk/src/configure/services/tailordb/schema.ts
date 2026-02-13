@@ -31,6 +31,7 @@ import {
 import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import type { PluginAttachment, PluginConfigs } from "@/parser/plugin-config/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
@@ -797,6 +798,20 @@ export interface TailorDBType<
    * Omit specific fields from the type
    */
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
+
+  /**
+   * Plugin attachments for this type
+   */
+  readonly plugins: PluginAttachment[];
+
+  /**
+   * Attach a plugin to this type
+   * @param config - Plugin configuration in the format { pluginId: config }
+   * @returns The type with the plugin attached
+   */
+  plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+    [K in P]: PluginConfigs<keyof Fields & string>[K];
+  }): TailorDBType<Fields, User>;
 }
 
 /**
@@ -822,6 +837,7 @@ function createTailorDBType<
   let _indexes: IndexDef<TailorDBType<Fields, User>>[] = [];
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
+  const _plugins: PluginAttachment[] = [];
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -974,6 +990,19 @@ function createTailorDBType<
         }
       }
       return result as Omit<Fields, K>;
+    },
+
+    get plugins(): PluginAttachment[] {
+      return _plugins;
+    },
+
+    plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+      [K in P]: PluginConfigs<keyof Fields & string>[K];
+    }): TailorDBType<Fields, User> {
+      for (const [pluginId, pluginConfig] of Object.entries(config)) {
+        _plugins.push({ pluginId, config: pluginConfig });
+      }
+      return this;
     },
   };
 

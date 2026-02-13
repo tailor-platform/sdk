@@ -163,9 +163,93 @@
       }
     },
     {
+      "files": ["src/parser/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Parser module should not import from cli module."
+              },
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Parser module should not import from configure module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/parser/service/tailordb/runtime.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Parser module should not import from cli module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/parser/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/plugin/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Plugin module should not import from cli module."
+              },
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Plugin module should not import from configure module. Please use parser module as an intermediary."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/plugin/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
       "files": ["src/parser/**/types.ts"],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/configure/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/plugin/**", "@/plugin/**"],
+                "message": "Configure module should not import from plugin module."
+              }
+            ]
+          }
+        ]
       }
     },
     {

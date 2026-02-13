@@ -1,12 +1,12 @@
 import ml from "multiline-ts";
+import {
+  isPluginGeneratedType,
+  type PluginGeneratedTypeSource,
+  type TypeSourceInfoEntry,
+} from "@/cli/generator/types";
 import type { LinesDbMetadata } from "./types";
 import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
-
-type LinesDbSource = {
-  filePath: string;
-  exportName: string;
-};
 
 /**
  * Processes TailorDB types to generate lines-db metadata
@@ -14,13 +14,70 @@ type LinesDbSource = {
  * @param source - Source file info
  * @returns Generated lines-db metadata
  */
-export function processLinesDb(type: TailorDBType, source: LinesDbSource): LinesDbMetadata {
-  if (!source.filePath || !source.exportName) {
-    throw new Error(`Missing source info for type ${type.name}`);
+export function processLinesDb(type: TailorDBType, source: TypeSourceInfoEntry): LinesDbMetadata {
+  if (isPluginGeneratedType(source)) {
+    // Plugin-generated type
+    return processLinesDbForPluginType(type, source);
   }
 
+  // User-defined type
+  if (!source.filePath) {
+    throw new Error(`Missing source info for type ${type.name}`);
+  }
+  if (!source.exportName) {
+    throw new Error(`Missing export name for type ${type.name}`);
+  }
+
+  const { optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
+
+  return {
+    typeName: type.name,
+    exportName: source.exportName,
+    importPath: source.filePath,
+    optionalFields,
+    omitFields,
+    foreignKeys,
+    indexes,
+  };
+}
+
+/**
+ * Process lines-db metadata for plugin-generated types
+ * @param type - Parsed TailorDB type
+ * @param source - Plugin-generated type source info
+ * @returns Generated lines-db metadata with plugin source
+ */
+function processLinesDbForPluginType(
+  type: TailorDBType,
+  source: PluginGeneratedTypeSource,
+): LinesDbMetadata {
+  const { optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
+
+  return {
+    typeName: type.name,
+    exportName: source.exportName,
+    importPath: "",
+    optionalFields,
+    omitFields,
+    foreignKeys,
+    indexes,
+    pluginSource: source,
+  };
+}
+
+/**
+ * Extract field metadata from TailorDB type
+ * @param type - Parsed TailorDB type
+ * @returns Field metadata including optional fields, omit fields, indexes, and foreign keys
+ */
+function extractFieldMetadata(type: TailorDBType): {
+  optionalFields: string[];
+  omitFields: string[];
+  indexes: IndexDefinition[];
+  foreignKeys: ForeignKeyDefinition[];
+} {
   const optionalFields = ["id"]; // id is always optional
-  const omitFields = [];
+  const omitFields: string[] = [];
   const indexes: IndexDefinition[] = [];
   const foreignKeys: ForeignKeyDefinition[] = [];
 
@@ -66,34 +123,19 @@ export function processLinesDb(type: TailorDBType, source: LinesDbSource): Lines
     }
   }
 
-  return {
-    typeName: type.name,
-    exportName: source.exportName,
-    importPath: source.filePath,
-    optionalFields,
-    omitFields,
-    foreignKeys,
-    indexes,
-  };
+  return { optionalFields, omitFields, indexes, foreignKeys };
 }
 
 /**
- * Generates the schema file content for lines-db
- * @param metadata - lines-db metadata
- * @param importPath - Import path for the TailorDB type
- * @returns Schema file contents
+ * Generate schema options code for lines-db
+ * @param foreignKeys - Foreign key definitions
+ * @param indexes - Index definitions
+ * @returns Schema options code string
  */
-export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath: string): string {
-  const { exportName, optionalFields, omitFields, foreignKeys, indexes } = metadata;
-
-  const schemaTypeCode = ml /* ts */ `
-    const schemaType = t.object({
-      ...${exportName}.pickFields(${JSON.stringify(optionalFields)}, { optional: true }),
-      ...${exportName}.omitFields(${JSON.stringify([...optionalFields, ...omitFields])}),
-    });
-    `;
-
-  // Generate SchemaOptions
+function generateSchemaOptions(
+  foreignKeys: ForeignKeyDefinition[],
+  indexes: IndexDefinition[],
+): string {
   const schemaOptions: string[] = [];
 
   if (foreignKeys.length > 0) {
@@ -112,6 +154,29 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
     schemaOptions.push("],");
   }
 
+  return schemaOptions.length > 0
+    ? ["\n  {", ...schemaOptions.map((option) => `    ${option}`), "  }"].join("\n")
+    : "";
+}
+
+/**
+ * Generates the schema file content for lines-db (for user-defined types with import)
+ * @param metadata - lines-db metadata
+ * @param importPath - Import path for the TailorDB type
+ * @returns Schema file contents
+ */
+export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath: string): string {
+  const { exportName, optionalFields, omitFields, foreignKeys, indexes } = metadata;
+
+  const schemaTypeCode = ml /* ts */ `
+    const schemaType = t.object({
+      ...${exportName}.pickFields(${JSON.stringify(optionalFields)}, { optional: true }),
+      ...${exportName}.omitFields(${JSON.stringify([...optionalFields, ...omitFields])}),
+    });
+    `;
+
+  const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
+
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
@@ -123,11 +188,95 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
     const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook),${
-        schemaOptions.length > 0
-          ? ["\n  {", ...schemaOptions.map((option) => `    ${option}`), "  }"].join("\n")
-          : ""
-      }
+      createStandardSchema(schemaType, hook),${schemaOptionsCode}
+    );
+
+    `;
+}
+
+/**
+ * Parameters for generating plugin-type schema file
+ */
+export interface PluginSchemaParams {
+  /** Relative import path to the plugin */
+  pluginImportPath: string;
+  /** Relative import path to the original type file (for type-attached plugins) */
+  originalImportPath?: string;
+}
+
+/**
+ * Generates the schema file content using getGeneratedType API
+ * (for plugin-generated types)
+ * @param metadata - lines-db metadata (must have pluginSource)
+ * @param params - Plugin import paths
+ * @returns Schema file contents
+ */
+export function generateLinesDbSchemaFileWithPluginAPI(
+  metadata: LinesDbMetadata,
+  params: PluginSchemaParams,
+): string {
+  const { typeName, exportName, optionalFields, omitFields, foreignKeys, indexes, pluginSource } =
+    metadata;
+
+  if (!pluginSource) {
+    throw new Error(`pluginSource is required for plugin-generated type "${typeName}"`);
+  }
+
+  const { pluginImportPath, originalImportPath } = params;
+
+  const schemaTypeCode = ml /* ts */ `
+    const schemaType = t.object({
+      ...${exportName}.pickFields(${JSON.stringify(optionalFields)}, { optional: true }),
+      ...${exportName}.omitFields(${JSON.stringify([...optionalFields, ...omitFields])}),
+    });
+    `;
+
+  const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
+
+  // Type-attached plugin (e.g., changeset): import original type and use getGeneratedType(type, kind)
+  if (pluginSource.originalExportName && originalImportPath && pluginSource.generatedTypeKind) {
+    return ml /* ts */ `
+    import { t } from "@tailor-platform/sdk";
+    import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
+    import { defineSchema } from "@toiroakr/lines-db";
+    import { getGeneratedType } from "${pluginImportPath}";
+    import { ${pluginSource.originalExportName} } from "${originalImportPath}";
+
+    const ${exportName} = getGeneratedType(${pluginSource.originalExportName}, "${pluginSource.generatedTypeKind}");
+
+    ${schemaTypeCode}
+
+    const hook = createTailorDBHook(${exportName});
+
+    export const schema = defineSchema(
+      createStandardSchema(schemaType, hook),${schemaOptionsCode}
+    );
+
+    `;
+  }
+
+  // Namespace plugin (e.g., audit-log): use getGeneratedType(null, kind)
+  // For namespace plugins, generatedTypeKind is required
+  if (!pluginSource.generatedTypeKind) {
+    throw new Error(
+      `Namespace plugin "${pluginSource.pluginId}" must provide generatedTypeKind for type "${typeName}"`,
+    );
+  }
+
+  return ml /* ts */ `
+    import { t } from "@tailor-platform/sdk";
+    import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
+    import { defineSchema } from "@toiroakr/lines-db";
+    import { getGeneratedType } from "${pluginImportPath}";
+
+    const ${exportName} = getGeneratedType(null, "${pluginSource.generatedTypeKind}");
+
+    ${schemaTypeCode}
+
+    const hook = createTailorDBHook(${exportName});
+
+    export const schema = defineSchema(
+      createStandardSchema(schemaType, hook),${schemaOptionsCode}
     );
 
     `;

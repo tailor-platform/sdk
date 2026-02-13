@@ -29,6 +29,7 @@ export default defineConfig({
     "src/cli/lib.ts",
     "src/utils/test/index.ts",
     "src/kysely/index.ts",
+    "src/plugin/index.ts",
   ],
   format: ["esm"],
   target: "node18",

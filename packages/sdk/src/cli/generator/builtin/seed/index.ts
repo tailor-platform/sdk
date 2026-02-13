@@ -6,8 +6,17 @@ import {
   type AggregateArgs,
   type GeneratorResult,
 } from "@/cli/generator/types";
+import {
+  getPluginImportBaseDirs,
+  resolveRelativePluginImportPath,
+} from "@/cli/utils/plugin-import";
 import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
-import { processLinesDb, generateLinesDbSchemaFile } from "./lines-db-processor";
+import {
+  processLinesDb,
+  generateLinesDbSchemaFile,
+  generateLinesDbSchemaFileWithPluginAPI,
+  type PluginSchemaParams,
+} from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
 import type { SeedTypeMetadata } from "./types";
 
@@ -561,10 +570,10 @@ export function createSeedGenerator(
       configPath,
     }: AggregateArgs<TailorDBInput<Record<string, SeedTypeMetadata>>>) => {
       const files: GeneratorResult["files"] = [];
+      const pluginImportBaseDirs = getPluginImportBaseDirs(configPath);
 
       // Collect namespace configurations
       const namespaceConfigs: NamespaceConfig[] = [];
-
       for (const nsResult of input.tailordb) {
         if (!nsResult.types) continue;
 
@@ -585,21 +594,65 @@ export function createSeedGenerator(
             skipIfExists: true,
           });
 
-          // Generate lines-db schema file
           const schemaOutputPath = path.join(
             outputBaseDir,
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
-          const importPath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
-          const normalizedImportPath = importPath.replace(/\.ts$/, "").startsWith(".")
-            ? importPath.replace(/\.ts$/, "")
-            : `./${importPath.replace(/\.ts$/, "")}`;
 
-          files.push({
-            path: schemaOutputPath,
-            content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
-          });
+          // Plugin-generated type: use getGeneratedType API
+          if (linesDb.pluginSource && linesDb.pluginSource.pluginImportPath) {
+            // Build original type import path
+            let originalImportPath: string | undefined;
+            if (linesDb.pluginSource.originalFilePath && linesDb.pluginSource.originalExportName) {
+              const relativePath = path.relative(
+                path.dirname(schemaOutputPath),
+                linesDb.pluginSource.originalFilePath,
+              );
+              originalImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+                ? relativePath.replace(/\.ts$/, "")
+                : `./${relativePath.replace(/\.ts$/, "")}`;
+            }
+
+            // Resolve plugin import path - if it's relative, resolve from config or project root
+            let pluginImportPath = linesDb.pluginSource.pluginImportPath;
+            if (pluginImportPath.startsWith("./") || pluginImportPath.startsWith("../")) {
+              const resolvedPluginPath =
+                resolveRelativePluginImportPath(pluginImportPath, pluginImportBaseDirs) ??
+                path.resolve(pluginImportBaseDirs[0] ?? process.cwd(), pluginImportPath);
+              const relativePluginPath = path.relative(
+                path.dirname(schemaOutputPath),
+                resolvedPluginPath,
+              );
+              pluginImportPath = relativePluginPath.startsWith(".")
+                ? relativePluginPath
+                : `./${relativePluginPath}`;
+            }
+
+            const params: PluginSchemaParams = {
+              pluginImportPath,
+              originalImportPath,
+            };
+
+            const schemaContent = generateLinesDbSchemaFileWithPluginAPI(linesDb, params);
+
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          } else {
+            // User-defined type: import from source file
+            const relativePath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
+            const typeImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+              ? relativePath.replace(/\.ts$/, "")
+              : `./${relativePath.replace(/\.ts$/, "")}`;
+            const schemaContent = generateLinesDbSchemaFile(linesDb, typeImportPath);
+
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          }
         }
 
         namespaceConfigs.push({
