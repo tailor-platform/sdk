@@ -1,5 +1,16 @@
 # @tailor-platform/sdk
 
+## 1.13.0
+
+### Minor Changes
+
+- [#580](https://github.com/tailor-platform/sdk/pull/580) [`74c2dfc`](https://github.com/tailor-platform/sdk/commit/74c2dfcb3e33d8d2548d7a948e5e322745e4a54c) Thanks [@toiroakr](https://github.com/toiroakr)! - Always generate exec.mjs for seed generator and add --machine-user option
+
+  - exec.mjs is now generated regardless of whether `machineUserName` is configured
+  - Added `--machine-user` (`-m`) CLI option to specify machine user at runtime
+  - CLI argument takes precedence over config default, allowing override
+  - Shows clear error message when machine user is not specified and not configured
+
 ## 1.12.0
 
 ### Minor Changes
