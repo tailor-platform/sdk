@@ -3,10 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ProblemMeta } from "../shared/helpers";
 
-type StageInput = {
+export type StageInput = {
   stage: "generate" | "typecheck" | "tests";
   passed: boolean;
   output: string;
+  testsPassed?: number;
+  testsTotal?: number;
 };
 
 function runCommand(command: string, cwd: string): { success: boolean; output: string } {
@@ -24,6 +26,52 @@ function runCommand(command: string, cwd: string): { success: boolean; output: s
       success: false,
       output: error.stderr || error.stdout || error.message,
     };
+  }
+}
+
+type VitestJsonResult = {
+  numTotalTests: number;
+  numPassedTests: number;
+  numFailedTests: number;
+};
+
+function parseVitestJson(output: string): { passed: number; total: number } | undefined {
+  // vitest --reporter=json outputs JSON to stdout, possibly mixed with other output
+  // Try to find the JSON object in the output
+  const jsonMatch = output.match(/\{[\s\S]*"numTotalTests"\s*:/);
+  if (!jsonMatch) {
+    return undefined;
+  }
+
+  // Find the start of the JSON object
+  const startIdx = output.indexOf(jsonMatch[0]);
+  if (startIdx === -1) {
+    return undefined;
+  }
+
+  // Try to parse from the start of the JSON object
+  let depth = 0;
+  let endIdx = startIdx;
+  for (let i = startIdx; i < output.length; i++) {
+    if (output[i] === "{") {
+      depth++;
+    } else if (output[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        endIdx = i + 1;
+        break;
+      }
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(output.slice(startIdx, endIdx)) as VitestJsonResult;
+    return {
+      passed: parsed.numPassedTests,
+      total: parsed.numTotalTests,
+    };
+  } catch {
+    return undefined;
   }
 }
 
@@ -71,18 +119,28 @@ export function verifyProblem(
     return results;
   }
 
-  // Stage 3: tests
+  // Stage 3: tests (use JSON reporter for partial scoring)
   const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
   const testResult = runCommand(
-    `npx vitest run --config ${path.join(challengeRoot, "vitest.config.ts")} --root ${challengeRoot} ${testsDir}`,
+    `npx vitest run --reporter=json --config ${path.join(challengeRoot, "vitest.config.ts")} --root ${challengeRoot} ${testsDir}`,
     workDir,
   );
-  results.push({
+
+  const testStage: StageInput = {
     stage: "tests",
     passed: testResult.success,
     output: testResult.output,
-  });
+  };
+
+  // Parse JSON output to extract individual test results
+  const parsed = parseVitestJson(testResult.output);
+  if (parsed) {
+    testStage.testsPassed = parsed.passed;
+    testStage.testsTotal = parsed.total;
+  }
+
+  results.push(testStage);
 
   return results;
 }

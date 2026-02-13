@@ -68,15 +68,50 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
   return `${systemPrompt}\n\n${userPrompt}`;
 }
 
-export function solveProblem(options: {
+function buildRetryPrompt(
+  problemDir: string,
+  meta: ProblemMeta,
+  workDir: string,
+  errorOutput: string,
+): string {
+  const basePrompt = buildPrompt(problemDir, meta, workDir);
+
+  const retryAddendum = [
+    "",
+    "## Previous Attempt Error",
+    "",
+    "Your previous implementation produced the following error. Please fix the issues:",
+    "",
+    "```",
+    errorOutput.slice(0, 3000),
+    "```",
+    "",
+    "Read the existing files you created previously and fix them to resolve the error.",
+  ].join("\n");
+
+  return `${basePrompt}\n${retryAddendum}`;
+}
+
+export function retrySolveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
   model: string;
   maxBudget: number;
+  errorOutput: string;
 }): SolveResult {
-  const { workDir, problemDir, meta, model, maxBudget } = options;
-  const prompt = buildPrompt(problemDir, meta, workDir);
+  const { workDir, problemDir, meta, model, maxBudget, errorOutput } = options;
+  const prompt = buildRetryPrompt(problemDir, meta, workDir, errorOutput);
+  return runClaude({ prompt, workDir, model, maxBudget });
+}
+
+function runClaude(options: {
+  prompt: string;
+  workDir: string;
+  model: string;
+  maxBudget: number;
+}): SolveResult {
+  const { prompt, workDir, model, maxBudget } = options;
 
   const args = [
     "claude",
@@ -145,4 +180,16 @@ export function solveProblem(options: {
       error: output || "Failed to parse Claude Code JSON output",
     };
   }
+}
+
+export function solveProblem(options: {
+  workDir: string;
+  problemDir: string;
+  meta: ProblemMeta;
+  model: string;
+  maxBudget: number;
+}): SolveResult {
+  const { workDir, problemDir, meta, model, maxBudget } = options;
+  const prompt = buildPrompt(problemDir, meta, workDir);
+  return runClaude({ prompt, workDir, model, maxBudget });
 }
