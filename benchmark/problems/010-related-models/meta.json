@@ -1,0 +1,15 @@
+{
+  "id": "010",
+  "name": "related-models",
+  "difficulty": "medium",
+  "category": "tailordb",
+  "scoring": {
+    "generate": 30,
+    "typecheck": 20,
+    "tests": 50
+  },
+  "files": {
+    "implement": ["tailordb/book.ts"],
+    "scaffold": ["tailor.config.ts", "tailordb/author.ts"]
+  }
+}

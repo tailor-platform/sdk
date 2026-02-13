@@ -1,0 +1,15 @@
+{
+  "id": "002",
+  "name": "simple-resolver",
+  "difficulty": "easy",
+  "category": "resolver",
+  "scoring": {
+    "generate": 30,
+    "typecheck": 20,
+    "tests": 50
+  },
+  "files": {
+    "implement": ["resolvers/calculator.ts"],
+    "scaffold": ["tailor.config.ts"]
+  }
+}

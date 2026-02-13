@@ -1,0 +1,15 @@
+{
+  "id": "020",
+  "name": "workflow-chain",
+  "difficulty": "hard",
+  "category": "workflow",
+  "scoring": {
+    "generate": 30,
+    "typecheck": 20,
+    "tests": 50
+  },
+  "files": {
+    "implement": ["workflows/order-fulfillment.ts"],
+    "scaffold": ["tailor.config.ts"]
+  }
+}

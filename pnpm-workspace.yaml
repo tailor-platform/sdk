@@ -4,6 +4,8 @@ packages:
   - packages/*
   - packages/create-sdk/templates/*
   - example
+  - benchmark
+  - benchmark/problems/*/work
 
 allowBuilds:
   "@swc/core": true

@@ -1,0 +1,25 @@
+{
+  "name": "benchmark",
+  "private": true,
+  "description": "Benchmark environment for evaluating LLM implementations with @tailor-platform/sdk",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "run": "tsx runner/run.ts",
+    "run:all": "tsx runner/run.ts --all --use-solution",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tailor-platform/sdk": "workspace:^"
+  },
+  "devDependencies": {
+    "@tailor-platform/function-types": "0.8.0",
+    "@types/node": "24.10.9",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.0.17"
+  },
+  "engines": {
+    "node": ">= 22.14.0"
+  }
+}

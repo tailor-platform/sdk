@@ -1,0 +1,15 @@
+{
+  "id": "011",
+  "name": "executor-trigger",
+  "difficulty": "medium",
+  "category": "executor",
+  "scoring": {
+    "generate": 30,
+    "typecheck": 20,
+    "tests": 50
+  },
+  "files": {
+    "implement": ["executors/productCreated.ts"],
+    "scaffold": ["tailor.config.ts", "tailordb/product.ts"]
+  }
+}

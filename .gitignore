@@ -44,3 +44,7 @@ user-defined.d.ts
 !.claude/rules
 !.claude/rules/**
 CLAUDE.local.md
+
+# Benchmark
+benchmark/results/
+benchmark/problems/*/work/
