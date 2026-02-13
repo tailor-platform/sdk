@@ -79,10 +79,8 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
     let liamBinPath: string;
     try {
       liamBinPath = resolveCliBinPath({
-        cwd,
         packageName: "@liam-hq/cli",
         binName: "liam",
-        installHint: "npm i -D @liam-hq/cli",
       });
     } catch (error) {
       logger.error(String(error));
@@ -105,7 +103,7 @@ async function runLiamBuild(schemaPath: string, cwd: string): Promise<void> {
     });
 
     child.on("error", (error) => {
-      logger.error("Failed to run `@liam-hq/cli`. Ensure it is installed in your project.");
+      logger.error("Failed to run `@liam-hq/cli`.");
       reject(error);
     });
 
