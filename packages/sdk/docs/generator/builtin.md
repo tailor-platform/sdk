@@ -148,16 +148,17 @@ Generates seed data configuration files for database initialization.
 ### Configuration
 
 ```typescript
-["@tailor-platform/seed", { distPath: "./seed" }][
-  // With executable script
-  ("@tailor-platform/seed", { distPath: "./seed", machineUserName: "admin" })
-];
+// Basic configuration
+["@tailor-platform/seed", { distPath: "./seed" }];
+
+// With default machine user
+["@tailor-platform/seed", { distPath: "./seed", machineUserName: "admin" }];
 ```
 
-| Option            | Type     | Description                                        |
-| ----------------- | -------- | -------------------------------------------------- |
-| `distPath`        | `string` | Output directory path (required)                   |
-| `machineUserName` | `string` | Machine user name for executable script (optional) |
+| Option            | Type     | Description                                              |
+| ----------------- | -------- | -------------------------------------------------------- |
+| `distPath`        | `string` | Output directory path (required)                         |
+| `machineUserName` | `string` | Default machine user name (can be overridden at runtime) |
 
 ### Output
 
@@ -165,27 +166,31 @@ Generates a seed directory structure:
 
 ```
 seed/
-├── config.yaml           # Entity dependencies configuration
 ├── data/
 │   ├── User.jsonl        # Seed data files (JSONL format)
+│   ├── User.schema.ts    # lines-db schema definitions
 │   └── Product.jsonl
-├── graphql/
-│   ├── User.graphql      # GraphQL mutation files
-│   └── Product.graphql
-├── mapping/
-│   ├── User.yaml         # GraphQL Ingest mapping files
-│   └── Product.yaml
-├── schema.ts             # lines-db schema definitions
-└── exec.mjs              # Executable script (if machineUserName provided)
+└── exec.mjs              # Executable script
 ```
 
 ### Usage
 
-If `machineUserName` is provided, an executable script is generated:
+Run the generated executable script:
 
 ```bash
-# Run seed data import
+# With machine user from config
 node seed/exec.mjs
+
+# Specify machine user at runtime (required if not configured, or to override)
+node seed/exec.mjs --machine-user admin
+
+# Short form
+node seed/exec.mjs -m admin
+
+# With other options
+node seed/exec.mjs -m admin --truncate --yes
 ```
+
+The `--machine-user` option is required at runtime if `machineUserName` is not configured in the generator options.
 
 The generated files are compatible with gql-ingest for bulk data import.
