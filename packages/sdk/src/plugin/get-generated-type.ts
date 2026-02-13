@@ -1,9 +1,5 @@
-import type {
-  NamespacePluginOutput,
-  PluginBase,
-  PluginOutput,
-  TailorAnyDBType,
-} from "@/parser/plugin-config/types";
+import type { NamespacePluginOutput, PluginBase, PluginOutput } from "@/parser/plugin-config/types";
+import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
 
 // Cache: plugin -> sourceTypeName -> PluginOutput
 const processCache = new WeakMap<PluginBase, Map<string, PluginOutput>>();
