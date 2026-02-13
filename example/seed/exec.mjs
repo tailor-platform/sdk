@@ -17,6 +17,7 @@ import {
 // Parse command-line arguments
 const { values, positionals } = parseArgs({
   options: {
+    "machine-user": { type: "string", short: "m" },
     namespace: { type: "string", short: "n" },
     "skip-idp": { type: "boolean", default: false },
     truncate: { type: "boolean", default: false },
@@ -32,15 +33,16 @@ if (values.help) {
 Usage: node exec.mjs [options] [types...]
 
 Options:
-  -n, --namespace <ns> Process all types in specified namespace (excludes _User)
-  --skip-idp           Skip IdP user (_User) entity
-  --truncate           Truncate tables before seeding
-  --yes                Skip confirmation prompts (for truncate)
-  -p, --profile <name> Workspace profile name
-  -h, --help           Show help
+  -m, --machine-user <name> Machine user name for authentication (required if not configured)
+  -n, --namespace <ns>      Process all types in specified namespace (excludes _User)
+  --skip-idp                Skip IdP user (_User) entity
+  --truncate                Truncate tables before seeding
+  --yes                     Skip confirmation prompts (for truncate)
+  -p, --profile <name>      Workspace profile name
+  -h, --help                Show help
 
 Examples:
-  node exec.mjs                                     # Process all types (default)
+  node exec.mjs -m admin                            # Process all types with machine user
   node exec.mjs --namespace <namespace>             # Process tailordb namespace only (no _User)
   node exec.mjs User Order                          # Process specific types only
   node exec.mjs --skip-idp                          # Process all except _User
@@ -69,6 +71,16 @@ const promptConfirmation = (question) => {
 
 const configDir = import.meta.dirname;
 const configPath = join(configDir, "../tailor.config.ts");
+
+// Determine machine user name (CLI argument takes precedence over config default)
+const defaultMachineUser = "manager-machine-user";
+const machineUserName = values["machine-user"] || defaultMachineUser;
+
+if (!machineUserName) {
+  console.error(styleText("red", "Error: Machine user name is required."));
+  console.error(styleText("yellow", "Specify --machine-user <name> or configure machineUserName in generator options."));
+  process.exit(1);
+}
 
 // Entity configuration
 const namespaceEntities = {
@@ -230,7 +242,7 @@ const authNamespace = appInfo.auth;
 
 // Get machine user token
 const tokenInfo = await getMachineUserToken({
-  name: "manager-machine-user",
+  name: machineUserName,
   configPath,
   profile: values.profile,
 });
@@ -338,7 +350,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
       arg: JSON.stringify({ data: chunk.data, order: chunk.order }),
       invoker: {
         namespace: authNamespace,
-        machineUserName: "manager-machine-user",
+        machineUserName,
       },
     });
 
