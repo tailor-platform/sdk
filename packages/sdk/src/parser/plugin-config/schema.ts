@@ -101,13 +101,7 @@ const CustomPluginTupleSchema = z.tuple([CustomPluginSchema, z.unknown()]);
  * @returns True if value is a PluginBase object
  */
 function isPluginBase(value: unknown): value is PluginBase {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id" in value &&
-    "description" in value &&
-    "importPath" in value
-  );
+  return CustomPluginSchema.safeParse(value).success;
 }
 
 function normalizePluginConfigSchema(schema: PluginConfigSchemaField): PluginConfigSchemaField {
