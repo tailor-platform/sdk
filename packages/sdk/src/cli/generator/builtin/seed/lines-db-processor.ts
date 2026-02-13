@@ -233,16 +233,17 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
   const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
 
-  // Type-attached plugin (e.g., changeset): import original type and use getGeneratedType(type, kind)
+  // Type-attached plugin (e.g., changeset): import original type and use getGeneratedType(plugin, type, kind)
   if (pluginSource.originalExportName && originalImportPath && pluginSource.generatedTypeKind) {
     return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
+    import { getGeneratedType } from "@tailor-platform/sdk/plugin";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
     import { defineSchema } from "@toiroakr/lines-db";
-    import { getGeneratedType } from "${pluginImportPath}";
+    import plugin from "${pluginImportPath}";
     import { ${pluginSource.originalExportName} } from "${originalImportPath}";
 
-    const ${exportName} = getGeneratedType(${pluginSource.originalExportName}, "${pluginSource.generatedTypeKind}");
+    const ${exportName} = getGeneratedType(plugin, ${pluginSource.originalExportName}, "${pluginSource.generatedTypeKind}");
 
     ${schemaTypeCode}
 
@@ -255,7 +256,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     `;
   }
 
-  // Namespace plugin (e.g., audit-log): use getGeneratedType(null, kind)
+  // Namespace plugin (e.g., audit-log): use getGeneratedType(plugin, null, kind)
   // For namespace plugins, generatedTypeKind is required
   if (!pluginSource.generatedTypeKind) {
     throw new Error(
@@ -265,11 +266,12 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
+    import { getGeneratedType } from "@tailor-platform/sdk/plugin";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
     import { defineSchema } from "@toiroakr/lines-db";
-    import { getGeneratedType } from "${pluginImportPath}";
+    import plugin from "${pluginImportPath}";
 
-    const ${exportName} = getGeneratedType(null, "${pluginSource.generatedTypeKind}");
+    const ${exportName} = getGeneratedType(plugin, null, "${pluginSource.generatedTypeKind}");
 
     ${schemaTypeCode}
 
