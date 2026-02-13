@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { ProblemMeta } from "../shared/helpers";
@@ -81,9 +81,9 @@ export function solveProblem(options: {
   const args = [
     "claude",
     "-p",
-    JSON.stringify(prompt),
+    prompt,
     "--setting-sources",
-    '""',
+    "",
     "--permission-mode",
     "bypassPermissions",
     "--output-format",
@@ -97,67 +97,52 @@ export function solveProblem(options: {
     "--no-session-persistence",
   ];
 
-  const command = args.join(" ");
-
   // Remove CLAUDECODE env var to prevent nested Claude Code issues
   const env = { ...process.env };
   delete env.CLAUDECODE;
 
   const startTime = Date.now();
-  try {
-    const stdout = execSync(command, {
-      cwd: workDir,
-      encoding: "utf-8",
-      timeout: 300_000, // 5 minutes
-      stdio: ["pipe", "pipe", "pipe"],
-      env,
-    });
+  const result = spawnSync(args[0]!, args.slice(1), {
+    cwd: workDir,
+    encoding: "utf-8",
+    timeout: 300_000, // 5 minutes
+    stdio: ["pipe", "pipe", "pipe"],
+    env,
+  });
 
-    const durationMs = Date.now() - startTime;
+  const durationMs = Date.now() - startTime;
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
 
-    let parsed: ClaudeCodeOutput;
-    try {
-      parsed = JSON.parse(stdout) as ClaudeCodeOutput;
-    } catch {
-      return {
-        success: false,
-        costUsd: 0,
-        durationMs,
-        output: stdout,
-        error: "Failed to parse Claude Code JSON output",
-      };
-    }
-
+  if (result.error) {
     return {
-      success: !parsed.is_error,
+      success: false,
+      costUsd: 0,
+      durationMs,
+      output: stderr || result.error.message,
+      error: stderr || result.error.message,
+    };
+  }
+
+  const output = stdout || stderr;
+
+  // Try to parse JSON output (Claude Code outputs JSON with --output-format json)
+  try {
+    const parsed = JSON.parse(output) as ClaudeCodeOutput;
+    return {
+      success: result.status === 0 && !parsed.is_error,
       costUsd: parsed.total_cost_usd ?? 0,
       durationMs: parsed.duration_ms ?? durationMs,
-      output: parsed.result,
-      error: parsed.is_error ? parsed.result : undefined,
+      output: parsed.result ?? output,
+      error: result.status !== 0 || parsed.is_error ? (parsed.result ?? output) : undefined,
     };
-  } catch (err) {
-    const durationMs = Date.now() - startTime;
-    const error = err as { stdout?: string; stderr?: string; message: string };
-    const output = error.stdout || error.stderr || error.message;
-
-    // Try to parse JSON even from failed execution (Claude Code may exit non-zero with valid JSON)
-    try {
-      const parsed = JSON.parse(output) as ClaudeCodeOutput;
-      return {
-        success: false,
-        costUsd: parsed.total_cost_usd ?? 0,
-        durationMs: parsed.duration_ms ?? durationMs,
-        output: parsed.result ?? output,
-        error: parsed.result ?? output,
-      };
-    } catch {
-      return {
-        success: false,
-        costUsd: 0,
-        durationMs,
-        output,
-        error: output,
-      };
-    }
+  } catch {
+    return {
+      success: false,
+      costUsd: 0,
+      durationMs,
+      output,
+      error: output || "Failed to parse Claude Code JSON output",
+    };
   }
 }

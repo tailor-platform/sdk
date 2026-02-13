@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 
-describe("001-simple-model", () => {
-  const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDirExists = fs.existsSync(workDir);
+
+describe.skipIf(!workDirExists)("001-simple-model", () => {
   const postPath = path.join(workDir, "tailordb/post.ts");
 
   test("tailordb/post.ts exists", () => {

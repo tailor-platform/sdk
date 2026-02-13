@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
+import fs from "node:fs";
 import { fileExists } from "../../../shared/helpers";
 
 const workDir = path.resolve(import.meta.dirname, "../work");
+const workDirExists = fs.existsSync(workDir);
 const bookPath = path.join(workDir, "tailordb/book.ts");
 const authorPath = path.join(workDir, "tailordb/author.ts");
 
-describe("010: Related Models - Book model", () => {
+describe.skipIf(!workDirExists)("010: Related Models - Book model", () => {
   it("tailordb/book.ts exists", () => {
     expect(fileExists(bookPath)).toBe(true);
   });

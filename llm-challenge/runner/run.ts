@@ -10,6 +10,14 @@ import { verifyProblem } from "./verify";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
+function requireArg(args: string[], i: number, flag: string): string {
+  if (i + 1 >= args.length) {
+    console.error(`Error: ${flag} requires a value`);
+    process.exit(1);
+  }
+  return args[i + 1]!;
+}
+
 function parseArgs(): {
   problem?: string;
   all: boolean;
@@ -33,16 +41,19 @@ function parseArgs(): {
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case "--problem":
-        problem = args[++i];
+        problem = requireArg(args, i, "--problem");
+        i++;
         break;
       case "--all":
         all = true;
         break;
       case "--impl":
-        implDir = args[++i];
+        implDir = requireArg(args, i, "--impl");
+        i++;
         break;
       case "--impl-dir":
-        implDir = args[++i];
+        implDir = requireArg(args, i, "--impl-dir");
+        i++;
         break;
       case "--use-solution":
         useSolution = true;
@@ -51,10 +62,12 @@ function parseArgs(): {
         solve = true;
         break;
       case "--model":
-        model = args[++i];
+        model = requireArg(args, i, "--model");
+        i++;
         break;
       case "--max-budget":
-        maxBudget = Number(args[++i]);
+        maxBudget = Number(requireArg(args, i, "--max-budget"));
+        i++;
         break;
       case "--clean":
         clean = true;
@@ -101,7 +114,7 @@ function installDependencies(workDir: string): void {
       stdio: ["pipe", "pipe", "pipe"],
     });
   } catch {
-    // pnpm install may fail with --frozen-lockfile in work dirs; retry without
+    console.warn("  Warning: --frozen-lockfile failed, retrying without it...");
     execSync("pnpm install", {
       cwd: workDir,
       encoding: "utf-8",
@@ -239,7 +252,10 @@ function main(): void {
 
 function findProblem(id: string): string {
   const problems = listProblems(challengeRoot);
-  const match = problems.find((p) => p.startsWith(id));
+  const match =
+    problems.find((p) => p === id) ??
+    problems.find((p) => p.startsWith(`${id}-`)) ??
+    problems.find((p) => p.startsWith(id));
   if (!match) {
     console.error(`Problem not found: ${id}`);
     process.exit(1);

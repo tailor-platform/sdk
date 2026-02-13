@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import type { ProblemMeta } from "../shared/helpers";
 
@@ -39,6 +40,13 @@ export function verifyProblem(
 
   // Stage 1: generate
   const sdkBin = path.join(challengeRoot, "..", "packages", "sdk", "dist", "cli", "index.mjs");
+  if (!fs.existsSync(sdkBin)) {
+    const msg = `SDK binary not found at ${sdkBin}. Run 'pnpm -C packages/sdk build' first.`;
+    results.push({ stage: "generate", passed: false, output: msg });
+    results.push({ stage: "typecheck", passed: false, output: "Skipped (generate failed)" });
+    results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
+    return results;
+  }
   const generateResult = runCommand(`node ${sdkBin} generate -c tailor.config.ts`, workDir);
   results.push({
     stage: "generate",

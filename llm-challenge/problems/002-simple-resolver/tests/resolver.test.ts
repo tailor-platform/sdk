@@ -2,9 +2,10 @@ import { describe, expect, test } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 
-describe("002-simple-resolver", () => {
-  const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDirExists = fs.existsSync(workDir);
 
+describe.skipIf(!workDirExists)("002-simple-resolver", () => {
   test("resolvers/calculator.ts exists", () => {
     expect(fs.existsSync(path.join(workDir, "resolvers/calculator.ts"))).toBe(true);
   });

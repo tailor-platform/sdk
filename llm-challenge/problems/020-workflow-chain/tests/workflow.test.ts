@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 
-describe("020-workflow-chain", () => {
-  const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDirExists = fs.existsSync(workDir);
+
+describe.skipIf(!workDirExists)("020-workflow-chain", () => {
   const workflowPath = path.join(workDir, "workflows/order-fulfillment.ts");
 
   test("workflows/order-fulfillment.ts exists", () => {
@@ -66,5 +68,18 @@ describe("020-workflow-chain", () => {
       paid: true,
       transactionId: "txn-order-456",
     });
+  });
+
+  test("fulfillOrder body calls trigger and returns correct structure", async () => {
+    const mod = await import(workflowPath);
+    const result = mod.fulfillOrder.body({ orderId: "order-789", amount: 50.0 }, { env: {} });
+    expect(result).toHaveProperty("orderId", "order-789");
+    expect(result).toHaveProperty("inventory");
+    expect(result).toHaveProperty("payment");
+    // .trigger() is async in SDK default impl, so resolve Promises
+    const inventory = await result.inventory;
+    const payment = await result.payment;
+    expect(inventory).toEqual({ available: true, orderId: "order-789" });
+    expect(payment).toEqual({ paid: true, transactionId: "txn-order-789" });
   });
 });

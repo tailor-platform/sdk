@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
 
-describe("011-executor-trigger", () => {
-  const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDir = path.resolve(import.meta.dirname, "..", "work");
+const workDirExists = fs.existsSync(workDir);
+
+describe.skipIf(!workDirExists)("011-executor-trigger", () => {
   const executorPath = path.join(workDir, "executors/productCreated.ts");
 
   test("executors/productCreated.ts exists", () => {
