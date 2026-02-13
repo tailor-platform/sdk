@@ -1,7 +1,10 @@
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { ProblemMeta } from "../shared/helpers";
+
+const execAsync = promisify(exec);
 
 export type TestDetail = {
   name: string;
@@ -18,15 +21,18 @@ export type StageInput = {
   testDetails?: TestDetail[];
 };
 
-function runCommand(command: string, cwd: string): { success: boolean; output: string } {
+async function runCommand(
+  command: string,
+  cwd: string,
+): Promise<{ success: boolean; output: string }> {
   try {
-    const output = execSync(command, {
+    const { stdout } = await execAsync(command, {
       cwd,
       encoding: "utf-8",
       timeout: 60_000,
-      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 10 * 1024 * 1024,
     });
-    return { success: true, output };
+    return { success: true, output: stdout };
   } catch (err) {
     const error = err as { stdout?: string; stderr?: string; message: string };
     return {
@@ -117,11 +123,11 @@ function parseVitestJson(output: string): ParsedVitestResult | undefined {
  * Run the three verification stages on a work directory.
  * Returns early (skipping later stages) if an earlier stage fails.
  */
-export function verifyProblem(
+export async function verifyProblem(
   workDir: string,
   _meta: ProblemMeta,
   challengeRoot: string,
-): StageInput[] {
+): Promise<StageInput[]> {
   const results: StageInput[] = [];
 
   // Stage 1: generate
@@ -133,7 +139,7 @@ export function verifyProblem(
     results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
     return results;
   }
-  const generateResult = runCommand(`node ${sdkBin} generate -c tailor.config.ts`, workDir);
+  const generateResult = await runCommand(`node ${sdkBin} generate -c tailor.config.ts`, workDir);
   if (!generateResult.success) {
     // Partial scoring for generate: check what was accomplished
     const generateStage: StageInput = {
@@ -151,7 +157,7 @@ export function verifyProblem(
       // Check if files can be imported (60% of generate score)
       // Use a quick syntax check via tsc --noEmit on just the implement files
       const fileList = _meta.files.implement.join(" ");
-      const importCheck = runCommand(
+      const importCheck = await runCommand(
         `npx tsc --noEmit --allowImportingTsExtensions ${fileList}`,
         workDir,
       );
@@ -172,7 +178,7 @@ export function verifyProblem(
   });
 
   // Stage 2: typecheck
-  const typecheckResult = runCommand("npx tsc --noEmit", workDir);
+  const typecheckResult = await runCommand("npx tsc --noEmit", workDir);
   results.push({
     stage: "typecheck",
     passed: typecheckResult.success,
@@ -186,7 +192,7 @@ export function verifyProblem(
   // Stage 3: tests (use JSON reporter for partial scoring)
   const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
-  const testResult = runCommand(
+  const testResult = await runCommand(
     `npx vitest run --reporter=json --config ${path.join(challengeRoot, "vitest.config.ts")} --root ${challengeRoot} ${testsDir}`,
     workDir,
   );

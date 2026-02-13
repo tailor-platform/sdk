@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { ProblemMeta } from "../shared/helpers";
@@ -161,14 +161,14 @@ function truncateErrorOutput(output: string, maxLength = 5000): string {
   return priorityBlock ? `${priorityBlock}\n${otherBlock}` : otherBlock;
 }
 
-export function retrySolveProblem(options: {
+export async function retrySolveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
   model: string;
   maxBudget: number;
   errorOutput: string;
-}): SolveResult {
+}): Promise<SolveResult> {
   const { workDir, problemDir, meta, model, maxBudget, errorOutput } = options;
   const prompt = buildRetryPrompt(problemDir, meta, workDir, errorOutput);
   return runClaude({ prompt, workDir, model, maxBudget });
@@ -179,11 +179,10 @@ function runClaude(options: {
   workDir: string;
   model: string;
   maxBudget: number;
-}): SolveResult {
+}): Promise<SolveResult> {
   const { prompt, workDir, model, maxBudget } = options;
 
   const args = [
-    "claude",
     "-p",
     prompt,
     "--setting-sources",
@@ -206,66 +205,85 @@ function runClaude(options: {
   delete env.CLAUDECODE;
 
   const startTime = Date.now();
-  const result = spawnSync(args[0]!, args.slice(1), {
-    cwd: workDir,
-    encoding: "utf-8",
-    timeout: 300_000, // 5 minutes
-    stdio: ["pipe", "pipe", "pipe"],
-    env,
+  const timeout = 300_000; // 5 minutes
+
+  return new Promise<SolveResult>((resolve) => {
+    const proc = spawn("claude", args, {
+      cwd: workDir,
+      stdio: ["pipe", "pipe", "pipe"],
+      env,
+    });
+
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+
+    proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+
+    const timer = setTimeout(() => {
+      proc.kill("SIGTERM");
+    }, timeout);
+
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      const durationMs = Date.now() - startTime;
+      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+      const errorOutput = stderr || err.message;
+      resolve({
+        success: false,
+        costUsd: 0,
+        durationMs,
+        output: errorOutput,
+        error: errorOutput,
+        infraFailure: detectInfraFailure(errorOutput, 0, durationMs),
+      });
+    });
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      const durationMs = Date.now() - startTime;
+      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+      const output = stdout || stderr;
+
+      // Try to parse JSON output (Claude Code outputs JSON with --output-format json)
+      try {
+        const parsed = JSON.parse(output) as ClaudeCodeOutput;
+        const costUsd = parsed.total_cost_usd ?? 0;
+        const parsedDuration = parsed.duration_ms ?? durationMs;
+        const parsedOutput = parsed.result ?? output;
+        const success = code === 0 && !parsed.is_error;
+        resolve({
+          success,
+          costUsd,
+          durationMs: parsedDuration,
+          output: parsedOutput,
+          error: !success ? parsedOutput : undefined,
+          infraFailure: !success
+            ? detectInfraFailure(parsedOutput, costUsd, parsedDuration)
+            : false,
+        });
+      } catch {
+        resolve({
+          success: false,
+          costUsd: 0,
+          durationMs,
+          output,
+          error: output || "Failed to parse Claude Code JSON output",
+          infraFailure: detectInfraFailure(output, 0, durationMs),
+        });
+      }
+    });
   });
-
-  const durationMs = Date.now() - startTime;
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
-
-  if (result.error) {
-    const errorOutput = stderr || result.error.message;
-    return {
-      success: false,
-      costUsd: 0,
-      durationMs,
-      output: errorOutput,
-      error: errorOutput,
-      infraFailure: detectInfraFailure(errorOutput, 0, durationMs),
-    };
-  }
-
-  const output = stdout || stderr;
-
-  // Try to parse JSON output (Claude Code outputs JSON with --output-format json)
-  try {
-    const parsed = JSON.parse(output) as ClaudeCodeOutput;
-    const costUsd = parsed.total_cost_usd ?? 0;
-    const parsedDuration = parsed.duration_ms ?? durationMs;
-    const parsedOutput = parsed.result ?? output;
-    const success = result.status === 0 && !parsed.is_error;
-    return {
-      success,
-      costUsd,
-      durationMs: parsedDuration,
-      output: parsedOutput,
-      error: !success ? parsedOutput : undefined,
-      infraFailure: !success ? detectInfraFailure(parsedOutput, costUsd, parsedDuration) : false,
-    };
-  } catch {
-    return {
-      success: false,
-      costUsd: 0,
-      durationMs,
-      output,
-      error: output || "Failed to parse Claude Code JSON output",
-      infraFailure: detectInfraFailure(output, 0, durationMs),
-    };
-  }
 }
 
-export function solveProblem(options: {
+export async function solveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
   model: string;
   maxBudget: number;
-}): SolveResult {
+}): Promise<SolveResult> {
   const { workDir, problemDir, meta, model, maxBudget } = options;
   const prompt = buildPrompt(problemDir, meta, workDir);
   return runClaude({ prompt, workDir, model, maxBudget });
@@ -275,9 +293,8 @@ export function solveProblem(options: {
  * Check if Claude Code can authenticate successfully.
  * Runs a lightweight prompt to verify auth status before starting a full solve run.
  */
-export function checkAuthStatus(): { ok: boolean; error?: string } {
+export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
   const args = [
-    "claude",
     "-p",
     "Reply with exactly: ok",
     "--output-format",
@@ -290,32 +307,51 @@ export function checkAuthStatus(): { ok: boolean; error?: string } {
   const env = { ...process.env };
   delete env.CLAUDECODE;
 
-  const result = spawnSync(args[0]!, args.slice(1), {
-    encoding: "utf-8",
-    timeout: 30_000,
-    stdio: ["pipe", "pipe", "pipe"],
-    env,
+  const timeout = 30_000;
+
+  return new Promise((resolve) => {
+    const proc = spawn("claude", args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env,
+    });
+
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+
+    proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+
+    const timer = setTimeout(() => {
+      proc.kill("SIGTERM");
+    }, timeout);
+
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+      resolve({ ok: false, error: stderr || err.message });
+    });
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+
+      try {
+        const parsed = JSON.parse(stdout || stderr) as ClaudeCodeOutput;
+        if (parsed.is_error) {
+          resolve({ ok: false, error: parsed.result });
+          return;
+        }
+        resolve({ ok: true });
+      } catch {
+        const output = stdout || stderr;
+        if (detectInfraFailure(output, 0, 0)) {
+          resolve({ ok: false, error: output });
+          return;
+        }
+        // If we got some output and no infra failure detected, assume ok
+        resolve({ ok: code === 0 });
+      }
+    });
   });
-
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
-
-  if (result.error) {
-    return { ok: false, error: stderr || result.error.message };
-  }
-
-  try {
-    const parsed = JSON.parse(stdout || stderr) as ClaudeCodeOutput;
-    if (parsed.is_error) {
-      return { ok: false, error: parsed.result };
-    }
-    return { ok: true };
-  } catch {
-    const output = stdout || stderr;
-    if (detectInfraFailure(output, 0, 0)) {
-      return { ok: false, error: output };
-    }
-    // If we got some output and no infra failure detected, assume ok
-    return { ok: result.status === 0 };
-  }
 }

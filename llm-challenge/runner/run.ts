@@ -1,6 +1,8 @@
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { copyDir, listProblems, loadMeta } from "../shared/helpers";
 import type { ProblemMeta } from "../shared/helpers";
 import { calculateScore, createReport, formatReportTable } from "./score";
@@ -8,6 +10,8 @@ import type { ChallengeReport, ProblemResult, StageResult } from "./score";
 import { checkAuthStatus, retrySolveProblem, solveProblem } from "./solve";
 import type { SolveResult } from "./solve";
 import { verifyProblem } from "./verify";
+
+const execAsync = promisify(exec);
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
@@ -31,6 +35,7 @@ function parseArgs(): {
   retry: number;
   resume: boolean;
   rerunInfra: boolean;
+  concurrency: number;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
@@ -44,6 +49,7 @@ function parseArgs(): {
   let retry = 0;
   let resume = false;
   let rerunInfra = false;
+  let concurrency = os.availableParallelism();
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -89,6 +95,10 @@ function parseArgs(): {
       case "--rerun-infra":
         rerunInfra = true;
         break;
+      case "--concurrency":
+        concurrency = Number(requireArg(args, i, "--concurrency"));
+        i++;
+        break;
     }
   }
 
@@ -104,6 +114,7 @@ function parseArgs(): {
     retry,
     resume,
     rerunInfra,
+    concurrency,
   };
 }
 
@@ -141,14 +152,15 @@ function rewriteWorkspaceRefs(workDir: string): void {
   fs.writeFileSync(pkgPath, updated);
 }
 
-function installDependencies(workDir: string): void {
-  console.log("  Installing dependencies...");
+async function installDependencies(workDir: string, verbose: boolean): Promise<void> {
+  if (verbose) {
+    console.log("  Installing dependencies...");
+  }
   rewriteWorkspaceRefs(workDir);
-  execSync("pnpm install --no-lockfile", {
+  await execAsync("pnpm install --no-lockfile", {
     cwd: workDir,
     encoding: "utf-8",
     timeout: 60_000,
-    stdio: ["pipe", "pipe", "pipe"],
   });
 }
 
@@ -163,46 +175,77 @@ function makeInfraFailureStages(meta: ProblemMeta): StageResult[] {
   }));
 }
 
-function runProblem(
+function createLimiter(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  return <T>(fn: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const run = () => {
+        active++;
+        fn()
+          .then(resolve, reject)
+          .finally(() => {
+            active--;
+            if (queue.length > 0) queue.shift()!();
+          });
+      };
+      if (active < concurrency) run();
+      else queue.push(run);
+    });
+}
+
+// Serialize pnpm install to avoid root node_modules race conditions
+const installLimiter = createLimiter(1);
+
+async function runProblem(
   problemName: string,
   options: {
     implDir?: string;
     solve?: { model: string; maxBudget: number; retry: number };
     clean: boolean;
+    verbose: boolean;
   },
-): ProblemResult {
+): Promise<ProblemResult> {
   const problemStartTime = Date.now();
   const problemDir = path.join(challengeRoot, "problems", problemName);
   const meta = loadMeta(problemDir);
 
-  console.log(`\n--- Running problem: ${problemName} (${meta.difficulty}) ---`);
+  if (options.verbose) {
+    console.log(`\n--- Running problem: ${problemName} (${meta.difficulty}) ---`);
+  }
 
   const workDir = setupWorkDir(problemDir, options.implDir);
-  installDependencies(workDir);
+  await installLimiter(() => installDependencies(workDir, options.verbose));
 
   let solveResult: SolveResult | undefined;
   const retrySolveResults: SolveResult[] = [];
   if (options.solve) {
-    console.log(`  Solving with Claude Code (model: ${options.solve.model})...`);
-    solveResult = solveProblem({
+    if (options.verbose) {
+      console.log(`  Solving with Claude Code (model: ${options.solve.model})...`);
+    }
+    solveResult = await solveProblem({
       workDir,
       problemDir,
       meta,
       model: options.solve.model,
       maxBudget: options.solve.maxBudget,
     });
-    const icon = solveResult.success ? "ok" : solveResult.infraFailure ? "INFRA" : "FAIL";
-    console.log(
-      `  Solve: ${icon} ($${solveResult.costUsd.toFixed(4)}, ${(solveResult.durationMs / 1000).toFixed(1)}s)`,
-    );
-    if (solveResult.error) {
-      console.log(`  Error: ${solveResult.error.slice(0, 200)}`);
+    if (options.verbose) {
+      const icon = solveResult.success ? "ok" : solveResult.infraFailure ? "INFRA" : "FAIL";
+      console.log(
+        `  Solve: ${icon} ($${solveResult.costUsd.toFixed(4)}, ${(solveResult.durationMs / 1000).toFixed(1)}s)`,
+      );
+      if (solveResult.error) {
+        console.log(`  Error: ${solveResult.error.slice(0, 200)}`);
+      }
     }
   }
 
   // If infra failure detected, skip verification entirely
   if (solveResult?.infraFailure) {
-    console.log("  Skipping verification (infrastructure failure)");
+    if (options.verbose) {
+      console.log("  Skipping verification (infrastructure failure)");
+    }
     const stages = makeInfraFailureStages(meta);
 
     if (options.clean) {
@@ -223,7 +266,7 @@ function runProblem(
   }
 
   // Run verification stages
-  let rawStages = verifyProblem(workDir, meta, challengeRoot);
+  let rawStages = await verifyProblem(workDir, meta, challengeRoot);
   let stages = calculateScore(meta, rawStages);
   let totalScore = stages.reduce((sum, s) => sum + s.score, 0);
   let maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
@@ -238,8 +281,10 @@ function runProblem(
         .map((s) => `[${s.stage}] ${s.output}`)
         .join("\n\n");
 
-      console.log(`  Retry ${attempt}/${maxRetries}...`);
-      const retryResult = retrySolveProblem({
+      if (options.verbose) {
+        console.log(`  Retry ${attempt}/${maxRetries}...`);
+      }
+      const retryResult = await retrySolveProblem({
         workDir,
         problemDir,
         meta,
@@ -248,27 +293,33 @@ function runProblem(
         errorOutput,
       });
       retrySolveResults.push(retryResult);
-      const retryIcon = retryResult.success ? "ok" : "FAIL";
-      console.log(
-        `  Retry solve: ${retryIcon} ($${retryResult.costUsd.toFixed(4)}, ${(retryResult.durationMs / 1000).toFixed(1)}s)`,
-      );
+      if (options.verbose) {
+        const retryIcon = retryResult.success ? "ok" : "FAIL";
+        console.log(
+          `  Retry solve: ${retryIcon} ($${retryResult.costUsd.toFixed(4)}, ${(retryResult.durationMs / 1000).toFixed(1)}s)`,
+        );
+      }
 
       // Re-verify
-      rawStages = verifyProblem(workDir, meta, challengeRoot);
+      rawStages = await verifyProblem(workDir, meta, challengeRoot);
       stages = calculateScore(meta, rawStages);
       totalScore = stages.reduce((sum, s) => sum + s.score, 0);
       maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
 
       if (totalScore === maxScore) {
-        console.log(`  Retry ${attempt} succeeded!`);
+        if (options.verbose) {
+          console.log(`  Retry ${attempt} succeeded!`);
+        }
         break;
       }
     }
   }
 
-  for (const s of stages) {
-    const icon = s.passed ? "ok" : s.score > 0 ? "PARTIAL" : "FAIL";
-    console.log(`  ${s.stage}: ${icon} (${s.score}/${s.maxScore})`);
+  if (options.verbose) {
+    for (const s of stages) {
+      const icon = s.passed ? "ok" : s.score > 0 ? "PARTIAL" : "FAIL";
+      console.log(`  ${s.stage}: ${icon} (${s.score}/${s.maxScore})`);
+    }
   }
 
   // Clean up work directory if --clean is specified
@@ -340,7 +391,14 @@ function findLatestReport(resultsDir: string): ChallengeReport | undefined {
   }
 }
 
-function main(): void {
+function formatDuration(ms: number): string {
+  const secs = ms / 1000;
+  const mins = Math.floor(secs / 60);
+  const remainSecs = Math.round(secs % 60);
+  return mins > 0 ? `${mins}m${remainSecs}s` : `${remainSecs}s`;
+}
+
+async function main(): Promise<void> {
   const {
     problem,
     all,
@@ -353,6 +411,7 @@ function main(): void {
     retry,
     resume,
     rerunInfra,
+    concurrency,
   } = parseArgs();
 
   if (!problem && !all && !rerunInfra) {
@@ -360,9 +419,9 @@ function main(): void {
     console.error("  tsx runner/run.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx runner/run.ts --problem 001 --use-solution");
     console.error("  tsx runner/run.ts --problem 001 --solve [--model sonnet] [--max-budget 2.00]");
-    console.error("  tsx runner/run.ts --all --use-solution [--clean]");
+    console.error("  tsx runner/run.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx runner/run.ts --all --solve [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean]",
+      "  tsx runner/run.ts --all --solve [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean] [--concurrency <n>]",
     );
     console.error("  tsx runner/run.ts --all --impl-dir ./path/to/all-outputs");
     console.error("  tsx runner/run.ts --all --solve --resume [--clean]");
@@ -371,11 +430,12 @@ function main(): void {
   }
 
   const resultsDir = path.join(challengeRoot, "results");
+  const verbose = concurrency === 1;
 
   // Auth pre-check for solve mode
   if (solve || rerunInfra) {
     console.log("Checking authentication status...");
-    const authCheck = checkAuthStatus();
+    const authCheck = await checkAuthStatus();
     if (!authCheck.ok) {
       console.error(`Authentication check failed: ${authCheck.error}`);
       console.error("Please log in to Claude Code before running solve mode.");
@@ -400,18 +460,33 @@ function main(): void {
       process.exit(0);
     }
 
-    console.log(`Rerunning ${infraProblems.length} infrastructure failure problem(s)...`);
+    console.log(
+      `Rerunning ${infraProblems.length} infrastructure failure problem(s) (concurrency: ${concurrency})...`,
+    );
 
-    const rerunResults: ProblemResult[] = [];
-    for (const infraResult of infraProblems) {
-      const problemId = `${infraResult.problemId}-${infraResult.problemName}`;
-      rerunResults.push(
-        runProblem(problemId, {
-          solve: { model, maxBudget, retry },
-          clean,
+    const limit = createLimiter(concurrency);
+    const total = infraProblems.length;
+    let completed = 0;
+    const rerunResults = await Promise.all(
+      infraProblems.map((infraResult) =>
+        limit(async () => {
+          const problemId = `${infraResult.problemId}-${infraResult.problemName}`;
+          const result = await runProblem(problemId, {
+            solve: { model, maxBudget, retry },
+            clean,
+            verbose,
+          });
+          completed++;
+          if (!verbose) {
+            const status = result.totalScore === result.maxScore ? "PASS" : "PARTIAL";
+            console.log(
+              `[${completed}/${total}] ${problemId}: ${status} (${result.totalScore}/${result.maxScore}) [${formatDuration(result.totalDurationMs ?? 0)}]`,
+            );
+          }
+          return result;
         }),
-      );
-    }
+      ),
+    );
 
     // Merge with existing results
     const mergedResults = latestReport.results.map((existing) => {
@@ -444,37 +519,34 @@ function main(): void {
 
   const problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
 
+  if (all) {
+    console.log(`Running ${problems.length} problem(s) (concurrency: ${concurrency})...`);
+  }
+
   // Resume support: load partial results and skip already-completed problems
-  let results: ProblemResult[] = [];
+  const results: ProblemResult[] = [];
   let completedIds = new Set<string>();
   if (resume) {
-    results = loadPartialResults(resultsDir);
-    completedIds = new Set(results.map((r) => `${r.problemId}-${r.problemName}`));
-    if (results.length > 0) {
-      console.log(`Resuming: ${results.length} problem(s) already completed, skipping.`);
+    const partialResults = loadPartialResults(resultsDir);
+    results.push(...partialResults);
+    completedIds = new Set(partialResults.map((r) => `${r.problemId}-${r.problemName}`));
+    if (partialResults.length > 0) {
+      console.log(`Resuming: ${partialResults.length} problem(s) already completed, skipping.`);
     }
   }
 
+  // Build task list
+  type ProblemTask = { problemName: string; implDir?: string };
+  const tasks: ProblemTask[] = [];
   for (const p of problems) {
-    // Skip already-completed problems in resume mode
     if (resume && completedIds.has(p)) {
       continue;
     }
 
-    const problemDir = path.join(challengeRoot, "problems", p);
-
     if (solve) {
-      const result = runProblem(p, {
-        solve: { model, maxBudget, retry },
-        clean,
-      });
-      results.push(result);
-
-      // Save partial results after each problem
-      if (all) {
-        savePartialResults(resultsDir, results);
-      }
+      tasks.push({ problemName: p });
     } else {
+      const problemDir = path.join(challengeRoot, "problems", p);
       let impl: string;
 
       if (useSolution) {
@@ -491,9 +563,45 @@ function main(): void {
         process.exit(1);
       }
 
-      results.push(runProblem(p, { implDir: impl, clean }));
+      tasks.push({ problemName: p, implDir: impl });
     }
   }
+
+  const limit = createLimiter(concurrency);
+  const total = tasks.length + results.length;
+  let completed = results.length;
+
+  await Promise.all(
+    tasks.map((task) =>
+      limit(async () => {
+        const result = await runProblem(task.problemName, {
+          implDir: task.implDir,
+          solve: solve ? { model, maxBudget, retry } : undefined,
+          clean,
+          verbose,
+        });
+
+        // Push result (safe: Node.js single-threaded)
+        results.push(result);
+        completed++;
+
+        if (!verbose) {
+          const status = result.totalScore === result.maxScore ? "PASS" : "PARTIAL";
+          console.log(
+            `[${completed}/${total}] ${task.problemName}: ${status} (${result.totalScore}/${result.maxScore}) [${formatDuration(result.totalDurationMs ?? 0)}]`,
+          );
+        }
+
+        // Save partial results after each problem
+        if (all) {
+          savePartialResults(resultsDir, results);
+        }
+      }),
+    ),
+  );
+
+  // Sort results by problemId for consistent report ordering
+  results.sort((a, b) => a.problemId.localeCompare(b.problemId));
 
   // Clean up partial results
   cleanPartialResults(resultsDir);
@@ -539,4 +647,7 @@ function findProblem(id: string): string {
   return match;
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
