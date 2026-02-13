@@ -74,6 +74,7 @@ import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { Executor } from "@/parser/service/executor";
 import type {
+  EnumValue,
   GqlOperations,
   PermissionOperand,
   StandardActionPermission,
@@ -596,7 +597,7 @@ function buildBreakingChangesMap(pendingMigrations: PendingMigration[]): Breakin
 interface FieldConfig {
   required?: boolean;
   unique?: boolean;
-  allowedValues?: string[];
+  allowedValues?: EnumValue[];
 }
 
 /**
@@ -635,14 +636,22 @@ function applyPreMigrationFieldAdjustments(
 
     // Enum values removed: keep old values + add new values (union)
     if (before?.allowedValues && after?.allowedValues) {
-      const removedValues = before.allowedValues.filter(
-        (value) => !after.allowedValues!.includes(value),
-      );
+      const afterValues = new Set(after.allowedValues.map((v) => v.value));
+      const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
       if (removedValues.length > 0) {
-        const unionValues = [...new Set([...before.allowedValues, ...after.allowedValues])];
-        field.allowedValues = unionValues.map((value) => ({
+        // Create union of all values, preserving descriptions where available
+        const valueMap = new Map<string, string>();
+        for (const v of before.allowedValues) {
+          valueMap.set(v.value, v.description ?? "");
+        }
+        for (const v of after.allowedValues) {
+          if (!valueMap.has(v.value)) {
+            valueMap.set(v.value, v.description ?? "");
+          }
+        }
+        field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
           value,
-          description: "",
+          description,
         }));
       }
     }
