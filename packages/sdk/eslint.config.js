@@ -143,8 +143,27 @@ export default defineConfig([
     },
   },
   {
+    // Built-in plugins can import from configure module
+    files: ["src/plugin/builtin/**/*.ts"],
+    ignores: ["src/plugin/builtin/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Plugin builtin module should not import from cli module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Non-builtin plugin modules cannot import from configure or builtin
     files: ["src/plugin/**/*.ts"],
-    ignores: ["src/plugin/**/*.test.ts"],
+    ignores: ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
         "error",
@@ -158,6 +177,11 @@ export default defineConfig([
               group: ["**/configure/**", "@/configure/**"],
               message:
                 "Plugin module should not import from configure module. Please use parser module as an intermediary.",
+            },
+            {
+              group: ["**/plugin/builtin/**", "@/plugin/builtin/**"],
+              message:
+                "Plugin module should not import from builtin plugins. Built-in plugins are exported separately.",
             },
           ],
         },
