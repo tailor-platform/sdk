@@ -110,24 +110,23 @@ function setupWorkDir(problemDir: string, implDir?: string): string {
   return workDir;
 }
 
+function rewriteWorkspaceRefs(workDir: string): void {
+  const pkgPath = path.join(workDir, "package.json");
+  const content = fs.readFileSync(pkgPath, "utf-8");
+  const sdkPath = path.relative(workDir, path.join(challengeRoot, "..", "packages", "sdk"));
+  const updated = content.replace(/"workspace:\^"/g, `"link:${sdkPath}"`);
+  fs.writeFileSync(pkgPath, updated);
+}
+
 function installDependencies(workDir: string): void {
   console.log("  Installing dependencies...");
-  try {
-    execSync("pnpm install --frozen-lockfile", {
-      cwd: workDir,
-      encoding: "utf-8",
-      timeout: 60_000,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-  } catch {
-    console.warn("  Warning: --frozen-lockfile failed, retrying without it...");
-    execSync("pnpm install", {
-      cwd: workDir,
-      encoding: "utf-8",
-      timeout: 60_000,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-  }
+  rewriteWorkspaceRefs(workDir);
+  execSync("pnpm install --no-lockfile", {
+    cwd: workDir,
+    encoding: "utf-8",
+    timeout: 60_000,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
 }
 
 function runProblem(
