@@ -11,6 +11,8 @@ export type FailureCategory =
   | "api_misuse"
   | undefined;
 
+type DefinedFailureCategory = Exclude<FailureCategory, undefined>;
+
 export type StageResult = {
   stage: "generate" | "typecheck" | "tests";
   passed: boolean;
@@ -33,6 +35,29 @@ export type ProblemResult = {
   retrySolveResults?: SolveResult[];
 };
 
+type SuccessRate = { passed: number; total: number; rate: number };
+
+type FailurePattern = {
+  pattern: string;
+  count: number;
+  affectedProblems: string[];
+  suggestedDocFix: string;
+};
+
+type RetryAnalysis = {
+  selfCorrectedCategories: Partial<Record<DefinedFailureCategory, number>>;
+  persistentCategories: Partial<Record<DefinedFailureCategory, number>>;
+};
+
+type Analytics = {
+  failureDistribution: Partial<Record<DefinedFailureCategory, number>>;
+  categorySuccessRates: Record<string, SuccessRate>;
+  difficultySuccessRates: Record<string, SuccessRate>;
+  stagePassRates: Record<string, SuccessRate>;
+  commonFailurePatterns: FailurePattern[];
+  retryAnalysis?: RetryAnalysis;
+};
+
 export type ChallengeReport = {
   timestamp: string;
   model?: string;
@@ -41,7 +66,28 @@ export type ChallengeReport = {
   totalScore: number;
   maxScore: number;
   percentage: number;
+  weightedScore: number;
+  weightedMaxScore: number;
+  weightedPercentage: number;
   totalCostUsd: number;
+  scorePerDollar?: number;
+  avgCostPerPoint?: number;
+  analytics: Analytics;
+};
+
+const difficultyWeights: Record<string, number> = {
+  easy: 1.0,
+  medium: 1.5,
+  hard: 2.5,
+};
+
+const failureDocSuggestions: Record<DefinedFailureCategory, string> = {
+  missing_file: "Add file creation examples to getting-started guide",
+  import_error: "Clarify import paths and module resolution in docs",
+  type_error: "Add type usage examples and common type patterns",
+  generate_error: "Improve code generation error messages and docs",
+  logic_error: "Add more resolver/executor logic examples",
+  api_misuse: "Improve API validation messages and usage docs",
 };
 
 function classifyFailure(
@@ -93,6 +139,140 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
   });
 }
 
+function computeAnalytics(results: ProblemResult[]): Analytics {
+  // Failure distribution
+  const failureDistribution: Partial<Record<DefinedFailureCategory, number>> = {};
+  for (const r of results) {
+    for (const s of r.stages) {
+      if (!s.passed && s.category) {
+        failureDistribution[s.category] = (failureDistribution[s.category] ?? 0) + 1;
+      }
+    }
+  }
+
+  // Category success rates
+  const categoryGroups: Record<string, { passed: number; total: number }> = {};
+  for (const r of results) {
+    const group = (categoryGroups[r.category] ??= { passed: 0, total: 0 });
+    group.total++;
+    if (r.totalScore === r.maxScore) {
+      group.passed++;
+    }
+  }
+  const categorySuccessRates: Record<string, SuccessRate> = {};
+  for (const [cat, g] of Object.entries(categoryGroups)) {
+    categorySuccessRates[cat] = {
+      ...g,
+      rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0,
+    };
+  }
+
+  // Difficulty success rates
+  const difficultyGroups: Record<string, { passed: number; total: number }> = {};
+  for (const r of results) {
+    const group = (difficultyGroups[r.difficulty] ??= { passed: 0, total: 0 });
+    group.total++;
+    if (r.totalScore === r.maxScore) {
+      group.passed++;
+    }
+  }
+  const difficultySuccessRates: Record<string, SuccessRate> = {};
+  for (const [diff, g] of Object.entries(difficultyGroups)) {
+    difficultySuccessRates[diff] = {
+      ...g,
+      rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0,
+    };
+  }
+
+  // Stage pass rates
+  const stageGroups: Record<string, { passed: number; total: number }> = {};
+  for (const r of results) {
+    for (const s of r.stages) {
+      const group = (stageGroups[s.stage] ??= { passed: 0, total: 0 });
+      group.total++;
+      if (s.passed) {
+        group.passed++;
+      }
+    }
+  }
+  const stagePassRates: Record<string, SuccessRate> = {};
+  for (const [stage, g] of Object.entries(stageGroups)) {
+    stagePassRates[stage] = {
+      ...g,
+      rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0,
+    };
+  }
+
+  // Common failure patterns: same FailureCategory appears 3+ times in same problem category
+  const patternCounts: Record<string, { count: number; problems: string[] }> = {};
+  for (const r of results) {
+    for (const s of r.stages) {
+      if (!s.passed && s.category) {
+        const key = `${r.category}:${s.category}`;
+        const entry = (patternCounts[key] ??= { count: 0, problems: [] });
+        entry.count++;
+        const problemLabel = `${r.problemId}-${r.problemName}`;
+        if (!entry.problems.includes(problemLabel)) {
+          entry.problems.push(problemLabel);
+        }
+      }
+    }
+  }
+  const commonFailurePatterns: FailurePattern[] = [];
+  for (const [key, entry] of Object.entries(patternCounts)) {
+    if (entry.count >= 3) {
+      const [category, failureCategory] = key.split(":") as [string, DefinedFailureCategory];
+      commonFailurePatterns.push({
+        pattern: `${failureCategory} in ${category} problems`,
+        count: entry.count,
+        affectedProblems: entry.problems,
+        suggestedDocFix: failureDocSuggestions[failureCategory],
+      });
+    }
+  }
+
+  // Retry analysis
+  let retryAnalysis: RetryAnalysis | undefined;
+  const hasRetries = results.some((r) => r.retrySolveResults && r.retrySolveResults.length > 0);
+  if (hasRetries) {
+    const selfCorrected: Partial<Record<DefinedFailureCategory, number>> = {};
+    const persistent: Partial<Record<DefinedFailureCategory, number>> = {};
+
+    for (const r of results) {
+      if (!r.retrySolveResults || r.retrySolveResults.length === 0) {
+        continue;
+      }
+      // Pre-retry failures
+      const preRetryCategories = new Set<DefinedFailureCategory>();
+      for (const s of r.stages) {
+        if (!s.passed && s.category) {
+          preRetryCategories.add(s.category);
+        }
+      }
+      // Post-retry: check if the problem passed after retries
+      const postRetryFailed = r.totalScore < r.maxScore;
+      for (const cat of preRetryCategories) {
+        if (postRetryFailed) {
+          persistent[cat] = (persistent[cat] ?? 0) + 1;
+        } else {
+          selfCorrected[cat] = (selfCorrected[cat] ?? 0) + 1;
+        }
+      }
+    }
+
+    retryAnalysis = { selfCorrectedCategories: selfCorrected, persistentCategories: persistent };
+  }
+
+  return {
+    failureDistribution,
+    categorySuccessRates,
+    difficultySuccessRates,
+    stagePassRates,
+    commonFailurePatterns,
+    retryAnalysis,
+  };
+}
+
 export function createReport(
   results: ProblemResult[],
   metadata?: { model?: string; sdkVersion?: string },
@@ -106,6 +286,23 @@ export function createReport(
     }
     return sum + cost;
   }, 0);
+
+  // Weighted scoring
+  let weightedScore = 0;
+  let weightedMaxScore = 0;
+  for (const r of results) {
+    const weight = difficultyWeights[r.difficulty] ?? 1.0;
+    weightedScore += r.totalScore * weight;
+    weightedMaxScore += r.maxScore * weight;
+  }
+
+  // Cost efficiency
+  const scorePerDollar = totalCostUsd > 0 ? totalScore / totalCostUsd : undefined;
+  const avgCostPerPoint =
+    totalCostUsd > 0 && totalScore > 0 ? totalCostUsd / totalScore : undefined;
+
+  const analytics = computeAnalytics(results);
+
   return {
     timestamp: new Date().toISOString(),
     model: metadata?.model,
@@ -114,7 +311,14 @@ export function createReport(
     totalScore,
     maxScore,
     percentage: maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0,
+    weightedScore: Math.round(weightedScore * 10) / 10,
+    weightedMaxScore: Math.round(weightedMaxScore * 10) / 10,
+    weightedPercentage:
+      weightedMaxScore > 0 ? Math.round((weightedScore / weightedMaxScore) * 100) : 0,
     totalCostUsd,
+    scorePerDollar,
+    avgCostPerPoint,
+    analytics,
   };
 }
 
@@ -162,7 +366,63 @@ export function formatReportTable(report: ChallengeReport): string {
     totalLine += `$${report.totalCostUsd.toFixed(4)}`;
   }
   lines.push(totalLine);
+
+  // Weighted score
+  lines.push(
+    `${"Weighted".padEnd(30)}${"".padEnd(12)}${`${report.weightedScore}/${report.weightedMaxScore}`.padEnd(15)}${`${report.weightedPercentage}%`}`,
+  );
+
+  // Cost efficiency
+  if (report.scorePerDollar != null) {
+    lines.push("");
+    lines.push(
+      `Cost efficiency: ${report.scorePerDollar.toFixed(1)} pts/$  |  $${report.avgCostPerPoint?.toFixed(4)}/pt`,
+    );
+  }
+
   lines.push("=".repeat(width));
+
+  // Analytics summary
+  const { analytics } = report;
+
+  // Category success rates
+  const categoryEntries = Object.entries(analytics.categorySuccessRates);
+  if (categoryEntries.length > 0) {
+    lines.push("");
+    lines.push("Category Success Rates:");
+    for (const [cat, rate] of categoryEntries) {
+      lines.push(`  ${cat.padEnd(25)} ${rate.passed}/${rate.total} (${rate.rate}%)`);
+    }
+  }
+
+  // Difficulty success rates
+  const difficultyEntries = Object.entries(analytics.difficultySuccessRates);
+  if (difficultyEntries.length > 0) {
+    lines.push("");
+    lines.push("Difficulty Success Rates:");
+    for (const [diff, rate] of difficultyEntries) {
+      lines.push(`  ${diff.padEnd(25)} ${rate.passed}/${rate.total} (${rate.rate}%)`);
+    }
+  }
+
+  // Stage pass rates
+  const stageEntries = Object.entries(analytics.stagePassRates);
+  if (stageEntries.length > 0) {
+    lines.push("");
+    lines.push("Stage Pass Rates:");
+    for (const [stage, rate] of stageEntries) {
+      lines.push(`  ${stage.padEnd(25)} ${rate.passed}/${rate.total} (${rate.rate}%)`);
+    }
+  }
+
+  // Common failure patterns
+  if (analytics.commonFailurePatterns.length > 0) {
+    lines.push("");
+    lines.push("Common Failure Patterns:");
+    for (const p of analytics.commonFailurePatterns) {
+      lines.push(`  ${p.pattern} (${p.count}x) -> ${p.suggestedDocFix}`);
+    }
+  }
 
   return lines.join("\n");
 }

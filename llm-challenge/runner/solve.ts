@@ -83,13 +83,41 @@ function buildRetryPrompt(
     "Your previous implementation produced the following error. Please fix the issues:",
     "",
     "```",
-    errorOutput.slice(0, 3000),
+    truncateErrorOutput(errorOutput),
     "```",
     "",
     "Read the existing files you created previously and fix them to resolve the error.",
   ].join("\n");
 
   return `${basePrompt}\n${retryAddendum}`;
+}
+
+function truncateErrorOutput(output: string, maxLength = 5000): string {
+  if (output.length <= maxLength) return output;
+
+  // Extract high-priority lines: TS errors and test failure messages
+  const lines = output.split("\n");
+  const priorityLines: string[] = [];
+  const otherLines: string[] = [];
+
+  for (const line of lines) {
+    if (/TS\d{4}/.test(line) || /FAIL|AssertionError|Expected|Received|✗|×/.test(line)) {
+      priorityLines.push(line);
+    } else {
+      otherLines.push(line);
+    }
+  }
+
+  // Build output: priority lines first, then remaining up to limit
+  const priorityBlock = priorityLines.join("\n");
+  if (priorityBlock.length >= maxLength) {
+    return priorityBlock.slice(0, maxLength);
+  }
+
+  const remaining = maxLength - priorityBlock.length - 1;
+  const otherBlock = otherLines.join("\n").slice(0, remaining);
+
+  return priorityBlock ? `${priorityBlock}\n${otherBlock}` : otherBlock;
 }
 
 export function retrySolveProblem(options: {

@@ -3,12 +3,19 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ProblemMeta } from "../shared/helpers";
 
+export type TestDetail = {
+  name: string;
+  status: "passed" | "failed";
+  failureMessage?: string;
+};
+
 export type StageInput = {
   stage: "generate" | "typecheck" | "tests";
   passed: boolean;
   output: string;
   testsPassed?: number;
   testsTotal?: number;
+  testDetails?: TestDetail[];
 };
 
 function runCommand(command: string, cwd: string): { success: boolean; output: string } {
@@ -29,13 +36,30 @@ function runCommand(command: string, cwd: string): { success: boolean; output: s
   }
 }
 
+type VitestAssertionResult = {
+  fullName: string;
+  status: string;
+  failureMessages: string[];
+};
+
+type VitestTestResult = {
+  assertionResults: VitestAssertionResult[];
+};
+
 type VitestJsonResult = {
   numTotalTests: number;
   numPassedTests: number;
   numFailedTests: number;
+  testResults: VitestTestResult[];
 };
 
-function parseVitestJson(output: string): { passed: number; total: number } | undefined {
+type ParsedVitestResult = {
+  passed: number;
+  total: number;
+  testDetails: TestDetail[];
+};
+
+function parseVitestJson(output: string): ParsedVitestResult | undefined {
   // vitest --reporter=json outputs JSON to stdout, possibly mixed with other output
   // Try to find the JSON object in the output
   const jsonMatch = output.match(/\{[\s\S]*"numTotalTests"\s*:/);
@@ -66,9 +90,23 @@ function parseVitestJson(output: string): { passed: number; total: number } | un
 
   try {
     const parsed = JSON.parse(output.slice(startIdx, endIdx)) as VitestJsonResult;
+    const testDetails: TestDetail[] = [];
+    for (const testResult of parsed.testResults ?? []) {
+      for (const assertion of testResult.assertionResults ?? []) {
+        const detail: TestDetail = {
+          name: assertion.fullName,
+          status: assertion.status === "passed" ? "passed" : "failed",
+        };
+        if (assertion.failureMessages.length > 0) {
+          detail.failureMessage = assertion.failureMessages.join("\n");
+        }
+        testDetails.push(detail);
+      }
+    }
     return {
       passed: parsed.numPassedTests,
       total: parsed.numTotalTests,
+      testDetails,
     };
   } catch {
     return undefined;
@@ -96,16 +134,42 @@ export function verifyProblem(
     return results;
   }
   const generateResult = runCommand(`node ${sdkBin} generate -c tailor.config.ts`, workDir);
+  if (!generateResult.success) {
+    // Partial scoring for generate: check what was accomplished
+    const generateStage: StageInput = {
+      stage: "generate",
+      passed: false,
+      output: generateResult.output,
+    };
+
+    // Check file existence (20% of generate score)
+    const allFilesExist = _meta.files.implement.every((f) => fs.existsSync(path.join(workDir, f)));
+    if (allFilesExist) {
+      generateStage.testsPassed = 1;
+      generateStage.testsTotal = 5;
+
+      // Check if files can be imported (60% of generate score)
+      // Use a quick syntax check via tsc --noEmit on just the implement files
+      const fileList = _meta.files.implement.join(" ");
+      const importCheck = runCommand(
+        `npx tsc --noEmit --allowImportingTsExtensions ${fileList}`,
+        workDir,
+      );
+      if (importCheck.success) {
+        generateStage.testsPassed = 3;
+      }
+    }
+
+    results.push(generateStage);
+    results.push({ stage: "typecheck", passed: false, output: "Skipped (generate failed)" });
+    results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
+    return results;
+  }
   results.push({
     stage: "generate",
     passed: generateResult.success,
     output: generateResult.output,
   });
-  if (!generateResult.success) {
-    results.push({ stage: "typecheck", passed: false, output: "Skipped (generate failed)" });
-    results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
-    return results;
-  }
 
   // Stage 2: typecheck
   const typecheckResult = runCommand("npx tsc --noEmit", workDir);
@@ -138,6 +202,9 @@ export function verifyProblem(
   if (parsed) {
     testStage.testsPassed = parsed.passed;
     testStage.testsTotal = parsed.total;
+    if (parsed.testDetails.length > 0) {
+      testStage.testDetails = parsed.testDetails;
+    }
   }
 
   results.push(testStage);

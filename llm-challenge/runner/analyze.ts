@@ -1,0 +1,367 @@
+import fs from "node:fs";
+import path from "node:path";
+import type { ChallengeReport } from "./score";
+
+const challengeRoot = path.resolve(import.meta.dirname, "..");
+
+function requireArg(args: string[], i: number, flag: string): string {
+  if (i + 1 >= args.length) {
+    console.error(`Error: ${flag} requires a value`);
+    process.exit(1);
+  }
+  return args[i + 1]!;
+}
+
+function parseArgs(): {
+  baseline?: string;
+  trend: boolean;
+} {
+  const args = process.argv.slice(2);
+  let baseline: string | undefined;
+  let trend = false;
+
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case "--baseline":
+        baseline = requireArg(args, i, "--baseline");
+        i++;
+        break;
+      case "--trend":
+        trend = true;
+        break;
+    }
+  }
+
+  return { baseline, trend };
+}
+
+function loadReports(): ChallengeReport[] {
+  const resultsDir = path.join(challengeRoot, "results");
+  if (!fs.existsSync(resultsDir)) {
+    console.error("No results directory found");
+    process.exit(1);
+  }
+
+  const files = fs
+    .readdirSync(resultsDir)
+    .filter((f) => f.startsWith("report-") && f.endsWith(".json"))
+    .sort();
+
+  if (files.length === 0) {
+    console.error("No report files found in results/");
+    process.exit(1);
+  }
+
+  return files.map((f) => {
+    const content = fs.readFileSync(path.join(resultsDir, f), "utf-8");
+    return JSON.parse(content) as ChallengeReport;
+  });
+}
+
+function loadReport(filePath: string): ChallengeReport {
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) {
+    console.error(`Report file not found: ${resolved}`);
+    process.exit(1);
+  }
+  const content = fs.readFileSync(resolved, "utf-8");
+  return JSON.parse(content) as ChallengeReport;
+}
+
+function formatDelta(delta: number): string {
+  if (delta > 0) return `+${delta}`;
+  if (delta < 0) return `${delta}`;
+  return "=";
+}
+
+function formatPercentDelta(delta: number): string {
+  if (delta > 0) return `+${delta}%`;
+  if (delta < 0) return `${delta}%`;
+  return "=";
+}
+
+function formatTimestamp(ts: string): string {
+  const d = new Date(ts);
+  return d.toISOString().replace("T", " ").slice(0, 19);
+}
+
+function getFailureCategory(result: ChallengeReport["results"][number]): string | undefined {
+  for (const s of result.stages) {
+    if (!s.passed && s.category) {
+      return s.category;
+    }
+  }
+  return undefined;
+}
+
+function computeCategoryRates(
+  report: ChallengeReport,
+): Record<string, { passed: number; total: number; rate: number }> {
+  // Use analytics if available
+  if (report.analytics?.categorySuccessRates) {
+    return report.analytics.categorySuccessRates;
+  }
+
+  // Compute from results
+  const groups: Record<string, { passed: number; total: number }> = {};
+  for (const r of report.results) {
+    if (!groups[r.category]) {
+      groups[r.category] = { passed: 0, total: 0 };
+    }
+    groups[r.category]!.total++;
+    if (r.totalScore === r.maxScore) {
+      groups[r.category]!.passed++;
+    }
+  }
+
+  const rates: Record<string, { passed: number; total: number; rate: number }> = {};
+  for (const [cat, g] of Object.entries(groups)) {
+    rates[cat] = { ...g, rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0 };
+  }
+  return rates;
+}
+
+function computeDifficultyRates(
+  report: ChallengeReport,
+): Record<string, { passed: number; total: number; rate: number }> {
+  // Use analytics if available
+  if (report.analytics?.difficultySuccessRates) {
+    return report.analytics.difficultySuccessRates;
+  }
+
+  // Compute from results
+  const groups: Record<string, { passed: number; total: number }> = {};
+  for (const r of report.results) {
+    if (!groups[r.difficulty]) {
+      groups[r.difficulty] = { passed: 0, total: 0 };
+    }
+    groups[r.difficulty]!.total++;
+    if (r.totalScore === r.maxScore) {
+      groups[r.difficulty]!.passed++;
+    }
+  }
+
+  const rates: Record<string, { passed: number; total: number; rate: number }> = {};
+  for (const [diff, g] of Object.entries(groups)) {
+    rates[diff] = { ...g, rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0 };
+  }
+  return rates;
+}
+
+function showComparison(before: ChallengeReport, after: ChallengeReport): void {
+  const width = 80;
+  console.log("=".repeat(width));
+  console.log("Report Comparison");
+  console.log("=".repeat(width));
+  console.log("");
+  console.log(
+    `  Before: ${formatTimestamp(before.timestamp)}${before.model ? ` (${before.model})` : ""}`,
+  );
+  console.log(
+    `  After:  ${formatTimestamp(after.timestamp)}${after.model ? ` (${after.model})` : ""}`,
+  );
+  console.log("");
+
+  // Build lookup maps
+  const beforeMap = new Map(before.results.map((r) => [`${r.problemId}-${r.problemName}`, r]));
+  const afterMap = new Map(after.results.map((r) => [`${r.problemId}-${r.problemName}`, r]));
+
+  // Collect all problem keys in order
+  const allKeys = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
+
+  // Per-problem comparison table
+  const header =
+    "Problem".padEnd(30) + "Before".padEnd(12) + "After".padEnd(12) + "Delta".padEnd(8) + "Notes";
+  console.log(header);
+  console.log("-".repeat(width));
+
+  for (const key of allKeys) {
+    const b = beforeMap.get(key);
+    const a = afterMap.get(key);
+
+    const beforeScore = b ? `${b.totalScore}/${b.maxScore}` : "-";
+    const afterScore = a ? `${a.totalScore}/${a.maxScore}` : "-";
+
+    const bTotal = b?.totalScore ?? 0;
+    const aTotal = a?.totalScore ?? 0;
+    const delta = aTotal - bTotal;
+    const deltaStr = b && a ? formatDelta(delta) : b ? "removed" : "new";
+
+    // Failure category change
+    const bCat = b ? getFailureCategory(b) : undefined;
+    const aCat = a ? getFailureCategory(a) : undefined;
+    let notes = "";
+    if (bCat && aCat && bCat !== aCat) {
+      notes = `[${bCat} -> ${aCat}]`;
+    } else if (bCat && !aCat && a && a.totalScore === a.maxScore) {
+      notes = `[${bCat} -> passed]`;
+    } else if (!bCat && aCat) {
+      notes = `[-> ${aCat}]`;
+    } else if (bCat && aCat && bCat === aCat && delta === 0) {
+      notes = `[persistent: ${aCat}]`;
+    }
+
+    console.log(
+      `${key.slice(0, 29).padEnd(30)}${beforeScore.padEnd(12)}${afterScore.padEnd(12)}${deltaStr.padEnd(8)}${notes}`,
+    );
+  }
+
+  console.log("-".repeat(width));
+
+  // Total
+  const totalDelta = (after.totalScore ?? 0) - (before.totalScore ?? 0);
+  console.log(
+    `${"Total".padEnd(30)}${`${before.totalScore}/${before.maxScore}`.padEnd(12)}${`${after.totalScore}/${after.maxScore}`.padEnd(12)}${formatDelta(totalDelta).padEnd(8)}${before.percentage}% -> ${after.percentage}%`,
+  );
+  console.log("");
+
+  // Category success rates
+  const beforeCatRates = computeCategoryRates(before);
+  const afterCatRates = computeCategoryRates(after);
+  const allCategories = [
+    ...new Set([...Object.keys(beforeCatRates), ...Object.keys(afterCatRates)]),
+  ].sort();
+
+  if (allCategories.length > 0) {
+    console.log("Category Success Rates:");
+    for (const cat of allCategories) {
+      const bRate = beforeCatRates[cat]?.rate ?? 0;
+      const aRate = afterCatRates[cat]?.rate ?? 0;
+      const delta = aRate - bRate;
+      console.log(`  ${cat}: ${bRate}% -> ${aRate}% (${formatPercentDelta(delta)})`);
+    }
+    console.log("");
+  }
+
+  // Difficulty success rates
+  const beforeDiffRates = computeDifficultyRates(before);
+  const afterDiffRates = computeDifficultyRates(after);
+  const allDiffs = [
+    ...new Set([...Object.keys(beforeDiffRates), ...Object.keys(afterDiffRates)]),
+  ].sort();
+
+  if (allDiffs.length > 0) {
+    console.log("Difficulty Success Rates:");
+    for (const diff of allDiffs) {
+      const bRate = beforeDiffRates[diff]?.rate ?? 0;
+      const aRate = afterDiffRates[diff]?.rate ?? 0;
+      const delta = aRate - bRate;
+      console.log(`  ${diff}: ${bRate}% -> ${aRate}% (${formatPercentDelta(delta)})`);
+    }
+    console.log("");
+  }
+
+  // Failure distribution changes (if analytics available)
+  if (before.analytics?.failureDistribution || after.analytics?.failureDistribution) {
+    const bDist = before.analytics?.failureDistribution ?? {};
+    const aDist = after.analytics?.failureDistribution ?? {};
+    const allFailCats = [...new Set([...Object.keys(bDist), ...Object.keys(aDist)])].sort();
+
+    if (allFailCats.length > 0) {
+      console.log("Failure Distribution:");
+      for (const cat of allFailCats) {
+        const bCount = bDist[cat as keyof typeof bDist] ?? 0;
+        const aCount = aDist[cat as keyof typeof aDist] ?? 0;
+        const delta = aCount - bCount;
+        console.log(`  ${cat}: ${bCount} -> ${aCount} (${formatDelta(delta)})`);
+      }
+      console.log("");
+    }
+  }
+
+  console.log("=".repeat(width));
+}
+
+function showTrend(reports: ChallengeReport[]): void {
+  const width = 80;
+  console.log("=".repeat(width));
+  console.log("Score Trend");
+  console.log("=".repeat(width));
+  console.log("");
+
+  // Header
+  const header =
+    "Timestamp".padEnd(22) + "Model".padEnd(12) + "Score".padEnd(15) + "Pct".padEnd(8) + "Cost";
+  console.log(header);
+  console.log("-".repeat(width));
+
+  for (const r of reports) {
+    const ts = formatTimestamp(r.timestamp);
+    const model = (r.model ?? "-").slice(0, 11).padEnd(12);
+    const score = `${r.totalScore}/${r.maxScore}`.padEnd(15);
+    const pct = `${r.percentage}%`.padEnd(8);
+    const cost = r.totalCostUsd > 0 ? `$${r.totalCostUsd.toFixed(4)}` : "-";
+    console.log(`${ts}  ${model}${score}${pct}${cost}`);
+  }
+
+  console.log("-".repeat(width));
+  console.log("");
+
+  // Per-problem trend
+  const allProblemKeys: string[] = [];
+  for (const r of reports) {
+    for (const p of r.results) {
+      const key = `${p.problemId}-${p.problemName}`;
+      if (!allProblemKeys.includes(key)) {
+        allProblemKeys.push(key);
+      }
+    }
+  }
+  allProblemKeys.sort();
+
+  if (reports.length >= 2) {
+    console.log("Per-Problem Progression:");
+    const probHeader =
+      "Problem".padEnd(30) + reports.map((_, i) => `R${i + 1}`.padEnd(10)).join("");
+    console.log(probHeader);
+    console.log("-".repeat(30 + reports.length * 10));
+
+    for (const key of allProblemKeys) {
+      let line = key.slice(0, 29).padEnd(30);
+      for (const report of reports) {
+        const result = report.results.find((r) => `${r.problemId}-${r.problemName}` === key);
+        const cell = result ? `${result.totalScore}/${result.maxScore}` : "-";
+        line += cell.padEnd(10);
+      }
+      console.log(line);
+    }
+    console.log("");
+  }
+
+  console.log("=".repeat(width));
+}
+
+function main(): void {
+  const { baseline, trend } = parseArgs();
+
+  if (trend) {
+    const reports = loadReports();
+    if (reports.length < 2) {
+      console.error("Trend mode requires at least 2 reports");
+      process.exit(1);
+    }
+    showTrend(reports);
+    return;
+  }
+
+  if (baseline) {
+    const baselineReport = loadReport(baseline);
+    const reports = loadReports();
+    const latest = reports[reports.length - 1]!;
+    showComparison(baselineReport, latest);
+    return;
+  }
+
+  // Default: compare latest 2 reports
+  const reports = loadReports();
+  if (reports.length < 2) {
+    console.error("Need at least 2 reports for comparison. Use --trend for single report view.");
+    process.exit(1);
+  }
+
+  const before = reports[reports.length - 2]!;
+  const after = reports[reports.length - 1]!;
+  showComparison(before, after);
+}
+
+main();

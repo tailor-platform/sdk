@@ -304,7 +304,10 @@ function main(): void {
   // Write JSON results
   const resultsDir = path.join(challengeRoot, "results");
   fs.mkdirSync(resultsDir, { recursive: true });
-  const jsonPath = path.join(resultsDir, `report-${Date.now()}.json`);
+  const modelLabel = solve ? model : "solution";
+  const versionLabel = sdkVersion ?? "unknown";
+  const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
+  const jsonPath = path.join(resultsDir, `report-${modelLabel}-${versionLabel}-${dateLabel}.json`);
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
   console.log(`\nResults written to: ${jsonPath}`);
 }
