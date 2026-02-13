@@ -1,6 +1,8 @@
 import type { TailorAnyDBType } from "@/configure/services/tailordb";
 import type { TailorAnyField } from "@/configure/types";
 
+export type { TailorAnyDBType };
+
 export type TypeConfigRequired<PluginConfig = unknown> =
   | boolean
   | ((pluginConfig: PluginConfig | undefined) => boolean);
