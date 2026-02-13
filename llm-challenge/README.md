@@ -1,6 +1,6 @@
 # LLM Challenge
 
-A benchmark system for evaluating whether LLMs can correctly implement @tailor-platform/sdk code. It measures implementation capability across TailorDB models, resolvers, executors, and workflows.
+A benchmark for measuring how AI-friendly `@tailor-platform/sdk` is. LLMs solve implementation problems across TailorDB models, resolvers, executors, and workflows — when they fail, it signals that the SDK lacks sufficient information or isn't AI-friendly enough, rather than a limitation of the AI itself.
 
 ## Problems
 
