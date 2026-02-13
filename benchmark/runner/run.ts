@@ -18,7 +18,7 @@ function parseArgs(): {
   solve: boolean;
   model: string;
   maxBudget: number;
-  keepWork: boolean;
+  clean: boolean;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
@@ -28,7 +28,7 @@ function parseArgs(): {
   let solve = false;
   let model = "sonnet";
   let maxBudget = 2.0;
-  let keepWork = false;
+  let clean = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -56,13 +56,13 @@ function parseArgs(): {
       case "--max-budget":
         maxBudget = Number(args[++i]);
         break;
-      case "--keep-work":
-        keepWork = true;
+      case "--clean":
+        clean = true;
         break;
     }
   }
 
-  return { problem, all, implDir, useSolution, solve, model, maxBudget, keepWork };
+  return { problem, all, implDir, useSolution, solve, model, maxBudget, clean };
 }
 
 function setupWorkDir(problemDir: string, implDir?: string): string {
@@ -116,7 +116,7 @@ function runProblem(
   options: {
     implDir?: string;
     solve?: { model: string; maxBudget: number };
-    keepWork: boolean;
+    clean: boolean;
   },
 ): ProblemResult {
   const problemDir = path.join(benchmarkRoot, "problems", problemName);
@@ -157,8 +157,8 @@ function runProblem(
     console.log(`  ${s.stage}: ${icon} (${s.score}/${s.maxScore})`);
   }
 
-  // Clean up work directory unless --keep-work is specified
-  if (!options.keepWork) {
+  // Clean up work directory if --clean is specified
+  if (options.clean) {
     fs.rmSync(workDir, { recursive: true });
   }
 
@@ -175,15 +175,17 @@ function runProblem(
 }
 
 function main(): void {
-  const { problem, all, implDir, useSolution, solve, model, maxBudget, keepWork } = parseArgs();
+  const { problem, all, implDir, useSolution, solve, model, maxBudget, clean } = parseArgs();
 
   if (!problem && !all) {
     console.error("Usage:");
     console.error("  tsx runner/run.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx runner/run.ts --problem 001 --use-solution");
     console.error("  tsx runner/run.ts --problem 001 --solve [--model sonnet] [--max-budget 2.00]");
-    console.error("  tsx runner/run.ts --all --use-solution");
-    console.error("  tsx runner/run.ts --all --solve [--model sonnet] [--max-budget 2.00]");
+    console.error("  tsx runner/run.ts --all --use-solution [--clean]");
+    console.error(
+      "  tsx runner/run.ts --all --solve [--model sonnet] [--max-budget 2.00] [--clean]",
+    );
     console.error("  tsx runner/run.ts --all --impl-dir ./path/to/all-outputs");
     process.exit(1);
   }
@@ -198,7 +200,7 @@ function main(): void {
       results.push(
         runProblem(p, {
           solve: { model, maxBudget },
-          keepWork,
+          clean,
         }),
       );
     } else {
