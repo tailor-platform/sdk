@@ -9,7 +9,7 @@ const namespaceProcessCache = new WeakMap<PluginBase, NamespacePluginOutput>();
 
 /**
  * Get a generated type from a plugin.
- * For type-attached plugins, calls process() with the sourceType.
+ * For type-attached plugins, calls processType() with the sourceType.
  * For namespace plugins, calls processNamespace() with minimal context.
  * Results are cached per plugin and sourceType to avoid redundant processing.
  * @param plugin - The plugin instance
@@ -33,7 +33,7 @@ export function getGeneratedType(
 
 /**
  * Get a generated type from a type-attached plugin.
- * @param plugin - The plugin instance (must have process() method)
+ * @param plugin - The plugin instance (must have processType() method)
  * @param sourceType - The source TailorDB type
  * @param kind - The generated type kind
  * @returns The generated TailorDB type
@@ -43,8 +43,8 @@ function getGeneratedTypeForTypeAttachedPlugin(
   sourceType: TailorAnyDBType,
   kind: string,
 ): TailorAnyDBType {
-  if (!plugin.process) {
-    throw new Error(`Plugin "${plugin.id}" does not have a process() method`);
+  if (!plugin.processType) {
+    throw new Error(`Plugin "${plugin.id}" does not have a processType() method`);
   }
 
   // Check cache first
@@ -58,19 +58,19 @@ function getGeneratedTypeForTypeAttachedPlugin(
   let output = pluginCache.get(cacheKey);
 
   if (!output) {
-    // Call process() and cache the result
-    const result = plugin.process({
+    // Call processType() and cache the result
+    const result = plugin.processType({
       type: sourceType,
       config: true, // Default config for type-attached plugins
       pluginConfig: plugin.pluginConfig,
       namespace: "", // Namespace is not needed for type retrieval
     });
 
-    // Handle async case (seed schema should use sync plugins)
+    // Handle async case
     if (result instanceof Promise) {
       throw new Error(
-        `Plugin "${plugin.id}" process() returned a Promise. ` +
-          `getGeneratedType requires synchronous process().`,
+        `Plugin "${plugin.id}" processType() returned a Promise. ` +
+          `getGeneratedType requires synchronous processType().`,
       );
     }
 

@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": minor
+"@tailor-platform/sdk": patch
 ---
 
 Add getGeneratedType helper function for plugin-generated types

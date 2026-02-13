@@ -178,17 +178,17 @@ export class PluginManager {
     }
 
     // Check if plugin supports type-attached processing
-    if (!plugin.process) {
+    if (!plugin.processType) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" does not support type-attached processing (missing process method). Use processNamespace via definePlugins() instead.`,
+        error: `Plugin "${plugin.id}" does not support type-attached processing (missing processType method). Use processNamespace via definePlugins() instead.`,
       };
     }
 
-    // Execute plugin process with raw TailorDBType
+    // Execute plugin processType with raw TailorDBType
     let output: PluginOutput;
     try {
-      output = await plugin.process({
+      output = await plugin.processType({
         type: context.type,
         config: context.config,
         pluginConfig: plugin.pluginConfig,

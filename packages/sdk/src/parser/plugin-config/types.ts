@@ -403,7 +403,7 @@ interface PluginBaseCommon<PluginConfig = unknown> {
    * @param context - Context containing the type, config, pluginConfig, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
 
   /**
    * Process plugin for a namespace without requiring a source type.
@@ -439,8 +439,8 @@ export interface PluginBaseNamespace<
 > extends PluginBaseCommon<PluginConfig> {
   /** Namespace-only plugins do not accept per-type config. */
   readonly configSchema?: undefined;
-  /** Namespace-only plugins cannot define process(). */
-  process?: never;
+  /** Namespace-only plugins cannot define processType(). */
+  processType?: never;
 }
 
 /**

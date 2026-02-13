@@ -33,7 +33,7 @@ interface PluginBase<PluginConfig = unknown> {
   /** Import path for generated code to reference */
   readonly importPath: string;
 
-  /** Schema for per-type configuration via .plugin() (required when using process) */
+  /** Schema for per-type configuration via .plugin() (required when using processType) */
   readonly configSchema?: TailorAnyField;
 
   /** Schema for plugin-level configuration via definePlugins() (optional) */
@@ -49,7 +49,7 @@ interface PluginBase<PluginConfig = unknown> {
   readonly configTypeTemplate?: string;
 
   /** Process a type with this plugin attached */
-  process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
 
   /** Process a namespace (plugins without a source type) */
   processNamespace?(
@@ -61,7 +61,7 @@ interface PluginBase<PluginConfig = unknown> {
 Notes:
 
 - `importPath` should be resolvable from the directory containing `tailor.config.ts`. Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
-- If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `process`.
+- If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `processType`.
 - Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
 - `pluginConfig` stores the plugin-level config so it can be read later during processing. If you prefer not to set it manually, you can pass config as a tuple to `definePlugins([plugin, config])`.
 - For custom plugins, `pluginConfig` is the expected pattern. The tuple form can also be used to pass config.
@@ -71,7 +71,7 @@ Notes:
 
 ## PluginProcessContext
 
-Context passed to the `process` method:
+Context passed to the `processType` method:
 
 ```typescript
 interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
@@ -125,7 +125,7 @@ const changeRequestTypes = context.generatedTypes.filter(
 
 ## PluginOutput
 
-Return value from `process`:
+Return value from `processType`:
 
 ```typescript
 interface PluginOutput {
@@ -173,11 +173,11 @@ const ChangeRequest = getGeneratedType(plugin, purchaseOrder, "request");
 
 **How it works:**
 
-1. Calls the plugin's `process()` method with the source type
+1. Calls the plugin's `processType()` method with the source type
 2. Caches the result to avoid redundant processing
 3. Returns the generated type matching the specified kind
 
-**Note**: `getGeneratedType()` requires synchronous `process()` methods. If your plugin's `process()` returns a Promise, it will throw an error.
+**Note**: `getGeneratedType()` requires synchronous `processType()` methods. If your plugin's `processType()` returns a Promise, it will throw an error.
 
 ### Example Usage
 
@@ -278,7 +278,7 @@ function createSoftDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginBa
     pluginConfigSchema,
     pluginConfig,
     typeConfigRequired: (config) => config?.requireTypeConfig === true,
-    process: processSoftDelete,
+    processType: processSoftDelete,
   };
 }
 
@@ -402,13 +402,13 @@ declare module "@tailor-platform/sdk" {
 
 ### Type-Attached Plugins
 
-Implement `process` to handle types with the plugin attached:
+Implement `processType` to handle types with the plugin attached:
 
 ```typescript
 const plugin: PluginBase = {
   id: "@example/my-plugin",
   // ...
-  process(context) {
+  processType(context) {
     // Called for each type with .plugin({ "@example/my-plugin": config })
     return {
       types: {
@@ -442,7 +442,7 @@ Implement both methods for plugins that support both modes:
 const plugin: PluginBase = {
   id: "@example/hybrid",
   // ...
-  process(context) {
+  processType(context) {
     // Handle type attachments
   },
   processNamespace(context) {

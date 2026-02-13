@@ -76,15 +76,15 @@ const CustomPluginSchema = z
     configSchema: z.any().optional(),
     pluginConfigSchema: z.any().optional(),
     pluginConfig: z.any().optional(),
-    // Use any for the process function since we're not strictly validating function signatures
-    process: z.any().optional(),
+    // Use any for the processType function since we're not strictly validating function signatures
+    processType: z.any().optional(),
     processNamespace: z.any().optional(),
   })
   .superRefine((plugin, ctx) => {
-    if (plugin.process && !plugin.configSchema) {
+    if (plugin.processType && !plugin.configSchema) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "process requires configSchema to be defined.",
+        message: "processType requires configSchema to be defined.",
         path: ["configSchema"],
       });
     }

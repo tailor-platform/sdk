@@ -91,7 +91,7 @@ describe("PluginManager", () => {
       importPath: "@example/require-config",
       configSchema: t.object({}),
       typeConfigRequired: true,
-      process: () => ({}),
+      processType: () => ({}),
     };
 
     const manager = new PluginManager([plugin]);
