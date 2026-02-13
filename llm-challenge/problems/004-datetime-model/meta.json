@@ -1,0 +1,15 @@
+{
+  "id": "004",
+  "name": "datetime-model",
+  "difficulty": "easy",
+  "category": "tailordb",
+  "scoring": {
+    "generate": 30,
+    "typecheck": 20,
+    "tests": 50
+  },
+  "files": {
+    "implement": ["tailordb/event.ts"],
+    "scaffold": ["tailor.config.ts"]
+  }
+}

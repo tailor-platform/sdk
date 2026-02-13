@@ -1,0 +1,15 @@
+{
+  "id": "005",
+  "name": "array-resolver",
+  "difficulty": "easy",
+  "category": "resolver",
+  "scoring": {
+    "generate": 30,
+    "typecheck": 20,
+    "tests": 50
+  },
+  "files": {
+    "implement": ["resolvers/categorizeNumbers.ts"],
+    "scaffold": ["tailor.config.ts"]
+  }
+}
