@@ -24,9 +24,11 @@ export type TypeConfigRequired<PluginConfig = unknown> =
  * ```
  */
 // Fields parameter is used by declaration merging in user-defined.d.ts
-// oxlint-disable-next-line no-unused-vars, no-empty-object-type
+// oxlint-disable-next-line no-unused-vars
 export interface PluginConfigs<Fields extends string = string> {
-  // Extend this interface via declaration merging to add typed plugin configs
+  // Specific plugin types are added via declaration merging in user-defined.d.ts
+  // Index signature allows any plugin ID at the base level
+  [pluginId: string]: unknown;
 }
 
 /**
