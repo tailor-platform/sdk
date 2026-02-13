@@ -813,16 +813,16 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "relationship_modified":
         if (types[change.typeName] && change.relationshipName) {
           const rel = change.after as SnapshotRelationship;
-          // Determine if it's forward or backward relationship based on sourceField
-          // Forward: sourceField is on this type, targets another type's field
-          // For simplicity, we check if forwardRelationships already has this name
-          const existingForward =
-            types[change.typeName].forwardRelationships?.[change.relationshipName];
-          const existingBackward =
-            types[change.typeName].backwardRelationships?.[change.relationshipName];
+          // Use relationshipType if specified, fallback to existing logic for backwards compatibility
+          const targetType =
+            change.relationshipType ??
+            (types[change.typeName].forwardRelationships?.[change.relationshipName]
+              ? "forward"
+              : types[change.typeName].backwardRelationships?.[change.relationshipName]
+                ? "backward"
+                : "forward");
 
-          if (existingForward || (!existingBackward && change.kind === "relationship_added")) {
-            // Default to forward relationship for new relationships
+          if (targetType === "forward") {
             types[change.typeName] = {
               ...types[change.typeName],
               forwardRelationships: {
@@ -844,13 +844,25 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
       case "relationship_removed":
         if (types[change.typeName] && change.relationshipName) {
           const type = types[change.typeName];
-          if (type.forwardRelationships?.[change.relationshipName]) {
+          // Use relationshipType if specified
+          const targetType =
+            change.relationshipType ??
+            (type.forwardRelationships?.[change.relationshipName]
+              ? "forward"
+              : type.backwardRelationships?.[change.relationshipName]
+                ? "backward"
+                : null);
+
+          if (targetType === "forward" && type.forwardRelationships?.[change.relationshipName]) {
             const { [change.relationshipName]: _, ...remaining } = type.forwardRelationships;
             types[change.typeName] = {
               ...type,
               forwardRelationships: Object.keys(remaining).length > 0 ? remaining : undefined,
             };
-          } else if (type.backwardRelationships?.[change.relationshipName]) {
+          } else if (
+            targetType === "backward" &&
+            type.backwardRelationships?.[change.relationshipName]
+          ) {
             const { [change.relationshipName]: _, ...remaining } = type.backwardRelationships;
             types[change.typeName] = {
               ...type,
@@ -1329,6 +1341,7 @@ function compareFiles(
  * Compare type-level relationships
  * @param {DiffContext} ctx - Diff context
  * @param {string} typeName - Type name
+ * @param relationshipType
  * @param {Record<string, SnapshotRelationship> | undefined} oldRelationships - Previous relationships
  * @param {Record<string, SnapshotRelationship> | undefined} newRelationships - Current relationships
  * @returns {void}
@@ -1336,6 +1349,7 @@ function compareFiles(
 function compareRelationships(
   ctx: DiffContext,
   typeName: string,
+  relationshipType: "forward" | "backward",
   oldRelationships: Record<string, SnapshotRelationship> | undefined,
   newRelationships: Record<string, SnapshotRelationship> | undefined,
 ): void {
@@ -1349,6 +1363,7 @@ function compareRelationships(
         kind: "relationship_added",
         typeName,
         relationshipName: relName,
+        relationshipType,
         after: newRelationships![relName],
       });
     }
@@ -1361,6 +1376,7 @@ function compareRelationships(
         kind: "relationship_removed",
         typeName,
         relationshipName: relName,
+        relationshipType,
         before: oldRelationships![relName],
       });
     }
@@ -1383,6 +1399,7 @@ function compareRelationships(
           kind: "relationship_modified",
           typeName,
           relationshipName: relName,
+          relationshipType,
           reason: reasons.join(", "),
           before: oldRel,
           after: newRel,
@@ -1489,12 +1506,14 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
     compareRelationships(
       ctx,
       typeName,
+      "forward",
       prevType.forwardRelationships,
       currType.forwardRelationships,
     );
     compareRelationships(
       ctx,
       typeName,
+      "backward",
       prevType.backwardRelationships,
       currType.backwardRelationships,
     );

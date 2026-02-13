@@ -14,7 +14,7 @@ import type { SnapshotFieldConfig } from "./snapshot";
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 2 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
 
 /**
  * Change kind in migration diff
@@ -48,6 +48,8 @@ export interface DiffChange {
   indexName?: string;
   /** Relationship name for relationship_* changes */
   relationshipName?: string;
+  /** Relationship type for relationship_* changes */
+  relationshipType?: "forward" | "backward";
   before?: unknown;
   after?: unknown;
   reason?: string;
@@ -165,11 +167,11 @@ function formatDiffChange(change: DiffChange): string {
     case "file_modified":
       return `  ~ [File] ${change.fieldName}: ${change.reason ?? "modified"}`;
     case "relationship_added":
-      return `  + [Relationship] ${change.relationshipName}`;
+      return `  + [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}`;
     case "relationship_removed":
-      return `  - [Relationship] ${change.relationshipName}`;
+      return `  - [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}`;
     case "relationship_modified":
-      return `  ~ [Relationship] ${change.relationshipName}: ${change.reason ?? "modified"}`;
+      return `  ~ [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}: ${change.reason ?? "modified"}`;
     case "permission_modified":
       return `  ~ [Permission] ${change.reason ?? "modified"}`;
     default:

@@ -614,6 +614,72 @@ describe("snapshot", () => {
 
       expect(diff.changes.length).toBe(0);
     });
+
+    it("includes relationshipType in relationship_added changes", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            fields: { id: { type: "uuid", required: true } },
+          },
+          Post: {
+            name: "Post",
+            fields: {
+              id: { type: "uuid", required: true },
+              authorId: { type: "uuid", required: true },
+            },
+          },
+        },
+      };
+
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            fields: { id: { type: "uuid", required: true } },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "",
+              },
+            },
+          },
+          Post: {
+            name: "Post",
+            fields: {
+              id: { type: "uuid", required: true },
+              authorId: { type: "uuid", required: true },
+            },
+            forwardRelationships: {
+              author: {
+                targetType: "User",
+                targetField: "id",
+                sourceField: "authorId",
+                isArray: false,
+                description: "",
+              },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      const forwardChange = diff.changes.find(
+        (c) => c.kind === "relationship_added" && c.relationshipName === "author",
+      );
+      const backwardChange = diff.changes.find(
+        (c) => c.kind === "relationship_added" && c.relationshipName === "posts",
+      );
+
+      expect(forwardChange?.relationshipType).toBe("forward");
+      expect(backwardChange?.relationshipType).toBe("backward");
+    });
   });
 
   // ==========================================================================
@@ -1108,6 +1174,77 @@ describe("snapshot", () => {
     it("returns null for empty directory", () => {
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
       expect(reconstructed).toBeNull();
+    });
+
+    it("correctly reconstructs backward relationships from diff", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: { id: { type: "uuid", required: true } },
+          },
+          Post: {
+            name: "Post",
+            fields: {
+              id: { type: "uuid", required: true },
+              authorId: { type: "uuid", required: true },
+            },
+          },
+        },
+      };
+
+      // Diff that adds both forward and backward relationships
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "relationship_added",
+            typeName: "Post",
+            relationshipName: "author",
+            relationshipType: "forward",
+            after: {
+              targetType: "User",
+              targetField: "id",
+              sourceField: "authorId",
+              isArray: false,
+            },
+          },
+          {
+            kind: "relationship_added",
+            typeName: "User",
+            relationshipName: "posts",
+            relationshipType: "backward",
+            after: {
+              targetType: "Post",
+              targetField: "authorId",
+              sourceField: "id",
+              isArray: true,
+            },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        requiresMigrationScript: false,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      // Forward relationship should be in forwardRelationships
+      expect(reconstructed?.types.Post.forwardRelationships?.author).toBeDefined();
+      expect(reconstructed?.types.Post.forwardRelationships?.author.targetType).toBe("User");
+
+      // Backward relationship should be in backwardRelationships (NOT forwardRelationships)
+      expect(reconstructed?.types.User.backwardRelationships?.posts).toBeDefined();
+      expect(reconstructed?.types.User.backwardRelationships?.posts.targetType).toBe("Post");
+      expect(reconstructed?.types.User.forwardRelationships?.posts).toBeUndefined();
     });
   });
 
