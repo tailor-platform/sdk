@@ -128,6 +128,11 @@ export class PluginManager {
 
   constructor(plugins: PluginBase[] = []) {
     for (const plugin of plugins) {
+      if (this.plugins.has(plugin.id)) {
+        throw new Error(
+          `Duplicate plugin ID "${plugin.id}" detected. Each plugin must have a unique ID.`,
+        );
+      }
       this.plugins.set(plugin.id, plugin);
     }
   }
