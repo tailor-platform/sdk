@@ -3,7 +3,7 @@
   "name": "full-config",
   "difficulty": "hard",
   "category": "config",
-  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "scoring": { "generate": 50, "typecheck": 20, "tests": 30 },
   "files": {
     "implement": ["tailor.config.ts"],
     "scaffold": ["tailordb/user.ts"]
