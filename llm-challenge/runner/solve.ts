@@ -3,6 +3,23 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ProblemMeta } from "../shared/helpers";
 
+function getSdkVersion(): string | undefined {
+  try {
+    const pkgPath = path.resolve(
+      import.meta.dirname,
+      "..",
+      "..",
+      "packages",
+      "sdk",
+      "package.json",
+    );
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as { version: string };
+    return pkg.version;
+  } catch {
+    return undefined;
+  }
+}
+
 export type SolveResult = {
   success: boolean;
   costUsd: number;
@@ -71,21 +88,30 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
   const overlapping = meta.files.implement.filter((f) => scaffoldSet.has(f));
   const isFixBroken = overlapping.length > 0;
 
+  const sdkVersion = getSdkVersion();
+  const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
+
   const systemPrompt = isFixBroken
     ? [
         "You are fixing issues in a @tailor-platform/sdk project.",
+        versionLine,
         "Fix the issues in the listed files. Read the existing files first, then modify them.",
         'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
         "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
         "Do NOT read any files outside of the current working directory.",
-      ].join("\n")
+      ]
+        .filter(Boolean)
+        .join("\n")
     : [
         "You are implementing a @tailor-platform/sdk project.",
+        versionLine,
         "Create ONLY the files listed in the task. Do NOT modify existing files.",
         'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
         "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
         "Do NOT read any files outside of the current working directory.",
-      ].join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
   const existingFilesList = existingFiles.map((f) => `- ${f}`).join("\n");
   const filesToCreate = meta.files.implement.map((f) => `- ${f}`).join("\n");
@@ -136,16 +162,30 @@ function buildRetryPrompt(
 function truncateErrorOutput(output: string, maxLength = 5000): string {
   if (output.length <= maxLength) return output;
 
-  // Extract high-priority lines: TS errors and test failure messages
+  // Extract high-priority lines with surrounding context for TS errors
   const lines = output.split("\n");
   const priorityLines: string[] = [];
   const otherLines: string[] = [];
+  const contextRadius = 2;
 
-  for (const line of lines) {
-    if (/TS\d{4}/.test(line) || /FAIL|AssertionError|Expected|Received|✗|×/.test(line)) {
-      priorityLines.push(line);
+  const priorityIndices = new Set<number>();
+  for (let i = 0; i < lines.length; i++) {
+    if (/TS\d{4}/.test(lines[i]!) || /FAIL|AssertionError|Expected|Received|✗|×/.test(lines[i]!)) {
+      for (
+        let j = Math.max(0, i - contextRadius);
+        j <= Math.min(lines.length - 1, i + contextRadius);
+        j++
+      ) {
+        priorityIndices.add(j);
+      }
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    if (priorityIndices.has(i)) {
+      priorityLines.push(lines[i]!);
     } else {
-      otherLines.push(line);
+      otherLines.push(lines[i]!);
     }
   }
 

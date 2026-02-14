@@ -93,20 +93,50 @@ const difficultyWeights: Record<string, number> = {
   hard: 2.5,
 };
 
-const failureDocSuggestions: Record<DefinedFailureCategory, string> = {
-  missing_file: "Add file creation examples to getting-started guide",
-  import_error: "Clarify import paths and module resolution in docs",
-  type_error: "Add type usage examples and common type patterns",
-  generate_error: "Improve code generation error messages and docs",
-  logic_error: "Add more resolver/executor logic examples",
-  api_misuse: "Improve API validation messages and usage docs",
-  infra_failure: "Infrastructure failure (auth, network, rate limit) - not an SDK issue",
+const failureDocSuggestions: Record<string, Record<DefinedFailureCategory, string>> = {
+  generate: {
+    missing_file: "Add file scaffolding examples to getting-started guide",
+    import_error: "Clarify SDK import paths in CLAUDE.md and package docs",
+    type_error: "Add type annotation examples for SDK configuration objects",
+    generate_error: "Improve code generation error messages with fix suggestions",
+    logic_error: "Add more configuration pattern examples",
+    api_misuse: "Improve SDK API validation messages with expected format hints",
+    infra_failure: "Infrastructure failure - not an SDK issue",
+  },
+  typecheck: {
+    missing_file: "Add file creation checklist to problem scaffold",
+    import_error: "Document all SDK export paths and re-exports",
+    type_error: "Add JSDoc with @example to SDK types (especially generics)",
+    generate_error: "Ensure generated types include all required fields",
+    logic_error: "Add type usage patterns for complex SDK APIs",
+    api_misuse: "Add type-level validation with better error messages",
+    infra_failure: "Infrastructure failure - not an SDK issue",
+  },
+  tests: {
+    missing_file: "Add file structure documentation",
+    import_error: "Document module resolution for generated files",
+    type_error: "Add runtime type checking examples",
+    generate_error: "Improve generated code correctness",
+    logic_error: "Add more logic examples (resolver body, executor handler, workflow jobs)",
+    api_misuse: "Add API usage examples with edge cases and error handling",
+    infra_failure: "Infrastructure failure - not an SDK issue",
+  },
 };
+
+function getSuggestedDocFix(stage: string, category: DefinedFailureCategory): string {
+  return (
+    failureDocSuggestions[stage]?.[category] ?? `Improve ${category} documentation for ${stage}`
+  );
+}
 
 function classifyFailure(
   stage: "generate" | "typecheck" | "tests",
   output: string,
 ): FailureCategory {
+  // Skipped stages (due to earlier stage failure) should not be classified
+  if (/^Skipped\b/.test(output)) {
+    return undefined;
+  }
   if (/does not exist|ENOENT/.test(output)) {
     return "missing_file";
   }
@@ -125,10 +155,7 @@ function classifyFailure(
   if (stage === "typecheck") {
     return "type_error";
   }
-  if (stage === "tests") {
-    return "logic_error";
-  }
-  return undefined;
+  return "logic_error";
 }
 
 export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageResult[] {
@@ -136,8 +163,8 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
     const maxScore = meta.scoring[s.stage];
     const category = s.passed ? undefined : classifyFailure(s.stage, s.output);
 
-    // Partial scoring for tests stage
-    if (s.stage === "tests" && s.testsTotal != null && s.testsTotal > 0) {
+    // Partial scoring for stages with test counts (generate and tests stages)
+    if (s.testsTotal != null && s.testsTotal > 0) {
       const testsPassed = s.testsPassed ?? 0;
       const score =
         testsPassed === s.testsTotal
@@ -219,13 +246,13 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     };
   }
 
-  // Common failure patterns: same FailureCategory appears 3+ times in same problem category
-  const patternCounts: Record<string, { count: number; problems: string[] }> = {};
+  // Common failure patterns: same FailureCategory+stage appears 2+ times in same problem category
+  const patternCounts: Record<string, { count: number; problems: string[]; stage: string }> = {};
   for (const r of results) {
     for (const s of r.stages) {
       if (!s.passed && s.category) {
-        const key = `${r.category}:${s.category}`;
-        const entry = (patternCounts[key] ??= { count: 0, problems: [] });
+        const key = `${r.category}:${s.stage}:${s.category}`;
+        const entry = (patternCounts[key] ??= { count: 0, problems: [], stage: s.stage });
         entry.count++;
         const problemLabel = `${r.problemId}-${r.problemName}`;
         if (!entry.problems.includes(problemLabel)) {
@@ -237,12 +264,16 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   const commonFailurePatterns: FailurePattern[] = [];
   for (const [key, entry] of Object.entries(patternCounts)) {
     if (entry.count >= 2) {
-      const [category, failureCategory] = key.split(":") as [string, DefinedFailureCategory];
+      const [category, , failureCategory] = key.split(":") as [
+        string,
+        string,
+        DefinedFailureCategory,
+      ];
       commonFailurePatterns.push({
-        pattern: `${failureCategory} in ${category} problems`,
+        pattern: `${failureCategory} in ${entry.stage} stage of ${category} problems`,
         count: entry.count,
         affectedProblems: entry.problems,
-        suggestedDocFix: failureDocSuggestions[failureCategory],
+        suggestedDocFix: getSuggestedDocFix(entry.stage, failureCategory),
       });
     }
   }

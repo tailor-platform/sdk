@@ -102,6 +102,20 @@ function parseArgs(): {
     }
   }
 
+  // Validate numeric arguments
+  if (!Number.isFinite(concurrency) || concurrency < 1) {
+    console.error("Error: --concurrency must be a positive integer");
+    process.exit(1);
+  }
+  if (!Number.isFinite(retry) || retry < 0) {
+    console.error("Error: --retry must be a non-negative integer");
+    process.exit(1);
+  }
+  if (!Number.isFinite(maxBudget) || maxBudget <= 0) {
+    console.error("Error: --max-budget must be a positive number");
+    process.exit(1);
+  }
+
   return {
     problem,
     all,
@@ -111,10 +125,10 @@ function parseArgs(): {
     model,
     maxBudget,
     clean,
-    retry,
+    retry: Math.trunc(retry),
     resume,
     rerunInfra,
-    concurrency,
+    concurrency: Math.trunc(concurrency),
   };
 }
 
@@ -282,7 +296,7 @@ async function runProblem(
       const errorParts = stages
         .filter((s) => !s.passed)
         .map((s) => {
-          let part = `[${s.stage}] ${s.output}`;
+          let part = `[STAGE: ${s.stage}] ${s.output}`;
           if (s.stage === "tests" && s.testDetails) {
             const failedTests = s.testDetails.filter((t) => t.status === "failed");
             if (failedTests.length > 0) {
