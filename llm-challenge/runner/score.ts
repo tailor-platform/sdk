@@ -20,6 +20,7 @@ export type StageResult = {
   output: string;
   score: number;
   maxScore: number;
+  durationMs?: number;
   category?: FailureCategory;
   testsPassed?: number;
   testsTotal?: number;
@@ -444,7 +445,11 @@ export function formatReportTable(report: ChallengeReport): string {
       line += firstAttempt.padEnd(8);
     }
     if (hasCost && r.solveResult && !infraFailed) {
-      line += `$${r.solveResult.costUsd.toFixed(4)}`;
+      let problemCost = r.solveResult.costUsd;
+      if (r.retrySolveResults) {
+        problemCost += r.retrySolveResults.reduce((s, rs) => s + rs.costUsd, 0);
+      }
+      line += `$${problemCost.toFixed(4)}`;
     }
     lines.push(line);
 
@@ -456,8 +461,9 @@ export function formatReportTable(report: ChallengeReport): string {
         const categoryLabel = s.category ? ` [${s.category}]` : "";
         const testCountLabel =
           s.testsTotal != null ? ` (${s.testsPassed ?? 0}/${s.testsTotal} tests)` : "";
+        const durationLabel = s.durationMs != null ? ` ${(s.durationMs / 1000).toFixed(1)}s` : "";
         lines.push(
-          `${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}${testCountLabel}`,
+          `${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}${testCountLabel}${durationLabel}`,
         );
       }
     }

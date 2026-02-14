@@ -24,6 +24,7 @@ export type StageInput = {
   stage: "generate" | "typecheck" | "tests";
   passed: boolean;
   output: string;
+  durationMs?: number;
   testsPassed?: number;
   testsTotal?: number;
   testDetails?: TestDetail[];
@@ -32,7 +33,8 @@ export type StageInput = {
 async function runCommand(
   command: string,
   cwd: string,
-): Promise<{ success: boolean; output: string }> {
+): Promise<{ success: boolean; output: string; durationMs: number }> {
+  const start = performance.now();
   try {
     const { stdout } = await execAsync(command, {
       cwd,
@@ -40,8 +42,9 @@ async function runCommand(
       timeout: 60_000,
       maxBuffer: 10 * 1024 * 1024,
     });
-    return { success: true, output: stdout };
+    return { success: true, output: stdout, durationMs: Math.round(performance.now() - start) };
   } catch (err) {
+    const durationMs = Math.round(performance.now() - start);
     const error = err as { stdout?: string; stderr?: string; message: string };
     const stdout = error.stdout ?? "";
     const stderr = filterNpmWarnings(error.stderr ?? "");
@@ -49,6 +52,7 @@ async function runCommand(
     return {
       success: false,
       output,
+      durationMs,
     };
   }
 }
@@ -79,7 +83,7 @@ type ParsedVitestResult = {
 function parseVitestJson(output: string): ParsedVitestResult | undefined {
   // vitest --reporter=json outputs JSON to stdout, possibly mixed with other output
   // Try to find the JSON object in the output
-  const jsonMatch = output.match(/\{[\s\S]*"numTotalTests"\s*:/);
+  const jsonMatch = output.match(/\{"numTotalTestSuites"\s*:/);
   if (!jsonMatch) {
     return undefined;
   }
@@ -132,7 +136,7 @@ function parseVitestJson(output: string): ParsedVitestResult | undefined {
 
 /**
  * Run the three verification stages on a work directory.
- * Returns early (skipping later stages) if an earlier stage fails.
+ * Returns early only if generate fails; typecheck failure does not skip tests.
  */
 export async function verifyProblem(
   workDir: string,
@@ -157,6 +161,7 @@ export async function verifyProblem(
       stage: "generate",
       passed: false,
       output: generateResult.output,
+      durationMs: generateResult.durationMs,
     };
 
     // Check file existence (20% of generate score)
@@ -186,6 +191,7 @@ export async function verifyProblem(
     stage: "generate",
     passed: generateResult.success,
     output: generateResult.output,
+    durationMs: generateResult.durationMs,
   });
 
   // Stage 2: typecheck
@@ -194,13 +200,10 @@ export async function verifyProblem(
     stage: "typecheck",
     passed: typecheckResult.success,
     output: typecheckResult.output,
+    durationMs: typecheckResult.durationMs,
   });
-  if (!typecheckResult.success) {
-    results.push({ stage: "tests", passed: false, output: "Skipped (typecheck failed)" });
-    return results;
-  }
 
-  // Stage 3: tests (use JSON reporter for partial scoring)
+  // Stage 3: tests (run even if typecheck failed for partial scoring)
   const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
   const testResult = await runCommand(
@@ -212,6 +215,7 @@ export async function verifyProblem(
     stage: "tests",
     passed: testResult.success,
     output: testResult.output,
+    durationMs: testResult.durationMs,
   };
 
   // Parse JSON output to extract individual test results
