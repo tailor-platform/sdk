@@ -1,0 +1,20 @@
+{
+  "id": "007",
+  "name": "workflow-orchestration",
+  "difficulty": "hard",
+  "category": "workflow",
+  "scoring": {
+    "generate": 15,
+    "typecheck": 15,
+    "tests": 70
+  },
+  "files": {
+    "implement": [
+      "workflows/fulfillment/checkInventory.ts",
+      "workflows/fulfillment/processPayment.ts",
+      "workflows/fulfillment/shipOrder.ts",
+      "workflows/fulfillment/fulfillOrder.ts"
+    ],
+    "scaffold": ["tailor.config.ts"]
+  }
+}
