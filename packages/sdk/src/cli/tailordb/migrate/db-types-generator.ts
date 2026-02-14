@@ -69,19 +69,20 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         after.allowedValues
       ) {
         // Check if there are any differences in allowed values
-        const beforeSet = new Set(before.allowedValues);
-        const afterSet = new Set(after.allowedValues);
+        const beforeValues = before.allowedValues.map((v) => v.value);
+        const afterValues = after.allowedValues.map((v) => v.value);
+        const beforeSet = new Set(beforeValues);
+        const afterSet = new Set(afterValues);
         const hasChanges =
-          before.allowedValues.some((v) => !afterSet.has(v)) ||
-          after.allowedValues.some((v) => !beforeSet.has(v));
+          beforeValues.some((v) => !afterSet.has(v)) || afterValues.some((v) => !beforeSet.has(v));
 
         if (hasChanges) {
           if (!enumValueChanges.has(change.typeName)) {
             enumValueChanges.set(change.typeName, new Map());
           }
           enumValueChanges.get(change.typeName)!.set(change.fieldName, {
-            beforeValues: before.allowedValues,
-            afterValues: after.allowedValues,
+            beforeValues,
+            afterValues,
           });
         }
       }
@@ -334,10 +335,8 @@ function generateFieldType(
   let usedTimestamp = false;
 
   if (config.type === "enum") {
-    baseType =
-      config.allowedValues && config.allowedValues.length > 0
-        ? formatEnumUnion(config.allowedValues)
-        : "string";
+    const enumValues = config.allowedValues?.map((v) => v.value) ?? [];
+    baseType = enumValues.length > 0 ? formatEnumUnion(enumValues) : "string";
   } else {
     const mapped = mapToTsType(config.type);
     baseType = mapped.type;

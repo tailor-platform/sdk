@@ -25,7 +25,17 @@ export type DiffChangeKind =
   | "type_modified"
   | "field_added"
   | "field_removed"
-  | "field_modified";
+  | "field_modified"
+  | "index_added"
+  | "index_removed"
+  | "index_modified"
+  | "file_added"
+  | "file_removed"
+  | "file_modified"
+  | "relationship_added"
+  | "relationship_removed"
+  | "relationship_modified"
+  | "permission_modified";
 
 /**
  * Single change in migration diff
@@ -34,6 +44,12 @@ export interface DiffChange {
   kind: DiffChangeKind;
   typeName: string;
   fieldName?: string;
+  /** Index name for index_* changes */
+  indexName?: string;
+  /** Relationship name for relationship_* changes */
+  relationshipName?: string;
+  /** Relationship type for relationship_* changes */
+  relationshipType?: "forward" | "backward";
   before?: unknown;
   after?: unknown;
   reason?: string;
@@ -138,6 +154,26 @@ function formatDiffChange(change: DiffChange): string {
       const after = change.after as SnapshotFieldConfig;
       return `  ~ ${change.fieldName}: ${formatFieldModification(before, after)}`;
     }
+    case "index_added":
+      return `  + [Index] ${change.indexName}`;
+    case "index_removed":
+      return `  - [Index] ${change.indexName}`;
+    case "index_modified":
+      return `  ~ [Index] ${change.indexName}: ${change.reason ?? "modified"}`;
+    case "file_added":
+      return `  + [File] ${change.fieldName}`;
+    case "file_removed":
+      return `  - [File] ${change.fieldName}`;
+    case "file_modified":
+      return `  ~ [File] ${change.fieldName}: ${change.reason ?? "modified"}`;
+    case "relationship_added":
+      return `  + [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}`;
+    case "relationship_removed":
+      return `  - [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}`;
+    case "relationship_modified":
+      return `  ~ [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}: ${change.reason ?? "modified"}`;
+    case "permission_modified":
+      return `  ~ [Permission] ${change.reason ?? "modified"}`;
     default:
       return `  ? ${change.typeName}.${change.fieldName ?? ""}`;
   }
@@ -180,15 +216,41 @@ function formatFieldModification(before: SnapshotFieldConfig, after: SnapshotFie
   if (Boolean(before.unique) !== Boolean(after.unique)) {
     changes.push(`unique: ${before.unique ?? false} → ${after.unique ?? false}`);
   }
+  if (Boolean(before.vector) !== Boolean(after.vector)) {
+    changes.push(`vector: ${before.vector ?? false} → ${after.vector ?? false}`);
+  }
 
-  // Check allowedValues changes (set-based comparison - order doesn't matter)
   const beforeAllowed = before.allowedValues ?? [];
   const afterAllowed = after.allowedValues ?? [];
-  const afterSet = new Set(afterAllowed);
+  const afterSet = new Set(afterAllowed.map((v) => v.value));
   const hasAllowedValuesChange =
-    beforeAllowed.length !== afterAllowed.length || beforeAllowed.some((v) => !afterSet.has(v));
+    beforeAllowed.length !== afterAllowed.length ||
+    beforeAllowed.some((v) => !afterSet.has(v.value));
   if (hasAllowedValuesChange) {
-    changes.push(`allowedValues: [${beforeAllowed.join(", ")}] → [${afterAllowed.join(", ")}]`);
+    const beforeValues = beforeAllowed.map((v) => v.value).join(", ");
+    const afterValues = afterAllowed.map((v) => v.value).join(", ");
+    changes.push(`allowedValues: [${beforeValues}] → [${afterValues}]`);
+  }
+
+  const beforeHooks = before.hooks;
+  const afterHooks = after.hooks;
+  if (
+    (beforeHooks?.create?.expr ?? "") !== (afterHooks?.create?.expr ?? "") ||
+    (beforeHooks?.update?.expr ?? "") !== (afterHooks?.update?.expr ?? "")
+  ) {
+    changes.push("hooks modified");
+  }
+
+  const beforeValidate = before.validate ?? [];
+  const afterValidate = after.validate ?? [];
+  if (beforeValidate.length !== afterValidate.length) {
+    changes.push(`validations: ${beforeValidate.length} → ${afterValidate.length}`);
+  }
+
+  if (Boolean(before.serial) !== Boolean(after.serial)) {
+    changes.push(
+      `serial: ${before.serial ? "enabled" : "disabled"} → ${after.serial ? "enabled" : "disabled"}`,
+    );
   }
 
   return changes.join(", ");
@@ -214,50 +276,39 @@ export function formatBreakingChanges(breakingChanges: BreakingChangeInfo[]): st
   return lines.join("\n");
 }
 
+const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
+  type_added: "type(s) added",
+  type_removed: "type(s) removed",
+  type_modified: "type(s) modified",
+  field_added: "field(s) added",
+  field_removed: "field(s) removed",
+  field_modified: "field(s) modified",
+  index_added: "index(es) added",
+  index_removed: "index(es) removed",
+  index_modified: "index(es) modified",
+  file_added: "file field(s) added",
+  file_removed: "file field(s) removed",
+  file_modified: "file field(s) modified",
+  relationship_added: "relationship(s) added",
+  relationship_removed: "relationship(s) removed",
+  relationship_modified: "relationship(s) modified",
+  permission_modified: "permission(s) modified",
+};
+
 /**
  * Format a summary of the migration diff
  * @param {MigrationDiff} diff - Migration diff to summarize
  * @returns {string} Formatted summary string
  */
 export function formatDiffSummary(diff: MigrationDiff): string {
-  const stats = {
-    typesAdded: 0,
-    typesRemoved: 0,
-    fieldsAdded: 0,
-    fieldsRemoved: 0,
-    fieldsModified: 0,
-  };
-
+  const stats: Partial<Record<DiffChangeKind, number>> = {};
   for (const change of diff.changes) {
-    switch (change.kind) {
-      case "type_added":
-        stats.typesAdded++;
-        break;
-      case "type_removed":
-        stats.typesRemoved++;
-        break;
-      case "field_added":
-        stats.fieldsAdded++;
-        break;
-      case "field_removed":
-        stats.fieldsRemoved++;
-        break;
-      case "field_modified":
-        stats.fieldsModified++;
-        break;
-    }
+    stats[change.kind] = (stats[change.kind] ?? 0) + 1;
   }
 
-  const parts: string[] = [];
-  if (stats.typesAdded > 0) parts.push(`${stats.typesAdded} type(s) added`);
-  if (stats.typesRemoved > 0) parts.push(`${stats.typesRemoved} type(s) removed`);
-  if (stats.fieldsAdded > 0) parts.push(`${stats.fieldsAdded} field(s) added`);
-  if (stats.fieldsRemoved > 0) parts.push(`${stats.fieldsRemoved} field(s) removed`);
-  if (stats.fieldsModified > 0) parts.push(`${stats.fieldsModified} field(s) modified`);
+  const parts = Object.keys(stats).map(
+    (kind) => `${stats[kind as DiffChangeKind]} ${DIFF_CHANGE_LABELS[kind as DiffChangeKind]}`,
+  );
 
-  if (parts.length === 0) {
-    return "No changes";
-  }
-
-  return parts.join(", ");
+  return parts.length > 0 ? parts.join(", ") : "No changes";
 }

@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "namespace": "tailordb",
-  "createdAt": "2026-01-20T03:12:00.525Z",
+  "createdAt": "2026-02-12T04:45:27.778Z",
   "types": {
     "Customer": {
       "name": "Customer",
@@ -12,7 +12,15 @@
         },
         "name": {
           "type": "string",
-          "required": true
+          "required": true,
+          "validate": [
+            {
+              "script": {
+                "expr": "(({value})=>value.length>5)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              },
+              "errorMessage": "Name must be longer than 5 characters"
+            }
+          ]
         },
         "email": {
           "type": "string",
@@ -36,11 +44,33 @@
         },
         "city": {
           "type": "string",
-          "required": false
+          "required": false,
+          "validate": [
+            {
+              "script": {
+                "expr": "(({value})=>value?value.length>1:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              },
+              "errorMessage": "failed by `({value})=>value?value.length>1:true`"
+            },
+            {
+              "script": {
+                "expr": "(({value})=>value?value.length<100:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              },
+              "errorMessage": "failed by `({value})=>value?value.length<100:true`"
+            }
+          ]
         },
         "fullAddress": {
           "type": "string",
-          "required": true
+          "required": true,
+          "hooks": {
+            "create": {
+              "expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "update": {
+              "expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "state": {
           "type": "string",
@@ -48,16 +78,137 @@
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "Customers",
       "description": "Customer information",
-      "settings": {}
+      "settings": {},
+      "backwardRelationships": {
+        "salesOrders": {
+          "targetType": "SalesOrder",
+          "targetField": "customerID",
+          "sourceField": "id",
+          "isArray": true,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "Invoice": {
       "name": "Invoice",
@@ -68,7 +219,11 @@
         },
         "invoiceNumber": {
           "type": "string",
-          "required": true
+          "required": true,
+          "serial": {
+            "start": 1000,
+            "format": "INV-%05d"
+          }
         },
         "salesOrderID": {
           "type": "uuid",
@@ -85,24 +240,166 @@
         },
         "sequentialId": {
           "type": "integer",
-          "required": true
+          "required": true,
+          "serial": {
+            "start": 1,
+            "maxValue": 999999
+          }
         },
         "status": {
           "type": "enum",
           "required": false,
-          "allowedValues": ["draft", "sent", "paid", "cancelled"]
+          "allowedValues": [
+            {
+              "value": "draft",
+              "description": "Draft invoice"
+            },
+            {
+              "value": "sent"
+            },
+            {
+              "value": "paid",
+              "description": "Paid invoice"
+            },
+            {
+              "value": "cancelled",
+              "description": "Cancelled invoice"
+            }
+          ],
+          "description": "Invoice status"
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "Invoices",
-      "settings": {}
+      "settings": {},
+      "forwardRelationships": {
+        "salesOrder": {
+          "targetType": "SalesOrder",
+          "targetField": "salesOrderID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "NestedProfile": {
       "name": "NestedProfile",
@@ -113,28 +410,187 @@
         },
         "userInfo": {
           "type": "nested",
-          "required": true
+          "required": true,
+          "description": "User information",
+          "fields": {
+            "name": {
+              "type": "string",
+              "required": true,
+              "description": "User's full name"
+            },
+            "age": {
+              "type": "integer",
+              "required": false,
+              "description": "User's age"
+            },
+            "bio": {
+              "type": "string",
+              "required": false,
+              "description": "User's biography"
+            },
+            "email": {
+              "type": "string",
+              "required": true,
+              "description": "User's email address"
+            },
+            "phone": {
+              "type": "string",
+              "required": false,
+              "description": "User's phone number"
+            }
+          }
         },
         "metadata": {
           "type": "nested",
-          "required": true
+          "required": true,
+          "description": "Profile metadata",
+          "fields": {
+            "created": {
+              "type": "datetime",
+              "required": true,
+              "description": "Creation timestamp"
+            },
+            "lastUpdated": {
+              "type": "datetime",
+              "required": false,
+              "description": "Last update timestamp"
+            },
+            "version": {
+              "type": "integer",
+              "required": true,
+              "description": "Version number"
+            }
+          }
         },
         "archived": {
           "type": "boolean",
-          "required": false
+          "required": false,
+          "description": "Archive status"
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "NestedProfiles",
       "description": "Nested Profile Type",
-      "settings": {}
+      "settings": {},
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "PurchaseOrder": {
       "name": "PurchaseOrder",
@@ -166,19 +622,174 @@
         "attachedFiles": {
           "type": "nested",
           "required": true,
-          "array": true
+          "array": true,
+          "fields": {
+            "id": {
+              "type": "uuid",
+              "required": true
+            },
+            "name": {
+              "type": "string",
+              "required": true
+            },
+            "size": {
+              "type": "integer",
+              "required": true,
+              "validate": [
+                {
+                  "script": {
+                    "expr": "(({value})=>value>0)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+                  },
+                  "errorMessage": "failed by `({value})=>value>0`"
+                }
+              ]
+            },
+            "type": {
+              "type": "enum",
+              "required": true,
+              "allowedValues": [
+                {
+                  "value": "text"
+                },
+                {
+                  "value": "image"
+                }
+              ]
+            }
+          }
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "PurchaseOrderList",
-      "settings": {}
+      "settings": {},
+      "forwardRelationships": {
+        "supplier": {
+          "targetType": "Supplier",
+          "targetField": "supplierID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "SalesOrder": {
       "name": "SalesOrder",
@@ -225,15 +836,159 @@
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "SalesOrderList",
-      "settings": {}
+      "settings": {},
+      "indexes": {
+        "idx_status_createdAt": {
+          "fields": ["status", "createdAt"],
+          "unique": false
+        },
+        "idx_customerID_status": {
+          "fields": ["customerID", "status"],
+          "unique": false
+        }
+      },
+      "files": {
+        "receipt": "receipt file",
+        "form": "order form file"
+      },
+      "forwardRelationships": {
+        "customer": {
+          "targetType": "Customer",
+          "targetField": "customerID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": "Customer information"
+        }
+      },
+      "backwardRelationships": {
+        "invoice": {
+          "targetType": "Invoice",
+          "targetField": "salesOrderID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "SalesOrderCreated": {
       "name": "SalesOrderCreated",
@@ -260,7 +1015,107 @@
         }
       },
       "pluralForm": "SalesOrderCreatedList",
-      "settings": {}
+      "settings": {},
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "Selfie": {
       "name": "Selfie",
@@ -292,7 +1147,139 @@
         }
       },
       "pluralForm": "Selfies",
-      "settings": {}
+      "settings": {},
+      "forwardRelationships": {
+        "parent": {
+          "targetType": "Selfie",
+          "targetField": "parentID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        },
+        "dependsOn": {
+          "targetType": "Selfie",
+          "targetField": "dependId",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "backwardRelationships": {
+        "children": {
+          "targetType": "Selfie",
+          "targetField": "parentID",
+          "sourceField": "id",
+          "isArray": true,
+          "description": ""
+        },
+        "dependedBy": {
+          "targetType": "Selfie",
+          "targetField": "dependId",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "Supplier": {
       "name": "Supplier",
@@ -303,7 +1290,7 @@
         },
         "name": {
           "type": "string",
-          "required": false
+          "required": true
         },
         "phone": {
           "type": "string",
@@ -323,12 +1310,19 @@
         },
         "country": {
           "type": "string",
-          "required": false
+          "required": true
         },
         "state": {
           "type": "enum",
           "required": true,
-          "allowedValues": ["Alabama", "Alaska"]
+          "allowedValues": [
+            {
+              "value": "Alabama"
+            },
+            {
+              "value": "Alaska"
+            }
+          ]
         },
         "city": {
           "type": "string",
@@ -336,15 +1330,136 @@
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "Suppliers",
-      "settings": {}
+      "settings": {},
+      "backwardRelationships": {
+        "purchaseOrders": {
+          "targetType": "PurchaseOrder",
+          "targetField": "supplierID",
+          "sourceField": "id",
+          "isArray": true,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "User": {
       "name": "User",
@@ -363,17 +1478,178 @@
           "index": true,
           "unique": true
         },
+        "status": {
+          "type": "string",
+          "required": false
+        },
+        "department": {
+          "type": "string",
+          "required": false
+        },
+        "role": {
+          "type": "enum",
+          "required": true,
+          "allowedValues": [
+            {
+              "value": "MANAGER"
+            },
+            {
+              "value": "STAFF"
+            }
+          ]
+        },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "Users",
-      "settings": {}
+      "settings": {},
+      "indexes": {
+        "idx_name_department": {
+          "fields": ["name", "department"],
+          "unique": false
+        },
+        "user_status_created_idx": {
+          "fields": ["status", "createdAt"],
+          "unique": false
+        }
+      },
+      "files": {
+        "avatar": "profile image"
+      },
+      "backwardRelationships": {
+        "userLogs": {
+          "targetType": "UserLog",
+          "targetField": "userID",
+          "sourceField": "id",
+          "isArray": true,
+          "description": ""
+        },
+        "setting": {
+          "targetType": "UserSetting",
+          "targetField": "userID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "UserLog": {
       "name": "UserLog",
@@ -396,15 +1672,136 @@
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "UserLogs",
-      "settings": {}
+      "settings": {},
+      "forwardRelationships": {
+        "user": {
+          "targetType": "User",
+          "targetField": "userID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     },
     "UserSetting": {
       "name": "UserSetting",
@@ -416,7 +1813,14 @@
         "language": {
           "type": "enum",
           "required": true,
-          "allowedValues": ["jp", "en"]
+          "allowedValues": [
+            {
+              "value": "jp"
+            },
+            {
+              "value": "en"
+            }
+          ]
         },
         "userID": {
           "type": "uuid",
@@ -429,15 +1833,136 @@
         },
         "createdAt": {
           "type": "datetime",
-          "required": true
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         },
         "updatedAt": {
           "type": "datetime",
-          "required": false
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
         }
       },
       "pluralForm": "UserSettings",
-      "settings": {}
+      "settings": {},
+      "forwardRelationships": {
+        "user": {
+          "targetType": "User",
+          "targetField": "userID",
+          "sourceField": "id",
+          "isArray": false,
+          "description": ""
+        }
+      },
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          }
+        ]
+      }
     }
   }
 }

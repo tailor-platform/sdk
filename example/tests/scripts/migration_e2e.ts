@@ -22,7 +22,7 @@ const stepsDir = path.resolve(fixtureRoot, "steps");
 const configPath = path.resolve(appDir, "tailor.config.ts");
 const migrationsDir = path.resolve(appDir, "migrations");
 const tailordbDir = path.resolve(appDir, "tailordb");
-const templateMigrationsDir = path.resolve(exampleDir, "migrations");
+const templateMigrationsDir = path.resolve(fixtureRoot, "templates");
 
 const namespace = "migrationdb";
 const machineUserName = "manager-machine-user";

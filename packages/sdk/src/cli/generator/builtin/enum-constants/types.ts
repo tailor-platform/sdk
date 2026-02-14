@@ -2,10 +2,7 @@
  * Type definitions for enum constants generation.
  */
 
-export interface EnumValue {
-  value: string;
-  description?: string;
-}
+import type { EnumValue } from "@/parser/service/tailordb/types";
 
 export interface EnumDefinition {
   name: string;
