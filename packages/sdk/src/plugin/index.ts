@@ -13,4 +13,4 @@ export {
   type PluginRecordUpdatedArgs,
 } from "./with-context";
 
-export { getGeneratedType } from "./get-generated-type";
+export { getGeneratedType, type GetGeneratedTypeOptions } from "./get-generated-type";

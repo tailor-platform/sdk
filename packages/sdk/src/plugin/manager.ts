@@ -31,7 +31,7 @@ const unauthenticatedTailorUser: UnauthenticatedTailorUser = {
  */
 export interface ProcessAttachmentContext {
   type: TailorAnyDBType;
-  config: unknown;
+  typeConfig: unknown;
   namespace: string;
   pluginId: string;
 }
@@ -50,6 +50,10 @@ export interface PluginGeneratedTypeInfo {
   kind: string;
   /** The generated TailorDB type object */
   type: PluginGeneratedType;
+  /** Namespace where this type was generated */
+  namespace: string;
+  /** Plugin config used to generate this type */
+  pluginConfig?: unknown;
 }
 
 /**
@@ -156,23 +160,23 @@ export class PluginManager {
       typeof typeConfigRequired === "function"
         ? typeConfigRequired(plugin.pluginConfig)
         : typeConfigRequired === true;
-    if (resolvedRequired && (context.config === undefined || context.config === null)) {
+    if (resolvedRequired && (context.typeConfig === undefined || context.typeConfig === null)) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" requires config, but none was provided for type "${context.type.name}".`,
+        error: `Plugin "${plugin.id}" requires typeConfig, but none was provided for type "${context.type.name}".`,
       };
     }
 
-    // Validate config against schema if provided
+    // Validate typeConfig against schema if provided
     if (plugin.configSchema) {
-      const validationErrors = validatePluginConfig(context.config, plugin.configSchema);
+      const validationErrors = validatePluginConfig(context.typeConfig, plugin.configSchema);
       if (validationErrors.length > 0) {
         const errorDetails = validationErrors
           .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
           .join("; ");
         return {
           success: false,
-          error: `Invalid config for plugin "${plugin.id}" on type "${context.type.name}": ${errorDetails}`,
+          error: `Invalid typeConfig for plugin "${plugin.id}" on type "${context.type.name}": ${errorDetails}`,
         };
       }
     }
@@ -190,7 +194,7 @@ export class PluginManager {
     try {
       output = await plugin.processType({
         type: context.type,
-        config: context.config,
+        typeConfig: context.typeConfig,
         pluginConfig: plugin.pluginConfig,
         namespace: context.namespace,
       });
@@ -212,6 +216,8 @@ export class PluginManager {
           sourceTypeName: context.type.name,
           kind,
           type,
+          namespace: context.namespace,
+          pluginConfig: plugin.pluginConfig,
         });
       }
     }
@@ -324,6 +330,8 @@ export class PluginManager {
             sourceTypeName: "(namespace)",
             kind,
             type,
+            namespace,
+            pluginConfig: plugin.pluginConfig,
           });
         }
       }
@@ -354,6 +362,15 @@ export class PluginManager {
    */
   get pluginCount(): number {
     return this.plugins.size;
+  }
+
+  /**
+   * Get a plugin by its ID
+   * @param pluginId - The plugin ID to look up
+   * @returns The plugin instance, or undefined if not found
+   */
+  getPlugin(pluginId: string): PluginBase | undefined {
+    return this.plugins.get(pluginId);
   }
 
   /**

@@ -99,14 +99,14 @@ describe("PluginManager", () => {
       type: db.type("Order", {
         name: db.string(),
       }),
-      config: undefined,
+      typeConfig: undefined,
       namespace: "main",
       pluginId: "requires-config",
     });
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("requires config");
+      expect(result.error).toContain("requires typeConfig");
     }
   });
 });

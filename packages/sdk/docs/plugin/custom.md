@@ -74,12 +74,12 @@ Notes:
 Context passed to the `processType` method:
 
 ```typescript
-interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
+interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
   /** The TailorDB type being processed */
   type: TailorAnyDBType;
 
-  /** Per-type configuration from .plugin({ pluginId: config }) */
-  config: Config;
+  /** Per-type configuration from .plugin({ pluginId: typeConfig }) */
+  typeConfig: TypeConfig;
 
   /** Plugin-level configuration from definePlugins() */
   pluginConfig: PluginConfig;
@@ -94,33 +94,13 @@ interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
 Context passed to the `processNamespace` method:
 
 ```typescript
-interface PluginNamespaceProcessContext<Config = unknown> {
+interface PluginNamespaceProcessContext<PluginConfig = unknown> {
   /** Plugin-level configuration from definePlugins() */
-  pluginConfig: Config;
+  pluginConfig: PluginConfig;
 
-  /** Namespace of the TailorDB types */
+  /** Target namespace for generated types */
   namespace: string;
-
-  /** TailorDB types in the namespace (after type-attached processing) */
-  types: TailorAnyDBType[];
-
-  /** Plugin-generated types for type-attached plugins in the namespace */
-  generatedTypes: Array<{
-    type: TailorAnyDBType;
-    pluginId: string;
-    generatedTypeKind?: string;
-    originalType: TailorAnyDBType;
-  }>;
 }
-```
-
-`generatedTypes` includes only type-attached plugin-generated types (so `originalType` is always present), and `types` contains only user-defined types.
-For example:
-
-```typescript
-const changeRequestTypes = context.generatedTypes.filter(
-  (entry) => entry.pluginId === "@example/change-request",
-);
 ```
 
 ## PluginOutput

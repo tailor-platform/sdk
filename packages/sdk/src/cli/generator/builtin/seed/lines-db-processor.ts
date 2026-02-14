@@ -233,6 +233,16 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
   const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
 
+  // Generate options object for getGeneratedType
+  const optionsParts: string[] = [];
+  if (pluginSource.pluginConfig !== undefined) {
+    optionsParts.push(`pluginConfig: ${JSON.stringify(pluginSource.pluginConfig)}`);
+  }
+  if (pluginSource.namespace) {
+    optionsParts.push(`namespace: ${JSON.stringify(pluginSource.namespace)}`);
+  }
+  const optionsCode = optionsParts.length > 0 ? `, { ${optionsParts.join(", ")} }` : "";
+
   // Type-attached plugin (e.g., changeset): import original type and use getGeneratedType(plugin, type, kind)
   if (pluginSource.originalExportName && originalImportPath && pluginSource.generatedTypeKind) {
     return ml /* ts */ `
@@ -243,7 +253,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import plugin from "${pluginImportPath}";
     import { ${pluginSource.originalExportName} } from "${originalImportPath}";
 
-    const ${exportName} = getGeneratedType(plugin, ${pluginSource.originalExportName}, "${pluginSource.generatedTypeKind}");
+    const ${exportName} = getGeneratedType(plugin, ${pluginSource.originalExportName}, "${pluginSource.generatedTypeKind}"${optionsCode});
 
     ${schemaTypeCode}
 
@@ -271,7 +281,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import { defineSchema } from "@toiroakr/lines-db";
     import plugin from "${pluginImportPath}";
 
-    const ${exportName} = getGeneratedType(plugin, null, "${pluginSource.generatedTypeKind}");
+    const ${exportName} = getGeneratedType(plugin, null, "${pluginSource.generatedTypeKind}"${optionsCode});
 
     ${schemaTypeCode}
 

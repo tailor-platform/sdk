@@ -78,7 +78,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     for (const attachment of attachments) {
       const result = await pluginManager.processAttachment({
         type: currentType,
-        config: attachment.config,
+        typeConfig: attachment.config,
         namespace,
         pluginId: attachment.pluginId,
       });
@@ -106,6 +106,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
 
       // Add generated types to rawTypes
+      const plugin = pluginManager.getPlugin(attachment.pluginId);
       for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
         rawTypes[sourceFilePath][generatedType.name] = generatedType as TailorDBTypeSchemaOutput;
         // Plugin-generated types don't have a source file.
@@ -117,7 +118,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           originalFilePath: sourceFilePath,
           originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
           generatedTypeKind: kind,
-          pluginConfig: attachment.config,
+          pluginConfig: plugin?.pluginConfig,
+          namespace,
         };
 
         logger.log(
@@ -240,6 +242,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             originalExportName: "",
             generatedTypeKind: kind,
             pluginConfig: config,
+            namespace,
           };
 
           logger.log(

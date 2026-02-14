@@ -41,11 +41,11 @@ export interface PluginAttachment {
 /**
  * Context passed to plugin's process method
  */
-export interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
+export interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
   /** The raw TailorDB type being processed */
   type: TailorAnyDBType;
-  /** Plugin-specific configuration passed via .plugin() method */
-  config: Config;
+  /** Per-type configuration passed via .plugin() method */
+  typeConfig: TypeConfig;
   /** Plugin-level configuration passed via definePlugins() */
   pluginConfig: PluginConfig;
   /** Namespace of the TailorDB type */
@@ -56,9 +56,9 @@ export interface PluginProcessContext<Config = unknown, PluginConfig = unknown> 
  * Context passed to plugin's processNamespace method.
  * Used for plugins that operate on a namespace without requiring a source type.
  */
-export interface PluginNamespaceProcessContext<Config = unknown> {
+export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
   /** Plugin-level configuration passed via definePlugins() */
-  pluginConfig: Config;
+  pluginConfig: PluginConfig;
   /** Target namespace for generated types */
   namespace: string;
 }
