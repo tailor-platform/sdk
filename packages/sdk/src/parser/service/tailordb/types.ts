@@ -16,8 +16,66 @@ import type { ValueOperand } from "@/parser/service/auth/types";
 import type { z } from "zod";
 
 export type { RelationType } from "./relation";
+export type { TypeSourceInfo } from "./type-parser";
+
+// ========================================
+// Source info type for TailorDB types
+// ========================================
+
+/**
+ * Source information for a user-defined TailorDB type.
+ */
+export interface UserDefinedTypeSource {
+  /** File path to import from */
+  filePath: string;
+  /** Export name in the source file */
+  exportName: string;
+  /** Not present for user-defined types */
+  pluginId?: never;
+}
+
+/**
+ * Source information for a plugin-generated TailorDB type.
+ */
+export interface PluginGeneratedTypeSource {
+  /** Not present for plugin-generated types */
+  filePath?: never;
+  /** Export name of the generated type */
+  exportName: string;
+  /** Plugin ID that generated this type */
+  pluginId: string;
+  /** Plugin import path for code generators */
+  pluginImportPath: string;
+  /** Original type's file path */
+  originalFilePath: string;
+  /** Original type's export name */
+  originalExportName: string;
+  /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */
+  generatedTypeKind?: string;
+  /** Plugin config used to generate this type */
+  pluginConfig?: unknown;
+}
+
+/**
+ * Source information for a TailorDB type.
+ * Discriminated union: use `pluginId` to distinguish between user-defined and plugin-generated types.
+ */
+export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTypeSource;
+
+/**
+ * Type guard to check if source is plugin-generated
+ * @param source - Type source info to check
+ * @returns True if source is plugin-generated
+ */
+export function isPluginGeneratedType(
+  source: TypeSourceInfoEntry,
+): source is PluginGeneratedTypeSource {
+  return source.pluginId !== undefined;
+}
+
 export type {
   TailorAnyDBField,
+  TailorAnyDBType,
   TailorDBField,
   DBFieldMetadata,
   Hook,

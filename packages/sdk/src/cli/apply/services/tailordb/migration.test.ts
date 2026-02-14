@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it, vi, beforeEach, afterAll, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterAll } from "vitest";
 import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
@@ -375,52 +375,6 @@ describe("migration", () => {
       expect(result[2].number).toBe(1);
       expect(result[3].namespace).toBe("namespace-b");
       expect(result[3].number).toBe(2);
-    });
-
-    describe("TAILOR_INTERNAL_APPLY_MIGRATION_VERSION environment variable", () => {
-      const originalEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
-
-      afterEach(() => {
-        if (originalEnv === undefined) {
-          delete process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
-        } else {
-          process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION = originalEnv;
-        }
-      });
-
-      it("respects TAILOR_INTERNAL_APPLY_MIGRATION_VERSION environment variable", async () => {
-        process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION = "2";
-        const client = createMockClient({ tailordb: 0 });
-
-        // Create migrations 0001, 0002, 0003
-        writeDiffFile(testDir, 1, createMockDiff());
-        writeDiffFile(testDir, 2, createMockDiff());
-        writeDiffFile(testDir, 3, createMockDiff());
-
-        const namespacesWithMigrations: NamespaceWithMigrations[] = [
-          { namespace: "tailordb", migrationsDir: testDir },
-        ];
-
-        const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
-
-        // Should only include migrations up to version 2
-        expect(result).toHaveLength(2);
-        expect(result[0].number).toBe(1);
-        expect(result[1].number).toBe(2);
-      });
-
-      it("throws error for invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION", async () => {
-        process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION = "invalid";
-        const client = createMockClient({ tailordb: 0 });
-
-        const namespacesWithMigrations: NamespaceWithMigrations[] = [
-          { namespace: "tailordb", migrationsDir: testDir },
-        ];
-
-        await expect(
-          detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
-        ).rejects.toThrow("Invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION");
-      });
     });
   });
 

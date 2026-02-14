@@ -24,6 +24,8 @@ export type {
   AggregateArgs,
   GeneratorResult,
   DependencyKind,
+  PluginAttachment,
+  TypeSourceInfoEntry,
 } from "./generator/types";
 export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
@@ -99,10 +101,19 @@ export {
   type ExecutorJobDetailInfo,
   type WatchExecutorJobResult,
 } from "./executor/jobs";
+export { listExecutors, type ListExecutorsOptions } from "./executor/list";
+export { getExecutor, type GetExecutorOptions } from "./executor/get";
+export {
+  listWebhookExecutors,
+  type ListWebhookExecutorsOptions,
+  type WebhookExecutorInfo,
+} from "./executor/webhook";
 export type {
   ExecutorJobListInfo,
   ExecutorJobInfo,
   ExecutorJobAttemptInfo,
+  ExecutorListInfo,
+  ExecutorInfo,
 } from "./executor/transform";
 export { loadAccessToken, loadWorkspaceId } from "./context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
@@ -149,7 +160,12 @@ export {
 export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";
 
 // Seed exports
+export { chunkSeedData, type SeedChunk, type ChunkSeedDataOptions } from "./utils/seed-chunker";
 export { bundleSeedScript, type SeedBundleResult } from "./bundler/seed/seed-bundler";
+export {
+  bundleMigrationScript,
+  type MigrationBundleResult,
+} from "./bundler/migration/migration-bundler";
 export {
   executeScript,
   waitForExecution,

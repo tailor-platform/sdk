@@ -14,6 +14,7 @@
     "test:generator:prepare": "tsx tests/scripts/generate_files.ts actual",
     "test:generator:update-expects": "tsx tests/scripts/generate_files.ts",
     "test:e2e": "vitest --project e2e",
+    "migration:e2e": "tsx tests/scripts/migration_e2e.ts",
     "seed:validate": "lines-db validate ./seed/data",
     "seed:truncate": "tailor-sdk tailordb truncate -a",
     "seed": "node ./seed/exec.mjs",

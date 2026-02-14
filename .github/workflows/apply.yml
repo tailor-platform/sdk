@@ -90,23 +90,6 @@ jobs:
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
-      - name: Apply initial migration (0000)
-        working-directory: example
-        shell: bash
-        run: pnpm run apply
-        env:
-          TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "0000"
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-
-      - name: Verify initial schema applied
-        working-directory: example
-        shell: bash
-        run: |
-          echo "Checking migration status..."
-          pnpm --silent tailor-sdk tailordb migration status --namespace tailordb
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
-
       - name: Apply workspace
         working-directory: example
         run: pnpm run apply

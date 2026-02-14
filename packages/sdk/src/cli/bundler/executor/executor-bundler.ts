@@ -16,20 +16,30 @@ interface ExecutorInfo {
 }
 
 /**
+ * Options for bundling executors
+ */
+export interface BundleExecutorsOptions {
+  /** Executor file loading configuration */
+  config: FileLoadConfig;
+  /** Trigger context for workflow/job transformations */
+  triggerContext?: TriggerContext;
+  /** Additional files to bundle (e.g., plugin-generated executors) */
+  additionalFiles?: string[];
+}
+
+/**
  * Bundle executors from the specified configuration
  *
  * This function:
  * 1. Creates entry file that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
- * @param config - Executor file loading configuration
- * @param triggerContext - Trigger context for workflow/job transformations
+ * @param options - Bundle executor options
  * @returns Promise that resolves when bundling completes
  */
-export async function bundleExecutors(
-  config: FileLoadConfig,
-  triggerContext?: TriggerContext,
-): Promise<void> {
-  const files = loadFilesWithIgnores(config);
+export async function bundleExecutors(options: BundleExecutorsOptions): Promise<void> {
+  const { config, triggerContext, additionalFiles = [] } = options;
+  const configFiles = loadFilesWithIgnores(config);
+  const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
     logger.warn(`No executor files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
     return;

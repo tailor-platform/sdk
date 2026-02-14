@@ -166,6 +166,18 @@ export async function applyAuth(
       }),
     ]);
 
+    // OAuth2Clients replaces (client type changed): delete then create sequentially
+    for (const replace of changeSet.oauth2Client.replaces) {
+      await client.deleteAuthOAuth2Client(replace.deleteRequest);
+      replace.createRequest.oauth2Client!.redirectUris = await resolveStaticWebsiteUrls(
+        client,
+        replace.createRequest.workspaceId!,
+        replace.createRequest.oauth2Client!.redirectUris,
+        "OAuth2 redirect URIs",
+      );
+      await client.createAuthOAuth2Client(replace.createRequest);
+    }
+
     // SCIMConfigs
     await Promise.all([
       ...changeSet.scim.creates.map((create) => client.createAuthSCIMConfig(create.request)),
@@ -1002,15 +1014,24 @@ type DeleteOAuth2Client = {
   request: MessageInitShape<typeof DeleteAuthOAuth2ClientRequestSchema>;
 };
 
+type ReplaceOAuth2Client = {
+  name: string;
+  deleteRequest: MessageInitShape<typeof DeleteAuthOAuth2ClientRequestSchema>;
+  createRequest: MessageInitShape<typeof CreateAuthOAuth2ClientRequestSchema>;
+};
+
 async function planOAuth2Clients(
   client: OperatorClient,
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
 ) {
-  const changeSet = createChangeSet<CreateOAuth2Clients, UpdateOAuth2Client, DeleteOAuth2Client>(
-    "Auth oauth2Clients",
-  );
+  const changeSet = createChangeSet<
+    CreateOAuth2Clients,
+    UpdateOAuth2Client,
+    DeleteOAuth2Client,
+    ReplaceOAuth2Client
+  >("Auth oauth2Clients");
 
   const fetchOAuth2Clients = (namespaceName: string) => {
     return fetchAll(async (pageToken) => {
@@ -1033,37 +1054,56 @@ async function planOAuth2Clients(
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
     const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
-    const existingNameSet = new Set<string>();
+    const existingClientsMap = new Map<string, AuthOAuth2Client_ClientType>();
     existingOAuth2Clients.forEach((oauth2Client) => {
-      existingNameSet.add(oauth2Client.name);
+      existingClientsMap.set(oauth2Client.name, oauth2Client.clientType);
     });
     for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
       const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
       if (!oauth2Client) {
         continue;
       }
-      if (existingNameSet.has(oauth2ClientName)) {
-        changeSet.updates.push({
-          name: oauth2ClientName,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            oauth2Client: protoOAuth2Client(oauth2ClientName, oauth2Client),
-          },
-        });
-        existingNameSet.delete(oauth2ClientName);
+      const newOAuth2Client = protoOAuth2Client(oauth2ClientName, oauth2Client);
+      if (existingClientsMap.has(oauth2ClientName)) {
+        const existingClientType = existingClientsMap.get(oauth2ClientName)!;
+        if (existingClientType !== newOAuth2Client.clientType) {
+          // Client type changed: need to replace (delete then create)
+          changeSet.replaces.push({
+            name: oauth2ClientName,
+            deleteRequest: {
+              workspaceId,
+              namespaceName: config.name,
+              name: oauth2ClientName,
+            },
+            createRequest: {
+              workspaceId,
+              namespaceName: config.name,
+              oauth2Client: newOAuth2Client,
+            },
+          });
+        } else {
+          changeSet.updates.push({
+            name: oauth2ClientName,
+            request: {
+              workspaceId,
+              namespaceName: config.name,
+              oauth2Client: newOAuth2Client,
+            },
+          });
+        }
+        existingClientsMap.delete(oauth2ClientName);
       } else {
         changeSet.creates.push({
           name: oauth2ClientName,
           request: {
             workspaceId,
             namespaceName: config.name,
-            oauth2Client: protoOAuth2Client(oauth2ClientName, oauth2Client),
+            oauth2Client: newOAuth2Client,
           },
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingClientsMap.forEach((_, name) => {
       changeSet.deletes.push({
         name,
         request: {
@@ -1088,6 +1128,7 @@ async function planOAuth2Clients(
       });
     });
   }
+
   return changeSet;
 }
 

@@ -1,18 +1,15 @@
 import {
-  type ColumnType,
-  Kysely,
-  type KyselyConfig,
-  type Transaction as KyselyTransaction,
-  type Insertable as KyselyInsertable,
-  type Selectable as KyselySelectable,
-  type Updateable as KyselyUpdateable,
-} from "kysely";
-import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
-
-type Timestamp = ColumnType<Date, Date | string, Date | string>;
-type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+  createGetDB,
+  type Generated,
+  type Timestamp,
+  type NamespaceDB,
+  type NamespaceInsertable,
+  type NamespaceSelectable,
+  type NamespaceTable,
+  type NamespaceTableName,
+  type NamespaceTransaction,
+  type NamespaceUpdateable,
+} from "@tailor-platform/sdk/kysely";
 
 export interface Namespace {
   "main-db": {
@@ -91,40 +88,16 @@ export interface Namespace {
   }
 }
 
-export function getDB<const N extends keyof Namespace>(
-  namespace: N,
-  kyselyConfig?: Omit<KyselyConfig, "dialect">,
-): Kysely<Namespace[N]> {
-  const client = new tailordb.Client({ namespace });
-  return new Kysely<Namespace[N]>({
-    dialect: new TailordbDialect(client),
-    ...kyselyConfig,
-  });
-}
+export const getDB = createGetDB<Namespace>();
 
-export type DB<N extends keyof Namespace = keyof Namespace> = ReturnType<typeof getDB<N>>;
+export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
 
 export type Transaction<K extends keyof Namespace | DB = keyof Namespace> =
-  K extends DB<infer N>
-    ? KyselyTransaction<Namespace[N]>
-    : K extends keyof Namespace
-      ? KyselyTransaction<Namespace[K]>
-      : never;
+  NamespaceTransaction<Namespace, K>;
 
-type TableName = {
-  [N in keyof Namespace]: keyof Namespace[N];
-}[keyof Namespace];
-export type Table<T extends TableName> = {
-  [N in keyof Namespace]: T extends keyof Namespace[N] ? Namespace[N][T]
-    : never;
-}[keyof Namespace];
+type TableName = NamespaceTableName<Namespace>;
+export type Table<T extends TableName> = NamespaceTable<Namespace, T>;
 
-export type Insertable<T extends keyof Namespace[keyof Namespace]> = KyselyInsertable<
-  Table<T>
->;
-export type Selectable<T extends keyof Namespace[keyof Namespace]> = KyselySelectable<
-  Table<T>
->;
-export type Updateable<T extends keyof Namespace[keyof Namespace]> = KyselyUpdateable<
-  Table<T>
->;
+export type Insertable<T extends TableName> = NamespaceInsertable<Namespace, T>;
+export type Selectable<T extends TableName> = NamespaceSelectable<Namespace, T>;
+export type Updateable<T extends TableName> = NamespaceUpdateable<Namespace, T>;

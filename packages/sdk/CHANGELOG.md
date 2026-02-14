@@ -1,5 +1,60 @@
 # @tailor-platform/sdk
 
+## 1.13.0
+
+### Minor Changes
+
+- [#580](https://github.com/tailor-platform/sdk/pull/580) [`74c2dfc`](https://github.com/tailor-platform/sdk/commit/74c2dfcb3e33d8d2548d7a948e5e322745e4a54c) Thanks [@toiroakr](https://github.com/toiroakr)! - Always generate exec.mjs for seed generator and add --machine-user option
+
+  - exec.mjs is now generated regardless of whether `machineUserName` is configured
+  - Added `--machine-user` (`-m`) CLI option to specify machine user at runtime
+  - CLI argument takes precedence over config default, allowing override
+  - Shows clear error message when machine user is not specified and not configured
+
+## 1.12.0
+
+### Minor Changes
+
+- [#579](https://github.com/tailor-platform/sdk/pull/579) [`1d37a95`](https://github.com/tailor-platform/sdk/commit/1d37a954208c1e6ae64bac7afda604311d95e2cc) Thanks [@dqn](https://github.com/dqn)! - Make TailorDBField fluent API immutable
+
+  Fluent methods (`description()`, `index()`, `unique()`, `hooks()`, `validate()`, `serial()`, `vector()`, `relation()`) now return new instances instead of mutating `this`, preventing shared field corruption when the same field is used across multiple types.
+
+- [#575](https://github.com/tailor-platform/sdk/pull/575) [`43d4795`](https://github.com/tailor-platform/sdk/commit/43d4795543b1427edf661dc495e89e60a1406305) Thanks [@k1LoW](https://github.com/k1LoW)! - Handle OAuth2 client type changes with delete-recreate
+
+  OAuth2 clients cannot update their clientType in-place on the server. This change detects clientType changes and handles them as replace operations (delete then create) during the create-update phase. Also adds deletion warnings for OAuth2 clients similar to TailorDB types and StaticWebsites.
+
+- [#556](https://github.com/tailor-platform/sdk/pull/556) [`b2183b3`](https://github.com/tailor-platform/sdk/commit/b2183b3975fa993d2a61035d90d6b6a4002a852a) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add TailorDB plugin system (beta), including plugin config, code generation, and apply integration.
+
+### Patch Changes
+
+- [#564](https://github.com/tailor-platform/sdk/pull/564) [`6be4cac`](https://github.com/tailor-platform/sdk/commit/6be4cacd3037f6230be1f3ddc24fdb75629e4f2a) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: add TailorDB migration e2e workflow and adjust apply ordering for migrations.
+
+- [#563](https://github.com/tailor-platform/sdk/pull/563) [`15fa518`](https://github.com/tailor-platform/sdk/commit/15fa518f6b0de2daf43eb1d41b3991ac867ed11a) Thanks [@riku99](https://github.com/riku99)! - Bundle optional peer dependencies with the SDK
+
+- [#574](https://github.com/tailor-platform/sdk/pull/574) [`6e5c4ee`](https://github.com/tailor-platform/sdk/commit/6e5c4eecedda91bd7544102b2c4e58bfe7eeff7d) Thanks [@riku99](https://github.com/riku99)! - Remove unnecessary tests
+
+- [#576](https://github.com/tailor-platform/sdk/pull/576) [`b909cdb`](https://github.com/tailor-platform/sdk/commit/b909cdb24e2d415af26a0f2237dfd012b5a78692) Thanks [@dqn](https://github.com/dqn)! - Add automatic chunking for seed data to avoid gRPC message size limits
+
+  Large seed data that exceeds the 4MB gRPC message size limit is now automatically split into smaller chunks and sent in multiple requests.
+
+## 1.11.1
+
+### Patch Changes
+
+- [#548](https://github.com/tailor-platform/sdk/pull/548) [`58a8094`](https://github.com/tailor-platform/sdk/commit/58a8094ea66d992e59753f95d9d0457824d67f5c) Thanks [@riku99](https://github.com/riku99)! - Add clone method tests for TailorDBField
+
+- [#571](https://github.com/tailor-platform/sdk/pull/571) [`3d030a6`](https://github.com/tailor-platform/sdk/commit/3d030a6437e80fae3007a7ece7d79ac428a27942) Thanks [@remiposo](https://github.com/remiposo)! - Document workflow job input/output type constraints
+
+## 1.11.0
+
+### Minor Changes
+
+- [#531](https://github.com/tailor-platform/sdk/pull/531) [`a3066a3`](https://github.com/tailor-platform/sdk/commit/a3066a399cb26ef91da1e871da0616311b104c26) Thanks [@toiroakr](https://github.com/toiroakr)! - Add executor list, get, and webhook commands to CLI
+
+### Patch Changes
+
+- [#569](https://github.com/tailor-platform/sdk/pull/569) [`cec1970`](https://github.com/tailor-platform/sdk/commit/cec1970581e39caedf84a1c89e0dbdbd5c53c0c0) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix BigInt serialization in error logging for API requests
+
 ## 1.10.1
 
 ### Patch Changes

@@ -31,10 +31,8 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
     let serveBinPath: string;
     try {
       serveBinPath = resolveCliBinPath({
-        cwd: primary.erdDir,
         packageName: "serve",
         binName: "serve",
-        installHint: "npm i -D serve",
       });
     } catch (error) {
       logger.error(String(error));
@@ -48,7 +46,7 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
     });
 
     child.on("error", (error) => {
-      logger.error("Failed to run `serve dist`. Ensure `serve` is installed in your project.");
+      logger.error("Failed to run `serve dist`.");
       reject(error);
     });
 

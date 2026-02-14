@@ -1,7 +1,10 @@
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { IdProviderConfig, OAuth2ClientInput } from "@/parser/service/auth/types";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
+
+export type { PluginAttachment } from "@/parser/plugin-config/types";
 
 // ========================================
 // Basic types
@@ -67,6 +70,18 @@ export type HasDependency<
 > = ArrayIncludes<Deps, D>;
 
 // ========================================
+// Source info type for TailorDB types
+// Re-exported from parser module
+// ========================================
+
+export type {
+  UserDefinedTypeSource,
+  PluginGeneratedTypeSource,
+  TypeSourceInfoEntry,
+} from "@/parser/service/tailordb/types";
+export { isPluginGeneratedType } from "@/parser/service/tailordb/types";
+
+// ========================================
 // Method interfaces for each dependency
 // ========================================
 
@@ -74,7 +89,9 @@ export interface TailorDBProcessMethods<T, Ts> {
   processType(args: {
     type: TailorDBType;
     namespace: string;
-    source: { filePath: string; exportName: string };
+    source: TypeSourceInfoEntry;
+    /** Plugin attachments configured on this type via .plugin() method */
+    plugins: readonly PluginAttachment[];
   }): T | Promise<T>;
 
   processTailorDBNamespace?(args: {
@@ -281,7 +298,8 @@ export interface AnyCodeGenerator {
   processType?(args: {
     type: TailorDBType;
     namespace: string;
-    source: { filePath: string; exportName: string };
+    source: TypeSourceInfoEntry;
+    plugins: readonly PluginAttachment[];
   }): unknown | Promise<unknown>;
 
   processTailorDBNamespace?(args: {

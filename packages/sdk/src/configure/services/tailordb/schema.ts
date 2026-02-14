@@ -1,3 +1,4 @@
+import { cloneDeep } from "es-toolkit";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -30,6 +31,7 @@ import {
 import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import type { PluginAttachment, PluginConfigs } from "@/parser/plugin-config/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
@@ -508,6 +510,12 @@ function createTailorDBField<
     return { value };
   }
 
+  function cloneWith(metadataUpdates: Partial<DBFieldMetadata>) {
+    const cloned = field.clone();
+    Object.assign(cloned._metadata, metadataUpdates);
+    return cloned;
+  }
+
   const field: FieldType = {
     type,
     fields: (fields ?? {}) as Record<string, TailorAnyField>,
@@ -527,24 +535,18 @@ function createTailorDBField<
     },
 
     description(description: string) {
-      this._metadata.description = description;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ description }) as any;
     },
 
     typeName(typeName: string) {
-      this._metadata.typeName = typeName;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ typeName }) as any;
     },
 
     validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
-      this._metadata.validate = validateInputs;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ validate: validateInputs }) as any;
     },
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
@@ -560,9 +562,10 @@ function createTailorDBField<
 
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
-      // Store raw relation config - all processing happens in parser layer
+      const cloned = field.clone();
       const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
-      _rawRelation = {
+      // oxlint-disable-next-line no-explicit-any
+      (cloned as any)._setRawRelation({
         type: config.type,
         toward: {
           type: targetType,
@@ -570,48 +573,52 @@ function createTailorDBField<
           key: config.toward.key,
         },
         backward: config.backward,
-      };
+      });
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloned as any;
     },
 
     index() {
-      this._metadata.index = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ index: true }) as any;
     },
 
     unique() {
-      this._metadata.unique = true;
-      this._metadata.index = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ unique: true, index: true }) as any;
     },
 
     vector() {
-      this._metadata.vector = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ vector: true }) as any;
     },
 
     hooks(hooks: Hook<unknown, FieldOutput<OutputBase, TOptions>>) {
-      this._metadata.hooks = hooks;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ hooks }) as any;
     },
 
     serial(config: SerialConfig) {
-      this._metadata.serial = config;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ serial: config }) as any;
     },
 
     clone(cloneOptions?: FieldOptions) {
-      // Create a new field with the same configuration
-      const clonedField = createTailorDBField(type, options, fields, values);
+      // Deep clone nested object fields if present
+      let clonedFields = fields;
+      if (fields) {
+        const cloned: Record<string, TailorAnyDBField> = {};
+        for (const [key, field] of Object.entries(fields)) {
+          cloned[key] = field.clone();
+        }
+        clonedFields = cloned;
+      }
 
-      // Copy metadata
-      Object.assign(clonedField._metadata, this._metadata);
+      // Create a new field with cloned configuration
+      const clonedField = createTailorDBField(type, options, clonedFields, values);
+
+      // Deep copy metadata using cloneDeep (preserves function references)
+      Object.assign(clonedField._metadata, cloneDeep(this._metadata));
 
       // Apply new options if provided
       if (cloneOptions) {
@@ -625,11 +632,9 @@ function createTailorDBField<
 
       // Copy raw relation if exists
       if (_rawRelation) {
-        // Access the internal _rawRelation of the cloned field
-        // We need to call relation method to set it
-        const clonedRawRelation = { ..._rawRelation, toward: { ..._rawRelation.toward } };
-        // @ts-expect-error - Accessing internal state for cloning
-        clonedField._setRawRelation(clonedRawRelation);
+        const clonedRawRelation = cloneDeep(_rawRelation);
+        // oxlint-disable-next-line no-explicit-any
+        (clonedField as any)._setRawRelation(clonedRawRelation);
       }
 
       // oxlint-disable-next-line no-explicit-any
@@ -637,7 +642,7 @@ function createTailorDBField<
     },
 
     // Internal method for clone to set rawRelation
-    // @ts-expect-error - Internal method
+    // @ts-ignore - Internal method not in interface
     _setRawRelation(relation: RawRelationConfig) {
       _rawRelation = relation;
     },
@@ -793,6 +798,20 @@ export interface TailorDBType<
    * Omit specific fields from the type
    */
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
+
+  /**
+   * Plugin attachments for this type
+   */
+  readonly plugins: PluginAttachment[];
+
+  /**
+   * Attach a plugin to this type
+   * @param config - Plugin configuration in the format { pluginId: config }
+   * @returns The type with the plugin attached
+   */
+  plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+    [K in P]: PluginConfigs<keyof Fields & string>[K];
+  }): TailorDBType<Fields, User>;
 }
 
 /**
@@ -818,6 +837,7 @@ function createTailorDBType<
   let _indexes: IndexDef<TailorDBType<Fields, User>>[] = [];
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
+  const _plugins: PluginAttachment[] = [];
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -828,7 +848,7 @@ function createTailorDBType<
 
   const dbType: TailorDBType<Fields, User> = {
     name,
-    fields,
+    fields: { ...fields },
     _output: null as unknown as InferFieldsOutput<Fields>,
     _description,
 
@@ -860,7 +880,8 @@ function createTailorDBType<
       // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
       // oxlint-disable-next-line no-explicit-any
       Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        this.fields[fieldName].hooks(fieldHooks);
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
+          this.fields[fieldName].hooks(fieldHooks);
       });
       return this;
     },
@@ -877,15 +898,17 @@ function createTailorDBType<
           return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
         };
 
+        let updatedField: TailorAnyDBField;
         if (Array.isArray(validators)) {
           if (isValidateConfig(validators)) {
-            field.validate(validators);
+            updatedField = field.validate(validators);
           } else {
-            field.validate(...validators);
+            updatedField = field.validate(...validators);
           }
         } else {
-          field.validate(validators);
+          updatedField = field.validate(validators);
         }
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
       });
       return this;
     },
@@ -967,6 +990,19 @@ function createTailorDBType<
         }
       }
       return result as Omit<Fields, K>;
+    },
+
+    get plugins(): PluginAttachment[] {
+      return _plugins;
+    },
+
+    plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+      [K in P]: PluginConfigs<keyof Fields & string>[K];
+    }): TailorDBType<Fields, User> {
+      for (const [pluginId, pluginConfig] of Object.entries(config)) {
+        _plugins.push({ pluginId, config: pluginConfig });
+      }
+      return this;
     },
   };
 

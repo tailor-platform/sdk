@@ -7,6 +7,7 @@
   "tags": ["-lintignore"],
   "ignore": ["scripts/**", "e2e/fixtures/**"],
   "ignoreDependencies": [
+    "@liam-hq/cli",
     "@tailor-platform/function-kysely-tailordb",
     "@typescript/native-preview",
     "cross-env",
@@ -14,6 +15,7 @@
     "kysely",
     "oxlint",
     "oxlint-tsgolint",
+    "serve",
     "tsx"
   ],
   "ignoreBinaries": ["vitest", "tsdown", "cross-env", "oxlint", "eslint", "tsc", "tsgo", "knip"]

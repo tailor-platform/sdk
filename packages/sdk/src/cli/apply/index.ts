@@ -1,6 +1,9 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { defineApplication } from "@/cli/application";
+import { createExecutorService } from "@/cli/application/executor/service";
 import {
   loadAndCollectJobs,
   printLoadedWorkflows,
@@ -15,7 +18,11 @@ import {
   type BundleWorkflowJobsResult,
 } from "@/cli/bundler/workflow/workflow-bundler";
 import { loadConfig } from "@/cli/config-loader";
+import { generatePluginExecutorFiles } from "@/cli/generator/plugin-executor-generator";
+import { generatePluginTypeFiles } from "@/cli/generator/plugin-type-generator";
 import { generateUserTypes } from "@/cli/type-generator";
+import { getDistDir } from "@/cli/utils/dist-dir";
+import { PluginManager } from "@/plugin/manager";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
@@ -40,6 +47,7 @@ import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
+import type { PluginBase } from "@/parser/plugin-config/types";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -64,6 +72,10 @@ export interface PlanContext {
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
+type MutableApplication = Omit<Application, "executorService"> & {
+  executorService: Application["executorService"];
+};
+
 /**
  * Apply the configured application to the Tailor platform.
  * @param options - Options for apply execution
@@ -71,14 +83,20 @@ export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "dele
  */
 export async function apply(options?: ApplyOptions) {
   // Load and validate options
-  const { config } = await loadConfig(options?.configPath);
+  const { config, plugins } = await loadConfig(options?.configPath);
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
 
+  // Initialize plugin manager if plugins are provided
+  let pluginManager: PluginManager | undefined;
+  if (plugins.length > 0) {
+    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+  }
+
   // Generate user types from loaded config
-  await generateUserTypes(config, config.path);
-  const application = defineApplication(config);
+  await generateUserTypes({ config, configPath: config.path, plugins });
+  const application = defineApplication({ config, pluginManager });
 
   // Load files first (before building)
   // Load workflows first and collect jobs for bundling
@@ -90,14 +108,77 @@ export async function apply(options?: ApplyOptions) {
   // Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(application.workflowConfig);
 
+  let tailordbTypesLoaded = false;
+  let pluginExecutorFiles: string[] = [];
+
+  // Load TailorDB types early to generate plugin type/executor files before bundling
+  if (application.tailorDBServices.length > 0) {
+    for (const tailordb of application.tailorDBServices) {
+      await tailordb.loadTypes();
+      // Process namespace plugins (generates types without requiring a source type)
+      await tailordb.processNamespacePlugins();
+    }
+    tailordbTypesLoaded = true;
+  }
+
+  // Generate plugin type/executor files (matches `generate` flow ordering)
+  const pluginOutputDir = path.join(getDistDir(), "plugin");
+  const pluginTypes = pluginManager?.getPluginGeneratedTypes() ?? [];
+  const typeGenerationResult = generatePluginTypeFiles(pluginTypes, pluginOutputDir);
+
+  const sourceTypeInfoMap = new Map<string, { filePath: string; exportName: string }>();
+  for (const db of application.tailorDBServices) {
+    const typeSourceInfo = db.getTypeSourceInfo();
+    for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
+      if (sourceInfo.filePath) {
+        sourceTypeInfoMap.set(typeName, {
+          filePath: sourceInfo.filePath,
+          exportName: sourceInfo.exportName,
+        });
+      }
+    }
+  }
+
+  const pluginExecutors = pluginManager?.getPluginGeneratedExecutorsWithImportPath() ?? [];
+  const generatedExecutorFiles = generatePluginExecutorFiles(
+    pluginExecutors,
+    pluginOutputDir,
+    typeGenerationResult,
+    sourceTypeInfoMap,
+    config.path,
+  );
+
+  // Discover plugin executor files after generation
+  const pluginExecutorFileSet = new Set<string>(generatedExecutorFiles);
+  // Also check legacy path for backwards compatibility
+  const legacyPluginExecutorDir = path.join(getDistDir(), "plugin-executors");
+  if (fs.existsSync(legacyPluginExecutorDir)) {
+    const legacyFiles = fs
+      .readdirSync(legacyPluginExecutorDir)
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => path.join(legacyPluginExecutorDir, f));
+    for (const file of legacyFiles) {
+      pluginExecutorFileSet.add(file);
+    }
+  }
+  pluginExecutorFiles = Array.from(pluginExecutorFileSet);
+  const executorService =
+    application.executorService ??
+    (pluginExecutorFiles.length > 0
+      ? createExecutorService({ config: { files: [] }, pluginManager })
+      : undefined);
+  const mutableApplication = application as MutableApplication;
+  mutableApplication.executorService = executorService;
+
   // Build functions (using already loaded data)
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
       await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
     }
   }
-  if (application.executorService) {
-    await buildExecutor(application.executorService.config, triggerContext);
+
+  if (executorService) {
+    await buildExecutor(executorService.config, triggerContext, pluginExecutorFiles);
   }
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowResult && workflowResult.jobs.length > 0) {
@@ -124,15 +205,23 @@ export async function apply(options?: ApplyOptions) {
 
   // Load remaining files and print logs
   // Order: TailorDB → Resolver → Executor → Workflow
-  for (const tailordb of application.tailorDBServices) {
-    await tailordb.loadTypes();
+  if (!tailordbTypesLoaded) {
+    for (const tailordb of application.tailorDBServices) {
+      await tailordb.loadTypes();
+      // Process namespace plugins (generates types without requiring a source type)
+      await tailordb.processNamespacePlugins();
+    }
   }
 
   for (const pipeline of application.resolverServices) {
     await pipeline.loadResolvers();
   }
-  if (application.executorService) {
-    await application.executorService.loadExecutors();
+  if (executorService) {
+    await executorService.loadExecutors();
+    // Load plugin-generated executors from generated TypeScript files
+    if (pluginExecutorFiles.length > 0) {
+      await executorService.loadPluginExecutorFiles(pluginExecutorFiles);
+    }
   }
   // Print workflow loading logs last (workflows were already loaded for bundling)
   if (workflowResult) {
@@ -200,6 +289,18 @@ export async function apply(options?: ApplyOptions) {
       resourceName: del.name,
     });
   }
+  for (const del of auth.changeSet.oauth2Client.deletes) {
+    importantDeletions.push({
+      resourceType: "OAuth2 client",
+      resourceName: del.name,
+    });
+  }
+  for (const replace of auth.changeSet.oauth2Client.replaces) {
+    importantDeletions.push({
+      resourceType: "OAuth2 client (client type change)",
+      resourceName: replace.name,
+    });
+  }
   await confirmImportantResourceDeletion(importantDeletions, yes);
 
   // Delete renamed applications
@@ -234,20 +335,19 @@ export async function apply(options?: ApplyOptions) {
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
 
-  // TailorDB: Automatically validates migrations and handles migration flow internally
-  await applyTailorDB(client, tailorDB, "create-update");
-
-  // Other services: Apply after TailorDB migrations complete
+  // Other services: Apply before TailorDB (migration scripts may require Auth)
   await applyStaticWebsite(client, staticWebsite, "create-update");
   await applyIdP(client, idp, "create-update");
   await applyAuth(client, auth, "create-update");
+  await applyTailorDB(client, tailorDB, "create-update");
+
   await applyPipeline(client, pipeline, "create-update");
 
   // Phase 3: Delete subgraph resources (types, resolvers, etc.) before Application update
   // This avoids GraphQL SDL composition errors when resources conflict with system-generated ones
   // NOTE: Services are NOT deleted here - they will be deleted after Application is deleted
-  // NOTE: TailorDB resource deletions are handled within create-update phase (above)
-  //       because migration flow requires: pre-migration → script execution → post-migration (with deletions)
+  // NOTE: TailorDB resource deletions are handled during the create-update phase
+  //       after migration scripts execute.
   await applyPipeline(client, pipeline, "delete-resources");
   await applyAuth(client, auth, "delete-resources");
   await applyIdP(client, idp, "delete-resources");
@@ -285,8 +385,12 @@ async function buildPipeline(
   await bundleResolvers(namespace, config, triggerContext);
 }
 
-async function buildExecutor(config: FileLoadConfig, triggerContext?: TriggerContext) {
-  await bundleExecutors(config, triggerContext);
+async function buildExecutor(
+  config: FileLoadConfig,
+  triggerContext?: TriggerContext,
+  additionalFiles?: string[],
+) {
+  await bundleExecutors({ config, triggerContext, additionalFiles });
 }
 
 async function buildWorkflow(

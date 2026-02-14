@@ -77,7 +77,11 @@ export async function waitForExecution(
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
-  const spinner = showProgress ? ora().start("Waiting for workflow to complete...") : null;
+  const spinner = showProgress
+    ? ora({
+        indent: 2,
+      }).start("Waiting for workflow to complete...")
+    : null;
 
   try {
     while (true) {
@@ -98,7 +102,7 @@ export async function waitForExecution(
       if (execution.status !== lastStatus) {
         if (showProgress) {
           spinner?.stop();
-          logger.info(`Status: ${coloredStatus}`, { mode: "stream" });
+          logger.info(`Status: ${coloredStatus}`, { mode: "stream", indent: 2 });
           spinner?.start(`Waiting for workflow to complete...`);
         }
         lastStatus = execution.status;
@@ -112,6 +116,7 @@ export async function waitForExecution(
             spinner?.stop();
             logger.info(`Job | ${runningJobs}: ${coloredStatus}`, {
               mode: "stream",
+              indent: 2,
             });
             spinner?.start(`Waiting for workflow to complete...`);
           }

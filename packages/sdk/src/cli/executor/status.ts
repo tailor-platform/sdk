@@ -11,7 +11,7 @@ import { styles } from "../utils/logger";
 // ============================================================================
 
 /**
- * Colorize executor job status for display.
+ * Colorize executor job status string.
  * @param status - Executor job status string
  * @returns Colorized status string
  */
@@ -34,7 +34,7 @@ export function colorizeExecutorJobStatus(status: string): string {
 
 /**
  * Check if executor job status is terminal.
- * @param status - Executor job status enum
+ * @param status - Executor job status enum value
  * @returns True if status is terminal
  */
 export function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean {
@@ -48,7 +48,7 @@ export function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean 
 /**
  * Parse executor job status string to enum.
  * @param status - Status string to parse
- * @returns Parsed ExecutorJobStatus enum value
+ * @returns ExecutorJobStatus enum value
  */
 export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
   const upperStatus = status.toUpperCase();
@@ -75,7 +75,7 @@ export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
 // ============================================================================
 
 /**
- * Colorize function execution status for display.
+ * Colorize function execution status string.
  * @param status - Function execution status string
  * @returns Colorized status string
  */
@@ -94,7 +94,7 @@ export function colorizeFunctionExecutionStatus(status: string): string {
 
 /**
  * Check if function execution status is terminal.
- * @param status - Function execution status enum
+ * @param status - Function execution status enum value
  * @returns True if status is terminal
  */
 export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Status): boolean {
@@ -103,8 +103,8 @@ export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Stat
 
 /**
  * Convert function execution status enum to string.
- * @param status - Function execution status enum
- * @returns Status string
+ * @param status - Function execution status enum value
+ * @returns Status string representation
  */
 export function functionExecutionStatusToString(status: FunctionExecution_Status): string {
   switch (status) {
@@ -125,8 +125,8 @@ export function functionExecutionStatusToString(status: FunctionExecution_Status
 
 /**
  * Convert executor target type enum to string.
- * @param targetType - Executor target type enum
- * @returns Target type string
+ * @param targetType - Executor target type enum value
+ * @returns Target type string representation
  */
 export function executorTargetTypeToString(targetType: ExecutorTargetType): string {
   switch (targetType) {
@@ -145,24 +145,20 @@ export function executorTargetTypeToString(targetType: ExecutorTargetType): stri
   }
 }
 
-// ============================================================================
-// Executor Trigger Type
-// ============================================================================
-
 /**
  * Convert executor trigger type enum to string.
- * @param triggerType - Executor trigger type enum
- * @returns Trigger type string
+ * @param triggerType - Executor trigger type enum value
+ * @returns Trigger type string representation
  */
 export function executorTriggerTypeToString(triggerType: ExecutorTriggerType): string {
   switch (triggerType) {
     case ExecutorTriggerType.SCHEDULE:
-      return "schedule";
+      return "SCHEDULE";
     case ExecutorTriggerType.EVENT:
-      return "event";
+      return "EVENT";
     case ExecutorTriggerType.INCOMING_WEBHOOK:
-      return "incomingWebhook";
+      return "INCOMING_WEBHOOK";
     default:
-      return "unspecified";
+      return "UNSPECIFIED";
   }
 }

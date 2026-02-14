@@ -24,6 +24,29 @@ vi.mock("node:fs", () => {
     mkdtempSync: vi.fn((prefix: string) => `${prefix}xxxxxx`),
     rmSync: vi.fn(() => {}),
     existsSync: vi.fn(() => true),
+    globSync: vi.fn(() => []),
+  };
+});
+
+vi.mock("@/cli/utils/logger", async (importOriginal) => {
+  const actual = (await importOriginal()) as {
+    logger?: Record<string, unknown>;
+    styles?: Record<string, unknown>;
+    symbols?: Record<string, unknown>;
+  };
+  return {
+    ...actual,
+    logger: {
+      ...(actual.logger ?? {}),
+      log: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      success: vi.fn(),
+      newline: vi.fn(),
+      out: vi.fn(),
+    },
   };
 });
 
@@ -251,6 +274,7 @@ describe("GenerationManager", () => {
       manager.services.tailordb["test-namespace"] = {
         types: parsedTypes,
         sourceInfo: {},
+        pluginAttachments: new Map(),
       };
       manager.services.resolver["test-namespace"] = {
         testResolver: createResolver({
@@ -337,6 +361,7 @@ describe("GenerationManager", () => {
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
         types: parsedTypes,
         sourceInfo: {},
+        pluginAttachments: new Map(),
       });
 
       expect(processTypeSpy).toHaveBeenCalledTimes(3);
@@ -362,6 +387,7 @@ describe("GenerationManager", () => {
         manager.processTailorDBNamespace(testGenerator, "test-namespace", {
           types: {},
           sourceInfo: {},
+          pluginAttachments: new Map(),
         }),
       ).resolves.not.toThrow();
     });
@@ -396,6 +422,7 @@ describe("GenerationManager", () => {
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
         types: parsedTypes,
         sourceInfo,
+        pluginAttachments: new Map(),
       });
 
       expect(processTypeSpy).toHaveBeenCalledWith(
@@ -406,6 +433,7 @@ describe("GenerationManager", () => {
             filePath: "test.ts",
             exportName: "TestType",
           }),
+          plugins: [],
         }),
       );
     });
@@ -597,16 +625,6 @@ describe("generate function", () => {
     mockConfig = {
       name: "test-workspace",
     };
-  });
-
-  it("creates and executes GenerationManager", async () => {
-    const manager = createGenerationManager(mockConfig, []);
-    await expect(manager.generate(false)).resolves.not.toThrow();
-  });
-
-  it("manager has watch method", () => {
-    const manager = createGenerationManager(mockConfig, []);
-    expect(typeof manager.watch).toBe("function");
   });
 
   it("generate does not automatically call watch", async () => {

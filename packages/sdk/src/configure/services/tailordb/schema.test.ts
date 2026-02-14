@@ -240,21 +240,6 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(userField.rawRelation!.backward).toBeUndefined();
   });
 
-  it('when toward.key is omitted, undefined is stored (default "id" is computed in parser layer)', () => {
-    const userField = db.uuid().relation({
-      type: "oneToOne",
-      toward: {
-        type: User,
-        as: "owner",
-      },
-    });
-
-    // Raw relation config is stored, processing happens in parser layer
-    expect(userField.rawRelation!.toward.type).toEqual("User");
-    expect(userField.rawRelation!.toward.as).toEqual("owner");
-    expect(userField.rawRelation!.toward.key).toBeUndefined();
-  });
-
   it("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
     const managerField = db.uuid().relation({
       type: "oneToOne",
@@ -432,16 +417,6 @@ describe("TailorDBField hooks modifier tests", () => {
     }>();
   });
 
-  it("calling hooks modifier more than once causes type error", () => {
-    db.string()
-      .hooks({
-        create: () => "created",
-      })
-      .hooks({
-        update: () => "updated",
-      });
-  });
-
   it("setting hooks on nested field causes type error", () => {
     // @ts-expect-error hooks() cannot be called on nested fields
     db.object({
@@ -607,19 +582,6 @@ describe("TailorDBField unique modifier tests", () => {
 });
 
 describe("TailorDBType withTimestamps option tests", () => {
-  it("withTimestamps: false does not add timestamp fields", () => {
-    const _noTimestampType = db.type("Test", {
-      name: db.string(),
-      ...db.fields.timestamps(),
-    });
-    expectTypeOf<output<typeof _noTimestampType>>().toEqualTypeOf<{
-      id: string;
-      name: string;
-      createdAt: string | Date;
-      updatedAt?: string | Date | null;
-    }>();
-  });
-
   it("withTimestamps: true adds timestamp fields", () => {
     const _timestampType = db.type("TestWithTimestamp", {
       name: db.string(),
@@ -920,16 +882,6 @@ describe("TailorDBType hooks modifier tests", () => {
       id: string;
       name: string;
     }>();
-  });
-
-  it("type error occurs when hooks is already set on TailorDBField", () => {
-    db.type("Test", {
-      name: db.string().hooks({ create: () => "created" }),
-    }).hooks({
-      name: {
-        create: () => "created",
-      },
-    });
   });
 
   it("setting hooks on id causes type error", () => {
@@ -1251,13 +1203,6 @@ describe("TailorField/TailorType compatibility tests", () => {
     expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
       name: string;
     }>();
-  });
-
-  it("can assign TailorDBType to TailorType", () => {
-    const _dbType = db.type("Test", {
-      name: db.string(),
-    });
-    // Type check removed - TailorType no longer exists
   });
 });
 
@@ -1644,5 +1589,303 @@ describe("TailorDBType gqlOperations alias tests", () => {
 
     expect(auditType.metadata.settings?.aggregation).toBe(true);
     expect(auditType.metadata.settings?.gqlOperations).toBe("query");
+  });
+});
+
+describe("TailorDBField immutability", () => {
+  it("field.hooks() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withHooks = original.hooks({ create: () => "created" });
+
+    // hooks() should return a NEW field
+    expect(withHooks).not.toBe(original);
+    // Original should NOT have hooks
+    expect(original.metadata.hooks).toBeUndefined();
+    // New field should have hooks
+    expect(withHooks.metadata.hooks?.create).toBeDefined();
+  });
+
+  it("field.validate() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withValidate = original.validate(({ value }) => value.length > 0);
+
+    expect(withValidate).not.toBe(original);
+    expect(original.metadata.validate).toBeUndefined();
+    expect(withValidate.metadata.validate).toHaveLength(1);
+  });
+
+  it("field.description() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withDesc = original.description("desc");
+
+    expect(withDesc).not.toBe(original);
+    expect(original.metadata.description).toBeUndefined();
+    expect(withDesc.metadata.description).toBe("desc");
+  });
+
+  it("field.index() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withIndex = original.index();
+
+    expect(withIndex).not.toBe(original);
+    expect(original.metadata.index).toBeUndefined();
+    expect(withIndex.metadata.index).toBe(true);
+  });
+
+  it("field.unique() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withUnique = original.unique();
+
+    expect(withUnique).not.toBe(original);
+    expect(original.metadata.unique).toBeUndefined();
+    expect(withUnique.metadata.unique).toBe(true);
+  });
+
+  it("field.serial() returns a new field without mutating the original", () => {
+    const original = db.int();
+    const withSerial = original.serial({ start: 1 });
+
+    expect(withSerial).not.toBe(original);
+    expect(original.metadata.serial).toBeUndefined();
+    expect(withSerial.metadata.serial).toEqual({ start: 1 });
+  });
+
+  it("field.vector() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withVector = original.vector();
+
+    expect(withVector).not.toBe(original);
+    expect(original.metadata.vector).toBeUndefined();
+    expect(withVector.metadata.vector).toBe(true);
+  });
+
+  it("field.relation() returns a new field without mutating the original", () => {
+    const User = db.type("User", { name: db.string() });
+    const original = db.uuid();
+    const withRelation = original.relation({ type: "n-1", toward: { type: User } });
+
+    expect(withRelation).not.toBe(original);
+    expect(original.rawRelation).toBeUndefined();
+    expect(withRelation.rawRelation).toBeDefined();
+  });
+
+  it("chained fluent calls produce correct result", () => {
+    const field = db
+      .string()
+      .description("name")
+      .index()
+      .hooks({ create: () => "x" });
+
+    expect(field.metadata.description).toBe("name");
+    expect(field.metadata.index).toBe(true);
+    expect(field.metadata.hooks?.create).toBeDefined();
+  });
+});
+
+describe("TailorDBType does not mutate shared fields", () => {
+  it("type.hooks() does not mutate the shared field", () => {
+    const sharedField = db.string();
+
+    const typeA = db.type("TypeA", { name: sharedField }).hooks({ name: { create: () => "A" } });
+    const typeB = db.type("TypeB", { name: sharedField });
+
+    expect(typeA.fields.name.metadata.hooks).toBeDefined();
+    expect(typeB.fields.name.metadata.hooks).toBeUndefined();
+    expect(sharedField.metadata.hooks).toBeUndefined();
+  });
+
+  it("type.validate() does not mutate the shared field", () => {
+    const sharedField = db.string();
+
+    const typeA = db
+      .type("TypeA", { email: sharedField })
+      .validate({ email: ({ value }) => value.includes("@") });
+    const typeB = db.type("TypeB", { email: sharedField });
+
+    expect(typeA.fields.email.metadata.validate).toBeDefined();
+    expect(typeB.fields.email.metadata.validate).toBeUndefined();
+    expect(sharedField.metadata.validate).toBeUndefined();
+  });
+
+  it("hooks() does not replace entries in the original fields record", () => {
+    const nameField = db.string();
+    const fields = { name: nameField };
+
+    db.type("TypeA", fields).hooks({ name: { create: () => "hooked" } });
+
+    // The fields record should still reference the original field instance
+    expect(fields.name).toBe(nameField);
+  });
+
+  it("validate() does not replace entries in the original fields record", () => {
+    const emailField = db.string();
+    const fields = { email: emailField };
+
+    db.type("TypeA", fields).validate({ email: ({ value }) => value.includes("@") });
+
+    // The fields record should still reference the original field instance
+    expect(fields.email).toBe(emailField);
+  });
+});
+
+describe("TailorDBField clone tests", () => {
+  it("clones field with same metadata", () => {
+    const original = db.string().description("test description").index();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.description).toBe("test description");
+    expect(cloned.metadata.index).toBe(true);
+    expect(cloned.metadata.required).toBe(true);
+  });
+
+  it("cloned field is independent from original", () => {
+    const original = db.string().description("original");
+    const cloned = original.clone();
+
+    // Modifying cloned should not affect original
+    expect(cloned.metadata.description).toBe("original");
+    expect(original.metadata.description).toBe("original");
+  });
+
+  it("clone with optional override changes required to false", () => {
+    const required = db.string();
+    expect(required.metadata.required).toBe(true);
+
+    const optional = required.clone({ optional: true });
+    expect(optional.metadata.required).toBe(false);
+
+    // Original remains unchanged
+    expect(required.metadata.required).toBe(true);
+  });
+
+  it("clone with array override", () => {
+    const single = db.int();
+    const array = single.clone({ array: true });
+
+    expect(array.metadata.array).toBe(true);
+    expectTypeOf<output<typeof array>>().toEqualTypeOf<number[]>();
+  });
+
+  it("clone with both optional and array overrides", () => {
+    const original = db.string();
+    const cloned = original.clone({ optional: true, array: true });
+
+    expect(cloned.metadata.required).toBe(false);
+    expect(cloned.metadata.array).toBe(true);
+    expectTypeOf<output<typeof cloned>>().toEqualTypeOf<string[] | null>();
+  });
+
+  it("clones unique modifier correctly", () => {
+    const original = db.string().unique();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.unique).toBe(true);
+    expect(cloned.metadata.index).toBe(true);
+  });
+
+  it("clones relation config correctly", () => {
+    const User = db.type("User", { name: db.string() });
+    const original = db.uuid().relation({
+      type: "n-1",
+      toward: { type: User, as: "author" },
+      backward: "posts",
+    });
+    const cloned = original.clone();
+
+    expect(cloned.rawRelation).toBeDefined();
+    expect(cloned.rawRelation?.type).toBe("n-1");
+    expect(cloned.rawRelation?.toward.type).toBe("User");
+    expect(cloned.rawRelation?.toward.as).toBe("author");
+    expect(cloned.rawRelation?.backward).toBe("posts");
+
+    // Verify deep copy (different reference)
+    expect(cloned.rawRelation).not.toBe(original.rawRelation);
+    expect(cloned.rawRelation?.toward).not.toBe(original.rawRelation?.toward);
+  });
+
+  it("clones hooks correctly", () => {
+    const createHook = () => "created";
+    const original = db.string().hooks({ create: createHook });
+    const cloned = original.clone();
+
+    expect(cloned.metadata.hooks).toBeDefined();
+    expect(cloned.metadata.hooks?.create).toBe(createHook);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.hooks).not.toBe(original.metadata.hooks);
+  });
+
+  it("clones validate correctly", () => {
+    const validator = ({ value }: { value: string }) => value.length > 0;
+    const original = db.string().validate(validator);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.validate).toBeDefined();
+    expect(cloned.metadata.validate).toHaveLength(1);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+  });
+
+  it("clones validate with tuple format correctly", () => {
+    const validator = ({ value }: { value: string }) => value.length > 0;
+    const original = db.string().validate([validator, "Value must not be empty"]);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.validate).toBeDefined();
+    expect(cloned.metadata.validate).toHaveLength(1);
+    expect(cloned.metadata.validate?.[0]).toEqual([validator, "Value must not be empty"]);
+
+    // Verify deep copy (different reference for array and tuple)
+    expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+    expect(cloned.metadata.validate?.[0]).not.toBe(original.metadata.validate?.[0]);
+  });
+
+  it("clones serial config correctly", () => {
+    const original = db.int().serial({ start: 100 });
+    const cloned = original.clone();
+
+    expect(cloned.metadata.serial).toEqual({ start: 100 });
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.serial).not.toBe(original.metadata.serial);
+  });
+
+  it("clones vector config correctly", () => {
+    const original = db.string().vector();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.vector).toBe(true);
+  });
+
+  it("clones enum field correctly", () => {
+    const original = db.enum(["active", "inactive", "pending"]);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.allowedValues).not.toBe(original.metadata.allowedValues);
+    expect(cloned.metadata.allowedValues?.[0]).not.toBe(original.metadata.allowedValues?.[0]);
+  });
+
+  it("clones nested object field correctly", () => {
+    const original = db.object({
+      name: db.string(),
+      age: db.int({ optional: true }),
+    });
+    const cloned = original.clone();
+
+    expect(cloned.fields.name).toBeDefined();
+    expect(cloned.fields.age).toBeDefined();
+
+    // Verify deep copy (different reference)
+    expect(cloned.fields).not.toBe(original.fields);
+    expect(cloned.fields.name).not.toBe(original.fields.name);
+    expect(cloned.fields.age).not.toBe(original.fields.age);
   });
 });

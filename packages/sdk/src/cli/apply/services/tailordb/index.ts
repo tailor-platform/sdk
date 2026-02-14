@@ -57,13 +57,12 @@ import {
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
 } from "../../../tailordb/migrate/snapshot";
-import { logger, styles } from "../../../utils/logger";
+import { logger } from "../../../utils/logger";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
 import {
   executeMigrations,
   detectPendingMigrations,
   updateMigrationLabel,
-  buildFilteredTypesForVersion,
   type MigrationContext,
 } from "./migration";
 import type { ApplyPhase, PlanContext } from "../..";
@@ -75,6 +74,7 @@ import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { Executor } from "@/parser/service/executor";
 import type {
+  EnumValue,
   GqlOperations,
   PermissionOperand,
   StandardActionPermission,
@@ -333,17 +333,53 @@ async function validateAndDetectMigrations(
 }
 
 /**
+ * Build migration execution context for script-based migrations.
+ * @param client - Operator client instance
+ * @param migrationContext - Planned TailorDB context
+ * @param migrationsRequiringScripts - Migrations that require scripts
+ * @returns Migration context for script execution
+ */
+function buildMigrationContextForScripts(
+  client: OperatorClient,
+  migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
+  migrationsRequiringScripts: PendingMigration[],
+): MigrationContext {
+  const authService = migrationContext.application.authService;
+  if (!authService) {
+    throw new Error("Auth configuration is required to execute migration scripts.");
+  }
+
+  const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
+  for (const migration of migrationsRequiringScripts) {
+    if (!(migration.namespace in dbConfigMap)) {
+      dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
+        | TailorDBServiceConfig
+        | undefined;
+    }
+  }
+
+  return {
+    client,
+    workspaceId: migrationContext.workspaceId,
+    authNamespace: authService.config.name,
+    machineUsers: authService.config.machineUsers
+      ? Object.keys(authService.config.machineUsers)
+      : undefined,
+    dbConfig: dbConfigMap,
+  };
+}
+
+/**
  * Apply TailorDB-related changes for the given phase.
  * @param client - Operator client instance
  * @param result - Planned TailorDB changes
  * @param phase - Apply phase (defaults to "create-update")
- * @returns Promise that resolves when TailorDB changes are applied
  */
 export async function applyTailorDB(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planTailorDB>>,
   phase: Exclude<ApplyPhase, "delete"> = "create-update",
-) {
+): Promise<void> {
   const { changeSet, context: migrationContext } = result;
 
   if (phase === "create-update") {
@@ -378,36 +414,15 @@ export async function applyTailorDB(
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
-      // Step 2: Build migration context for script execution (if any migrations require scripts)
-      let migrationCtx: MigrationContext | undefined;
       const migrationsRequiringScripts = pendingMigrations.filter(
         (m) => m.diff.requiresMigrationScript,
       );
-      if (migrationsRequiringScripts.length > 0) {
-        const authService = migrationContext.application.authService;
-        if (!authService) {
-          throw new Error("Auth configuration is required to execute migration scripts.");
-        }
 
-        const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
-        for (const migration of migrationsRequiringScripts) {
-          if (!(migration.namespace in dbConfigMap)) {
-            dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
-              | TailorDBServiceConfig
-              | undefined;
-          }
-        }
-
-        migrationCtx = {
-          client,
-          workspaceId: migrationContext.workspaceId,
-          authNamespace: authService.config.name,
-          machineUsers: authService.config.machineUsers
-            ? Object.keys(authService.config.machineUsers)
-            : undefined,
-          dbConfig: dbConfigMap,
-        };
-      }
+      // Step 2: Build migration context for script execution (if any migrations require scripts)
+      const migrationCtx =
+        migrationsRequiringScripts.length > 0
+          ? buildMigrationContextForScripts(client, migrationContext, migrationsRequiringScripts)
+          : undefined;
 
       // Step 3: Execute each migration sequentially: pre -> script -> post
       if (migrationsRequiringScripts.length > 0) {
@@ -510,25 +525,6 @@ export async function applyTailorDB(
       changeSet.service.deletes.map((del) => client.deleteTailorDBService(del.request)),
     );
   }
-
-  // Update migration labels if TAILOR_INTERNAL_APPLY_MIGRATION_VERSION is set
-  // This ensures the migration label matches the applied schema version
-  if (phase === "create-update") {
-    const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
-    if (maxVersionEnv) {
-      const maxVersion = parseInt(maxVersionEnv, 10);
-      if (Number.isInteger(maxVersion)) {
-        const configDir = path.dirname(migrationContext.config.path);
-        const namespacesWithMigrations = getNamespacesWithMigrations(
-          migrationContext.config,
-          configDir,
-        );
-        for (const { namespace } of namespacesWithMigrations) {
-          await updateMigrationLabel(client, migrationContext.workspaceId, namespace, maxVersion);
-        }
-      }
-    }
-  }
 }
 
 // ============================================================================
@@ -601,46 +597,65 @@ function buildBreakingChangesMap(pendingMigrations: PendingMigration[]): Breakin
 interface FieldConfig {
   required?: boolean;
   unique?: boolean;
-  allowedValues?: string[];
+  allowedValues?: EnumValue[];
 }
 
 /**
- * Check if a field change requires pre/post-migration handling
- * - Adding a required field (pre: add as optional, post: make required)
- * - Changing optional to required (post: make required)
- * - Adding unique constraint (post: add unique)
- * - Removing enum values (pre: add new values only, post: remove old values)
- * @param {DiffChange} change - Diff change to check
- * @returns {boolean} True if the change requires pre/post-migration handling
+ * Apply pre-migration schema adjustments to avoid breaking changes before scripts run.
+ * @param fields - Field configs to adjust
+ * @param typeChanges - Breaking changes for a type
  */
-function isBreakingChange(change: DiffChange): boolean {
-  const before = change.before as FieldConfig | undefined;
-  const after = change.after as FieldConfig | undefined;
+function applyPreMigrationFieldAdjustments(
+  fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
+  typeChanges: Map<string, DiffChange>,
+): void {
+  for (const [fieldName, change] of typeChanges) {
+    const field = fields[fieldName];
+    if (!field) continue;
 
-  if (change.kind === "field_added") {
-    return after?.required === true;
+    const before = change.before as FieldConfig | undefined;
+    const after = change.after as FieldConfig | undefined;
+
+    if (change.kind === "field_added" && after?.required) {
+      field.required = false;
+    }
+
+    if (change.kind !== "field_modified") {
+      continue;
+    }
+
+    // Optional to required
+    if (!before?.required && after?.required) {
+      field.required = false;
+    }
+
+    // Unique constraint added
+    if (!(before?.unique ?? false) && (after?.unique ?? false)) {
+      field.unique = false;
+    }
+
+    // Enum values removed: keep old values + add new values (union)
+    if (before?.allowedValues && after?.allowedValues) {
+      const afterValues = new Set(after.allowedValues.map((v) => v.value));
+      const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
+      if (removedValues.length > 0) {
+        // Create union of all values, preserving descriptions where available
+        const valueMap = new Map<string, string>();
+        for (const v of before.allowedValues) {
+          valueMap.set(v.value, v.description ?? "");
+        }
+        for (const v of after.allowedValues) {
+          if (!valueMap.has(v.value)) {
+            valueMap.set(v.value, v.description ?? "");
+          }
+        }
+        field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
+          value,
+          description,
+        }));
+      }
+    }
   }
-
-  if (change.kind !== "field_modified") {
-    return false;
-  }
-
-  // Optional to required
-  if (!before?.required && after?.required) {
-    return true;
-  }
-
-  // Unique constraint added
-  if (!(before?.unique ?? false) && (after?.unique ?? false)) {
-    return true;
-  }
-
-  // Enum values removed
-  if (before?.allowedValues && after?.allowedValues) {
-    return before.allowedValues.some((v) => !after.allowedValues!.includes(v));
-  }
-
-  return false;
 }
 
 // ============================================================================
@@ -702,11 +717,11 @@ async function executeServicesCreation(
 const processedTypes = {
   created: new Set<string>(),
   updated: new Set<string>(),
-  gqlPermissionsProcessed: false,
+  gqlPermissionsProcessed: new Set<string>(),
   reset() {
     this.created.clear();
     this.updated.clear();
-    this.gqlPermissionsProcessed = false;
+    this.gqlPermissionsProcessed.clear();
   },
 };
 
@@ -725,6 +740,7 @@ async function executeSingleMigrationPrePhase(
   // Build breaking changes map for this single migration
   const breakingChanges = buildBreakingChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
+  const createdBeforeMigration = new Set(processedTypes.created);
 
   // Types - create/update only types affected by this migration
   await Promise.all([
@@ -732,7 +748,7 @@ async function executeSingleMigrationPrePhase(
     ...changeSet.type.creates
       .filter((create) => {
         const typeName = create.request.tailordbType?.name;
-        return typeName && affectedTypes.has(typeName) && !processedTypes.created.has(typeName);
+        return typeName && affectedTypes.has(typeName) && !createdBeforeMigration.has(typeName);
       })
       .map((create) => {
         const typeName = create.request.tailordbType?.name;
@@ -747,18 +763,41 @@ async function executeSingleMigrationPrePhase(
         // Clone request to avoid modifying the original changeSet
         const clonedRequest = structuredClone(create.request);
         if (clonedRequest.tailordbType?.schema?.fields) {
-          const fields = clonedRequest.tailordbType.schema.fields;
-          for (const [fieldName, change] of typeChanges) {
-            if (!isBreakingChange(change) || !fields[fieldName]) continue;
-
-            const after = change.after as FieldConfig | undefined;
-            if (change.kind === "field_added" && after?.required) {
-              fields[fieldName].required = false;
-            }
-          }
+          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
         return client.createTailorDBType(clonedRequest);
+      }),
+    // Update types already created in previous migrations (from create list)
+    ...changeSet.type.creates
+      .filter((create) => {
+        const typeName = create.request.tailordbType?.name;
+        return typeName && affectedTypes.has(typeName) && createdBeforeMigration.has(typeName);
+      })
+      .map((create) => {
+        const typeName = create.request.tailordbType?.name;
+        if (typeName) processedTypes.updated.add(typeName);
+
+        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+
+        if (!typeChanges || typeChanges.size === 0) {
+          return client.updateTailorDBType({
+            workspaceId: create.request.workspaceId,
+            namespaceName: create.request.namespaceName,
+            tailordbType: create.request.tailordbType,
+          });
+        }
+
+        const clonedRequest = structuredClone(create.request);
+        if (clonedRequest.tailordbType?.schema?.fields) {
+          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
+        }
+
+        return client.updateTailorDBType({
+          workspaceId: create.request.workspaceId,
+          namespaceName: create.request.namespaceName,
+          tailordbType: clonedRequest.tailordbType,
+        });
       }),
     // Update types that are affected by this migration
     ...changeSet.type.updates
@@ -779,42 +818,7 @@ async function executeSingleMigrationPrePhase(
         // Clone request to avoid modifying the original changeSet
         const clonedRequest = structuredClone(update.request);
         if (clonedRequest.tailordbType?.schema?.fields) {
-          const fields = clonedRequest.tailordbType.schema.fields;
-
-          for (const [fieldName, change] of typeChanges) {
-            if (!isBreakingChange(change) || !fields[fieldName]) continue;
-
-            const before = change.before as FieldConfig | undefined;
-            const after = change.after as FieldConfig | undefined;
-
-            // Required field added: make optional for pre-migration
-            if (change.kind === "field_added" && after?.required) {
-              fields[fieldName].required = false;
-            }
-
-            // Unique constraint added: keep unique=false for pre-migration
-            if (
-              change.kind === "field_modified" &&
-              !(before?.unique ?? false) &&
-              (after?.unique ?? false)
-            ) {
-              fields[fieldName].unique = false;
-            }
-
-            // Enum values removed: keep old values + add new values (union)
-            if (change.kind === "field_modified" && before?.allowedValues && after?.allowedValues) {
-              const removedValues = before.allowedValues.filter(
-                (v) => !after.allowedValues!.includes(v),
-              );
-              if (removedValues.length > 0) {
-                const unionValues = [...new Set([...before.allowedValues, ...after.allowedValues])];
-                fields[fieldName].allowedValues = unionValues.map((v) => ({
-                  value: v,
-                  description: "",
-                }));
-              }
-            }
-          }
+          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
         return client.updateTailorDBType(clonedRequest);
@@ -822,13 +826,41 @@ async function executeSingleMigrationPrePhase(
   ]);
 
   // GQLPermissions - process once (on the first migration)
-  if (!processedTypes.gqlPermissionsProcessed) {
-    processedTypes.gqlPermissionsProcessed = true;
+  if (!processedTypes.gqlPermissionsProcessed.has(migration.namespace)) {
+    const gqlPermissionCreatesForNamespace = changeSet.gqlPermission.creates.filter(
+      (create) => create.request.namespaceName === migration.namespace,
+    );
+    const gqlPermissionUpdatesForNamespace = changeSet.gqlPermission.updates.filter(
+      (update) => update.request.namespaceName === migration.namespace,
+    );
+    const gqlPermissionTypeNames = new Set(
+      gqlPermissionCreatesForNamespace.map((create) => create.name),
+    );
+    const missingTypeCreates = changeSet.type.creates.filter((create) => {
+      const typeName = create.request.tailordbType?.name;
+      const namespaceName = create.request.namespaceName;
+      return (
+        namespaceName === migration.namespace &&
+        typeName &&
+        gqlPermissionTypeNames.has(typeName) &&
+        !processedTypes.created.has(typeName)
+      );
+    });
+    if (missingTypeCreates.length > 0) {
+      await Promise.all(
+        missingTypeCreates.map((create) => {
+          const typeName = create.request.tailordbType?.name;
+          if (typeName) processedTypes.created.add(typeName);
+          return client.createTailorDBType(create.request);
+        }),
+      );
+    }
+    processedTypes.gqlPermissionsProcessed.add(migration.namespace);
     await Promise.all([
-      ...changeSet.gqlPermission.creates.map((create) =>
+      ...gqlPermissionCreatesForNamespace.map((create) =>
         client.createTailorDBGQLPermission(create.request),
       ),
-      ...changeSet.gqlPermission.updates.map((update) =>
+      ...gqlPermissionUpdatesForNamespace.map((update) =>
         client.updateTailorDBGQLPermission(update.request),
       ),
     ]);
@@ -948,36 +980,6 @@ export async function planTailorDB(context: PlanContext) {
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
 
-  // Check for TAILOR_INTERNAL_APPLY_MIGRATION_VERSION and build filtered types if set (only for non-removal)
-  let filteredTypesByNamespace: Map<string, Record<string, TailorDBType>> | undefined;
-  let skipSchemaCheck = false;
-  if (!forRemoval) {
-    const maxVersionEnv = process.env.TAILOR_INTERNAL_APPLY_MIGRATION_VERSION;
-    if (maxVersionEnv) {
-      const maxVersion = parseInt(maxVersionEnv, 10);
-      if (!Number.isInteger(maxVersion)) {
-        throw new Error(
-          `Invalid TAILOR_INTERNAL_APPLY_MIGRATION_VERSION: "${maxVersionEnv}". Must be a valid integer.`,
-        );
-      }
-
-      logger.info(
-        `Using schema reconstructed up to migration version ${styles.bold(formatMigrationNumber(maxVersion))}`,
-      );
-      logger.info("Schema check will be skipped (local types are ahead of target version)", {
-        mode: "plain",
-      });
-      logger.newline();
-
-      skipSchemaCheck = true;
-      filteredTypesByNamespace = await buildFilteredTypesForVersion(
-        maxVersion,
-        application,
-        config,
-      );
-    }
-  }
-
   const {
     changeSet: serviceChangeSet,
     conflicts,
@@ -985,14 +987,7 @@ export async function planTailorDB(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const typeChangeSet = await planTypes(
-    client,
-    workspaceId,
-    tailordbs,
-    executors,
-    deletedServices,
-    filteredTypesByNamespace,
-  );
+  const typeChangeSet = await planTypes(client, workspaceId, tailordbs, executors, deletedServices);
   const gqlPermissionChangeSet = await planGqlPermissions(
     client,
     workspaceId,
@@ -1017,7 +1012,7 @@ export async function planTailorDB(context: PlanContext) {
       workspaceId,
       application,
       config,
-      noSchemaCheck: skipSchemaCheck || (noSchemaCheck ?? false),
+      noSchemaCheck: noSchemaCheck ?? false,
     },
   };
 }
