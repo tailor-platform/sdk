@@ -125,17 +125,17 @@ When using \`--wait\`, the CLI tracks not only the executor job but also any dow
 
 The \`--logs\` option displays logs from the downstream execution when available.`,
   examples: [
-    { cmd: "tailor-sdk executor trigger my-executor", desc: "Trigger an executor" },
+    { cmd: "my-executor", desc: "Trigger an executor" },
     {
-      cmd: 'tailor-sdk executor trigger my-executor -d \'{"message": "hello"}\'',
+      cmd: 'my-executor -d \'{"message": "hello"}\'',
       desc: "Trigger with data",
     },
     {
-      cmd: 'tailor-sdk executor trigger my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "X-Another: value2"',
+      cmd: 'my-executor -d \'{"message": "hello"}\' -H "X-Custom: value" -H "X-Another: value2"',
       desc: "Trigger with data and headers",
     },
-    { cmd: "tailor-sdk executor trigger my-executor -W", desc: "Trigger and wait for completion" },
-    { cmd: "tailor-sdk executor trigger my-executor -W -l", desc: "Trigger, wait, and show logs" },
+    { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
+    { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
   ],
   args: z.object({
     ...commonArgs,
