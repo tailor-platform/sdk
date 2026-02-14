@@ -6,6 +6,14 @@ import type { ProblemMeta } from "../shared/helpers";
 
 const execAsync = promisify(exec);
 
+function filterNpmWarnings(output: string): string {
+  return output
+    .split("\n")
+    .filter((line) => !line.startsWith("npm warn "))
+    .join("\n")
+    .trim();
+}
+
 export type TestDetail = {
   name: string;
   status: "passed" | "failed";
@@ -35,9 +43,12 @@ async function runCommand(
     return { success: true, output: stdout };
   } catch (err) {
     const error = err as { stdout?: string; stderr?: string; message: string };
+    const stdout = error.stdout ?? "";
+    const stderr = filterNpmWarnings(error.stderr ?? "");
+    const output = [stdout, stderr].filter(Boolean).join("\n") || error.message;
     return {
       success: false,
-      output: error.stderr || error.stdout || error.message,
+      output,
     };
   }
 }

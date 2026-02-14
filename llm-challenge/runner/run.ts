@@ -279,10 +279,25 @@ async function runProblem(
     const maxRetries = options.solve.retry;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // Collect error output from failed stages
-      const errorOutput = stages
+      const errorParts = stages
         .filter((s) => !s.passed)
-        .map((s) => `[${s.stage}] ${s.output}`)
-        .join("\n\n");
+        .map((s) => {
+          let part = `[${s.stage}] ${s.output}`;
+          if (s.stage === "tests" && s.testDetails) {
+            const failedTests = s.testDetails.filter((t) => t.status === "failed");
+            if (failedTests.length > 0) {
+              const details = failedTests
+                .map((t) => {
+                  const msg = t.failureMessage ? `: ${t.failureMessage.split("\n")[0]}` : "";
+                  return `  FAIL ${t.name}${msg}`;
+                })
+                .join("\n");
+              part += `\n\nFailed tests:\n${details}`;
+            }
+          }
+          return part;
+        });
+      const errorOutput = errorParts.join("\n\n");
 
       if (options.verbose) {
         console.log(`  Retry ${attempt}/${maxRetries}...`);

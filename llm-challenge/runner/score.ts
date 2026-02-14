@@ -1,6 +1,6 @@
 import type { ProblemMeta } from "../shared/helpers";
 import type { SolveResult } from "./solve";
-import type { StageInput } from "./verify";
+import type { TestDetail, StageInput } from "./verify";
 
 export type FailureCategory =
   | "missing_file"
@@ -21,6 +21,9 @@ export type StageResult = {
   score: number;
   maxScore: number;
   category?: FailureCategory;
+  testsPassed?: number;
+  testsTotal?: number;
+  testDetails?: TestDetail[];
 };
 
 export type ProblemResult = {
@@ -118,6 +121,9 @@ function classifyFailure(
       return "api_misuse";
     }
     return "generate_error";
+  }
+  if (stage === "typecheck") {
+    return "type_error";
   }
   if (stage === "tests") {
     return "logic_error";
@@ -230,7 +236,7 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   }
   const commonFailurePatterns: FailurePattern[] = [];
   for (const [key, entry] of Object.entries(patternCounts)) {
-    if (entry.count >= 3) {
+    if (entry.count >= 2) {
       const [category, failureCategory] = key.split(":") as [string, DefinedFailureCategory];
       commonFailurePatterns.push({
         pattern: `${failureCategory} in ${category} problems`,
@@ -417,7 +423,11 @@ export function formatReportTable(report: ChallengeReport): string {
         const stageScore = `${s.score}/${s.maxScore}`.padEnd(15);
         const stageStatus = s.passed ? "ok" : s.score > 0 ? "PARTIAL" : "FAIL";
         const categoryLabel = s.category ? ` [${s.category}]` : "";
-        lines.push(`${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}`);
+        const testCountLabel =
+          s.testsTotal != null ? ` (${s.testsPassed ?? 0}/${s.testsTotal} tests)` : "";
+        lines.push(
+          `${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}${testCountLabel}`,
+        );
       }
     }
   }
