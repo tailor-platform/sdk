@@ -96,7 +96,7 @@ function getGeneratedTypeForTypeAttachedPlugin(
     processCache.set(plugin, pluginCache);
   }
 
-  const cacheKey = getCacheKey(sourceType.name, resolvedPluginConfig);
+  const cacheKey = getCacheKey(`${sourceType.name}:ns=${resolvedNamespace}`, resolvedPluginConfig);
   let output = pluginCache.get(cacheKey);
 
   if (!output) {
@@ -159,7 +159,7 @@ function getGeneratedTypeForNamespacePlugin(
     namespaceProcessCache.set(plugin, pluginCache);
   }
 
-  const cacheKey = getCacheKey("namespace", resolvedPluginConfig);
+  const cacheKey = getCacheKey(`namespace:ns=${resolvedNamespace}`, resolvedPluginConfig);
   let output = pluginCache.get(cacheKey);
 
   if (!output) {
