@@ -31,6 +31,8 @@ export type ProblemResult = {
   stages: StageResult[];
   totalScore: number;
   maxScore: number;
+  firstAttemptScore?: number;
+  adjustedScore?: number;
   solveResult?: SolveResult;
   retryCount?: number;
   retrySolveResults?: SolveResult[];
@@ -68,6 +70,8 @@ export type ChallengeReport = {
   totalScore: number;
   maxScore: number;
   percentage: number;
+  adjustedScore: number;
+  adjustedPercentage: number;
   weightedScore: number;
   weightedMaxScore: number;
   weightedPercentage: number;
@@ -283,6 +287,19 @@ function isInfraFailure(result: ProblemResult): boolean {
   return result.stages.every((s) => s.category === "infra_failure");
 }
 
+/**
+ * Compute adjusted score with retry penalty.
+ * Formula: base_score * (1 - 0.1 * retry_count), max 30% reduction.
+ */
+export function computeAdjustedScore(result: ProblemResult): number {
+  const retryCount = result.retryCount ?? 0;
+  if (retryCount === 0) {
+    return result.totalScore;
+  }
+  const penalty = Math.min(0.1 * retryCount, 0.3);
+  return Math.round(result.totalScore * (1 - penalty));
+}
+
 export function createReport(
   results: ProblemResult[],
   metadata?: { model?: string; sdkVersion?: string },
@@ -292,6 +309,9 @@ export function createReport(
 
   const totalScore = results.reduce((sum, r) => sum + r.totalScore, 0);
   const maxScore = results.reduce((sum, r) => sum + r.maxScore, 0);
+
+  // Adjusted score with retry penalty
+  const adjustedScore = results.reduce((sum, r) => sum + (r.adjustedScore ?? r.totalScore), 0);
 
   // Exclude infra failures from cost calculation
   const totalCostUsd = validResults.reduce((sum, r) => {
@@ -334,6 +354,8 @@ export function createReport(
     totalScore,
     maxScore,
     percentage: maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0,
+    adjustedScore,
+    adjustedPercentage: maxScore > 0 ? Math.round((adjustedScore / maxScore) * 100) : 0,
     weightedScore: Math.round(weightedScore * 10) / 10,
     weightedMaxScore: Math.round(weightedMaxScore * 10) / 10,
     weightedPercentage:
@@ -350,7 +372,8 @@ export function createReport(
 
 export function formatReportTable(report: ChallengeReport): string {
   const hasCost = report.results.some((r) => r.solveResult !== undefined);
-  const width = hasCost ? 92 : 80;
+  const hasRetries = report.results.some((r) => (r.retryCount ?? 0) > 0);
+  const width = hasCost ? 102 : 90;
 
   const lines: string[] = [];
   lines.push("=".repeat(width));
@@ -360,6 +383,9 @@ export function formatReportTable(report: ChallengeReport): string {
 
   let header =
     "Problem".padEnd(30) + "Difficulty".padEnd(12) + "Score".padEnd(15) + "Status".padEnd(10);
+  if (hasRetries) {
+    header += "1st".padEnd(8);
+  }
   if (hasCost) {
     header += "Cost";
   }
@@ -375,6 +401,11 @@ export function formatReportTable(report: ChallengeReport): string {
       infraFailed ? "INFRA" : r.totalScore === r.maxScore ? "PASS" : "PARTIAL"
     ).padEnd(10);
     let line = `${name}${diff}${score}${status}`;
+    if (hasRetries) {
+      const firstAttempt =
+        !infraFailed && r.firstAttemptScore != null ? `${r.firstAttemptScore}` : "";
+      line += firstAttempt.padEnd(8);
+    }
     if (hasCost && r.solveResult && !infraFailed) {
       line += `$${r.solveResult.costUsd.toFixed(4)}`;
     }
@@ -397,6 +428,13 @@ export function formatReportTable(report: ChallengeReport): string {
     totalLine += `$${report.totalCostUsd.toFixed(4)}`;
   }
   lines.push(totalLine);
+
+  // Adjusted score (with retry penalty)
+  if (hasRetries && report.adjustedScore !== report.totalScore) {
+    lines.push(
+      `${"Adjusted (retry penalty)".padEnd(30)}${"".padEnd(12)}${`${report.adjustedScore}/${report.maxScore}`.padEnd(15)}${`${report.adjustedPercentage}%`}`,
+    );
+  }
 
   // Weighted score
   lines.push(
@@ -431,6 +469,15 @@ export function formatReportTable(report: ChallengeReport): string {
     lines.push("");
     lines.push(
       `⚠ ${report.infraFailureCount} problem(s) skipped due to infrastructure failures (auth/network/rate-limit)`,
+    );
+  }
+
+  // All problems passed warning
+  const validResults = report.results.filter((r) => !isInfraFailure(r));
+  if (validResults.length > 0 && validResults.every((r) => r.totalScore === r.maxScore)) {
+    lines.push("");
+    lines.push(
+      "WARNING: All problems passed — consider increasing difficulty or adding harder problems",
     );
   }
 

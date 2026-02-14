@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { copyDir, listProblems, loadMeta } from "../shared/helpers";
 import type { ProblemMeta } from "../shared/helpers";
-import { calculateScore, createReport, formatReportTable } from "./score";
+import { calculateScore, computeAdjustedScore, createReport, formatReportTable } from "./score";
 import type { ChallengeReport, ProblemResult, StageResult } from "./score";
 import { checkAuthStatus, retrySolveProblem, solveProblem } from "./solve";
 import type { SolveResult } from "./solve";
@@ -271,6 +271,9 @@ async function runProblem(
   let totalScore = stages.reduce((sum, s) => sum + s.score, 0);
   let maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
 
+  // Record first-attempt score before retries
+  const firstAttemptScore = totalScore;
+
   // Retry loop (only in solve mode)
   if (options.solve && totalScore < maxScore) {
     const maxRetries = options.solve.retry;
@@ -327,7 +330,8 @@ async function runProblem(
     fs.rmSync(workDir, { recursive: true });
   }
 
-  return {
+  const retryCount = retrySolveResults.length > 0 ? retrySolveResults.length : undefined;
+  const result: ProblemResult = {
     problemId: meta.id,
     problemName: meta.name,
     difficulty: meta.difficulty,
@@ -335,11 +339,14 @@ async function runProblem(
     stages,
     totalScore,
     maxScore,
+    firstAttemptScore: retryCount != null ? firstAttemptScore : undefined,
     solveResult,
-    retryCount: retrySolveResults.length > 0 ? retrySolveResults.length : undefined,
+    retryCount,
     retrySolveResults: retrySolveResults.length > 0 ? retrySolveResults : undefined,
     totalDurationMs: Date.now() - problemStartTime,
   };
+  result.adjustedScore = computeAdjustedScore(result);
+  return result;
 }
 
 function getPartialResultsPath(resultsDir: string): string {

@@ -213,6 +213,19 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
   console.log(
     `${"Total".padEnd(30)}${`${before.totalScore}/${before.maxScore}`.padEnd(12)}${`${after.totalScore}/${after.maxScore}`.padEnd(12)}${formatDelta(totalDelta).padEnd(8)}${before.percentage}% -> ${after.percentage}%`,
   );
+
+  // Adjusted score comparison (if retries were used)
+  if (before.adjustedScore != null || after.adjustedScore != null) {
+    const adjBefore = before.adjustedScore ?? before.totalScore;
+    const adjAfter = after.adjustedScore ?? after.totalScore;
+    const adjDelta = adjAfter - adjBefore;
+    const adjPctBefore = before.adjustedPercentage ?? before.percentage;
+    const adjPctAfter = after.adjustedPercentage ?? after.percentage;
+    console.log(
+      `${"Adjusted".padEnd(30)}${`${adjBefore}/${before.maxScore}`.padEnd(12)}${`${adjAfter}/${after.maxScore}`.padEnd(12)}${formatDelta(adjDelta).padEnd(8)}${adjPctBefore}% -> ${adjPctAfter}%`,
+    );
+  }
+
   console.log("");
 
   // Category success rates
@@ -280,8 +293,14 @@ function showTrend(reports: ChallengeReport[]): void {
   console.log("");
 
   // Header
-  const header =
-    "Timestamp".padEnd(22) + "Model".padEnd(12) + "Score".padEnd(15) + "Pct".padEnd(8) + "Cost";
+  const hasAdjusted = reports.some(
+    (r) => r.adjustedScore != null && r.adjustedScore !== r.totalScore,
+  );
+  let header = "Timestamp".padEnd(22) + "Model".padEnd(12) + "Score".padEnd(15) + "Pct".padEnd(8);
+  if (hasAdjusted) {
+    header += "Adj%".padEnd(8);
+  }
+  header += "Cost".padEnd(12) + "Pts/$";
   console.log(header);
   console.log("-".repeat(width));
 
@@ -290,8 +309,16 @@ function showTrend(reports: ChallengeReport[]): void {
     const model = (r.model ?? "-").slice(0, 11).padEnd(12);
     const score = `${r.totalScore}/${r.maxScore}`.padEnd(15);
     const pct = `${r.percentage}%`.padEnd(8);
+    let line = `${ts}  ${model}${score}${pct}`;
+    if (hasAdjusted) {
+      const adjPct = r.adjustedPercentage != null ? `${r.adjustedPercentage}%` : "-";
+      line += adjPct.padEnd(8);
+    }
     const cost = r.totalCostUsd > 0 ? `$${r.totalCostUsd.toFixed(4)}` : "-";
-    console.log(`${ts}  ${model}${score}${pct}${cost}`);
+    line += cost.padEnd(12);
+    const ptsPerDollar = r.scorePerDollar != null ? `${r.scorePerDollar.toFixed(1)}` : "-";
+    line += ptsPerDollar;
+    console.log(line);
   }
 
   console.log("-".repeat(width));
