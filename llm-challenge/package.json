@@ -9,7 +9,9 @@
     "challenge:verify-solution": "tsx runner/run.ts --all --use-solution",
     "challenge:solve": "tsx runner/run.ts --all --solve",
     "challenge:analyze": "tsx runner/analyze.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "typecheck:go": "tsgo"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^"
