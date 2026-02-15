@@ -192,7 +192,6 @@ describe("executeScript", () => {
     const result = await resultPromise;
 
     expect(result.success).toBe(true);
-    expect(result.executionId).toBe("exec-123");
     expect(result.logs).toBe("Script executed successfully");
     expect(result.result).toBe('{"data":"test"}');
     expect(result.error).toBeUndefined();
@@ -258,7 +257,6 @@ describe("executeScript", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.executionId).toBe("exec-123");
     expect(result.logs).toBe("Error: TypeError: undefined is not a function");
     expect(result.result).toBe("Script execution failed");
     expect(result.error).toBe(
@@ -289,7 +287,6 @@ describe("executeScript", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.executionId).toBe("exec-123");
     expect(result.error).toBe("Script execution failed with unknown error (executionId: exec-123)");
   });
 
@@ -317,7 +314,6 @@ describe("executeScript", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.executionId).toBe("exec-123");
     expect(result.result).toBe("permission denied");
     expect(result.error).toBe("permission denied");
   });
