@@ -154,7 +154,7 @@ export async function verifyProblem(
     results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
     return results;
   }
-  const generateResult = await runCommand(`node ${sdkBin} generate -c tailor.config.ts`, workDir);
+  const generateResult = await runCommand(`node "${sdkBin}" generate -c tailor.config.ts`, workDir);
   if (!generateResult.success) {
     // Partial scoring for generate: check what was accomplished
     const generateStage: StageInput = {
@@ -172,7 +172,7 @@ export async function verifyProblem(
 
       // Check if files can be imported (60% of generate score)
       // Use a quick syntax check via tsc --noEmit on just the implement files
-      const fileList = _meta.files.implement.join(" ");
+      const fileList = _meta.files.implement.map((f) => `"${f}"`).join(" ");
       const importCheck = await runCommand(
         `npx tsc --noEmit --allowImportingTsExtensions ${fileList}`,
         workDir,
@@ -207,7 +207,7 @@ export async function verifyProblem(
   const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
   const testResult = await runCommand(
-    `npx vitest run --reporter=json --config ${path.join(challengeRoot, "vitest.config.ts")} --root ${challengeRoot} ${testsDir}`,
+    `npx vitest run --reporter=json --config "${path.join(challengeRoot, "vitest.config.ts")}" --root "${challengeRoot}" "${testsDir}"`,
     workDir,
   );
 

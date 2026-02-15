@@ -48,3 +48,4 @@ CLAUDE.local.md
 # LLM Challenge
 llm-challenge/results/
 llm-challenge/problems/*/work/
+.claude/tmp/

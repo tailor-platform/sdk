@@ -669,27 +669,46 @@ async function main(): Promise<void> {
   await Promise.all(
     tasks.map((task) =>
       limit(async () => {
-        const result = await runProblem(task.problemName, {
-          implDir: task.implDir,
-          solve: solve ? { model, maxBudget, retry } : undefined,
-          clean,
-          verbose,
-        });
+        try {
+          const result = await runProblem(task.problemName, {
+            implDir: task.implDir,
+            solve: solve ? { model, maxBudget, retry } : undefined,
+            clean,
+            verbose,
+          });
 
-        // Push result (safe: Node.js single-threaded)
-        results.push(result);
-        completed++;
+          // Push result (safe: Node.js single-threaded)
+          results.push(result);
+          completed++;
 
-        if (!verbose) {
-          const status = result.totalScore === result.maxScore ? "PASS" : "PARTIAL";
-          console.log(
-            `[${completed}/${total}] ${task.problemName}: ${status} (${result.totalScore}/${result.maxScore}) [${formatDuration(result.totalDurationMs ?? 0)}]`,
-          );
-        }
+          if (!verbose) {
+            const status = result.totalScore === result.maxScore ? "PASS" : "PARTIAL";
+            console.log(
+              `[${completed}/${total}] ${task.problemName}: ${status} (${result.totalScore}/${result.maxScore}) [${formatDuration(result.totalDurationMs ?? 0)}]`,
+            );
+          }
 
-        // Save partial results after each problem
-        if (all) {
-          savePartialResults(resultsDir, results, solve ? model : undefined, !!solve, implSource);
+          // Save partial results after each problem
+          if (all) {
+            savePartialResults(resultsDir, results, solve ? model : undefined, !!solve, implSource);
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          console.error(`[ERROR] ${task.problemName}: ${errorMsg}`);
+
+          const problemDir = path.join(challengeRoot, "problems", task.problemName);
+          const meta = loadMeta(problemDir);
+          results.push({
+            problemId: task.problemName,
+            problemName: task.problemName,
+            difficulty: meta.difficulty,
+            category: meta.category,
+            stages: [],
+            totalScore: 0,
+            maxScore: 0,
+            totalDurationMs: 0,
+          });
+          completed++;
         }
       }),
     ),
