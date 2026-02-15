@@ -698,15 +698,15 @@ async function main(): Promise<void> {
 
           const problemDir = path.join(challengeRoot, "problems", task.problemName);
           const meta = loadMeta(problemDir);
-          const maxScore = meta.scoring.generate + meta.scoring.typecheck + meta.scoring.tests;
+          const stages = makeInfraFailureStages(meta);
           results.push({
             problemId: meta.id,
             problemName: meta.name,
             difficulty: meta.difficulty,
             category: meta.category,
-            stages: [],
+            stages,
             totalScore: 0,
-            maxScore,
+            maxScore: stages.reduce((sum, s) => sum + s.maxScore, 0),
             totalDurationMs: 0,
           });
           completed++;

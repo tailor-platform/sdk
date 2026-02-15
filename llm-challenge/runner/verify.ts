@@ -183,12 +183,8 @@ export async function verifyProblem(
       generateStage.testsTotal = 5;
 
       // Check if files can be imported (60% of generate score)
-      // Use a quick syntax check via tsc --noEmit on just the implement files
-      const fileList = _meta.files.implement.map((f) => `"${f}"`).join(" ");
-      const importCheck = await runCommand(
-        `npx tsc --noEmit --allowImportingTsExtensions ${fileList}`,
-        workDir,
-      );
+      // Use project tsconfig to respect module resolution and compiler options
+      const importCheck = await runCommand("npx tsc --noEmit", workDir);
       if (importCheck.success) {
         generateStage.testsPassed = 3;
       }
