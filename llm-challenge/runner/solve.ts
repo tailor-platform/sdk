@@ -141,9 +141,39 @@ function buildRetryPrompt(
   workDir: string,
   errorOutput: string,
 ): string {
-  const basePrompt = buildPrompt(problemDir, meta, workDir);
+  const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
+  const existingFiles = listFilesRecursive(workDir);
 
-  const retryAddendum = [
+  const sdkVersion = getSdkVersion();
+  const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
+
+  const systemPrompt = [
+    "You are fixing issues in a @tailor-platform/sdk project.",
+    versionLine,
+    "Fix the issues in the listed files. Read the existing files first, then modify them.",
+    'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
+    "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
+    "Do NOT read any files outside of the current working directory.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const existingFilesList = existingFiles.map((f) => `- ${f}`).join("\n");
+  const filesToFix = meta.files.implement.map((f) => `- ${f}`).join("\n");
+
+  const userPrompt = [
+    "## Existing Files",
+    "",
+    "The following files already exist in the project:",
+    existingFilesList,
+    "",
+    "## Task",
+    "",
+    problemMd,
+    "",
+    "## Files to Fix",
+    "",
+    filesToFix,
     "",
     "## Previous Attempt Error",
     "",
@@ -156,7 +186,7 @@ function buildRetryPrompt(
     "Read the existing files you created previously and fix them to resolve the error.",
   ].join("\n");
 
-  return `${basePrompt}\n${retryAddendum}`;
+  return `${systemPrompt}\n\n${userPrompt}`;
 }
 
 function truncateErrorOutput(output: string, maxLength = 5000): string {

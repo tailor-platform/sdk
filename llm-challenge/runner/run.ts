@@ -384,21 +384,55 @@ function getPartialResultsPath(resultsDir: string): string {
   return path.join(resultsDir, ".partial-results.json");
 }
 
-function loadPartialResults(resultsDir: string): ProblemResult[] {
+type PartialResultsFile = {
+  model?: string;
+  solve: boolean;
+  results: ProblemResult[];
+};
+
+function loadPartialResults(
+  resultsDir: string,
+  expectedModel?: string,
+  expectedSolve?: boolean,
+): ProblemResult[] {
   const partialPath = getPartialResultsPath(resultsDir);
   if (!fs.existsSync(partialPath)) {
     return [];
   }
   try {
-    return JSON.parse(fs.readFileSync(partialPath, "utf-8")) as ProblemResult[];
+    const raw = JSON.parse(fs.readFileSync(partialPath, "utf-8")) as
+      | PartialResultsFile
+      | ProblemResult[];
+    // Support legacy format (plain array)
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+    // Validate run configuration matches
+    if (expectedModel != null && raw.model != null && raw.model !== expectedModel) {
+      console.log(
+        `Partial results model mismatch (${raw.model} vs ${expectedModel}), starting fresh.`,
+      );
+      return [];
+    }
+    if (expectedSolve != null && raw.solve !== expectedSolve) {
+      console.log(`Partial results mode mismatch, starting fresh.`);
+      return [];
+    }
+    return raw.results;
   } catch {
     return [];
   }
 }
 
-function savePartialResults(resultsDir: string, results: ProblemResult[]): void {
+function savePartialResults(
+  resultsDir: string,
+  results: ProblemResult[],
+  model?: string,
+  solve?: boolean,
+): void {
   fs.mkdirSync(resultsDir, { recursive: true });
-  fs.writeFileSync(getPartialResultsPath(resultsDir), JSON.stringify(results, null, 2));
+  const data: PartialResultsFile = { model, solve: solve ?? false, results };
+  fs.writeFileSync(getPartialResultsPath(resultsDir), JSON.stringify(data, null, 2));
 }
 
 function cleanPartialResults(resultsDir: string): void {
@@ -568,7 +602,7 @@ async function main(): Promise<void> {
   const results: ProblemResult[] = [];
   let completedIds = new Set<string>();
   if (resume) {
-    const partialResults = loadPartialResults(resultsDir);
+    const partialResults = loadPartialResults(resultsDir, solve ? model : undefined, !!solve);
     results.push(...partialResults);
     completedIds = new Set(partialResults.map((r) => `${r.problemId}-${r.problemName}`));
     if (partialResults.length > 0) {
@@ -635,7 +669,7 @@ async function main(): Promise<void> {
 
         // Save partial results after each problem
         if (all) {
-          savePartialResults(resultsDir, results);
+          savePartialResults(resultsDir, results, solve ? model : undefined, !!solve);
         }
       }),
     ),
