@@ -94,13 +94,25 @@ function parseVitestJson(output: string): ParsedVitestResult | undefined {
     return undefined;
   }
 
-  // Try to parse from the start of the JSON object
+  // Try to parse from the start of the JSON object, skipping string literals
   let depth = 0;
   let endIdx = startIdx;
+  let inString = false;
   for (let i = startIdx; i < output.length; i++) {
-    if (output[i] === "{") {
+    const ch = output[i];
+    if (inString) {
+      if (ch === "\\" && i + 1 < output.length) {
+        i++; // skip escaped character
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
       depth++;
-    } else if (output[i] === "}") {
+    } else if (ch === "}") {
       depth--;
       if (depth === 0) {
         endIdx = i + 1;
