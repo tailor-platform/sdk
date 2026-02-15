@@ -395,7 +395,7 @@ export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
         resolve({ ok: true });
       } catch {
         const output = stdout || stderr;
-        if (detectInfraFailure(output, 0, 0)) {
+        if (infraFailurePatterns.some((p) => p.test(output))) {
           resolve({ ok: false, error: output });
           return;
         }

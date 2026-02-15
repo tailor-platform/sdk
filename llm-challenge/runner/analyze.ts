@@ -45,7 +45,11 @@ function loadReports(): ChallengeReport[] {
   const files = fs
     .readdirSync(resultsDir)
     .filter((f) => f.startsWith("report-") && f.endsWith(".json"))
-    .sort();
+    .sort((a, b) => {
+      const aMtime = fs.statSync(path.join(resultsDir, a)).mtimeMs;
+      const bMtime = fs.statSync(path.join(resultsDir, b)).mtimeMs;
+      return aMtime - bMtime;
+    });
 
   if (files.length === 0) {
     console.error("No report files found in results/");

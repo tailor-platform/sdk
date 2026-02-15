@@ -36,6 +36,7 @@ export type ProblemResult = {
   totalScore: number;
   maxScore: number;
   firstAttemptScore?: number;
+  firstAttemptStages?: StageResult[];
   adjustedScore?: number;
   solveResult?: SolveResult;
   retryCount?: number;
@@ -290,9 +291,9 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
       if (!r.retrySolveResults || r.retrySolveResults.length === 0) {
         continue;
       }
-      // Pre-retry failures
+      // Pre-retry failures (use firstAttemptStages if available, fall back to stages)
       const preRetryCategories = new Set<DefinedFailureCategory>();
-      for (const s of r.stages) {
+      for (const s of r.firstAttemptStages ?? r.stages) {
         if (!s.passed && s.category) {
           preRetryCategories.add(s.category);
         }

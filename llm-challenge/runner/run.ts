@@ -285,8 +285,9 @@ async function runProblem(
   let totalScore = stages.reduce((sum, s) => sum + s.score, 0);
   let maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
 
-  // Record first-attempt score before retries
+  // Record first-attempt score and stages before retries
   const firstAttemptScore = totalScore;
+  const firstAttemptStages = stages.map((s) => ({ ...s }));
 
   // Retry loop (only in solve mode)
   if (options.solve && totalScore < maxScore) {
@@ -369,6 +370,7 @@ async function runProblem(
     totalScore,
     maxScore,
     firstAttemptScore: retryCount != null ? firstAttemptScore : undefined,
+    firstAttemptStages: retryCount != null ? firstAttemptStages : undefined,
     solveResult,
     retryCount,
     retrySolveResults: retrySolveResults.length > 0 ? retrySolveResults : undefined,
@@ -413,8 +415,11 @@ function findLatestReport(resultsDir: string): ChallengeReport | undefined {
   const files = fs
     .readdirSync(resultsDir)
     .filter((f) => f.startsWith("report-") && f.endsWith(".json"))
-    .sort()
-    .reverse();
+    .sort((a, b) => {
+      const aMtime = fs.statSync(path.join(resultsDir, a)).mtimeMs;
+      const bMtime = fs.statSync(path.join(resultsDir, b)).mtimeMs;
+      return bMtime - aMtime;
+    });
   if (files.length === 0) {
     return undefined;
   }
