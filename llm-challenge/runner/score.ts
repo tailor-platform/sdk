@@ -341,7 +341,7 @@ export function computeAdjustedScore(result: ProblemResult): number {
 
 export function createReport(
   results: ProblemResult[],
-  metadata?: { model?: string; sdkVersion?: string },
+  metadata?: { model?: string; sdkVersion?: string; elapsedMs?: number },
 ): ChallengeReport {
   const infraFailureCount = results.filter(isInfraFailure).length;
   const validResults = results.filter((r) => !isInfraFailure(r));
@@ -380,8 +380,9 @@ export function createReport(
   const avgCostPerPoint =
     totalCostUsd > 0 && validScore > 0 ? totalCostUsd / validScore : undefined;
 
-  // Total duration
-  const totalDurationMs = results.reduce((sum, r) => sum + (r.totalDurationMs ?? 0), 0);
+  // Total duration: prefer wall-clock elapsed time (accurate for parallel runs)
+  const totalDurationMs =
+    metadata?.elapsedMs ?? results.reduce((sum, r) => sum + (r.totalDurationMs ?? 0), 0);
 
   const analytics = computeAnalytics(validResults);
 

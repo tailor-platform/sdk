@@ -387,6 +387,7 @@ function getPartialResultsPath(resultsDir: string): string {
 type PartialResultsFile = {
   model?: string;
   solve: boolean;
+  implSource?: string;
   results: ProblemResult[];
 };
 
@@ -394,6 +395,7 @@ function loadPartialResults(
   resultsDir: string,
   expectedModel?: string,
   expectedSolve?: boolean,
+  expectedImplSource?: string,
 ): ProblemResult[] {
   const partialPath = getPartialResultsPath(resultsDir);
   if (!fs.existsSync(partialPath)) {
@@ -418,6 +420,14 @@ function loadPartialResults(
       console.log(`Partial results mode mismatch, starting fresh.`);
       return [];
     }
+    if (
+      expectedImplSource != null &&
+      raw.implSource != null &&
+      raw.implSource !== expectedImplSource
+    ) {
+      console.log(`Partial results implementation source mismatch, starting fresh.`);
+      return [];
+    }
     return raw.results;
   } catch {
     return [];
@@ -429,9 +439,10 @@ function savePartialResults(
   results: ProblemResult[],
   model?: string,
   solve?: boolean,
+  implSource?: string,
 ): void {
   fs.mkdirSync(resultsDir, { recursive: true });
-  const data: PartialResultsFile = { model, solve: solve ?? false, results };
+  const data: PartialResultsFile = { model, solve: solve ?? false, implSource, results };
   fs.writeFileSync(getPartialResultsPath(resultsDir), JSON.stringify(data, null, 2));
 }
 
@@ -598,11 +609,19 @@ async function main(): Promise<void> {
     console.log(`Running ${problems.length} problem(s) (concurrency: ${concurrency})...`);
   }
 
+  // Determine implementation source label for resume validation
+  const implSource = solve ? "solve" : useSolution ? "solution" : (implDir ?? "unknown");
+
   // Resume support: load partial results and skip already-completed problems
   const results: ProblemResult[] = [];
   let completedIds = new Set<string>();
   if (resume) {
-    const partialResults = loadPartialResults(resultsDir, solve ? model : undefined, !!solve);
+    const partialResults = loadPartialResults(
+      resultsDir,
+      solve ? model : undefined,
+      !!solve,
+      implSource,
+    );
     results.push(...partialResults);
     completedIds = new Set(partialResults.map((r) => `${r.problemId}-${r.problemName}`));
     if (partialResults.length > 0) {
@@ -645,6 +664,7 @@ async function main(): Promise<void> {
   const limit = createLimiter(concurrency);
   const total = tasks.length + results.length;
   let completed = results.length;
+  const runStartTime = Date.now();
 
   await Promise.all(
     tasks.map((task) =>
@@ -669,7 +689,7 @@ async function main(): Promise<void> {
 
         // Save partial results after each problem
         if (all) {
-          savePartialResults(resultsDir, results, solve ? model : undefined, !!solve);
+          savePartialResults(resultsDir, results, solve ? model : undefined, !!solve, implSource);
         }
       }),
     ),
@@ -694,6 +714,7 @@ async function main(): Promise<void> {
   const report = createReport(results, {
     model: solve ? model : undefined,
     sdkVersion,
+    elapsedMs: Date.now() - runStartTime,
   });
 
   // Print table
