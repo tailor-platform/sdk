@@ -323,7 +323,7 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
 }
 
 function isInfraFailure(result: ProblemResult): boolean {
-  return result.stages.every((s) => s.category === "infra_failure");
+  return result.stages.length > 0 && result.stages.every((s) => s.category === "infra_failure");
 }
 
 /**

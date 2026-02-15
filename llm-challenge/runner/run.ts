@@ -538,8 +538,8 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    const infraProblems = latestReport.results.filter((r) =>
-      r.stages.every((s) => s.category === "infra_failure"),
+    const infraProblems = latestReport.results.filter(
+      (r) => r.stages.length > 0 && r.stages.every((s) => s.category === "infra_failure"),
     );
     if (infraProblems.length === 0) {
       console.log("No infrastructure failures found in latest report. Nothing to rerun.");
