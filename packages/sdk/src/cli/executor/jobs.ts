@@ -449,19 +449,19 @@ export const jobsCommand = defineCommand({
   description: "List or get executor jobs.",
   examples: [
     {
-      cmd: "tailor-sdk executor jobs my-executor",
+      cmd: "my-executor",
       desc: "List jobs for an executor (default: 50 jobs)",
     },
-    { cmd: "tailor-sdk executor jobs my-executor --limit 10", desc: "Limit the number of jobs" },
-    { cmd: "tailor-sdk executor jobs my-executor -s RUNNING", desc: "Filter by status" },
-    { cmd: "tailor-sdk executor jobs my-executor <job-id>", desc: "Get job details" },
+    { cmd: "my-executor --limit 10", desc: "Limit the number of jobs" },
+    { cmd: "my-executor -s RUNNING", desc: "Filter by status" },
+    { cmd: "my-executor <job-id>", desc: "Get job details" },
     {
-      cmd: "tailor-sdk executor jobs my-executor <job-id> --attempts",
+      cmd: "my-executor <job-id> --attempts",
       desc: "Get job details with attempts",
     },
-    { cmd: "tailor-sdk executor jobs my-executor <job-id> -W", desc: "Wait for job to complete" },
+    { cmd: "my-executor <job-id> -W", desc: "Wait for job to complete" },
     {
-      cmd: "tailor-sdk executor jobs my-executor <job-id> -W -l",
+      cmd: "my-executor <job-id> -W -l",
       desc: "Wait for job with logs",
     },
   ],
