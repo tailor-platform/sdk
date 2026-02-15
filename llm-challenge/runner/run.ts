@@ -583,15 +583,17 @@ async function main(): Promise<void> {
     });
 
     const sdkVersion = latestReport.sdkVersion;
+    // Preserve the model from the original report to avoid misattribution
+    const reportModel = latestReport.model ?? model;
     const report = createReport(mergedResults, {
-      model,
+      model: reportModel,
       sdkVersion,
     });
 
     console.log("\n" + formatReportTable(report));
 
     fs.mkdirSync(resultsDir, { recursive: true });
-    const modelLabel = model;
+    const modelLabel = reportModel;
     const versionLabel = sdkVersion ?? "unknown";
     const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
     const jsonPath = path.join(

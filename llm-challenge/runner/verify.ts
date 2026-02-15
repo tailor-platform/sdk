@@ -177,7 +177,10 @@ export async function verifyProblem(
     };
 
     // Check file existence (20% of generate score)
-    const allFilesExist = _meta.files.implement.every((f) => fs.existsSync(path.join(workDir, f)));
+    // Exclude files already present in scaffold to avoid unearned credit for fix-broken problems
+    const newFiles = _meta.files.implement.filter((f) => !_meta.files.scaffold.includes(f));
+    const allFilesExist =
+      newFiles.length > 0 && newFiles.every((f) => fs.existsSync(path.join(workDir, f)));
     if (allFilesExist) {
       generateStage.testsPassed = 1;
       generateStage.testsTotal = 5;
