@@ -29,7 +29,7 @@ export interface ScriptExecutionOptions {
   /** Optional JSON string argument to pass to the script */
   arg?: string;
   /** Auth invoker for script execution */
-  invoker: AuthInvoker;
+  invoker?: AuthInvoker;
   /** Polling interval in milliseconds (default: 1000ms) */
   pollInterval?: number;
 }
@@ -40,6 +40,8 @@ export interface ScriptExecutionOptions {
 export interface ScriptExecutionResult {
   /** Whether the script executed successfully */
   success: boolean;
+  /** Execution ID returned from TestExecScript */
+  executionId: string;
   /** Logs output from the script execution */
   logs: string;
   /** Result value from the script execution */
@@ -121,14 +123,16 @@ export async function executeScript(
   const { client, workspaceId, name, code, arg, invoker, pollInterval } = options;
 
   // Execute the script
-  const response = await client.testExecScript({
+  const request = {
     workspaceId,
     name,
     code,
     arg: arg ?? JSON.stringify({}),
-    invoker,
-  });
+    ...(invoker ? { invoker } : {}),
+  };
+  const response = await client.testExecScript(request);
   const executionId = response.executionId;
+  const initialResult = response.result ?? "";
 
   // Wait for completion
   const result = await waitForExecution(client, workspaceId, executionId, pollInterval);
@@ -136,16 +140,19 @@ export async function executeScript(
   if (result.status === FunctionExecution_Status.SUCCESS) {
     return {
       success: true,
+      executionId,
       logs: result.logs,
-      result: result.result,
+      result: result.result || initialResult,
     };
   } else {
-    const errorDetails = [result.logs, result.result].filter(Boolean).join("\n");
+    const errorDetails = [result.logs, result.result, initialResult].filter(Boolean).join("\n");
     return {
       success: false,
+      executionId,
       logs: result.logs,
-      result: result.result,
-      error: errorDetails || "Script execution failed with unknown error",
+      result: result.result || initialResult,
+      error:
+        errorDetails || `Script execution failed with unknown error (executionId: ${executionId})`,
     };
   }
 }

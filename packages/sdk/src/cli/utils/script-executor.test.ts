@@ -192,6 +192,7 @@ describe("executeScript", () => {
     const result = await resultPromise;
 
     expect(result.success).toBe(true);
+    expect(result.executionId).toBe("exec-123");
     expect(result.logs).toBe("Script executed successfully");
     expect(result.result).toBe('{"data":"test"}');
     expect(result.error).toBeUndefined();
@@ -257,6 +258,7 @@ describe("executeScript", () => {
     });
 
     expect(result.success).toBe(false);
+    expect(result.executionId).toBe("exec-123");
     expect(result.logs).toBe("Error: TypeError: undefined is not a function");
     expect(result.result).toBe("Script execution failed");
     expect(result.error).toBe(
@@ -287,7 +289,37 @@ describe("executeScript", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("Script execution failed with unknown error");
+    expect(result.executionId).toBe("exec-123");
+    expect(result.error).toBe("Script execution failed with unknown error (executionId: exec-123)");
+  });
+
+  test("uses initial testExecScript result when execution logs and result are empty", async () => {
+    const client = createMockClient({
+      testExecScript: vi.fn().mockResolvedValue({
+        executionId: "exec-123",
+        result: "permission denied",
+      }),
+      getFunctionExecution: vi.fn().mockResolvedValue({
+        execution: {
+          status: FunctionExecution_Status.FAILED,
+          logs: "",
+          result: "",
+        },
+      }),
+    });
+
+    const result = await executeScript({
+      client,
+      workspaceId: "workspace-1",
+      name: "empty-error-script.js",
+      code: "code",
+      invoker: mockAuthInvoker,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.executionId).toBe("exec-123");
+    expect(result.result).toBe("permission denied");
+    expect(result.error).toBe("permission denied");
   });
 
   test("uses custom poll interval", async () => {
