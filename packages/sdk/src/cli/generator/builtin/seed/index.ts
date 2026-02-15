@@ -6,8 +6,17 @@ import {
   type AggregateArgs,
   type GeneratorResult,
 } from "@/cli/generator/types";
+import {
+  getPluginImportBaseDirs,
+  resolveRelativePluginImportPath,
+} from "@/cli/utils/plugin-import";
 import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
-import { processLinesDb, generateLinesDbSchemaFile } from "./lines-db-processor";
+import {
+  processLinesDb,
+  generateLinesDbSchemaFile,
+  generateLinesDbSchemaFileWithPluginAPI,
+  type PluginSchemaParams,
+} from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
 import type { SeedTypeMetadata } from "./types";
 
@@ -98,14 +107,14 @@ function generateIdpUserSeedCall(hasIdpUser: boolean): string {
 /**
  * Generates the exec.mjs script content using testExecScript API for TailorDB types
  * and GraphQL mutation for _User (IdP managed)
- * @param machineUserName - Machine user name for token retrieval
+ * @param defaultMachineUserName - Default machine user name from generator config (can be overridden at runtime)
  * @param relativeConfigPath - Config path relative to exec script
  * @param namespaceConfigs - Namespace configurations with types and dependencies
  * @param hasIdpUser - Whether _User is included
  * @returns exec.mjs file contents
  */
 function generateExecScript(
-  machineUserName: string,
+  defaultMachineUserName: string | undefined,
   relativeConfigPath: string,
   namespaceConfigs: NamespaceConfig[],
   hasIdpUser: boolean,
@@ -138,6 +147,7 @@ function generateExecScript(
       getMachineUserToken,
       truncate,
       bundleSeedScript,
+      chunkSeedData,
       executeScript,
       initOperatorClient,
       loadAccessToken,
@@ -147,6 +157,7 @@ function generateExecScript(
     // Parse command-line arguments
     const { values, positionals } = parseArgs({
       options: {
+        "machine-user": { type: "string", short: "m" },
         namespace: { type: "string", short: "n" },
         "skip-idp": { type: "boolean", default: false },
         truncate: { type: "boolean", default: false },
@@ -162,15 +173,16 @@ function generateExecScript(
     Usage: node exec.mjs [options] [types...]
 
     Options:
-      -n, --namespace <ns> Process all types in specified namespace (excludes _User)
-      --skip-idp           Skip IdP user (_User) entity
-      --truncate           Truncate tables before seeding
-      --yes                Skip confirmation prompts (for truncate)
-      -p, --profile <name> Workspace profile name
-      -h, --help           Show help
+      -m, --machine-user <name> Machine user name for authentication (required if not configured)
+      -n, --namespace <ns>      Process all types in specified namespace (excludes _User)
+      --skip-idp                Skip IdP user (_User) entity
+      --truncate                Truncate tables before seeding
+      --yes                     Skip confirmation prompts (for truncate)
+      -p, --profile <name>      Workspace profile name
+      -h, --help                Show help
 
     Examples:
-      node exec.mjs                                     # Process all types (default)
+      node exec.mjs -m admin                            # Process all types with machine user
       node exec.mjs --namespace <namespace>             # Process tailordb namespace only (no _User)
       node exec.mjs User Order                          # Process specific types only
       node exec.mjs --skip-idp                          # Process all except _User
@@ -199,6 +211,16 @@ function generateExecScript(
 
     const configDir = import.meta.dirname;
     const configPath = join(configDir, "${relativeConfigPath}");
+
+    // Determine machine user name (CLI argument takes precedence over config default)
+    const defaultMachineUser = ${defaultMachineUserName ? `"${defaultMachineUserName}"` : "undefined"};
+    const machineUserName = values["machine-user"] || defaultMachineUser;
+
+    if (!machineUserName) {
+      console.error(styleText("red", "Error: Machine user name is required."));
+      console.error(styleText("yellow", "Specify --machine-user <name> or configure machineUserName in generator options."));
+      process.exit(1);
+    }
 
     // Entity configuration
     const namespaceEntities = {
@@ -330,7 +352,7 @@ ${namespaceDepsEntries}
 
     // Get machine user token
     const tokenInfo = await getMachineUserToken({
-      name: "${machineUserName}",
+      name: machineUserName,
       configPath,
       profile: values.profile,
     });
@@ -404,55 +426,89 @@ ${namespaceDepsEntries}
       // Bundle seed script
       const bundled = await bundleSeedScript(namespace, typesWithData);
 
-      // Execute seed script
-      const result = await executeScript({
-        client: operatorClient,
-        workspaceId,
-        name: \`seed-\${namespace}.ts\`,
-        code: bundled.bundledCode,
-        arg: JSON.stringify({ data, order: sortedTypes }),
-        invoker: {
-          namespace: authNamespace,
-          machineUserName: "${machineUserName}",
-        },
+      // Chunk seed data to fit within gRPC message size limits
+      const chunks = chunkSeedData({
+        data,
+        order: sortedTypes,
+        codeByteSize: new TextEncoder().encode(bundled.bundledCode).length,
       });
 
-      // Parse result and display logs
-      if (result.logs) {
-        for (const line of result.logs.split("\\n").filter(Boolean)) {
-          console.log(styleText("dim", \`    \${line}\`));
+      if (chunks.length === 0) {
+        console.log(styleText("dim", \`  [\${namespace}] No data to seed\`));
+        return { success: true, processed: {} };
+      }
+
+      if (chunks.length > 1) {
+        console.log(styleText("dim", \`    Split into \${chunks.length} chunks\`));
+      }
+
+      const allProcessed = {};
+      let hasError = false;
+      const allErrors = [];
+
+      for (const chunk of chunks) {
+        if (chunks.length > 1) {
+          console.log(styleText("dim", \`    Chunk \${chunk.index + 1}/\${chunk.total}: \${chunk.order.join(", ")}\`));
+        }
+
+        // Execute seed script for this chunk
+        const result = await executeScript({
+          client: operatorClient,
+          workspaceId,
+          name: \`seed-\${namespace}.ts\`,
+          code: bundled.bundledCode,
+          arg: JSON.stringify({ data: chunk.data, order: chunk.order }),
+          invoker: {
+            namespace: authNamespace,
+            machineUserName,
+          },
+        });
+
+        // Parse result and display logs
+        if (result.logs) {
+          for (const line of result.logs.split("\\n").filter(Boolean)) {
+            console.log(styleText("dim", \`    \${line}\`));
+          }
+        }
+
+        if (result.success) {
+          let parsed;
+          try {
+            const parsedResult = JSON.parse(result.result || "{}");
+            parsed = parsedResult && typeof parsedResult === "object" ? parsedResult : {};
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(styleText("red", \`    ✗ Failed to parse seed result: \${message}\`));
+            hasError = true;
+            allErrors.push(message);
+            continue;
+          }
+
+          const processed = parsed.processed || {};
+          for (const [type, count] of Object.entries(processed)) {
+            allProcessed[type] = (allProcessed[type] || 0) + count;
+            console.log(styleText("green", \`    ✓ \${type}: \${count} rows inserted\`));
+          }
+
+          if (!parsed.success) {
+            const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+            const errorMessage =
+              errors.length > 0 ? errors.join("\\n") : "Seed script reported failure";
+            console.error(styleText("red", \`    ✗ Seed failed: \${errorMessage}\`));
+            hasError = true;
+            allErrors.push(errorMessage);
+          }
+        } else {
+          console.error(styleText("red", \`    ✗ Seed failed: \${result.error}\`));
+          hasError = true;
+          allErrors.push(result.error);
         }
       }
 
-      if (result.success) {
-        let parsed;
-        try {
-          const parsedResult = JSON.parse(result.result || "{}");
-          parsed = parsedResult && typeof parsedResult === "object" ? parsedResult : {};
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(styleText("red", \`    ✗ Failed to parse seed result: \${message}\`));
-          return { success: false, error: message };
-        }
-
-        const processed = parsed.processed || {};
-        for (const [type, count] of Object.entries(processed)) {
-          console.log(styleText("green", \`    ✓ \${type}: \${count} rows inserted\`));
-        }
-
-        if (!parsed.success) {
-          const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
-          const errorMessage =
-            errors.length > 0 ? errors.join("\\n") : "Seed script reported failure";
-          console.error(styleText("red", \`    ✗ Seed failed: \${errorMessage}\`));
-          return { success: false, error: errorMessage };
-        }
-
-        return { success: true, processed };
-      } else {
-        console.error(styleText("red", \`    ✗ Seed failed: \${result.error}\`));
-        return { success: false, error: result.error };
+      if (hasError) {
+        return { success: false, error: allErrors.join("\\n") };
       }
+      return { success: true, processed: allProcessed };
     };
 
     ${generateIdpUserSeedFunction(hasIdpUser)}
@@ -526,10 +582,10 @@ export function createSeedGenerator(
       configPath,
     }: AggregateArgs<TailorDBInput<Record<string, SeedTypeMetadata>>>) => {
       const files: GeneratorResult["files"] = [];
+      const pluginImportBaseDirs = getPluginImportBaseDirs(configPath);
 
       // Collect namespace configurations
       const namespaceConfigs: NamespaceConfig[] = [];
-
       for (const nsResult of input.tailordb) {
         if (!nsResult.types) continue;
 
@@ -550,21 +606,65 @@ export function createSeedGenerator(
             skipIfExists: true,
           });
 
-          // Generate lines-db schema file
           const schemaOutputPath = path.join(
             outputBaseDir,
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
-          const importPath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
-          const normalizedImportPath = importPath.replace(/\.ts$/, "").startsWith(".")
-            ? importPath.replace(/\.ts$/, "")
-            : `./${importPath.replace(/\.ts$/, "")}`;
 
-          files.push({
-            path: schemaOutputPath,
-            content: generateLinesDbSchemaFile(linesDb, normalizedImportPath),
-          });
+          // Plugin-generated type: use getGeneratedType API
+          if (linesDb.pluginSource && linesDb.pluginSource.pluginImportPath) {
+            // Build original type import path
+            let originalImportPath: string | undefined;
+            if (linesDb.pluginSource.originalFilePath && linesDb.pluginSource.originalExportName) {
+              const relativePath = path.relative(
+                path.dirname(schemaOutputPath),
+                linesDb.pluginSource.originalFilePath,
+              );
+              originalImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+                ? relativePath.replace(/\.ts$/, "")
+                : `./${relativePath.replace(/\.ts$/, "")}`;
+            }
+
+            // Resolve plugin import path - if it's relative, resolve from config or project root
+            let pluginImportPath = linesDb.pluginSource.pluginImportPath;
+            if (pluginImportPath.startsWith("./") || pluginImportPath.startsWith("../")) {
+              const resolvedPluginPath =
+                resolveRelativePluginImportPath(pluginImportPath, pluginImportBaseDirs) ??
+                path.resolve(pluginImportBaseDirs[0] ?? process.cwd(), pluginImportPath);
+              const relativePluginPath = path.relative(
+                path.dirname(schemaOutputPath),
+                resolvedPluginPath,
+              );
+              pluginImportPath = relativePluginPath.startsWith(".")
+                ? relativePluginPath
+                : `./${relativePluginPath}`;
+            }
+
+            const params: PluginSchemaParams = {
+              pluginImportPath,
+              originalImportPath,
+            };
+
+            const schemaContent = generateLinesDbSchemaFileWithPluginAPI(linesDb, params);
+
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          } else {
+            // User-defined type: import from source file
+            const relativePath = path.relative(path.dirname(schemaOutputPath), linesDb.importPath);
+            const typeImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
+              ? relativePath.replace(/\.ts$/, "")
+              : `./${relativePath.replace(/\.ts$/, "")}`;
+            const schemaContent = generateLinesDbSchemaFile(linesDb, typeImportPath);
+
+            files.push({
+              path: schemaOutputPath,
+              content: schemaContent,
+            });
+          }
         }
 
         namespaceConfigs.push({
@@ -598,19 +698,17 @@ export function createSeedGenerator(
         });
       }
 
-      // Generate exec.mjs if machineUserName is provided
-      if (options.machineUserName) {
-        const relativeConfigPath = path.relative(options.distPath, configPath);
-        files.push({
-          path: path.join(options.distPath, "exec.mjs"),
-          content: generateExecScript(
-            options.machineUserName,
-            relativeConfigPath,
-            namespaceConfigs,
-            hasIdpUser,
-          ),
-        });
-      }
+      // Generate exec.mjs (machineUserName can be provided at runtime if not configured)
+      const relativeConfigPath = path.relative(options.distPath, configPath);
+      files.push({
+        path: path.join(options.distPath, "exec.mjs"),
+        content: generateExecScript(
+          options.machineUserName,
+          relativeConfigPath,
+          namespaceConfigs,
+          hasIdpUser,
+        ),
+      });
 
       return { files };
     },

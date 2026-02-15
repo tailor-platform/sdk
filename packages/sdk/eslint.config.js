@@ -7,7 +7,7 @@ import jsdocPlugin from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
-  globalIgnores(["dist/", "e2e/fixtures/"]),
+  globalIgnores(["dist/", "e2e/fixtures/", "user-defined.d.ts", "plugin-defined.d.ts"]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
@@ -87,6 +87,10 @@ export default defineConfig([
               message: "Configure module should not import from parser module.",
             },
             {
+              group: ["**/plugin/**", "@/plugin/**"],
+              message: "Configure module should not import from plugin module.",
+            },
+            {
               group: ["**/parser/**/types", "@/parser/**/types"],
               allowTypeImports: true,
               message: "Configure module should not import from parser module.",
@@ -116,6 +120,44 @@ export default defineConfig([
             {
               group: ["**/configure/**", "@/configure/**"],
               message: "Parser module should not import from configure module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/parser/service/tailordb/runtime.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Parser module should not import from cli module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/plugin/**/*.ts"],
+    ignores: ["src/plugin/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Plugin module should not import from cli module.",
+            },
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message:
+                "Plugin module should not import from configure module. Please use parser module as an intermediary.",
             },
           ],
         },

@@ -24,6 +24,8 @@ export type {
   AggregateArgs,
   GeneratorResult,
   DependencyKind,
+  PluginAttachment,
+  TypeSourceInfoEntry,
 } from "./generator/types";
 export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
@@ -159,6 +161,7 @@ export {
 export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";
 
 // Seed exports
+export { chunkSeedData, type SeedChunk, type ChunkSeedDataOptions } from "./utils/seed-chunker";
 export { bundleSeedScript, type SeedBundleResult } from "./bundler/seed/seed-bundler";
 export {
   bundleMigrationScript,

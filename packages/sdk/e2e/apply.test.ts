@@ -475,7 +475,7 @@ export default defineConfig({
     fs.writeFileSync(
       path.join(initialSnapshotDir, "schema.json"),
       JSON.stringify({
-        version: 1,
+        version: 2,
         namespace: sharedTailordbName,
         createdAt: new Date().toISOString(),
         types: {

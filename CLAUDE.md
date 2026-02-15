@@ -292,7 +292,7 @@ export const generators = defineGenerators([
 
 1. Install required dependencies:
    ```bash
-   pnpm add -D @tailor-platform/function-kysely-tailordb @tailor-platform/function-types
+   pnpm add -D @tailor-platform/function-types
    ```
 
 This generator creates:

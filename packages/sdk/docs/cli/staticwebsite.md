@@ -37,13 +37,13 @@ tailor-sdk staticwebsite deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                      | Default |
-| ------------------------------- | ----- | -------------------------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                   | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                | -       |
-| `--name <NAME>`                 | `-n`  | Static website name              | -       |
-| `--dir <DIR>`                   | `-d`  | Path to the static website files | -       |
+| Option                          | Alias | Description                      | Required | Default |
+| ------------------------------- | ----- | -------------------------------- | -------- | ------- |
+| `--json`                        | `-j`  | Output as JSON                   | No       | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                | No       | -       |
+| `--name <NAME>`                 | `-n`  | Static website name              | Yes      | -       |
+| `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       |
 
 <!-- politty:command:staticwebsite deploy:end -->
 <!-- politty:command:staticwebsite list:start -->
@@ -60,11 +60,11 @@ tailor-sdk staticwebsite list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:staticwebsite list:end -->
 <!-- politty:command:staticwebsite get:start -->
@@ -87,11 +87,11 @@ tailor-sdk staticwebsite get [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:staticwebsite get:end -->
 

@@ -309,7 +309,12 @@ describe("template-generator", () => {
             status: {
               type: "enum",
               required: true,
-              allowedValues: ["PENDING", "IN_PROGRESS", "DONE", "CANCELLED"],
+              allowedValues: [
+                { value: "PENDING" },
+                { value: "IN_PROGRESS" },
+                { value: "DONE" },
+                { value: "CANCELLED" },
+              ],
             },
           },
         },

@@ -148,8 +148,21 @@ function createTailorField<
   const _metadata: FieldMetadata = { required: true };
 
   if (options) {
-    if (options.optional === true) {
-      _metadata.required = false;
+    const hasRequired = Object.prototype.hasOwnProperty.call(options, "required");
+    const hasOptional = Object.prototype.hasOwnProperty.call(options, "optional");
+
+    if (hasRequired) {
+      const isRequired = options.required === true;
+      _metadata.required = isRequired;
+      if (isRequired) {
+        _metadata.requiredExplicit = true;
+      }
+    } else if (hasOptional) {
+      const isOptional = options.optional === true;
+      _metadata.required = !isOptional;
+      if (options.optional === false) {
+        _metadata.requiredExplicit = true;
+      }
     }
     if (options.array === true) {
       _metadata.array = true;
