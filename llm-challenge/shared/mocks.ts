@@ -87,8 +87,9 @@ export function setupWorkflowMock(handler: JobHandler): WorkflowMockResult {
 }
 
 export function cleanupMocks(): void {
-  GlobalThis.tailordb = undefined;
-  GlobalThis.tailor = undefined;
+  delete GlobalThis.tailordb;
+  // tailor is declared as a required namespace by @tailor-platform/function-types
+  delete (GlobalThis as { tailor?: typeof GlobalThis.tailor }).tailor;
 }
 
 export type { MainFunction, QueryResolver };

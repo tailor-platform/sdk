@@ -584,14 +584,14 @@ async function main(): Promise<void> {
 
     const sdkVersion = latestReport.sdkVersion;
     const report = createReport(mergedResults, {
-      model: latestReport.model ?? model,
+      model,
       sdkVersion,
     });
 
     console.log("\n" + formatReportTable(report));
 
     fs.mkdirSync(resultsDir, { recursive: true });
-    const modelLabel = latestReport.model ?? model;
+    const modelLabel = model;
     const versionLabel = sdkVersion ?? "unknown";
     const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
     const jsonPath = path.join(
@@ -722,7 +722,7 @@ async function main(): Promise<void> {
 
   // Write JSON results
   fs.mkdirSync(resultsDir, { recursive: true });
-  const modelLabel = solve ? model : "solution";
+  const modelLabel = solve ? model : useSolution ? "solution" : "impl";
   const versionLabel = sdkVersion ?? "unknown";
   const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
   const jsonPath = path.join(resultsDir, `report-${modelLabel}-${versionLabel}-${dateLabel}.json`);
