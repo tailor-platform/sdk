@@ -163,7 +163,11 @@ export default defineConfig([
   {
     // Non-builtin plugin modules cannot import from configure or builtin
     files: ["src/plugin/**/*.ts"],
-    ignores: ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.ts"],
+    ignores: [
+      "src/plugin/**/*.test.ts",
+      "src/plugin/builtin/**/*.ts",
+      "src/plugin/get-generated-type.ts",
+    ],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
         "error",
