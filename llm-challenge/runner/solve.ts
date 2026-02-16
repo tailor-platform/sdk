@@ -47,6 +47,10 @@ const infraFailurePatterns = [
   /authentication.*failed/i,
   /unauthorized/i,
   /403 Forbidden/i,
+  /EPERM/,
+  /EACCES/,
+  /error_during_execution/i,
+  /permission denied/i,
 ];
 
 function detectInfraFailure(output: string): boolean {
@@ -289,11 +293,13 @@ function runClaude(options: {
 
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
+    let timedOut = false;
 
     proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
     proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
     const timer = setTimeout(() => {
+      timedOut = true;
       proc.kill("SIGTERM");
     }, timeout);
 
@@ -319,6 +325,19 @@ function runClaude(options: {
       const stderr = Buffer.concat(stderrChunks).toString("utf-8");
       const output = stdout || stderr;
 
+      // Timeout is always an infrastructure failure
+      if (timedOut) {
+        resolve({
+          success: false,
+          costUsd: 0,
+          durationMs,
+          output: output || "Process timed out",
+          error: "Process timed out",
+          infraFailure: true,
+        });
+        return;
+      }
+
       // Try to parse JSON output (Claude Code outputs JSON with --output-format json)
       try {
         const parsed = JSON.parse(output) as ClaudeCodeOutput;
@@ -332,7 +351,9 @@ function runClaude(options: {
           durationMs: parsedDuration,
           output: parsedOutput,
           error: !success ? parsedOutput : undefined,
-          infraFailure: !success ? detectInfraFailure(parsedOutput) : false,
+          infraFailure: !success
+            ? detectInfraFailure(parsedOutput) || detectInfraFailure(stderr)
+            : false,
         });
       } catch {
         resolve({
