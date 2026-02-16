@@ -44,22 +44,19 @@ function loadReports(): ChallengeReport[] {
 
   const files = fs
     .readdirSync(resultsDir)
-    .filter((f) => f.startsWith("report-") && f.endsWith(".json"))
-    .sort((a, b) => {
-      const aMtime = fs.statSync(path.join(resultsDir, a)).mtimeMs;
-      const bMtime = fs.statSync(path.join(resultsDir, b)).mtimeMs;
-      return aMtime - bMtime;
-    });
+    .filter((f) => f.startsWith("report-") && f.endsWith(".json"));
 
   if (files.length === 0) {
     console.error("No report files found in results/");
     process.exit(1);
   }
 
-  return files.map((f) => {
-    const content = fs.readFileSync(path.join(resultsDir, f), "utf-8");
-    return JSON.parse(content) as ChallengeReport;
-  });
+  return files
+    .map((f) => {
+      const content = fs.readFileSync(path.join(resultsDir, f), "utf-8");
+      return JSON.parse(content) as ChallengeReport;
+    })
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 }
 
 function loadReport(filePath: string): ChallengeReport {

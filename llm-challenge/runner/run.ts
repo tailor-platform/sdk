@@ -535,22 +535,28 @@ function findLatestReport(resultsDir: string): ChallengeReport | undefined {
   }
   const files = fs
     .readdirSync(resultsDir)
-    .filter((f) => f.startsWith("report-") && f.endsWith(".json"))
-    .sort((a, b) => {
-      const aMtime = fs.statSync(path.join(resultsDir, a)).mtimeMs;
-      const bMtime = fs.statSync(path.join(resultsDir, b)).mtimeMs;
-      return bMtime - aMtime;
-    });
+    .filter((f) => f.startsWith("report-") && f.endsWith(".json"));
   if (files.length === 0) {
     return undefined;
   }
-  try {
-    return JSON.parse(
-      fs.readFileSync(path.join(resultsDir, files[0]!), "utf-8"),
-    ) as ChallengeReport;
-  } catch {
-    return undefined;
+
+  let latest: ChallengeReport | undefined;
+  let latestTime = -1;
+  for (const f of files) {
+    try {
+      const report = JSON.parse(
+        fs.readFileSync(path.join(resultsDir, f), "utf-8"),
+      ) as ChallengeReport;
+      const time = new Date(report.timestamp).getTime();
+      if (time > latestTime) {
+        latestTime = time;
+        latest = report;
+      }
+    } catch {
+      // Skip malformed report files
+    }
   }
+  return latest;
 }
 
 function formatDuration(ms: number): string {
@@ -634,19 +640,27 @@ async function main(): Promise<void> {
       infraProblems.map((infraResult) =>
         limit(async () => {
           const problemId = `${infraResult.problemId}-${infraResult.problemName}`;
-          const result = await runProblem(problemId, {
-            solve: { model, maxBudget, retry },
-            clean,
-            verbose,
-          });
-          completed++;
-          if (!verbose) {
-            const status = result.totalScore === result.maxScore ? "PASS" : "PARTIAL";
-            console.log(
-              `[${completed}/${total}] ${problemId}: ${status} (${result.totalScore}/${result.maxScore}) [${formatDuration(result.totalDurationMs ?? 0)}]`,
-            );
+          try {
+            const result = await runProblem(problemId, {
+              solve: { model, maxBudget, retry },
+              clean,
+              verbose,
+            });
+            completed++;
+            if (!verbose) {
+              const status = result.totalScore === result.maxScore ? "PASS" : "PARTIAL";
+              console.log(
+                `[${completed}/${total}] ${problemId}: ${status} (${result.totalScore}/${result.maxScore}) [${formatDuration(result.totalDurationMs ?? 0)}]`,
+              );
+            }
+            return result;
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            console.error(`[ERROR] ${problemId}: ${errorMsg}`);
+            completed++;
+            // Return the original infra failure result so merged report is not missing entries
+            return infraResult;
           }
-          return result;
         }),
       ),
     );
