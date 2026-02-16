@@ -626,6 +626,7 @@ async function main(): Promise<void> {
       `Rerunning ${infraProblems.length} infrastructure failure problem(s) (concurrency: ${concurrency})...`,
     );
 
+    const rerunStartTime = Date.now();
     const limit = createLimiter(concurrency);
     const total = infraProblems.length;
     let completed = 0;
@@ -664,6 +665,7 @@ async function main(): Promise<void> {
     const report = createReport(mergedResults, {
       model: reportModel,
       sdkVersion,
+      elapsedMs: Date.now() - rerunStartTime,
     });
 
     console.log("\n" + formatReportTable(report));

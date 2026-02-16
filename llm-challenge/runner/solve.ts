@@ -285,7 +285,6 @@ function runClaude(options: {
       cwd: workDir,
       stdio: ["ignore", "pipe", "pipe"],
       env,
-      detached: true,
     });
 
     const stdoutChunks: Buffer[] = [];
