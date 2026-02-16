@@ -54,6 +54,7 @@ export function getGeneratedType(
  * @param baseKey - Base key for the cache
  * @param pluginConfig - Plugin configuration to include in the key
  * @returns Cache key string
+ * @throws Error if pluginConfig is not JSON-serializable
  */
 function getCacheKey(baseKey: string, pluginConfig: unknown): string {
   if (pluginConfig === undefined) {
@@ -62,8 +63,9 @@ function getCacheKey(baseKey: string, pluginConfig: unknown): string {
   try {
     return `${baseKey}:${JSON.stringify(pluginConfig)}`;
   } catch {
-    // If pluginConfig is not serializable, use base key only
-    return baseKey;
+    throw new Error(
+      `pluginConfig must be JSON-serializable for caching. Received non-serializable value.`,
+    );
   }
 }
 
