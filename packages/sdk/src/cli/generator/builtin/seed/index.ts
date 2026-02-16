@@ -10,7 +10,12 @@ import {
   getPluginImportBaseDirs,
   resolveRelativePluginImportPath,
 } from "@/cli/utils/plugin-import";
-import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
+import {
+  processIdpUser,
+  generateIdpUserSchemaFile,
+  generateIdpSeedScriptCode,
+  generateIdpTruncateScriptCode,
+} from "./idp-user-processor";
 import {
   processLinesDb,
   generateLinesDbSchemaFile,
@@ -34,17 +39,20 @@ type NamespaceConfig = {
 };
 
 /**
- * Generate the IdP user seed function code
+ * Generate the IdP user seed function code using tailor.idp.Client via testExecScript
  * @param hasIdpUser - Whether IdP user is included
+ * @param idpNamespace - The IDP namespace name
  * @returns JavaScript code for IdP user seeding function
  */
-function generateIdpUserSeedFunction(hasIdpUser: boolean): string {
-  if (!hasIdpUser) return "";
+function generateIdpUserSeedFunction(hasIdpUser: boolean, idpNamespace: string | null): string {
+  if (!hasIdpUser || !idpNamespace) return "";
+
+  const scriptCode = generateIdpSeedScriptCode(idpNamespace);
 
   return ml`
-    // Seed _User via GraphQL mutation
+    // Seed _User via tailor.idp.Client (server-side)
     const seedIdpUser = async () => {
-      console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
+      console.log(styleText("cyan", "  Seeding _User via tailor.idp.Client..."));
       const dataDir = join(configDir, "data");
       const data = loadSeedData(dataDir, ["_User"]);
       const rows = data["_User"] || [];
@@ -52,34 +60,54 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean): string {
         console.log(styleText("dim", "    No _User data to seed"));
         return { success: true };
       }
-      console.log(styleText("dim", \`    Processing _User...\`));
-      const mutation = \`mutation CreateUser($input: _CreateUserInput!) { _createUser(input: $input) { id } }\`;
-      let successCount = 0;
-      let failCount = 0;
-      for (let i = 0; i < rows.length; i++) {
-        try {
-          const response = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: \`Bearer \${tokenInfo.accessToken}\` },
-            body: JSON.stringify({ query: mutation, variables: { input: rows[i] } }),
-          });
-          const result = await response.json();
-          if (result.errors) {
-            failCount++;
-            console.error(styleText("red", \`    ✗ Row \${i} in _User failed: \${result.errors[0].message}\`));
-          } else {
-            successCount++;
-          }
-        } catch (error) {
-          failCount++;
-          console.error(styleText("red", \`    ✗ Row \${i} in _User failed: \${error.message}\`));
+      console.log(styleText("dim", \`    Processing \${rows.length} _User records...\`));
+
+      const idpSeedCode = \/* js *\/\`${scriptCode.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
+
+      const result = await executeScript({
+        client: operatorClient,
+        workspaceId,
+        name: "seed-idp-user.ts",
+        code: idpSeedCode,
+        arg: JSON.stringify({ users: rows }),
+        invoker: {
+          namespace: authNamespace,
+          machineUserName,
+        },
+      });
+
+      if (result.logs) {
+        for (const line of result.logs.split("\\n").filter(Boolean)) {
+          console.log(styleText("dim", \`    \${line}\`));
         }
       }
-      console.log(styleText("green", \`    ✓ _User: \${successCount} rows processed\`));
-      if (failCount > 0) {
-        console.error(styleText("red", \`    ✗ _User: \${failCount} rows failed\`));
+
+      if (result.success) {
+        let parsed;
+        try {
+          parsed = JSON.parse(result.result || "{}");
+        } catch (e) {
+          console.error(styleText("red", \`    ✗ Failed to parse seed result: \${e.message}\`));
+          return { success: false };
+        }
+
+        if (parsed.processed) {
+          console.log(styleText("green", \`    ✓ _User: \${parsed.processed} rows processed\`));
+        }
+
+        if (!parsed.success) {
+          const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+          for (const err of errors) {
+            console.error(styleText("red", \`    ✗ \${err}\`));
+          }
+          return { success: false };
+        }
+
+        return { success: true };
+      } else {
+        console.error(styleText("red", \`    ✗ Seed failed: \${result.error}\`));
+        return { success: false };
       }
-      return { success: failCount === 0 };
     };
   `;
 }
@@ -105,12 +133,100 @@ function generateIdpUserSeedCall(hasIdpUser: boolean): string {
 }
 
 /**
+ * Generate the IdP user truncation function code using tailor.idp.Client via testExecScript
+ * @param hasIdpUser - Whether IdP user is included
+ * @param idpNamespace - The IDP namespace name
+ * @returns JavaScript code for IdP user truncation function
+ */
+function generateIdpUserTruncateFunction(hasIdpUser: boolean, idpNamespace: string | null): string {
+  if (!hasIdpUser || !idpNamespace) return "";
+
+  const scriptCode = generateIdpTruncateScriptCode(idpNamespace);
+
+  return ml`
+    // Truncate _User via tailor.idp.Client (server-side)
+    const truncateIdpUser = async () => {
+      console.log(styleText("cyan", "Truncating _User via tailor.idp.Client..."));
+
+      const idpTruncateCode = \/* js *\/\`${scriptCode.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
+
+      const result = await executeScript({
+        client: operatorClient,
+        workspaceId,
+        name: "truncate-idp-user.ts",
+        code: idpTruncateCode,
+        arg: JSON.stringify({}),
+        invoker: {
+          namespace: authNamespace,
+          machineUserName,
+        },
+      });
+
+      if (result.logs) {
+        for (const line of result.logs.split("\\n").filter(Boolean)) {
+          console.log(styleText("dim", \`  \${line}\`));
+        }
+      }
+
+      if (result.success) {
+        let parsed;
+        try {
+          parsed = JSON.parse(result.result || "{}");
+        } catch (e) {
+          console.error(styleText("red", \`  ✗ Failed to parse truncation result: \${e.message}\`));
+          return { success: false };
+        }
+
+        if (parsed.deleted !== undefined) {
+          console.log(styleText("green", \`  ✓ _User: \${parsed.deleted} users deleted\`));
+        }
+
+        if (!parsed.success) {
+          const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+          for (const err of errors) {
+            console.error(styleText("red", \`  ✗ \${err}\`));
+          }
+          return { success: false };
+        }
+
+        return { success: true };
+      } else {
+        console.error(styleText("red", \`  ✗ Truncation failed: \${result.error}\`));
+        return { success: false };
+      }
+    };
+  `;
+}
+
+/**
+ * Generate the IdP user truncation call code within the truncate block
+ * @param hasIdpUser - Whether IdP user is included
+ * @returns JavaScript code for calling IdP user truncation
+ */
+function generateIdpUserTruncateCall(hasIdpUser: boolean): string {
+  if (!hasIdpUser) return "";
+
+  return ml`
+    // Truncate _User if applicable
+    const shouldTruncateUser = !skipIdp && !hasNamespace && (!hasTypes || entitiesToProcess.includes("_User"));
+    if (hasIdpUser && shouldTruncateUser) {
+      const truncResult = await truncateIdpUser();
+      if (!truncResult.success) {
+        console.error(styleText("red", "IDP user truncation failed."));
+        process.exit(1);
+      }
+    }
+  `;
+}
+
+/**
  * Generates the exec.mjs script content using testExecScript API for TailorDB types
- * and GraphQL mutation for _User (IdP managed)
+ * and tailor.idp.Client for _User (IdP managed)
  * @param defaultMachineUserName - Default machine user name from generator config (can be overridden at runtime)
  * @param relativeConfigPath - Config path relative to exec script
  * @param namespaceConfigs - Namespace configurations with types and dependencies
  * @param hasIdpUser - Whether _User is included
+ * @param idpNamespace - The IDP namespace name, or null if not applicable
  * @returns exec.mjs file contents
  */
 function generateExecScript(
@@ -118,6 +234,7 @@ function generateExecScript(
   relativeConfigPath: string,
   namespaceConfigs: NamespaceConfig[],
   hasIdpUser: boolean,
+  idpNamespace: string | null,
 ): string {
   // Generate namespaceEntities object
   const namespaceEntitiesEntries = namespaceConfigs
@@ -144,7 +261,6 @@ function generateExecScript(
     import { createInterface } from "node:readline";
     import {
       show,
-      getMachineUserToken,
       truncate,
       bundleSeedScript,
       chunkSeedData,
@@ -298,6 +414,17 @@ ${namespaceDepsEntries}
       }
     }
 
+    // Get application info
+    const appInfo = await show({ configPath, profile: values.profile });
+    const authNamespace = appInfo.auth;
+
+    // Initialize operator client (once for all namespaces)
+    const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+    const workspaceId = await loadWorkspaceId({ profile: values.profile });
+    const operatorClient = await initOperatorClient(accessToken);
+
+    ${generateIdpUserTruncateFunction(hasIdpUser, idpNamespace)}
+
     // Truncate tables if requested
     if (values.truncate) {
       const answer = values.yes ? "y" : await promptConfirmation("Are you sure you want to truncate? (y/n): ");
@@ -333,29 +460,20 @@ ${namespaceDepsEntries}
             all: true,
           });
         }
-        console.log(styleText("green", "Truncate completed."));
       } catch (error) {
         console.error(styleText("red", \`Truncate failed: \${error.message}\`));
         process.exit(1);
       }
+
+      ${generateIdpUserTruncateCall(hasIdpUser)}
+
+      console.log(styleText("green", "Truncate completed."));
     }
 
     console.log(styleText("cyan", "\\nStarting seed data generation..."));
     if (skipIdp) {
       console.log(styleText("dim", \`  Skipping IdP user (_User)\`));
     }
-
-    // Get application info
-    const appInfo = await show({ configPath, profile: values.profile });
-    const endpoint = \`\${appInfo.url}/query\`;
-    const authNamespace = appInfo.auth;
-
-    // Get machine user token
-    const tokenInfo = await getMachineUserToken({
-      name: machineUserName,
-      configPath,
-      profile: values.profile,
-    });
 
     // Load seed data from JSONL files
     const loadSeedData = (dataDir, typeNames) => {
@@ -402,11 +520,6 @@ ${namespaceDepsEntries}
       }
       return result;
     };
-
-    // Initialize operator client (once for all namespaces)
-    const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
-    const workspaceId = await loadWorkspaceId({ profile: values.profile });
-    const operatorClient = await initOperatorClient(accessToken);
 
     // Seed TailorDB types via testExecScript
     const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
@@ -493,8 +606,8 @@ ${namespaceDepsEntries}
           if (!parsed.success) {
             const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
             const errorMessage =
-              errors.length > 0 ? errors.join("\\n") : "Seed script reported failure";
-            console.error(styleText("red", \`    ✗ Seed failed: \${errorMessage}\`));
+              errors.length > 0 ? errors.join("\\n        ") : "Seed script reported failure";
+            console.error(styleText("red", \`    ✗ Seed failed:\\n        \${errorMessage}\`));
             hasError = true;
             allErrors.push(errorMessage);
           }
@@ -511,7 +624,7 @@ ${namespaceDepsEntries}
       return { success: true, processed: allProcessed };
     };
 
-    ${generateIdpUserSeedFunction(hasIdpUser)}
+    ${generateIdpUserSeedFunction(hasIdpUser, idpNamespace)}
 
     // Main execution
     try {
@@ -566,7 +679,7 @@ export function createSeedGenerator(
 ): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
   return {
     id: SeedGeneratorID,
-    description: "Generates seed data files (Kysely batch insert + GraphQL mutation for _User)",
+    description: "Generates seed data files (Kysely batch insert + tailor.idp.Client for _User)",
     dependencies: ["tailordb"] as const,
 
     processType: ({ type, source, namespace }) => {
@@ -707,6 +820,7 @@ export function createSeedGenerator(
           relativeConfigPath,
           namespaceConfigs,
           hasIdpUser,
+          idpUser?.idpNamespace ?? null,
         ),
       });
 
