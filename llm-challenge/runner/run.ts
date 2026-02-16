@@ -306,7 +306,7 @@ async function runProblem(
     }
     const stages = makeInfraFailureStages(meta);
 
-    if (options.clean) {
+    if (isSolveMode || options.clean) {
       fs.rmSync(workDir, { recursive: true });
     }
 
@@ -343,7 +343,17 @@ async function runProblem(
   // Retry loop (only in solve mode)
   if (options.solve && totalScore < maxScore) {
     const maxRetries = options.solve.retry;
+    let cumulativeCost = solveResult?.costUsd ?? 0;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const remainingBudget = Math.max(0, options.solve.maxBudget - cumulativeCost);
+      if (remainingBudget <= 0) {
+        if (options.verbose) {
+          console.log(
+            `  Budget exhausted ($${cumulativeCost.toFixed(4)}), skipping retry ${attempt}`,
+          );
+        }
+        break;
+      }
       // Collect error output from failed stages
       const errorParts = stages
         .filter((s) => !s.passed)
@@ -374,10 +384,11 @@ async function runProblem(
         problemDir,
         meta,
         model: options.solve.model,
-        maxBudget: options.solve.maxBudget,
+        maxBudget: remainingBudget,
         errorOutput,
       });
       retrySolveResults.push(retryResult);
+      cumulativeCost += retryResult.costUsd;
       if (options.verbose) {
         const retryIcon = retryResult.success ? "ok" : "FAIL";
         console.log(
