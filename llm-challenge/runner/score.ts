@@ -293,6 +293,11 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
       if (!r.retrySolveResults || r.retrySolveResults.length === 0) {
         continue;
       }
+      // Skip infra-only retries: when retryCount is 0 or firstAttemptStages is absent,
+      // all retries were infra failures and should not affect retry analytics
+      if ((r.retryCount ?? 0) === 0 || !r.firstAttemptStages) {
+        continue;
+      }
       // Pre-retry failures (use firstAttemptStages if available, fall back to stages)
       const preRetryCategories = new Set<DefinedFailureCategory>();
       for (const s of r.firstAttemptStages ?? r.stages) {

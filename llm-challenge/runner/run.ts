@@ -150,7 +150,7 @@ function cleanupWorkArtifacts(problemDir: string): void {
       const target = fs.realpathSync(fs.readlinkSync(workPath));
       const normalizedTmpdir = fs.realpathSync(os.tmpdir());
       const rel = path.relative(normalizedTmpdir, target);
-      if (!rel.startsWith("..") && !path.isAbsolute(rel) && fs.existsSync(target)) {
+      if (rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel) && fs.existsSync(target)) {
         fs.rmSync(target, { recursive: true });
       }
     } catch {
@@ -585,6 +585,10 @@ function findLatestReport(
   return latest;
 }
 
+function sanitizeForFilename(label: string): string {
+  return label.replace(/[/\\:*?"<>|]/g, "-");
+}
+
 function formatDuration(ms: number): string {
   const secs = ms / 1000;
   const mins = Math.floor(secs / 60);
@@ -714,7 +718,7 @@ async function main(): Promise<void> {
     console.log("\n" + formatReportTable(report));
 
     fs.mkdirSync(resultsDir, { recursive: true });
-    const modelLabel = rerunModel;
+    const modelLabel = sanitizeForFilename(rerunModel);
     const versionLabel = sdkVersion ?? "unknown";
     const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
     const jsonPath = path.join(
@@ -872,7 +876,7 @@ async function main(): Promise<void> {
 
   // Write JSON results
   fs.mkdirSync(resultsDir, { recursive: true });
-  const modelLabel = solve ? model : useSolution ? "solution" : "impl";
+  const modelLabel = sanitizeForFilename(solve ? model : useSolution ? "solution" : "impl");
   const versionLabel = sdkVersion ?? "unknown";
   const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
   const jsonPath = path.join(resultsDir, `report-${modelLabel}-${versionLabel}-${dateLabel}.json`);

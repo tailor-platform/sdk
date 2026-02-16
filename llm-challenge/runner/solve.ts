@@ -47,10 +47,9 @@ const infraFailurePatterns = [
   /authentication.*failed/i,
   /unauthorized/i,
   /403 Forbidden/i,
-  /EPERM/,
-  /EACCES/,
-  /error_during_execution/i,
-  /permission denied/i,
+  // Note: EPERM, EACCES, error_during_execution, and "permission denied" are intentionally
+  // excluded because they can match claude-settings.json tool denials (anti-cheat), which
+  // are expected model failures, not infrastructure issues.
 ];
 
 function detectInfraFailure(output: string): boolean {
@@ -237,6 +236,8 @@ function cleanEnv(): NodeJS.ProcessEnv {
       delete env[key];
     }
   }
+  // Also strip CLAUDECODE to prevent nested-session guard from blocking spawned CLI
+  delete env.CLAUDECODE;
   delete env.OLDPWD;
   return env;
 }
@@ -442,8 +443,8 @@ export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
           resolve({ ok: false, error: output });
           return;
         }
-        // If we got some output and no infra failure detected, assume ok
-        resolve({ ok: code === 0 });
+        // Preserve output for diagnostics even when not matching infra patterns
+        resolve({ ok: code === 0, error: code !== 0 ? output || `Exit code ${code}` : undefined });
       }
     });
   });

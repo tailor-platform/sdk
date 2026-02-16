@@ -183,9 +183,10 @@ export async function verifyProblem(
     };
 
     // Check file existence (20% of generate score)
-    // For fix-broken problems (where all implement files are in scaffold), check those files instead
+    // For fix-broken problems (where all implement files are in scaffold), skip file existence
+    // check since those files exist before any fix is applied — awarding credit would inflate scores
     const newFiles = meta.files.implement.filter((f) => !meta.files.scaffold.includes(f));
-    const filesToCheck = newFiles.length > 0 ? newFiles : meta.files.implement;
+    const filesToCheck = newFiles;
     const allFilesExist =
       filesToCheck.length > 0 && filesToCheck.every((f) => fs.existsSync(path.join(workDir, f)));
     if (allFilesExist) {
