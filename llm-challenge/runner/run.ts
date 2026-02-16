@@ -61,11 +61,8 @@ function parseArgs(): {
         all = true;
         break;
       case "--impl":
-        implDir = requireArg(args, i, "--impl");
-        i++;
-        break;
       case "--impl-dir":
-        implDir = requireArg(args, i, "--impl-dir");
+        implDir = requireArg(args, i, args[i]!);
         i++;
         break;
       case "--use-solution":
@@ -289,7 +286,12 @@ async function runProblem(
       maxBudget: options.solve.maxBudget,
     });
     if (options.verbose) {
-      const icon = solveResult.success ? "ok" : solveResult.infraFailure ? "INFRA" : "FAIL";
+      let icon = "FAIL";
+      if (solveResult.success) {
+        icon = "ok";
+      } else if (solveResult.infraFailure) {
+        icon = "INFRA";
+      }
       console.log(
         `  Solve: ${icon} ($${solveResult.costUsd.toFixed(4)}, ${(solveResult.durationMs / 1000).toFixed(1)}s)`,
       );
@@ -413,7 +415,12 @@ async function runProblem(
 
   if (options.verbose) {
     for (const s of stages) {
-      const icon = s.passed ? "ok" : s.score > 0 ? "PARTIAL" : "FAIL";
+      let icon = "FAIL";
+      if (s.passed) {
+        icon = "ok";
+      } else if (s.score > 0) {
+        icon = "PARTIAL";
+      }
       console.log(`  ${s.stage}: ${icon} (${s.score}/${s.maxScore})`);
     }
   }

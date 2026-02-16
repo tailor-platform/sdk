@@ -1,32 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/**
- * Check if a file exists at the given path.
- */
-export function fileExists(filePath: string): boolean {
-  return fs.existsSync(filePath);
-}
-
-/**
- * Check if a module has a default export.
- */
-export async function hasDefaultExport(filePath: string): Promise<boolean> {
-  const mod = await import(filePath);
-  return "default" in mod && mod.default !== undefined;
-}
-
-/**
- * Check if a module has a named export.
- */
-export async function hasNamedExport(filePath: string, exportName: string): Promise<boolean> {
-  const mod = await import(filePath);
-  return exportName in mod && mod[exportName] !== undefined;
-}
-
-/**
- * Load a meta.json file for a problem.
- */
 export type ProblemMeta = {
   id: string;
   name: string;

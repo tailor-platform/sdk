@@ -439,9 +439,13 @@ export function formatReportTable(report: ChallengeReport): string {
     const name = `${r.problemId}-${r.problemName}`.padEnd(30);
     const diff = r.difficulty.padEnd(12);
     const score = (infraFailed ? "-" : `${r.totalScore}/${r.maxScore}`).padEnd(15);
-    const status = (
-      infraFailed ? "INFRA" : r.totalScore === r.maxScore ? "PASS" : "PARTIAL"
-    ).padEnd(10);
+    let statusLabel = "PARTIAL";
+    if (infraFailed) {
+      statusLabel = "INFRA";
+    } else if (r.totalScore === r.maxScore) {
+      statusLabel = "PASS";
+    }
+    const status = statusLabel.padEnd(10);
     let line = `${name}${diff}${score}${status}`;
     if (hasRetries) {
       const firstAttempt =
@@ -461,7 +465,12 @@ export function formatReportTable(report: ChallengeReport): string {
       for (const s of r.stages) {
         const stageName = `  ${s.stage}`.padEnd(30);
         const stageScore = `${s.score}/${s.maxScore}`.padEnd(15);
-        const stageStatus = s.passed ? "ok" : s.score > 0 ? "PARTIAL" : "FAIL";
+        let stageStatus = "FAIL";
+        if (s.passed) {
+          stageStatus = "ok";
+        } else if (s.score > 0) {
+          stageStatus = "PARTIAL";
+        }
         const categoryLabel = s.category ? ` [${s.category}]` : "";
         const testCountLabel =
           s.testsTotal != null ? ` (${s.testsPassed ?? 0}/${s.testsTotal} tests)` : "";

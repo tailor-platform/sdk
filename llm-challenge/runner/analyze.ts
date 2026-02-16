@@ -98,58 +98,42 @@ function getFailureCategory(result: ChallengeReport["results"][number]): string 
   return undefined;
 }
 
-function computeCategoryRates(
+function computeSuccessRates(
   report: ChallengeReport,
+  cached: Record<string, { passed: number; total: number; rate: number }> | undefined,
+  groupKeyFn: (r: ChallengeReport["results"][number]) => string,
 ): Record<string, { passed: number; total: number; rate: number }> {
-  // Use analytics if available
-  if (report.analytics?.categorySuccessRates) {
-    return report.analytics.categorySuccessRates;
+  if (cached) {
+    return cached;
   }
 
-  // Compute from results
   const groups: Record<string, { passed: number; total: number }> = {};
   for (const r of report.results) {
-    if (!groups[r.category]) {
-      groups[r.category] = { passed: 0, total: 0 };
-    }
-    groups[r.category]!.total++;
+    const key = groupKeyFn(r);
+    const group = (groups[key] ??= { passed: 0, total: 0 });
+    group.total++;
     if (r.totalScore === r.maxScore) {
-      groups[r.category]!.passed++;
+      group.passed++;
     }
   }
 
   const rates: Record<string, { passed: number; total: number; rate: number }> = {};
-  for (const [cat, g] of Object.entries(groups)) {
-    rates[cat] = { ...g, rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0 };
+  for (const [key, g] of Object.entries(groups)) {
+    rates[key] = { ...g, rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0 };
   }
   return rates;
+}
+
+function computeCategoryRates(
+  report: ChallengeReport,
+): Record<string, { passed: number; total: number; rate: number }> {
+  return computeSuccessRates(report, report.analytics?.categorySuccessRates, (r) => r.category);
 }
 
 function computeDifficultyRates(
   report: ChallengeReport,
 ): Record<string, { passed: number; total: number; rate: number }> {
-  // Use analytics if available
-  if (report.analytics?.difficultySuccessRates) {
-    return report.analytics.difficultySuccessRates;
-  }
-
-  // Compute from results
-  const groups: Record<string, { passed: number; total: number }> = {};
-  for (const r of report.results) {
-    if (!groups[r.difficulty]) {
-      groups[r.difficulty] = { passed: 0, total: 0 };
-    }
-    groups[r.difficulty]!.total++;
-    if (r.totalScore === r.maxScore) {
-      groups[r.difficulty]!.passed++;
-    }
-  }
-
-  const rates: Record<string, { passed: number; total: number; rate: number }> = {};
-  for (const [diff, g] of Object.entries(groups)) {
-    rates[diff] = { ...g, rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0 };
-  }
-  return rates;
+  return computeSuccessRates(report, report.analytics?.difficultySuccessRates, (r) => r.difficulty);
 }
 
 function showComparison(before: ChallengeReport, after: ChallengeReport): void {
@@ -189,7 +173,12 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
     const bTotal = b?.totalScore ?? 0;
     const aTotal = a?.totalScore ?? 0;
     const delta = aTotal - bTotal;
-    const deltaStr = b && a ? formatDelta(delta) : b ? "removed" : "new";
+    let deltaStr = "new";
+    if (b && a) {
+      deltaStr = formatDelta(delta);
+    } else if (b) {
+      deltaStr = "removed";
+    }
 
     // Failure category change
     const bCat = b ? getFailureCategory(b) : undefined;
@@ -329,16 +318,13 @@ function showTrend(reports: ChallengeReport[]): void {
   console.log("");
 
   // Per-problem trend
-  const allProblemKeys: string[] = [];
+  const problemKeySet = new Set<string>();
   for (const r of reports) {
     for (const p of r.results) {
-      const key = `${p.problemId}-${p.problemName}`;
-      if (!allProblemKeys.includes(key)) {
-        allProblemKeys.push(key);
-      }
+      problemKeySet.add(`${p.problemId}-${p.problemName}`);
     }
   }
-  allProblemKeys.sort();
+  const allProblemKeys = [...problemKeySet].sort();
 
   if (reports.length >= 2) {
     console.log("Per-Problem Progression:");

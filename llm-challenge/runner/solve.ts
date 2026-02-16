@@ -50,16 +50,11 @@ const infraFailurePatterns = [
 ];
 
 function detectInfraFailure(output: string, costUsd: number, durationMs: number): boolean {
-  for (const pattern of infraFailurePatterns) {
-    if (pattern.test(output)) {
-      return true;
-    }
-  }
-  // Heuristic: zero cost + very fast = likely auth/infra failure before any work
-  if (costUsd === 0 && durationMs < 5000) {
+  if (infraFailurePatterns.some((pattern) => pattern.test(output))) {
     return true;
   }
-  return false;
+  // Heuristic: zero cost + very fast = likely auth/infra failure before any work
+  return costUsd === 0 && durationMs < 5000;
 }
 
 function listFilesRecursive(dir: string, base: string = dir): string[] {
@@ -233,6 +228,17 @@ function truncateErrorOutput(output: string, maxLength = 5000): string {
 
 const claudeSettingsPath = path.join(import.meta.dirname, "claude-settings.json");
 
+function cleanEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("CLAUDE")) {
+      delete env[key];
+    }
+  }
+  delete env.OLDPWD;
+  return env;
+}
+
 export async function retrySolveProblem(options: {
   workDir: string;
   problemDir: string;
@@ -274,16 +280,7 @@ function runClaude(options: {
     "--no-session-persistence",
   ];
 
-  // Remove all Claude Code env vars and OLDPWD to prevent nested Claude Code issues
-  // and remove path hints to the original repository
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith("CLAUDE")) {
-      delete env[key];
-    }
-  }
-  delete env.OLDPWD;
-
+  const env = cleanEnv();
   const startTime = Date.now();
   const timeout = 300_000; // 5 minutes
 
@@ -385,13 +382,7 @@ export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
     "--no-session-persistence",
   ];
 
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith("CLAUDE")) {
-      delete env[key];
-    }
-  }
-
+  const env = cleanEnv();
   const timeout = 30_000;
 
   return new Promise((resolve) => {

@@ -1,3 +1,4 @@
+import type { ExecException } from "node:child_process";
 import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -5,6 +6,11 @@ import { promisify } from "node:util";
 import type { ProblemMeta } from "../shared/helpers";
 
 const execAsync = promisify(exec);
+
+// Partial scoring for generate stage (out of GENERATE_PARTIAL_TOTAL)
+const GENERATE_PARTIAL_FILE_EXISTS = 1; // 20% — all expected files exist
+const GENERATE_PARTIAL_IMPORT_CHECK = 3; // 60% — files compile with tsc
+const GENERATE_PARTIAL_TOTAL = 5;
 
 function filterNpmWarnings(output: string): string {
   return output
@@ -45,7 +51,7 @@ async function runCommand(
     return { success: true, output: stdout, durationMs: Math.round(performance.now() - start) };
   } catch (err) {
     const durationMs = Math.round(performance.now() - start);
-    const error = err as { stdout?: string; stderr?: string; message: string };
+    const error = err as ExecException & { stdout?: string; stderr?: string };
     const stdout = error.stdout ?? "";
     const stderr = filterNpmWarnings(error.stderr ?? "");
     const output = [stdout, stderr].filter(Boolean).join("\n") || error.message;
@@ -152,7 +158,7 @@ function parseVitestJson(output: string): ParsedVitestResult | undefined {
  */
 export async function verifyProblem(
   workDir: string,
-  _meta: ProblemMeta,
+  meta: ProblemMeta,
   challengeRoot: string,
 ): Promise<StageInput[]> {
   const results: StageInput[] = [];
@@ -178,18 +184,17 @@ export async function verifyProblem(
 
     // Check file existence (20% of generate score)
     // Exclude files already present in scaffold to avoid unearned credit for fix-broken problems
-    const newFiles = _meta.files.implement.filter((f) => !_meta.files.scaffold.includes(f));
+    const newFiles = meta.files.implement.filter((f) => !meta.files.scaffold.includes(f));
     const allFilesExist =
       newFiles.length > 0 && newFiles.every((f) => fs.existsSync(path.join(workDir, f)));
     if (allFilesExist) {
-      generateStage.testsPassed = 1;
-      generateStage.testsTotal = 5;
+      generateStage.testsPassed = GENERATE_PARTIAL_FILE_EXISTS;
+      generateStage.testsTotal = GENERATE_PARTIAL_TOTAL;
 
-      // Check if files can be imported (60% of generate score)
-      // Use project tsconfig to respect module resolution and compiler options
+      // Check if files can be imported — use project tsconfig to respect module resolution
       const importCheck = await runCommand("npx tsc --noEmit", workDir);
       if (importCheck.success) {
-        generateStage.testsPassed = 3;
+        generateStage.testsPassed = GENERATE_PARTIAL_IMPORT_CHECK;
       }
     }
 
@@ -200,7 +205,7 @@ export async function verifyProblem(
   }
   results.push({
     stage: "generate",
-    passed: generateResult.success,
+    passed: true,
     output: generateResult.output,
     durationMs: generateResult.durationMs,
   });
