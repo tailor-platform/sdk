@@ -7,7 +7,11 @@ import type {
   PluginNamespaceProcessContext,
   PluginOutput,
 } from "@/parser/plugin-config/types";
-import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
+import type {
+  TailorAnyDBType,
+  TailorTypePermission,
+  TailorTypeGqlPermission,
+} from "@/parser/service/tailordb/types";
 
 type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
 
@@ -489,11 +493,13 @@ function copyMetadataToExtendedType(
   }
 
   // Copy permissions from metadata
+  // Zod schema operand types are wider unions than the configure layer's discriminated PermissionCondition,
+  // so type assertions are needed here.
   if (metadata.permissions?.record) {
-    result = result.permission(metadata.permissions.record);
+    result = result.permission(metadata.permissions.record as TailorTypePermission);
   }
   if (metadata.permissions?.gql) {
-    result = result.gqlPermission(metadata.permissions.gql);
+    result = result.gqlPermission(metadata.permissions.gql as TailorTypeGqlPermission);
   }
 
   // Copy indexes from metadata (indexes are stored in metadata, not as a direct property)
