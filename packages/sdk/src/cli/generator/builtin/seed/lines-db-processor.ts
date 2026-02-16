@@ -198,8 +198,8 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
  * Parameters for generating plugin-type schema file
  */
 export interface PluginSchemaParams {
-  /** Relative import path to the plugin */
-  pluginImportPath: string;
+  /** Relative path from schema output to tailor.config.ts */
+  configImportPath: string;
   /** Relative import path to the original type file (for type-attached plugins) */
   originalImportPath?: string;
 }
@@ -222,7 +222,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     throw new Error(`pluginSource is required for plugin-generated type "${typeName}"`);
   }
 
-  const { pluginImportPath, originalImportPath } = params;
+  const { configImportPath, originalImportPath } = params;
 
   const schemaTypeCode = ml /* ts */ `
     const schemaType = t.object({
@@ -233,16 +233,18 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
   const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
 
-  // Type-attached plugin (e.g., changeset): import original type and use getGeneratedType(type, kind)
+  // Type-attached plugin (e.g., changeset): import original type and use getGeneratedType(configPath, pluginId, type, kind)
   if (pluginSource.originalExportName && originalImportPath && pluginSource.generatedTypeKind) {
     return ml /* ts */ `
+    import { join } from "node:path";
     import { t } from "@tailor-platform/sdk";
+    import { getGeneratedType } from "@tailor-platform/sdk/plugin";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
     import { defineSchema } from "@toiroakr/lines-db";
-    import { getGeneratedType } from "${pluginImportPath}";
     import { ${pluginSource.originalExportName} } from "${originalImportPath}";
 
-    const ${exportName} = getGeneratedType(${pluginSource.originalExportName}, "${pluginSource.generatedTypeKind}");
+    const configPath = join(import.meta.dirname, "${configImportPath}");
+    const ${exportName} = await getGeneratedType(configPath, "${pluginSource.pluginId}", ${pluginSource.originalExportName}, "${pluginSource.generatedTypeKind}");
 
     ${schemaTypeCode}
 
@@ -255,7 +257,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     `;
   }
 
-  // Namespace plugin (e.g., audit-log): use getGeneratedType(null, kind)
+  // Namespace plugin (e.g., audit-log): use getGeneratedType(configPath, pluginId, null, kind)
   // For namespace plugins, generatedTypeKind is required
   if (!pluginSource.generatedTypeKind) {
     throw new Error(
@@ -264,12 +266,14 @@ export function generateLinesDbSchemaFileWithPluginAPI(
   }
 
   return ml /* ts */ `
+    import { join } from "node:path";
     import { t } from "@tailor-platform/sdk";
+    import { getGeneratedType } from "@tailor-platform/sdk/plugin";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
     import { defineSchema } from "@toiroakr/lines-db";
-    import { getGeneratedType } from "${pluginImportPath}";
 
-    const ${exportName} = getGeneratedType(null, "${pluginSource.generatedTypeKind}");
+    const configPath = join(import.meta.dirname, "${configImportPath}");
+    const ${exportName} = await getGeneratedType(configPath, "${pluginSource.pluginId}", null, "${pluginSource.generatedTypeKind}");
 
     ${schemaTypeCode}
 

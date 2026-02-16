@@ -23,9 +23,9 @@ Define plugins in `tailor.config.ts` using `definePlugins()`:
 
 ```typescript
 import { defineConfig, definePlugins } from "@tailor-platform/sdk";
-import { myPlugin } from "./plugins/my-plugin";
+import myPlugin from "./plugins/my-plugin";
 
-export const plugins = definePlugins(myPlugin());
+export const plugins = definePlugins(myPlugin);
 
 export default defineConfig({
   name: "my-app",

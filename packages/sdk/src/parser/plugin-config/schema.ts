@@ -1,5 +1,7 @@
 import { cloneDeep } from "es-toolkit";
 import { z } from "zod";
+import { functionSchema } from "@/parser/service/common";
+import { TailorFieldSchema } from "@/parser/service/resolver/schema";
 import type { PluginBase } from "./types";
 
 type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
@@ -66,25 +68,32 @@ const _PluginOutputSchema = z.object({
   executors: z.array(PluginGeneratedExecutorSchema).optional(),
 });
 
+// Validates TailorAnyField shape using TailorFieldSchema,
+// wrapped in z.custom to preserve runtime methods (_metadata, parse, etc.)
+const tailorAnyFieldSchema = z.custom<PluginConfigSchemaField>(
+  (val) => TailorFieldSchema.safeParse(val).success,
+);
+
 // Custom plugin schema (object form)
-// Using passthrough() to preserve fields like importPath, configSchema, processNamespace
+// Using passthrough() to preserve additional properties on PluginBase instances
 const CustomPluginSchema = z
   .object({
     id: z.string(),
     description: z.string(),
     importPath: z.string(),
-    configSchema: z.any().optional(),
-    pluginConfigSchema: z.any().optional(),
-    pluginConfig: z.any().optional(),
-    // Use any for the process function since we're not strictly validating function signatures
-    process: z.any().optional(),
-    processNamespace: z.any().optional(),
+    configSchema: tailorAnyFieldSchema.optional(),
+    pluginConfigSchema: tailorAnyFieldSchema.optional(),
+    pluginConfig: z.unknown().optional(),
+    processType: functionSchema.optional(),
+    processNamespace: functionSchema.optional(),
+    typeConfigRequired: z.union([z.boolean(), functionSchema]).optional(),
+    configTypeTemplate: z.string().optional(),
   })
   .superRefine((plugin, ctx) => {
-    if (plugin.process && !plugin.configSchema) {
+    if (plugin.processType && !plugin.configSchema) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "process requires configSchema to be defined.",
+        message: "processType requires configSchema to be defined.",
         path: ["configSchema"],
       });
     }

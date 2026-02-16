@@ -20,7 +20,7 @@ describe("PluginManager", () => {
     };
 
     const manager = new PluginManager([plugin]);
-    await manager.processNamespacePlugins("main", [], []);
+    await manager.processNamespacePlugins("main");
 
     const generatedTypes = manager.getPluginGeneratedTypes();
     expect(generatedTypes).toHaveLength(1);
@@ -56,8 +56,8 @@ describe("PluginManager", () => {
     };
 
     const manager = new PluginManager([plugin]);
-    await manager.processNamespacePlugins("main", [], []);
-    await manager.processNamespacePlugins("analytics", [], []);
+    await manager.processNamespacePlugins("main");
+    await manager.processNamespacePlugins("analytics");
 
     expect(manager.getPluginGeneratedTypes()).toHaveLength(1);
     expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);
@@ -91,7 +91,7 @@ describe("PluginManager", () => {
       importPath: "@example/require-config",
       configSchema: t.object({}),
       typeConfigRequired: true,
-      process: () => ({}),
+      processType: () => ({}),
     };
 
     const manager = new PluginManager([plugin]);
@@ -99,14 +99,14 @@ describe("PluginManager", () => {
       type: db.type("Order", {
         name: db.string(),
       }),
-      config: undefined,
+      typeConfig: undefined,
       namespace: "main",
       pluginId: "requires-config",
     });
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("requires config");
+      expect(result.error).toContain("requires typeConfig");
     }
   });
 });
