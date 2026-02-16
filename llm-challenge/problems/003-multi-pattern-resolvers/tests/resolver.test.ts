@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
+import { importPath } from "../../../shared/helpers.js";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
 const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
@@ -12,7 +13,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/calculator.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await import(resolverPath);
+      const mod = await importPath(resolverPath);
       const resolver = mod.default;
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("calculator");
@@ -20,31 +21,31 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body computes sum and product for positive integers", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({ input: { a: 3, b: 4 }, user: {}, env: {} });
       expect(result).toEqual({ sum: 7, product: 12 });
     });
 
     test("body handles negative values", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({ input: { a: -3, b: 7 }, user: {}, env: {} });
       expect(result).toEqual({ sum: 4, product: -21 });
     });
 
     test("body handles zero values", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({ input: { a: 0, b: 5 }, user: {}, env: {} });
       expect(result).toEqual({ sum: 5, product: 0 });
     });
 
     test("body handles both negative values", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({ input: { a: -2, b: -3 }, user: {}, env: {} });
       expect(result).toEqual({ sum: -5, product: 6 });
     });
 
     test("output has integer sum and product fields", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver.output.type).toBe("nested");
       expect(resolver.output.fields.sum.type).toBe("integer");
       expect(resolver.output.fields.product.type).toBe("integer");
@@ -57,7 +58,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/formatName.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await import(resolverPath);
+      const mod = await importPath(resolverPath);
       const resolver = mod.default;
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("formatName");
@@ -65,7 +66,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body formats name without uppercase", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { firstName: "John", lastName: "Doe" },
         user: {},
@@ -75,7 +76,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body formats name with uppercase true", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { firstName: "Jane", lastName: "Smith", uppercase: true },
         user: {},
@@ -85,7 +86,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body formats name with uppercase false", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { firstName: "John", lastName: "Doe", uppercase: false },
         user: {},
@@ -95,7 +96,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("initials are always uppercase regardless of input case", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { firstName: "john", lastName: "doe" },
         user: {},
@@ -105,7 +106,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("uppercase is optional", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver.input.uppercase.metadata.required).toBe(false);
     });
   });
@@ -116,7 +117,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/categorizeNumbers.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await import(resolverPath);
+      const mod = await importPath(resolverPath);
       const resolver = mod.default;
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("categorizeNumbers");
@@ -124,7 +125,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body categorizes mixed input correctly", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { numbers: [3, -1, 0, 5, -2] },
         user: {},
@@ -137,7 +138,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body returns all_positive for positive numbers", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { numbers: [1, 2, 3] },
         user: {},
@@ -150,7 +151,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body returns all_negative for negative numbers", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { numbers: [-1, -2, -3] },
         user: {},
@@ -163,7 +164,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body returns empty for empty array", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { numbers: [] },
         user: {},
@@ -176,7 +177,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body returns mixed for zeros only", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: { numbers: [0] },
         user: {},
@@ -187,7 +188,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("output summary is an enum type", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver.output.fields.summary.type).toBe("enum");
     });
   });
@@ -198,7 +199,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/whoami/resolver.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await import(resolverPath);
+      const mod = await importPath(resolverPath);
       const resolver = mod.default;
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("whoami");
@@ -206,7 +207,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("resolver has no input", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       expect(
         resolver.input === undefined ||
           resolver.input === null ||
@@ -215,7 +216,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body returns correct user info from context", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: {},
         user: {
@@ -235,7 +236,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body handles machine user context", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: {},
         user: {
@@ -255,7 +256,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("body handles empty attributes", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       const result = resolver.body({
         input: {},
         user: {
@@ -275,7 +276,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     });
 
     test("output has userId, userType, and attributes fields", async () => {
-      const { default: resolver } = await import(resolverPath);
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver.output.type).toBe("nested");
       expect(resolver.output.fields.userId.type).toBe("string");
       expect(resolver.output.fields.userType.type).toBe("string");

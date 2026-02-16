@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
+import { importPath } from "../../../shared/helpers.js";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
 const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
@@ -13,17 +14,17 @@ describe.skipIf(!workDirReady)("010-fix-broken-model", () => {
   });
 
   test("employee is a named export", async () => {
-    const mod = await import(employeePath);
+    const mod = await importPath(employeePath);
     expect(mod.employee).toBeDefined();
   });
 
   test("employee model name is 'Employee' (not 'Employe')", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     expect(employee.name).toBe("Employee");
   });
 
   test("employee model has all required fields", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const fieldNames = Object.keys(employee.fields);
     expect(fieldNames).toContain("id");
     expect(fieldNames).toContain("name");
@@ -36,21 +37,21 @@ describe.skipIf(!workDirReady)("010-fix-broken-model", () => {
   });
 
   test("name is a required string field", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.name;
     expect(field.type).toBe("string");
     expect(field.metadata.required).toBe(true);
   });
 
   test("department is an enum field (not string)", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.department;
     expect(field.type).toBe("enum");
     expect(field.metadata.required).toBe(true);
   });
 
   test("department enum has correct values", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.department;
     const values = field.metadata.allowedValues.map((v: { value: string }) => v.value);
     expect(values).toContain("engineering");
@@ -60,14 +61,14 @@ describe.skipIf(!workDirReady)("010-fix-broken-model", () => {
   });
 
   test("salary is a required integer field", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.salary;
     expect(field.type).toBe("integer");
     expect(field.metadata.required).toBe(true);
   });
 
   test("salary has validators", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.salary;
     const validators = field.metadata.validate;
     expect(validators).toBeDefined();
@@ -76,42 +77,42 @@ describe.skipIf(!workDirReady)("010-fix-broken-model", () => {
   });
 
   test("salary validator rejects negative values", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.salary;
     const [validatorFn] = field.metadata.validate[0];
     expect(validatorFn({ value: -1 })).toBe(false);
   });
 
   test("salary validator accepts zero", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.salary;
     const [validatorFn] = field.metadata.validate[0];
     expect(validatorFn({ value: 0 })).toBe(true);
   });
 
   test("salary validator accepts positive values", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.salary;
     const [validatorFn] = field.metadata.validate[0];
     expect(validatorFn({ value: 50000 })).toBe(true);
   });
 
   test("hireDate is a required datetime field", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.hireDate;
     expect(field.type).toBe("datetime");
     expect(field.metadata.required).toBe(true);
   });
 
   test("isActive is an optional boolean field", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.isActive;
     expect(field.type).toBe("boolean");
     expect(field.metadata.required).toBe(false);
   });
 
   test("timestamps are present with correct types", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     expect(employee.fields.createdAt.type).toBe("datetime");
     expect(employee.fields.updatedAt.type).toBe("datetime");
   });

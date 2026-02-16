@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export type ProblemMeta = {
   id: string;
@@ -53,4 +54,13 @@ export function copyDir(src: string, dest: string): void {
       fs.copyFileSync(srcPath, destPath);
     }
   }
+}
+
+/**
+ * Import a module from a filesystem path, converting to file URL for cross-platform compatibility.
+ * Raw filesystem paths break on Windows ESM (ERR_UNSUPPORTED_ESM_URL_SCHEME).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic imports in tests need flexible typing
+export function importPath(filePath: string): Promise<Record<string, any>> {
+  return import(pathToFileURL(filePath).href) as Promise<Record<string, any>>;
 }

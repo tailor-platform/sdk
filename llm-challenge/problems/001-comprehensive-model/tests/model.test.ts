@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
 import fs from "node:fs";
+import { importPath } from "../../../shared/helpers.js";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
 const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
@@ -9,13 +10,13 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   const employeePath = path.join(workDir, "tailordb/employee.ts");
 
   test("employee is a named export with correct model name", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     expect(employee).toBeDefined();
     expect(employee.name).toBe("Employee");
   });
 
   test("employee has all required fields", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const fieldNames = Object.keys(employee.fields);
     expect(fieldNames).toContain("name");
     expect(fieldNames).toContain("age");
@@ -27,14 +28,14 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   });
 
   test("name is a required string field", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.name;
     expect(field.type).toBe("string");
     expect(field.metadata.required).toBe(true);
   });
 
   test("name validation rejects short values", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const validators = employee.fields.name.metadata.validate;
     expect(validators).toBeDefined();
     expect(validators.length).toBeGreaterThanOrEqual(1);
@@ -44,7 +45,7 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   });
 
   test("age is a required integer with min/max validators", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.age;
     expect(field.type).toBe("integer");
     expect(field.metadata.required).toBe(true);
@@ -53,21 +54,21 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   });
 
   test("age validation enforces minimum of 18", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const [minFn] = employee.fields.age.metadata.validate[0];
     expect(minFn({ value: 17 })).toBe(false);
     expect(minFn({ value: 18 })).toBe(true);
   });
 
   test("age validation enforces maximum of 120", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const [maxFn] = employee.fields.age.metadata.validate[1];
     expect(maxFn({ value: 120 })).toBe(true);
     expect(maxFn({ value: 121 })).toBe(false);
   });
 
   test("department is an enum with correct values", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.department;
     expect(field.type).toBe("enum");
     const values = field.metadata.allowedValues.map((v: { value: string }) => v.value);
@@ -75,7 +76,7 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   });
 
   test("address is a required nested object (not array)", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const field = employee.fields.address;
     expect(field.type).toBe("nested");
     expect(field.metadata.required).toBe(true);
@@ -83,7 +84,7 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   });
 
   test("address has correct nested fields with expected types and optionality", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     const addr = employee.fields.address.fields;
 
     expect(addr.street.type).toBe("string");
@@ -103,7 +104,7 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   });
 
   test("timestamps are present with correct types", async () => {
-    const { employee } = await import(employeePath);
+    const { employee } = await importPath(employeePath);
     expect(employee.fields.createdAt.type).toBe("datetime");
     expect(employee.fields.updatedAt.type).toBe("datetime");
   });
@@ -113,13 +114,13 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Event", () => {
   const eventPath = path.join(workDir, "tailordb/event.ts");
 
   test("event is a named export with correct model name", async () => {
-    const { event } = await import(eventPath);
+    const { event } = await importPath(eventPath);
     expect(event).toBeDefined();
     expect(event.name).toBe("Event");
   });
 
   test("event has all required fields", async () => {
-    const { event } = await import(eventPath);
+    const { event } = await importPath(eventPath);
     const fieldNames = Object.keys(event.fields);
     expect(fieldNames).toContain("name");
     expect(fieldNames).toContain("eventDate");
@@ -133,7 +134,7 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Event", () => {
   });
 
   test("event fields have correct types and optionality", async () => {
-    const { event } = await import(eventPath);
+    const { event } = await importPath(eventPath);
     expect(event.fields.name.type).toBe("string");
     expect(event.fields.eventDate.type).toBe("date");
     expect(event.fields.startTime.type).toBe("time");
@@ -148,7 +149,7 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Event", () => {
   });
 
   test("timestamps are present with correct types", async () => {
-    const { event } = await import(eventPath);
+    const { event } = await importPath(eventPath);
     expect(event.fields.createdAt.type).toBe("datetime");
     expect(event.fields.updatedAt.type).toBe("datetime");
   });
@@ -159,32 +160,32 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Profile", () => {
   const userPath = path.join(workDir, "tailordb/user.ts");
 
   test("profile is a named export with correct model name", async () => {
-    const { profile } = await import(profilePath);
+    const { profile } = await importPath(profilePath);
     expect(profile).toBeDefined();
     expect(profile.name).toBe("Profile");
   });
 
   test("userId is a uuid field with relation config", async () => {
-    const { profile } = await import(profilePath);
+    const { profile } = await importPath(profilePath);
     expect(profile.fields.userId.type).toBe("uuid");
     expect(profile.fields.userId.rawRelation).toBeDefined();
   });
 
   test("relation type is 1-1", async () => {
-    const { profile } = await import(profilePath);
+    const { profile } = await importPath(profilePath);
     const relType = profile.fields.userId.rawRelation.type;
     expect(relType === "1-1" || relType === "oneToOne").toBe(true);
   });
 
   test("relation toward.as is 'owner' and backward is 'profile'", async () => {
-    const { profile } = await import(profilePath);
+    const { profile } = await importPath(profilePath);
     const rel = profile.fields.userId.rawRelation;
     expect(rel.toward.as).toBe("owner");
     expect(rel.backward).toBe("profile");
   });
 
   test("bio and avatarUrl are optional string fields", async () => {
-    const { profile } = await import(profilePath);
+    const { profile } = await importPath(profilePath);
     expect(profile.fields.bio.type).toBe("string");
     expect(profile.fields.bio.metadata.required).toBe(false);
     expect(profile.fields.avatarUrl.type).toBe("string");
@@ -192,13 +193,13 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Profile", () => {
   });
 
   test("user model can be imported without errors", async () => {
-    const mod = await import(userPath);
+    const mod = await importPath(userPath);
     expect(mod.user).toBeDefined();
     expect(mod.user.name).toBe("User");
   });
 
   test("timestamps are present with correct types", async () => {
-    const { profile } = await import(profilePath);
+    const { profile } = await importPath(profilePath);
     expect(profile.fields.createdAt.type).toBe("datetime");
     expect(profile.fields.updatedAt.type).toBe("datetime");
   });
