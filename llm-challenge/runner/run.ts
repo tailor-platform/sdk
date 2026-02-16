@@ -145,7 +145,8 @@ function cleanupWorkArtifacts(problemDir: string): void {
     try {
       const target = fs.realpathSync(fs.readlinkSync(workPath));
       const normalizedTmpdir = fs.realpathSync(os.tmpdir());
-      if (target.startsWith(normalizedTmpdir) && fs.existsSync(target)) {
+      const rel = path.relative(normalizedTmpdir, target);
+      if (!rel.startsWith("..") && !path.isAbsolute(rel) && fs.existsSync(target)) {
         fs.rmSync(target, { recursive: true });
       }
     } catch {

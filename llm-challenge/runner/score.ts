@@ -300,10 +300,15 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
           preRetryCategories.add(s.category);
         }
       }
-      // Post-retry: check if the problem passed after retries
-      const postRetryFailed = r.totalScore < r.maxScore;
+      // Post-retry: check which categories still fail after retries
+      const postRetryCategories = new Set<DefinedFailureCategory>();
+      for (const s of r.stages) {
+        if (!s.passed && s.category) {
+          postRetryCategories.add(s.category);
+        }
+      }
       for (const cat of preRetryCategories) {
-        if (postRetryFailed) {
+        if (postRetryCategories.has(cat)) {
           persistent[cat] = (persistent[cat] ?? 0) + 1;
         } else {
           selfCorrected[cat] = (selfCorrected[cat] ?? 0) + 1;
