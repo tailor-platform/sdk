@@ -100,11 +100,11 @@ function parseArgs(): {
   }
 
   // Validate numeric arguments
-  if (!Number.isFinite(concurrency) || concurrency < 1) {
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
     console.error("Error: --concurrency must be a positive integer");
     process.exit(1);
   }
-  if (!Number.isFinite(retry) || retry < 0) {
+  if (!Number.isInteger(retry) || retry < 0) {
     console.error("Error: --retry must be a non-negative integer");
     process.exit(1);
   }
@@ -144,7 +144,8 @@ function cleanupWorkArtifacts(problemDir: string): void {
     // Remove tmpdir target first, then symlink — only if target lives under os.tmpdir()
     try {
       const target = fs.realpathSync(fs.readlinkSync(workPath));
-      if (target.startsWith(os.tmpdir()) && fs.existsSync(target)) {
+      const normalizedTmpdir = fs.realpathSync(os.tmpdir());
+      if (target.startsWith(normalizedTmpdir) && fs.existsSync(target)) {
         fs.rmSync(target, { recursive: true });
       }
     } catch {
