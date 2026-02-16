@@ -231,6 +231,8 @@ function truncateErrorOutput(output: string, maxLength = 5000): string {
   return priorityBlock ? `${priorityBlock}\n${otherBlock}` : otherBlock;
 }
 
+const claudeSettingsPath = path.join(import.meta.dirname, "claude-settings.json");
+
 export async function retrySolveProblem(options: {
   workDir: string;
   problemDir: string;
@@ -257,6 +259,8 @@ function runClaude(options: {
     prompt,
     "--setting-sources",
     "",
+    "--settings",
+    claudeSettingsPath,
     "--permission-mode",
     "bypassPermissions",
     "--output-format",
@@ -270,13 +274,15 @@ function runClaude(options: {
     "--no-session-persistence",
   ];
 
-  // Remove all Claude Code env vars to prevent nested Claude Code issues
+  // Remove all Claude Code env vars and OLDPWD to prevent nested Claude Code issues
+  // and remove path hints to the original repository
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
     if (key.startsWith("CLAUDE")) {
       delete env[key];
     }
   }
+  delete env.OLDPWD;
 
   const startTime = Date.now();
   const timeout = 300_000; // 5 minutes

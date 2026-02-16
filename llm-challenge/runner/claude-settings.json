@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(/**/solution/**)",
+      "Read(/**/tests/**/*.test.ts)",
+      "Read(/**/meta.json)",
+      "Read(/**/runner/**)",
+      "Read(/**/results/**)"
+    ]
+  }
+}

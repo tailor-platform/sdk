@@ -132,12 +132,43 @@ function parseArgs(): {
   };
 }
 
-function setupWorkDir(problemDir: string, implDir?: string): string {
-  const workDir = path.join(problemDir, "work");
+/**
+ * Clean up previous work artifacts (symlink + tmpdir, or regular directory).
+ */
+function cleanupWorkArtifacts(problemDir: string): void {
+  const workPath = path.join(problemDir, "work");
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(workPath);
+  } catch {
+    return; // Path doesn't exist at all
+  }
+  if (stat.isSymbolicLink()) {
+    // Remove tmpdir target first, then symlink
+    try {
+      const target = fs.readlinkSync(workPath);
+      if (fs.existsSync(target)) {
+        fs.rmSync(target, { recursive: true });
+      }
+    } catch {
+      // Broken symlink, just remove it
+    }
+    fs.rmSync(workPath);
+  } else {
+    fs.rmSync(workPath, { recursive: true });
+  }
+}
 
-  // Clean previous work directory
-  if (fs.existsSync(workDir)) {
-    fs.rmSync(workDir, { recursive: true });
+function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean): string {
+  // Clean previous work directory or symlink
+  cleanupWorkArtifacts(problemDir);
+
+  let workDir: string;
+  if (useTmpDir) {
+    const problemName = path.basename(problemDir);
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), `llm-challenge-${problemName}-`));
+  } else {
+    workDir = path.join(problemDir, "work");
   }
 
   // 1. Copy shared scaffold
@@ -161,7 +192,7 @@ function setupWorkDir(problemDir: string, implDir?: string): string {
 function rewriteWorkspaceRefs(workDir: string): void {
   const pkgPath = path.join(workDir, "package.json");
   const content = fs.readFileSync(pkgPath, "utf-8");
-  const sdkPath = path.relative(workDir, path.join(challengeRoot, "..", "packages", "sdk"));
+  const sdkPath = path.resolve(challengeRoot, "..", "packages", "sdk");
   const updated = content.replace(/"workspace:\^"/g, `"link:${sdkPath}"`);
   fs.writeFileSync(pkgPath, updated);
 }
@@ -228,8 +259,12 @@ async function runProblem(
     console.log(`\n--- Running problem: ${problemName} (${meta.difficulty}) ---`);
   }
 
-  const workDir = setupWorkDir(problemDir, options.implDir);
+  const isSolveMode = !!options.solve;
+  const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode);
   await installLimiter(() => installDependencies(workDir, options.verbose));
+
+  // In solve mode, workDir is a tmpdir. We'll create a symlink later for verify.
+  const symlinkPath = path.join(problemDir, "work");
 
   let solveResult: SolveResult | undefined;
   const retrySolveResults: SolveResult[] = [];
@@ -279,8 +314,15 @@ async function runProblem(
     };
   }
 
+  // In solve mode, create symlink: problems/<name>/work → tmpdir
+  // This ensures verify's path.dirname(workDir) resolves to problemDir for test paths
+  if (isSolveMode) {
+    fs.symlinkSync(workDir, symlinkPath);
+  }
+  const verifyWorkDir = isSolveMode ? symlinkPath : workDir;
+
   // Run verification stages
-  let rawStages = await verifyProblem(workDir, meta, challengeRoot);
+  let rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
   let stages = calculateScore(meta, rawStages);
   let totalScore = stages.reduce((sum, s) => sum + s.score, 0);
   let maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
@@ -317,6 +359,7 @@ async function runProblem(
       if (options.verbose) {
         console.log(`  Retry ${attempt}/${maxRetries}...`);
       }
+      // Retry solve uses the actual workDir (tmpdir) for Claude execution
       const retryResult = await retrySolveProblem({
         workDir,
         problemDir,
@@ -333,8 +376,8 @@ async function runProblem(
         );
       }
 
-      // Re-verify
-      rawStages = await verifyProblem(workDir, meta, challengeRoot);
+      // Re-verify using symlink path
+      rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
       stages = calculateScore(meta, rawStages);
       totalScore = stages.reduce((sum, s) => sum + s.score, 0);
       maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
@@ -355,9 +398,14 @@ async function runProblem(
     }
   }
 
-  // Clean up work directory if --clean is specified
+  // Clean up work artifacts if --clean is specified
   if (options.clean) {
-    fs.rmSync(workDir, { recursive: true });
+    if (isSolveMode) {
+      // Remove symlink and tmpdir
+      cleanupWorkArtifacts(problemDir);
+    } else {
+      fs.rmSync(workDir, { recursive: true });
+    }
   }
 
   const retryCount = retrySolveResults.length > 0 ? retrySolveResults.length : undefined;
