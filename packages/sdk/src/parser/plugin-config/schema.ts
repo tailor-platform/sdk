@@ -4,6 +4,13 @@ import { functionSchema } from "@/parser/service/common";
 import { TailorFieldSchema } from "@/parser/service/resolver/schema";
 import type { Plugin } from "./types";
 
+// Literal-based schema for changeset plugin (string tuple form)
+// Accepts both ["@tailor-platform/changeset"] and ["@tailor-platform/changeset", options]
+const ChangesetPluginConfigSchema = z.union([
+  z.tuple([z.literal("@tailor-platform/changeset")]),
+  z.tuple([z.literal("@tailor-platform/changeset"), z.unknown()]),
+]);
+
 type PluginConfigSchemaField = NonNullable<Plugin["configSchema"]>;
 
 type UnauthenticatedTailorUser = {
@@ -180,10 +187,24 @@ function validatePluginConfig(
 
 /**
  * Creates a PluginConfigSchema for custom plugins
+ * @param builtinPlugins - Optional map of plugin IDs to their instances
  * @returns Plugin config schema that validates and transforms Plugin instances
  */
-export function createPluginConfigSchema() {
-  return CustomPluginSchema.transform((plugin) => normalizePlugin(plugin as Plugin)).brand(
-    "Plugin",
-  );
+export function createPluginConfigSchema(builtinPlugins?: Map<string, Plugin>) {
+  return z
+    .union([ChangesetPluginConfigSchema, CustomPluginSchema])
+    .transform((plugin) => {
+      // String tuple form: ["@tailor-platform/changeset", options?]
+      if (Array.isArray(plugin) && typeof plugin[0] === "string") {
+        const [id, options] = plugin;
+        const resolved = builtinPlugins?.get(id);
+        if (!resolved) {
+          throw new Error(`Unknown plugin ID: ${id}`);
+        }
+        return normalizePlugin({ ...resolved, pluginConfig: options } as Plugin);
+      }
+      // Object form: custom plugin without plugin config
+      return normalizePlugin(plugin as Plugin);
+    })
+    .brand("Plugin");
 }

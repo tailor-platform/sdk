@@ -16,4 +16,5 @@ export const purchaseOrder = db
     ...db.fields.timestamps(),
   })
   .permission(defaultPermission)
-  .gqlPermission(defaultGqlPermission);
+  .gqlPermission(defaultGqlPermission)
+  .plugin({ "@tailor-platform/changeset": true });

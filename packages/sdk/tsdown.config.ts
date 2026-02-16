@@ -30,6 +30,7 @@ export default defineConfig({
     "src/utils/test/index.ts",
     "src/kysely/index.ts",
     "src/plugin/index.ts",
+    "src/plugin/builtin/changeset/index.ts",
   ],
   format: ["esm"],
   target: "node18",

@@ -20,6 +20,62 @@ export const PurchaseOrderAttachedFilesType = {
 } as const;
 export type PurchaseOrderAttachedFilesType = (typeof PurchaseOrderAttachedFilesType)[keyof typeof PurchaseOrderAttachedFilesType];
 
+/**
+ * Current state of the record
+ */
+export const PurchaseOrderRecordState = {
+  "DRAFT": "DRAFT",
+  "ACTIVE": "ACTIVE",
+  "ARCHIVED": "ARCHIVED"
+} as const;
+export type PurchaseOrderRecordState = (typeof PurchaseOrderRecordState)[keyof typeof PurchaseOrderRecordState];
+
+export const PurchaseOrderChangeRequestStatus = {
+  "RUNNING": "RUNNING",
+  "REWORK": "REWORK",
+  "APPROVED": "APPROVED",
+  "REJECTED": "REJECTED",
+  "CANCELED": "CANCELED"
+} as const;
+export type PurchaseOrderChangeRequestStatus = (typeof PurchaseOrderChangeRequestStatus)[keyof typeof PurchaseOrderChangeRequestStatus];
+
+export const PurchaseOrderChangeRequestActivationStatus = {
+  "PENDING": "PENDING",
+  "ACTIVATED": "ACTIVATED"
+} as const;
+export type PurchaseOrderChangeRequestActivationStatus = (typeof PurchaseOrderChangeRequestActivationStatus)[keyof typeof PurchaseOrderChangeRequestActivationStatus];
+
+export const PurchaseOrderChangeStepQuorumType = {
+  "ALL": "ALL",
+  "ANY": "ANY"
+} as const;
+export type PurchaseOrderChangeStepQuorumType = (typeof PurchaseOrderChangeStepQuorumType)[keyof typeof PurchaseOrderChangeStepQuorumType];
+
+export const PurchaseOrderChangeStepStatus = {
+  "PENDING": "PENDING",
+  "APPROVED": "APPROVED",
+  "REWORK": "REWORK",
+  "REJECTED": "REJECTED",
+  "SKIPPED": "SKIPPED"
+} as const;
+export type PurchaseOrderChangeStepStatus = (typeof PurchaseOrderChangeStepStatus)[keyof typeof PurchaseOrderChangeStepStatus];
+
+export const PurchaseOrderChangeApprovalDecision = {
+  "PENDING": "PENDING",
+  "APPROVED": "APPROVED",
+  "REWORK": "REWORK",
+  "REJECTED": "REJECTED"
+} as const;
+export type PurchaseOrderChangeApprovalDecision = (typeof PurchaseOrderChangeApprovalDecision)[keyof typeof PurchaseOrderChangeApprovalDecision];
+
+export const PurchaseOrderChangeApprovalResolvedByRuleType = {
+  "USER": "USER",
+  "GROUP": "GROUP",
+  "ROLE": "ROLE",
+  "ORG_MANAGER": "ORG_MANAGER"
+} as const;
+export type PurchaseOrderChangeApprovalResolvedByRuleType = (typeof PurchaseOrderChangeApprovalResolvedByRuleType)[keyof typeof PurchaseOrderChangeApprovalResolvedByRuleType];
+
 export const SupplierState = {
   "Alabama": "Alabama",
   "Alaska": "Alaska"

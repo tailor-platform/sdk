@@ -73,6 +73,76 @@ export interface Namespace {
       }[];
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
+      recordId: string | null;
+      recordState: "DRAFT" | "ACTIVE" | "ARCHIVED" | null;
+      archivedSeq: number | null;
+      effectiveFrom: Timestamp | null;
+      effectiveTo: Timestamp | null;
+      requestedBy: string | null;
+      requestedAt: Timestamp | null;
+      currentApprover: string | null;
+      approvers: string[] | null;
+    }
+
+    PurchaseOrderChangeRequest: {
+      id: Generated<string>;
+      recordId: string;
+      draft: string;
+      status: "RUNNING" | "REWORK" | "APPROVED" | "REJECTED" | "CANCELED";
+      reworkIteration: number;
+      currentStepNo: Generated<number>;
+      templateKey: string;
+      templateVersion: number;
+      requestedBy: string;
+      requestedAt: Timestamp;
+      finalizedAt: Timestamp | null;
+      effectiveFrom: Timestamp;
+      activationStatus: "PENDING" | "ACTIVATED";
+      activatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    PurchaseOrderChangeStep: {
+      id: Generated<string>;
+      request: string;
+      iteration: number;
+      stepNo: number;
+      stepName: string;
+      quorumType: "ALL" | "ANY";
+      minApprovals: number | null;
+      status: "PENDING" | "APPROVED" | "REWORK" | "REJECTED" | "SKIPPED";
+      startedAt: Timestamp;
+      finishedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    PurchaseOrderChangeApproval: {
+      id: Generated<string>;
+      request: string;
+      iteration: number;
+      stepNo: number;
+      approver: string;
+      decision: "PENDING" | "APPROVED" | "REWORK" | "REJECTED";
+      decidedAt: Timestamp | null;
+      comment: string | null;
+      resolvedByRuleType: "USER" | "GROUP" | "ROLE" | "ORG_MANAGER";
+      resolvedByRuleValue: string | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    PurchaseOrderChangeReworkEvent: {
+      id: Generated<string>;
+      request: string;
+      iteration: number;
+      fromStepNo: number;
+      requestedBy: string;
+      requestedAt: Timestamp;
+      reason: string | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
     }
 
     SalesOrder: {

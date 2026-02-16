@@ -445,3 +445,20 @@ export interface PluginNamespaceOnly<PluginConfig = unknown> extends PluginCommo
 export type Plugin<PluginConfig = unknown> =
   | PluginWithConfig<PluginConfig>
   | PluginNamespaceOnly<PluginConfig>;
+
+/**
+ * Built-in plugin IDs that can be used with string-based configuration
+ */
+export type BuiltinPluginId = "@tailor-platform/changeset";
+
+/**
+ * Plugin configuration input type for definePlugins()
+ * Can be:
+ * - A Plugin object for custom plugins without configuration
+ * - A tuple [BuiltinPluginId, options?] for built-in plugins with string ID
+ * Options can be any value - the plugin's pluginConfigSchema handles validation.
+ */
+export type PluginInput =
+  | Plugin
+  | readonly [BuiltinPluginId]
+  | readonly [BuiltinPluginId, unknown];
