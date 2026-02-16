@@ -99,45 +99,48 @@ const RecordPermissionOperandSchema = z.union([
 
 const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
 
-const RecordPermissionConditionSchema = z.tuple([
-  RecordPermissionOperandSchema,
-  PermissionOperatorSchema,
-  RecordPermissionOperandSchema,
-]);
+const RecordPermissionConditionSchema = z
+  .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])
+  .readonly();
 
-const GqlPermissionConditionSchema = z.tuple([
-  GqlPermissionOperandSchema,
-  PermissionOperatorSchema,
-  GqlPermissionOperandSchema,
-]);
+const GqlPermissionConditionSchema = z
+  .tuple([GqlPermissionOperandSchema, PermissionOperatorSchema, GqlPermissionOperandSchema])
+  .readonly();
 
 const ActionPermissionSchema = z.union([
   // Object format: { conditions, description?, permit? }
   z.object({
     conditions: z.union([
       RecordPermissionConditionSchema,
-      z.array(RecordPermissionConditionSchema),
+      z.array(RecordPermissionConditionSchema).readonly(),
     ]),
     description: z.string().optional(),
     permit: z.boolean().optional(),
   }),
   // Single condition tuple: [operand, operator, operand]
-  z.tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema]),
+  z
+    .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])
+    .readonly(),
   // Single condition tuple with permit: [operand, operator, operand, permit]
-  z.tuple([
-    RecordPermissionOperandSchema,
-    PermissionOperatorSchema,
-    RecordPermissionOperandSchema,
-    z.boolean(),
-  ]),
+  z
+    .tuple([
+      RecordPermissionOperandSchema,
+      PermissionOperatorSchema,
+      RecordPermissionOperandSchema,
+      z.boolean(),
+    ])
+    .readonly(),
   // Multiple conditions with optional trailing permit
-  z.array(z.union([RecordPermissionConditionSchema, z.boolean()])).refine(
-    (arr) => {
-      const boolIndex = arr.findIndex((item) => typeof item === "boolean");
-      return boolIndex === -1 || boolIndex === arr.length - 1;
-    },
-    { message: "Boolean permit flag must only appear at the end" },
-  ),
+  z
+    .array(z.union([RecordPermissionConditionSchema, z.boolean()]))
+    .refine(
+      (arr) => {
+        const boolIndex = arr.findIndex((item) => typeof item === "boolean");
+        return boolIndex === -1 || boolIndex === arr.length - 1;
+      },
+      { message: "Boolean permit flag must only appear at the end" },
+    )
+    .readonly(),
 ]);
 
 const GqlPermissionActionSchema = z.enum([
@@ -150,8 +153,8 @@ const GqlPermissionActionSchema = z.enum([
 ]);
 
 const GqlPermissionPolicySchema = z.object({
-  conditions: z.array(GqlPermissionConditionSchema),
-  actions: z.union([z.literal("all"), z.array(GqlPermissionActionSchema)]),
+  conditions: z.array(GqlPermissionConditionSchema).readonly(),
+  actions: z.union([z.literal("all"), z.array(GqlPermissionActionSchema).readonly()]),
   permit: z.boolean().optional(),
   description: z.string().optional(),
 });
@@ -159,13 +162,13 @@ const GqlPermissionPolicySchema = z.object({
 export const RawPermissionsSchema = z.object({
   record: z
     .object({
-      create: z.array(ActionPermissionSchema),
-      read: z.array(ActionPermissionSchema),
-      update: z.array(ActionPermissionSchema),
-      delete: z.array(ActionPermissionSchema),
+      create: z.array(ActionPermissionSchema).readonly(),
+      read: z.array(ActionPermissionSchema).readonly(),
+      update: z.array(ActionPermissionSchema).readonly(),
+      delete: z.array(ActionPermissionSchema).readonly(),
     })
     .optional(),
-  gql: z.array(GqlPermissionPolicySchema).optional(),
+  gql: z.array(GqlPermissionPolicySchema).readonly().optional(),
 });
 
 export const TailorDBTypeSchema = z.object({
