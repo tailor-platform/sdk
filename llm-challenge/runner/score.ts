@@ -139,16 +139,16 @@ function classifyFailure(
   if (/^Skipped\b/.test(output)) {
     return undefined;
   }
-  // Check TS error codes before generic patterns to avoid misclassifying
-  // TS2339 "does not exist on type" as missing_file
+  // Check import errors before generic TS code matching so that TS2307
+  // ("Cannot find module") is classified as import_error, not type_error.
+  if (/Cannot find module|does not provide an export/.test(output)) {
+    return "import_error";
+  }
   if (/TS\d{4}/.test(output)) {
     return "type_error";
   }
   if (/does not exist|ENOENT/.test(output)) {
     return "missing_file";
-  }
-  if (/Cannot find module|does not provide an export/.test(output)) {
-    return "import_error";
   }
   if (stage === "generate") {
     if (/validation|invalid|schema/i.test(output)) {

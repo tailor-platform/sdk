@@ -49,12 +49,8 @@ const infraFailurePatterns = [
   /403 Forbidden/i,
 ];
 
-function detectInfraFailure(output: string, costUsd: number, durationMs: number): boolean {
-  if (infraFailurePatterns.some((pattern) => pattern.test(output))) {
-    return true;
-  }
-  // Heuristic: zero cost + very fast = likely auth/infra failure before any work
-  return costUsd === 0 && durationMs < 5000;
+function detectInfraFailure(output: string): boolean {
+  return infraFailurePatterns.some((pattern) => pattern.test(output));
 }
 
 function listFilesRecursive(dir: string, base: string = dir): string[] {
@@ -313,7 +309,7 @@ function runClaude(options: {
         durationMs,
         output: errorOutput,
         error: errorOutput,
-        infraFailure: detectInfraFailure(errorOutput, 0, durationMs),
+        infraFailure: detectInfraFailure(errorOutput),
       });
     });
 
@@ -337,9 +333,7 @@ function runClaude(options: {
           durationMs: parsedDuration,
           output: parsedOutput,
           error: !success ? parsedOutput : undefined,
-          infraFailure: !success
-            ? detectInfraFailure(parsedOutput, costUsd, parsedDuration)
-            : false,
+          infraFailure: !success ? detectInfraFailure(parsedOutput) : false,
         });
       } catch {
         resolve({
@@ -348,7 +342,7 @@ function runClaude(options: {
           durationMs,
           output,
           error: output || "Failed to parse Claude Code JSON output",
-          infraFailure: detectInfraFailure(output, 0, durationMs),
+          infraFailure: detectInfraFailure(output),
         });
       }
     });
