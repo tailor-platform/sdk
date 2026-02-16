@@ -30,6 +30,7 @@ function parseArgs(): {
   useSolution: boolean;
   solve: boolean;
   model: string;
+  modelExplicit: boolean;
   maxBudget: number;
   clean: boolean;
   retry: number;
@@ -44,6 +45,7 @@ function parseArgs(): {
   let useSolution = false;
   let solve = false;
   let model = "sonnet";
+  let modelExplicit = false;
   let maxBudget = 2.0;
   let clean = false;
   let retry = 0;
@@ -73,6 +75,7 @@ function parseArgs(): {
         break;
       case "--model":
         model = requireArg(args, i, "--model");
+        modelExplicit = true;
         i++;
         break;
       case "--max-budget":
@@ -120,6 +123,7 @@ function parseArgs(): {
     useSolution,
     solve,
     model,
+    modelExplicit,
     maxBudget,
     clean,
     retry: Math.trunc(retry),
@@ -596,6 +600,7 @@ async function main(): Promise<void> {
     useSolution,
     solve,
     model,
+    modelExplicit,
     maxBudget,
     clean,
     retry,
@@ -651,8 +656,8 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // Use the original report's model to avoid misattribution when --model is not explicitly passed
-    const rerunModel = latestReport.model ?? model;
+    // Honor explicit --model flag; fall back to the original report's model to avoid misattribution
+    const rerunModel = modelExplicit ? model : (latestReport.model ?? model);
 
     console.log(
       `Rerunning ${infraProblems.length} infrastructure failure problem(s) (model: ${rerunModel}, concurrency: ${concurrency})...`,
