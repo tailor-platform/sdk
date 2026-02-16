@@ -230,8 +230,10 @@ const claudeSettingsPath = path.join(import.meta.dirname, "claude-settings.json"
 
 function cleanEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
+  // Only strip Claude Code session/process vars to prevent nested session interference.
+  // Preserve other CLAUDE_* vars (e.g. auth, provider config) that users may set.
   for (const key of Object.keys(env)) {
-    if (key.startsWith("CLAUDE")) {
+    if (key.startsWith("CLAUDE_CODE_")) {
       delete env[key];
     }
   }
