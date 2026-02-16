@@ -709,8 +709,11 @@ async function main(): Promise<void> {
     });
 
     const sdkVersion = latestReport.sdkVersion;
+    const originalModel = latestReport.model;
+    const isMixedModel = modelExplicit && originalModel && rerunModel !== originalModel;
+    const reportModel = isMixedModel ? `${originalModel}+${rerunModel}` : rerunModel;
     const report = createReport(mergedResults, {
-      model: rerunModel,
+      model: reportModel,
       sdkVersion,
       elapsedMs: Date.now() - rerunStartTime,
     });
@@ -718,7 +721,7 @@ async function main(): Promise<void> {
     console.log("\n" + formatReportTable(report));
 
     fs.mkdirSync(resultsDir, { recursive: true });
-    const modelLabel = sanitizeForFilename(rerunModel);
+    const modelLabel = sanitizeForFilename(reportModel);
     const versionLabel = sdkVersion ?? "unknown";
     const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
     const jsonPath = path.join(
