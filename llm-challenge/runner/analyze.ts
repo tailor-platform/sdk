@@ -51,12 +51,16 @@ function loadReports(): ChallengeReport[] {
     process.exit(1);
   }
 
-  return files
-    .map((f) => {
+  const reports: ChallengeReport[] = [];
+  for (const f of files) {
+    try {
       const content = fs.readFileSync(path.join(resultsDir, f), "utf-8");
-      return JSON.parse(content) as ChallengeReport;
-    })
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      reports.push(JSON.parse(content) as ChallengeReport);
+    } catch {
+      console.warn(`Skipping malformed report file: ${f}`);
+    }
+  }
+  return reports.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 }
 
 function loadReport(filePath: string): ChallengeReport {

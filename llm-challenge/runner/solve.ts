@@ -392,6 +392,10 @@ export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
   const args = [
     "-p",
     "Reply with exactly: ok",
+    "--setting-sources",
+    "",
+    "--settings",
+    claudeSettingsPath,
     "--output-format",
     "json",
     "--max-budget-usd",
