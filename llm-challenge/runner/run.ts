@@ -437,7 +437,9 @@ async function runProblem(
     }
   }
 
-  const retryCount = retrySolveResults.length > 0 ? retrySolveResults.length : undefined;
+  // Exclude infra failure retries from retry count so they don't penalize adjusted score
+  const nonInfraRetries = retrySolveResults.filter((r) => !r.infraFailure);
+  const retryCount = nonInfraRetries.length > 0 ? nonInfraRetries.length : undefined;
   const result: ProblemResult = {
     problemId: meta.id,
     problemName: meta.name,
@@ -636,8 +638,11 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
+    // Use the original report's model to avoid misattribution when --model is not explicitly passed
+    const rerunModel = latestReport.model ?? model;
+
     console.log(
-      `Rerunning ${infraProblems.length} infrastructure failure problem(s) (concurrency: ${concurrency})...`,
+      `Rerunning ${infraProblems.length} infrastructure failure problem(s) (model: ${rerunModel}, concurrency: ${concurrency})...`,
     );
 
     const rerunStartTime = Date.now();
@@ -650,7 +655,7 @@ async function main(): Promise<void> {
           const problemId = `${infraResult.problemId}-${infraResult.problemName}`;
           try {
             const result = await runProblem(problemId, {
-              solve: { model, maxBudget, retry },
+              solve: { model: rerunModel, maxBudget, retry },
               clean,
               verbose,
             });
@@ -682,10 +687,8 @@ async function main(): Promise<void> {
     });
 
     const sdkVersion = latestReport.sdkVersion;
-    // Preserve the model from the original report to avoid misattribution
-    const reportModel = latestReport.model ?? model;
     const report = createReport(mergedResults, {
-      model: reportModel,
+      model: rerunModel,
       sdkVersion,
       elapsedMs: Date.now() - rerunStartTime,
     });
@@ -693,7 +696,7 @@ async function main(): Promise<void> {
     console.log("\n" + formatReportTable(report));
 
     fs.mkdirSync(resultsDir, { recursive: true });
-    const modelLabel = reportModel;
+    const modelLabel = rerunModel;
     const versionLabel = sdkVersion ?? "unknown";
     const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
     const jsonPath = path.join(
