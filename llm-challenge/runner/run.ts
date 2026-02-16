@@ -144,10 +144,10 @@ function cleanupWorkArtifacts(problemDir: string): void {
     return; // Path doesn't exist at all
   }
   if (stat.isSymbolicLink()) {
-    // Remove tmpdir target first, then symlink
+    // Remove tmpdir target first, then symlink — only if target lives under os.tmpdir()
     try {
-      const target = fs.readlinkSync(workPath);
-      if (fs.existsSync(target)) {
+      const target = fs.realpathSync(fs.readlinkSync(workPath));
+      if (target.startsWith(os.tmpdir()) && fs.existsSync(target)) {
         fs.rmSync(target, { recursive: true });
       }
     } catch {
@@ -191,10 +191,19 @@ function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean)
 
 function rewriteWorkspaceRefs(workDir: string): void {
   const pkgPath = path.join(workDir, "package.json");
-  const content = fs.readFileSync(pkgPath, "utf-8");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
   const sdkPath = path.resolve(challengeRoot, "..", "packages", "sdk");
-  const updated = content.replace(/"workspace:\^"/g, `"link:${sdkPath}"`);
-  fs.writeFileSync(pkgPath, updated);
+  const linkRef = `link:${sdkPath.replace(/\\/g, "/")}`;
+  for (const section of ["dependencies", "devDependencies"] as const) {
+    const deps = pkg[section] as Record<string, string> | undefined;
+    if (!deps) continue;
+    for (const [key, value] of Object.entries(deps)) {
+      if (value === "workspace:^") {
+        deps[key] = linkRef;
+      }
+    }
+  }
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
 }
 
 async function installDependencies(workDir: string, verbose: boolean): Promise<void> {
