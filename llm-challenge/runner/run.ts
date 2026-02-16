@@ -213,7 +213,7 @@ async function installDependencies(workDir: string, verbose: boolean): Promise<v
   await execAsync("pnpm install --no-lockfile --ignore-workspace", {
     cwd: workDir,
     encoding: "utf-8",
-    timeout: 60_000,
+    timeout: 120_000,
   });
 }
 
@@ -269,7 +269,15 @@ async function runProblem(
 
   const isSolveMode = !!options.solve;
   const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode);
-  await installLimiter(() => installDependencies(workDir, options.verbose));
+  try {
+    await installLimiter(() => installDependencies(workDir, options.verbose));
+  } catch (err) {
+    // Clean up temporary solve directory on setup/install failure
+    if (isSolveMode) {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
+    throw err;
+  }
 
   // In solve mode, workDir is a tmpdir. We'll create a symlink later for verify.
   const symlinkPath = path.join(problemDir, "work");
@@ -330,7 +338,12 @@ async function runProblem(
   // In solve mode, create symlink: problems/<name>/work → tmpdir
   // This ensures verify's path.dirname(workDir) resolves to problemDir for test paths
   if (isSolveMode) {
-    fs.symlinkSync(workDir, symlinkPath);
+    try {
+      fs.symlinkSync(workDir, symlinkPath);
+    } catch {
+      // Fallback to junction for Windows environments without symlink privileges
+      fs.symlinkSync(workDir, symlinkPath, "junction");
+    }
   }
   const verifyWorkDir = isSolveMode ? symlinkPath : workDir;
 
