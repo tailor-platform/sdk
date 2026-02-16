@@ -171,7 +171,7 @@ async function installDependencies(workDir: string, verbose: boolean): Promise<v
     console.log("  Installing dependencies...");
   }
   rewriteWorkspaceRefs(workDir);
-  await execAsync("pnpm install --no-lockfile", {
+  await execAsync("pnpm install --no-lockfile --ignore-workspace", {
     cwd: workDir,
     encoding: "utf-8",
     timeout: 60_000,

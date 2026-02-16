@@ -237,6 +237,8 @@ export async function verifyProblem(
     if (parsed.testDetails.length > 0) {
       testStage.testDetails = parsed.testDetails;
     }
+    // Override pass/fail from parsed results: treat zero executed tests as failure
+    testStage.passed = parsed.total > 0 && parsed.passed === parsed.total;
   }
 
   results.push(testStage);
