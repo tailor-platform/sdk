@@ -720,8 +720,10 @@ async function main(): Promise<void> {
   // Sort results by problemId for consistent report ordering
   results.sort((a, b) => a.problemId.localeCompare(b.problemId));
 
-  // Clean up partial results
-  cleanPartialResults(resultsDir);
+  // Clean up partial results only when running all problems
+  if (all) {
+    cleanPartialResults(resultsDir);
+  }
 
   // Read SDK version from package.json
   let sdkVersion: string | undefined;
