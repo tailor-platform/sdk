@@ -23,9 +23,9 @@ Define plugins in `tailor.config.ts` using `definePlugins()`:
 
 ```typescript
 import { defineConfig, definePlugins } from "@tailor-platform/sdk";
-import myPlugin from "./plugins/my-plugin";
 
-export const plugins = definePlugins(myPlugin);
+// Built-in plugins can be specified by string ID (like generators)
+export const plugins = definePlugins(["@tailor-platform/changeset"]);
 
 export default defineConfig({
   name: "my-app",
@@ -33,7 +33,35 @@ export default defineConfig({
 });
 ```
 
+For custom plugins, import and pass the plugin object:
+
+```typescript
+import { definePlugins } from "@tailor-platform/sdk";
+import myPlugin from "./plugins/my-plugin";
+
+export const plugins = definePlugins(myPlugin);
+```
+
 **Important**: The `plugins` export must be a named export (not default).
+
+### Built-in Plugins
+
+The SDK includes the following built-in plugins:
+
+| Plugin ID                    | Description                                                    |
+| ---------------------------- | -------------------------------------------------------------- |
+| `@tailor-platform/changeset` | Generates change request workflow types for approval processes |
+
+Built-in plugins can be configured with options:
+
+```typescript
+export const plugins = definePlugins([
+  "@tailor-platform/changeset",
+  {
+    /* options */
+  },
+]);
+```
 
 ### Attaching Plugins to Types
 

@@ -138,25 +138,25 @@ The SDK provides an async `getGeneratedType()` helper function to retrieve plugi
 ```typescript
 import { join } from "node:path";
 import { getGeneratedType } from "@tailor-platform/sdk/plugin";
-import { customer } from "./tailordb/customer";
+import { purchaseOrder } from "./tailordb/purchaseOrder";
 
 const configPath = join(import.meta.dirname, "./tailor.config.ts");
 
 // Get the generated type by config path, plugin ID, source type, and kind
-const DeletedCustomer = await getGeneratedType(
+const ChangeRequest = await getGeneratedType(
   configPath,
-  "@example/soft-delete",
-  customer,
-  "archive",
+  "@tailor-platform/changeset",
+  purchaseOrder,
+  "request",
 );
 ```
 
 **Parameters:**
 
 - `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
-- `pluginId`: The plugin's unique identifier (e.g., `"@example/soft-delete"`)
+- `pluginId`: The plugin's unique identifier (e.g., `"@tailor-platform/changeset"`)
 - `sourceType`: The TailorDB type that the plugin is attached to (`null` for namespace plugins)
-- `kind`: The generated type kind (e.g., `"archive"`, `"auditLog"`)
+- `kind`: The generated type kind (e.g., `"request"`, `"step"`, `"archive"`)
 
 **How it works:**
 
@@ -172,16 +172,16 @@ const DeletedCustomer = await getGeneratedType(
 ```typescript
 import { join } from "node:path";
 import { getGeneratedType } from "@tailor-platform/sdk/plugin";
-import { customer } from "./tailordb/customer";
+import { purchaseOrder } from "./tailordb/purchaseOrder";
 
 const configPath = join(import.meta.dirname, "./tailor.config.ts");
 
 // Type-attached plugin
-const DeletedCustomer = await getGeneratedType(
+const PurchaseOrderChangeRequest = await getGeneratedType(
   configPath,
-  "@example/soft-delete",
-  customer,
-  "archive",
+  "@tailor-platform/changeset",
+  purchaseOrder,
+  "request",
 );
 
 // Namespace plugin (pass null as sourceType)
