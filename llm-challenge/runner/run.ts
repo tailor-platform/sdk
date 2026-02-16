@@ -693,6 +693,7 @@ async function main(): Promise<void> {
   // Resume support: load partial results and skip already-completed problems
   const results: ProblemResult[] = [];
   let completedIds = new Set<string>();
+  const problemSet = new Set(problems);
   if (resume) {
     const partialResults = loadPartialResults(
       resultsDir,
@@ -700,10 +701,14 @@ async function main(): Promise<void> {
       !!solve,
       implSource,
     );
-    results.push(...partialResults);
-    completedIds = new Set(partialResults.map((r) => `${r.problemId}-${r.problemName}`));
-    if (partialResults.length > 0) {
-      console.log(`Resuming: ${partialResults.length} problem(s) already completed, skipping.`);
+    // Filter to only include results for problems in the current target set
+    const relevantResults = partialResults.filter((r) =>
+      problemSet.has(`${r.problemId}-${r.problemName}`),
+    );
+    results.push(...relevantResults);
+    completedIds = new Set(relevantResults.map((r) => `${r.problemId}-${r.problemName}`));
+    if (relevantResults.length > 0) {
+      console.log(`Resuming: ${relevantResults.length} problem(s) already completed, skipping.`);
     }
   }
 
