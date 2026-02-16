@@ -832,15 +832,31 @@ async function main(): Promise<void> {
 
 function findProblem(id: string): string {
   const problems = listProblems(challengeRoot);
-  const match =
-    problems.find((p) => p === id) ??
-    problems.find((p) => p.startsWith(`${id}-`)) ??
-    problems.find((p) => p.startsWith(id));
-  if (!match) {
-    console.error(`Problem not found: ${id}`);
+  // Exact match first
+  const exact = problems.find((p) => p === id);
+  if (exact) {
+    return exact;
+  }
+  // Prefix match with disambiguation: "001" matches "001-comprehensive-model"
+  const prefixDash = problems.filter((p) => p.startsWith(`${id}-`));
+  if (prefixDash.length === 1) {
+    return prefixDash[0];
+  }
+  if (prefixDash.length > 1) {
+    console.error(`Ambiguous problem ID "${id}" matches: ${prefixDash.join(", ")}`);
     process.exit(1);
   }
-  return match;
+  // Fallback prefix match (no dash)
+  const prefix = problems.filter((p) => p.startsWith(id));
+  if (prefix.length === 1) {
+    return prefix[0];
+  }
+  if (prefix.length > 1) {
+    console.error(`Ambiguous problem ID "${id}" matches: ${prefix.join(", ")}`);
+    process.exit(1);
+  }
+  console.error(`Problem not found: ${id}`);
+  process.exit(1);
 }
 
 main().catch((err) => {

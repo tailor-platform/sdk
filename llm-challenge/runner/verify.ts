@@ -183,10 +183,11 @@ export async function verifyProblem(
     };
 
     // Check file existence (20% of generate score)
-    // Exclude files already present in scaffold to avoid unearned credit for fix-broken problems
+    // For fix-broken problems (where all implement files are in scaffold), check those files instead
     const newFiles = meta.files.implement.filter((f) => !meta.files.scaffold.includes(f));
+    const filesToCheck = newFiles.length > 0 ? newFiles : meta.files.implement;
     const allFilesExist =
-      newFiles.length > 0 && newFiles.every((f) => fs.existsSync(path.join(workDir, f)));
+      filesToCheck.length > 0 && filesToCheck.every((f) => fs.existsSync(path.join(workDir, f)));
     if (allFilesExist) {
       generateStage.testsPassed = GENERATE_PARTIAL_FILE_EXISTS;
       generateStage.testsTotal = GENERATE_PARTIAL_TOTAL;
