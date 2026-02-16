@@ -530,7 +530,10 @@ function cleanPartialResults(resultsDir: string): void {
   }
 }
 
-function findLatestReport(resultsDir: string): ChallengeReport | undefined {
+function findLatestReport(
+  resultsDir: string,
+  options?: { solveOnly?: boolean },
+): ChallengeReport | undefined {
   if (!fs.existsSync(resultsDir)) {
     return undefined;
   }
@@ -548,6 +551,9 @@ function findLatestReport(resultsDir: string): ChallengeReport | undefined {
       const report = JSON.parse(
         fs.readFileSync(path.join(resultsDir, f), "utf-8"),
       ) as ChallengeReport;
+      if (options?.solveOnly && !report.results.some((r) => r.solveResult !== undefined)) {
+        continue;
+      }
       const time = new Date(report.timestamp).getTime();
       if (time > latestTime) {
         latestTime = time;
@@ -615,7 +621,7 @@ async function main(): Promise<void> {
 
   // --rerun-infra mode: extract infra failure problems from latest report
   if (rerunInfra) {
-    const latestReport = findLatestReport(resultsDir);
+    const latestReport = findLatestReport(resultsDir, { solveOnly: true });
     if (!latestReport) {
       console.error("No existing report found. Run a full benchmark first.");
       process.exit(1);
