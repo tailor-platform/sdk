@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("006-advanced-executor-operations", () => {
+describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
   const dailyReportPath = path.join(workDir, "executors/dailyReport.ts");
   const paymentWebhookPath = path.join(workDir, "executors/paymentWebhook.ts");
   const triggerWorkflowPath = path.join(workDir, "executors/triggerWorkflow.ts");

@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("010-fix-broken-model", () => {
+describe.skipIf(!workDirReady)("010-fix-broken-model", () => {
   const employeePath = path.join(workDir, "tailordb/employee.ts");
 
   test("tailordb/employee.ts exists", () => {

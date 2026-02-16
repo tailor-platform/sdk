@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("001-comprehensive-model: Employee", () => {
+describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   const employeePath = path.join(workDir, "tailordb/employee.ts");
 
   test("employee is a named export with correct model name", async () => {
@@ -109,7 +109,7 @@ describe.skipIf(!workDirExists)("001-comprehensive-model: Employee", () => {
   });
 });
 
-describe.skipIf(!workDirExists)("001-comprehensive-model: Event", () => {
+describe.skipIf(!workDirReady)("001-comprehensive-model: Event", () => {
   const eventPath = path.join(workDir, "tailordb/event.ts");
 
   test("event is a named export with correct model name", async () => {
@@ -154,7 +154,7 @@ describe.skipIf(!workDirExists)("001-comprehensive-model: Event", () => {
   });
 });
 
-describe.skipIf(!workDirExists)("001-comprehensive-model: Profile", () => {
+describe.skipIf(!workDirReady)("001-comprehensive-model: Profile", () => {
   const profilePath = path.join(workDir, "tailordb/profile.ts");
   const userPath = path.join(workDir, "tailordb/user.ts");
 

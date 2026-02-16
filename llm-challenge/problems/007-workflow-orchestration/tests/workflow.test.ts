@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("007-workflow-orchestration", () => {
+describe.skipIf(!workDirReady)("007-workflow-orchestration", () => {
   const checkInventoryPath = path.join(workDir, "workflows/fulfillment/checkInventory.ts");
   const processPaymentPath = path.join(workDir, "workflows/fulfillment/processPayment.ts");
   const shipOrderPath = path.join(workDir, "workflows/fulfillment/shipOrder.ts");

@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("008-full-application-config", () => {
+describe.skipIf(!workDirReady)("008-full-application-config", () => {
   const configPath = path.join(workDir, "tailor.config.ts");
 
   // --- File existence ---

@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("005-record-lifecycle-executors", () => {
+describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
   const productCreatedPath = path.join(workDir, "executors/productCreated.ts");
   const orderStatusChangedPath = path.join(workDir, "executors/orderStatusChanged.ts");
   const taskDeletedPath = path.join(workDir, "executors/taskDeleted.ts");

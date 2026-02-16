@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("011-fix-broken-resolver", () => {
+describe.skipIf(!workDirReady)("011-fix-broken-resolver", () => {
   const resolverPath = path.join(workDir, "resolvers/calculateDiscount/resolver.ts");
 
   test("resolvers/calculateDiscount/resolver.ts exists", () => {

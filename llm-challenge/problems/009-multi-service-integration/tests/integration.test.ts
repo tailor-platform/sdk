@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("009-multi-service-integration", () => {
+describe.skipIf(!workDirReady)("009-multi-service-integration", () => {
   const projectModelPath = path.join(workDir, "tailordb/project.ts");
   const taskModelPath = path.join(workDir, "tailordb/task.ts");
   const resolverPath = path.join(workDir, "resolvers/completeTask/resolver.ts");

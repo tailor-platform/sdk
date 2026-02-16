@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("003-multi-pattern-resolvers", () => {
+describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
   // ─── calculator ───────────────────────────────────────────────────────
 
   describe("calculator resolver", () => {

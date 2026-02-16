@@ -3,9 +3,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirExists = fs.existsSync(workDir);
+const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
 
-describe.skipIf(!workDirExists)("002-advanced-model-features: Book", () => {
+describe.skipIf(!workDirReady)("002-advanced-model-features: Book", () => {
   const bookPath = path.join(workDir, "tailordb/book.ts");
   const authorPath = path.join(workDir, "tailordb/author.ts");
 
@@ -61,7 +61,7 @@ describe.skipIf(!workDirExists)("002-advanced-model-features: Book", () => {
   });
 });
 
-describe.skipIf(!workDirExists)("002-advanced-model-features: Invoice", () => {
+describe.skipIf(!workDirReady)("002-advanced-model-features: Invoice", () => {
   const invoicePath = path.join(workDir, "tailordb/invoice.ts");
 
   test("invoice is a named export with correct model name", async () => {
@@ -144,7 +144,7 @@ describe.skipIf(!workDirExists)("002-advanced-model-features: Invoice", () => {
   });
 });
 
-describe.skipIf(!workDirExists)("002-advanced-model-features: Product", () => {
+describe.skipIf(!workDirReady)("002-advanced-model-features: Product", () => {
   const productPath = path.join(workDir, "tailordb/product.ts");
 
   test("product is a named export with correct model name", async () => {
