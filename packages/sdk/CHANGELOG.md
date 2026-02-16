@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.14.1
+
+### Patch Changes
+
+- [#587](https://github.com/tailor-platform/sdk/pull/587) [`014d8db`](https://github.com/tailor-platform/sdk/commit/014d8db10d2fb8a19ffff4a5c2d3c76c4f24f72d) Thanks [@toiroakr](https://github.com/toiroakr)! - Use tailor.idp.Client for IDP user seeding and truncation in seed generator
+
 ## 1.14.0
 
 ### Minor Changes
