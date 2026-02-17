@@ -46,6 +46,7 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
     create: boolean;
     update: boolean;
   };
+  hookModifier?: true;
   serial?: boolean;
   relation?: boolean;
 }
@@ -59,7 +60,7 @@ export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = 
 };
 
 export type ExcludeHooksAndValidateFields<T extends Record<string, TailorAnyDBField>> = {
-  [K in keyof T]: "hooks" extends keyof T[K]["_defined"]
+  [K in keyof T]: T[K]["_defined"] extends { hookModifier: true }
     ? never
     : T[K]["_defined"] extends { validate: unknown }
       ? never

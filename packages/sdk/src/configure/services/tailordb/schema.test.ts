@@ -433,6 +433,13 @@ describe("TailorDBField hooks modifier tests", () => {
     });
   });
 
+  it("serial on fields inside nested object is allowed", () => {
+    db.object({
+      seq: db.int().serial({ start: 1 }),
+      label: db.string(),
+    });
+  });
+
   it("setting validate on fields inside nested object causes type error", () => {
     db.object({
       first: db.string(),

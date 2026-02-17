@@ -203,6 +203,7 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
           create: H extends { create: unknown } ? true : false;
           update: H extends { update: unknown } ? true : false;
         };
+        hookModifier: true;
         serial: false;
       }
     >,
