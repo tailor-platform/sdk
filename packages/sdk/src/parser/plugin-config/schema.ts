@@ -100,19 +100,6 @@ const CustomPluginSchema = z
   })
   .passthrough();
 
-// Custom plugin tuple schema (PluginBase, options)
-// Allows custom plugins to receive plugin config via definePlugins()
-const CustomPluginTupleSchema = z.tuple([CustomPluginSchema, z.unknown()]);
-
-/**
- * Type guard to check if a value is a PluginBase object
- * @param value - Value to check
- * @returns True if value is a PluginBase object
- */
-function isPluginBase(value: unknown): value is PluginBase {
-  return CustomPluginSchema.safeParse(value).success;
-}
-
 function normalizePluginConfigSchema(schema: PluginConfigSchemaField): PluginConfigSchemaField {
   const seen = new Set<PluginConfigSchemaField>();
   const stack: PluginConfigSchemaField[] = [schema];
@@ -196,22 +183,9 @@ function validatePluginConfig(
  * @returns Plugin config schema that validates and transforms PluginBase instances
  */
 export function createPluginConfigSchema() {
-  return z
-    .union([CustomPluginSchema, CustomPluginTupleSchema])
-    .transform((plugin) => {
-      // Tuple form: [PluginBase, options]
-      if (Array.isArray(plugin)) {
-        const [first, options] = plugin;
-        if (isPluginBase(first)) {
-          const pluginBase = first as PluginBase;
-          return normalizePluginBase({ ...pluginBase, pluginConfig: options } as PluginBase);
-        }
-        throw new Error(`Invalid plugin configuration: expected PluginBase object`);
-      }
-      // Object form: custom plugin without plugin config
-      return normalizePluginBase(plugin as PluginBase);
-    })
-    .brand("Plugin");
+  return CustomPluginSchema.transform((plugin) => normalizePluginBase(plugin as PluginBase)).brand(
+    "Plugin",
+  );
 }
 
 export type PluginConfigSchemaType = ReturnType<typeof createPluginConfigSchema>;

@@ -63,8 +63,7 @@ Notes:
 - `importPath` should be resolvable from the directory containing `tailor.config.ts`. Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
 - If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `processType`.
 - Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
-- `pluginConfig` stores the plugin-level config so it can be read later during processing. If you prefer not to set it manually, you can pass config as a tuple to `definePlugins([plugin, config])`.
-- For custom plugins, `pluginConfig` is the expected pattern. The tuple form can also be used to pass config.
+- `pluginConfig` stores the plugin-level config so it can be read later during processing. Set it on the plugin object (e.g., via a factory function) before passing to `definePlugins()`.
 - `resolve` should return a dynamic import; relative specifiers are resolved from the plugin module.
 - Per-type config is optional by default. Use `typeConfigRequired: true` to make it mandatory.
 - To toggle optional/required based on plugin config, provide a function for `typeConfigRequired`.
@@ -331,14 +330,13 @@ export default withPluginContext((ctx: SoftDeleteContext) => {
 import { definePlugins } from "@tailor-platform/sdk";
 import softDeletePlugin from "./plugins/soft-delete";
 
-// Use tuple form to pass plugin-level config
-export const plugins = definePlugins([
-  softDeletePlugin,
-  {
+// Use a factory function to pass plugin-level config
+export const plugins = definePlugins(
+  softDeletePlugin({
     archiveTablePrefix: "Deleted_",
     defaultRetentionDays: 90,
-  },
-]);
+  }),
+);
 
 // tailordb/customer.ts
 export const customer = db
@@ -353,19 +351,16 @@ export const customer = db
   });
 ```
 
-**Note**: The tuple form `[plugin, config]` passes config as `pluginConfig` to the plugin. This allows using default export while still providing plugin-level configuration.
-
 If your plugin uses `typeConfigRequired` as a function, you can toggle whether per-type config
 is required via `pluginConfig`:
 
 ```typescript
-export const plugins = definePlugins([
-  softDeletePlugin,
-  {
+export const plugins = definePlugins(
+  softDeletePlugin({
     archiveTablePrefix: "Deleted_",
     requireTypeConfig: true,
-  },
-]);
+  }),
+);
 ```
 
 ## Adding Type Safety

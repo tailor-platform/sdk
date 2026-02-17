@@ -359,7 +359,7 @@ interface PluginBaseCommon<PluginConfig = unknown> {
   readonly importPath: string;
   /**
    * Schema defining the expected plugin-level configuration.
-   * Used to validate config passed via `definePlugins([plugin, config])`.
+   * Used to validate the `pluginConfig` property on the plugin object.
    * If not provided, pluginConfig validation is skipped.
    * @example
    * ```typescript
@@ -451,10 +451,8 @@ export type PluginBase<PluginConfig = unknown> =
   | PluginBaseNamespace<PluginConfig>;
 
 /**
- * Plugin configuration input type for definePlugins()
- * Can be:
- * - A PluginBase object for custom plugins without configuration
- * - A tuple [PluginBase, options] for custom plugins with configuration
- * Options can be any value - the plugin's pluginConfigSchema handles validation.
+ * Plugin configuration input type for definePlugins().
+ * Pass a PluginBase object directly. Use the pluginConfig property on
+ * the plugin object to provide plugin-level configuration.
  */
-export type PluginConfig = PluginBase | readonly [PluginBase, unknown];
+export type PluginConfig = PluginBase;

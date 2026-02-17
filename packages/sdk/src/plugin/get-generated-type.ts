@@ -68,12 +68,7 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
     if (!Array.isArray(value)) continue;
 
     for (const item of value) {
-      if (Array.isArray(item) && item.length === 2 && isPluginBase(item[0])) {
-        // Tuple form: [PluginBase, pluginConfig]
-        const plugin = item[0] as PluginBase;
-        plugins.set(plugin.id, { plugin, pluginConfig: item[1] });
-      } else if (isPluginBase(item)) {
-        // Direct PluginBase form
+      if (isPluginBase(item)) {
         plugins.set(item.id, { plugin: item, pluginConfig: item.pluginConfig });
       }
     }
