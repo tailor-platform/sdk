@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import {
+  GQL_PERMISSION_INVALID_OPERAND,
   parseTypes,
   TailorDBTypeSchema,
   type TypeSourceInfo,
@@ -142,8 +143,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         const result = TailorDBTypeSchema.safeParse(exportedValue);
         if (!result.success) {
-          const gqlIssue = result.error.issues.find((i) =>
-            i.message.includes("operand is not supported in gqlPermission"),
+          const gqlIssue = result.error.issues.find(
+            (i) => i.code === "custom" && i.params?.code === GQL_PERMISSION_INVALID_OPERAND,
           );
           if (gqlIssue) {
             throw new Error(gqlIssue.message);
