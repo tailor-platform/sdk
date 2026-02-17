@@ -64,3 +64,52 @@ export function copyDir(src: string, dest: string): void {
 export function importPath(filePath: string): Promise<Record<string, any>> {
   return import(pathToFileURL(filePath).href) as Promise<Record<string, any>>;
 }
+
+/**
+ * Build a problem key string from ID and name, used consistently across runner files.
+ */
+export function problemKey(problemId: string, problemName: string): string {
+  return `${problemId}-${problemName}`;
+}
+
+/**
+ * Parse a required CLI argument value at position i+1.
+ * Exits with an error if the value is missing.
+ */
+export function requireArg(args: string[], i: number, flag: string): string {
+  if (i + 1 >= args.length) {
+    console.error(`Error: ${flag} requires a value`);
+    process.exit(1);
+  }
+  return args[i + 1]!;
+}
+
+/**
+ * Format a duration in milliseconds as a human-readable string (e.g. "2m30s" or "45s").
+ */
+export function formatDuration(ms: number): string {
+  const secs = ms / 1000;
+  const mins = Math.floor(secs / 60);
+  const remainSecs = Math.round(secs % 60);
+  return mins > 0 ? `${mins}m${remainSecs}s` : `${remainSecs}s`;
+}
+
+/**
+ * Read SDK version from package.json.
+ */
+export function getSdkVersion(challengeRoot: string): string | undefined {
+  try {
+    const sdkPkgPath = path.join(challengeRoot, "..", "packages", "sdk", "package.json");
+    const sdkPkg = JSON.parse(fs.readFileSync(sdkPkgPath, "utf-8")) as { version: string };
+    return sdkPkg.version;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Replace filename-unsafe characters with dashes.
+ */
+export function sanitizeForFilename(label: string): string {
+  return label.replace(/[/\\:*?"<>|]/g, "-");
+}

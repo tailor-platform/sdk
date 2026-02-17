@@ -1,10 +1,9 @@
 import { describe, expect, test } from "vitest";
-import path from "node:path";
 import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import path from "node:path";
+import { createWorkDirContext, importPath } from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("012-fix-broken-workflow", () => {
   const workflowPath = path.join(workDir, "workflows/orderPipeline.ts");

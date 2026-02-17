@@ -1,10 +1,8 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import { createWorkDirContext, importPath } from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
   // ─── getUser ──────────────────────────────────────────────────────────
@@ -13,8 +11,7 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
     const resolverPath = path.join(workDir, "resolvers/getUser.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await importPath(resolverPath);
-      const resolver = mod.default;
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("getUser");
       expect(resolver.operation).toBe("query");
@@ -30,7 +27,6 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
     test("body is an async function", async () => {
       const { default: resolver } = await importPath(resolverPath);
       expect(typeof resolver.body).toBe("function");
-      // Check that it's async (constructor name is AsyncFunction)
       expect(resolver.body.constructor.name).toBe("AsyncFunction");
     });
 
@@ -38,9 +34,7 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
       const { default: resolver } = await importPath(resolverPath);
       expect(resolver.output).toBeDefined();
       expect(resolver.output.type).toBe("nested");
-      expect(resolver.output.fields.name).toBeDefined();
       expect(resolver.output.fields.name.type).toBe("string");
-      expect(resolver.output.fields.email).toBeDefined();
       expect(resolver.output.fields.email.type).toBe("string");
     });
   });
@@ -51,8 +45,7 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
     const resolverPath = path.join(workDir, "resolvers/processOrder.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await importPath(resolverPath);
-      const resolver = mod.default;
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("processOrder");
       expect(resolver.operation).toBe("mutation");
@@ -60,7 +53,6 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
 
     test("input has customer as nested object", async () => {
       const { default: resolver } = await importPath(resolverPath);
-      expect(resolver.input.customer).toBeDefined();
       expect(resolver.input.customer.type).toBe("nested");
       expect(resolver.input.customer.fields.name.type).toBe("string");
       expect(resolver.input.customer.fields.email.type).toBe("string");
@@ -68,7 +60,6 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
 
     test("input has items as array of nested objects", async () => {
       const { default: resolver } = await importPath(resolverPath);
-      expect(resolver.input.items).toBeDefined();
       expect(resolver.input.items.type).toBe("nested");
       expect(resolver.input.items.metadata.array).toBe(true);
       expect(resolver.input.items.fields.productName.type).toBe("string");
@@ -187,8 +178,7 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
     const resolverPath = path.join(workDir, "resolvers/startProcessing/resolver.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await importPath(resolverPath);
-      const resolver = mod.default;
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("startProcessing");
       expect(resolver.operation).toBe("mutation");
@@ -202,7 +192,6 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
 
     test("input has priority as enum with correct values", async () => {
       const { default: resolver } = await importPath(resolverPath);
-      expect(resolver.input.priority).toBeDefined();
       expect(resolver.input.priority.type).toBe("enum");
       const values = resolver.input.priority.metadata.allowedValues.map(
         (v: { value: string }) => v.value,

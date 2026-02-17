@@ -1,10 +1,8 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import { createWorkDirContext, importPath } from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
   // ─── calculator ───────────────────────────────────────────────────────
@@ -13,8 +11,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/calculator.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await importPath(resolverPath);
-      const resolver = mod.default;
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("calculator");
       expect(resolver.operation).toBe("query");
@@ -58,8 +55,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/formatName.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await importPath(resolverPath);
-      const resolver = mod.default;
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("formatName");
       expect(resolver.operation).toBe("mutation");
@@ -117,8 +113,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/categorizeNumbers.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await importPath(resolverPath);
-      const resolver = mod.default;
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("categorizeNumbers");
       expect(resolver.operation).toBe("query");
@@ -199,8 +194,7 @@ describe.skipIf(!workDirReady)("003-multi-pattern-resolvers", () => {
     const resolverPath = path.join(workDir, "resolvers/whoami/resolver.ts");
 
     test("has default export with correct name and operation", async () => {
-      const mod = await importPath(resolverPath);
-      const resolver = mod.default;
+      const { default: resolver } = await importPath(resolverPath);
       expect(resolver).toBeDefined();
       expect(resolver.name).toBe("whoami");
       expect(resolver.operation).toBe("query");

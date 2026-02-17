@@ -1,10 +1,15 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import {
+  createWorkDirContext,
+  expectEnumValues,
+  expectFieldNames,
+  expectFieldType,
+  expectTimestamps,
+  importPath,
+} from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("002-advanced-model-features: Book", () => {
   const bookPath = path.join(workDir, "tailordb/book.ts");
@@ -18,35 +23,25 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Book", () => {
 
   test("book has all expected fields", async () => {
     const { book } = await importPath(bookPath);
-    const fieldNames = Object.keys(book.fields);
-    expect(fieldNames).toContain("title");
-    expect(fieldNames).toContain("isbn");
-    expect(fieldNames).toContain("price");
-    expect(fieldNames).toContain("authorID");
-    expect(fieldNames).toContain("createdAt");
-    expect(fieldNames).toContain("updatedAt");
+    expectFieldNames(book, ["title", "isbn", "price", "authorID", "createdAt", "updatedAt"]);
   });
 
   test("isbn is a required unique string", async () => {
     const { book } = await importPath(bookPath);
-    expect(book.fields.isbn.type).toBe("string");
-    expect(book.fields.isbn.metadata.required).toBe(true);
-    expect(book.fields.isbn.metadata.unique).toBe(true);
+    expectFieldType(book.fields.isbn, "string", { required: true, unique: true });
   });
 
   test("price is an optional integer", async () => {
     const { book } = await importPath(bookPath);
-    expect(book.fields.price.type).toBe("integer");
-    expect(book.fields.price.metadata.required).toBe(false);
+    expectFieldType(book.fields.price, "integer", { required: false });
   });
 
   test("authorID is a uuid with n-1 relation to Author", async () => {
     const { book } = await importPath(bookPath);
-    const field = book.fields.authorID;
-    expect(field.type).toBe("uuid");
-    expect(field.rawRelation).toBeDefined();
-    expect(field.rawRelation.type).toBe("n-1");
-    expect(field.rawRelation.toward.type).toBe("Author");
+    expectFieldType(book.fields.authorID, "uuid");
+    expect(book.fields.authorID.rawRelation).toBeDefined();
+    expect(book.fields.authorID.rawRelation.type).toBe("n-1");
+    expect(book.fields.authorID.rawRelation.toward.type).toBe("Author");
   });
 
   test("author model can be imported without errors", async () => {
@@ -57,8 +52,7 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Book", () => {
 
   test("timestamps are present", async () => {
     const { book } = await importPath(bookPath);
-    expect(book.fields.createdAt.type).toBe("datetime");
-    expect(book.fields.updatedAt.type).toBe("datetime");
+    expectTimestamps(book);
   });
 });
 
@@ -73,20 +67,21 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Invoice", () => {
 
   test("invoice has all expected fields", async () => {
     const { invoice } = await importPath(invoicePath);
-    const fieldNames = Object.keys(invoice.fields);
-    expect(fieldNames).toContain("invoiceNumber");
-    expect(fieldNames).toContain("sequenceId");
-    expect(fieldNames).toContain("customerEmail");
-    expect(fieldNames).toContain("amount");
-    expect(fieldNames).toContain("status");
-    expect(fieldNames).toContain("createdAt");
-    expect(fieldNames).toContain("updatedAt");
+    expectFieldNames(invoice, [
+      "invoiceNumber",
+      "sequenceId",
+      "customerEmail",
+      "amount",
+      "status",
+      "createdAt",
+      "updatedAt",
+    ]);
   });
 
   test("invoiceNumber has serial config with correct format", async () => {
     const { invoice } = await importPath(invoicePath);
     const field = invoice.fields.invoiceNumber;
-    expect(field.type).toBe("string");
+    expectFieldType(field, "string");
     expect(field.metadata.serial).toBeDefined();
     expect(field.metadata.serial.start).toBe(1);
     expect(field.metadata.serial.format).toBe("INV-{:05d}");
@@ -95,7 +90,7 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Invoice", () => {
   test("sequenceId has serial config with start and maxValue", async () => {
     const { invoice } = await importPath(invoicePath);
     const field = invoice.fields.sequenceId;
-    expect(field.type).toBe("integer");
+    expectFieldType(field, "integer");
     expect(field.metadata.serial).toBeDefined();
     expect(field.metadata.serial.start).toBe(1000);
     expect(field.metadata.serial.maxValue).toBe(99999);
@@ -103,10 +98,7 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Invoice", () => {
 
   test("status is an enum with correct values", async () => {
     const { invoice } = await importPath(invoicePath);
-    const field = invoice.fields.status;
-    expect(field.type).toBe("enum");
-    const values = field.metadata.allowedValues.map((v: { value: string }) => v.value);
-    expect(values).toEqual(["draft", "sent", "paid", "overdue"]);
+    expectEnumValues(invoice.fields.status, ["draft", "sent", "paid", "overdue"]);
   });
 
   test("customerEmail has create and update hooks defined", async () => {
@@ -140,8 +132,7 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Invoice", () => {
 
   test("timestamps are present", async () => {
     const { invoice } = await importPath(invoicePath);
-    expect(invoice.fields.createdAt.type).toBe("datetime");
-    expect(invoice.fields.updatedAt.type).toBe("datetime");
+    expectTimestamps(invoice);
   });
 });
 
@@ -161,15 +152,16 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Product", () => {
 
   test("product has all expected fields", async () => {
     const { product } = await importPath(productPath);
-    const fieldNames = Object.keys(product.fields);
-    expect(fieldNames).toContain("name");
-    expect(fieldNames).toContain("sku");
-    expect(fieldNames).toContain("price");
-    expect(fieldNames).toContain("stock");
-    expect(fieldNames).toContain("category");
-    expect(fieldNames).toContain("isActive");
-    expect(fieldNames).toContain("createdAt");
-    expect(fieldNames).toContain("updatedAt");
+    expectFieldNames(product, [
+      "name",
+      "sku",
+      "price",
+      "stock",
+      "category",
+      "isActive",
+      "createdAt",
+      "updatedAt",
+    ]);
   });
 
   test("name field has index enabled", async () => {
@@ -179,8 +171,7 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Product", () => {
 
   test("sku is a required unique string", async () => {
     const { product } = await importPath(productPath);
-    expect(product.fields.sku.type).toBe("string");
-    expect(product.fields.sku.metadata.unique).toBe(true);
+    expectFieldType(product.fields.sku, "string", { unique: true });
   });
 
   test("aggregation feature is enabled", async () => {
@@ -256,7 +247,6 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Product", () => {
 
   test("timestamps are present", async () => {
     const { product } = await importPath(productPath);
-    expect(product.fields.createdAt.type).toBe("datetime");
-    expect(product.fields.updatedAt.type).toBe("datetime");
+    expectTimestamps(product);
   });
 });

@@ -1,10 +1,14 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import {
+  createWorkDirContext,
+  expectFilesExist,
+  expectFunctionOperation,
+  expectNonEmptyDescription,
+  importPath,
+} from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
   const dailyReportPath = path.join(workDir, "executors/dailyReport.ts");
@@ -13,14 +17,14 @@ describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
   const notifyExternalPath = path.join(workDir, "executors/notifyExternal.ts");
   const syncDataPath = path.join(workDir, "executors/syncData.ts");
 
-  // --- File existence ---
-
   test("all 5 executor files exist", () => {
-    expect(fs.existsSync(dailyReportPath)).toBe(true);
-    expect(fs.existsSync(paymentWebhookPath)).toBe(true);
-    expect(fs.existsSync(triggerWorkflowPath)).toBe(true);
-    expect(fs.existsSync(notifyExternalPath)).toBe(true);
-    expect(fs.existsSync(syncDataPath)).toBe(true);
+    expectFilesExist([
+      dailyReportPath,
+      paymentWebhookPath,
+      triggerWorkflowPath,
+      notifyExternalPath,
+      syncDataPath,
+    ]);
   });
 
   // --- dailyReport ---
@@ -37,9 +41,7 @@ describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
 
   test("dailyReport has a non-empty description", async () => {
     const { default: executor } = await importPath(dailyReportPath);
-    expect(executor.description).toBeDefined();
-    expect(typeof executor.description).toBe("string");
-    expect(executor.description.length).toBeGreaterThan(0);
+    expectNonEmptyDescription(executor);
   });
 
   test("dailyReport trigger kind is schedule", async () => {
@@ -59,8 +61,7 @@ describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
 
   test("dailyReport operation is a function", async () => {
     const { default: executor } = await importPath(dailyReportPath);
-    expect(executor.operation.kind).toBe("function");
-    expect(typeof executor.operation.body).toBe("function");
+    expectFunctionOperation(executor);
   });
 
   // --- paymentWebhook ---
@@ -82,8 +83,7 @@ describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
 
   test("paymentWebhook operation body is a callable function", async () => {
     const { default: executor } = await importPath(paymentWebhookPath);
-    expect(executor.operation.kind).toBe("function");
-    expect(typeof executor.operation.body).toBe("function");
+    expectFunctionOperation(executor);
   });
 
   // --- triggerWorkflow ---
@@ -100,9 +100,7 @@ describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
 
   test("triggerWorkflow has a non-empty description", async () => {
     const { default: executor } = await importPath(triggerWorkflowPath);
-    expect(executor.description).toBeDefined();
-    expect(typeof executor.description).toBe("string");
-    expect(executor.description.length).toBeGreaterThan(0);
+    expectNonEmptyDescription(executor);
   });
 
   test("triggerWorkflow trigger kind is recordCreated", async () => {
@@ -205,9 +203,7 @@ describe.skipIf(!workDirReady)("006-advanced-executor-operations", () => {
 
   test("syncData has a non-empty description", async () => {
     const { default: executor } = await importPath(syncDataPath);
-    expect(executor.description).toBeDefined();
-    expect(typeof executor.description).toBe("string");
-    expect(executor.description.length).toBeGreaterThan(0);
+    expectNonEmptyDescription(executor);
   });
 
   test("syncData trigger kind is resolverExecuted", async () => {

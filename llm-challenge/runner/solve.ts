@@ -1,24 +1,10 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { getSdkVersion } from "../shared/helpers";
 import type { ProblemMeta } from "../shared/helpers";
 
-function getSdkVersion(): string | undefined {
-  try {
-    const pkgPath = path.resolve(
-      import.meta.dirname,
-      "..",
-      "..",
-      "packages",
-      "sdk",
-      "package.json",
-    );
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as { version: string };
-    return pkg.version;
-  } catch {
-    return undefined;
-  }
-}
+const challengeRoot = path.resolve(import.meta.dirname, "..");
 
 export type SolveResult = {
   success: boolean;
@@ -73,42 +59,62 @@ function listFilesRecursive(dir: string, base: string = dir): string[] {
   return files.sort();
 }
 
-function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): string {
-  const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
-  const existingFiles = listFilesRecursive(workDir);
+const commonSystemLines = [
+  'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
+  "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
+  "Do NOT read any files outside of the current working directory.",
+];
 
-  // Detect fix-broken problems: implement files that overlap with scaffold files
-  const scaffoldSet = new Set(meta.files.scaffold);
-  const overlapping = meta.files.implement.filter((f) => scaffoldSet.has(f));
-  const isFixBroken = overlapping.length > 0;
-
-  const sdkVersion = getSdkVersion();
+function buildSystemPrompt(mode: "implement" | "fix"): string {
+  const sdkVersion = getSdkVersion(challengeRoot);
   const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
 
-  const systemPrompt = isFixBroken
-    ? [
-        "You are fixing issues in a @tailor-platform/sdk project.",
-        versionLine,
-        "Fix the issues in the listed files. Read the existing files first, then modify them.",
-        'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
-        "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
-        "Do NOT read any files outside of the current working directory.",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    : [
-        "You are implementing a @tailor-platform/sdk project.",
-        versionLine,
-        "Create ONLY the files listed in the task. Do NOT modify existing files.",
-        'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
-        "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
-        "Do NOT read any files outside of the current working directory.",
-      ]
-        .filter(Boolean)
-        .join("\n");
+  const modeLines =
+    mode === "fix"
+      ? [
+          "You are fixing issues in a @tailor-platform/sdk project.",
+          versionLine,
+          "Fix the issues in the listed files. Read the existing files first, then modify them.",
+        ]
+      : [
+          "You are implementing a @tailor-platform/sdk project.",
+          versionLine,
+          "Create ONLY the files listed in the task. Do NOT modify existing files.",
+        ];
 
-  const existingFilesList = existingFiles.map((f) => `- ${f}`).join("\n");
-  const filesToCreate = meta.files.implement.map((f) => `- ${f}`).join("\n");
+  return [...modeLines, ...commonSystemLines].filter(Boolean).join("\n");
+}
+
+function buildPromptSections(
+  problemDir: string,
+  meta: ProblemMeta,
+  workDir: string,
+): {
+  problemMd: string;
+  existingFilesList: string;
+  filesList: string;
+  isFixBroken: boolean;
+} {
+  const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
+  const existingFiles = listFilesRecursive(workDir);
+  const scaffoldSet = new Set(meta.files.scaffold);
+  const isFixBroken = meta.files.implement.some((f) => scaffoldSet.has(f));
+  return {
+    problemMd,
+    existingFilesList: existingFiles.map((f) => `- ${f}`).join("\n"),
+    filesList: meta.files.implement.map((f) => `- ${f}`).join("\n"),
+    isFixBroken,
+  };
+}
+
+function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): string {
+  const { problemMd, existingFilesList, filesList, isFixBroken } = buildPromptSections(
+    problemDir,
+    meta,
+    workDir,
+  );
+
+  const systemPrompt = buildSystemPrompt(isFixBroken ? "fix" : "implement");
   const filesLabel = isFixBroken ? "## Files to Fix" : "## Files to Create";
 
   const userPrompt = [
@@ -123,7 +129,7 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
     "",
     filesLabel,
     "",
-    filesToCreate,
+    filesList,
   ].join("\n");
 
   return `${systemPrompt}\n\n${userPrompt}`;
@@ -135,25 +141,13 @@ function buildRetryPrompt(
   workDir: string,
   errorOutput: string,
 ): string {
-  const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
-  const existingFiles = listFilesRecursive(workDir);
+  const { problemMd, existingFilesList, filesList } = buildPromptSections(
+    problemDir,
+    meta,
+    workDir,
+  );
 
-  const sdkVersion = getSdkVersion();
-  const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
-
-  const systemPrompt = [
-    "You are fixing issues in a @tailor-platform/sdk project.",
-    versionLine,
-    "Fix the issues in the listed files. Read the existing files first, then modify them.",
-    'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
-    "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
-    "Do NOT read any files outside of the current working directory.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const existingFilesList = existingFiles.map((f) => `- ${f}`).join("\n");
-  const filesToFix = meta.files.implement.map((f) => `- ${f}`).join("\n");
+  const systemPrompt = buildSystemPrompt("fix");
 
   const userPrompt = [
     "## Existing Files",
@@ -167,7 +161,7 @@ function buildRetryPrompt(
     "",
     "## Files to Fix",
     "",
-    filesToFix,
+    filesList,
     "",
     "## Previous Attempt Error",
     "",

@@ -1,10 +1,14 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import {
+  createWorkDirContext,
+  expectFieldNames,
+  expectFieldType,
+  expectTimestamps,
+  importPath,
+} from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
   const employeePath = path.join(workDir, "tailordb/employee.ts");
@@ -17,21 +21,20 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
 
   test("employee has all required fields", async () => {
     const { employee } = await importPath(employeePath);
-    const fieldNames = Object.keys(employee.fields);
-    expect(fieldNames).toContain("name");
-    expect(fieldNames).toContain("age");
-    expect(fieldNames).toContain("email");
-    expect(fieldNames).toContain("department");
-    expect(fieldNames).toContain("address");
-    expect(fieldNames).toContain("createdAt");
-    expect(fieldNames).toContain("updatedAt");
+    expectFieldNames(employee, [
+      "name",
+      "age",
+      "email",
+      "department",
+      "address",
+      "createdAt",
+      "updatedAt",
+    ]);
   });
 
   test("name is a required string field", async () => {
     const { employee } = await importPath(employeePath);
-    const field = employee.fields.name;
-    expect(field.type).toBe("string");
-    expect(field.metadata.required).toBe(true);
+    expectFieldType(employee.fields.name, "string", { required: true });
   });
 
   test("name validation rejects short values", async () => {
@@ -46,10 +49,8 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
 
   test("age is a required integer with min/max validators", async () => {
     const { employee } = await importPath(employeePath);
-    const field = employee.fields.age;
-    expect(field.type).toBe("integer");
-    expect(field.metadata.required).toBe(true);
-    const validators = field.metadata.validate;
+    expectFieldType(employee.fields.age, "integer", { required: true });
+    const validators = employee.fields.age.metadata.validate;
     expect(validators.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -75,44 +76,33 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
 
   test("department is an enum with correct values", async () => {
     const { employee } = await importPath(employeePath);
-    const field = employee.fields.department;
-    expect(field.type).toBe("enum");
-    const values = field.metadata.allowedValues.map((v: { value: string }) => v.value);
+    expect(employee.fields.department.type).toBe("enum");
+    const values = employee.fields.department.metadata.allowedValues.map(
+      (v: { value: string }) => v.value,
+    );
     expect(values).toEqual(["engineering", "sales", "marketing", "hr"]);
   });
 
   test("address is a required nested object (not array)", async () => {
     const { employee } = await importPath(employeePath);
-    const field = employee.fields.address;
-    expect(field.type).toBe("nested");
-    expect(field.metadata.required).toBe(true);
-    expect(field.metadata.array).toBeUndefined();
+    expectFieldType(employee.fields.address, "nested", { required: true });
+    expect(employee.fields.address.metadata.array).toBeUndefined();
   });
 
   test("address has correct nested fields with expected types and optionality", async () => {
     const { employee } = await importPath(employeePath);
     const addr = employee.fields.address.fields;
 
-    expect(addr.street.type).toBe("string");
-    expect(addr.street.metadata.required).toBe(true);
-
-    expect(addr.city.type).toBe("string");
-    expect(addr.city.metadata.required).toBe(true);
-
-    expect(addr.state.type).toBe("string");
-    expect(addr.state.metadata.required).toBe(false);
-
-    expect(addr.zipCode.type).toBe("string");
-    expect(addr.zipCode.metadata.required).toBe(true);
-
-    expect(addr.country.type).toBe("string");
-    expect(addr.country.metadata.required).toBe(true);
+    expectFieldType(addr.street, "string", { required: true });
+    expectFieldType(addr.city, "string", { required: true });
+    expectFieldType(addr.state, "string", { required: false });
+    expectFieldType(addr.zipCode, "string", { required: true });
+    expectFieldType(addr.country, "string", { required: true });
   });
 
   test("timestamps are present with correct types", async () => {
     const { employee } = await importPath(employeePath);
-    expect(employee.fields.createdAt.type).toBe("datetime");
-    expect(employee.fields.updatedAt.type).toBe("datetime");
+    expectTimestamps(employee);
   });
 });
 
@@ -127,37 +117,33 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Event", () => {
 
   test("event has all required fields", async () => {
     const { event } = await importPath(eventPath);
-    const fieldNames = Object.keys(event.fields);
-    expect(fieldNames).toContain("name");
-    expect(fieldNames).toContain("eventDate");
-    expect(fieldNames).toContain("startTime");
-    expect(fieldNames).toContain("endTime");
-    expect(fieldNames).toContain("capacity");
-    expect(fieldNames).toContain("price");
-    expect(fieldNames).toContain("scheduledAt");
-    expect(fieldNames).toContain("createdAt");
-    expect(fieldNames).toContain("updatedAt");
+    expectFieldNames(event, [
+      "name",
+      "eventDate",
+      "startTime",
+      "endTime",
+      "capacity",
+      "price",
+      "scheduledAt",
+      "createdAt",
+      "updatedAt",
+    ]);
   });
 
   test("event fields have correct types and optionality", async () => {
     const { event } = await importPath(eventPath);
-    expect(event.fields.name.type).toBe("string");
-    expect(event.fields.eventDate.type).toBe("date");
-    expect(event.fields.startTime.type).toBe("time");
-    expect(event.fields.endTime.type).toBe("time");
-    expect(event.fields.endTime.metadata.required).toBe(false);
-    expect(event.fields.capacity.type).toBe("integer");
-    expect(event.fields.capacity.metadata.required).toBe(false);
-    expect(event.fields.price.type).toBe("float");
-    expect(event.fields.price.metadata.required).toBe(true);
-    expect(event.fields.scheduledAt.type).toBe("datetime");
-    expect(event.fields.scheduledAt.metadata.required).toBe(true);
+    expectFieldType(event.fields.name, "string");
+    expectFieldType(event.fields.eventDate, "date");
+    expectFieldType(event.fields.startTime, "time");
+    expectFieldType(event.fields.endTime, "time", { required: false });
+    expectFieldType(event.fields.capacity, "integer", { required: false });
+    expectFieldType(event.fields.price, "float", { required: true });
+    expectFieldType(event.fields.scheduledAt, "datetime", { required: true });
   });
 
   test("timestamps are present with correct types", async () => {
     const { event } = await importPath(eventPath);
-    expect(event.fields.createdAt.type).toBe("datetime");
-    expect(event.fields.updatedAt.type).toBe("datetime");
+    expectTimestamps(event);
   });
 });
 
@@ -173,7 +159,7 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Profile", () => {
 
   test("userId is a uuid field with relation config", async () => {
     const { profile } = await importPath(profilePath);
-    expect(profile.fields.userId.type).toBe("uuid");
+    expectFieldType(profile.fields.userId, "uuid");
     expect(profile.fields.userId.rawRelation).toBeDefined();
   });
 
@@ -192,10 +178,8 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Profile", () => {
 
   test("bio and avatarUrl are optional string fields", async () => {
     const { profile } = await importPath(profilePath);
-    expect(profile.fields.bio.type).toBe("string");
-    expect(profile.fields.bio.metadata.required).toBe(false);
-    expect(profile.fields.avatarUrl.type).toBe("string");
-    expect(profile.fields.avatarUrl.metadata.required).toBe(false);
+    expectFieldType(profile.fields.bio, "string", { required: false });
+    expectFieldType(profile.fields.avatarUrl, "string", { required: false });
   });
 
   test("user model can be imported without errors", async () => {
@@ -206,7 +190,6 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Profile", () => {
 
   test("timestamps are present with correct types", async () => {
     const { profile } = await importPath(profilePath);
-    expect(profile.fields.createdAt.type).toBe("datetime");
-    expect(profile.fields.updatedAt.type).toBe("datetime");
+    expectTimestamps(profile);
   });
 });

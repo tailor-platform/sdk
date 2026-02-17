@@ -3,9 +3,24 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { copyDir, listProblems, loadMeta } from "../shared/helpers";
+import {
+  copyDir,
+  formatDuration,
+  getSdkVersion,
+  listProblems,
+  loadMeta,
+  problemKey,
+  requireArg,
+  sanitizeForFilename,
+} from "../shared/helpers";
 import type { ProblemMeta } from "../shared/helpers";
-import { calculateScore, computeAdjustedScore, createReport, formatReportTable } from "./score";
+import {
+  calculateScore,
+  computeAdjustedScore,
+  createReport,
+  formatReportTable,
+  isInfraFailure,
+} from "./score";
 import type { ChallengeReport, ProblemResult, StageResult } from "./score";
 import { checkAuthStatus, retrySolveProblem, solveProblem } from "./solve";
 import type { SolveResult } from "./solve";
@@ -14,14 +29,6 @@ import { verifyProblem } from "./verify";
 const execAsync = promisify(exec);
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
-
-function requireArg(args: string[], i: number, flag: string): string {
-  if (i + 1 >= args.length) {
-    console.error(`Error: ${flag} requires a value`);
-    process.exit(1);
-  }
-  return args[i + 1]!;
-}
 
 function parseArgs(): {
   problem?: string;
@@ -221,25 +228,27 @@ async function installDependencies(workDir: string, verbose: boolean): Promise<v
   });
 }
 
-function makeInfraFailureStages(meta: ProblemMeta): StageResult[] {
-  return (["generate", "typecheck", "tests"] as const).map((stage) => ({
-    stage,
-    passed: false,
-    output: "Skipped (infrastructure failure)",
-    score: 0,
-    maxScore: meta.scoring[stage],
-    category: "infra_failure" as const,
-  }));
+const allStages = ["generate", "typecheck", "tests"] as const;
+
+function sumStageScores(stages: StageResult[]): { totalScore: number; maxScore: number } {
+  return stages.reduce(
+    (acc, s) => ({ totalScore: acc.totalScore + s.score, maxScore: acc.maxScore + s.maxScore }),
+    { totalScore: 0, maxScore: 0 },
+  );
 }
 
-function makeRunnerErrorStages(meta: ProblemMeta, errorMsg: string): StageResult[] {
-  return (["generate", "typecheck", "tests"] as const).map((stage) => ({
+function makeSkippedStages(
+  meta: ProblemMeta,
+  output: string,
+  category: "infra_failure" | "runner_error",
+): StageResult[] {
+  return allStages.map((stage) => ({
     stage,
     passed: false,
-    output: `Skipped (runner error: ${errorMsg})`,
+    output,
     score: 0,
     maxScore: meta.scoring[stage],
-    category: "runner_error" as const,
+    category,
   }));
 }
 
@@ -331,7 +340,7 @@ async function runProblem(
     if (options.verbose) {
       console.log("  Skipping verification (infrastructure failure)");
     }
-    const stages = makeInfraFailureStages(meta);
+    const stages = makeSkippedStages(meta, "Skipped (infrastructure failure)", "infra_failure");
 
     if (isSolveMode || options.clean) {
       fs.rmSync(workDir, { recursive: true });
@@ -344,7 +353,7 @@ async function runProblem(
       category: meta.category,
       stages,
       totalScore: 0,
-      maxScore: stages.reduce((sum, s) => sum + s.maxScore, 0),
+      maxScore: sumStageScores(stages).maxScore,
       solveResult,
       totalDurationMs: Date.now() - problemStartTime,
     };
@@ -365,8 +374,7 @@ async function runProblem(
   // Run verification stages
   let rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
   let stages = calculateScore(meta, rawStages);
-  let totalScore = stages.reduce((sum, s) => sum + s.score, 0);
-  let maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
+  let { totalScore, maxScore } = sumStageScores(stages);
 
   // Record first-attempt score and stages before retries
   const firstAttemptScore = totalScore;
@@ -450,8 +458,7 @@ async function runProblem(
       // Re-verify using symlink path
       rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
       stages = calculateScore(meta, rawStages);
-      totalScore = stages.reduce((sum, s) => sum + s.score, 0);
-      maxScore = stages.reduce((sum, s) => sum + s.maxScore, 0);
+      ({ totalScore, maxScore } = sumStageScores(stages));
 
       if (totalScore === maxScore) {
         if (options.verbose) {
@@ -615,15 +622,43 @@ function findLatestReport(
   return latest;
 }
 
-function sanitizeForFilename(label: string): string {
-  return label.replace(/[/\\:*?"<>|]/g, "-");
+const authErrorPatterns = [
+  /Not logged in/i,
+  /API key/i,
+  /authentication.*failed/i,
+  /unauthorized/i,
+];
+
+async function ensureAuthenticated(targetModel: string): Promise<void> {
+  console.log("Checking authentication status...");
+  const authCheck = await checkAuthStatus(targetModel);
+  if (!authCheck.ok) {
+    console.error(`Authentication check failed: ${authCheck.error}`);
+    if (authErrorPatterns.some((p) => p.test(authCheck.error ?? ""))) {
+      console.error("Please log in to Claude Code before running solve mode.");
+    } else {
+      console.error("Please check your Claude Code setup and try again.");
+    }
+    process.exit(1);
+  }
+  console.log("Authentication: ok");
 }
 
-function formatDuration(ms: number): string {
-  const secs = ms / 1000;
-  const mins = Math.floor(secs / 60);
-  const remainSecs = Math.round(secs % 60);
-  return mins > 0 ? `${mins}m${remainSecs}s` : `${remainSecs}s`;
+function writeReport(
+  resultsDir: string,
+  report: ChallengeReport,
+  modelLabel: string,
+  sdkVersion: string | undefined,
+): void {
+  console.log("\n" + formatReportTable(report));
+
+  fs.mkdirSync(resultsDir, { recursive: true });
+  const safeName = sanitizeForFilename(modelLabel);
+  const versionLabel = sdkVersion ?? "unknown";
+  const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
+  const jsonPath = path.join(resultsDir, `report-${safeName}-${versionLabel}-${dateLabel}.json`);
+  fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+  console.log(`\nResults written to: ${jsonPath}`);
 }
 
 async function main(): Promise<void> {
@@ -672,26 +707,9 @@ async function main(): Promise<void> {
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
 
-  // Auth pre-check for solve mode (skip when rerun-infra — deferred until targets are known)
+  // Auth pre-check for solve mode (skip when rerun-infra -- deferred until targets are known)
   if (solve && !rerunInfra) {
-    console.log("Checking authentication status...");
-    const authCheck = await checkAuthStatus(model);
-    if (!authCheck.ok) {
-      console.error(`Authentication check failed: ${authCheck.error}`);
-      const authPatterns = [
-        /Not logged in/i,
-        /API key/i,
-        /authentication.*failed/i,
-        /unauthorized/i,
-      ];
-      if (authPatterns.some((p) => p.test(authCheck.error ?? ""))) {
-        console.error("Please log in to Claude Code before running solve mode.");
-      } else {
-        console.error("Please check your Claude Code setup and try again.");
-      }
-      process.exit(1);
-    }
-    console.log("Authentication: ok");
+    await ensureAuthenticated(model);
   }
 
   // --rerun-infra mode: extract infra failure problems from latest report
@@ -702,9 +720,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    const infraProblems = latestReport.results.filter(
-      (r) => r.stages.length > 0 && r.stages.every((s) => s.category === "infra_failure"),
-    );
+    const infraProblems = latestReport.results.filter(isInfraFailure);
     if (infraProblems.length === 0) {
       console.log("No infrastructure failures found in latest report. Nothing to rerun.");
       process.exit(0);
@@ -718,24 +734,7 @@ async function main(): Promise<void> {
     const rerunModel = modelExplicit ? model : (primaryReportModel ?? model);
 
     // Auth pre-check (deferred until rerunModel is derived so the correct model is validated)
-    console.log("Checking authentication status...");
-    const authCheck = await checkAuthStatus(rerunModel);
-    if (!authCheck.ok) {
-      console.error(`Authentication check failed: ${authCheck.error}`);
-      const authPatterns = [
-        /Not logged in/i,
-        /API key/i,
-        /authentication.*failed/i,
-        /unauthorized/i,
-      ];
-      if (authPatterns.some((p) => p.test(authCheck.error ?? ""))) {
-        console.error("Please log in to Claude Code before running solve mode.");
-      } else {
-        console.error("Please check your Claude Code setup and try again.");
-      }
-      process.exit(1);
-    }
-    console.log("Authentication: ok");
+    await ensureAuthenticated(rerunModel);
 
     console.log(
       `Rerunning ${infraProblems.length} infrastructure failure problem(s) (model: ${rerunModel}, concurrency: ${concurrency})...`,
@@ -748,7 +747,7 @@ async function main(): Promise<void> {
     const rerunResults = await Promise.all(
       infraProblems.map((infraResult) =>
         limit(async () => {
-          const problemId = `${infraResult.problemId}-${infraResult.problemName}`;
+          const problemId = problemKey(infraResult.problemId, infraResult.problemName);
           try {
             const result = await runProblem(problemId, {
               solve: { model: rerunModel, maxBudget, retry },
@@ -787,29 +786,21 @@ async function main(): Promise<void> {
     // When --model is explicit and differs from the original, create a composite label.
     // When --model is not explicit, preserve the original report's model label as-is
     // (it may already be composite from prior reruns).
-    const reportModel = modelExplicit
-      ? originalModel && rerunModel !== originalModel
-        ? `${originalModel}+${rerunModel}`
-        : rerunModel
-      : (originalModel ?? rerunModel);
+    let reportModel: string;
+    if (modelExplicit && originalModel && rerunModel !== originalModel) {
+      reportModel = `${originalModel}+${rerunModel}`;
+    } else if (modelExplicit) {
+      reportModel = rerunModel;
+    } else {
+      reportModel = originalModel ?? rerunModel;
+    }
     const report = createReport(mergedResults, {
       model: reportModel,
       sdkVersion,
       elapsedMs: Date.now() - rerunStartTime,
     });
 
-    console.log("\n" + formatReportTable(report));
-
-    fs.mkdirSync(resultsDir, { recursive: true });
-    const modelLabel = sanitizeForFilename(reportModel);
-    const versionLabel = sdkVersion ?? "unknown";
-    const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
-    const jsonPath = path.join(
-      resultsDir,
-      `report-${modelLabel}-${versionLabel}-${dateLabel}.json`,
-    );
-    fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
-    console.log(`\nResults written to: ${jsonPath}`);
+    writeReport(resultsDir, report, reportModel, sdkVersion);
     return;
   }
 
@@ -820,7 +811,14 @@ async function main(): Promise<void> {
   }
 
   // Determine implementation source label for resume validation
-  const implSource = solve ? "solve" : useSolution ? "solution" : (implDir ?? "unknown");
+  let implSource: string;
+  if (solve) {
+    implSource = "solve";
+  } else if (useSolution) {
+    implSource = "solution";
+  } else {
+    implSource = implDir ?? "unknown";
+  }
 
   // Resume support: load partial results and skip already-completed problems
   const results: ProblemResult[] = [];
@@ -835,10 +833,10 @@ async function main(): Promise<void> {
     );
     // Filter to only include results for problems in the current target set
     const relevantResults = partialResults.filter((r) =>
-      problemSet.has(`${r.problemId}-${r.problemName}`),
+      problemSet.has(problemKey(r.problemId, r.problemName)),
     );
     results.push(...relevantResults);
-    completedIds = new Set(relevantResults.map((r) => `${r.problemId}-${r.problemName}`));
+    completedIds = new Set(relevantResults.map((r) => problemKey(r.problemId, r.problemName)));
     if (relevantResults.length > 0) {
       console.log(`Resuming: ${relevantResults.length} problem(s) already completed, skipping.`);
     }
@@ -913,7 +911,11 @@ async function main(): Promise<void> {
 
           const problemDir = path.join(challengeRoot, "problems", task.problemName);
           const meta = loadMeta(problemDir);
-          const stages = makeRunnerErrorStages(meta, errorMsg);
+          const stages = makeSkippedStages(
+            meta,
+            `Skipped (runner error: ${errorMsg})`,
+            "runner_error",
+          );
           results.push({
             problemId: meta.id,
             problemName: meta.name,
@@ -921,7 +923,7 @@ async function main(): Promise<void> {
             category: meta.category,
             stages,
             totalScore: 0,
-            maxScore: stages.reduce((sum, s) => sum + s.maxScore, 0),
+            maxScore: sumStageScores(stages).maxScore,
             totalDurationMs: 0,
           });
           completed++;
@@ -938,15 +940,7 @@ async function main(): Promise<void> {
     cleanPartialResults(resultsDir);
   }
 
-  // Read SDK version from package.json
-  let sdkVersion: string | undefined;
-  try {
-    const sdkPkgPath = path.join(challengeRoot, "..", "packages", "sdk", "package.json");
-    const sdkPkg = JSON.parse(fs.readFileSync(sdkPkgPath, "utf-8")) as { version: string };
-    sdkVersion = sdkPkg.version;
-  } catch {
-    // SDK package.json not found, skip version
-  }
+  const sdkVersion = getSdkVersion(challengeRoot);
 
   const report = createReport(results, {
     model: solve ? model : undefined,
@@ -954,17 +948,15 @@ async function main(): Promise<void> {
     elapsedMs: Date.now() - runStartTime,
   });
 
-  // Print table
-  console.log("\n" + formatReportTable(report));
-
-  // Write JSON results
-  fs.mkdirSync(resultsDir, { recursive: true });
-  const modelLabel = sanitizeForFilename(solve ? model : useSolution ? "solution" : "impl");
-  const versionLabel = sdkVersion ?? "unknown";
-  const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
-  const jsonPath = path.join(resultsDir, `report-${modelLabel}-${versionLabel}-${dateLabel}.json`);
-  fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
-  console.log(`\nResults written to: ${jsonPath}`);
+  let modelLabelRaw: string;
+  if (solve) {
+    modelLabelRaw = model;
+  } else if (useSolution) {
+    modelLabelRaw = "solution";
+  } else {
+    modelLabelRaw = "impl";
+  }
+  writeReport(resultsDir, report, modelLabelRaw, sdkVersion);
 }
 
 function findProblem(id: string): string {

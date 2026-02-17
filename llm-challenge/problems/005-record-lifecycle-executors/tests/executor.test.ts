@@ -1,10 +1,14 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import {
+  createWorkDirContext,
+  expectFilesExist,
+  expectFunctionOperation,
+  expectNonEmptyDescription,
+  importPath,
+} from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
   const productCreatedPath = path.join(workDir, "executors/productCreated.ts");
@@ -12,13 +16,13 @@ describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
   const taskDeletedPath = path.join(workDir, "executors/taskDeleted.ts");
   const logResolverPath = path.join(workDir, "executors/logResolverExecution.ts");
 
-  // --- File existence ---
-
   test("all 4 executor files exist", () => {
-    expect(fs.existsSync(productCreatedPath)).toBe(true);
-    expect(fs.existsSync(orderStatusChangedPath)).toBe(true);
-    expect(fs.existsSync(taskDeletedPath)).toBe(true);
-    expect(fs.existsSync(logResolverPath)).toBe(true);
+    expectFilesExist([
+      productCreatedPath,
+      orderStatusChangedPath,
+      taskDeletedPath,
+      logResolverPath,
+    ]);
   });
 
   // --- productCreated ---
@@ -35,9 +39,7 @@ describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
 
   test("productCreated has a non-empty description", async () => {
     const { default: executor } = await importPath(productCreatedPath);
-    expect(executor.description).toBeDefined();
-    expect(typeof executor.description).toBe("string");
-    expect(executor.description.length).toBeGreaterThan(0);
+    expectNonEmptyDescription(executor);
   });
 
   test("productCreated trigger kind is recordCreated", async () => {
@@ -52,8 +54,7 @@ describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
 
   test("productCreated operation is a function", async () => {
     const { default: executor } = await importPath(productCreatedPath);
-    expect(executor.operation.kind).toBe("function");
-    expect(typeof executor.operation.body).toBe("function");
+    expectFunctionOperation(executor);
   });
 
   // --- orderStatusChanged ---
@@ -103,8 +104,7 @@ describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
 
   test("orderStatusChanged operation is a function", async () => {
     const { default: executor } = await importPath(orderStatusChangedPath);
-    expect(executor.operation.kind).toBe("function");
-    expect(typeof executor.operation.body).toBe("function");
+    expectFunctionOperation(executor);
   });
 
   // --- taskDeleted ---
@@ -131,8 +131,7 @@ describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
 
   test("taskDeleted operation is a function", async () => {
     const { default: executor } = await importPath(taskDeletedPath);
-    expect(executor.operation.kind).toBe("function");
-    expect(typeof executor.operation.body).toBe("function");
+    expectFunctionOperation(executor);
   });
 
   // --- logResolverExecution ---
@@ -159,13 +158,11 @@ describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
 
   test("logResolverExecution operation is a function", async () => {
     const { default: executor } = await importPath(logResolverPath);
-    expect(executor.operation.kind).toBe("function");
-    expect(typeof executor.operation.body).toBe("function");
+    expectFunctionOperation(executor);
   });
 
   test("logResolverExecution body handles success args", async () => {
     const { default: executor } = await importPath(logResolverPath);
-    // Should not throw when called with success args
     await expect(
       executor.operation.body({ success: true, result: { id: "1", name: "Test" } }),
     ).resolves.not.toThrow();
@@ -173,7 +170,6 @@ describe.skipIf(!workDirReady)("005-record-lifecycle-executors", () => {
 
   test("logResolverExecution body handles failure args", async () => {
     const { default: executor } = await importPath(logResolverPath);
-    // Should not throw when called with failure args
     await expect(
       executor.operation.body({ success: false, error: "Not found" }),
     ).resolves.not.toThrow();

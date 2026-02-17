@@ -1,16 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ChallengeReport } from "./score";
+import { problemKey, requireArg } from "../shared/helpers";
+import { computeSuccessRates, isInfraFailure } from "./score";
+import type { ChallengeReport, FailureCategory, SuccessRate } from "./score";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
-
-function requireArg(args: string[], i: number, flag: string): string {
-  if (i + 1 >= args.length) {
-    console.error(`Error: ${flag} requires a value`);
-    process.exit(1);
-  }
-  return args[i + 1]!;
-}
 
 function parseArgs(): {
   baseline?: string;
@@ -73,15 +67,9 @@ function loadReport(filePath: string): ChallengeReport {
   return JSON.parse(content) as ChallengeReport;
 }
 
-function formatDelta(delta: number): string {
-  if (delta > 0) return `+${delta}`;
-  if (delta < 0) return `${delta}`;
-  return "=";
-}
-
-function formatPercentDelta(delta: number): string {
-  if (delta > 0) return `+${delta}%`;
-  if (delta < 0) return `${delta}%`;
+function formatDelta(delta: number, suffix = ""): string {
+  if (delta > 0) return `+${delta}${suffix}`;
+  if (delta < 0) return `${delta}${suffix}`;
   return "=";
 }
 
@@ -90,7 +78,9 @@ function formatTimestamp(ts: string): string {
   return d.toISOString().replace("T", " ").slice(0, 19);
 }
 
-function getFailureCategory(result: ChallengeReport["results"][number]): string | undefined {
+function getFailureCategory(
+  result: ChallengeReport["results"][number],
+): FailureCategory | undefined {
   for (const s of result.stages) {
     if (!s.passed && s.category) {
       return s.category;
@@ -99,46 +89,52 @@ function getFailureCategory(result: ChallengeReport["results"][number]): string 
   return undefined;
 }
 
-function computeSuccessRates(
+type SuccessRateMap = Record<string, SuccessRate>;
+
+function computeRatesFromReport(
   report: ChallengeReport,
-  cached: Record<string, { passed: number; total: number; rate: number }> | undefined,
+  cached: SuccessRateMap | undefined,
   groupKeyFn: (r: ChallengeReport["results"][number]) => string,
-): Record<string, { passed: number; total: number; rate: number }> {
+): SuccessRateMap {
   if (cached) {
     return cached;
   }
-
-  const groups: Record<string, { passed: number; total: number }> = {};
-  for (const r of report.results) {
-    // Exclude infra-only failures to match cached analytics computation
-    if (r.stages.length > 0 && r.stages.every((s) => s.category === "infra_failure")) {
-      continue;
-    }
-    const key = groupKeyFn(r);
-    const group = (groups[key] ??= { passed: 0, total: 0 });
-    group.total++;
-    if (r.totalScore === r.maxScore) {
-      group.passed++;
-    }
-  }
-
-  const rates: Record<string, { passed: number; total: number; rate: number }> = {};
-  for (const [key, g] of Object.entries(groups)) {
-    rates[key] = { ...g, rate: g.total > 0 ? Math.round((g.passed / g.total) * 100) : 0 };
-  }
-  return rates;
+  const validResults = report.results.filter((r) => !isInfraFailure(r));
+  return computeSuccessRates(validResults, groupKeyFn, (r) => r.totalScore === r.maxScore);
 }
 
-function computeCategoryRates(
-  report: ChallengeReport,
-): Record<string, { passed: number; total: number; rate: number }> {
-  return computeSuccessRates(report, report.analytics?.categorySuccessRates, (r) => r.category);
+function computeCategoryRates(report: ChallengeReport): SuccessRateMap {
+  return computeRatesFromReport(report, report.analytics?.categorySuccessRates, (r) => r.category);
 }
 
-function computeDifficultyRates(
-  report: ChallengeReport,
-): Record<string, { passed: number; total: number; rate: number }> {
-  return computeSuccessRates(report, report.analytics?.difficultySuccessRates, (r) => r.difficulty);
+function computeDifficultyRates(report: ChallengeReport): SuccessRateMap {
+  return computeRatesFromReport(
+    report,
+    report.analytics?.difficultySuccessRates,
+    (r) => r.difficulty,
+  );
+}
+
+function printRateComparison(
+  title: string,
+  beforeRates: SuccessRateMap,
+  afterRates: SuccessRateMap,
+): void {
+  const allKeys = [...new Set([...Object.keys(beforeRates), ...Object.keys(afterRates)])].sort();
+  if (allKeys.length === 0) {
+    return;
+  }
+  console.log(title);
+  for (const key of allKeys) {
+    const bEntry = beforeRates[key];
+    const aEntry = afterRates[key];
+    const bLabel = bEntry != null ? `${bEntry.rate}%` : "N/A";
+    const aLabel = aEntry != null ? `${aEntry.rate}%` : "N/A";
+    const delta =
+      bEntry != null && aEntry != null ? ` (${formatDelta(aEntry.rate - bEntry.rate, "%")})` : "";
+    console.log(`  ${key}: ${bLabel} -> ${aLabel}${delta}`);
+  }
+  console.log("");
 }
 
 function showComparison(before: ChallengeReport, after: ChallengeReport): void {
@@ -156,8 +152,8 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
   console.log("");
 
   // Build lookup maps
-  const beforeMap = new Map(before.results.map((r) => [`${r.problemId}-${r.problemName}`, r]));
-  const afterMap = new Map(after.results.map((r) => [`${r.problemId}-${r.problemName}`, r]));
+  const beforeMap = new Map(before.results.map((r) => [problemKey(r.problemId, r.problemName), r]));
+  const afterMap = new Map(after.results.map((r) => [problemKey(r.problemId, r.problemName), r]));
 
   // Collect all problem keys in order
   const allKeys = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
@@ -226,51 +222,16 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
 
   console.log("");
 
-  // Category success rates
-  const beforeCatRates = computeCategoryRates(before);
-  const afterCatRates = computeCategoryRates(after);
-  const allCategories = [
-    ...new Set([...Object.keys(beforeCatRates), ...Object.keys(afterCatRates)]),
-  ].sort();
-
-  if (allCategories.length > 0) {
-    console.log("Category Success Rates:");
-    for (const cat of allCategories) {
-      const bEntry = beforeCatRates[cat];
-      const aEntry = afterCatRates[cat];
-      const bLabel = bEntry != null ? `${bEntry.rate}%` : "N/A";
-      const aLabel = aEntry != null ? `${aEntry.rate}%` : "N/A";
-      const delta =
-        bEntry != null && aEntry != null
-          ? ` (${formatPercentDelta(aEntry.rate - bEntry.rate)})`
-          : "";
-      console.log(`  ${cat}: ${bLabel} -> ${aLabel}${delta}`);
-    }
-    console.log("");
-  }
-
-  // Difficulty success rates
-  const beforeDiffRates = computeDifficultyRates(before);
-  const afterDiffRates = computeDifficultyRates(after);
-  const allDiffs = [
-    ...new Set([...Object.keys(beforeDiffRates), ...Object.keys(afterDiffRates)]),
-  ].sort();
-
-  if (allDiffs.length > 0) {
-    console.log("Difficulty Success Rates:");
-    for (const diff of allDiffs) {
-      const bEntry = beforeDiffRates[diff];
-      const aEntry = afterDiffRates[diff];
-      const bLabel = bEntry != null ? `${bEntry.rate}%` : "N/A";
-      const aLabel = aEntry != null ? `${aEntry.rate}%` : "N/A";
-      const delta =
-        bEntry != null && aEntry != null
-          ? ` (${formatPercentDelta(aEntry.rate - bEntry.rate)})`
-          : "";
-      console.log(`  ${diff}: ${bLabel} -> ${aLabel}${delta}`);
-    }
-    console.log("");
-  }
+  printRateComparison(
+    "Category Success Rates:",
+    computeCategoryRates(before),
+    computeCategoryRates(after),
+  );
+  printRateComparison(
+    "Difficulty Success Rates:",
+    computeDifficultyRates(before),
+    computeDifficultyRates(after),
+  );
 
   // Failure distribution changes (if analytics available)
   if (before.analytics?.failureDistribution || after.analytics?.failureDistribution) {
@@ -336,7 +297,7 @@ function showTrend(reports: ChallengeReport[]): void {
   const problemKeySet = new Set<string>();
   for (const r of reports) {
     for (const p of r.results) {
-      problemKeySet.add(`${p.problemId}-${p.problemName}`);
+      problemKeySet.add(problemKey(p.problemId, p.problemName));
     }
   }
   const allProblemKeys = [...problemKeySet].sort();
@@ -351,7 +312,7 @@ function showTrend(reports: ChallengeReport[]): void {
     for (const key of allProblemKeys) {
       let line = key.slice(0, 29).padEnd(30);
       for (const report of reports) {
-        const result = report.results.find((r) => `${r.problemId}-${r.problemName}` === key);
+        const result = report.results.find((r) => problemKey(r.problemId, r.problemName) === key);
         const cell = result ? `${result.totalScore}/${result.maxScore}` : "-";
         line += cell.padEnd(10);
       }

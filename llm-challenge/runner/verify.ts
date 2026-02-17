@@ -152,6 +152,14 @@ function parseVitestJson(output: string): ParsedVitestResult | undefined {
   }
 }
 
+function earlyReturn(generateStage: StageInput, skipReason: string): StageInput[] {
+  return [
+    generateStage,
+    { stage: "typecheck", passed: false, output: `Skipped (${skipReason})` },
+    { stage: "tests", passed: false, output: `Skipped (${skipReason})` },
+  ];
+}
+
 /**
  * Run the three verification stages on a work directory.
  * Returns early only if generate fails; typecheck failure does not skip tests.
@@ -161,16 +169,11 @@ export async function verifyProblem(
   meta: ProblemMeta,
   challengeRoot: string,
 ): Promise<StageInput[]> {
-  const results: StageInput[] = [];
-
   // Stage 1: generate
   const sdkBin = path.join(challengeRoot, "..", "packages", "sdk", "dist", "cli", "index.mjs");
   if (!fs.existsSync(sdkBin)) {
     const msg = `SDK binary not found at ${sdkBin}. Run 'pnpm -C packages/sdk build' first.`;
-    results.push({ stage: "generate", passed: false, output: msg });
-    results.push({ stage: "typecheck", passed: false, output: "Skipped (generate failed)" });
-    results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
-    return results;
+    return earlyReturn({ stage: "generate", passed: false, output: msg }, "generate failed");
   }
   const generateResult = await runCommand(`node "${sdkBin}" generate -c tailor.config.ts`, workDir);
   if (!generateResult.success) {
@@ -184,7 +187,7 @@ export async function verifyProblem(
 
     // Check file existence (20% of generate score)
     // For fix-broken problems (where all implement files are in scaffold), skip file existence
-    // check since those files exist before any fix is applied — awarding credit would inflate scores
+    // check since those files exist before any fix is applied -- awarding credit would inflate scores
     const newFiles = meta.files.implement.filter((f) => !meta.files.scaffold.includes(f));
     const isFixBroken = newFiles.length === 0;
     const allNewFilesExist =
@@ -193,7 +196,7 @@ export async function verifyProblem(
       generateStage.testsPassed = GENERATE_PARTIAL_FILE_EXISTS;
     }
 
-    // Import check (60% of generate score) — runs for both new and fix-broken problems
+    // Import check (60% of generate score) -- runs for both new and fix-broken problems
     if (allNewFilesExist || isFixBroken) {
       generateStage.testsTotal = GENERATE_PARTIAL_TOTAL;
       const importCheck = await runCommand("npx tsc --noEmit", workDir);
@@ -202,45 +205,40 @@ export async function verifyProblem(
       }
     }
 
-    results.push(generateStage);
-    results.push({ stage: "typecheck", passed: false, output: "Skipped (generate failed)" });
-    results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
-    return results;
+    return earlyReturn(generateStage, "generate failed");
   }
   // Verify all required implementation files exist even when generate succeeds.
   // This catches fix-broken submissions that delete or rename required target files.
   const missingFiles = meta.files.implement.filter((f) => !fs.existsSync(path.join(workDir, f)));
   if (missingFiles.length > 0) {
-    // Generate succeeded but implementation files are missing — partial credit only
-    const generateStage: StageInput = {
-      stage: "generate",
-      passed: false,
-      output: `Generate succeeded but required files missing: ${missingFiles.join(", ")}`,
-      durationMs: generateResult.durationMs,
-      testsPassed: 0,
-      testsTotal: GENERATE_PARTIAL_TOTAL,
-    };
-    results.push(generateStage);
-    results.push({ stage: "typecheck", passed: false, output: "Skipped (missing files)" });
-    results.push({ stage: "tests", passed: false, output: "Skipped (missing files)" });
-    return results;
+    return earlyReturn(
+      {
+        stage: "generate",
+        passed: false,
+        output: `Generate succeeded but required files missing: ${missingFiles.join(", ")}`,
+        durationMs: generateResult.durationMs,
+        testsPassed: 0,
+        testsTotal: GENERATE_PARTIAL_TOTAL,
+      },
+      "missing files",
+    );
   }
 
-  results.push({
+  const generateStage: StageInput = {
     stage: "generate",
     passed: true,
     output: generateResult.output,
     durationMs: generateResult.durationMs,
-  });
+  };
 
   // Stage 2: typecheck
   const typecheckResult = await runCommand("npx tsc --noEmit", workDir);
-  results.push({
+  const typecheckStage: StageInput = {
     stage: "typecheck",
     passed: typecheckResult.success,
     output: typecheckResult.output,
     durationMs: typecheckResult.durationMs,
-  });
+  };
 
   // Stage 3: tests (run even if typecheck failed for partial scoring)
   const problemDir = path.dirname(workDir);
@@ -269,7 +267,5 @@ export async function verifyProblem(
     testStage.passed = parsed.total > 0 && parsed.passed === parsed.total;
   }
 
-  results.push(testStage);
-
-  return results;
+  return [generateStage, typecheckStage, testStage];
 }

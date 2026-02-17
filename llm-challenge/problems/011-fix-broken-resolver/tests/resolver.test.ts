@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest";
-import path from "node:path";
 import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import path from "node:path";
+import {
+  createWorkDirContext,
+  expectEnumValues,
+  importPath,
+} from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("011-fix-broken-resolver", () => {
   const resolverPath = path.join(workDir, "resolvers/calculateDiscount/resolver.ts");
@@ -35,13 +38,9 @@ describe.skipIf(!workDirReady)("011-fix-broken-resolver", () => {
     expect(resolver.input.membershipLevel).toBeDefined();
   });
 
-  test("membershipLevel is enum with array values", async () => {
+  test("membershipLevel is enum with correct values", async () => {
     const { default: resolver } = await importPath(resolverPath);
-    expect(resolver.input.membershipLevel.type).toBe("enum");
-    const values = resolver.input.membershipLevel.metadata.allowedValues.map(
-      (v: { value: string }) => v.value,
-    );
-    expect(values).toEqual(["gold", "silver", "bronze"]);
+    expectEnumValues(resolver.input.membershipLevel, ["gold", "silver", "bronze"]);
   });
 
   test("output is wrapped with t.object (type is 'nested')", async () => {

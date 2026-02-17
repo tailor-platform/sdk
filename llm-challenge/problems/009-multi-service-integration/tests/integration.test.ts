@@ -1,10 +1,15 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import {
+  createWorkDirContext,
+  expectEnumValues,
+  expectFieldNames,
+  expectFieldType,
+  expectFilesExist,
+  importPath,
+} from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("009-multi-service-integration", () => {
   const projectModelPath = path.join(workDir, "tailordb/project.ts");
@@ -13,14 +18,8 @@ describe.skipIf(!workDirReady)("009-multi-service-integration", () => {
   const executorPath = path.join(workDir, "executors/taskCompleted.ts");
   const workflowPath = path.join(workDir, "workflows/taskCleanup.ts");
 
-  // --- File existence ---
-
   test("all 5 files exist", () => {
-    expect(fs.existsSync(projectModelPath)).toBe(true);
-    expect(fs.existsSync(taskModelPath)).toBe(true);
-    expect(fs.existsSync(resolverPath)).toBe(true);
-    expect(fs.existsSync(executorPath)).toBe(true);
-    expect(fs.existsSync(workflowPath)).toBe(true);
+    expectFilesExist([projectModelPath, taskModelPath, resolverPath, executorPath, workflowPath]);
   });
 
   // --- Project model ---
@@ -37,19 +36,12 @@ describe.skipIf(!workDirReady)("009-multi-service-integration", () => {
 
   test("project model has all required fields", async () => {
     const { project } = await importPath(projectModelPath);
-    const fieldNames = Object.keys(project.fields);
-    expect(fieldNames).toContain("name");
-    expect(fieldNames).toContain("description");
-    expect(fieldNames).toContain("status");
-    expect(fieldNames).toContain("createdAt");
-    expect(fieldNames).toContain("updatedAt");
+    expectFieldNames(project, ["name", "description", "status", "createdAt", "updatedAt"]);
   });
 
   test("project name field is a required string", async () => {
     const { project } = await importPath(projectModelPath);
-    const field = project.fields.name;
-    expect(field.type).toBe("string");
-    expect(field.metadata.required).toBe(true);
+    expectFieldType(project.fields.name, "string", { required: true });
   });
 
   test("project description field is optional", async () => {
@@ -81,25 +73,20 @@ describe.skipIf(!workDirReady)("009-multi-service-integration", () => {
 
   test("task model has all required fields", async () => {
     const { task } = await importPath(taskModelPath);
-    const fieldNames = Object.keys(task.fields);
-    expect(fieldNames).toContain("title");
-    expect(fieldNames).toContain("description");
-    expect(fieldNames).toContain("status");
-    expect(fieldNames).toContain("assigneeId");
-    expect(fieldNames).toContain("projectId");
-    expect(fieldNames).toContain("createdAt");
-    expect(fieldNames).toContain("updatedAt");
+    expectFieldNames(task, [
+      "title",
+      "description",
+      "status",
+      "assigneeId",
+      "projectId",
+      "createdAt",
+      "updatedAt",
+    ]);
   });
 
   test("task status field is an enum with correct values", async () => {
     const { task } = await importPath(taskModelPath);
-    const field = task.fields.status;
-    expect(field.type).toBe("enum");
-    const values = field.metadata.allowedValues.map((v: { value: string }) => v.value);
-    expect(values).toContain("open");
-    expect(values).toContain("in_progress");
-    expect(values).toContain("completed");
-    expect(values).toContain("archived");
+    expectEnumValues(task.fields.status, ["open", "in_progress", "completed", "archived"]);
   });
 
   test("task description field is optional", async () => {
@@ -109,16 +96,13 @@ describe.skipIf(!workDirReady)("009-multi-service-integration", () => {
 
   test("task assigneeId field is optional uuid", async () => {
     const { task } = await importPath(taskModelPath);
-    const field = task.fields.assigneeId;
-    expect(field.type).toBe("uuid");
-    expect(field.metadata.required).toBe(false);
+    expectFieldType(task.fields.assigneeId, "uuid", { required: false });
   });
 
   test("task projectId has n-1 relation to Project", async () => {
     const { task } = await importPath(taskModelPath);
     const field = task.fields.projectId;
-    expect(field.type).toBe("uuid");
-    expect(field.metadata.required).toBe(true);
+    expectFieldType(field, "uuid", { required: true });
     expect(field.rawRelation).toBeDefined();
     expect(field.rawRelation.type).toBe("n-1");
   });

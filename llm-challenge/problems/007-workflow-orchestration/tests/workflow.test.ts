@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
 import path from "node:path";
-import fs from "node:fs";
-import { importPath } from "../../../shared/helpers.js";
+import {
+  createWorkDirContext,
+  expectFilesExist,
+  importPath,
+} from "../../../shared/test-helpers.js";
 
-const workDir = path.resolve(import.meta.dirname, "..", "work");
-const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
+const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
 describe.skipIf(!workDirReady)("007-workflow-orchestration", () => {
   const checkInventoryPath = path.join(workDir, "workflows/fulfillment/checkInventory.ts");
@@ -12,13 +14,8 @@ describe.skipIf(!workDirReady)("007-workflow-orchestration", () => {
   const shipOrderPath = path.join(workDir, "workflows/fulfillment/shipOrder.ts");
   const fulfillOrderPath = path.join(workDir, "workflows/fulfillment/fulfillOrder.ts");
 
-  // --- File existence ---
-
   test("all 4 workflow files exist", () => {
-    expect(fs.existsSync(checkInventoryPath)).toBe(true);
-    expect(fs.existsSync(processPaymentPath)).toBe(true);
-    expect(fs.existsSync(shipOrderPath)).toBe(true);
-    expect(fs.existsSync(fulfillOrderPath)).toBe(true);
+    expectFilesExist([checkInventoryPath, processPaymentPath, shipOrderPath, fulfillOrderPath]);
   });
 
   // --- fulfillOrder exports ---
@@ -137,7 +134,6 @@ describe.skipIf(!workDirReady)("007-workflow-orchestration", () => {
   test("fulfillOrder body triggers produce correct results when resolved", async () => {
     const mod = await importPath(fulfillOrderPath);
     const result = mod.fulfillOrder.body({ orderId: "o-final", amount: 200 }, { env: {} });
-    // .trigger() returns Promises in SDK default impl
     const inventory = await result.inventory;
     const payment = await result.payment;
     const shipping = await result.shipping;
