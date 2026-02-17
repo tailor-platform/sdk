@@ -10,6 +10,7 @@ export type FailureCategory =
   | "logic_error"
   | "api_misuse"
   | "infra_failure"
+  | "runner_error"
   | undefined;
 
 type DefinedFailureCategory = Exclude<FailureCategory, undefined>;
@@ -104,6 +105,7 @@ const failureDocSuggestions: Record<string, Record<DefinedFailureCategory, strin
     logic_error: "Add more configuration pattern examples",
     api_misuse: "Improve SDK API validation messages with expected format hints",
     infra_failure: "Infrastructure failure - not an SDK issue",
+    runner_error: "Runner error - investigate runner bug or problem setup",
   },
   typecheck: {
     missing_file: "Add file creation checklist to problem scaffold",
@@ -113,6 +115,7 @@ const failureDocSuggestions: Record<string, Record<DefinedFailureCategory, strin
     logic_error: "Add type usage patterns for complex SDK APIs",
     api_misuse: "Add type-level validation with better error messages",
     infra_failure: "Infrastructure failure - not an SDK issue",
+    runner_error: "Runner error - investigate runner bug or problem setup",
   },
   tests: {
     missing_file: "Add file structure documentation",
@@ -122,6 +125,7 @@ const failureDocSuggestions: Record<string, Record<DefinedFailureCategory, strin
     logic_error: "Add more logic examples (resolver body, executor handler, workflow jobs)",
     api_misuse: "Add API usage examples with edge cases and error handling",
     infra_failure: "Infrastructure failure - not an SDK issue",
+    runner_error: "Runner error - investigate runner bug or problem setup",
   },
 };
 

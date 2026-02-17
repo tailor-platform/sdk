@@ -232,6 +232,17 @@ function makeInfraFailureStages(meta: ProblemMeta): StageResult[] {
   }));
 }
 
+function makeRunnerErrorStages(meta: ProblemMeta, errorMsg: string): StageResult[] {
+  return (["generate", "typecheck", "tests"] as const).map((stage) => ({
+    stage,
+    passed: false,
+    output: `Skipped (runner error: ${errorMsg})`,
+    score: 0,
+    maxScore: meta.scoring[stage],
+    category: "runner_error" as const,
+  }));
+}
+
 function createLimiter(concurrency: number) {
   let active = 0;
   const queue: Array<() => void> = [];
@@ -902,7 +913,7 @@ async function main(): Promise<void> {
 
           const problemDir = path.join(challengeRoot, "problems", task.problemName);
           const meta = loadMeta(problemDir);
-          const stages = makeInfraFailureStages(meta);
+          const stages = makeRunnerErrorStages(meta, errorMsg);
           results.push({
             problemId: meta.id,
             problemName: meta.name,
