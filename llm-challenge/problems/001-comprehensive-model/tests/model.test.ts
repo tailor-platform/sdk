@@ -55,16 +55,22 @@ describe.skipIf(!workDirReady)("001-comprehensive-model: Employee", () => {
 
   test("age validation enforces minimum of 18", async () => {
     const { employee } = await importPath(employeePath);
-    const [minFn] = employee.fields.age.metadata.validate[0];
-    expect(minFn({ value: 17 })).toBe(false);
-    expect(minFn({ value: 18 })).toBe(true);
+    const validators = employee.fields.age.metadata.validate;
+    const minValidator = validators.find(
+      ([fn]: [(_: { value: number }) => boolean]) =>
+        fn({ value: 17 }) === false && fn({ value: 18 }) === true,
+    );
+    expect(minValidator).toBeDefined();
   });
 
   test("age validation enforces maximum of 120", async () => {
     const { employee } = await importPath(employeePath);
-    const [maxFn] = employee.fields.age.metadata.validate[1];
-    expect(maxFn({ value: 120 })).toBe(true);
-    expect(maxFn({ value: 121 })).toBe(false);
+    const validators = employee.fields.age.metadata.validate;
+    const maxValidator = validators.find(
+      ([fn]: [(_: { value: number }) => boolean]) =>
+        fn({ value: 120 }) === true && fn({ value: 121 }) === false,
+    );
+    expect(maxValidator).toBeDefined();
   });
 
   test("department is an enum with correct values", async () => {

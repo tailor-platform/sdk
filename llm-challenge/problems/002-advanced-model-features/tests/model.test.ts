@@ -234,16 +234,24 @@ describe.skipIf(!workDirReady)("002-advanced-model-features: Product", () => {
     expect(gql).toHaveLength(2);
   });
 
-  test("first gqlPermission policy has actions ['read', 'create']", async () => {
+  test("gqlPermission has a policy with actions ['read', 'create']", async () => {
     const { product } = await importPath(productPath);
     const gql = product.metadata.permissions.gql;
-    expect(gql[0].actions).toEqual(["read", "create"]);
+    const hasReadCreate = gql.some(
+      (p: { actions: string | string[] }) =>
+        Array.isArray(p.actions) &&
+        p.actions.length === 2 &&
+        p.actions.includes("read") &&
+        p.actions.includes("create"),
+    );
+    expect(hasReadCreate).toBe(true);
   });
 
-  test("second gqlPermission policy has actions 'all'", async () => {
+  test("gqlPermission has a policy with actions 'all'", async () => {
     const { product } = await importPath(productPath);
     const gql = product.metadata.permissions.gql;
-    expect(gql[1].actions).toBe("all");
+    const hasAll = gql.some((p: { actions: string | string[] }) => p.actions === "all");
+    expect(hasAll).toBe(true);
   });
 
   test("timestamps are present", async () => {
