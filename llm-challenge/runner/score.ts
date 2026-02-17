@@ -173,7 +173,7 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
       const score =
         testsPassed === s.testsTotal
           ? maxScore
-          : Math.round((testsPassed / s.testsTotal) * maxScore);
+          : Math.min(Math.round((testsPassed / s.testsTotal) * maxScore), maxScore - 1);
       return { ...s, score, maxScore, category };
     }
 

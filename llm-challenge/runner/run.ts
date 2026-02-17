@@ -628,6 +628,17 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Validate mutually exclusive flags
+  if (problem && all) {
+    console.error("Error: --problem and --all are mutually exclusive.");
+    process.exit(1);
+  }
+  const implModes = [solve, useSolution, implDir].filter(Boolean).length;
+  if (implModes > 1) {
+    console.error("Error: --solve, --use-solution, and --impl are mutually exclusive.");
+    process.exit(1);
+  }
+
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
 
