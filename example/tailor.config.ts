@@ -6,6 +6,7 @@ import {
   definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import changesetPlugin from "@tailor-platform/sdk/changeset-plugin";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -95,4 +96,4 @@ export const generators = defineGenerators(
   ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
 );
 
-export const plugins = definePlugins(["@tailor-platform/changeset"]);
+export const plugins = definePlugins(changesetPlugin);

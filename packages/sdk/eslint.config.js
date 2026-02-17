@@ -165,6 +165,7 @@ export default defineConfig([
     files: ["src/plugin/**/*.ts"],
     ignores: [
       "src/plugin/**/*.test.ts",
+      "src/plugin/**/__tests__/**",
       "src/plugin/builtin/**/*.ts",
       "src/plugin/get-generated-type.ts",
     ],

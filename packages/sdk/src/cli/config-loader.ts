@@ -7,7 +7,6 @@ import {
   type Generator,
 } from "@/parser/generator-config";
 import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
-import changesetPlugin from "@/plugin/builtin/changeset";
 import { loadConfigPath } from "./context";
 import {
   createEnumConstantsGenerator,
@@ -17,7 +16,6 @@ import { createFileUtilsGenerator, FileUtilsGeneratorID } from "./generator/buil
 import { createKyselyGenerator, KyselyGeneratorID } from "./generator/builtin/kysely-type";
 import { createSeedGenerator, SeedGeneratorID } from "./generator/builtin/seed";
 import type { AppConfig } from "@/parser/app-config";
-import type { Plugin } from "@/parser/plugin-config/types";
 import "./mock";
 
 /**
@@ -39,10 +37,7 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
 
 export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
 
-// Register built-in plugins
-const builtinPlugins = new Map<string, Plugin>([[changesetPlugin.id, changesetPlugin]]);
-
-const PluginConfigSchema = createPluginConfigSchema(builtinPlugins);
+const PluginConfigSchema = createPluginConfigSchema();
 
 /**
  * Load Tailor configuration file and associated generators and plugins.

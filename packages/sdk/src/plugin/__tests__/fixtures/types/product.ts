@@ -1,3 +1,4 @@
+// oxlint-disable no-restricted-imports -- Test fixture requires configure imports
 import { db } from "@/configure/services/tailordb";
 
 export const product = db

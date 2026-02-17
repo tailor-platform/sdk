@@ -1,3 +1,4 @@
+// oxlint-disable no-restricted-imports -- Test fixture requires configure and builtin imports
 import { defineConfig, definePlugins } from "@/configure/config";
 import changesetPlugin from "@/plugin/builtin/changeset";
 
