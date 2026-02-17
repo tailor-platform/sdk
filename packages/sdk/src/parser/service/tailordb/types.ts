@@ -2,16 +2,12 @@ import type { RelationType } from "./relation";
 import type {
   DBFieldMetadataSchema,
   RawRelationConfigSchema,
+  RawPermissionsSchema,
   TailorDBTypeSchema,
   TailorDBServiceConfig as TailorDBServiceConfigType,
   TailorDBTypeSettingsSchema,
 } from "./schema";
-import type {
-  GqlOperations,
-  GqlOperationsConfig,
-  TailorTypeGqlPermission,
-  TailorTypePermission,
-} from "@/configure/services/tailordb";
+import type { GqlOperationsConfig } from "@/configure/services/tailordb";
 import type { ValueOperand } from "@/parser/service/auth/types";
 import type { z } from "zod";
 
@@ -108,6 +104,8 @@ export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
 
 export type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;
 export type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
+
+export type RawPermissions = z.output<typeof RawPermissionsSchema>;
 
 export type TailorDBFieldOutput = {
   type: string;
@@ -227,15 +225,6 @@ export type StandardTailorTypeGqlPermission = readonly StandardGqlPermissionPoli
 export interface Permissions {
   record?: StandardTailorTypePermission;
   gql?: StandardTailorTypeGqlPermission;
-}
-
-export interface RawPermissions {
-  // Raw permissions are user-provided
-  // oxlint-disable-next-line no-explicit-any
-  record?: TailorTypePermission<any, any>;
-  // Raw permissions are user-provided
-  // oxlint-disable-next-line no-explicit-any
-  gql?: TailorTypeGqlPermission<any, any>;
 }
 
 export interface TailorDBTypeMetadata {

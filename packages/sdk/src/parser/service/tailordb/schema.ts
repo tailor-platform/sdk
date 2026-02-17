@@ -40,7 +40,7 @@ export const DBFieldMetadataSchema = z.object({
       update: functionSchema.optional(),
     })
     .optional(),
-  validate: z.array(z.unknown()).optional(),
+  validate: z.array(z.union([functionSchema, z.tuple([functionSchema, z.string()])])).optional(),
   serial: z
     .object({
       start: z.number(),
@@ -82,6 +82,95 @@ export const TailorDBTypeSettingsSchema = z.object({
   gqlOperations: GqlOperationsSchema.optional(),
 });
 
+const GqlPermissionOperandSchema = z.union([
+  z.object({ user: z.string() }),
+  z.string(),
+  z.boolean(),
+  z.array(z.string()),
+  z.array(z.boolean()),
+]);
+
+const RecordPermissionOperandSchema = z.union([
+  GqlPermissionOperandSchema,
+  z.object({ record: z.string() }),
+  z.object({ oldRecord: z.string() }),
+  z.object({ newRecord: z.string() }),
+]);
+
+const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
+
+const RecordPermissionConditionSchema = z
+  .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])
+  .readonly();
+
+const GqlPermissionConditionSchema = z
+  .tuple([GqlPermissionOperandSchema, PermissionOperatorSchema, GqlPermissionOperandSchema])
+  .readonly();
+
+const ActionPermissionSchema = z.union([
+  // Object format: { conditions, description?, permit? }
+  z.object({
+    conditions: z.union([
+      RecordPermissionConditionSchema,
+      z.array(RecordPermissionConditionSchema).readonly(),
+    ]),
+    description: z.string().optional(),
+    permit: z.boolean().optional(),
+  }),
+  // Single condition tuple: [operand, operator, operand]
+  z
+    .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])
+    .readonly(),
+  // Single condition tuple with permit: [operand, operator, operand, permit]
+  z
+    .tuple([
+      RecordPermissionOperandSchema,
+      PermissionOperatorSchema,
+      RecordPermissionOperandSchema,
+      z.boolean(),
+    ])
+    .readonly(),
+  // Multiple conditions with optional trailing permit
+  z
+    .array(z.union([RecordPermissionConditionSchema, z.boolean()]))
+    .refine(
+      (arr) => {
+        const boolIndex = arr.findIndex((item) => typeof item === "boolean");
+        return boolIndex === -1 || boolIndex === arr.length - 1;
+      },
+      { message: "Boolean permit flag must only appear at the end" },
+    )
+    .readonly(),
+]);
+
+const GqlPermissionActionSchema = z.enum([
+  "read",
+  "create",
+  "update",
+  "delete",
+  "aggregate",
+  "bulkUpsert",
+]);
+
+const GqlPermissionPolicySchema = z.object({
+  conditions: z.array(GqlPermissionConditionSchema).readonly(),
+  actions: z.union([z.literal("all"), z.array(GqlPermissionActionSchema).readonly()]),
+  permit: z.boolean().optional(),
+  description: z.string().optional(),
+});
+
+export const RawPermissionsSchema = z.object({
+  record: z
+    .object({
+      create: z.array(ActionPermissionSchema).readonly(),
+      read: z.array(ActionPermissionSchema).readonly(),
+      update: z.array(ActionPermissionSchema).readonly(),
+      delete: z.array(ActionPermissionSchema).readonly(),
+    })
+    .optional(),
+  gql: z.array(GqlPermissionPolicySchema).readonly().optional(),
+});
+
 export const TailorDBTypeSchema = z.object({
   name: z.string(),
   fields: z.record(z.string(), TailorDBFieldSchema),
@@ -89,7 +178,7 @@ export const TailorDBTypeSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
     settings: TailorDBTypeSettingsSchema.optional(),
-    permissions: z.unknown(),
+    permissions: RawPermissionsSchema,
     files: z.record(z.string(), z.string()),
     indexes: z
       .record(

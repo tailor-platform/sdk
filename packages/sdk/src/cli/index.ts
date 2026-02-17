@@ -2,6 +2,7 @@
 
 import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
+import { withCompletionCommand } from "politty/completion";
 import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
 import { executorCommand } from "./executor";
@@ -26,32 +27,35 @@ import { workspaceCommand } from "./workspace";
 register("tsx", import.meta.url, { data: {} });
 
 const packageJson = await readPackageJson();
+const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
 
-export const mainCommand = defineCommand({
-  name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
-  description:
-    packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
-  subCommands: {
-    api: apiCommand,
-    apply: applyCommand,
-    executor: executorCommand,
-    generate: generateCommand,
-    init: initCommand,
-    login: loginCommand,
-    logout: logoutCommand,
-    machineuser: machineuserCommand,
-    oauth2client: oauth2clientCommand,
-    open: openCommand,
-    profile: profileCommand,
-    remove: removeCommand,
-    secret: secretCommand,
-    show: showCommand,
-    staticwebsite: staticwebsiteCommand,
-    tailordb: tailordbCommand,
-    user: userCommand,
-    workflow: workflowCommand,
-    workspace: workspaceCommand,
-  },
-});
+export const mainCommand = withCompletionCommand(
+  defineCommand({
+    name: cliName,
+    description:
+      packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
+    subCommands: {
+      api: apiCommand,
+      apply: applyCommand,
+      executor: executorCommand,
+      generate: generateCommand,
+      init: initCommand,
+      login: loginCommand,
+      logout: logoutCommand,
+      machineuser: machineuserCommand,
+      oauth2client: oauth2clientCommand,
+      open: openCommand,
+      profile: profileCommand,
+      remove: removeCommand,
+      secret: secretCommand,
+      show: showCommand,
+      staticwebsite: staticwebsiteCommand,
+      tailordb: tailordbCommand,
+      user: userCommand,
+      workflow: workflowCommand,
+      workspace: workspaceCommand,
+    },
+  }),
+);
 
 runMain(mainCommand, { version: packageJson.version });

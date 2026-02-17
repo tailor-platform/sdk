@@ -1,5 +1,24 @@
 # @tailor-platform/sdk
 
+## 1.14.1
+
+### Patch Changes
+
+- [#587](https://github.com/tailor-platform/sdk/pull/587) [`014d8db`](https://github.com/tailor-platform/sdk/commit/014d8db10d2fb8a19ffff4a5c2d3c76c4f24f72d) Thanks [@toiroakr](https://github.com/toiroakr)! - Use tailor.idp.Client for IDP user seeding and truncation in seed generator
+
+## 1.14.0
+
+### Minor Changes
+
+- [#557](https://github.com/tailor-platform/sdk/pull/557) [`e5dfa62`](https://github.com/tailor-platform/sdk/commit/e5dfa6263dba4644e79f1bfaf03a71ab40421019) Thanks [@dqn](https://github.com/dqn)! - Add a new `completion` subcommand to the CLI so users can generate shell completion scripts for their environment.
+
+- [#577](https://github.com/tailor-platform/sdk/pull/577) [`1d969ac`](https://github.com/tailor-platform/sdk/commit/1d969ac5b6b2fd26919ef1ad5dcb4ce97c6734fe) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: snapshot-based migration apply
+
+  - Extend snapshot schema (v2) to include relationships, permissions, files, hooks, and validation rules
+  - Generate proto manifests directly from snapshots for migration-based deployments
+  - Add support for index, file, relationship, and permission diff kinds
+  - Separate migration e2e test templates from example app migrations
+
 ## 1.13.0
 
 ### Minor Changes

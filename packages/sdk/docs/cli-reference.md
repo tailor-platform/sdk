@@ -184,3 +184,11 @@ Commands for managing and deploying static websites.
 | [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory |
 | [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List static websites in a workspace                  |
 | [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a static website                      |
+
+### [Completion](./cli/completion.md)
+
+Generate shell completion scripts for bash, zsh, and fish.
+
+| Command                                      | Description                      |
+| -------------------------------------------- | -------------------------------- |
+| [completion](./cli/completion.md#completion) | Generate shell completion script |

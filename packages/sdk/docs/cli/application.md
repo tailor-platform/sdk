@@ -22,9 +22,9 @@ tailor-sdk init [options] [name]
 
 **Options**
 
-| Option                  | Alias | Description   | Default |
-| ----------------------- | ----- | ------------- | ------- |
-| `--template <TEMPLATE>` | `-t`  | Template name | -       |
+| Option                  | Alias | Description   | Required | Default |
+| ----------------------- | ----- | ------------- | -------- | ------- |
+| `--template <TEMPLATE>` | `-t`  | Template name | No       | -       |
 
 <!-- politty:command:init:end -->
 
@@ -42,10 +42,10 @@ tailor-sdk generate [options]
 
 **Options**
 
-| Option              | Alias | Description                                    | Default              |
-| ------------------- | ----- | ---------------------------------------------- | -------------------- |
-| `--config <CONFIG>` | `-c`  | Path to SDK config file                        | `"tailor.config.ts"` |
-| `--watch`           | `-W`  | Watch for type/resolver changes and regenerate | `false`              |
+| Option              | Alias | Description                                    | Required | Default              |
+| ------------------- | ----- | ---------------------------------------------- | -------- | -------------------- |
+| `--config <CONFIG>` | `-c`  | Path to SDK config file                        | No       | `"tailor.config.ts"` |
+| `--watch`           | `-W`  | Watch for type/resolver changes and regenerate | No       | `false`              |
 
 <!-- politty:command:generate:end -->
 
@@ -63,14 +63,14 @@ tailor-sdk apply [options]
 
 **Options**
 
-| Option                          | Alias | Description                                        | Default              |
-| ------------------------------- | ----- | -------------------------------------------------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                  | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | `"tailor.config.ts"` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                          | `false`              |
-| `--dry-run`                     | `-d`  | Run the command without making any changes         | -                    |
-| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | -                    |
+| Option                          | Alias | Description                                        | Required | Default              |
+| ------------------------------- | ----- | -------------------------------------------------- | -------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                       | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                  | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | No       | `"tailor.config.ts"` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                          | No       | `false`              |
+| `--dry-run`                     | `-d`  | Run the command without making any changes         | No       | -                    |
+| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | No       | -                    |
 
 <!-- politty:command:apply:end -->
 
@@ -110,12 +110,12 @@ tailor-sdk remove [options]
 
 **Options**
 
-| Option                          | Alias | Description               | Default              |
-| ------------------------------- | ----- | ------------------------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file   | `"tailor.config.ts"` |
-| `--yes`                         | `-y`  | Skip confirmation prompts | `false`              |
+| Option                          | Alias | Description               | Required | Default              |
+| ------------------------------- | ----- | ------------------------- | -------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file   | No       | `"tailor.config.ts"` |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false`              |
 
 <!-- politty:command:remove:end -->
 
@@ -133,12 +133,12 @@ tailor-sdk show [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Default              |
-| ------------------------------- | ----- | ----------------------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | `false`              |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Required | Default              |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:show:end -->
 
@@ -156,11 +156,11 @@ tailor-sdk open [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Default              |
-| ------------------------------- | ----- | ----------------------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Required | Default              |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:open:end -->
 
@@ -184,11 +184,11 @@ tailor-sdk api [options] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description          | Default |
-| ------------------------------- | ----- | -------------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON       | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile    | -       |
-| `--body <BODY>`                 | `-b`  | Request body as JSON | `"{}"`  |
+| Option                          | Alias | Description          | Required | Default |
+| ------------------------------- | ----- | -------------------- | -------- | ------- |
+| `--json`                        | `-j`  | Output as JSON       | No       | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile    | No       | -       |
+| `--body <BODY>`                 | `-b`  | Request body as JSON | No       | `"{}"`  |
 
 <!-- politty:command:api:end -->
