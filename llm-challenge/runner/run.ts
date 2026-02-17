@@ -660,8 +660,12 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // Honor explicit --model flag; fall back to the original report's model to avoid misattribution
-    const rerunModel = modelExplicit ? model : (latestReport.model ?? model);
+    // Honor explicit --model flag; fall back to the original report's model to avoid misattribution.
+    // Composite labels like "sonnet+opus" (from mixed-model reruns) are not valid model IDs;
+    // extract the primary model (before "+") for the fallback.
+    const reportModelRaw = latestReport.model;
+    const primaryReportModel = reportModelRaw?.split("+")[0];
+    const rerunModel = modelExplicit ? model : (primaryReportModel ?? model);
 
     console.log(
       `Rerunning ${infraProblems.length} infrastructure failure problem(s) (model: ${rerunModel}, concurrency: ${concurrency})...`,
