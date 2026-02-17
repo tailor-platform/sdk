@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import type { NamespacePluginOutput, PluginBase, PluginOutput } from "@/parser/plugin-config/types";
+import type { NamespacePluginOutput, Plugin, PluginOutput } from "@/parser/plugin-config/types";
 import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
 
 // ========================================
@@ -9,7 +9,7 @@ import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
 // ========================================
 
 interface PluginEntry {
-  plugin: PluginBase;
+  plugin: Plugin;
   pluginConfig: unknown;
 }
 
@@ -23,11 +23,11 @@ interface ConfigCache {
 const configCacheMap = new Map<string, ConfigCache>();
 
 /**
- * Check if a value is a PluginBase instance.
+ * Check if a value is a Plugin instance.
  * @param value - Value to check
- * @returns True if value has the shape of PluginBase
+ * @returns True if value has the shape of Plugin
  */
-function isPluginBase(value: unknown): value is PluginBase {
+function isPlugin(value: unknown): value is Plugin {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -68,7 +68,7 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
     if (!Array.isArray(value)) continue;
 
     for (const item of value) {
-      if (isPluginBase(item)) {
+      if (isPlugin(item)) {
         plugins.set(item.id, { plugin: item, pluginConfig: item.pluginConfig });
       }
     }
@@ -149,7 +149,7 @@ async function resolveNamespaceForType(
  */
 async function resolveNamespaceForNamespacePlugin(
   config: { db?: Record<string, unknown> },
-  plugin: PluginBase,
+  plugin: Plugin,
   kind: string,
   pluginConfig: unknown,
 ): Promise<string> {
@@ -186,10 +186,10 @@ async function resolveNamespaceForNamespacePlugin(
 // ========================================
 
 // Cache: plugin -> cacheKey -> PluginOutput
-const processCache = new WeakMap<PluginBase, Map<string, PluginOutput>>();
+const processCache = new WeakMap<Plugin, Map<string, PluginOutput>>();
 
 // Cache for namespace plugins: plugin -> cacheKey -> NamespacePluginOutput
-const namespaceProcessCache = new WeakMap<PluginBase, Map<string, NamespacePluginOutput>>();
+const namespaceProcessCache = new WeakMap<Plugin, Map<string, NamespacePluginOutput>>();
 
 /**
  * Generate a cache key that includes pluginConfig.
@@ -269,7 +269,7 @@ export async function getGeneratedType(
  * @returns The generated TailorDB type
  */
 async function getGeneratedTypeForTypeAttachedPlugin(
-  plugin: PluginBase,
+  plugin: Plugin,
   sourceType: TailorAnyDBType,
   kind: string,
   pluginConfig: unknown,
@@ -322,7 +322,7 @@ async function getGeneratedTypeForTypeAttachedPlugin(
  */
 async function getGeneratedTypeForNamespacePlugin(
   config: { db?: Record<string, unknown> },
-  plugin: PluginBase,
+  plugin: Plugin,
   kind: string,
   pluginConfig: unknown,
 ): Promise<TailorAnyDBType> {

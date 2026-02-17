@@ -2,9 +2,9 @@ import { cloneDeep } from "es-toolkit";
 import { z } from "zod";
 import { functionSchema } from "@/parser/service/common";
 import { TailorFieldSchema } from "@/parser/service/resolver/schema";
-import type { PluginBase } from "./types";
+import type { Plugin } from "./types";
 
-type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
+type PluginConfigSchemaField = NonNullable<Plugin["configSchema"]>;
 
 type UnauthenticatedTailorUser = {
   id: string;
@@ -75,7 +75,7 @@ const tailorAnyFieldSchema = z.custom<PluginConfigSchemaField>(
 );
 
 // Custom plugin schema (object form)
-// Using passthrough() to preserve additional properties on PluginBase instances
+// Using passthrough() to preserve additional properties on Plugin instances
 const CustomPluginSchema = z
   .object({
     id: z.string(),
@@ -126,7 +126,7 @@ function clonePluginConfigSchema(schema: PluginConfigSchemaField): PluginConfigS
   return cloneDeep(schema) as PluginConfigSchemaField;
 }
 
-function normalizePluginBase(plugin: PluginBase): PluginBase {
+function normalizePlugin(plugin: Plugin): Plugin {
   let normalized = plugin;
 
   if (normalized.configSchema) {
@@ -180,13 +180,10 @@ function validatePluginConfig(
 
 /**
  * Creates a PluginConfigSchema for custom plugins
- * @returns Plugin config schema that validates and transforms PluginBase instances
+ * @returns Plugin config schema that validates and transforms Plugin instances
  */
 export function createPluginConfigSchema() {
-  return CustomPluginSchema.transform((plugin) => normalizePluginBase(plugin as PluginBase)).brand(
+  return CustomPluginSchema.transform((plugin) => normalizePlugin(plugin as Plugin)).brand(
     "Plugin",
   );
 }
-
-export type PluginConfigSchemaType = ReturnType<typeof createPluginConfigSchema>;
-export type Plugin = z.output<PluginConfigSchemaType>;

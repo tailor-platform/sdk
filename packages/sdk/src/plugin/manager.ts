@@ -1,6 +1,6 @@
 import { db } from "@/parser/service/tailordb/runtime";
 import type {
-  PluginBase,
+  Plugin,
   PluginGeneratedExecutor,
   PluginGeneratedType,
   PluginNamespaceProcessContext,
@@ -12,7 +12,7 @@ import type {
   TailorTypeGqlPermission,
 } from "@/parser/service/tailordb/types";
 
-type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
+type PluginConfigSchemaField = NonNullable<Plugin["configSchema"]>;
 
 type UnauthenticatedTailorUser = {
   id: string;
@@ -127,13 +127,13 @@ function validatePluginConfig(
  * Manages plugin registration and processing
  */
 export class PluginManager {
-  private plugins: Map<string, PluginBase> = new Map();
+  private plugins: Map<string, Plugin> = new Map();
   private generatedExecutors: PluginExecutorInfo[] = [];
   private generatedTypes: PluginGeneratedTypeInfo[] = [];
   private namespaceGeneratedTypeKeys: Set<string> = new Set();
   private namespaceGeneratedExecutorKeys: Set<string> = new Set();
 
-  constructor(plugins: PluginBase[] = []) {
+  constructor(plugins: Plugin[] = []) {
     for (const plugin of plugins) {
       if (this.plugins.has(plugin.id)) {
         throw new Error(
@@ -287,7 +287,7 @@ export class PluginManager {
         namespace,
       };
 
-      let output: Awaited<ReturnType<NonNullable<PluginBase["processNamespace"]>>>;
+      let output: Awaited<ReturnType<NonNullable<Plugin["processNamespace"]>>>;
       try {
         output = await plugin.processNamespace(context);
       } catch (error) {
@@ -373,7 +373,7 @@ export class PluginManager {
    * @param pluginId - The plugin ID to look up
    * @returns The plugin instance, or undefined if not found
    */
-  getPlugin(pluginId: string): PluginBase | undefined {
+  getPlugin(pluginId: string): Plugin | undefined {
     return this.plugins.get(pluginId);
   }
 

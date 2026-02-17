@@ -4,12 +4,12 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger } from "@/cli/utils/logger";
 import type { AppConfig } from "@/parser/app-config";
-import type { PluginBase } from "@/parser/plugin-config";
+import type { Plugin } from "@/parser/plugin-config";
 
 /**
  * Type alias for plugin config schema field type
  */
-type ConfigSchemaField = Exclude<PluginBase["configSchema"], undefined>;
+type ConfigSchemaField = Exclude<Plugin["configSchema"], undefined>;
 
 export interface AttributeMapConfig {
   [key: string]: string;
@@ -251,7 +251,7 @@ interface GenerateUserTypesOptions {
   /** Path to Tailor config file */
   configPath: string;
   /** Optional array of plugins to generate PluginConfigs for */
-  plugins?: PluginBase[];
+  plugins?: Plugin[];
 }
 
 /**
@@ -282,7 +282,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
     // Convert plugins to PluginConfigForTypeGen format
     const pluginConfigs: PluginConfigForTypeGen[] | undefined = plugins
       ?.filter(
-        (p): p is PluginBase & { configSchema: ConfigSchemaField } => p.configSchema !== undefined,
+        (p): p is Plugin & { configSchema: ConfigSchemaField } => p.configSchema !== undefined,
       )
       .map((p) => ({
         id: p.id,
@@ -416,7 +416,7 @@ function fieldToTypeString(field: ConfigSchemaField, indent = 0): string {
   return baseType;
 }
 
-function isTypeConfigRequired(plugin: PluginBase): boolean {
+function isTypeConfigRequired(plugin: Plugin): boolean {
   const required = plugin.typeConfigRequired;
   if (typeof required === "function") {
     return required(plugin.pluginConfig);

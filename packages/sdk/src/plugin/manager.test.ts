@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { t } from "@/configure";
 import { db } from "@/configure/services/tailordb";
 import { PluginManager } from "@/plugin/manager";
-import type { PluginBase } from "@/parser/plugin-config/types";
+import type { Plugin } from "@/parser/plugin-config/types";
 
 describe("PluginManager", () => {
   it("collects namespace plugin-generated types", async () => {
-    const plugin: PluginBase = {
+    const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
@@ -35,7 +35,7 @@ describe("PluginManager", () => {
   });
 
   it("dedupes namespace plugin-generated outputs across namespaces", async () => {
-    const plugin: PluginBase = {
+    const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
@@ -85,7 +85,7 @@ describe("PluginManager", () => {
   });
 
   it("requires per-type config when typeConfigRequired is true", async () => {
-    const plugin: PluginBase = {
+    const plugin: Plugin = {
       id: "requires-config",
       description: "requires per-type config",
       importPath: "@example/require-config",

@@ -2,7 +2,7 @@
 
 > **Beta Feature**: The custom plugin API is in beta and may change in future releases.
 
-Create your own plugins by implementing the `PluginBase` interface.
+Create your own plugins by implementing the `Plugin` interface.
 
 ## Requirements
 
@@ -10,7 +10,7 @@ Create your own plugins by implementing the `PluginBase` interface.
 
 ```typescript
 // plugin.ts
-const myPlugin: PluginBase = {
+const myPlugin: Plugin = {
   id: "@my-company/my-plugin",
   // ...
 };
@@ -20,10 +20,10 @@ export default myPlugin; // Required: must be default export
 
 This is required so that generators can use plugin-generated TailorDB types via `getGeneratedType()`.
 
-## PluginBase Interface
+## Plugin Interface
 
 ```typescript
-interface PluginBase<PluginConfig = unknown> {
+interface Plugin<PluginConfig = unknown> {
   /** Unique identifier for the plugin (e.g., "@my-company/soft-delete") */
   readonly id: string;
 
@@ -197,7 +197,7 @@ A complete example of a plugin that adds soft delete functionality:
 ```typescript
 // plugins/soft-delete/plugin.ts
 import { db, t } from "@tailor-platform/sdk";
-import type { PluginBase, PluginProcessContext, PluginOutput } from "@tailor-platform/sdk";
+import type { Plugin, PluginProcessContext, PluginOutput } from "@tailor-platform/sdk";
 
 interface SoftDeleteConfig {
   archiveReason?: boolean;
@@ -266,7 +266,7 @@ function processSoftDelete(
 }
 
 // Factory function for plugins with plugin-level config
-function createSoftDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginBase {
+function createSoftDeletePlugin(pluginConfig?: SoftDeletePluginConfig): Plugin {
   return {
     id: "@example/soft-delete",
     description: "Adds soft delete with archive functionality",
@@ -398,7 +398,7 @@ declare module "@tailor-platform/sdk" {
 Implement `processType` to handle types with the plugin attached:
 
 ```typescript
-const plugin: PluginBase = {
+const plugin: Plugin = {
   id: "@example/my-plugin",
   // ...
   processType(context) {
@@ -417,7 +417,7 @@ const plugin: PluginBase = {
 Implement `processNamespace` for plugins that generate types independently:
 
 ```typescript
-const plugin: PluginBase = {
+const plugin: Plugin = {
   id: "@example/audit-log",
   // ...
   processNamespace(context) {
@@ -432,7 +432,7 @@ const plugin: PluginBase = {
 Implement both methods for plugins that support both modes:
 
 ```typescript
-const plugin: PluginBase = {
+const plugin: Plugin = {
   id: "@example/hybrid",
   // ...
   processType(context) {

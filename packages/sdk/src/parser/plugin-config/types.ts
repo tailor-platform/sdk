@@ -346,7 +346,7 @@ export type NamespacePluginOutput = Omit<PluginOutput, "extends"> & { extends?: 
 /**
  * Base plugin interface that all plugins must implement
  */
-interface PluginBaseCommon<PluginConfig = unknown> {
+interface PluginCommon<PluginConfig = unknown> {
   /** Unique identifier for the plugin */
   readonly id: string;
   /** Human-readable description of the plugin */
@@ -417,9 +417,7 @@ interface PluginBaseCommon<PluginConfig = unknown> {
   ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
 }
 
-export interface PluginBaseWithConfig<
-  PluginConfig = unknown,
-> extends PluginBaseCommon<PluginConfig> {
+export interface PluginWithConfig<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
   /**
    * Schema defining the expected per-type configuration for this plugin.
    * Used to validate config passed via `.plugin({ pluginId: config })`.
@@ -434,9 +432,7 @@ export interface PluginBaseWithConfig<
   readonly configSchema: TailorAnyField;
 }
 
-export interface PluginBaseNamespace<
-  PluginConfig = unknown,
-> extends PluginBaseCommon<PluginConfig> {
+export interface PluginNamespaceOnly<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
   /** Namespace-only plugins do not accept per-type config. */
   readonly configSchema?: undefined;
   /** Namespace-only plugins cannot define processType(). */
@@ -444,15 +440,8 @@ export interface PluginBaseNamespace<
 }
 
 /**
- * Base plugin interface that all plugins must implement
+ * Plugin interface that all plugins must implement
  */
-export type PluginBase<PluginConfig = unknown> =
-  | PluginBaseWithConfig<PluginConfig>
-  | PluginBaseNamespace<PluginConfig>;
-
-/**
- * Plugin configuration input type for definePlugins().
- * Pass a PluginBase object directly. Use the pluginConfig property on
- * the plugin object to provide plugin-level configuration.
- */
-export type PluginConfig = PluginBase;
+export type Plugin<PluginConfig = unknown> =
+  | PluginWithConfig<PluginConfig>
+  | PluginNamespaceOnly<PluginConfig>;
