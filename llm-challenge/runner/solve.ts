@@ -388,7 +388,7 @@ export async function solveProblem(options: {
  * Check if Claude Code can authenticate successfully.
  * Runs a lightweight prompt to verify auth status before starting a full solve run.
  */
-export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
+export function checkAuthStatus(model?: string): Promise<{ ok: boolean; error?: string }> {
   const args = [
     "-p",
     "Reply with exactly: ok",
@@ -401,6 +401,7 @@ export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
     "--max-budget-usd",
     "0.01",
     "--no-session-persistence",
+    ...(model ? ["--model", model] : []),
   ];
 
   const env = cleanEnv();

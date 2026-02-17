@@ -664,7 +664,7 @@ async function main(): Promise<void> {
   // Auth pre-check for solve mode (skip when rerun-infra — deferred until targets are known)
   if (solve && !rerunInfra) {
     console.log("Checking authentication status...");
-    const authCheck = await checkAuthStatus();
+    const authCheck = await checkAuthStatus(model);
     if (!authCheck.ok) {
       console.error(`Authentication check failed: ${authCheck.error}`);
       const authPatterns = [
@@ -702,7 +702,7 @@ async function main(): Promise<void> {
 
     // Auth pre-check (deferred until we know there are problems to rerun)
     console.log("Checking authentication status...");
-    const authCheck = await checkAuthStatus();
+    const authCheck = await checkAuthStatus(model);
     if (!authCheck.ok) {
       console.error(`Authentication check failed: ${authCheck.error}`);
       const authPatterns = [
