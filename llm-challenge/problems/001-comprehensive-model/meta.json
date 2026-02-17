@@ -1,0 +1,15 @@
+{
+  "id": "001",
+  "name": "comprehensive-model",
+  "difficulty": "medium",
+  "category": "tailordb",
+  "scoring": {
+    "generate": 20,
+    "typecheck": 20,
+    "tests": 60
+  },
+  "files": {
+    "implement": ["tailordb/employee.ts", "tailordb/event.ts", "tailordb/profile.ts"],
+    "scaffold": ["tailor.config.ts", "tailordb/user.ts"]
+  }
+}

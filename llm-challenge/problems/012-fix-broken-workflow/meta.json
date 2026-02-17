@@ -1,0 +1,11 @@
+{
+  "id": "012",
+  "name": "fix-broken-workflow",
+  "difficulty": "hard",
+  "category": "workflow",
+  "scoring": { "generate": 15, "typecheck": 15, "tests": 70 },
+  "files": {
+    "implement": ["workflows/orderPipeline.ts"],
+    "scaffold": ["tailor.config.ts", "workflows/orderPipeline.ts"]
+  }
+}

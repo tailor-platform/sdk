@@ -1,0 +1,16 @@
+{
+  "name": "llm-challenge-problem",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tailor-platform/sdk": "workspace:^"
+  },
+  "devDependencies": {
+    "@tailor-platform/function-types": "0.8.0",
+    "@types/node": "24.10.9",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">= 22.14.0"
+  }
+}
