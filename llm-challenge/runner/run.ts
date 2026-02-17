@@ -661,8 +661,8 @@ async function main(): Promise<void> {
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
 
-  // Auth pre-check for solve mode
-  if (solve || rerunInfra) {
+  // Auth pre-check for solve mode (not rerun-infra — deferred until targets are known)
+  if (solve) {
     console.log("Checking authentication status...");
     const authCheck = await checkAuthStatus();
     if (!authCheck.ok) {
@@ -699,6 +699,26 @@ async function main(): Promise<void> {
       console.log("No infrastructure failures found in latest report. Nothing to rerun.");
       process.exit(0);
     }
+
+    // Auth pre-check (deferred until we know there are problems to rerun)
+    console.log("Checking authentication status...");
+    const authCheck = await checkAuthStatus();
+    if (!authCheck.ok) {
+      console.error(`Authentication check failed: ${authCheck.error}`);
+      const authPatterns = [
+        /Not logged in/i,
+        /API key/i,
+        /authentication.*failed/i,
+        /unauthorized/i,
+      ];
+      if (authPatterns.some((p) => p.test(authCheck.error ?? ""))) {
+        console.error("Please log in to Claude Code before running solve mode.");
+      } else {
+        console.error("Please check your Claude Code setup and try again.");
+      }
+      process.exit(1);
+    }
+    console.log("Authentication: ok");
 
     // Honor explicit --model flag; fall back to the original report's model to avoid misattribution.
     // Composite labels like "sonnet+opus" (from mixed-model reruns) are not valid model IDs;

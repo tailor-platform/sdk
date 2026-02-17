@@ -368,10 +368,6 @@ function main(): void {
 
   if (trend) {
     const reports = loadReports();
-    if (reports.length < 2) {
-      console.error("Trend mode requires at least 2 reports");
-      process.exit(1);
-    }
     showTrend(reports);
     return;
   }
