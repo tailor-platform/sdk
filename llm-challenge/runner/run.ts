@@ -364,6 +364,8 @@ async function runProblem(
   // Retry loop (only in solve mode)
   if (options.solve && totalScore < maxScore) {
     const maxRetries = options.solve.retry;
+    const maxInfraRetries = 3;
+    let infraRetries = 0;
     let cumulativeCost = solveResult?.costUsd ?? 0;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const remainingBudget = Math.max(0, options.solve.maxBudget - cumulativeCost);
@@ -416,6 +418,23 @@ async function runProblem(
           `  Retry solve: ${retryIcon} ($${retryResult.costUsd.toFixed(4)}, ${(retryResult.durationMs / 1000).toFixed(1)}s)`,
         );
       }
+
+      // Infra failures do not count against the retry budget
+      if (retryResult.infraFailure) {
+        infraRetries++;
+        if (infraRetries >= maxInfraRetries) {
+          if (options.verbose) {
+            console.log(`  Too many consecutive infra failures (${infraRetries}), giving up`);
+          }
+          break;
+        }
+        if (options.verbose) {
+          console.log(`  Retry ${attempt} was an infra failure, not counting against retry budget`);
+        }
+        attempt--;
+        continue;
+      }
+      infraRetries = 0;
 
       // Re-verify using symlink path
       rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
@@ -648,7 +667,17 @@ async function main(): Promise<void> {
     const authCheck = await checkAuthStatus();
     if (!authCheck.ok) {
       console.error(`Authentication check failed: ${authCheck.error}`);
-      console.error("Please log in to Claude Code before running solve mode.");
+      const authPatterns = [
+        /Not logged in/i,
+        /API key/i,
+        /authentication.*failed/i,
+        /unauthorized/i,
+      ];
+      if (authPatterns.some((p) => p.test(authCheck.error ?? ""))) {
+        console.error("Please log in to Claude Code before running solve mode.");
+      } else {
+        console.error("Please check your Claude Code setup and try again.");
+      }
       process.exit(1);
     }
     console.log("Authentication: ok");
