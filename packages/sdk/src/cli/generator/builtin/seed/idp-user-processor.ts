@@ -5,6 +5,7 @@ export interface IdpUserMetadata {
   name: "_User";
   dependencies: string[];
   dataFile: string;
+  idpNamespace: string;
   schema: {
     usernameField: string;
     userTypeName: string;
@@ -28,11 +29,92 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
     name: "_User",
     dependencies: [typeName],
     dataFile: "data/_User.jsonl",
+    idpNamespace: auth.idProvider.namespace,
     schema: {
       usernameField,
       userTypeName: typeName,
     },
   };
+}
+
+/**
+ * Generates the server-side IDP seed script code for testExecScript execution.
+ * Uses the global tailor.idp.Client - no bundling required.
+ * @param idpNamespace - The IDP namespace name
+ * @returns Script code string
+ */
+export function generateIdpSeedScriptCode(idpNamespace: string): string {
+  return ml /* ts */ `
+    export async function main(input) {
+      const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
+      const errors = [];
+      let processed = 0;
+
+      for (let i = 0; i < input.users.length; i++) {
+        try {
+          await client.createUser(input.users[i]);
+          processed++;
+          console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          errors.push(\`Row \${i} (\${input.users[i].name}): \${message}\`);
+          console.error(\`[_User] Row \${i} failed: \${message}\`);
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        processed,
+        errors,
+      };
+    }
+  `;
+}
+
+/**
+ * Generates the server-side IDP truncation script code for testExecScript execution.
+ * Lists all users with pagination and deletes each one.
+ * @param idpNamespace - The IDP namespace name
+ * @returns Script code string
+ */
+export function generateIdpTruncateScriptCode(idpNamespace: string): string {
+  return ml /* ts */ `
+    export async function main() {
+      const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
+      const errors = [];
+      let deleted = 0;
+
+      // List all users with pagination
+      let nextToken = undefined;
+      const allUsers = [];
+      do {
+        const response = await client.users(nextToken ? { nextToken } : undefined);
+        allUsers.push(...(response.users || []));
+        nextToken = response.nextToken;
+      } while (nextToken);
+
+      console.log(\`Found \${allUsers.length} IDP users to delete\`);
+
+      for (const user of allUsers) {
+        try {
+          await client.deleteUser(user.id);
+          deleted++;
+          console.log(\`[_User] Deleted \${deleted}/\${allUsers.length}: \${user.name}\`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          errors.push(\`User \${user.id} (\${user.name}): \${message}\`);
+          console.error(\`[_User] Delete failed for \${user.name}: \${message}\`);
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        deleted,
+        total: allUsers.length,
+        errors,
+      };
+    }
+  `;
 }
 
 /**

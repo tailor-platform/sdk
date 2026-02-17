@@ -1,6 +1,4 @@
 import type {
-  TailorTypePermission,
-  TailorTypeGqlPermission,
   StandardTailorTypePermission,
   StandardTailorTypeGqlPermission,
   StandardActionPermission,
@@ -74,17 +72,15 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
 
 /**
  * Normalize record-level permissions into a standard structure.
- * @template User
- * @template Type
  * @param permission - Tailor type permission
  * @returns Normalized record permissions
  */
-function normalizePermission<User extends object = object, Type extends object = object>(
-  permission: TailorTypePermission<User, Type>,
+function normalizePermission(
+  permission: NonNullable<RawPermissions["record"]>,
 ): StandardTailorTypePermission {
   const keys = Object.keys(permission) as Array<keyof typeof permission>;
   return keys.reduce((acc, action) => {
-    acc[action] = permission[action].map(normalizeActionPermission);
+    acc[action] = permission[action].map((p) => normalizeActionPermission(p));
     return acc;
     // oxlint-disable-next-line no-explicit-any
   }, {} as any);
@@ -96,12 +92,10 @@ function normalizePermission<User extends object = object, Type extends object =
  * @returns Normalized GQL permissions
  */
 export function normalizeGqlPermission(
-  // Raw GQL permissions are not strongly typed at parse time
-  // oxlint-disable-next-line no-explicit-any
-  permission: TailorTypeGqlPermission<any, any>,
+  permission: NonNullable<RawPermissions["gql"]>,
 ): StandardTailorTypeGqlPermission {
-  return (permission as readonly GqlPermissionPolicy[]).map(
-    normalizeGqlPolicy,
+  return (permission as readonly GqlPermissionPolicy[]).map((policy) =>
+    normalizeGqlPolicy(policy),
   ) as StandardTailorTypeGqlPermission;
 }
 

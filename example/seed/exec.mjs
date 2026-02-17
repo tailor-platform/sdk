@@ -4,7 +4,6 @@ import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
 import {
   show,
-  getMachineUserToken,
   truncate,
   bundleSeedScript,
   chunkSeedData,
@@ -130,7 +129,8 @@ const hasTypes = positionals.length > 0;
 const skipIdp = values["skip-idp"];
 
 // Validate mutually exclusive options
-if (hasNamespace && hasTypes) {
+const optionCount = [hasNamespace, hasTypes].filter(Boolean).length;
+if (optionCount > 1) {
   console.error(styleText("red", "Error: Options --namespace and type names are mutually exclusive."));
   process.exit(1);
 }
@@ -187,6 +187,101 @@ if (skipIdp) {
   }
 }
 
+// Get application info
+const appInfo = await show({ configPath, profile: values.profile });
+const authNamespace = appInfo.auth;
+
+// Initialize operator client (once for all namespaces)
+const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
+const workspaceId = await loadWorkspaceId({ profile: values.profile });
+const operatorClient = await initOperatorClient(accessToken);
+
+    // Truncate _User via tailor.idp.Client (server-side)
+    const truncateIdpUser = async () => {
+      console.log(styleText("cyan", "Truncating _User via tailor.idp.Client..."));
+
+      const idpTruncateCode = /* js */`export async function main() {
+  const client = new tailor.idp.Client({ namespace: "my-idp" });
+  const errors = [];
+  let deleted = 0;
+
+  // List all users with pagination
+  let nextToken = undefined;
+  const allUsers = [];
+  do {
+    const response = await client.users(nextToken ? { nextToken } : undefined);
+    allUsers.push(...(response.users || []));
+    nextToken = response.nextToken;
+  } while (nextToken);
+
+  console.log(\`Found \${allUsers.length} IDP users to delete\`);
+
+  for (const user of allUsers) {
+    try {
+      await client.deleteUser(user.id);
+      deleted++;
+      console.log(\`[_User] Deleted \${deleted}/\${allUsers.length}: \${user.name}\`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(\`User \${user.id} (\${user.name}): \${message}\`);
+      console.error(\`[_User] Delete failed for \${user.name}: \${message}\`);
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    deleted,
+    total: allUsers.length,
+    errors,
+  };
+}`;
+
+      const result = await executeScript({
+        client: operatorClient,
+        workspaceId,
+        name: "truncate-idp-user.ts",
+        code: idpTruncateCode,
+        arg: JSON.stringify({}),
+        invoker: {
+          namespace: authNamespace,
+          machineUserName,
+        },
+      });
+
+      if (result.logs) {
+        for (const line of result.logs.split("\n").filter(Boolean)) {
+          console.log(styleText("dim", `  ${line}`));
+        }
+      }
+
+      if (result.success) {
+        let parsed;
+        try {
+          parsed = JSON.parse(result.result || "{}");
+        } catch (e) {
+          console.error(styleText("red", `  ✗ Failed to parse truncation result: ${e.message}`));
+          return { success: false };
+        }
+
+        if (parsed.deleted !== undefined) {
+          console.log(styleText("green", `  ✓ _User: ${parsed.deleted} users deleted`));
+        }
+
+        if (!parsed.success) {
+          const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+          for (const err of errors) {
+            console.error(styleText("red", `  ✗ ${err}`));
+          }
+          return { success: false };
+        }
+
+        return { success: true };
+      } else {
+        console.error(styleText("red", `  ✗ Truncation failed: ${result.error}`));
+        return { success: false };
+      }
+    };
+
 // Truncate tables if requested
 if (values.truncate) {
   const answer = values.yes ? "y" : await promptConfirmation("Are you sure you want to truncate? (y/n): ");
@@ -222,29 +317,28 @@ if (values.truncate) {
         all: true,
       });
     }
-    console.log(styleText("green", "Truncate completed."));
   } catch (error) {
     console.error(styleText("red", `Truncate failed: ${error.message}`));
     process.exit(1);
   }
+
+  // Truncate _User if applicable
+  const shouldTruncateUser = !skipIdp && !hasNamespace && (!hasTypes || entitiesToProcess.includes("_User"));
+  if (hasIdpUser && shouldTruncateUser) {
+    const truncResult = await truncateIdpUser();
+    if (!truncResult.success) {
+      console.error(styleText("red", "IDP user truncation failed."));
+      process.exit(1);
+    }
+  }
+
+  console.log(styleText("green", "Truncate completed."));
 }
 
 console.log(styleText("cyan", "\nStarting seed data generation..."));
 if (skipIdp) {
   console.log(styleText("dim", `  Skipping IdP user (_User)`));
 }
-
-// Get application info
-const appInfo = await show({ configPath, profile: values.profile });
-const endpoint = `${appInfo.url}/query`;
-const authNamespace = appInfo.auth;
-
-// Get machine user token
-const tokenInfo = await getMachineUserToken({
-  name: machineUserName,
-  configPath,
-  profile: values.profile,
-});
 
 // Load seed data from JSONL files
 const loadSeedData = (dataDir, typeNames) => {
@@ -291,11 +385,6 @@ const topologicalSort = (types, deps) => {
   }
   return result;
 };
-
-// Initialize operator client (once for all namespaces)
-const accessToken = await loadAccessToken({ profile: values.profile, useProfile: true });
-const workspaceId = await loadWorkspaceId({ profile: values.profile });
-const operatorClient = await initOperatorClient(accessToken);
 
 // Seed TailorDB types via testExecScript
 const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
@@ -382,8 +471,8 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
       if (!parsed.success) {
         const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
         const errorMessage =
-          errors.length > 0 ? errors.join("\n") : "Seed script reported failure";
-        console.error(styleText("red", `    ✗ Seed failed: ${errorMessage}`));
+          errors.length > 0 ? errors.join("\n        ") : "Seed script reported failure";
+        console.error(styleText("red", `    ✗ Seed failed:\n        ${errorMessage}`));
         hasError = true;
         allErrors.push(errorMessage);
       }
@@ -400,45 +489,87 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   return { success: true, processed: allProcessed };
 };
 
-// Seed _User via GraphQL mutation
-const seedIdpUser = async () => {
-  console.log(styleText("cyan", "  Seeding _User via GraphQL mutation..."));
-  const dataDir = join(configDir, "data");
-  const data = loadSeedData(dataDir, ["_User"]);
-  const rows = data["_User"] || [];
-  if (rows.length === 0) {
-    console.log(styleText("dim", "    No _User data to seed"));
-    return { success: true };
-  }
-  console.log(styleText("dim", `    Processing _User...`));
-  const mutation = `mutation CreateUser($input: _CreateUserInput!) { _createUser(input: $input) { id } }`;
-  let successCount = 0;
-  let failCount = 0;
-  for (let i = 0; i < rows.length; i++) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenInfo.accessToken}` },
-        body: JSON.stringify({ query: mutation, variables: { input: rows[i] } }),
-      });
-      const result = await response.json();
-      if (result.errors) {
-        failCount++;
-        console.error(styleText("red", `    ✗ Row ${i} in _User failed: ${result.errors[0].message}`));
-      } else {
-        successCount++;
+    // Seed _User via tailor.idp.Client (server-side)
+    const seedIdpUser = async () => {
+      console.log(styleText("cyan", "  Seeding _User via tailor.idp.Client..."));
+      const dataDir = join(configDir, "data");
+      const data = loadSeedData(dataDir, ["_User"]);
+      const rows = data["_User"] || [];
+      if (rows.length === 0) {
+        console.log(styleText("dim", "    No _User data to seed"));
+        return { success: true };
       }
+      console.log(styleText("dim", `    Processing ${rows.length} _User records...`));
+
+      const idpSeedCode = /* js */`export async function main(input) {
+  const client = new tailor.idp.Client({ namespace: "my-idp" });
+  const errors = [];
+  let processed = 0;
+
+  for (let i = 0; i < input.users.length; i++) {
+    try {
+      await client.createUser(input.users[i]);
+      processed++;
+      console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
     } catch (error) {
-      failCount++;
-      console.error(styleText("red", `    ✗ Row ${i} in _User failed: ${error.message}`));
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(\`Row \${i} (\${input.users[i].name}): \${message}\`);
+      console.error(\`[_User] Row \${i} failed: \${message}\`);
     }
   }
-  console.log(styleText("green", `    ✓ _User: ${successCount} rows processed`));
-  if (failCount > 0) {
-    console.error(styleText("red", `    ✗ _User: ${failCount} rows failed`));
-  }
-  return { success: failCount === 0 };
-};
+
+  return {
+    success: errors.length === 0,
+    processed,
+    errors,
+  };
+}`;
+
+      const result = await executeScript({
+        client: operatorClient,
+        workspaceId,
+        name: "seed-idp-user.ts",
+        code: idpSeedCode,
+        arg: JSON.stringify({ users: rows }),
+        invoker: {
+          namespace: authNamespace,
+          machineUserName,
+        },
+      });
+
+      if (result.logs) {
+        for (const line of result.logs.split("\n").filter(Boolean)) {
+          console.log(styleText("dim", `    ${line}`));
+        }
+      }
+
+      if (result.success) {
+        let parsed;
+        try {
+          parsed = JSON.parse(result.result || "{}");
+        } catch (e) {
+          console.error(styleText("red", `    ✗ Failed to parse seed result: ${e.message}`));
+          return { success: false };
+        }
+
+        if (parsed.processed) {
+          console.log(styleText("green", `    ✓ _User: ${parsed.processed} rows processed`));
+        }
+
+        if (!parsed.success) {
+          const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+          for (const err of errors) {
+            console.error(styleText("red", `    ✗ ${err}`));
+          }
+          return { success: false };
+        }
+
+        return { success: true };
+      } else {
+        console.error(styleText("red", `    ✗ Seed failed: ${result.error}`));
+        return { success: false };
+      }
+    };
 
 // Main execution
 try {
