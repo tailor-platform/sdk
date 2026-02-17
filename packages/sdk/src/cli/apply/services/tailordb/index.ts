@@ -1812,13 +1812,6 @@ function protoGqlOperand(
         },
       };
     }
-    for (const key of ["record", "oldRecord", "newRecord"] as const) {
-      if (key in operand) {
-        throw new Error(
-          `"${key}" operand is not supported in gqlPermission. Use permission() for record-level conditions.`,
-        );
-      }
-    }
     throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
   }
 

@@ -143,11 +143,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         const result = TailorDBTypeSchema.safeParse(exportedValue);
         if (!result.success) {
-          const gqlIssue = result.error.issues.find(
+          const gqlPermissionIssue = result.error.issues.find(
             (i) => i.code === "custom" && i.params?.code === GQL_PERMISSION_INVALID_OPERAND,
           );
-          if (gqlIssue) {
-            throw new Error(gqlIssue.message);
+          if (gqlPermissionIssue) {
+            throw new Error(gqlPermissionIssue.message);
           }
           continue;
         }
