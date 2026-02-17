@@ -437,7 +437,7 @@ export function checkAuthStatus(): Promise<{ ok: boolean; error?: string }> {
       try {
         const parsed = JSON.parse(stdout || stderr) as ClaudeCodeOutput;
         if (parsed.is_error) {
-          resolve({ ok: false, error: parsed.result });
+          resolve({ ok: false, error: parsed.result || stdout || stderr });
           return;
         }
         resolve({ ok: true });

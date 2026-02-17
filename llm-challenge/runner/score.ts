@@ -446,7 +446,8 @@ export function formatReportTable(report: ChallengeReport): string {
 
   for (const r of report.results) {
     const infraFailed = isInfraFailure(r);
-    const name = `${r.problemId}-${r.problemName}`.padEnd(30);
+    const nameRaw = `${r.problemId}-${r.problemName}`;
+    const name = (nameRaw.length > 29 ? `${nameRaw.slice(0, 28)}\u2026` : nameRaw).padEnd(30);
     const diff = r.difficulty.padEnd(12);
     const score = (infraFailed ? "-" : `${r.totalScore}/${r.maxScore}`).padEnd(15);
     let statusLabel = "PARTIAL";
