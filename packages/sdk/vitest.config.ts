@@ -15,7 +15,7 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
-          exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],
+          exclude: ["**/node_modules/**", "**/dist/**", "e2e/**", "**/__tests__/fixtures/**"],
         },
       },
       {
