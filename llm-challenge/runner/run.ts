@@ -685,10 +685,9 @@ async function main(): Promise<void> {
 
   // --rerun-infra mode: extract infra failure problems from latest report
   if (rerunInfra) {
-    const latestReport =
-      findLatestReport(resultsDir, { solveOnly: true }) ?? findLatestReport(resultsDir);
+    const latestReport = findLatestReport(resultsDir, { solveOnly: true });
     if (!latestReport) {
-      console.error("No existing report found. Run a full benchmark first.");
+      console.error("No solve-mode report found. Run a full benchmark with --solve first.");
       process.exit(1);
     }
 
