@@ -58,6 +58,14 @@ export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = 
     : T[K];
 };
 
+export type ExcludeHooksAndValidateFields<T extends Record<string, TailorAnyDBField>> = {
+  [K in keyof T]: "hooks" extends keyof T[K]["_defined"]
+    ? never
+    : T[K]["_defined"] extends { validate: unknown }
+      ? never
+      : T[K];
+};
+
 type HookFn<TValue, TData, TReturn> = (args: {
   value: TValue;
   data: TData extends Record<string, unknown>

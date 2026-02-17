@@ -27,6 +27,7 @@ import {
   type IndexDef,
   type TypeFeatures,
   type ExcludeNestedDBFields,
+  type ExcludeHooksAndValidateFields,
 } from "./types";
 import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
@@ -696,7 +697,9 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
 }
 
 function object<
-  const F extends Record<string, TailorAnyDBField> & ExcludeNestedDBFields<F>,
+  const F extends Record<string, TailorAnyDBField> &
+    ExcludeNestedDBFields<F> &
+    ExcludeHooksAndValidateFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<

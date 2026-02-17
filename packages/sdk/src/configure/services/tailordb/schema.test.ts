@@ -425,6 +425,22 @@ describe("TailorDBField hooks modifier tests", () => {
     }).hooks({ create: () => ({ first: "A", last: "B" }) });
   });
 
+  it("setting hooks on fields inside nested object causes type error", () => {
+    db.object({
+      first: db.string(),
+      // @ts-expect-error hooks() cannot be used on fields inside nested objects
+      last: db.string().hooks({ create: () => "B" }),
+    });
+  });
+
+  it("setting validate on fields inside nested object causes type error", () => {
+    db.object({
+      first: db.string(),
+      // @ts-expect-error validate() cannot be used on fields inside nested objects
+      last: db.string().validate(({ value }) => value.length > 0),
+    });
+  });
+
   it("hooks modifier on string field receives string", () => {
     const _hooks = db.string().hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string>>();
