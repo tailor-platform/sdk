@@ -570,7 +570,7 @@ function findLatestReport(
       const report = JSON.parse(
         fs.readFileSync(path.join(resultsDir, f), "utf-8"),
       ) as ChallengeReport;
-      if (options?.solveOnly && !report.results.some((r) => r.solveResult !== undefined)) {
+      if (options?.solveOnly && report.model === undefined) {
         continue;
       }
       const time = new Date(report.timestamp).getTime();
