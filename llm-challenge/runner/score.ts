@@ -147,7 +147,7 @@ function classifyFailure(
   if (/TS\d{4}/.test(output)) {
     return "type_error";
   }
-  if (/does not exist|ENOENT/.test(output)) {
+  if (/does not exist|ENOENT|required files missing/.test(output)) {
     return "missing_file";
   }
   if (stage === "generate") {
@@ -235,6 +235,10 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   const stageGroups: Record<string, { passed: number; total: number }> = {};
   for (const r of results) {
     for (const s of r.stages) {
+      // Exclude skipped stages (never actually executed) from pass-rate totals
+      if (s.output?.startsWith("Skipped")) {
+        continue;
+      }
       const group = (stageGroups[s.stage] ??= { passed: 0, total: 0 });
       group.total++;
       if (s.passed) {
