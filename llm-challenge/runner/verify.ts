@@ -205,6 +205,26 @@ export async function verifyProblem(
     results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
     return results;
   }
+  // Verify required implementation files exist even when generate succeeds.
+  // For fix-broken problems (implement ⊆ scaffold) the files are pre-existing, so skip.
+  const newFiles = meta.files.implement.filter((f) => !meta.files.scaffold.includes(f));
+  const missingFiles = newFiles.filter((f) => !fs.existsSync(path.join(workDir, f)));
+  if (missingFiles.length > 0) {
+    // Generate succeeded but implementation files are missing — partial credit only
+    const generateStage: StageInput = {
+      stage: "generate",
+      passed: false,
+      output: `Generate succeeded but required files missing: ${missingFiles.join(", ")}`,
+      durationMs: generateResult.durationMs,
+      testsPassed: 0,
+      testsTotal: GENERATE_PARTIAL_TOTAL,
+    };
+    results.push(generateStage);
+    results.push({ stage: "typecheck", passed: false, output: "Skipped (missing files)" });
+    results.push({ stage: "tests", passed: false, output: "Skipped (missing files)" });
+    return results;
+  }
+
   results.push({
     stage: "generate",
     passed: true,
