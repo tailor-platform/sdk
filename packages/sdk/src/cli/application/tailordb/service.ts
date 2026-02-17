@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { CLIError, isCLIError } from "@/cli/utils/errors";
 import { logger, styles } from "@/cli/utils/logger";
 import {
   parseTypes,
@@ -142,6 +143,21 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         const result = TailorDBTypeSchema.safeParse(exportedValue);
         if (!result.success) {
+          if (
+            typeof exportedValue === "object" &&
+            exportedValue !== null &&
+            "name" in exportedValue &&
+            "fields" in exportedValue
+          ) {
+            const relativePath = path.relative(process.cwd(), typeFile);
+            const details = result.error.issues
+              .map((i) => `${i.path.join(".")}: ${i.message}`)
+              .join("\n");
+            throw CLIError({
+              message: `Failed to parse type "${exportedValue.name}" from ${relativePath}`,
+              details,
+            });
+          }
           continue;
         }
 
@@ -172,9 +188,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         }
       }
     } catch (error) {
-      const relativePath = path.relative(process.cwd(), typeFile);
-      logger.error(`Failed to load type from ${styles.bold(relativePath)}`);
-      logger.error(String(error));
+      if (!isCLIError(error)) {
+        const relativePath = path.relative(process.cwd(), typeFile);
+        logger.error(`Failed to load type from ${styles.bold(relativePath)}`);
+        logger.error(String(error));
+      }
       throw error;
     }
     return loadedTypes;

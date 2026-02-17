@@ -84,6 +84,18 @@ export const TailorDBTypeSettingsSchema = z.object({
 
 const GqlPermissionOperandSchema = z.union([
   z.object({ user: z.string() }),
+  z.object({ record: z.string() }).refine(() => false, {
+    message:
+      '"record" operand is not supported in gqlPermission. Use permission() for record-level conditions.',
+  }),
+  z.object({ oldRecord: z.string() }).refine(() => false, {
+    message:
+      '"oldRecord" operand is not supported in gqlPermission. Use permission() for record-level conditions.',
+  }),
+  z.object({ newRecord: z.string() }).refine(() => false, {
+    message:
+      '"newRecord" operand is not supported in gqlPermission. Use permission() for record-level conditions.',
+  }),
   z.string(),
   z.boolean(),
   z.array(z.string()),
