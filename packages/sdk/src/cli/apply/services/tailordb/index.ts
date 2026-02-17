@@ -1811,8 +1811,10 @@ function protoGqlOperand(
           value: operand.user,
         },
       };
+    } else {
+      // RecordOperand is not valid for GQL permissions
+      throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
     }
-    throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
   }
 
   return {
