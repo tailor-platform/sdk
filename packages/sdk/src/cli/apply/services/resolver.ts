@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
@@ -17,13 +16,11 @@ import {
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
-import * as path from "pathe";
 import { type ResolverService } from "@/cli/application/resolver/service";
-import { getDistDir } from "@/cli/utils/dist-dir";
-import { logger } from "@/cli/utils/logger";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { tailorUserMap } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
+import { resolverFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
@@ -324,7 +321,12 @@ async function planResolvers(
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(resolver, executorUsedResolvers, env),
+            pipelineResolver: processResolver(
+              pipeline.namespace,
+              resolver,
+              executorUsedResolvers,
+              env,
+            ),
           },
         });
         existingNameSet.delete(resolver.name);
@@ -334,7 +336,12 @@ async function planResolvers(
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(resolver, executorUsedResolvers, env),
+            pipelineResolver: processResolver(
+              pipeline.namespace,
+              resolver,
+              executorUsedResolvers,
+              env,
+            ),
           },
         });
       }
@@ -368,26 +375,18 @@ async function planResolvers(
 }
 
 function processResolver(
+  namespace: string,
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
   env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof PipelineResolverSchema> {
-  // Read body function code
-  const functionPath = path.join(getDistDir(), "resolvers", `${resolver.name}.js`);
-  let functionCode = "";
-  try {
-    functionCode = fs.readFileSync(functionPath, "utf-8");
-  } catch {
-    logger.warn(`Function file not found: ${functionPath}`);
-  }
-
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
       name: "body",
       operationName: "body",
       description: `${resolver.name} function body`,
       operationType: PipelineResolver_OperationType.FUNCTION,
-      operationSource: functionCode,
+      operationSourceRef: resolverFunctionName(namespace, resolver.name),
       operationHook: {
         expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
       },
