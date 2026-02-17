@@ -700,9 +700,16 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // Auth pre-check (deferred until we know there are problems to rerun)
+    // Honor explicit --model flag; fall back to the original report's model to avoid misattribution.
+    // Composite labels like "sonnet+opus" (from mixed-model reruns) are not valid model IDs;
+    // extract the primary model (before "+") for the fallback.
+    const reportModelRaw = latestReport.model;
+    const primaryReportModel = reportModelRaw?.split("+")[0];
+    const rerunModel = modelExplicit ? model : (primaryReportModel ?? model);
+
+    // Auth pre-check (deferred until rerunModel is derived so the correct model is validated)
     console.log("Checking authentication status...");
-    const authCheck = await checkAuthStatus(model);
+    const authCheck = await checkAuthStatus(rerunModel);
     if (!authCheck.ok) {
       console.error(`Authentication check failed: ${authCheck.error}`);
       const authPatterns = [
@@ -719,13 +726,6 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     console.log("Authentication: ok");
-
-    // Honor explicit --model flag; fall back to the original report's model to avoid misattribution.
-    // Composite labels like "sonnet+opus" (from mixed-model reruns) are not valid model IDs;
-    // extract the primary model (before "+") for the fallback.
-    const reportModelRaw = latestReport.model;
-    const primaryReportModel = reportModelRaw?.split("+")[0];
-    const rerunModel = modelExplicit ? model : (primaryReportModel ?? model);
 
     console.log(
       `Rerunning ${infraProblems.length} infrastructure failure problem(s) (model: ${rerunModel}, concurrency: ${concurrency})...`,
