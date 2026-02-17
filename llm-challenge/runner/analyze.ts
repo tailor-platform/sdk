@@ -110,6 +110,10 @@ function computeSuccessRates(
 
   const groups: Record<string, { passed: number; total: number }> = {};
   for (const r of report.results) {
+    // Exclude infra-only failures to match cached analytics computation
+    if (r.stages.length > 0 && r.stages.every((s) => s.category === "infra_failure")) {
+      continue;
+    }
     const key = groupKeyFn(r);
     const group = (groups[key] ??= { passed: 0, total: 0 });
     group.total++;
