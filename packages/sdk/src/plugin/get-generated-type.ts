@@ -39,14 +39,20 @@ function isPluginBase(value: unknown): value is PluginBase {
 /**
  * Load and cache config module from the given path.
  * Extracts plugins from all array exports using definePlugins() format.
+ * Returns null if the config file does not exist (e.g., in bundled executor on platform server).
  * @param configPath - Absolute or relative path to tailor.config.ts
- * @returns Cached config data with plugins map
+ * @returns Cached config data with plugins map, or null if config file is not available
  */
-async function loadAndCacheConfig(configPath: string): Promise<ConfigCache> {
+async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | null> {
   const resolvedPath = path.resolve(configPath);
 
   const cached = configCacheMap.get(resolvedPath);
   if (cached) return cached;
+
+  // Config file may not exist in bundled environments (e.g., platform server)
+  if (!fs.existsSync(resolvedPath)) {
+    return null;
+  }
 
   const configModule = await import(pathToFileURL(resolvedPath).href);
   if (!configModule?.default) {
@@ -230,7 +236,15 @@ export async function getGeneratedType(
   sourceType: TailorAnyDBType | null,
   kind: string,
 ): Promise<TailorAnyDBType> {
-  const { config, configDir, plugins } = await loadAndCacheConfig(configPath);
+  const cache = await loadAndCacheConfig(configPath);
+
+  if (!cache) {
+    // Config not available (e.g., running in bundled executor on platform server).
+    // Return a placeholder. The actual type is resolved at generate/apply time.
+    return { name: `__placeholder_${kind}__`, fields: {} } as TailorAnyDBType;
+  }
+
+  const { config, configDir, plugins } = cache;
 
   const pluginEntry = plugins.get(pluginId);
   if (!pluginEntry) {
