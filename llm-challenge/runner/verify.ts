@@ -186,14 +186,16 @@ export async function verifyProblem(
     // For fix-broken problems (where all implement files are in scaffold), skip file existence
     // check since those files exist before any fix is applied — awarding credit would inflate scores
     const newFiles = meta.files.implement.filter((f) => !meta.files.scaffold.includes(f));
-    const filesToCheck = newFiles;
-    const allFilesExist =
-      filesToCheck.length > 0 && filesToCheck.every((f) => fs.existsSync(path.join(workDir, f)));
-    if (allFilesExist) {
+    const isFixBroken = newFiles.length === 0;
+    const allNewFilesExist =
+      newFiles.length > 0 && newFiles.every((f) => fs.existsSync(path.join(workDir, f)));
+    if (allNewFilesExist) {
       generateStage.testsPassed = GENERATE_PARTIAL_FILE_EXISTS;
-      generateStage.testsTotal = GENERATE_PARTIAL_TOTAL;
+    }
 
-      // Check if files can be imported — use project tsconfig to respect module resolution
+    // Import check (60% of generate score) — runs for both new and fix-broken problems
+    if (allNewFilesExist || isFixBroken) {
+      generateStage.testsTotal = GENERATE_PARTIAL_TOTAL;
       const importCheck = await runCommand("npx tsc --noEmit", workDir);
       if (importCheck.success) {
         generateStage.testsPassed = GENERATE_PARTIAL_IMPORT_CHECK;

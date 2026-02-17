@@ -661,8 +661,8 @@ async function main(): Promise<void> {
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
 
-  // Auth pre-check for solve mode (not rerun-infra — deferred until targets are known)
-  if (solve) {
+  // Auth pre-check for solve mode (skip when rerun-infra — deferred until targets are known)
+  if (solve && !rerunInfra) {
     console.log("Checking authentication status...");
     const authCheck = await checkAuthStatus();
     if (!authCheck.ok) {
