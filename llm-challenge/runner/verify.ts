@@ -205,10 +205,9 @@ export async function verifyProblem(
     results.push({ stage: "tests", passed: false, output: "Skipped (generate failed)" });
     return results;
   }
-  // Verify required implementation files exist even when generate succeeds.
-  // For fix-broken problems (implement ⊆ scaffold) the files are pre-existing, so skip.
-  const newFiles = meta.files.implement.filter((f) => !meta.files.scaffold.includes(f));
-  const missingFiles = newFiles.filter((f) => !fs.existsSync(path.join(workDir, f)));
+  // Verify all required implementation files exist even when generate succeeds.
+  // This catches fix-broken submissions that delete or rename required target files.
+  const missingFiles = meta.files.implement.filter((f) => !fs.existsSync(path.join(workDir, f)));
   if (missingFiles.length > 0) {
     // Generate succeeded but implementation files are missing — partial credit only
     const generateStage: StageInput = {
