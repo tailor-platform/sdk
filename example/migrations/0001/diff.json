@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-02-17T07:12:06.449Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "PurchaseOrder",
+      "fieldName": "attachedFiles",
+      "before": {
+        "type": "nested",
+        "required": true,
+        "array": true,
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "name": {
+            "type": "string",
+            "required": true
+          },
+          "size": {
+            "type": "integer",
+            "required": true,
+            "validate": [
+              {
+                "script": {
+                  "expr": "(({value})=>value>0)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+                },
+                "errorMessage": "failed by `({value})=>value>0`"
+              }
+            ]
+          },
+          "type": {
+            "type": "enum",
+            "required": true,
+            "allowedValues": [
+              {
+                "value": "text"
+              },
+              {
+                "value": "image"
+              }
+            ]
+          }
+        }
+      },
+      "after": {
+        "type": "nested",
+        "required": true,
+        "array": true,
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "name": {
+            "type": "string",
+            "required": true
+          },
+          "size": {
+            "type": "integer",
+            "required": true
+          },
+          "type": {
+            "type": "enum",
+            "required": true,
+            "allowedValues": [
+              {
+                "value": "text"
+              },
+              {
+                "value": "image"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
