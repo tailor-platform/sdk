@@ -84,7 +84,7 @@ function normalizePermission<User extends object = object, Type extends object =
 ): StandardTailorTypePermission {
   const keys = Object.keys(permission) as Array<keyof typeof permission>;
   return keys.reduce((acc, action) => {
-    acc[action] = permission[action].map((p) => normalizeActionPermission(p));
+    acc[action] = permission[action].map(normalizeActionPermission);
     return acc;
     // oxlint-disable-next-line no-explicit-any
   }, {} as any);
@@ -100,8 +100,8 @@ export function normalizeGqlPermission(
   // oxlint-disable-next-line no-explicit-any
   permission: TailorTypeGqlPermission<any, any>,
 ): StandardTailorTypeGqlPermission {
-  return (permission as readonly GqlPermissionPolicy[]).map((policy) =>
-    normalizeGqlPolicy(policy),
+  return (permission as readonly GqlPermissionPolicy[]).map(
+    normalizeGqlPolicy,
   ) as StandardTailorTypeGqlPermission;
 }
 

@@ -5,7 +5,6 @@ export interface IdpUserMetadata {
   name: "_User";
   dependencies: string[];
   dataFile: string;
-  mutation: string;
   schema: {
     usernameField: string;
     userTypeName: string;
@@ -25,18 +24,10 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
 
   const { typeName, usernameField } = auth.userProfile;
 
-  const mutation = /* gql */ `mutation CreateUser($input: _CreateUserInput!) {
-  _createUser(input: $input) {
-    id
-  }
-}
-`;
-
   return {
     name: "_User",
     dependencies: [typeName],
     dataFile: "data/_User.jsonl",
-    mutation,
     schema: {
       usernameField,
       userTypeName: typeName,

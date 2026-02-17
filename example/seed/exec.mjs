@@ -130,8 +130,7 @@ const hasTypes = positionals.length > 0;
 const skipIdp = values["skip-idp"];
 
 // Validate mutually exclusive options
-const optionCount = [hasNamespace, hasTypes].filter(Boolean).length;
-if (optionCount > 1) {
+if (hasNamespace && hasTypes) {
   console.error(styleText("red", "Error: Options --namespace and type names are mutually exclusive."));
   process.exit(1);
 }
