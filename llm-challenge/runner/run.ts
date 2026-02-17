@@ -725,8 +725,14 @@ async function main(): Promise<void> {
 
     const sdkVersion = latestReport.sdkVersion;
     const originalModel = latestReport.model;
-    const isMixedModel = modelExplicit && originalModel && rerunModel !== originalModel;
-    const reportModel = isMixedModel ? `${originalModel}+${rerunModel}` : rerunModel;
+    // When --model is explicit and differs from the original, create a composite label.
+    // When --model is not explicit, preserve the original report's model label as-is
+    // (it may already be composite from prior reruns).
+    const reportModel = modelExplicit
+      ? originalModel && rerunModel !== originalModel
+        ? `${originalModel}+${rerunModel}`
+        : rerunModel
+      : (originalModel ?? rerunModel);
     const report = createReport(mergedResults, {
       model: reportModel,
       sdkVersion,

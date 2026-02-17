@@ -236,10 +236,15 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
   if (allCategories.length > 0) {
     console.log("Category Success Rates:");
     for (const cat of allCategories) {
-      const bRate = beforeCatRates[cat]?.rate ?? 0;
-      const aRate = afterCatRates[cat]?.rate ?? 0;
-      const delta = aRate - bRate;
-      console.log(`  ${cat}: ${bRate}% -> ${aRate}% (${formatPercentDelta(delta)})`);
+      const bEntry = beforeCatRates[cat];
+      const aEntry = afterCatRates[cat];
+      const bLabel = bEntry != null ? `${bEntry.rate}%` : "N/A";
+      const aLabel = aEntry != null ? `${aEntry.rate}%` : "N/A";
+      const delta =
+        bEntry != null && aEntry != null
+          ? ` (${formatPercentDelta(aEntry.rate - bEntry.rate)})`
+          : "";
+      console.log(`  ${cat}: ${bLabel} -> ${aLabel}${delta}`);
     }
     console.log("");
   }
@@ -254,10 +259,15 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
   if (allDiffs.length > 0) {
     console.log("Difficulty Success Rates:");
     for (const diff of allDiffs) {
-      const bRate = beforeDiffRates[diff]?.rate ?? 0;
-      const aRate = afterDiffRates[diff]?.rate ?? 0;
-      const delta = aRate - bRate;
-      console.log(`  ${diff}: ${bRate}% -> ${aRate}% (${formatPercentDelta(delta)})`);
+      const bEntry = beforeDiffRates[diff];
+      const aEntry = afterDiffRates[diff];
+      const bLabel = bEntry != null ? `${bEntry.rate}%` : "N/A";
+      const aLabel = aEntry != null ? `${aEntry.rate}%` : "N/A";
+      const delta =
+        bEntry != null && aEntry != null
+          ? ` (${formatPercentDelta(aEntry.rate - bEntry.rate)})`
+          : "";
+      console.log(`  ${diff}: ${bLabel} -> ${aLabel}${delta}`);
     }
     console.log("");
   }
