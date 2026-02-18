@@ -26,6 +26,6 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm exec turbo run test -- --project unit
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
