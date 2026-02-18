@@ -152,7 +152,7 @@ async function resolveNamespaceForNamespacePlugin(
   plugin: Plugin,
   kind: string,
   pluginConfig: unknown,
-): Promise<string> {
+): Promise<{ namespace: string; output: NamespacePluginOutput }> {
   if (!config.db) {
     throw new Error(`No db configuration found in config`);
   }
@@ -171,7 +171,7 @@ async function resolveNamespaceForNamespacePlugin(
     });
 
     if (output.types?.[kind]) {
-      return namespace;
+      return { namespace, output };
     }
   }
 
@@ -352,18 +352,15 @@ async function getGeneratedTypeForNamespacePlugin(
   }
 
   // Not in cache - resolve namespace and process
-  const namespace = await resolveNamespaceForNamespacePlugin(config, plugin, kind, pluginConfig);
+  const { namespace, output } = await resolveNamespaceForNamespacePlugin(
+    config,
+    plugin,
+    kind,
+    pluginConfig,
+  );
 
   const cacheKey = getCacheKey(`namespace:ns=${namespace}`, pluginConfig);
-  let output = pluginCache.get(cacheKey);
-
-  if (!output) {
-    output = await plugin.processNamespace({
-      pluginConfig,
-      namespace,
-    });
-    pluginCache.set(cacheKey, output);
-  }
+  pluginCache.set(cacheKey, output);
 
   const generatedType = output.types?.[kind];
   if (!generatedType) {
