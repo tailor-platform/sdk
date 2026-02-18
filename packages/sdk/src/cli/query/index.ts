@@ -274,28 +274,18 @@ function isSQLExecutionResult(value: unknown): value is SQLExecutionResult {
 
 function printQueryResult(result: QueryDispatchResult): void {
   if (result.engine === "sql" && isSQLExecutionResult(result.result)) {
-    logger.out({
-      engine: result.engine,
-      namespace: result.namespace,
-      query: result.query,
-      rowCount: result.result.rowCount,
-    });
-
     if (result.result.rows.length === 0) {
       logger.info("No rows returned.");
       return;
     }
 
     logger.out(result.result.rows, { showNull: true });
+    logger.out(`rows: ${result.result.rowCount}`);
+
     return;
   }
 
   if (result.engine === "gql") {
-    logger.out({
-      engine: result.engine,
-      namespace: result.namespace,
-      query: result.query,
-    });
     logger.out(JSON.stringify(result.result, null, 2));
     return;
   }
