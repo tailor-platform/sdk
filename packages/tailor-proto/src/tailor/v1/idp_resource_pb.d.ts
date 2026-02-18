@@ -141,6 +141,15 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * @generated from field: repeated string allowed_email_domains = 9;
    */
   allowedEmailDomains: string[];
+
+  /**
+   * allow_google_oauth enables "Sign in with Google" for this namespace.
+   * When enabled, users can authenticate using their Google account.
+   * Cannot be enabled when use_non_email_identifier is true.
+   *
+   * @generated from field: bool allow_google_oauth = 10;
+   */
+  allowGoogleOauth: boolean;
 };
 
 /**
