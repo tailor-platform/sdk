@@ -34,7 +34,6 @@ type UpdateFunction = {
   name: string;
   entry: FunctionEntry;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
-  skipUpload: boolean;
 };
 
 type DeleteFunction = {
@@ -246,7 +245,6 @@ export async function planFunctionRegistry(
         name: entry.name,
         entry,
         metaRequest,
-        skipUpload: existing.resource.contentHash === entry.contentHash,
       });
       delete existingMap[entry.name];
     } else {
@@ -355,11 +353,9 @@ export async function applyFunctionRegistry(
       await client.setMetadata(create.metaRequest);
     }
 
-    // Update existing functions (skip upload when content hash matches)
+    // Update existing functions (server deduplicates content by hash)
     for (const update of changeSet.updates) {
-      if (!update.skipUpload) {
-        await uploadFunctionScript(client, workspaceId, update.entry, false);
-      }
+      await uploadFunctionScript(client, workspaceId, update.entry, false);
       await client.setMetadata(update.metaRequest);
     }
   } else if (phase === "delete") {
