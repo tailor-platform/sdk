@@ -9,8 +9,10 @@ import type { ExecutorInput } from "@/parser/service/executor/types";
  */
 type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
 
-type ExecutorBase<Args> = Omit<ExecutorInput, "trigger" | "operation"> & {
-  trigger: Trigger<Args>;
+type TriggerArgs<T extends Trigger<unknown>> = T extends { __args: infer Args } ? Args : never;
+
+type ExecutorBase<T extends Trigger<unknown>> = Omit<ExecutorInput, "trigger" | "operation"> & {
+  trigger: T;
 };
 
 /**
@@ -18,32 +20,32 @@ type ExecutorBase<Args> = Omit<ExecutorInput, "trigger" | "operation"> & {
  * When operation.kind is "workflow", infers W from the workflow property
  * to ensure args type matches the workflow's mainJob input type.
  */
-type Executor<Args, O> = O extends {
+type Executor<T extends Trigger<unknown>, O> = O extends {
   kind: "workflow";
   workflow: infer W extends Workflow;
 }
-  ? ExecutorBase<Args> & {
+  ? ExecutorBase<T> & {
       operation: {
         kind: "workflow";
         workflow: W;
-        args?: WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
+        args?: WorkflowInput<W> | ((args: TriggerArgs<T>) => WorkflowInput<W>);
         authInvoker?: AuthInvoker<string>;
       };
     }
-  : ExecutorBase<Args> & {
+  : ExecutorBase<T> & {
       operation: O;
     };
 
 /**
  * Create an executor configuration for the Tailor SDK.
- * @template Args
+ * @template T
  * @template O
  * @param config - Executor configuration
  * @returns The same executor configuration
  */
 export function createExecutor<
-  Args,
-  O extends Operation<Args> | { kind: "workflow"; workflow: Workflow },
->(config: Executor<Args, O>) {
+  T extends Trigger<unknown>,
+  O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
+>(config: Executor<T, O>) {
   return config;
 }

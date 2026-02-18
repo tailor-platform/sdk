@@ -20,7 +20,39 @@ import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform
 import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
-export interface StartWorkflowOptions {
+type WorkflowLike = {
+  name: string;
+  mainJob: {
+    body: unknown;
+  };
+};
+
+type AuthInvoker<M extends string = string> = {
+  namespace: string;
+  machineUserName: M;
+};
+
+type WorkflowInput<W extends WorkflowLike> = W["mainJob"]["body"] extends (
+  ...args: infer Args
+) => unknown
+  ? Args[0]
+  : never;
+
+type StartWorkflowArgOption<W extends WorkflowLike> = WorkflowLike extends W
+  ? { arg?: Jsonifiable }
+  : [WorkflowInput<W>] extends [undefined]
+    ? { arg?: undefined }
+    : { arg: WorkflowInput<W> };
+
+export type StartWorkflowOptions<W extends WorkflowLike = WorkflowLike> = {
+  workflow: W;
+  authInvoker: AuthInvoker<string>;
+  workspaceId?: string;
+  profile?: string;
+  interval?: number;
+} & StartWorkflowArgOption<W>;
+
+interface StartWorkflowByNameOptions {
   name: string;
   machineUser: string;
   arg?: Jsonifiable;
@@ -172,41 +204,23 @@ export interface StartWorkflowResultWithWait {
   wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
 }
 
-/**
- * Start a workflow and return a handle to wait for completion.
- * @param options - Start options
- * @returns Start result with wait helper
- */
-export async function startWorkflow(
-  options: StartWorkflowOptions,
-): Promise<StartWorkflowResultWithWait> {
-  const accessToken = await loadAccessToken({
-    useProfile: true,
-    profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
-    workspaceId: options.workspaceId,
-    profile: options.profile,
-  });
+interface StartWorkflowCoreOptions {
+  client: Awaited<ReturnType<typeof initOperatorClient>>;
+  workspaceId: string;
+  workflowName: string;
+  authInvoker: AuthInvoker<string>;
+  arg?: unknown;
+  interval?: number;
+}
 
-  const { config } = await loadConfig(options.configPath);
-  const { application } = await client.getApplication({
-    workspaceId,
-    applicationName: config.name,
-  });
-  if (!application?.authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
-  }
+async function startWorkflowCore(
+  options: StartWorkflowCoreOptions,
+): Promise<StartWorkflowResultWithWait> {
+  const { client, workspaceId, workflowName } = options;
 
   try {
-    const workflow = await resolveWorkflow(client, workspaceId, options.name);
-
-    const authInvoker = create(AuthInvokerSchema, {
-      namespace: application.authNamespace,
-      machineUserName: options.machineUser,
-    });
-
+    const workflow = await resolveWorkflow(client, workspaceId, workflowName);
+    const authInvoker = create(AuthInvokerSchema, options.authInvoker);
     const arg =
       options.arg === undefined
         ? undefined
@@ -235,10 +249,73 @@ export async function startWorkflow(
     };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Workflow '${options.name}' not found.`);
+      throw new Error(`Workflow '${workflowName}' not found.`);
     }
     throw error;
   }
+}
+
+async function startWorkflowByName(
+  options: StartWorkflowByNameOptions,
+): Promise<StartWorkflowResultWithWait> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+
+  const { config } = await loadConfig(options.configPath);
+  const { application } = await client.getApplication({
+    workspaceId,
+    applicationName: config.name,
+  });
+  if (!application?.authNamespace) {
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+  }
+
+  return await startWorkflowCore({
+    client,
+    workspaceId,
+    workflowName: options.name,
+    authInvoker: {
+      namespace: application.authNamespace,
+      machineUserName: options.machineUser,
+    },
+    arg: options.arg,
+    interval: options.interval,
+  });
+}
+
+/**
+ * Start a workflow and return a handle to wait for completion.
+ * @param options - Start options
+ * @returns Start result with wait helper
+ */
+export async function startWorkflow<W extends WorkflowLike>(
+  options: StartWorkflowOptions<W>,
+): Promise<StartWorkflowResultWithWait> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+
+  return await startWorkflowCore({
+    client,
+    workspaceId,
+    workflowName: options.workflow.name,
+    authInvoker: options.authInvoker,
+    arg: options.arg,
+    interval: options.interval,
+  });
 }
 
 export const startCommand = defineCommand({
@@ -260,7 +337,7 @@ export const startCommand = defineCommand({
     ...waitArgs,
   }),
   run: withCommonArgs(async (args) => {
-    const { executionId, wait } = await startWorkflow({
+    const { executionId, wait } = await startWorkflowByName({
       name: args.name,
       machineUser: args.machineuser,
       arg: args.arg,
