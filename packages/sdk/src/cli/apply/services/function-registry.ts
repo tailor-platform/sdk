@@ -34,6 +34,7 @@ type UpdateFunction = {
   name: string;
   entry: FunctionEntry;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  skipUpload: boolean;
 };
 
 type DeleteFunction = {
@@ -241,21 +242,12 @@ export async function planFunctionRegistry(
         });
       }
 
-      // Skip update if content hash matches
-      if (existing.resource.contentHash === entry.contentHash) {
-        // Still set metadata to ensure ownership is correct
-        changeSet.updates.push({
-          name: entry.name,
-          entry,
-          metaRequest,
-        });
-      } else {
-        changeSet.updates.push({
-          name: entry.name,
-          entry,
-          metaRequest,
-        });
-      }
+      changeSet.updates.push({
+        name: entry.name,
+        entry,
+        metaRequest,
+        skipUpload: existing.resource.contentHash === entry.contentHash,
+      });
       delete existingMap[entry.name];
     } else {
       changeSet.creates.push({
@@ -363,9 +355,11 @@ export async function applyFunctionRegistry(
       await client.setMetadata(create.metaRequest);
     }
 
-    // Update existing functions
+    // Update existing functions (skip upload when content hash matches)
     for (const update of changeSet.updates) {
-      await uploadFunctionScript(client, workspaceId, update.entry, false);
+      if (!update.skipUpload) {
+        await uploadFunctionScript(client, workspaceId, update.entry, false);
+      }
       await client.setMetadata(update.metaRequest);
     }
   } else if (phase === "delete") {

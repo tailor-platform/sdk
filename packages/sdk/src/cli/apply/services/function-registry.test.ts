@@ -139,11 +139,12 @@ describe("planFunctionRegistry", () => {
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0].name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.updates[0].skipUpload).toBe(false);
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
 
-    test("existing function is still updated when content hash matches (for metadata)", async () => {
+    test("existing function skips upload when content hash matches", async () => {
       const entry = createEntry("resolver/ns/getUser");
       const client = createMockClient([
         { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
@@ -151,9 +152,10 @@ describe("planFunctionRegistry", () => {
 
       const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
 
-      // Still in updates for metadata sync
+      // Still in updates for metadata sync, but upload is skipped
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0].name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.updates[0].skipUpload).toBe(true);
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
@@ -268,7 +270,7 @@ describe("applyFunctionRegistry phase separation", () => {
     } as unknown as OperatorClient;
   }
 
-  function createMockPlanResult() {
+  function createMockPlanResult(skipUpload = false) {
     const entry: FunctionEntry = {
       name: "resolver/ns/test",
       scriptContent: "// script",
@@ -289,6 +291,7 @@ describe("applyFunctionRegistry phase separation", () => {
             name: "resolver/ns/update-test",
             entry,
             metaRequest: { trn: "trn:test", labels: {} },
+            skipUpload,
           },
         ],
         deletes: [
@@ -324,6 +327,20 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.setMetadata).toHaveBeenCalledTimes(2);
     // No deletes in create-update phase
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
+  test("create-update phase skips upload when skipUpload is true", async () => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult(true);
+
+    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+
+    // Creates should still upload
+    expect(client.createFunctionRegistry).toHaveBeenCalledTimes(1);
+    // Updates with skipUpload should NOT call updateFunctionRegistry
+    expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
+    // Metadata should still be set for both creates and updates
+    expect(client.setMetadata).toHaveBeenCalledTimes(2);
   });
 
   test("delete phase deletes functions only", async () => {
