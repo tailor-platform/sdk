@@ -39,12 +39,44 @@ const noInputWorkflow = createWorkflow({
   mainJob: noInputJob,
 });
 
+const optionalInputJob = createWorkflowJob({
+  name: "optional-input",
+  body: (input?: { value: number }) => ({ value: input?.value ?? 0 }),
+});
+
+const optionalInputWorkflow = createWorkflow({
+  name: "optional-input-workflow",
+  mainJob: optionalInputJob,
+});
+
+type UndefinedableInputWorkflow = {
+  name: "undefinedable-input-workflow";
+  mainJob: {
+    body: (input: { value: number } | undefined) => { value: number };
+  };
+};
+
+const undefinedableInputWorkflow: UndefinedableInputWorkflow = {
+  name: "undefinedable-input-workflow",
+  mainJob: {
+    body: (input) => ({ value: input?.value ?? 0 }),
+  },
+};
+
 const acceptsCalculationWorkflowOptions = (
   _options: StartWorkflowOptions<typeof calculationWorkflow>,
 ): void => {};
 
 const acceptsNoInputWorkflowOptions = (
   _options: StartWorkflowOptions<typeof noInputWorkflow>,
+): void => {};
+
+const acceptsOptionalInputWorkflowOptions = (
+  _options: StartWorkflowOptions<typeof optionalInputWorkflow>,
+): void => {};
+
+const acceptsUndefinedableInputWorkflowOptions = (
+  _options: StartWorkflowOptions<UndefinedableInputWorkflow>,
 ): void => {};
 
 const acceptsDefaultWorkflowOptions = (_options: StartWorkflowOptions): void => {};
@@ -88,6 +120,64 @@ describe("startWorkflow API types", () => {
       // @ts-expect-error - no-input workflow must not receive arg
       arg: { any: "value" },
     });
+  });
+
+  it("allows omitting arg when workflow input includes undefined", () => {
+    acceptsOptionalInputWorkflowOptions({
+      workflow: optionalInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+    });
+
+    acceptsOptionalInputWorkflowOptions({
+      workflow: optionalInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: { value: 1 },
+    });
+
+    acceptsOptionalInputWorkflowOptions({
+      workflow: optionalInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: undefined,
+    });
+
+    acceptsOptionalInputWorkflowOptions({
+      workflow: optionalInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+      // @ts-expect-error - arg shape must match workflow input
+      arg: { invalid: true },
+    });
+
+    type OptionalArg = StartWorkflowOptions<typeof optionalInputWorkflow>["arg"];
+    expectTypeOf<OptionalArg>().toEqualTypeOf<{ value: number } | undefined>();
+  });
+
+  it("allows omitting arg when workflow input is T | undefined", () => {
+    acceptsUndefinedableInputWorkflowOptions({
+      workflow: undefinedableInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+    });
+
+    acceptsUndefinedableInputWorkflowOptions({
+      workflow: undefinedableInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: { value: 1 },
+    });
+
+    acceptsUndefinedableInputWorkflowOptions({
+      workflow: undefinedableInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: undefined,
+    });
+
+    acceptsUndefinedableInputWorkflowOptions({
+      workflow: undefinedableInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+      // @ts-expect-error - arg shape must match workflow input
+      arg: { invalid: true },
+    });
+
+    type UndefinedableArg = StartWorkflowOptions<UndefinedableInputWorkflow>["arg"];
+    expectTypeOf<UndefinedableArg>().toEqualTypeOf<{ value: number } | undefined>();
   });
 
   it("keeps machine user names type-safe via auth.invoker", () => {

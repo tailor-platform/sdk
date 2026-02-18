@@ -40,8 +40,8 @@ type WorkflowInput<W extends WorkflowLike> = W["mainJob"]["body"] extends (
 
 type StartWorkflowArgOption<W extends WorkflowLike> = WorkflowLike extends W
   ? { arg?: Jsonifiable }
-  : [WorkflowInput<W>] extends [undefined]
-    ? { arg?: undefined }
+  : undefined extends WorkflowInput<W>
+    ? { arg?: WorkflowInput<W> }
     : { arg: WorkflowInput<W> };
 
 export type StartWorkflowOptions<W extends WorkflowLike = WorkflowLike> = {
