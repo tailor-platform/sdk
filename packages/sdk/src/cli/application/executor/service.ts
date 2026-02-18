@@ -7,7 +7,6 @@ import {
   type Executor,
   type ExecutorServiceConfig,
 } from "@/parser/service/executor";
-import type { PluginManager } from "@/plugin/manager";
 
 /**
  * Information about a plugin-generated executor converted to Executor format
@@ -35,8 +34,6 @@ export type ExecutorService = {
 export interface CreateExecutorServiceParams {
   /** The executor service configuration */
   config: ExecutorServiceConfig;
-  /** Plugin manager for processing plugin-generated executors */
-  pluginManager?: PluginManager;
 }
 
 /**

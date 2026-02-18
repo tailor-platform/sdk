@@ -1,7 +1,25 @@
+import * as path from "pathe";
 import { createAuthService, type AuthService } from "@/cli/application/auth/service";
 import { createExecutorService, type ExecutorService } from "@/cli/application/executor/service";
 import { createResolverService, type ResolverService } from "@/cli/application/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
+import {
+  loadAndCollectJobs,
+  printLoadedWorkflows,
+  type WorkflowLoadResult,
+} from "@/cli/application/workflow/service";
+import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
+import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
+import { buildTriggerContext } from "@/cli/bundler/trigger-context";
+import {
+  bundleWorkflowJobs,
+  type BundleWorkflowJobsResult,
+} from "@/cli/bundler/workflow/workflow-bundler";
+import { type LoadedConfig } from "@/cli/config-loader";
+import { generatePluginExecutorFiles } from "@/cli/generator/plugin-executor-generator";
+import { generatePluginTypeFiles } from "@/cli/generator/plugin-type-generator";
+import { getDistDir } from "@/cli/utils/dist-dir";
+import { logger } from "@/cli/utils/logger";
 import { type AppConfig } from "@/parser/app-config";
 import { type AuthConfig } from "@/parser/service/auth";
 import { type ExecutorServiceInput } from "@/parser/service/executor";
@@ -31,8 +49,19 @@ export type Application = {
   readonly workflowConfig: WorkflowServiceConfig | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly env: Readonly<Record<string, string | number | boolean>>;
-  readonly applications: ReadonlyArray<Application>;
 };
+
+/**
+ * Result of loading the application
+ */
+export interface LoadApplicationResult {
+  /** Fully initialized application */
+  application: Application;
+  /** Workflow loading result (if workflows are configured) */
+  workflowResult?: WorkflowLoadResult;
+  /** Workflow bundling result (if workflows were bundled) */
+  workflowBuildResult?: BundleWorkflowJobsResult;
+}
 
 type DefineTailorDBResult = {
   tailorDBServices: TailorDBService[];
@@ -146,35 +175,19 @@ function defineAuth(
   return { authService, subgraphs };
 }
 
-type DefineExecutorResult = {
-  executorService: ExecutorService | undefined;
-};
-
 function defineExecutor(
   config: ExecutorServiceInput | undefined,
-  pluginManager?: PluginManager,
-): DefineExecutorResult {
-  if (!config) {
-    return { executorService: undefined };
+  hasPluginExecutors: boolean,
+): ExecutorService | undefined {
+  if (!config && !hasPluginExecutors) {
+    return undefined;
   }
-  return { executorService: createExecutorService({ config, pluginManager }) };
+  return createExecutorService({ config: config ?? { files: [] } });
 }
-
-type DefineWorkflowResult = {
-  workflowConfig: WorkflowServiceConfig | undefined;
-};
-
-function defineWorkflow(config: WorkflowServiceConfig | undefined): DefineWorkflowResult {
-  return { workflowConfig: config };
-}
-
-type DefineStaticWebsitesResult = {
-  staticWebsiteServices: StaticWebsite[];
-};
 
 function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
-): DefineStaticWebsitesResult {
+): StaticWebsite[] {
   const staticWebsiteServices: StaticWebsite[] = [];
   const websiteNames = new Set<string>();
 
@@ -187,21 +200,55 @@ function defineStaticWebsites(
     staticWebsiteServices.push(website);
   });
 
-  return { staticWebsiteServices };
+  return staticWebsiteServices;
+}
+
+function buildApplication(params: {
+  config: AppConfig;
+  tailordbResult: DefineTailorDBResult;
+  resolverResult: DefineResolverResult;
+  idpResult: DefineIdpResult;
+  authResult: DefineAuthResult;
+  executorService: ExecutorService | undefined;
+  workflowConfig: WorkflowServiceConfig | undefined;
+  staticWebsiteServices: StaticWebsite[];
+  env: Record<string, string | number | boolean>;
+}): Application {
+  return {
+    name: params.config.name,
+    config: params.config,
+    subgraphs: [
+      ...params.tailordbResult.subgraphs,
+      ...params.resolverResult.subgraphs,
+      ...params.idpResult.subgraphs,
+      ...params.authResult.subgraphs,
+    ],
+    tailorDBServices: params.tailordbResult.tailorDBServices,
+    externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
+    resolverServices: params.resolverResult.resolverServices,
+    idpServices: params.idpResult.idpServices,
+    authService: params.authResult.authService,
+    executorService: params.executorService,
+    workflowConfig: params.workflowConfig,
+    staticWebsiteServices: params.staticWebsiteServices,
+    env: params.env,
+  };
 }
 
 /**
  * Parameters for defining an application
  */
 export interface DefineApplicationParams {
-  /** Application configuration object */
-  config: AppConfig;
+  /** Application configuration object (must be loaded via loadConfig) */
+  config: LoadedConfig;
   /** Plugin manager for processing plugins */
   pluginManager?: PluginManager;
 }
 
 /**
  * Define a Tailor application from the given configuration.
+ * This is a lightweight, synchronous function that creates the application
+ * structure without loading types or bundling files.
  * @param params - Parameters for defining the application
  * @returns Configured application instance
  */
@@ -215,34 +262,150 @@ export function defineApplication(params: DefineApplicationParams): Application 
     tailordbResult.tailorDBServices,
     tailordbResult.externalTailorDBNamespaces,
   );
-  const executorResult = defineExecutor(config.executor, pluginManager);
-  const workflowResult = defineWorkflow(config.workflow);
-  const staticWebsiteResult = defineStaticWebsites(config.staticWebsites);
+  const executorService = defineExecutor(config.executor, false);
+  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
 
-  const subgraphs = [
-    ...tailordbResult.subgraphs,
-    ...resolverResult.subgraphs,
-    ...idpResult.subgraphs,
-    ...authResult.subgraphs,
-  ];
-
-  const application: Application = {
-    name: config.name,
+  return buildApplication({
     config,
-    subgraphs,
-    tailorDBServices: tailordbResult.tailorDBServices,
-    externalTailorDBNamespaces: tailordbResult.externalTailorDBNamespaces,
-    resolverServices: resolverResult.resolverServices,
-    idpServices: idpResult.idpServices,
-    authService: authResult.authService,
-    executorService: executorResult.executorService,
-    workflowConfig: workflowResult.workflowConfig,
-    staticWebsiteServices: staticWebsiteResult.staticWebsiteServices,
+    tailordbResult,
+    resolverResult,
+    idpResult,
+    authResult,
+    executorService,
+    workflowConfig: config.workflow,
+    staticWebsiteServices,
     env: config.env ?? {},
-    get applications() {
-      return [application];
-    },
-  };
+  });
+}
 
-  return application;
+function generatePluginFilesIfNeeded(
+  pluginManager: PluginManager | undefined,
+  tailorDBServices: ReadonlyArray<TailorDBService>,
+  configPath: string,
+): string[] {
+  if (!pluginManager) return [];
+
+  const sourceTypeInfoMap = new Map<string, { filePath: string; exportName: string }>();
+  for (const db of tailorDBServices) {
+    const typeSourceInfo = db.getTypeSourceInfo();
+    for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
+      if (sourceInfo.filePath) {
+        sourceTypeInfoMap.set(typeName, {
+          filePath: sourceInfo.filePath,
+          exportName: sourceInfo.exportName,
+        });
+      }
+    }
+  }
+
+  return pluginManager.generatePluginFiles({
+    outputDir: path.join(getDistDir(), "plugin"),
+    sourceTypeInfoMap,
+    configPath,
+    typeGenerator: generatePluginTypeFiles,
+    executorGenerator: generatePluginExecutorFiles,
+  });
+}
+
+/**
+ * Load and fully initialize a Tailor application.
+ * This performs all I/O-heavy operations: loading types, processing plugins,
+ * generating plugin files, bundling, and loading definitions for validation.
+ * @param params - Parameters for defining and loading the application
+ * @returns Fully initialized application with workflow results
+ */
+export async function loadApplication(
+  params: DefineApplicationParams,
+): Promise<LoadApplicationResult> {
+  const { config, pluginManager } = params;
+
+  // 1. Define services (synchronous)
+  const tailordbResult = defineTailorDB(config.db, pluginManager);
+  const resolverResult = defineResolver(config.resolver);
+  const idpResult = defineIdp(config.idp);
+  const authResult = defineAuth(
+    config.auth,
+    tailordbResult.tailorDBServices,
+    tailordbResult.externalTailorDBNamespaces,
+  );
+  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
+
+  // 2. Load TailorDB types and process namespace plugins
+  for (const tailordb of tailordbResult.tailorDBServices) {
+    await tailordb.loadTypes();
+    await tailordb.processNamespacePlugins();
+  }
+
+  // 3. Generate plugin files and determine executor file paths
+  const pluginExecutorFiles = generatePluginFilesIfNeeded(
+    pluginManager,
+    tailordbResult.tailorDBServices,
+    config.path,
+  );
+
+  // 4. Determine final executorService (const, no reassignment)
+  const executorService = defineExecutor(config.executor, pluginExecutorFiles.length > 0);
+
+  // 5. Load and collect workflows
+  const workflowConfig = config.workflow;
+  const workflowResult = workflowConfig ? await loadAndCollectJobs(workflowConfig) : undefined;
+
+  // 6. Build trigger context for workflow/job trigger transformation
+  const triggerContext = await buildTriggerContext(workflowConfig);
+
+  // 7. Bundle resolvers
+  for (const pipeline of resolverResult.resolverServices) {
+    await bundleResolvers(pipeline.namespace, pipeline.config, triggerContext);
+  }
+
+  // 8. Bundle executors
+  if (executorService) {
+    await bundleExecutors({
+      config: executorService.config,
+      triggerContext,
+      additionalFiles: [...pluginExecutorFiles],
+    });
+  }
+
+  // 9. Bundle workflows
+  let workflowBuildResult: BundleWorkflowJobsResult | undefined;
+  if (workflowResult && workflowResult.jobs.length > 0) {
+    const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
+    workflowBuildResult = await bundleWorkflowJobs(
+      workflowResult.jobs,
+      mainJobNames,
+      config.env ?? {},
+      triggerContext,
+    );
+  }
+
+  // 10. Load resolver and executor definitions (for validation/logging)
+  for (const pipeline of resolverResult.resolverServices) {
+    await pipeline.loadResolvers();
+  }
+  if (executorService) {
+    await executorService.loadExecutors();
+    if (pluginExecutorFiles.length > 0) {
+      await executorService.loadPluginExecutorFiles([...pluginExecutorFiles]);
+    }
+  }
+  if (workflowResult) {
+    printLoadedWorkflows(workflowResult);
+  }
+  logger.newline();
+
+  // 11. Build immutable Application
+  const application = buildApplication({
+    config,
+    tailordbResult,
+    resolverResult,
+    idpResult,
+    authResult,
+    executorService,
+    workflowConfig,
+    staticWebsiteServices,
+    env: config.env ?? {},
+  });
+
+  return { application, workflowResult, workflowBuildResult };
 }
