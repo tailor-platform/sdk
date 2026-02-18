@@ -284,6 +284,69 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.updatedAt?.hooks?.update?.expr).toBe("now()");
     });
 
+    it("keeps validate and hooks in nested fields", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        fields: {
+          id: { type: "uuid", required: true },
+          profile: {
+            type: "nested",
+            required: true,
+            fields: {
+              displayName: {
+                type: "string",
+                required: true,
+                validate: [
+                  {
+                    script: { expr: "((_value ?? '').length > 0)" },
+                    errorMessage: "Display name is required",
+                  },
+                ],
+                hooks: {
+                  create: { expr: "(_value ?? '').trim()" },
+                  update: { expr: "(_value ?? '').trim()" },
+                },
+              },
+              contact: {
+                type: "nested",
+                required: true,
+                fields: {
+                  email: {
+                    type: "string",
+                    required: true,
+                    validate: [
+                      {
+                        script: { expr: "((_value ?? '').includes('@'))" },
+                        errorMessage: "Email must contain @",
+                      },
+                    ],
+                    hooks: {
+                      create: { expr: "(_value ?? '').toLowerCase()" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const profileField = manifest.schema?.fields?.profile;
+      const displayNameField = profileField?.fields?.displayName;
+      const emailField = profileField?.fields?.contact?.fields?.email;
+
+      expect(displayNameField?.validate).toHaveLength(1);
+      expect(displayNameField?.validate?.[0]?.errorMessage).toBe("Display name is required");
+      expect(displayNameField?.validate?.[0]?.script?.expr).toBe("!((_value ?? '').length > 0)");
+      expect(displayNameField?.hooks?.create?.expr).toBe("(_value ?? '').trim()");
+      expect(displayNameField?.hooks?.update?.expr).toBe("(_value ?? '').trim()");
+
+      expect(emailField?.validate).toHaveLength(1);
+      expect(emailField?.validate?.[0]?.errorMessage).toBe("Email must contain @");
+      expect(emailField?.validate?.[0]?.script?.expr).toBe("!((_value ?? '').includes('@'))");
+      expect(emailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
+    });
+
     it("handles serial configuration", () => {
       const snapshotType = createTestSnapshotType("Order", {
         fields: {
