@@ -29,10 +29,8 @@ export { defineConfig, defineGenerators, definePlugins } from "@/configure/confi
 
 // Plugin types for custom plugin development
 export type {
-  PluginBase,
-  PluginConfig,
+  Plugin,
   PluginConfigs,
-  PluginNamespaceGeneratedTypeEntry,
   PluginOutput,
   NamespacePluginOutput,
   PluginProcessContext,

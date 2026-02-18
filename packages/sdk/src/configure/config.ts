@@ -1,6 +1,6 @@
 import type { AppConfig } from "@/parser/app-config/types";
 import type { GeneratorConfig } from "@/parser/generator-config/types";
-import type { PluginConfig } from "@/parser/plugin-config/types";
+import type { Plugin } from "@/parser/plugin-config/types";
 
 /**
  * Define a Tailor SDK application configuration with shallow exactness.
@@ -38,6 +38,6 @@ export function defineGenerators(...configs: GeneratorConfig[]) {
  */
 /* @__NO_SIDE_EFFECTS__ */
 // eslint-disable-next-line jsdoc/require-jsdoc
-export function definePlugins(...configs: PluginConfig[]) {
+export function definePlugins(...configs: Plugin[]) {
   return configs;
 }

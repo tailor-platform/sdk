@@ -27,6 +27,7 @@ export default defineConfig({
     "src/configure/index.ts",
     "src/cli/index.ts",
     "src/cli/lib.ts",
+    "src/cli/skills.ts",
     "src/utils/test/index.ts",
     "src/kysely/index.ts",
     "src/plugin/index.ts",

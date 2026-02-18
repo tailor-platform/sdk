@@ -47,7 +47,7 @@ import type { Application } from "@/cli/application";
 import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
-import type { PluginBase } from "@/parser/plugin-config/types";
+import type { Plugin } from "@/parser/plugin-config/types";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -91,7 +91,7 @@ export async function apply(options?: ApplyOptions) {
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
   if (plugins.length > 0) {
-    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+    pluginManager = new PluginManager(plugins as unknown as Plugin[]);
   }
 
   // Generate user types from loaded config

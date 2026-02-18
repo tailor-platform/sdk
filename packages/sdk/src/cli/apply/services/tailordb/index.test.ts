@@ -7,6 +7,7 @@ import type { ExecutorService } from "@/cli/application/executor/service";
 import type { TailorDBService } from "@/cli/application/tailordb/service";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {
@@ -254,6 +255,104 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0].name).toBe("my-tailordb");
       expect(result.resourceOwners.has("other-app")).toBe(true);
+    });
+  });
+
+  describe("nested field manifest mapping", () => {
+    test("includes validate and hooks for nested fields", async () => {
+      const client = createMockClient([]);
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+
+      const testType: TailorDBType = {
+        name: "User",
+        pluralForm: "users",
+        description: "User type",
+        fields: {
+          profile: {
+            name: "profile",
+            config: {
+              type: "nested",
+              required: true,
+              fields: {
+                displayName: {
+                  type: "string",
+                  required: true,
+                  validate: [
+                    {
+                      script: { expr: "((_value ?? '').length > 0)" },
+                      errorMessage: "Display name is required",
+                    },
+                  ],
+                  hooks: {
+                    create: { expr: "(_value ?? '').trim()" },
+                    update: { expr: "(_value ?? '').trim()" },
+                  },
+                },
+                contact: {
+                  type: "nested",
+                  required: true,
+                  fields: {
+                    email: {
+                      type: "string",
+                      required: true,
+                      validate: [
+                        {
+                          script: { expr: "((_value ?? '').includes('@'))" },
+                          errorMessage: "Email must contain @",
+                        },
+                      ],
+                      hooks: {
+                        create: { expr: "(_value ?? '').toLowerCase()" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      vi.mocked(tailorDBService.getTypes).mockReturnValue({
+        [testType.name]: testType,
+      });
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.creates).toHaveLength(1);
+      const createdType = result.changeSet.type.creates[0].request.tailordbType;
+      const profileField = createdType?.schema?.fields?.profile;
+      const displayNameField = profileField?.fields?.displayName;
+      const contactEmailField = profileField?.fields?.contact?.fields?.email;
+
+      expect(displayNameField?.validate).toHaveLength(1);
+      expect(displayNameField?.validate?.[0]?.errorMessage).toBe("Display name is required");
+      expect(displayNameField?.validate?.[0]?.script?.expr).toContain(
+        "!((_value ?? '').length > 0)",
+      );
+      expect(displayNameField?.hooks?.create?.expr).toBe("(_value ?? '').trim()");
+      expect(displayNameField?.hooks?.update?.expr).toBe("(_value ?? '').trim()");
+
+      expect(contactEmailField?.validate).toHaveLength(1);
+      expect(contactEmailField?.validate?.[0]?.errorMessage).toBe("Email must contain @");
+      expect(contactEmailField?.validate?.[0]?.script?.expr).toContain(
+        "!((_value ?? '').includes('@'))",
+      );
+      expect(contactEmailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
     });
   });
 });

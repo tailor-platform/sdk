@@ -34,7 +34,7 @@ import {
   type SchemaSnapshot,
 } from "./snapshot";
 import { generateSchemaFile, generateDiffFiles } from "./template-generator";
-import type { PluginBase } from "@/parser/plugin-config";
+import type { Plugin } from "@/parser/plugin-config";
 
 export interface GenerateOptions {
   configPath?: string;
@@ -136,7 +136,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
   if (plugins.length > 0) {
-    pluginManager = new PluginManager(plugins as unknown as PluginBase[]);
+    pluginManager = new PluginManager(plugins as unknown as Plugin[]);
   }
 
   // Load application and all types

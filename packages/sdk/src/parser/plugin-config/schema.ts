@@ -1,8 +1,10 @@
 import { cloneDeep } from "es-toolkit";
 import { z } from "zod";
-import type { PluginBase } from "./types";
+import { functionSchema } from "@/parser/service/common";
+import { TailorFieldSchema } from "@/parser/service/resolver/schema";
+import type { Plugin } from "./types";
 
-type PluginConfigSchemaField = NonNullable<PluginBase["configSchema"]>;
+type PluginConfigSchemaField = NonNullable<Plugin["configSchema"]>;
 
 type UnauthenticatedTailorUser = {
   id: string;
@@ -66,43 +68,37 @@ const _PluginOutputSchema = z.object({
   executors: z.array(PluginGeneratedExecutorSchema).optional(),
 });
 
+// Validates TailorAnyField shape using TailorFieldSchema,
+// wrapped in z.custom to preserve runtime methods (_metadata, parse, etc.)
+const tailorAnyFieldSchema = z.custom<PluginConfigSchemaField>(
+  (val) => TailorFieldSchema.safeParse(val).success,
+);
+
 // Custom plugin schema (object form)
-// Using passthrough() to preserve fields like importPath, configSchema, processNamespace
+// Using passthrough() to preserve additional properties on Plugin instances
 const CustomPluginSchema = z
   .object({
     id: z.string(),
     description: z.string(),
     importPath: z.string(),
-    configSchema: z.any().optional(),
-    pluginConfigSchema: z.any().optional(),
-    pluginConfig: z.any().optional(),
-    // Use any for the process function since we're not strictly validating function signatures
-    process: z.any().optional(),
-    processNamespace: z.any().optional(),
+    configSchema: tailorAnyFieldSchema.optional(),
+    pluginConfigSchema: tailorAnyFieldSchema.optional(),
+    pluginConfig: z.unknown().optional(),
+    processType: functionSchema.optional(),
+    processNamespace: functionSchema.optional(),
+    typeConfigRequired: z.union([z.boolean(), functionSchema]).optional(),
+    configTypeTemplate: z.string().optional(),
   })
   .superRefine((plugin, ctx) => {
-    if (plugin.process && !plugin.configSchema) {
+    if (plugin.processType && !plugin.configSchema) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "process requires configSchema to be defined.",
+        message: "processType requires configSchema to be defined.",
         path: ["configSchema"],
       });
     }
   })
   .passthrough();
-
-// Custom plugin tuple schema (PluginBase, options)
-// Allows custom plugins to receive plugin config via definePlugins()
-const CustomPluginTupleSchema = z.tuple([CustomPluginSchema, z.unknown()]);
-
-/**
- * Type guard to check if a value is a PluginBase object
- * @param value - Value to check
- * @returns True if value is a PluginBase object
- */
-function isPluginBase(value: unknown): value is PluginBase {
-  return CustomPluginSchema.safeParse(value).success;
-}
 
 function normalizePluginConfigSchema(schema: PluginConfigSchemaField): PluginConfigSchemaField {
   const seen = new Set<PluginConfigSchemaField>();
@@ -130,7 +126,7 @@ function clonePluginConfigSchema(schema: PluginConfigSchemaField): PluginConfigS
   return cloneDeep(schema) as PluginConfigSchemaField;
 }
 
-function normalizePluginBase(plugin: PluginBase): PluginBase {
+function normalizePlugin(plugin: Plugin): Plugin {
   let normalized = plugin;
 
   if (normalized.configSchema) {
@@ -184,26 +180,10 @@ function validatePluginConfig(
 
 /**
  * Creates a PluginConfigSchema for custom plugins
- * @returns Plugin config schema that validates and transforms PluginBase instances
+ * @returns Plugin config schema that validates and transforms Plugin instances
  */
 export function createPluginConfigSchema() {
-  return z
-    .union([CustomPluginSchema, CustomPluginTupleSchema])
-    .transform((plugin) => {
-      // Tuple form: [PluginBase, options]
-      if (Array.isArray(plugin)) {
-        const [first, options] = plugin;
-        if (isPluginBase(first)) {
-          const pluginBase = first as PluginBase;
-          return normalizePluginBase({ ...pluginBase, pluginConfig: options } as PluginBase);
-        }
-        throw new Error(`Invalid plugin configuration: expected PluginBase object`);
-      }
-      // Object form: custom plugin without plugin config
-      return normalizePluginBase(plugin as PluginBase);
-    })
-    .brand("Plugin");
+  return CustomPluginSchema.transform((plugin) => normalizePlugin(plugin as Plugin)).brand(
+    "Plugin",
+  );
 }
-
-export type PluginConfigSchemaType = ReturnType<typeof createPluginConfigSchema>;
-export type Plugin = z.output<PluginConfigSchemaType>;

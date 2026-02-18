@@ -102,7 +102,7 @@
     "jsdoc/check-tag-names": [
       "warn",
       {
-        "definedTags": ["tailor-platform/sdk"]
+        "definedTags": ["tailor-platform/sdk", "lintignore"]
       }
     ],
     "jsdoc/empty-tags": "warn",
@@ -218,6 +218,10 @@
               {
                 "group": ["**/configure/**", "@/configure/**"],
                 "message": "Plugin module should not import from configure module. Please use parser module as an intermediary."
+              },
+              {
+                "group": ["**/plugin/builtin/**", "@/plugin/builtin/**"],
+                "message": "Plugin module should not import from builtin plugins. Built-in plugins are exported separately."
               }
             ]
           }
@@ -225,7 +229,23 @@
       }
     },
     {
-      "files": ["src/plugin/**/*.test.ts"],
+      "files": ["src/plugin/builtin/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Plugin builtin module should not import from cli module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.test.ts"],
       "rules": {
         "no-restricted-imports": "off"
       }

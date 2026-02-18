@@ -184,15 +184,7 @@ function convertFieldConfigToProto(
         ? (config.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [])
         : [],
     description: config.description || "",
-    validate: (config.validate ?? []).map((val) => ({
-      action: TailorDBType_PermitAction.DENY,
-      errorMessage: val.errorMessage || "",
-      ...(val.script && {
-        script: {
-          expr: val.script.expr ? `!${val.script.expr}` : "",
-        },
-      }),
-    })),
+    validate: toProtoSnapshotFieldValidate(config),
     array: config.array ?? false,
     index: config.index ?? false,
     unique: config.unique ?? false,
@@ -201,20 +193,7 @@ function convertFieldConfigToProto(
     foreignKeyField: config.foreignKeyField,
     required: config.required ?? true,
     vector: config.vector ?? false,
-    ...(config.hooks && {
-      hooks: {
-        create: config.hooks.create
-          ? {
-              expr: config.hooks.create.expr || "",
-            }
-          : undefined,
-        update: config.hooks.update
-          ? {
-              expr: config.hooks.update.expr || "",
-            }
-          : undefined,
-      },
-    }),
+    ...toProtoSnapshotFieldHooks(config),
     ...(config.serial && {
       serial: {
         start: BigInt(config.serial.start),
@@ -236,6 +215,42 @@ function convertFieldConfigToProto(
   return fieldEntry;
 }
 
+function toProtoSnapshotFieldValidate(
+  config: SnapshotFieldConfig,
+): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["validate"] {
+  return (config.validate ?? []).map((val) => ({
+    action: TailorDBType_PermitAction.DENY,
+    errorMessage: val.errorMessage || "",
+    ...(val.script && {
+      script: {
+        expr: val.script.expr ? `!${val.script.expr}` : "",
+      },
+    }),
+  }));
+}
+
+function toProtoSnapshotFieldHooks(
+  config: SnapshotFieldConfig,
+): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
+  if (!config.hooks) {
+    return {};
+  }
+  return {
+    hooks: {
+      create: config.hooks.create
+        ? {
+            expr: config.hooks.create.expr || "",
+          }
+        : undefined,
+      update: config.hooks.update
+        ? {
+            expr: config.hooks.update.expr || "",
+          }
+        : undefined,
+    },
+  };
+}
+
 /**
  * Process nested fields from snapshot format to proto format
  * @param {Record<string, SnapshotFieldConfig>} fields - Nested fields
@@ -253,13 +268,14 @@ function processNestedFieldsFromSnapshot(
         type: "nested",
         allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
         description: fieldConfig.description || "",
-        validate: [],
+        validate: toProtoSnapshotFieldValidate(fieldConfig),
         required: fieldConfig.required ?? true,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
+        ...toProtoSnapshotFieldHooks(fieldConfig),
         fields: deepNestedFields,
       };
     } else {
@@ -270,13 +286,14 @@ function processNestedFieldsFromSnapshot(
             ? (fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [])
             : [],
         description: fieldConfig.description || "",
-        validate: [],
+        validate: toProtoSnapshotFieldValidate(fieldConfig),
         required: fieldConfig.required ?? true,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
+        ...toProtoSnapshotFieldHooks(fieldConfig),
         ...(fieldConfig.serial && {
           serial: {
             start: BigInt(fieldConfig.serial.start),

@@ -50,6 +50,8 @@ export interface PluginGeneratedTypeSource {
   generatedTypeKind?: string;
   /** Plugin config used to generate this type */
   pluginConfig?: unknown;
+  /** Namespace where this type was generated */
+  namespace?: string;
 }
 
 /**
