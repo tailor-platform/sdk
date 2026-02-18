@@ -32,17 +32,21 @@ type AuthInvoker<M extends string = string> = {
   machineUserName: M;
 };
 
-type WorkflowInput<W extends WorkflowLike> = W["mainJob"]["body"] extends (
-  ...args: infer Args
-) => unknown
-  ? Args[0]
+type WorkflowInput<W extends WorkflowLike> = W extends WorkflowLike
+  ? W["mainJob"]["body"] extends (...args: infer Args) => unknown
+    ? Args[0]
+    : never
   : never;
 
-type StartWorkflowArgOption<W extends WorkflowLike> = WorkflowLike extends W
+type StartWorkflowArgOptionForSingleWorkflow<W extends WorkflowLike> = WorkflowLike extends W
   ? { arg?: Jsonifiable }
   : undefined extends WorkflowInput<W>
     ? { arg?: WorkflowInput<W> }
     : { arg: WorkflowInput<W> };
+
+type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
+  ? StartWorkflowArgOptionForSingleWorkflow<W>
+  : never;
 
 /**
  * @deprecated Use StartWorkflowTypedOptions instead.
@@ -57,13 +61,16 @@ export interface StartWorkflowOptions {
   interval?: number;
 }
 
-export type StartWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> = {
+type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
   authInvoker: AuthInvoker<string>;
   workspaceId?: string;
   profile?: string;
   interval?: number;
-} & StartWorkflowArgOption<W>;
+};
+
+export type StartWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> =
+  W extends WorkflowLike ? StartWorkflowTypedBaseOptions<W> & StartWorkflowArgOption<W> : never;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -137,7 +144,10 @@ export async function waitForExecution(
       if (execution.status !== lastStatus) {
         if (showProgress) {
           spinner?.stop();
-          logger.info(`Status: ${coloredStatus}`, { mode: "stream", indent: 2 });
+          logger.info(`Status: ${coloredStatus}`, {
+            mode: "stream",
+            indent: 2,
+          });
           spinner?.start(`Waiting for workflow to complete...`);
         }
         lastStatus = execution.status;

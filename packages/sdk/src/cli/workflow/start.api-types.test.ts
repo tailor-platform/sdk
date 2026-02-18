@@ -29,6 +29,16 @@ const calculationWorkflow = createWorkflow({
   mainJob: calculationJob,
 });
 
+const textJob = createWorkflowJob({
+  name: "text",
+  body: (input: { message: string }) => ({ message: input.message }),
+});
+
+const textWorkflow = createWorkflow({
+  name: "text-workflow",
+  mainJob: textJob,
+});
+
 const noInputJob = createWorkflowJob({
   name: "no-input",
   body: () => ({ ok: true as const }),
@@ -63,6 +73,34 @@ const undefinedableInputWorkflow: UndefinedableInputWorkflow = {
   },
 };
 
+type PlainWorkflowA = {
+  name: "plain-a";
+  mainJob: {
+    body: (input: { foo: number }) => { foo: number };
+  };
+};
+
+type PlainWorkflowB = {
+  name: "plain-b";
+  mainJob: {
+    body: (input: { bar: string }) => { bar: string };
+  };
+};
+
+const plainWorkflowA: PlainWorkflowA = {
+  name: "plain-a",
+  mainJob: {
+    body: (input) => ({ foo: input.foo }),
+  },
+};
+
+const plainWorkflowB: PlainWorkflowB = {
+  name: "plain-b",
+  mainJob: {
+    body: (input) => ({ bar: input.bar }),
+  },
+};
+
 const acceptsCalculationWorkflowOptions = (
   _options: StartWorkflowTypedOptions<typeof calculationWorkflow>,
 ): void => {};
@@ -81,6 +119,18 @@ const acceptsUndefinedableInputWorkflowOptions = (
 
 const acceptsDefaultWorkflowOptions = (_options: StartWorkflowTypedOptions): void => {};
 const acceptsDeprecatedOptions = (_options: StartWorkflowOptions): void => {};
+const acceptsUnionWorkflowOptions = (
+  _options: StartWorkflowTypedOptions<typeof calculationWorkflow | typeof noInputWorkflow>,
+): void => {};
+const acceptsUnionInputWorkflowOptions = (
+  _options: StartWorkflowTypedOptions<typeof calculationWorkflow | typeof textWorkflow>,
+): void => {};
+const acceptsMixedWorkflowOptions = (
+  _options: StartWorkflowTypedOptions<typeof calculationWorkflow | typeof optionalInputWorkflow>,
+): void => {};
+const acceptsPlainUnionWorkflowOptions = (
+  _options: StartWorkflowTypedOptions<PlainWorkflowA | PlainWorkflowB>,
+): void => {};
 
 describe("startWorkflow API types", () => {
   it("infers arg type from workflow", () => {
@@ -203,6 +253,74 @@ describe("startWorkflow API types", () => {
       authInvoker: auth.invoker("admin"),
       arg: { a: 1, b: 2 },
     });
+  });
+
+  it("supports union workflow types without collapsing arg type", () => {
+    acceptsUnionWorkflowOptions({
+      workflow: calculationWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: { a: 1, b: 2 },
+    });
+
+    acceptsUnionWorkflowOptions({
+      workflow: noInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+    });
+  });
+
+  it("supports union workflow input types without collapsing arg type", () => {
+    acceptsUnionInputWorkflowOptions({
+      workflow: calculationWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: { a: 1, b: 2 },
+    });
+
+    acceptsUnionInputWorkflowOptions({
+      workflow: textWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: { message: "hello" },
+    });
+
+    type UnionInputArg = StartWorkflowTypedOptions<
+      typeof calculationWorkflow | typeof textWorkflow
+    >["arg"];
+    expectTypeOf<UnionInputArg>().toEqualTypeOf<{ a: number; b: number } | { message: string }>();
+  });
+
+  it("keeps workflow-specific arg requirements for mixed union workflows", () => {
+    acceptsMixedWorkflowOptions({
+      workflow: optionalInputWorkflow,
+      authInvoker: auth.invoker("admin"),
+    });
+
+    acceptsMixedWorkflowOptions({
+      workflow: calculationWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: { a: 1, b: 2 },
+    });
+
+    // @ts-expect-error - calculation workflow branch still requires arg
+    acceptsMixedWorkflowOptions({
+      workflow: calculationWorkflow,
+      authInvoker: auth.invoker("admin"),
+    });
+  });
+
+  it("supports plain workflow unions without collapsing arg type", () => {
+    acceptsPlainUnionWorkflowOptions({
+      workflow: plainWorkflowA,
+      authInvoker: auth.invoker("admin"),
+      arg: { foo: 1 },
+    });
+
+    acceptsPlainUnionWorkflowOptions({
+      workflow: plainWorkflowB,
+      authInvoker: auth.invoker("admin"),
+      arg: { bar: "x" },
+    });
+
+    type PlainUnionArg = StartWorkflowTypedOptions<PlainWorkflowA | PlainWorkflowB>["arg"];
+    expectTypeOf<PlainUnionArg>().toEqualTypeOf<{ foo: number } | { bar: string }>();
   });
 
   it("keeps deprecated StartWorkflowOptions shape available", () => {
