@@ -1330,7 +1330,7 @@ function generateTailorDBTypeManifest(
         foreignKeyField: fieldConfig.foreignKeyField,
         required: fieldConfig.required !== false,
         vector: fieldConfig.vector || false,
-        hooks: toProtoFieldHooks(fieldConfig),
+        ...toProtoFieldHooks(fieldConfig),
         ...(fieldConfig.serial && {
           serial: {
             start: fieldConfig.serial.start as unknown as bigint,
@@ -1440,21 +1440,24 @@ function toProtoFieldValidate(
 
 function toProtoFieldHooks(
   fieldConfig: OperatorFieldConfig,
-): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["hooks"] {
-  return fieldConfig.hooks
-    ? {
-        create: fieldConfig.hooks.create
-          ? {
-              expr: fieldConfig.hooks.create.expr || "",
-            }
-          : undefined,
-        update: fieldConfig.hooks.update
-          ? {
-              expr: fieldConfig.hooks.update.expr || "",
-            }
-          : undefined,
-      }
-    : undefined;
+): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
+  if (!fieldConfig.hooks) {
+    return {};
+  }
+  return {
+    hooks: {
+      create: fieldConfig.hooks.create
+        ? {
+            expr: fieldConfig.hooks.create.expr || "",
+          }
+        : undefined,
+      update: fieldConfig.hooks.update
+        ? {
+            expr: fieldConfig.hooks.update.expr || "",
+          }
+        : undefined,
+    },
+  };
 }
 
 function processNestedFields(
@@ -1478,7 +1481,7 @@ function processNestedFields(
         unique: false,
         foreignKey: false,
         vector: false,
-        hooks: toProtoFieldHooks(nestedFieldConfig),
+        ...toProtoFieldHooks(nestedFieldConfig),
         fields: deepNestedFields,
       };
     } else {
@@ -1493,7 +1496,7 @@ function processNestedFields(
         unique: false,
         foreignKey: false,
         vector: false,
-        hooks: toProtoFieldHooks(nestedFieldConfig),
+        ...toProtoFieldHooks(nestedFieldConfig),
         ...(nestedFieldConfig.serial && {
           serial: {
             start: nestedFieldConfig.serial.start as unknown as bigint,

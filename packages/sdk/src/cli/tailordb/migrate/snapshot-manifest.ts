@@ -193,7 +193,7 @@ function convertFieldConfigToProto(
     foreignKeyField: config.foreignKeyField,
     required: config.required ?? true,
     vector: config.vector ?? false,
-    hooks: toProtoSnapshotFieldHooks(config),
+    ...toProtoSnapshotFieldHooks(config),
     ...(config.serial && {
       serial: {
         start: BigInt(config.serial.start),
@@ -231,21 +231,24 @@ function toProtoSnapshotFieldValidate(
 
 function toProtoSnapshotFieldHooks(
   config: SnapshotFieldConfig,
-): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["hooks"] {
-  return config.hooks
-    ? {
-        create: config.hooks.create
-          ? {
-              expr: config.hooks.create.expr || "",
-            }
-          : undefined,
-        update: config.hooks.update
-          ? {
-              expr: config.hooks.update.expr || "",
-            }
-          : undefined,
-      }
-    : undefined;
+): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
+  if (!config.hooks) {
+    return {};
+  }
+  return {
+    hooks: {
+      create: config.hooks.create
+        ? {
+            expr: config.hooks.create.expr || "",
+          }
+        : undefined,
+      update: config.hooks.update
+        ? {
+            expr: config.hooks.update.expr || "",
+          }
+        : undefined,
+    },
+  };
 }
 
 /**
@@ -272,7 +275,7 @@ function processNestedFieldsFromSnapshot(
         unique: false,
         foreignKey: false,
         vector: false,
-        hooks: toProtoSnapshotFieldHooks(fieldConfig),
+        ...toProtoSnapshotFieldHooks(fieldConfig),
         fields: deepNestedFields,
       };
     } else {
@@ -290,7 +293,7 @@ function processNestedFieldsFromSnapshot(
         unique: false,
         foreignKey: false,
         vector: false,
-        hooks: toProtoSnapshotFieldHooks(fieldConfig),
+        ...toProtoSnapshotFieldHooks(fieldConfig),
         ...(fieldConfig.serial && {
           serial: {
             start: BigInt(fieldConfig.serial.start),
