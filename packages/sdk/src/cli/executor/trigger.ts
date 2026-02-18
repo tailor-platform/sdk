@@ -140,7 +140,8 @@ export async function triggerExecutor(
 export async function triggerExecutor<E extends ManualTriggerExecutor>(
   options: TriggerExecutorOptions | TriggerExecutorTypedOptions<E>,
 ): Promise<TriggerExecutorResult> {
-  if (!("executor" in options)) {
+  // Keep backward compatibility: if both legacy and typed keys are present, prefer legacy shape.
+  if ("executorName" in options) {
     return await triggerExecutorByName(options);
   }
 

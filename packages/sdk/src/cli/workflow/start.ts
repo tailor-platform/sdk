@@ -307,7 +307,8 @@ export async function startWorkflow(
 export async function startWorkflow<W extends WorkflowLike>(
   options: StartWorkflowOptions | StartWorkflowTypedOptions<W>,
 ): Promise<StartWorkflowResultWithWait> {
-  if (!("workflow" in options)) {
+  // Keep backward compatibility: if both legacy and typed keys are present, prefer legacy shape.
+  if ("name" in options) {
     return await startWorkflowByName(options);
   }
 
