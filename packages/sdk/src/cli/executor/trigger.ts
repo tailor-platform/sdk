@@ -15,6 +15,7 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger, styles } from "../utils/logger";
 import { watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
+import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "@/parser/service/executor/types";
 import type { JsonObject } from "@bufbuild/protobuf";
 
 /**
@@ -59,6 +60,24 @@ const headerArg = z
     message: "Header name cannot be empty",
   });
 
+type ManualTrigger = IncomingWebhookTrigger | ScheduleTriggerInput;
+
+type ManualTriggerExecutor<T extends ManualTrigger = ManualTrigger> = T extends ManualTrigger
+  ? {
+      name: string;
+      trigger: T;
+    }
+  : never;
+
+type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
+  executor: E;
+  workspaceId?: string;
+  profile?: string;
+};
+
+/**
+ * @deprecated Use TriggerExecutorTypedOptions instead.
+ */
 export interface TriggerExecutorOptions {
   executorName: string;
   payload?: JsonObject;
@@ -66,16 +85,16 @@ export interface TriggerExecutorOptions {
   profile?: string;
 }
 
+export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = ManualTriggerExecutor> =
+  E extends ManualTriggerExecutor<IncomingWebhookTrigger>
+    ? TriggerExecutorBaseOptions<E> & { payload?: JsonObject }
+    : TriggerExecutorBaseOptions<E> & { payload?: never };
+
 export interface TriggerExecutorResult {
   jobId?: string;
 }
 
-/**
- * Trigger an executor and return the job ID.
- * @param options - Options for triggering executor
- * @returns Result containing the job ID if available
- */
-export async function triggerExecutor(
+async function triggerExecutorByName(
   options: TriggerExecutorOptions,
 ): Promise<TriggerExecutorResult> {
   const accessToken = await loadAccessToken({
@@ -105,6 +124,40 @@ export async function triggerExecutor(
     }
     throw error;
   }
+}
+
+/**
+ * Trigger an executor and return the job ID.
+ * @param options - Options for triggering executor
+ * @returns Result containing the job ID if available
+ */
+export async function triggerExecutor<E extends ManualTriggerExecutor>(
+  options: TriggerExecutorTypedOptions<E>,
+): Promise<TriggerExecutorResult>;
+export async function triggerExecutor(
+  options: TriggerExecutorOptions,
+): Promise<TriggerExecutorResult>;
+export async function triggerExecutor<E extends ManualTriggerExecutor>(
+  options: TriggerExecutorOptions | TriggerExecutorTypedOptions<E>,
+): Promise<TriggerExecutorResult> {
+  // Keep backward compatibility: if both legacy and typed keys are present, prefer legacy shape.
+  if ("executorName" in options) {
+    return await triggerExecutorByName(options);
+  }
+
+  if (options.executor.trigger.kind !== "incomingWebhook" && options.payload !== undefined) {
+    throw new Error(
+      `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
+        `The payload is only available for 'incomingWebhook' trigger type.`,
+    );
+  }
+
+  return await triggerExecutorByName({
+    executorName: options.executor.name,
+    payload: options.payload,
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
 }
 
 export const triggerCommand = defineCommand({
@@ -223,7 +276,7 @@ The \`--logs\` option displays logs from the downstream execution when available
       };
     }
 
-    const result = await triggerExecutor({
+    const result = await triggerExecutorByName({
       executorName: args.executorName,
       payload,
       workspaceId: args["workspace-id"],
