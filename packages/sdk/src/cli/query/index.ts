@@ -248,7 +248,7 @@ export async function query(options: QueryOptions) {
     throw mapQueryExecutionError({
       error,
       engine,
-      namespace: "namespace" in options ? options.namespace : undefined,
+      namespace,
       machineUser: options.machineUser,
     });
   }
