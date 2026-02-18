@@ -107,7 +107,7 @@ describe("controlplane", async () => {
         config: {
           case: "function",
           value: {
-            name: "user-created__target",
+            name: "operation",
             script: expect.any(String),
             variables: expect.any(Object),
           },
