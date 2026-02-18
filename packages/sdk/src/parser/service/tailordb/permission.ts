@@ -9,7 +9,7 @@ import type {
 } from "./types";
 
 // Raw permission types for normalize function parameters
-type PermissionOperator = "=" | "!=" | "in" | "not in";
+type PermissionOperator = "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny";
 
 type ObjectOperand =
   | { user: string }
@@ -32,6 +32,8 @@ const operatorMap: Record<PermissionOperator, string> = {
   "!=": "ne",
   in: "in",
   "not in": "nin",
+  hasAny: "hasAny",
+  "not hasAny": "nhasAny",
 };
 
 type GqlPermissionPolicy = {

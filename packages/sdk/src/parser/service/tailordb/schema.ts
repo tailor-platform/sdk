@@ -97,7 +97,7 @@ const RecordPermissionOperandSchema = z.union([
   z.object({ newRecord: z.string() }),
 ]);
 
-const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
+const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in", "hasAny", "not hasAny"]);
 
 const RecordPermissionConditionSchema = z
   .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])

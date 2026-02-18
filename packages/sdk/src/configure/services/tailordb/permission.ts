@@ -45,6 +45,7 @@ type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate"
 
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
+type HasAnyOperator = "hasAny" | "not hasAny";
 
 // Helper types for User field extraction
 type StringFieldKeys<User extends object> = {
@@ -195,6 +196,21 @@ type ContainsCondition<
   | StringContainsCondition<Level, User, Update, Type>
   | BooleanContainsCondition<Level, User, Update, Type>;
 
+type StringArrayOperand<User extends object> = string[] | UserStringArrayOperand<User>;
+
+type HasAnyCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | readonly [StringArrayOperand<User>, HasAnyOperator, StringArrayOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [RecordOperand<Type, Update>, HasAnyOperator, StringArrayOperand<User>]
+          | readonly [StringArrayOperand<User>, HasAnyOperator, RecordOperand<Type, Update>]
+      : never);
+
 /**
  * Type representing a permission condition that combines user attributes, record fields, and literal values using comparison operators.
  *
@@ -220,7 +236,10 @@ export type PermissionCondition<
   User extends object = InferredAttributeMap,
   Update extends boolean = boolean,
   Type extends object = object,
-> = EqualityCondition<Level, User, Update, Type> | ContainsCondition<Level, User, Update, Type>;
+> =
+  | EqualityCondition<Level, User, Update, Type>
+  | ContainsCondition<Level, User, Update, Type>
+  | HasAnyCondition<Level, User, Update, Type>;
 
 /**
  * Grants full record-level access without any conditions.

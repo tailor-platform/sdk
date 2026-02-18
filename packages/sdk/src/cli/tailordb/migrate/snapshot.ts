@@ -142,7 +142,7 @@ export type SnapshotPermissionOperand =
 /**
  * Permission operators
  */
-export type SnapshotPermissionOperator = "eq" | "ne" | "in" | "nin";
+export type SnapshotPermissionOperator = "eq" | "ne" | "in" | "nin" | "hasAny" | "nhasAny";
 
 /**
  * Permission condition tuple
