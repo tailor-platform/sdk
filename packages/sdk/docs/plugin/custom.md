@@ -2,12 +2,28 @@
 
 > **Beta Feature**: The custom plugin API is in beta and may change in future releases.
 
-Create your own plugins by implementing the `PluginBase` interface.
+Create your own plugins by implementing the `Plugin` interface.
 
-## PluginBase Interface
+## Requirements
+
+**Plugins must use default export**:
 
 ```typescript
-interface PluginBase<PluginConfig = unknown> {
+// plugin.ts
+const myPlugin: Plugin = {
+  id: "@my-company/my-plugin",
+  // ...
+};
+
+export default myPlugin; // Required: must be default export
+```
+
+This is required so that generators can use plugin-generated TailorDB types via `getGeneratedType()`.
+
+## Plugin Interface
+
+```typescript
+interface Plugin<PluginConfig = unknown> {
   /** Unique identifier for the plugin (e.g., "@my-company/soft-delete") */
   readonly id: string;
 
@@ -17,7 +33,7 @@ interface PluginBase<PluginConfig = unknown> {
   /** Import path for generated code to reference */
   readonly importPath: string;
 
-  /** Schema for per-type configuration via .plugin() (required when using process) */
+  /** Schema for per-type configuration via .plugin() (required when using processType) */
   readonly configSchema?: TailorAnyField;
 
   /** Schema for plugin-level configuration via definePlugins() (optional) */
@@ -33,7 +49,7 @@ interface PluginBase<PluginConfig = unknown> {
   readonly configTypeTemplate?: string;
 
   /** Process a type with this plugin attached */
-  process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
 
   /** Process a namespace (plugins without a source type) */
   processNamespace?(
@@ -45,25 +61,24 @@ interface PluginBase<PluginConfig = unknown> {
 Notes:
 
 - `importPath` should be resolvable from the directory containing `tailor.config.ts`. Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
-- If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `process`.
+- If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `processType`.
 - Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
-- `pluginConfig` stores the plugin-level config so it can be read later during processing. If you prefer not to set it manually, you can pass config as a tuple to `definePlugins([plugin, config])`.
-- For custom plugins, `pluginConfig` is the expected pattern. The tuple form can also be used to pass config.
+- `pluginConfig` stores the plugin-level config so it can be read later during processing. Set it on the plugin object (e.g., via a factory function) before passing to `definePlugins()`.
 - `resolve` should return a dynamic import; relative specifiers are resolved from the plugin module.
 - Per-type config is optional by default. Use `typeConfigRequired: true` to make it mandatory.
 - To toggle optional/required based on plugin config, provide a function for `typeConfigRequired`.
 
 ## PluginProcessContext
 
-Context passed to the `process` method:
+Context passed to the `processType` method:
 
 ```typescript
-interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
+interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
   /** The TailorDB type being processed */
   type: TailorAnyDBType;
 
-  /** Per-type configuration from .plugin({ pluginId: config }) */
-  config: Config;
+  /** Per-type configuration from .plugin({ pluginId: typeConfig }) */
+  typeConfig: TypeConfig;
 
   /** Plugin-level configuration from definePlugins() */
   pluginConfig: PluginConfig;
@@ -78,38 +93,18 @@ interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
 Context passed to the `processNamespace` method:
 
 ```typescript
-interface PluginNamespaceProcessContext<Config = unknown> {
+interface PluginNamespaceProcessContext<PluginConfig = unknown> {
   /** Plugin-level configuration from definePlugins() */
-  pluginConfig: Config;
+  pluginConfig: PluginConfig;
 
-  /** Namespace of the TailorDB types */
+  /** Target namespace for generated types */
   namespace: string;
-
-  /** TailorDB types in the namespace (after type-attached processing) */
-  types: TailorAnyDBType[];
-
-  /** Plugin-generated types for type-attached plugins in the namespace */
-  generatedTypes: Array<{
-    type: TailorAnyDBType;
-    pluginId: string;
-    generatedTypeKind?: string;
-    originalType: TailorAnyDBType;
-  }>;
 }
-```
-
-`generatedTypes` includes only type-attached plugin-generated types (so `originalType` is always present), and `types` contains only user-defined types.
-For example:
-
-```typescript
-const changeRequestTypes = context.generatedTypes.filter(
-  (entry) => entry.pluginId === "@example/change-request",
-);
 ```
 
 ## PluginOutput
 
-Return value from `process`:
+Return value from `processType`:
 
 ```typescript
 interface PluginOutput {
@@ -136,6 +131,63 @@ interface PluginOutput {
 type NamespacePluginOutput = Omit<PluginOutput, "extends">;
 ```
 
+## getGeneratedType Helper
+
+The SDK provides an async `getGeneratedType()` helper function to retrieve plugin-generated TailorDB types. This enables generators and other tools to work with types generated by plugins.
+
+```typescript
+import { join } from "node:path";
+import { getGeneratedType } from "@tailor-platform/sdk/plugin";
+import { customer } from "./tailordb/customer";
+
+const configPath = join(import.meta.dirname, "./tailor.config.ts");
+
+// Get the generated type by config path, plugin ID, source type, and kind
+const DeletedCustomer = await getGeneratedType(
+  configPath,
+  "@example/soft-delete",
+  customer,
+  "archive",
+);
+```
+
+**Parameters:**
+
+- `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
+- `pluginId`: The plugin's unique identifier (e.g., `"@example/soft-delete"`)
+- `sourceType`: The TailorDB type that the plugin is attached to (`null` for namespace plugins)
+- `kind`: The generated type kind (e.g., `"archive"`, `"auditLog"`)
+
+**How it works:**
+
+1. Loads and caches the config from the given path
+2. Finds the plugin by ID from `definePlugins()` exports
+3. Auto-resolves the namespace from config
+4. Calls the plugin's `processType()` or `processNamespace()` method
+5. Caches the result to avoid redundant processing
+6. Returns the generated type matching the specified kind
+
+### Example Usage
+
+```typescript
+import { join } from "node:path";
+import { getGeneratedType } from "@tailor-platform/sdk/plugin";
+import { customer } from "./tailordb/customer";
+
+const configPath = join(import.meta.dirname, "./tailor.config.ts");
+
+// Type-attached plugin
+const DeletedCustomer = await getGeneratedType(
+  configPath,
+  "@example/soft-delete",
+  customer,
+  "archive",
+);
+
+// Namespace plugin (pass null as sourceType)
+const AuditLog = await getGeneratedType(configPath, "@example/audit-log", null, "auditLog");
+```
+
 ## Example: Soft Delete Plugin
 
 A complete example of a plugin that adds soft delete functionality:
@@ -145,7 +197,7 @@ A complete example of a plugin that adds soft delete functionality:
 ```typescript
 // plugins/soft-delete/plugin.ts
 import { db, t } from "@tailor-platform/sdk";
-import type { PluginBase, PluginProcessContext, PluginOutput } from "@tailor-platform/sdk";
+import type { Plugin, PluginProcessContext, PluginOutput } from "@tailor-platform/sdk";
 
 interface SoftDeleteConfig {
   archiveReason?: boolean;
@@ -174,7 +226,7 @@ const pluginConfigSchema = t.object({
 function processSoftDelete(
   context: PluginProcessContext<SoftDeleteConfig, SoftDeletePluginConfig>,
 ): PluginOutput {
-  const { type, config, pluginConfig, namespace } = context;
+  const { type, typeConfig, pluginConfig, namespace } = context;
   const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted_";
 
   // Generate archive type
@@ -184,7 +236,7 @@ function processSoftDelete(
       originalData: db.string().description("JSON snapshot of deleted record"),
       deletedAt: db.datetime().description("When the record was deleted"),
       deletedBy: db.uuid().description("User who deleted the record"),
-      ...(config.archiveReason && {
+      ...(typeConfig.archiveReason && {
         reason: db.string({ optional: true }).description("Reason for deletion"),
       }),
       ...db.fields.timestamps(),
@@ -213,8 +265,8 @@ function processSoftDelete(
   };
 }
 
-// Factory function for plugins with namespace config
-export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginBase {
+// Factory function for plugins with plugin-level config
+function createSoftDeletePlugin(pluginConfig?: SoftDeletePluginConfig): Plugin {
   return {
     id: "@example/soft-delete",
     description: "Adds soft delete with archive functionality",
@@ -223,9 +275,12 @@ export function softDeletePlugin(pluginConfig?: SoftDeletePluginConfig): PluginB
     pluginConfigSchema,
     pluginConfig,
     typeConfigRequired: (config) => config?.requireTypeConfig === true,
-    process: processSoftDelete,
+    processType: processSoftDelete,
   };
 }
+
+// Default export is required for getGeneratedType() to work
+export default createSoftDeletePlugin();
 ```
 
 ### Executor with Context
@@ -273,8 +328,9 @@ export default withPluginContext((ctx: SoftDeleteContext) => {
 ```typescript
 // tailor.config.ts
 import { definePlugins } from "@tailor-platform/sdk";
-import { softDeletePlugin } from "./plugins/soft-delete";
+import softDeletePlugin from "./plugins/soft-delete";
 
+// Use a factory function to pass plugin-level config
 export const plugins = definePlugins(
   softDeletePlugin({
     archiveTablePrefix: "Deleted_",
@@ -339,13 +395,13 @@ declare module "@tailor-platform/sdk" {
 
 ### Type-Attached Plugins
 
-Implement `process` to handle types with the plugin attached:
+Implement `processType` to handle types with the plugin attached:
 
 ```typescript
-const plugin: PluginBase = {
+const plugin: Plugin = {
   id: "@example/my-plugin",
   // ...
-  process(context) {
+  processType(context) {
     // Called for each type with .plugin({ "@example/my-plugin": config })
     return {
       types: {
@@ -361,7 +417,7 @@ const plugin: PluginBase = {
 Implement `processNamespace` for plugins that generate types independently:
 
 ```typescript
-const plugin: PluginBase = {
+const plugin: Plugin = {
   id: "@example/audit-log",
   // ...
   processNamespace(context) {
@@ -376,10 +432,10 @@ const plugin: PluginBase = {
 Implement both methods for plugins that support both modes:
 
 ```typescript
-const plugin: PluginBase = {
+const plugin: Plugin = {
   id: "@example/hybrid",
   // ...
-  process(context) {
+  processType(context) {
     // Handle type attachments
   },
   processNamespace(context) {

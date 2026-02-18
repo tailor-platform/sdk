@@ -12,3 +12,5 @@ export {
   type PluginRecordDeletedArgs,
   type PluginRecordUpdatedArgs,
 } from "./with-context";
+
+export { getGeneratedType } from "./get-generated-type";

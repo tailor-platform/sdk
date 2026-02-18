@@ -41,11 +41,11 @@ export interface PluginAttachment {
 /**
  * Context passed to plugin's process method
  */
-export interface PluginProcessContext<Config = unknown, PluginConfig = unknown> {
+export interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
   /** The raw TailorDB type being processed */
   type: TailorAnyDBType;
-  /** Plugin-specific configuration passed via .plugin() method */
-  config: Config;
+  /** Per-type configuration passed via .plugin() method */
+  typeConfig: TypeConfig;
   /** Plugin-level configuration passed via definePlugins() */
   pluginConfig: PluginConfig;
   /** Namespace of the TailorDB type */
@@ -53,31 +53,14 @@ export interface PluginProcessContext<Config = unknown, PluginConfig = unknown> 
 }
 
 /**
- * Plugin-generated type entry passed to processNamespace.
- */
-export interface PluginNamespaceGeneratedTypeEntry {
-  type: TailorAnyDBType;
-  /** Plugin ID that generated this type */
-  pluginId: string;
-  /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */
-  generatedTypeKind?: string;
-  /** Source type that triggered generation */
-  originalType: TailorAnyDBType;
-}
-
-/**
  * Context passed to plugin's processNamespace method.
  * Used for plugins that operate on a namespace without requiring a source type.
  */
-export interface PluginNamespaceProcessContext<Config = unknown> {
+export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
   /** Plugin-level configuration passed via definePlugins() */
-  pluginConfig: Config;
+  pluginConfig: PluginConfig;
   /** Target namespace for generated types */
   namespace: string;
-  /** TailorDB types in the namespace (after type-attached processing) */
-  types: TailorAnyDBType[];
-  /** Plugin-generated types for type-attached plugins in the namespace */
-  generatedTypes: PluginNamespaceGeneratedTypeEntry[];
 }
 
 /**
@@ -363,7 +346,7 @@ export type NamespacePluginOutput = Omit<PluginOutput, "extends"> & { extends?: 
 /**
  * Base plugin interface that all plugins must implement
  */
-interface PluginBaseCommon<PluginConfig = unknown> {
+interface PluginCommon<PluginConfig = unknown> {
   /** Unique identifier for the plugin */
   readonly id: string;
   /** Human-readable description of the plugin */
@@ -376,7 +359,7 @@ interface PluginBaseCommon<PluginConfig = unknown> {
   readonly importPath: string;
   /**
    * Schema defining the expected plugin-level configuration.
-   * Used to validate config passed via `definePlugins([plugin, config])`.
+   * Used to validate the `pluginConfig` property on the plugin object.
    * If not provided, pluginConfig validation is skipped.
    * @example
    * ```typescript
@@ -398,7 +381,7 @@ interface PluginBaseCommon<PluginConfig = unknown> {
   /**
    * Plugin-level configuration passed via definePlugins().
    * This config is stored when the plugin is registered and made available
-   * to both process() and processNamespace() methods.
+   * to both processType() and processNamespace() methods.
    */
   readonly pluginConfig?: PluginConfig;
 
@@ -420,7 +403,7 @@ interface PluginBaseCommon<PluginConfig = unknown> {
    * @param context - Context containing the type, config, pluginConfig, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  process?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
 
   /**
    * Process plugin for a namespace without requiring a source type.
@@ -434,9 +417,7 @@ interface PluginBaseCommon<PluginConfig = unknown> {
   ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
 }
 
-export interface PluginBaseWithConfig<
-  PluginConfig = unknown,
-> extends PluginBaseCommon<PluginConfig> {
+export interface PluginWithConfig<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
   /**
    * Schema defining the expected per-type configuration for this plugin.
    * Used to validate config passed via `.plugin({ pluginId: config })`.
@@ -451,27 +432,16 @@ export interface PluginBaseWithConfig<
   readonly configSchema: TailorAnyField;
 }
 
-export interface PluginBaseNamespace<
-  PluginConfig = unknown,
-> extends PluginBaseCommon<PluginConfig> {
+export interface PluginNamespaceOnly<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
   /** Namespace-only plugins do not accept per-type config. */
   readonly configSchema?: undefined;
-  /** Namespace-only plugins cannot define process(). */
-  process?: never;
+  /** Namespace-only plugins cannot define processType(). */
+  processType?: never;
 }
 
 /**
- * Base plugin interface that all plugins must implement
+ * Plugin interface that all plugins must implement
  */
-export type PluginBase<PluginConfig = unknown> =
-  | PluginBaseWithConfig<PluginConfig>
-  | PluginBaseNamespace<PluginConfig>;
-
-/**
- * Plugin configuration input type for definePlugins()
- * Can be:
- * - A PluginBase object for custom plugins without configuration
- * - A tuple [PluginBase, options] for custom plugins with configuration
- * Options can be any value - the plugin's pluginConfigSchema handles validation.
- */
-export type PluginConfig = PluginBase | readonly [PluginBase, unknown];
+export type Plugin<PluginConfig = unknown> =
+  | PluginWithConfig<PluginConfig>
+  | PluginNamespaceOnly<PluginConfig>;

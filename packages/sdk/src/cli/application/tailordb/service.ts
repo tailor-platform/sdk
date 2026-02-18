@@ -11,11 +11,7 @@ import {
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
-import { isPluginGeneratedType } from "@/parser/service/tailordb/types";
-import type {
-  PluginAttachment,
-  PluginNamespaceGeneratedTypeEntry,
-} from "@/parser/plugin-config/types";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 
 export type TailorDBService = {
@@ -82,7 +78,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     for (const attachment of attachments) {
       const result = await pluginManager.processAttachment({
         type: currentType,
-        config: attachment.config,
+        typeConfig: attachment.config,
         namespace,
         pluginId: attachment.pluginId,
       });
@@ -110,6 +106,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
 
       // Add generated types to rawTypes
+      const plugin = pluginManager.getPlugin(attachment.pluginId);
       for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
         rawTypes[sourceFilePath][generatedType.name] = generatedType as TailorDBTypeSchemaOutput;
         // Plugin-generated types don't have a source file.
@@ -121,7 +118,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           originalFilePath: sourceFilePath,
           originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
           generatedTypeKind: kind,
-          pluginConfig: attachment.config,
+          pluginConfig: plugin?.pluginConfig,
+          namespace,
         };
 
         logger.log(
@@ -215,66 +213,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     processNamespacePlugins: async () => {
       if (!pluginManager) return;
 
-      const typeByName = new Map<string, TailorAnyDBType>();
-      for (const typeMap of Object.values(rawTypes)) {
-        for (const [typeName, typeValue] of Object.entries(typeMap)) {
-          if (!typeByName.has(typeName)) {
-            typeByName.set(typeName, typeValue as TailorAnyDBType);
-          }
-        }
-      }
-
-      const originalTypeBySourceKey = new Map<string, TailorAnyDBType>();
-      for (const [typeName, source] of Object.entries(typeSourceInfo)) {
-        if ("filePath" in source && source.filePath && source.exportName) {
-          const typeValue = typeByName.get(typeName);
-          if (!typeValue) {
-            continue;
-          }
-          const key = `${source.filePath}:${source.exportName}`;
-          originalTypeBySourceKey.set(key, typeValue);
-        }
-      }
-
-      const namespaceTypes: TailorAnyDBType[] = [];
-      const namespaceGeneratedTypes: PluginNamespaceGeneratedTypeEntry[] = [];
-
-      for (const [typeName, typeValue] of typeByName.entries()) {
-        const source = typeSourceInfo[typeName];
-        if (!source) {
-          continue;
-        }
-
-        if (isPluginGeneratedType(source)) {
-          const hasOriginalSource = Boolean(source.originalFilePath && source.originalExportName);
-          if (!hasOriginalSource) {
-            continue;
-          }
-          const originalType =
-            originalTypeBySourceKey.get(
-              `${source.originalFilePath}:${source.originalExportName}`,
-            ) ?? null;
-          if (!originalType) {
-            continue;
-          }
-
-          namespaceGeneratedTypes.push({
-            type: typeValue,
-            pluginId: source.pluginId,
-            generatedTypeKind: source.generatedTypeKind,
-            originalType,
-          });
-          continue;
-        }
-
-        namespaceTypes.push(typeValue);
-      }
-
-      const results = await pluginManager.processNamespacePlugins(
-        namespace,
-        namespaceTypes,
-        namespaceGeneratedTypes,
-      );
+      const results = await pluginManager.processNamespacePlugins(namespace);
       const pluginGeneratedKey = "__plugin_generated__";
 
       if (!rawTypes[pluginGeneratedKey]) {
@@ -303,6 +242,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             originalExportName: "",
             generatedTypeKind: kind,
             pluginConfig: config,
+            namespace,
           };
 
           logger.log(
