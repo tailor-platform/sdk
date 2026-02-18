@@ -46,6 +46,25 @@ type Executor<T extends Trigger<unknown>, O> = O extends {
 export function createExecutor<
   T extends Trigger<unknown>,
   O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
+>(config: Executor<T, O>): Executor<T, O>;
+
+/**
+ * Create an executor configuration for the Tailor SDK.
+ * This overload preserves source compatibility for legacy explicit generic calls,
+ * where the first generic argument represents trigger args.
+ * @template Args
+ * @template O
+ * @param config - Executor configuration
+ * @returns The same executor configuration
+ */
+export function createExecutor<
+  Args,
+  O extends Operation<Args> | { kind: "workflow"; workflow: Workflow },
+>(config: Executor<Trigger<Args>, O>): Executor<Trigger<Args>, O>;
+
+export function createExecutor<
+  T extends Trigger<unknown>,
+  O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
 >(config: Executor<T, O>) {
   return config;
 }
