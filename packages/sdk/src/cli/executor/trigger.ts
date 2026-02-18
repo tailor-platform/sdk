@@ -75,24 +75,27 @@ type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
   profile?: string;
 };
 
-export type TriggerExecutorOptions<E extends ManualTriggerExecutor = ManualTriggerExecutor> =
-  E extends ManualTriggerExecutor<IncomingWebhookTrigger>
-    ? TriggerExecutorBaseOptions<E> & { payload?: JsonObject }
-    : TriggerExecutorBaseOptions<E> & { payload?: never };
-
-interface TriggerExecutorByNameOptions {
+/**
+ * @deprecated Use TriggerExecutorTypedOptions instead.
+ */
+export interface TriggerExecutorOptions {
   executorName: string;
   payload?: JsonObject;
   workspaceId?: string;
   profile?: string;
 }
 
+export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = ManualTriggerExecutor> =
+  E extends ManualTriggerExecutor<IncomingWebhookTrigger>
+    ? TriggerExecutorBaseOptions<E> & { payload?: JsonObject }
+    : TriggerExecutorBaseOptions<E> & { payload?: never };
+
 export interface TriggerExecutorResult {
   jobId?: string;
 }
 
 async function triggerExecutorByName(
-  options: TriggerExecutorByNameOptions,
+  options: TriggerExecutorOptions,
 ): Promise<TriggerExecutorResult> {
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -129,8 +132,18 @@ async function triggerExecutorByName(
  * @returns Result containing the job ID if available
  */
 export async function triggerExecutor<E extends ManualTriggerExecutor>(
-  options: TriggerExecutorOptions<E>,
+  options: TriggerExecutorTypedOptions<E>,
+): Promise<TriggerExecutorResult>;
+export async function triggerExecutor(
+  options: TriggerExecutorOptions,
+): Promise<TriggerExecutorResult>;
+export async function triggerExecutor<E extends ManualTriggerExecutor>(
+  options: TriggerExecutorOptions | TriggerExecutorTypedOptions<E>,
 ): Promise<TriggerExecutorResult> {
+  if (!("executor" in options)) {
+    return await triggerExecutorByName(options);
+  }
+
   if (options.executor.trigger.kind !== "incomingWebhook" && options.payload !== undefined) {
     throw new Error(
       `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +

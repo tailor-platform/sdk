@@ -44,15 +44,10 @@ type StartWorkflowArgOption<W extends WorkflowLike> = WorkflowLike extends W
     ? { arg?: WorkflowInput<W> }
     : { arg: WorkflowInput<W> };
 
-export type StartWorkflowOptions<W extends WorkflowLike = WorkflowLike> = {
-  workflow: W;
-  authInvoker: AuthInvoker<string>;
-  workspaceId?: string;
-  profile?: string;
-  interval?: number;
-} & StartWorkflowArgOption<W>;
-
-interface StartWorkflowByNameOptions {
+/**
+ * @deprecated Use StartWorkflowTypedOptions instead.
+ */
+export interface StartWorkflowOptions {
   name: string;
   machineUser: string;
   arg?: Jsonifiable;
@@ -61,6 +56,14 @@ interface StartWorkflowByNameOptions {
   configPath?: string;
   interval?: number;
 }
+
+export type StartWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> = {
+  workflow: W;
+  authInvoker: AuthInvoker<string>;
+  workspaceId?: string;
+  profile?: string;
+  interval?: number;
+} & StartWorkflowArgOption<W>;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -256,7 +259,7 @@ async function startWorkflowCore(
 }
 
 async function startWorkflowByName(
-  options: StartWorkflowByNameOptions,
+  options: StartWorkflowOptions,
 ): Promise<StartWorkflowResultWithWait> {
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -296,8 +299,18 @@ async function startWorkflowByName(
  * @returns Start result with wait helper
  */
 export async function startWorkflow<W extends WorkflowLike>(
-  options: StartWorkflowOptions<W>,
+  options: StartWorkflowTypedOptions<W>,
+): Promise<StartWorkflowResultWithWait>;
+export async function startWorkflow(
+  options: StartWorkflowOptions,
+): Promise<StartWorkflowResultWithWait>;
+export async function startWorkflow<W extends WorkflowLike>(
+  options: StartWorkflowOptions | StartWorkflowTypedOptions<W>,
 ): Promise<StartWorkflowResultWithWait> {
+  if (!("workflow" in options)) {
+    return await startWorkflowByName(options);
+  }
+
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,

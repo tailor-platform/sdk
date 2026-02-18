@@ -65,6 +65,7 @@ export { getWorkflow, type GetWorkflowOptions } from "./workflow/get";
 export {
   startWorkflow,
   type StartWorkflowOptions,
+  type StartWorkflowTypedOptions,
   type StartWorkflowResultWithWait,
   type WaitOptions,
 } from "./workflow/start";
@@ -89,6 +90,7 @@ export type {
 export {
   triggerExecutor,
   type TriggerExecutorOptions,
+  type TriggerExecutorTypedOptions,
   type TriggerExecutorResult,
 } from "./executor/trigger";
 export {

@@ -2,7 +2,7 @@ import { describe, expectTypeOf, it } from "vitest";
 import { defineAuth } from "@/configure/services/auth";
 import { db } from "@/configure/services/tailordb";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
-import { type StartWorkflowOptions } from "./start";
+import { type StartWorkflowOptions, type StartWorkflowTypedOptions } from "./start";
 
 const userType = db.type("User", {
   email: db.string().unique(),
@@ -64,22 +64,23 @@ const undefinedableInputWorkflow: UndefinedableInputWorkflow = {
 };
 
 const acceptsCalculationWorkflowOptions = (
-  _options: StartWorkflowOptions<typeof calculationWorkflow>,
+  _options: StartWorkflowTypedOptions<typeof calculationWorkflow>,
 ): void => {};
 
 const acceptsNoInputWorkflowOptions = (
-  _options: StartWorkflowOptions<typeof noInputWorkflow>,
+  _options: StartWorkflowTypedOptions<typeof noInputWorkflow>,
 ): void => {};
 
 const acceptsOptionalInputWorkflowOptions = (
-  _options: StartWorkflowOptions<typeof optionalInputWorkflow>,
+  _options: StartWorkflowTypedOptions<typeof optionalInputWorkflow>,
 ): void => {};
 
 const acceptsUndefinedableInputWorkflowOptions = (
-  _options: StartWorkflowOptions<UndefinedableInputWorkflow>,
+  _options: StartWorkflowTypedOptions<UndefinedableInputWorkflow>,
 ): void => {};
 
-const acceptsDefaultWorkflowOptions = (_options: StartWorkflowOptions): void => {};
+const acceptsDefaultWorkflowOptions = (_options: StartWorkflowTypedOptions): void => {};
+const acceptsDeprecatedOptions = (_options: StartWorkflowOptions): void => {};
 
 describe("startWorkflow API types", () => {
   it("infers arg type from workflow", () => {
@@ -96,7 +97,7 @@ describe("startWorkflow API types", () => {
       arg: { x: 1, y: 2 },
     });
 
-    type CalculationArg = StartWorkflowOptions<typeof calculationWorkflow>["arg"];
+    type CalculationArg = StartWorkflowTypedOptions<typeof calculationWorkflow>["arg"];
     expectTypeOf<CalculationArg>().toEqualTypeOf<{ a: number; b: number }>();
   });
 
@@ -147,7 +148,7 @@ describe("startWorkflow API types", () => {
       arg: { invalid: true },
     });
 
-    type OptionalArg = StartWorkflowOptions<typeof optionalInputWorkflow>["arg"];
+    type OptionalArg = StartWorkflowTypedOptions<typeof optionalInputWorkflow>["arg"];
     expectTypeOf<OptionalArg>().toEqualTypeOf<{ value: number } | undefined>();
   });
 
@@ -176,7 +177,7 @@ describe("startWorkflow API types", () => {
       arg: { invalid: true },
     });
 
-    type UndefinedableArg = StartWorkflowOptions<UndefinedableInputWorkflow>["arg"];
+    type UndefinedableArg = StartWorkflowTypedOptions<UndefinedableInputWorkflow>["arg"];
     expectTypeOf<UndefinedableArg>().toEqualTypeOf<{ value: number } | undefined>();
   });
 
@@ -191,13 +192,34 @@ describe("startWorkflow API types", () => {
     auth.invoker("invalid-machine-user");
   });
 
-  it("keeps default generic usable when StartWorkflowOptions generic is omitted", () => {
+  it("keeps default generic usable when StartWorkflowTypedOptions generic is omitted", () => {
     acceptsDefaultWorkflowOptions({
       workflow: noInputWorkflow,
       authInvoker: auth.invoker("admin"),
     });
 
     acceptsDefaultWorkflowOptions({
+      workflow: calculationWorkflow,
+      authInvoker: auth.invoker("admin"),
+      arg: { a: 1, b: 2 },
+    });
+  });
+
+  it("keeps deprecated StartWorkflowOptions shape available", () => {
+    acceptsDeprecatedOptions({
+      name: "legacy-workflow",
+      machineUser: "admin",
+    });
+
+    acceptsDeprecatedOptions({
+      name: "legacy-workflow",
+      machineUser: "admin",
+      arg: { any: "value" },
+      configPath: "./tailor.config.ts",
+    });
+
+    acceptsDeprecatedOptions({
+      // @ts-expect-error - deprecated options must keep legacy name/machineUser shape
       workflow: calculationWorkflow,
       authInvoker: auth.invoker("admin"),
       arg: { a: 1, b: 2 },
