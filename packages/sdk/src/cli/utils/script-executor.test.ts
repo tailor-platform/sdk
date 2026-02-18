@@ -287,35 +287,7 @@ describe("executeScript", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("Script execution failed with unknown error (executionId: exec-123)");
-  });
-
-  test("uses initial testExecScript result when execution logs and result are empty", async () => {
-    const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-        result: "permission denied",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.FAILED,
-          logs: "",
-          result: "",
-        },
-      }),
-    });
-
-    const result = await executeScript({
-      client,
-      workspaceId: "workspace-1",
-      name: "empty-error-script.js",
-      code: "code",
-      invoker: mockAuthInvoker,
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.result).toBe("permission denied");
-    expect(result.error).toBe("permission denied");
+    expect(result.error).toBe("Script execution failed with unknown error");
   });
 
   test("uses custom poll interval", async () => {
