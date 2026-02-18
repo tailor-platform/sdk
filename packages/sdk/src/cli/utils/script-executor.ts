@@ -145,7 +145,7 @@ export async function executeScript(
       success: false,
       logs: result.logs,
       result: result.result,
-      error: errorDetails || `Script execution failed with unknown error`,
+      error: errorDetails || "Script execution failed with unknown error",
     };
   }
 }
