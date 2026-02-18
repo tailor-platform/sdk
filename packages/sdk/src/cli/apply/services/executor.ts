@@ -392,6 +392,7 @@ function protoExecutor(
           case: "function",
           value: {
             name: `${executor.name}__target`,
+            // script is a required proto3 string field; use empty string when scriptRef is set
             script: "",
             scriptRef: executorFunctionName(executor.name),
             variables: {
