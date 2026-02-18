@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { _clearCacheForTesting, getGeneratedType } from "./get-generated-type";
 
 declare global {
