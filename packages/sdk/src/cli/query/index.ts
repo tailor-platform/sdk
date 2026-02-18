@@ -17,15 +17,24 @@ import { mapQueryExecutionError } from "./errors";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 const queryEngineSchema = z.enum(["sql", "gql"]);
-const queryOptionsSchema = z.object({
+const queryOptionsBaseSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
   configPath: z.string().optional(),
-  namespace: z.string(),
-  engine: queryEngineSchema,
   query: z.string(),
   machineUser: z.string(),
 });
+const queryOptionsSqlSchema = queryOptionsBaseSchema.extend({
+  engine: z.literal("sql"),
+  namespace: z.string(),
+});
+const queryOptionsGqlSchema = queryOptionsBaseSchema.extend({
+  engine: z.literal("gql"),
+});
+const queryOptionsSchema = z.discriminatedUnion("engine", [
+  queryOptionsSqlSchema,
+  queryOptionsGqlSchema,
+]);
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
@@ -33,7 +42,6 @@ type Client = Awaited<ReturnType<typeof initOperatorClient>>;
 
 type QueryDispatchResult = {
   engine: QueryEngine;
-  namespace: string;
   query: string;
   result: unknown;
 };
@@ -83,13 +91,6 @@ async function loadOptions(options: QueryOptions) {
     config,
     application,
     machineUserResource,
-    args: {
-      profile: result.data.profile,
-      namespace: result.data.namespace,
-      engine: result.data.engine,
-      query: result.data.query,
-      machineUser: result.data.machineUser,
-    },
   };
 }
 
@@ -134,7 +135,6 @@ async function gqlQuery(
   machineUser: MachineUser,
   args: {
     workspaceId: string;
-    namespace: string;
     bundledCode: string;
     query: string;
   },
@@ -148,7 +148,7 @@ async function gqlQuery(
   const executed = await executeScript({
     client,
     workspaceId: args.workspaceId,
-    name: `query-gql-${args.namespace}.js`,
+    name: `query-gql.js`,
     code: args.bundledCode,
     arg: JSON.stringify({
       endpoint: `${application.url}/query`,
@@ -164,7 +164,6 @@ async function gqlQuery(
 
   return {
     engine: "gql" as const,
-    namespace: args.namespace,
     query: args.query,
     result: parseExecutionResult(executed.result),
   };
@@ -188,40 +187,39 @@ function parseExecutionResult(result: string): unknown {
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions) {
-  const { client, workspaceId, application, machineUserResource, args } =
-    await loadOptions(options);
+  const { client, workspaceId, application, machineUserResource } = await loadOptions(options);
 
   try {
     const bundledCode = await bundleQueryScript(options.engine);
     const invoker = create(AuthInvokerSchema, {
       namespace: application.authNamespace,
-      machineUserName: args.machineUser,
+      machineUserName: machineUserResource.name,
     });
 
-    switch (options.engine) {
+    const engine = options.engine;
+    switch (engine) {
       case "sql":
         return await sqlQuery(client, invoker, {
           workspaceId,
-          namespace: args.namespace,
+          namespace: options.namespace,
           bundledCode,
-          query: args.query,
+          query: options.query,
         });
       case "gql":
         return await gqlQuery(client, invoker, application, machineUserResource, {
           workspaceId,
-          namespace: args.namespace,
           bundledCode,
-          query: args.query,
+          query: options.query,
         });
       default:
-        throw new Error(`Unsupported query engine: ${options.engine satisfies never}`);
+        throw new Error(`Unsupported query engine: ${engine satisfies never}`);
     }
   } catch (error) {
     throw mapQueryExecutionError({
       error,
-      engine: args.engine,
-      namespace: args.namespace,
-      machineUser: args.machineUser,
+      engine: options.engine,
+      namespace: "namespace" in options ? options.namespace : undefined,
+      machineUser: options.machineUser,
     });
   }
 }
@@ -235,7 +233,7 @@ export const queryCommand = defineCommand({
     engine: arg(queryEngineSchema, {
       description: "Query engine (sql or gql)",
     }),
-    namespace: arg(z.string(), {
+    namespace: arg(z.string().optional(), {
       alias: "n",
       description: "Namespace name",
     }),
@@ -249,17 +247,35 @@ export const queryCommand = defineCommand({
     }),
   }),
   run: withCommonArgs(async (args) => {
-    const result = await query({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      configPath: args.config,
-      namespace: args.namespace,
-      engine: args.engine,
-      query: args.query,
-      machineUser: args.machineuser,
-    });
+    if (args.engine === "sql") {
+      if (!args.namespace) {
+        throw new Error("Namespace is required for SQL queries.");
+      }
+      const result = await query({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: args.config,
+        namespace: args.namespace,
+        engine: args.engine,
+        query: args.query,
+        machineUser: args.machineuser,
+      });
 
-    printQueryResult(result);
+      printQueryResult(result);
+    } else if (args.engine === "gql") {
+      const result = await query({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: args.config,
+        engine: args.engine,
+        query: args.query,
+        machineUser: args.machineuser,
+      });
+
+      printQueryResult(result);
+    } else {
+      throw new Error(`Unsupported query engine: ${args.engine satisfies never}`);
+    }
   }),
 });
 
@@ -292,7 +308,6 @@ function printQueryResult(result: QueryDispatchResult): void {
 
   logger.out({
     engine: result.engine,
-    namespace: result.namespace,
     query: result.query,
     result: result.result,
   });

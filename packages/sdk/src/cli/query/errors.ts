@@ -11,7 +11,7 @@ function toErrorMessage(error: unknown): string {
 type MapQueryExecutionErrorArgs = {
   error: unknown;
   engine: QueryEngine;
-  namespace: string;
+  namespace: string | undefined;
   machineUser?: string;
 };
 
