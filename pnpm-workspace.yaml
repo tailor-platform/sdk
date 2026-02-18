@@ -4,6 +4,7 @@ packages:
   - packages/*
   - packages/create-sdk/templates/*
   - example
+  - llm-challenge
 
 allowBuilds:
   "@swc/core": true

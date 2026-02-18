@@ -1,0 +1,20 @@
+{
+  "id": "003",
+  "name": "multi-pattern-resolvers",
+  "difficulty": "medium",
+  "category": "resolver",
+  "scoring": {
+    "generate": 15,
+    "typecheck": 15,
+    "tests": 70
+  },
+  "files": {
+    "implement": [
+      "resolvers/calculator.ts",
+      "resolvers/formatName.ts",
+      "resolvers/categorizeNumbers.ts",
+      "resolvers/whoami/resolver.ts"
+    ],
+    "scaffold": ["tailor.config.ts"]
+  }
+}

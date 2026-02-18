@@ -1,0 +1,11 @@
+{
+  "id": "008",
+  "name": "full-application-config",
+  "difficulty": "hard",
+  "category": "config",
+  "scoring": { "generate": 30, "typecheck": 20, "tests": 50 },
+  "files": {
+    "implement": ["tailor.config.ts"],
+    "scaffold": ["tailordb/user.ts", "tailordb/product.ts"]
+  }
+}

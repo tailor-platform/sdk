@@ -1,5 +1,45 @@
 # @tailor-platform/sdk
 
+## 1.14.2
+
+### Patch Changes
+
+- [#603](https://github.com/tailor-platform/sdk/pull/603) [`b093524`](https://github.com/tailor-platform/sdk/commit/b093524b2535dea2937b63ee62b300a6f0654cf0) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support allowGoogleOauth field for IdP userAuthPolicy
+
+- [#598](https://github.com/tailor-platform/sdk/pull/598) [`b32223a`](https://github.com/tailor-platform/sdk/commit/b32223ac5735959e39c934bee3b30562c7c2b990) Thanks [@toiroakr](https://github.com/toiroakr)! - Prevent e2e-ws- workspace accumulation by separating SDK e2e tests into a dedicated CI workflow
+
+- [#596](https://github.com/tailor-platform/sdk/pull/596) [`aecbfb7`](https://github.com/tailor-platform/sdk/commit/aecbfb73c184a9e36dfecd12580729783425a10e) Thanks [@dqn](https://github.com/dqn)! - Add `tailor-sdk` agent skill support and the `tailor-sdk-skills` shortcut installer command.
+
+- [#592](https://github.com/tailor-platform/sdk/pull/592) [`ca758ed`](https://github.com/tailor-platform/sdk/commit/ca758ed7870dbb32364840d4b0eca465808bee13) Thanks [@toiroakr](https://github.com/toiroakr)! - Add getGeneratedType helper function for plugin-generated types
+
+  - Add async `getGeneratedType(configPath, pluginId, sourceType, kind)` function to retrieve plugin-generated types
+  - Auto-resolve namespace and pluginConfig from tailor.config.ts
+  - Support both type-attached plugins (with sourceType) and namespace plugins (sourceType is null)
+  - Rename `process` to `processType` and `config` to `typeConfig` in plugin context
+  - Simplify `PluginNamespaceProcessContext` by removing `types` and `generatedTypes` parameters
+  - Results are cached per config path, plugin, namespace, and pluginConfig
+
+- [#578](https://github.com/tailor-platform/sdk/pull/578) [`a2f28c8`](https://github.com/tailor-platform/sdk/commit/a2f28c8b1ec72859271d096ddf1b0299ed83d0ca) Thanks [@riku99](https://github.com/riku99)! - Replace z.unknown() with typed Zod schemas in TailorDB schema
+
+## 1.14.1
+
+### Patch Changes
+
+- [#587](https://github.com/tailor-platform/sdk/pull/587) [`014d8db`](https://github.com/tailor-platform/sdk/commit/014d8db10d2fb8a19ffff4a5c2d3c76c4f24f72d) Thanks [@toiroakr](https://github.com/toiroakr)! - Use tailor.idp.Client for IDP user seeding and truncation in seed generator
+
+## 1.14.0
+
+### Minor Changes
+
+- [#557](https://github.com/tailor-platform/sdk/pull/557) [`e5dfa62`](https://github.com/tailor-platform/sdk/commit/e5dfa6263dba4644e79f1bfaf03a71ab40421019) Thanks [@dqn](https://github.com/dqn)! - Add a new `completion` subcommand to the CLI so users can generate shell completion scripts for their environment.
+
+- [#577](https://github.com/tailor-platform/sdk/pull/577) [`1d969ac`](https://github.com/tailor-platform/sdk/commit/1d969ac5b6b2fd26919ef1ad5dcb4ce97c6734fe) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: snapshot-based migration apply
+
+  - Extend snapshot schema (v2) to include relationships, permissions, files, hooks, and validation rules
+  - Generate proto manifests directly from snapshots for migration-based deployments
+  - Add support for index, file, relationship, and permission diff kinds
+  - Separate migration e2e test templates from example app migrations
+
 ## 1.13.0
 
 ### Minor Changes

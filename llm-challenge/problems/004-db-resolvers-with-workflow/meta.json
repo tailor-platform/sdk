@@ -1,0 +1,19 @@
+{
+  "id": "004",
+  "name": "db-resolvers-with-workflow",
+  "difficulty": "hard",
+  "category": "resolver",
+  "scoring": {
+    "generate": 15,
+    "typecheck": 15,
+    "tests": 70
+  },
+  "files": {
+    "implement": [
+      "resolvers/getUser.ts",
+      "resolvers/processOrder.ts",
+      "resolvers/startProcessing/resolver.ts"
+    ],
+    "scaffold": ["tailor.config.ts", "tailordb/user.ts", "workflows/dataProcessing.ts"]
+  }
+}

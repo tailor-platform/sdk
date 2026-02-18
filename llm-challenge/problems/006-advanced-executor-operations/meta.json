@@ -1,0 +1,26 @@
+{
+  "id": "006",
+  "name": "advanced-executor-operations",
+  "difficulty": "hard",
+  "category": "executor",
+  "scoring": {
+    "generate": 15,
+    "typecheck": 15,
+    "tests": 70
+  },
+  "files": {
+    "implement": [
+      "executors/dailyReport.ts",
+      "executors/paymentWebhook.ts",
+      "executors/triggerWorkflow.ts",
+      "executors/notifyExternal.ts",
+      "executors/syncData.ts"
+    ],
+    "scaffold": [
+      "tailor.config.ts",
+      "tailordb/order.ts",
+      "workflows/processOrder.ts",
+      "resolvers/updateProduct/resolver.ts"
+    ]
+  }
+}

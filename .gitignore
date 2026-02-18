@@ -44,3 +44,8 @@ user-defined.d.ts
 !.claude/rules
 !.claude/rules/**
 CLAUDE.local.md
+
+# LLM Challenge
+llm-challenge/results/
+llm-challenge/problems/*/work
+.claude/tmp/

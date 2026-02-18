@@ -941,7 +941,7 @@ function createTailorDBType<
       >,
     >(permission: P) {
       const ret = this as TailorDBType<Fields, U>;
-      _permissions.record = permission;
+      _permissions.record = permission as RawPermissions["record"];
       return ret;
     },
 
@@ -950,7 +950,7 @@ function createTailorDBType<
       P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
     >(permission: P) {
       const ret = this as TailorDBType<Fields, U>;
-      _permissions.gql = permission;
+      _permissions.gql = permission as RawPermissions["gql"];
       return ret;
     },
 

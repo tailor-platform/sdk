@@ -46,6 +46,25 @@ See [Available Templates](https://github.com/tailor-platform/sdk/tree/main/packa
 
 For more details, see the [Quickstart Guide](./docs/quickstart.md).
 
+## Agent Skill
+
+Install the `tailor-sdk` skill with the open `skills` CLI:
+
+```bash
+npx skills add https://github.com/tailor-platform/sdk/tree/main/packages/sdk/skills --skill tailor-sdk
+```
+
+Use the SDK-provided shorthand command (internally uses `skills add`):
+
+```bash
+npx tailor-sdk-skills
+
+# Example: install to Codex in non-interactive mode
+npx tailor-sdk-skills -a codex -y
+```
+
+`npx tailor-sdk-skills` requires an environment where the `@tailor-platform/sdk` package binary is available.
+
 ## Learn More
 
 ### Configuration

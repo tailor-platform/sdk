@@ -1,0 +1,26 @@
+{
+  "id": "005",
+  "name": "record-lifecycle-executors",
+  "difficulty": "medium",
+  "category": "executor",
+  "scoring": {
+    "generate": 15,
+    "typecheck": 15,
+    "tests": 70
+  },
+  "files": {
+    "implement": [
+      "executors/productCreated.ts",
+      "executors/orderStatusChanged.ts",
+      "executors/taskDeleted.ts",
+      "executors/logResolverExecution.ts"
+    ],
+    "scaffold": [
+      "tailor.config.ts",
+      "tailordb/product.ts",
+      "tailordb/order.ts",
+      "tailordb/task.ts",
+      "resolvers/getProduct/resolver.ts"
+    ]
+  }
+}

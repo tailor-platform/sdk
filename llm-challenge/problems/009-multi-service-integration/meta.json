@@ -1,0 +1,17 @@
+{
+  "id": "009",
+  "name": "multi-service-integration",
+  "difficulty": "hard",
+  "category": "config",
+  "scoring": { "generate": 15, "typecheck": 15, "tests": 70 },
+  "files": {
+    "implement": [
+      "tailordb/project.ts",
+      "tailordb/task.ts",
+      "resolvers/completeTask/resolver.ts",
+      "executors/taskCompleted.ts",
+      "workflows/taskCleanup.ts"
+    ],
+    "scaffold": ["tailor.config.ts"]
+  }
+}

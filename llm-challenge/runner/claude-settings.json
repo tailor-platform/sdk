@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(/**/solution/**)",
+      "Read(/**/tests/**/*.test.ts)",
+      "Read(/**/meta.json)",
+      "Read(/**/runner/**)",
+      "Read(/**/results/**)",
+      "Grep(*solution*)",
+      "Grep(*tests/*.test.ts*)",
+      "Grep(*meta.json*)",
+      "Grep(*runner*)",
+      "Grep(*results*)",
+      "Bash(*solution*)",
+      "Bash(*tests/*.test.ts*)",
+      "Bash(*meta.json*)",
+      "Bash(*runner*)",
+      "Bash(*results*)",
+      "Write(/**/solution/**)",
+      "Write(/**/tests/**/*.test.ts)",
+      "Write(/**/meta.json)",
+      "Write(/**/runner/**)",
+      "Write(/**/results/**)"
+    ]
+  }
+}
