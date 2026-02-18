@@ -4,6 +4,7 @@ import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "..
 import { initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { extractAllNamespaces } from "../utils/config";
 import { logger } from "../utils/logger";
 
 export interface TruncateOptions {
@@ -53,16 +54,7 @@ async function truncateNamespace(
 
 async function getAllNamespaces(configPath?: string): Promise<string[]> {
   const { config } = await loadConfig(configPath);
-  const namespaces = new Set<string>();
-
-  // Collect namespace names from db configuration
-  if (config.db) {
-    for (const [namespaceName] of Object.entries(config.db)) {
-      namespaces.add(namespaceName);
-    }
-  }
-
-  return Array.from(namespaces);
+  return extractAllNamespaces(config);
 }
 
 async function getTypeNamespace(

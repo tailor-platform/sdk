@@ -11,6 +11,7 @@ import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
+import { extractAllNamespaces } from "../utils/config";
 import { logger } from "../utils/logger";
 import { executeScript } from "../utils/script-executor";
 import { mapQueryExecutionError } from "./errors";
@@ -26,7 +27,7 @@ const queryOptionsBaseSchema = z.object({
 });
 const queryOptionsSqlSchema = queryOptionsBaseSchema.extend({
   engine: z.literal("sql"),
-  namespace: z.string(),
+  namespace: z.string().optional(),
 });
 const queryOptionsGqlSchema = queryOptionsBaseSchema.extend({
   engine: z.literal("gql"),
@@ -85,12 +86,41 @@ async function loadOptions(options: QueryOptions) {
     throw new Error(`Machine user ${result.data.machineUser} not found.`);
   }
 
+  if (options.engine === "gql") {
+    return {
+      engine: options.engine,
+      client,
+      workspaceId,
+      config,
+      application,
+      machineUserResource,
+    };
+  }
+
+  let namespace: string | undefined;
+  if ("namespace" in result.data && result.data.namespace) {
+    namespace = result.data.namespace;
+  } else {
+    const allNamespaces = extractAllNamespaces(config);
+    if (allNamespaces.length === 0) {
+      throw new Error("No namespaces found in configuration.");
+    } else if (allNamespaces.length === 1) {
+      namespace = allNamespaces[0];
+    } else {
+      throw new Error(
+        `Multiple namespaces found in configuration. Please specify one using --namespace option. Namespaces: ${allNamespaces.join(", ")}`,
+      );
+    }
+  }
+
   return {
+    engine: options.engine,
     client,
     workspaceId,
     config,
     application,
     machineUserResource,
+    namespace,
   };
 }
 
@@ -187,21 +217,21 @@ function parseExecutionResult(result: string): unknown {
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions) {
-  const { client, workspaceId, application, machineUserResource } = await loadOptions(options);
+  const { client, workspaceId, application, machineUserResource, engine, namespace } =
+    await loadOptions(options);
 
   try {
-    const bundledCode = await bundleQueryScript(options.engine);
+    const bundledCode = await bundleQueryScript(engine);
     const invoker = create(AuthInvokerSchema, {
       namespace: application.authNamespace,
       machineUserName: machineUserResource.name,
     });
 
-    const engine = options.engine;
     switch (engine) {
       case "sql":
         return await sqlQuery(client, invoker, {
           workspaceId,
-          namespace: options.namespace,
+          namespace,
           bundledCode,
           query: options.query,
         });
@@ -217,7 +247,7 @@ export async function query(options: QueryOptions) {
   } catch (error) {
     throw mapQueryExecutionError({
       error,
-      engine: options.engine,
+      engine,
       namespace: "namespace" in options ? options.namespace : undefined,
       machineUser: options.machineUser,
     });
@@ -247,35 +277,17 @@ export const queryCommand = defineCommand({
     }),
   }),
   run: withCommonArgs(async (args) => {
-    if (args.engine === "sql") {
-      if (!args.namespace) {
-        throw new Error("Namespace is required for SQL queries.");
-      }
-      const result = await query({
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-        configPath: args.config,
-        namespace: args.namespace,
-        engine: args.engine,
-        query: args.query,
-        machineUser: args.machineuser,
-      });
+    const result = await query({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      configPath: args.config,
+      namespace: args.namespace,
+      engine: args.engine,
+      query: args.query,
+      machineUser: args.machineuser,
+    });
 
-      printQueryResult(result);
-    } else if (args.engine === "gql") {
-      const result = await query({
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-        configPath: args.config,
-        engine: args.engine,
-        query: args.query,
-        machineUser: args.machineuser,
-      });
-
-      printQueryResult(result);
-    } else {
-      throw new Error(`Unsupported query engine: ${args.engine satisfies never}`);
-    }
+    printQueryResult(result);
   }),
 });
 
