@@ -235,7 +235,7 @@ export async function apply(options?: ApplyOptions) {
   logger.newline();
 
   // Collect function entries from bundled scripts (after build, before plan)
-  const functionEntries = collectFunctionEntries(application);
+  const functionEntries = collectFunctionEntries(application, workflowResult?.jobs ?? []);
 
   // Phase 1: Plan
   const ctx: PlanContext = {

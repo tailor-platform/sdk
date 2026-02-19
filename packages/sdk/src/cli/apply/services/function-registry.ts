@@ -10,6 +10,7 @@ import { createChangeSet } from ".";
 import type { ApplyPhase } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Application } from "@/cli/application";
+import type { CollectedJob } from "@/cli/application/workflow/service";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { UpdateFunctionRegistryRequestSchema } from "@tailor-proto/tailor/v1/function_registry_pb";
 import type { CreateFunctionRegistryRequestSchema } from "@tailor-proto/tailor/v1/function_registry_pb";
@@ -85,9 +86,13 @@ export function workflowJobFunctionName(jobName: string): string {
 /**
  * Collect all function entries from bundled scripts for all services.
  * @param application - Application definition
+ * @param workflowJobs - Collected workflow jobs from config
  * @returns Array of function entries to register
  */
-export function collectFunctionEntries(application: Readonly<Application>): FunctionEntry[] {
+export function collectFunctionEntries(
+  application: Readonly<Application>,
+  workflowJobs: CollectedJob[],
+): FunctionEntry[] {
   const entries: FunctionEntry[] = [];
   const distDir = getDistDir();
 
@@ -133,22 +138,18 @@ export function collectFunctionEntries(application: Readonly<Application>): Func
   }
 
   // Workflow jobs
-  const jobsDir = path.join(distDir, "workflow-jobs");
-  if (fs.existsSync(jobsDir)) {
-    const files = fs.readdirSync(jobsDir);
-    for (const file of files) {
-      // Only load final bundled .js files (e.g., "job-name.js", not "job-name.base.js")
-      if (/^[^.]+\.js$/.test(file)) {
-        const jobName = file.replace(/\.js$/, "");
-        const scriptPath = path.join(jobsDir, file);
-        const content = fs.readFileSync(scriptPath, "utf-8");
-        entries.push({
-          name: workflowJobFunctionName(jobName),
-          scriptContent: content,
-          contentHash: computeContentHash(content),
-          description: `Workflow job: ${jobName}`,
-        });
-      }
+  for (const job of workflowJobs) {
+    const scriptPath = path.join(distDir, "workflow-jobs", `${job.name}.js`);
+    try {
+      const content = fs.readFileSync(scriptPath, "utf-8");
+      entries.push({
+        name: workflowJobFunctionName(job.name),
+        scriptContent: content,
+        contentHash: computeContentHash(content),
+        description: `Workflow job: ${job.name}`,
+      });
+    } catch {
+      logger.warn(`Function file not found: ${scriptPath}`);
     }
   }
 

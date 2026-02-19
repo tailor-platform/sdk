@@ -135,18 +135,15 @@ async function registerJobFunctions(
   const results = await Promise.all(
     Array.from(allUsedJobNames).map(async (jobName) => {
       const isExisting = existingJobNamesSet.has(jobName);
-      // script is a required proto3 string field; use empty string when scriptRef is set
       const response = isExisting
         ? await client.updateWorkflowJobFunction({
             workspaceId,
             jobFunctionName: jobName,
-            script: "",
             scriptRef: workflowJobFunctionName(jobName),
           })
         : await client.createWorkflowJobFunction({
             workspaceId,
             jobFunctionName: jobName,
-            script: "",
             scriptRef: workflowJobFunctionName(jobName),
           });
 
