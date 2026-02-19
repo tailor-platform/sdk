@@ -3,12 +3,13 @@ import {
   FunctionExecution_Status,
   FunctionExecution_Type,
 } from "@tailor-proto/tailor/v1/function_resource_pb";
-import { defineCommand } from "politty";
+import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
-import { logger } from "../utils/logger";
+import { formatKeyValueTable } from "../utils/format";
+import { logger, styles } from "../utils/logger";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
 
 interface FunctionExecutionListInfo {
@@ -20,9 +21,15 @@ interface FunctionExecutionListInfo {
   finishedAt: Date | null;
 }
 
-interface ListFunctionLogsOptions {
-  workspaceId?: string;
-  profile?: string;
+interface FunctionExecutionDetailInfo {
+  id: string;
+  scriptName: string;
+  status: string;
+  type: string;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  logs: string;
+  result: string;
 }
 
 /**
@@ -76,53 +83,115 @@ function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExec
 }
 
 /**
- * List function execution logs in the workspace and return CLI-friendly info.
- * @param options - Function log listing options
- * @returns List of function execution logs
+ * Transform FunctionExecution to FunctionExecutionDetailInfo for detail display.
+ * @param execution - FunctionExecution from proto
+ * @returns Function execution detail info
  */
-async function listFunctionLogs(
-  options?: ListFunctionLogsOptions,
-): Promise<FunctionExecutionListInfo[]> {
-  const accessToken = await loadAccessToken({
-    useProfile: true,
-    profile: options?.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
-    workspaceId: options?.workspaceId,
-    profile: options?.profile,
-  });
+function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionExecutionDetailInfo {
+  return {
+    id: execution.id,
+    scriptName: execution.scriptName,
+    status: functionExecutionStatusToString(execution.status),
+    type: functionExecutionTypeToString(execution.type),
+    startedAt: execution.startedAt ? timestampDate(execution.startedAt) : null,
+    finishedAt: execution.finishedAt ? timestampDate(execution.finishedAt) : null,
+    logs: execution.logs,
+    result: execution.result,
+  };
+}
 
-  const executions = await fetchAll(async (pageToken) => {
-    const { executions, nextPageToken } = await client.listFunctionExecutions({
-      workspaceId,
-      pageToken,
-    });
-    return [executions, nextPageToken];
-  });
+/**
+ * Print function execution detail in a human-readable format.
+ * @param detail - Function execution detail info
+ */
+function printFunctionExecutionDetail(detail: FunctionExecutionDetailInfo): void {
+  const formatDate = (date: Date | null): string => (date ? date.toISOString() : "N/A");
 
-  return executions.map(toFunctionExecutionListInfo);
+  const summaryData: [string, string][] = [
+    ["id", detail.id],
+    ["scriptName", detail.scriptName],
+    ["status", detail.status],
+    ["type", detail.type],
+    ["startedAt", formatDate(detail.startedAt)],
+    ["finishedAt", formatDate(detail.finishedAt)],
+  ];
+  logger.out(formatKeyValueTable(summaryData));
+
+  if (detail.logs) {
+    logger.log(styles.bold("\nLogs:"));
+    for (const line of detail.logs.split("\n")) {
+      logger.log(`  ${line}`);
+    }
+  }
+
+  if (detail.result) {
+    logger.log(styles.bold("\nResult:"));
+    try {
+      const parsed = JSON.parse(detail.result);
+      logger.log(`  ${JSON.stringify(parsed, null, 2).split("\n").join("\n  ")}`);
+    } catch {
+      logger.log(`  ${detail.result}`);
+    }
+  }
 }
 
 export const logsCommand = defineCommand({
   name: "logs",
-  description: "List function execution logs.",
+  description: "List or get function execution logs.",
   args: z.object({
     ...commonArgs,
     ...jsonArgs,
     ...workspaceArgs,
+    executionId: arg(z.string().optional(), {
+      positional: true,
+      description: "Execution ID (if provided, shows details with logs)",
+    }),
   }),
   run: withCommonArgs(async (args) => {
-    const logs = await listFunctionLogs({
+    const accessToken = await loadAccessToken({
+      useProfile: true,
+      profile: args.profile,
+    });
+    const client = await initOperatorClient(accessToken);
+    const workspaceId = loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
-    if (logs.length === 0) {
-      logger.info("No function execution logs found.");
-      return;
-    }
+    if (args.executionId) {
+      const { execution } = await client.getFunctionExecution({
+        workspaceId,
+        executionId: args.executionId,
+      });
 
-    logger.out(logs);
+      if (!execution) {
+        throw new Error(`Function execution '${args.executionId}' not found.`);
+      }
+
+      const detail = toFunctionExecutionDetailInfo(execution);
+
+      if (args.json) {
+        logger.out(detail);
+      } else {
+        printFunctionExecutionDetail(detail);
+      }
+    } else {
+      const executions = await fetchAll(async (pageToken) => {
+        const { executions, nextPageToken } = await client.listFunctionExecutions({
+          workspaceId,
+          pageToken,
+        });
+        return [executions, nextPageToken];
+      });
+
+      const logs = executions.map(toFunctionExecutionListInfo);
+
+      if (logs.length === 0) {
+        logger.info("No function execution logs found.");
+        return;
+      }
+
+      logger.out(logs);
+    }
   }),
 });
