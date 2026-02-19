@@ -38,6 +38,11 @@ import {
   type UnmanagedResource,
 } from "./services/confirm";
 import { applyExecutor, planExecutor } from "./services/executor";
+import {
+  applyFunctionRegistry,
+  collectFunctionEntries,
+  planFunctionRegistry,
+} from "./services/function-registry";
 import { applyIdP, planIdP } from "./services/idp";
 import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
@@ -229,6 +234,9 @@ export async function apply(options?: ApplyOptions) {
   }
   logger.newline();
 
+  // Collect function entries from bundled scripts (after build, before plan)
+  const functionEntries = collectFunctionEntries(application, workflowResult?.jobs ?? []);
+
   // Phase 1: Plan
   const ctx: PlanContext = {
     client,
@@ -238,6 +246,12 @@ export async function apply(options?: ApplyOptions) {
     config,
     noSchemaCheck: options?.noSchemaCheck,
   };
+  const functionRegistry = await planFunctionRegistry(
+    client,
+    workspaceId,
+    application.name,
+    functionEntries,
+  );
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
   const idp = await planIdP(ctx);
@@ -255,6 +269,7 @@ export async function apply(options?: ApplyOptions) {
 
   // Confirm conflicts
   const allConflicts: OwnerConflict[] = [
+    ...functionRegistry.conflicts,
     ...tailorDB.conflicts,
     ...staticWebsite.conflicts,
     ...idp.conflicts,
@@ -266,6 +281,7 @@ export async function apply(options?: ApplyOptions) {
   await confirmOwnerConflict(allConflicts, application.name, yes);
   // Confirm unmanaged resources
   const allUnmanaged: UnmanagedResource[] = [
+    ...functionRegistry.unmanaged,
     ...tailorDB.unmanaged,
     ...staticWebsite.unmanaged,
     ...idp.unmanaged,
@@ -307,6 +323,7 @@ export async function apply(options?: ApplyOptions) {
   // NOTE: When removing resources while renaming the app at the same time,
   // the app and its resources don't get deleted and are left orphaned...
   const resourceOwners = new Set([
+    ...functionRegistry.resourceOwners,
     ...tailorDB.resourceOwners,
     ...staticWebsite.resourceOwners,
     ...idp.resourceOwners,
@@ -332,8 +349,12 @@ export async function apply(options?: ApplyOptions) {
   }
 
   // Phase 2: Create/Update services that Application depends on
+  // - Function registry (must be registered before services that reference them)
   // - Subgraph services (for GraphQL SDL composition): TailorDB, IdP, Auth, Pipeline
   // - StaticWebsite (for CORS and OAuth2 redirect URI resolution)
+
+  // Register function scripts first (resolvers, executors, workflows reference them)
+  await applyFunctionRegistry(client, workspaceId, functionRegistry, "create-update");
 
   // Other services: Apply before TailorDB (migration scripts may require Auth)
   await applyStaticWebsite(client, staticWebsite, "create-update");
@@ -373,6 +394,9 @@ export async function apply(options?: ApplyOptions) {
   await applyAuth(client, auth, "delete-services");
   await applyIdP(client, idp, "delete-services");
   await applyTailorDB(client, tailorDB, "delete-services");
+
+  // Phase 9: Delete unused function registry entries (after all referencing services are deleted)
+  await applyFunctionRegistry(client, workspaceId, functionRegistry, "delete");
 
   logger.success("Successfully applied changes.");
 }

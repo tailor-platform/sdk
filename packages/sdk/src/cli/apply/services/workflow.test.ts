@@ -4,27 +4,6 @@ import { planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/client";
 import type { Workflow, WorkflowJob } from "@/parser/service/workflow";
 
-// Mock node:fs and node:path
-vi.mock("node:fs", () => ({
-  readFileSync: vi.fn().mockReturnValue("// mock script"),
-  existsSync: vi.fn().mockReturnValue(true),
-  readdirSync: vi.fn().mockReturnValue(["job1.js", "job2.js"]),
-}));
-
-vi.mock("node:path", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const original = (await importOriginal()) as typeof import("node:path");
-  return {
-    ...original,
-    join: vi.fn().mockImplementation((...args) => args.join("/")),
-  };
-});
-
-// Mock dist-dir
-vi.mock("@/cli/utils/dist-dir", () => ({
-  getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
-}));
-
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
