@@ -1,14 +1,12 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import {
-  FunctionExecution_Status,
-  FunctionExecution_Type,
-} from "@tailor-proto/tailor/v1/function_resource_pb";
+import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "../args";
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { formatKeyValueTable } from "../utils/format";
+import { functionExecutionStatusToString } from "../utils/function-execution";
 import { logger, styles } from "../utils/logger";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
 
@@ -30,24 +28,6 @@ interface FunctionExecutionDetailInfo {
   finishedAt: Date | null;
   logs: string;
   result: string;
-}
-
-/**
- * Convert function execution status enum to string.
- * @param status - Function execution status enum value
- * @returns Status string representation
- */
-function functionExecutionStatusToString(status: FunctionExecution_Status): string {
-  switch (status) {
-    case FunctionExecution_Status.RUNNING:
-      return "RUNNING";
-    case FunctionExecution_Status.SUCCESS:
-      return "SUCCESS";
-    case FunctionExecution_Status.FAILED:
-      return "FAILED";
-    default:
-      return "UNSPECIFIED";
-  }
 }
 
 /**
@@ -186,11 +166,10 @@ export const logsCommand = defineCommand({
 
       const logs = executions.map(toFunctionExecutionListInfo);
 
-      if (logs.length === 0) {
+      if (logs.length === 0 && !args.json) {
         logger.info("No function execution logs found.");
         return;
       }
-
       logger.out(logs);
     }
   }),

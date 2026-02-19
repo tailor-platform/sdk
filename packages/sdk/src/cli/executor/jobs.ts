@@ -27,6 +27,7 @@ import {
 import { fetchAll, initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { formatKeyValueTable } from "../utils/format";
+import { functionExecutionStatusToString } from "../utils/function-execution";
 import { logger, styles } from "../utils/logger";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
@@ -34,7 +35,6 @@ import {
   colorizeExecutorJobStatus,
   colorizeFunctionExecutionStatus,
   executorTargetTypeToString,
-  functionExecutionStatusToString,
   isFunctionExecutionTerminalStatus,
   isExecutorJobTerminalStatus,
   parseExecutorJobStatus,
