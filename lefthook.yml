@@ -45,3 +45,8 @@ pre-commit:
     5-knip:
       glob: "*.{ts,js}"
       run: pnpm run knip
+
+post-commit:
+  commands:
+    verify-signature:
+      run: 'git cat-file -p HEAD | grep -q "gpgsig" || { echo "ERROR: Commit is not signed!" >&2; exit 1; }'
