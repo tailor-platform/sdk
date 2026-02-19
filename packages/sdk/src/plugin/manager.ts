@@ -5,6 +5,7 @@ import type {
   PluginGeneratedType,
   PluginNamespaceProcessContext,
   PluginOutput,
+  TypePluginOutput,
 } from "@/parser/plugin-config/types";
 import type {
   TailorAnyDBType,
@@ -51,9 +52,16 @@ export interface PluginExecutorInfoExtended extends PluginExecutorInfo {
 }
 
 /**
- * Result of processing a plugin attachment
+ * Result of processing a type-attached plugin
  */
 export type ProcessAttachmentResult =
+  | { success: true; output: TypePluginOutput }
+  | { success: false; error: string };
+
+/**
+ * Result of processing a namespace plugin
+ */
+export type ProcessNamespaceResult =
   | { success: true; output: PluginOutput }
   | { success: false; error: string };
 
@@ -128,7 +136,7 @@ export class PluginManager {
     }
 
     // Execute plugin processType with raw TailorDBType
-    let output: PluginOutput;
+    let output: TypePluginOutput;
     try {
       output = await plugin.processType({
         type: context.type,
@@ -183,8 +191,8 @@ export class PluginManager {
    */
   async processNamespacePlugins(
     namespace: string,
-  ): Promise<Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }>> {
-    const results: Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }> =
+  ): Promise<Array<{ pluginId: string; config: unknown; result: ProcessNamespaceResult }>> {
+    const results: Array<{ pluginId: string; config: unknown; result: ProcessNamespaceResult }> =
       [];
 
     for (const [pluginId, plugin] of this.plugins) {

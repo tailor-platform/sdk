@@ -1,4 +1,4 @@
-import type { TailorAnyDBType } from "@/configure/services/tailordb";
+import type { TailorAnyDBField, TailorAnyDBType } from "@/configure/services/tailordb";
 
 export type TypeConfigRequired<PluginConfig = unknown> =
   | boolean
@@ -315,11 +315,12 @@ export interface PluginExtends {
    * These fields will be merged into the original type's fields.
    * Existing fields (from original definition or earlier plugins) take precedence.
    */
-  fields?: Record<string, unknown>;
+  fields?: Record<string, TailorAnyDBField>;
 }
 
 /**
- * Output returned by a plugin's process method
+ * Base output returned by a plugin's process method.
+ * Used by both processType and processNamespace.
  */
 export interface PluginOutput {
   /**
@@ -332,15 +333,22 @@ export interface PluginOutput {
   resolvers?: PluginGeneratedResolver[];
   /** Additional executors to generate */
   executors?: PluginGeneratedExecutor[];
+}
+
+/**
+ * Output returned by a plugin's processType method.
+ * Extends PluginOutput with the ability to add fields to the source type.
+ */
+export interface TypePluginOutput extends PluginOutput {
   /** Extensions to apply to the source type */
   extends?: PluginExtends;
 }
 
 /**
  * Output returned by a plugin's processNamespace method.
- * Namespace plugins cannot extend a source type.
+ * Alias for PluginOutput (namespace plugins cannot extend a source type).
  */
-export type NamespacePluginOutput = Omit<PluginOutput, "extends"> & { extends?: never };
+export type NamespacePluginOutput = PluginOutput;
 
 /**
  * Plugin interface that all plugins must implement.
@@ -381,7 +389,7 @@ export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
    */
   processType?(
     context: PluginProcessContext<TypeConfig, PluginConfig>,
-  ): PluginOutput | Promise<PluginOutput>;
+  ): TypePluginOutput | Promise<TypePluginOutput>;
 
   /**
    * Process plugin for a namespace without requiring a source type.
