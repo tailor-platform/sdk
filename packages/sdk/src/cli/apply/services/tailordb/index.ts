@@ -1321,15 +1321,7 @@ function generateTailorDBTypeManifest(
         type: fieldType,
         allowedValues: fieldType === "enum" ? fieldConfig.allowedValues || [] : [],
         description: fieldConfig.description || "",
-        validate: (fieldConfig.validate || []).map((val) => ({
-          action: TailorDBType_PermitAction.DENY,
-          errorMessage: val.errorMessage || "",
-          ...(val.script && {
-            script: {
-              expr: val.script.expr ? `!${val.script.expr}` : "",
-            },
-          }),
-        })),
+        validate: toProtoFieldValidate(fieldConfig),
         array: fieldConfig.array || false,
         index: fieldConfig.index || false,
         unique: fieldConfig.unique || false,
@@ -1338,20 +1330,7 @@ function generateTailorDBTypeManifest(
         foreignKeyField: fieldConfig.foreignKeyField,
         required: fieldConfig.required !== false,
         vector: fieldConfig.vector || false,
-        ...(fieldConfig.hooks && {
-          hooks: {
-            create: fieldConfig.hooks?.create
-              ? {
-                  expr: fieldConfig.hooks.create.expr || "",
-                }
-              : undefined,
-            update: fieldConfig.hooks?.update
-              ? {
-                  expr: fieldConfig.hooks.update.expr || "",
-                }
-              : undefined,
-          },
-        }),
+        ...toProtoFieldHooks(fieldConfig),
         ...(fieldConfig.serial && {
           serial: {
             start: fieldConfig.serial.start as unknown as bigint,
@@ -1445,6 +1424,42 @@ function generateTailorDBTypeManifest(
   };
 }
 
+function toProtoFieldValidate(
+  fieldConfig: OperatorFieldConfig,
+): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["validate"] {
+  return (fieldConfig.validate || []).map((val) => ({
+    action: TailorDBType_PermitAction.DENY,
+    errorMessage: val.errorMessage || "",
+    ...(val.script && {
+      script: {
+        expr: val.script.expr ? `!${val.script.expr}` : "",
+      },
+    }),
+  }));
+}
+
+function toProtoFieldHooks(
+  fieldConfig: OperatorFieldConfig,
+): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
+  if (!fieldConfig.hooks) {
+    return {};
+  }
+  return {
+    hooks: {
+      create: fieldConfig.hooks.create
+        ? {
+            expr: fieldConfig.hooks.create.expr || "",
+          }
+        : undefined,
+      update: fieldConfig.hooks.update
+        ? {
+            expr: fieldConfig.hooks.update.expr || "",
+          }
+        : undefined,
+    },
+  };
+}
+
 function processNestedFields(
   fields: Record<string, OperatorFieldConfig>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
@@ -1459,13 +1474,14 @@ function processNestedFields(
         type: "nested",
         allowedValues: nestedFieldConfig.allowedValues || [],
         description: nestedFieldConfig.description || "",
-        validate: [],
+        validate: toProtoFieldValidate(nestedFieldConfig),
         required: nestedFieldConfig.required ?? true,
         array: nestedFieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
+        ...toProtoFieldHooks(nestedFieldConfig),
         fields: deepNestedFields,
       };
     } else {
@@ -1473,13 +1489,14 @@ function processNestedFields(
         type: nestedType,
         allowedValues: nestedType === "enum" ? nestedFieldConfig.allowedValues || [] : [],
         description: nestedFieldConfig.description || "",
-        validate: [],
+        validate: toProtoFieldValidate(nestedFieldConfig),
         required: nestedFieldConfig.required ?? true,
         array: nestedFieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
+        ...toProtoFieldHooks(nestedFieldConfig),
         ...(nestedFieldConfig.serial && {
           serial: {
             start: nestedFieldConfig.serial.start as unknown as bigint,

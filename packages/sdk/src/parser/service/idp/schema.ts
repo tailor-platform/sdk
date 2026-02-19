@@ -25,6 +25,7 @@ export const IdPUserAuthPolicySchema = z
       })
       .optional(),
     allowedEmailDomains: z.array(z.string()).optional(),
+    allowGoogleOauth: z.boolean().optional(),
   })
   .refine(
     (data) =>
@@ -44,6 +45,16 @@ export const IdPUserAuthPolicySchema = z
     {
       message: "allowedEmailDomains cannot be set when useNonEmailIdentifier is true",
       path: ["allowedEmailDomains"],
+    },
+  )
+  .refine(
+    (data) =>
+      data.allowGoogleOauth === undefined ||
+      data.allowGoogleOauth === false ||
+      !data.useNonEmailIdentifier,
+    {
+      message: "allowGoogleOauth cannot be set when useNonEmailIdentifier is true",
+      path: ["allowGoogleOauth"],
     },
   );
 
