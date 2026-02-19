@@ -181,21 +181,13 @@ describe("normalizeActionPermission", () => {
     });
 
     it("should handle 'hasAny' operator", () => {
-      const permission = [
-        { user: "roles" },
-        "hasAny",
-        ["admin", "manager"] as string[],
-      ] as unknown as Permission;
+      const permission = [{ user: "roles" }, "hasAny", ["admin", "manager"]];
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([[{ user: "roles" }, "hasAny", ["admin", "manager"]]]);
     });
 
     it("should handle 'not hasAny' operator", () => {
-      const permission = [
-        { user: "roles" },
-        "not hasAny",
-        ["blocked"] as string[],
-      ] as unknown as Permission;
+      const permission = [{ user: "roles" }, "not hasAny", ["blocked"]];
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([[{ user: "roles" }, "nhasAny", ["blocked"]]]);
     });
@@ -445,12 +437,31 @@ describe("normalizeGqlPermission", () => {
         actions: ["read", "update"],
         permit: true,
       },
-    ] as unknown as Parameters<typeof normalizeGqlPermission>[0];
+    ] as const;
     const result = normalizeGqlPermission(permission);
     expect(result).toEqual([
       {
         conditions: [[{ user: "roles" }, "hasAny", ["admin", "manager"]]],
         actions: ["read", "update"],
+        permit: "allow",
+        description: undefined,
+      },
+    ]);
+  });
+
+  it("should handle nhasAny operator in GQL permission", () => {
+    const permission = [
+      {
+        conditions: [[{ user: "roles" }, "not hasAny", ["blocked"] as string[]]],
+        actions: ["read"],
+        permit: true,
+      },
+    ] as const;
+    const result = normalizeGqlPermission(permission);
+    expect(result).toEqual([
+      {
+        conditions: [[{ user: "roles" }, "nhasAny", ["blocked"]]],
+        actions: ["read"],
         permit: "allow",
         description: undefined,
       },
