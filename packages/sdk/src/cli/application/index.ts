@@ -49,6 +49,7 @@ export type Application = {
   readonly workflowConfig: WorkflowServiceConfig | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly env: Readonly<Record<string, string | number | boolean>>;
+  readonly applications: ReadonlyArray<Application>;
 };
 
 /**
@@ -214,7 +215,7 @@ function buildApplication(params: {
   staticWebsiteServices: StaticWebsite[];
   env: Record<string, string | number | boolean>;
 }): Application {
-  return {
+  const application: Application = {
     name: params.config.name,
     config: params.config,
     subgraphs: [
@@ -232,7 +233,11 @@ function buildApplication(params: {
     workflowConfig: params.workflowConfig,
     staticWebsiteServices: params.staticWebsiteServices,
     env: params.env,
+    get applications() {
+      return [application];
+    },
   };
+  return application;
 }
 
 /**
@@ -278,7 +283,15 @@ export function defineApplication(params: DefineApplicationParams): Application 
   });
 }
 
-function generatePluginFilesIfNeeded(
+/**
+ * Generate plugin type and executor files if a plugin manager is provided.
+ * Collects source type info from TailorDB services and delegates to PluginManager.
+ * @param pluginManager - Plugin manager instance (skips if undefined)
+ * @param tailorDBServices - TailorDB services to collect type source info from
+ * @param configPath - Path to tailor.config.ts for resolving plugin imports
+ * @returns Generated executor file paths
+ */
+export function generatePluginFilesIfNeeded(
   pluginManager: PluginManager | undefined,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   configPath: string,
