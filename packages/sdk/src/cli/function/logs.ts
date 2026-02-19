@@ -84,7 +84,7 @@ function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionEx
  * Print function execution detail in a human-readable format.
  * @param detail - Function execution detail info
  */
-function printFunctionExecutionDetail(detail: FunctionExecutionDetailInfo): void {
+function printFunctionExecutionDetail(detail: FunctionExecutionDetailInfo) {
   const formatDate = (date: Date | null): string => (date ? date.toISOString() : "N/A");
 
   const summaryData: [string, string][] = [
