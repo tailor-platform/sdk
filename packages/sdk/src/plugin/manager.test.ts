@@ -113,7 +113,7 @@ describe("PluginManager", () => {
       id: "schema-less-plugin",
       description: "plugin without configSchema",
       importPath: "@example/schema-less",
-      processType: (context) => ({
+      processType: (_context) => ({
         types: {
           derived: db.type("Derived", {
             sourceId: db.uuid(),
