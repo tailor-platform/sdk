@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.15.2
+
+### Patch Changes
+
+- [#597](https://github.com/tailor-platform/sdk/pull/597) [`8d4f911`](https://github.com/tailor-platform/sdk/commit/8d4f9111645df049d91808c7083a054bb0ad656a) Thanks [@riku99](https://github.com/riku99)! - Show clear error when record/oldRecord/newRecord operand is used in gqlPermission
+
+- [#609](https://github.com/tailor-platform/sdk/pull/609) [`50f0aee`](https://github.com/tailor-platform/sdk/commit/50f0aee0f17a05afde5bbce2a9f1b42f03cee0e5) Thanks [@riku99](https://github.com/riku99)! - Add `function logs` CLI command to list and view function execution logs
+
 ## 1.15.1
 
 ### Patch Changes
