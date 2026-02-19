@@ -79,6 +79,16 @@ describe("tailordb permission types", () => {
         "record",
         User
       >;
+      // @ts-expect-error Type mismatch: string field vs string[] expected
+      const _err = [{ user: "id" }, "hasAny", ["admin"]] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string field vs string[] expected
+      const _errReverse = [["admin"], "hasAny", { user: "id" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
     });
   });
 

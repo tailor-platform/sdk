@@ -196,19 +196,29 @@ type ContainsCondition<
   | StringContainsCondition<Level, User, Update, Type>
   | BooleanContainsCondition<Level, User, Update, Type>;
 
-type StringArrayOperand<User extends object> = string[] | UserStringArrayOperand<User>;
-
 type HasAnyCondition<
   Level extends "record" | "gql",
   User extends object,
   Update extends boolean,
   Type extends object,
 > =
-  | readonly [StringArrayOperand<User>, HasAnyOperator, StringArrayOperand<User>]
+  | readonly [
+      string[] | UserStringArrayOperand<User>,
+      HasAnyOperator,
+      string[] | UserStringArrayOperand<User>,
+    ]
   | (Level extends "record"
       ?
-          | readonly [RecordOperand<Type, Update>, HasAnyOperator, StringArrayOperand<User>]
-          | readonly [StringArrayOperand<User>, HasAnyOperator, RecordOperand<Type, Update>]
+          | readonly [
+              RecordOperand<Type, Update>,
+              HasAnyOperator,
+              string[] | UserStringArrayOperand<User>,
+            ]
+          | readonly [
+              string[] | UserStringArrayOperand<User>,
+              HasAnyOperator,
+              RecordOperand<Type, Update>,
+            ]
       : never);
 
 /**
