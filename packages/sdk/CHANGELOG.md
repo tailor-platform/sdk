@@ -1,5 +1,30 @@
 # @tailor-platform/sdk
 
+## 1.15.0
+
+### Minor Changes
+
+- [#605](https://github.com/tailor-platform/sdk/pull/605) [`634699c`](https://github.com/tailor-platform/sdk/commit/634699c0519157a18b992df4e98718940fc6d013) Thanks [@toiroakr](https://github.com/toiroakr)! - Add TypeConfig/PluginConfig type parameters to Plugin interface and remove TailorField schema requirements
+
+  - Add `Plugin<TypeConfig, PluginConfig>` type parameters for type-safe arbitrary config
+  - Remove `configSchema`, `pluginConfigSchema`, and `configTypeTemplate` properties from Plugin interface
+  - Merge `PluginWithConfig`/`PluginNamespaceOnly` into a single `Plugin` interface
+  - Wire TypeConfig/PluginConfig through `processType`/`processNamespace` contexts
+  - Remove TailorField-based runtime validation from plugin config processing
+  - Introduce `TypePluginOutput` for processType (extends `PluginOutput` with `extends` field)
+  - Make `PluginOutput` the base type without `extends` (used by processNamespace)
+  - Use `TailorAnyDBField` for `PluginExtends.fields` type
+
+- [#595](https://github.com/tailor-platform/sdk/pull/595) [`4e6e3e6`](https://github.com/tailor-platform/sdk/commit/4e6e3e62e3071060373571e7d9765938c37a9013) Thanks [@toiroakr](https://github.com/toiroakr)! - Use Function Registry service for script storage instead of embedding bundled scripts directly in pipeline/executor/workflow requests. Scripts are now registered in the Function Registry during apply, and services reference them by name via operationSourceRef/scriptRef fields.
+
+### Patch Changes
+
+- [#599](https://github.com/tailor-platform/sdk/pull/599) [`e73e8fe`](https://github.com/tailor-platform/sdk/commit/e73e8fef5daf056a00a3bb402d0c8ab0a58f96ee) Thanks [@dqn](https://github.com/dqn)! - Add typed programmatic CLI APIs for workflow and executor operations while preserving legacy option shapes for backward compatibility.
+
+- [#601](https://github.com/tailor-platform/sdk/pull/601) [`151102b`](https://github.com/tailor-platform/sdk/commit/151102bedca42457f02f6e503025908a40d5d1a4) Thanks [@riku99](https://github.com/riku99)! - Fixes an issue where nested field hooks/validate were dropped when generating TailorDB proto manifests
+
+- [#606](https://github.com/tailor-platform/sdk/pull/606) [`4761d2b`](https://github.com/tailor-platform/sdk/commit/4761d2bab2d8d8fa7c5ce249db28e0a8f28dfc5a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add lefthook post-commit hook to verify commit signatures and update CLAUDE.md with signing rules
+
 ## 1.14.2
 
 ### Patch Changes
