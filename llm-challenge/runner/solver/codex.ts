@@ -161,51 +161,53 @@ export function parseCodexJsonlOutput(output: string): CodexJsonlParseResult {
       continue;
     }
     const eventType = typeof parsed.type === "string" ? parsed.type : "";
-    if (eventType === "item.completed") {
-      const item =
-        parsed.item && typeof parsed.item === "object"
-          ? (parsed.item as { type?: unknown; text?: unknown })
-          : undefined;
-      if (item?.type === "agent_message" && typeof item.text === "string") {
-        latestMessage = item.text;
+    switch (eventType) {
+      case "item.completed": {
+        const item =
+          parsed.item && typeof parsed.item === "object"
+            ? (parsed.item as { type?: unknown; text?: unknown })
+            : undefined;
+        if (item?.type === "agent_message" && typeof item.text === "string") {
+          latestMessage = item.text;
+        }
+        break;
       }
-      continue;
-    }
-    if (eventType === "error") {
-      if (
-        typeof parsed.message === "string" &&
-        // Keep the concrete turn.failed reason when trailing generic error events follow.
-        !(sawTurnFailed && latestError)
-      ) {
-        latestError = parsed.message;
+      case "error":
+        if (
+          typeof parsed.message === "string" &&
+          // Keep the concrete turn.failed reason when trailing generic error events follow.
+          !(sawTurnFailed && latestError)
+        ) {
+          latestError = parsed.message;
+        }
+        break;
+      case "turn.failed": {
+        sawTurnFailed = true;
+        const error =
+          parsed.error && typeof parsed.error === "object"
+            ? (parsed.error as { message?: unknown })
+            : undefined;
+        if (typeof error?.message === "string") {
+          latestError = error.message;
+        }
+        break;
       }
-      continue;
-    }
-    if (eventType === "turn.failed") {
-      sawTurnFailed = true;
-      const error =
-        parsed.error && typeof parsed.error === "object"
-          ? (parsed.error as { message?: unknown })
-          : undefined;
-      if (typeof error?.message === "string") {
-        latestError = error.message;
-      }
-      continue;
-    }
-    if (eventType === "turn.completed") {
-      sawTurnCompleted = true;
-      if (parsed.usage && typeof parsed.usage === "object") {
-        const usageRaw = parsed.usage as {
-          input_tokens?: unknown;
-          cached_input_tokens?: unknown;
-          output_tokens?: unknown;
-        };
-        usage = {
-          inputTokens: typeof usageRaw.input_tokens === "number" ? usageRaw.input_tokens : 0,
-          cachedInputTokens:
-            typeof usageRaw.cached_input_tokens === "number" ? usageRaw.cached_input_tokens : 0,
-          outputTokens: typeof usageRaw.output_tokens === "number" ? usageRaw.output_tokens : 0,
-        };
+      case "turn.completed": {
+        sawTurnCompleted = true;
+        if (parsed.usage && typeof parsed.usage === "object") {
+          const usageRaw = parsed.usage as {
+            input_tokens?: unknown;
+            cached_input_tokens?: unknown;
+            output_tokens?: unknown;
+          };
+          usage = {
+            inputTokens: typeof usageRaw.input_tokens === "number" ? usageRaw.input_tokens : 0,
+            cachedInputTokens:
+              typeof usageRaw.cached_input_tokens === "number" ? usageRaw.cached_input_tokens : 0,
+            outputTokens: typeof usageRaw.output_tokens === "number" ? usageRaw.output_tokens : 0,
+          };
+        }
+        break;
       }
     }
   }
@@ -332,12 +334,11 @@ export function buildCodexDenylistRules(): string {
 function ensureRealDirectory(target: string): void {
   try {
     const stat = fs.lstatSync(target);
-    if (!stat.isDirectory()) {
-      // Remove non-directory node (symlink, file, etc.)
-      fs.rmSync(target, { recursive: true });
-    } else {
-      return; // Already a real directory
+    if (stat.isDirectory()) {
+      return;
     }
+    // Remove non-directory node (symlink, file, etc.)
+    fs.rmSync(target, { recursive: true });
   } catch {
     // Path does not exist — will be created below.
   }
@@ -395,7 +396,17 @@ export function ensureCodexDenylistRules(workDir: string): void {
   } catch {
     // Path does not exist — rename will create it.
   }
-  fs.renameSync(tmpPath, rulesPath);
+  try {
+    fs.renameSync(tmpPath, rulesPath);
+  } catch (err) {
+    // Clean up the temp file to avoid leaking it on rename failure.
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {
+      // Best-effort cleanup.
+    }
+    throw err;
+  }
 }
 
 function runCodex(options: SolveRunOptions): Promise<SolveResult> {

@@ -205,7 +205,7 @@ function runSolver(options: {
   return solveAdapters[agent].run(runOptions);
 }
 
-export async function retrySolveProblem(options: {
+export function retrySolveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
@@ -219,7 +219,7 @@ export async function retrySolveProblem(options: {
   return runSolver({ agent, prompt, workDir, model, maxBudget });
 }
 
-export async function solveProblem(options: {
+export function solveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
